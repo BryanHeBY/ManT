@@ -24,6 +24,13 @@ use super::{
     NativePassSweep,
 };
 
+struct PresentedPass {
+    print: NativeFieldPrint,
+    placement: super::super::super::presentation::FieldPlacement,
+    width: usize,
+    margin: usize,
+}
+
 impl InlineBuilder {
     /// Run the `term_flushln()` pass loop (term.c:143-230) over one
     /// receipt: print each accepted pass at its computed origin, execute
@@ -45,6 +52,10 @@ impl InlineBuilder {
         };
         let row = &state.hang_row;
         let mut sweep = NativeFieldSweep {
+            presentation: self.execution.row_presentation,
+            partial_alignment: false,
+            cleared_alignment: None,
+            row_presentations: Vec::new(),
             viscol: row.viscol,
             printed_row: row.native_row_occupied().then_some(row.viscol),
             emission: NativeFieldEmission::Unprinted,
@@ -55,16 +66,20 @@ impl InlineBuilder {
             loop_row_end: LoopRowEnd::Open,
             loop_rows: Vec::new(),
         };
-        let mut vbl = row.padding_units(state.field_offset_units);
         let mut row_origin_units = state.field_offset_units;
+        let mut placement = sweep.presentation.field_placement(
+            row_origin_units,
+            sweep.viscol,
+            row.minbl,
+            sweep.printed_row.is_some(),
+        );
         let mut start = 0;
-        let mut vfield =
-            rmargin.saturating_sub(sweep.viscol.saturating_mul(24).saturating_add(vbl));
+        let mut vfield = placement.capacity(rmargin);
         let mut width = 0;
         let mut width_units = 0;
         let mut tab_offset = state.field_buffer.tab_offset();
         for (index, pass) in passes.iter().enumerate() {
-            vfield = rmargin.saturating_sub(sweep.viscol.saturating_mul(24).saturating_add(vbl));
+            vfield = placement.capacity(rmargin);
             let tab_target = if no_break {
                 // The responsive reading projection has no screen margin.
                 usize::MAX / 2
@@ -73,15 +88,20 @@ impl InlineBuilder {
             };
             width = pass.width;
             width_units = pass.units;
-            self.print_native_field_pass(
+            self.print_presented_native_pass(
                 &mut sweep,
-                &NativeFieldPrint {
-                    start,
-                    end: pass.end,
-                    first: index == 0,
-                    padding_units: vbl,
-                    origin_units: row_origin_units,
-                    tab_offset,
+                &PresentedPass {
+                    print: NativeFieldPrint {
+                        start,
+                        end: pass.end,
+                        first: index == 0,
+                        padding_units: placement.projection_padding,
+                        origin_units: row_origin_units,
+                        tab_offset,
+                    },
+                    placement,
+                    width: width_units,
+                    margin: if no_break { usize::MAX / 2 } else { rmargin },
                 },
                 resumed,
             );
@@ -98,37 +118,16 @@ impl InlineBuilder {
                 start += 1;
             }
             if index + 1 < passes.len() || rejected {
-                // A genuine remaining field executes loop endline(), then
-                // BRIND selects its right-margin origin for the next pass.
-                // That endline ends the row this pass printed when the
-                // boundary came from an authored `\p` marker (term.c:294-
-                // 305 armed breakline; 217 endline); a device-width guess
-                // (vn > vtarget) stays responsive placement instead.
-                sweep.loop_rows.push(NativeLoopRow {
-                    end_cell: pass.end,
-                    printed: sweep.printed_row.is_some(),
-                    boundary: pass.boundary,
-                });
-                sweep.loop_row_end = if pass.boundary == FillBoundary::WordEndBreak {
-                    LoopRowEnd::Authored
-                } else {
-                    LoopRowEnd::Responsive
-                };
-                sweep.viscol = 0;
-                sweep.printed_row = None;
-                sweep.unprojected_origin_units = 0;
-                row_origin_units = if flags.contains(FieldFlag::Brind) {
-                    rmargin
-                } else {
-                    state.field_offset_units
-                };
-                vbl = row_origin_units;
+                row_origin_units = end_native_loop_pass(&mut sweep, pass, state, flags, rmargin);
+                placement = sweep
+                    .presentation
+                    .field_placement(row_origin_units, 0, 0, false);
             }
         }
         if rejected {
             width = 0;
             width_units = 0;
-            vfield = rmargin.saturating_sub(sweep.viscol.saturating_mul(24).saturating_add(vbl));
+            vfield = placement.capacity(rmargin);
         }
         NativePassSweep {
             sweep,
@@ -137,5 +136,83 @@ impl InlineBuilder {
             tab_offset,
             vfield,
         }
+    }
+
+    fn print_presented_native_pass(
+        &self,
+        sweep: &mut NativeFieldSweep,
+        pass: &PresentedPass,
+        resumed: Option<NoBreakField>,
+    ) {
+        let state = self.execution.definition.as_ref().expect("field session");
+        let fresh = sweep.printed_row.is_none();
+        if fresh
+            && let Some(receipt) = super::super::super::presentation::pass_receipt(
+                &state.field_buffer,
+                &state.field_word_anchors,
+                pass.print.start,
+                pass.print.end,
+                sweep
+                    .presentation
+                    .hint_at(self.execution.text_alignment, pass.print.origin_units),
+            )
+        {
+            sweep.row_presentations.push(receipt);
+        }
+        let old_presentation = sweep.presentation;
+        let placement = pass.placement.aligned(
+            self.execution.text_alignment,
+            pass.width,
+            pass.margin,
+            sweep.presentation.parent,
+            !fresh,
+        );
+        sweep.presentation.record_field_placement(placement);
+        let print = NativeFieldPrint {
+            padding_units: placement.projection_padding,
+            ..pass.print
+        };
+        if !self.print_native_field_pass(sweep, &print, resumed) {
+            // Graphless NBRZW/rejected cells do not call device advance().
+            sweep.presentation = old_presentation;
+        } else if fresh {
+            if let Some(receipt) = sweep.row_presentations.last() {
+                sweep.presentation.remember_alignment(receipt);
+            }
+        } else if self.execution.text_alignment != mant_ir::TextAlignment::Left {
+            // Whole-row alignment cannot reposition this accepted suffix.
+            sweep.partial_alignment = true;
+            sweep.cleared_alignment = sweep.presentation.retire_partial_alignment();
+        }
+    }
+}
+
+/// term.c:217-228: the loop endline is real even while HANG keeps
+/// the final tail open. BRIND chooses only the following print origin.
+fn end_native_loop_pass(
+    sweep: &mut NativeFieldSweep,
+    pass: &super::super::super::field_buffer::FillPass,
+    state: &DefinitionFieldState,
+    flags: FieldFlags,
+    rmargin: usize,
+) -> usize {
+    sweep.loop_rows.push(NativeLoopRow {
+        end_cell: pass.end,
+        printed: sweep.printed_row.is_some(),
+        boundary: pass.boundary,
+    });
+    sweep.loop_row_end = if pass.boundary == FillBoundary::WordEndBreak {
+        LoopRowEnd::Authored
+    } else {
+        LoopRowEnd::Responsive
+    };
+    sweep.viscol = 0;
+    sweep.printed_row = None;
+    sweep.unprojected_origin_units = 0;
+    sweep.presentation.endline_at(state.field_offset_units);
+    if flags.contains(FieldFlag::Brind) {
+        rmargin
+    } else {
+        state.field_offset_units
     }
 }

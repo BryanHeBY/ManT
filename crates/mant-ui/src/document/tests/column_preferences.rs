@@ -288,12 +288,13 @@ fn install_pure_ir_hints(content: &mut ResolvedContent) {
         .map(|(row, indent_columns)| mant_ir::RowLayoutHint {
             row,
             indent_columns,
+            ..Default::default()
         })
         .collect();
 }
 
 #[test]
-fn explicit_owner_hint_json_is_separate_from_retired_native_ti_geometry() {
+fn explicit_owner_hints_survive_json_and_literal_projection() {
     let case = cases()
         .into_iter()
         .find(|case| case["id"] == "hinted-hard-rows")

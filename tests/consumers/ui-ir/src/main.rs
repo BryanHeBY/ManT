@@ -145,6 +145,7 @@ fn check_hinted_owner(source: &ResolvedContent) {
     inline_layout.row_hints = vec![mant_ir::RowLayoutHint {
         row: 1,
         indent_columns: 4,
+        ..Default::default()
     }];
     let restored: ResolvedContent = mant_protocol::QueryBundle::from(&authored).into();
     assert_eq!(restored, authored);

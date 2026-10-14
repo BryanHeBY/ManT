@@ -111,8 +111,16 @@ fn defensive_placement_fallback_reuses_prepared_rows_without_a_tree_access() {
             extra_width_columns: Some(10),
         })
         .unwrap();
-        BlockRenderer::placed_column_row(columns.place_at(&widths, 2), cells, &widths, 2)
-            .finish(false)
+        BlockRenderer::placed_column_row(
+            columns.place_at(&widths, 2),
+            cells,
+            &widths,
+            2,
+            &[],
+            2,
+            None,
+        )
+        .finish(false)
     });
     assert_eq!(undecorated(&output), "  LEFT\n  RIGHT");
     assert_eq!(counts, visits::Counts::default());

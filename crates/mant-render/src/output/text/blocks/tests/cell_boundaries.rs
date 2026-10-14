@@ -231,6 +231,7 @@ fn closed_anchor_rows_keep_data_topology_without_hint_padding() {
             row_hints: vec![mant_ir::RowLayoutHint {
                 row: 0,
                 indent_columns: 12,
+                ..Default::default()
             }],
         },
         layout: LayoutHint::default(),
@@ -250,6 +251,7 @@ fn closed_anchor_rows_keep_data_topology_without_hint_padding() {
 fn nested_generic_fallback_retires_only_the_open_tail_at_every_depth() {
     let renderer = super::super::super::plain_renderer();
     let styled = BlockRenderer {
+        width: None,
         names: None,
         locations: None,
         decorate: &|_, value| format!("\x1b[1m{value}\x1b[0m"),

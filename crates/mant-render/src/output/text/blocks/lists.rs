@@ -1,7 +1,7 @@
 //! List labels and definition bodies compose into the caller's content flow.
 use super::{
     Block, BlockRenderer, DefinitionItem, Flow, LayoutText, ListItem, ListKind, ParagraphTail,
-    TextRole, compose_origin, coordinate, marker_run_in_gap, padding, resolve_row_origins,
+    TextRole, compose_origin, coordinate, marker_run_in_gap, padding,
 };
 use mant_ir::geometry::{list_item_spacing, list_marker, list_marker_width};
 
@@ -38,7 +38,10 @@ impl BlockRenderer<'_> {
                 && let Some(gap) = marker_run_in_gap(
                     base_indent,
                     marker_width,
-                    compose_origin(layout.indent_columns, inline_layout.row_indent(0)),
+                    inline_layout
+                        .row_layout(0)
+                        .resolve(layout.indent_columns, layout.indent_columns)
+                        .first_visual_origin,
                 )
             {
                 // The first paragraph's boundary precedes the whole item,
@@ -47,15 +50,16 @@ impl BlockRenderer<'_> {
                 output.gap(layout.spacing_before_lines);
                 let body = self.render_block(first, body_origin);
                 let indent = " ".repeat(padding(
-                    resolve_row_origins(
-                        compose_origin(body_origin, layout.indent_columns),
-                        compose_origin(
+                    inline_layout
+                        .row_layout(0)
+                        .resolve(
                             compose_origin(body_origin, layout.indent_columns),
-                            layout.continuation_indent_columns,
-                        ),
-                        inline_layout.row_indent(0),
-                    )
-                    .first_visual_origin,
+                            compose_origin(
+                                compose_origin(body_origin, layout.indent_columns),
+                                layout.continuation_indent_columns,
+                            ),
+                        )
+                        .first_visual_origin,
                 ));
                 // Zero-width navigation keeps its identity, but cannot turn
                 // the marker's content gap into a copied physical cell.
@@ -112,7 +116,7 @@ impl BlockRenderer<'_> {
             && let Some(mut last_rows) = terms.pop()
         {
             let (mut shared_row, row_indent) = last_rows.pop().unwrap_or_default();
-            let term_origin = compose_origin(origin, row_indent);
+            let term_origin = row_indent.resolve(origin, origin).first_visual_origin;
             let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
             let mut lines = self.inline_rows(content, TextRole::Body);
             let completed_empty_tail = matches!(body.block, Block::Paragraph { .. })
@@ -122,11 +126,12 @@ impl BlockRenderer<'_> {
             let first_body_origin = compose_origin(body_origin, layout.indent_columns);
             let continued_body_origin =
                 compose_origin(first_body_origin, layout.continuation_indent_columns);
-            let preferred_body_origin =
-                resolve_row_origins(first_body_origin, continued_body_origin, first_line.1)
-                    .first_visual_origin;
-            let mut output = definition_term_rows(terms, origin);
-            output.extend(definition_term_rows(vec![last_rows], origin));
+            let preferred_body_origin = first_line
+                .1
+                .resolve(first_body_origin, continued_body_origin)
+                .first_visual_origin;
+            let mut output = self.definition_term_rows(terms, origin);
+            output.extend(self.definition_term_rows(vec![last_rows], origin));
             let gap = mant_ir::geometry::definition_body_gap(
                 item.head_body_relation,
                 &item.layout,
@@ -138,12 +143,22 @@ impl BlockRenderer<'_> {
             shared_row.append(&first_line.0);
             // An open HEAD tail can receive BODY content. Its origin is
             // applied to the completed shared row, never to an empty prefix.
-            output.push(shared_row.indented(padding(term_origin)));
+            let shared_hint = mant_ir::RowLayoutHint {
+                alignment: if row_indent.alignment == mant_ir::TextAlignment::Left {
+                    first_line.1.alignment
+                } else {
+                    row_indent.alignment
+                },
+                ..row_indent
+            };
+            output.push(self.position_row(shared_row, shared_hint, origin, origin));
             output.extend(lines.map(|(line, row_indent)| {
-                line.indented(padding(
-                    resolve_row_origins(continued_body_origin, continued_body_origin, row_indent)
-                        .first_visual_origin,
-                ))
+                self.position_row(
+                    line,
+                    row_indent,
+                    continued_body_origin,
+                    continued_body_origin,
+                )
             }));
             let mut result = Flow::default();
             result.extend(self.block_flow(body.leading_blocks, body_origin));
@@ -159,22 +174,22 @@ impl BlockRenderer<'_> {
         }
         // Rows keep their request-relative indents (a cleared-BRIND request
         // moved the upstream offset, roff_term.c:73-75).
-        let rows = definition_term_rows(terms, origin);
+        let rows = self.definition_term_rows(terms, origin);
         let mut result = Flow::text(LayoutText::join(rows, "\n"));
         result.extend(self.block_flow(&item.description, body_origin));
         result
     }
-}
-
-fn definition_term_rows(terms: Vec<Vec<(LayoutText, i32)>>, origin: i32) -> Vec<LayoutText> {
-    terms
-        .into_iter()
-        .flat_map(|term| {
-            term.into_iter().map(|(row, row_indent)| {
-                row.indented(padding(
-                    resolve_row_origins(origin, origin, row_indent).first_visual_origin,
-                ))
+    fn definition_term_rows(
+        &self,
+        terms: Vec<Vec<(LayoutText, mant_ir::RowLayoutHint)>>,
+        origin: i32,
+    ) -> Vec<LayoutText> {
+        terms
+            .into_iter()
+            .flat_map(|term| {
+                term.into_iter()
+                    .map(|(row, hint)| self.position_row(row, hint, origin, origin))
             })
-        })
-        .collect()
+            .collect()
+    }
 }

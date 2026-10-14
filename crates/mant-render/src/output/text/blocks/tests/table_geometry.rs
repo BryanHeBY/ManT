@@ -350,6 +350,7 @@ fn placed_fields_compose_parent_child_and_hint_before_leaf_clipping() {
             inline_layout.row_hints.push(mant_ir::RowLayoutHint {
                 row: 0,
                 indent_columns: correction,
+                ..Default::default()
             });
         }
         if nested {

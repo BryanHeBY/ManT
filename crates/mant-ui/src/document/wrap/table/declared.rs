@@ -36,7 +36,7 @@ pub(super) fn render_declared_columns(
         return stack_table_cells(indent, table, width);
     }
     let mut group = 0;
-    let cells = table
+    let mut cells = table
         .cells
         .iter()
         .enumerate()
@@ -46,10 +46,11 @@ pub(super) fn render_declared_columns(
                 available.saturating_sub(preferred_start(index)).max(1),
                 0,
                 &mut group,
+                true,
             )
         })
         .collect::<Vec<_>>();
-    let widths = cells
+    let mut widths = cells
         .iter()
         .zip(&table.cells)
         .map(|(rows, cell)| {
@@ -78,6 +79,14 @@ pub(super) fn render_declared_columns(
     ) {
         return stack_table_cells(indent, table, width);
     }
+    position_declared_cells(
+        &placements,
+        &mut cells,
+        &mut widths,
+        &columns,
+        &table.layout.column_preferences,
+        available,
+    );
     if placements.iter().flatten().any(|piece| {
         piece
             .column
@@ -90,6 +99,45 @@ pub(super) fn render_declared_columns(
         .into_iter()
         .map(|pieces| placed_column_row(&pieces, &cells, &widths, indent))
         .collect()
+}
+
+fn position_declared_cells(
+    placements: &[Vec<mant_ir::geometry::ColumnPiece>],
+    cells: &mut [Vec<WrappedLine>],
+    widths: &mut [Vec<mant_ir::geometry::ColumnFieldWidth>],
+    columns: &mant_ir::geometry::DeclaredColumns,
+    preferences: &mant_ir::ColumnPreferences,
+    available: usize,
+) {
+    // Intrinsic rows decide placement first. Alignment uses only the final
+    // slot and cannot feed viewport padding back into collision decisions.
+    for pieces in placements {
+        for (index, piece) in pieces.iter().enumerate() {
+            let end = if piece.cell + 1 == cells.len() {
+                available
+            } else {
+                columns
+                    .field_end(piece.cell)
+                    .unwrap_or(available)
+                    .saturating_sub(if piece.cell < preferences.widths.len() {
+                        usize::from(preferences.gap_columns)
+                    } else {
+                        0
+                    })
+                    .min(available)
+            };
+            let end = pieces.get(index + 1).map_or(end, |next| {
+                end.min(
+                    next.column
+                        .saturating_sub(usize::from(preferences.gap_columns)),
+                )
+            });
+            let row = &mut cells[piece.cell][piece.line];
+            row.position_alignment(end.saturating_sub(piece.column));
+            widths[piece.cell][piece.line].output =
+                super::super::super::inline::spans_width(&row.line.spans);
+        }
+    }
 }
 
 fn placed_column_row(

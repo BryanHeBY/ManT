@@ -73,6 +73,7 @@ fn measurement_reuses_name_and_match_decorated_fragments_without_revisiting() {
         ansi(presentation, value)
     };
     let renderer = BlockRenderer {
+        width: None,
         locations: Some(&styles),
         names: None,
         decorate: &decorate,

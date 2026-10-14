@@ -95,6 +95,7 @@ fn definition(case: DefinitionCase) -> Block {
                         vec![mant_ir::RowLayoutHint {
                             row: u32::try_from(hinted).unwrap(),
                             indent_columns: case.correction,
+                            ..Default::default()
                         }]
                     },
                 },

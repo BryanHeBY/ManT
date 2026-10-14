@@ -109,7 +109,10 @@ pub(super) fn definition_item(
     let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;
     if man_node {
         formatter.font.man_text_boundary(); // HEAD pre
+        // pre_IP/pre_TP(HEAD) assign mt->offset after BLOCK print_bvspace.
+        super::super::reset_man_macro_offset(formatter, indent_columns);
     }
+    let head_offset_shift = formatter.row_presentation.offset_shift;
     let (
         term,
         run_in_execution,
@@ -126,12 +129,20 @@ pub(super) fn definition_item(
         formatter,
     );
     let completed_head_rows = formatter.definition_head_completed_empty_rows();
+    if !man_node {
+        // print_mdoc_node() restores HEAD offset after It post. It does not
+        // restore ti; an open HANG row can consume that register at BODY entry.
+        formatter.row_presentation.offset_shift = head_offset_shift;
+    }
     // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
     // evidence that the first no-fill BODY row still belongs on that line.
     let head_source_continues = formatter.execution.source_row_continues();
     if man_node {
         formatter.font.man_text_boundary(); // HEAD post
         formatter.font.man_text_boundary(); // BODY pre
+        // BODY uses its declared tag offset, without the HEAD's temporary
+        // correction. The independent ti still closes at device endline.
+        formatter.row_presentation.offset_shift = 0;
         formatter.enter_man_definition_body();
     }
     if definition_field_exited && !man_node {
@@ -147,25 +158,17 @@ pub(super) fn definition_item(
         normalize_executed_definition_head(term, &term_breaks, node, flow, &mut geometry);
     let empty_head_rows = transfer_completed_empty_head_rows(&mut terms, completed_head_rows);
     let body_origin = geometry.body_origin(context, node, indent_columns);
-    // The BODY is executed once. Its active formatter records whether a real
-    // boundary preceded the first visible word and whether the detached head
-    // already accounts for an invisible first row.
-    // A native HEAD may occupy a formatter cell without giving IR any term
-    // that represents its row (for example, `.It \\&`). Only a rendered HEAD
-    // can own the first invisible BODY row when term_newln() closes it.
-    let rendered_head_row = terms
-        .iter()
-        .any(|term| mant_ir::has_printable_character(term));
-    formatter.begin_definition_body(
-        flow.shares_pending_term_row
-            && if man_node {
-                formatter.definition_head_row_occupied()
-            } else {
-                rendered_head_row
-            }
-            && !closed_head_row
-            && !definition_field_exited,
+    enter_definition_body(
+        node,
+        formatter,
+        flow,
+        context.macro_set,
+        &terms,
+        !closed_head_row && !definition_field_exited,
     );
+    let deferred_head_layout = run_in_execution
+        .as_ref()
+        .and_then(|run_in| run_in.state.deferred_head_layout());
     let spacing_enabled = formatter.spacing_enabled();
     let mut description = lower_scope(
         body,
@@ -174,6 +177,9 @@ pub(super) fn definition_item(
         formatter,
         definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
     );
+    if let Some(receiver) = deferred_head_layout {
+        receiver.apply(&mut terms);
+    }
     carry_completed_head_rows(
         node,
         &terms,
@@ -208,17 +214,58 @@ pub(super) fn definition_item(
         head_source_continues,
         &description,
     );
-    let (head_body_relation, layout) = geometry.layout(indent_columns, body_origin, &terms);
-    let mut item = DefinitionItem {
-        head_body_relation,
-        source: source_span(node),
-        entry: None,
-        layout,
-        terms: terms.into_iter().map(finalize_definition_term).collect(),
-        description,
-    };
-    record_definition_item(&mut item, node, head, context);
+    let layout = geometry.layout(indent_columns, body_origin, &terms);
+    let item = assemble_definition_item(terms, description, layout, node, head, context);
+    if !man_node {
+        // The It BLOCK returns after BODY post, restoring offset while
+        // keeping whatever independent ti register that real post left.
+        formatter.row_presentation.offset_shift = head_offset_shift;
+    }
     item
+}
+
+/// Enter the original BODY's source event before its pre changes offset.
+/// The HEAD already owns its accepted glyphs; this entry may still close
+/// its retained native HANG row and consume the independent ti register.
+fn enter_definition_body(
+    node: &Node,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    flow: DefinitionFlow,
+    macro_set: libmandoc_rs::MacroSet,
+    terms: &[Vec<Inline>],
+    head_open: bool,
+) {
+    let man_node = macro_set == libmandoc_rs::MacroSet::Man;
+    if !man_node
+        && matches!(flow.head, DefinitionHeadFlow::Detached { .. })
+        && let Some(part) = node
+            .children
+            .iter()
+            .find(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
+    {
+        // mdoc_term.c:314-329,764,838-862; no synthetic IR words are
+        // executed here, only the original BODY's conditional term_newln.
+        let mut entry_output = Vec::new();
+        formatter.with_output_builder(&mut entry_output, |builder| {
+            builder.observe_no_fill_source_lines(true);
+            builder.begin_executed_node(part);
+            builder.observe_no_fill_source_lines(false);
+        });
+    }
+    // Native occupancy is distinct from the row already represented by
+    // the HEAD. An invisible \& head cannot consume a BODY's new empty row.
+    let represented_head = terms
+        .iter()
+        .any(|term| mant_ir::has_printable_character(term));
+    formatter.begin_definition_body(
+        flow.shares_pending_term_row
+            && if man_node {
+                formatter.definition_head_row_occupied()
+            } else {
+                represented_head
+            }
+            && head_open,
+    );
 }
 
 fn close_pending_definition_prefix(formatter: &mut crate::mandoc::formatter::FormatterState) {
@@ -232,11 +279,33 @@ fn close_pending_definition_prefix(formatter: &mut crate::mandoc::formatter::For
 }
 
 fn finalize_definition_term(mut content: Vec<Inline>) -> mant_ir::DefinitionTerm {
+    crate::mandoc::inline::prepare_inline_output(&mut content);
+    crate::mandoc::inline::strip_native_projection_markers(&mut content);
     let inline_layout = crate::mandoc::inline::take_inline_layout(&mut content);
     mant_ir::DefinitionTerm {
         content,
         inline_layout,
     }
+}
+
+fn assemble_definition_item(
+    terms: Vec<Vec<Inline>>,
+    description: Vec<Block>,
+    (head_body_relation, layout): (mant_ir::HeadBodyRelation, mant_ir::DefinitionLayout),
+    node: &Node,
+    head: &[Node],
+    context: &LoweringContext<'_>,
+) -> DefinitionItem {
+    let mut item = DefinitionItem {
+        head_body_relation,
+        source: source_span(node),
+        entry: None,
+        layout,
+        terms: terms.into_iter().map(finalize_definition_term).collect(),
+        description,
+    };
+    record_definition_item(&mut item, node, head, context);
+    item
 }
 
 fn record_definition_item(

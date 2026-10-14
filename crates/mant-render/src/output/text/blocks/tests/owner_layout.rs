@@ -9,6 +9,7 @@ fn hints(values: &[(u32, i32)]) -> InlineLayout {
             .map(|&(row, indent_columns)| RowLayoutHint {
                 row,
                 indent_columns,
+                ..Default::default()
             })
             .collect(),
     }
@@ -168,6 +169,7 @@ fn paragraph_closes_only_its_open_tail_and_retains_completed_blank_rows() {
             }
         };
         let renderer = BlockRenderer {
+            width: None,
             names: None,
             locations: None,
             decorate: &decorate,

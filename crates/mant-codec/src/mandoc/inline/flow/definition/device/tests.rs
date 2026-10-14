@@ -29,6 +29,7 @@ fn printed_origin_advances_survive_node_geometry_until_the_real_row_end() {
     let mut builder = InlineBuilder::new();
     builder.begin_column_body(12, 0, false);
     let checkpoint = DefinitionGeometryCheckpoint {
+        offset_shift_units: 0,
         indent_columns: 0,
         field_offset: 0,
         field_offset_units: 0,
@@ -94,6 +95,7 @@ fn accepted_column_reading_origins_preserve_signed_display_offsets_once() {
         builder.set_column_reading_parent(10 * 24);
         let state = builder.definition.as_ref().unwrap();
         let saved = DefinitionGeometryCheckpoint {
+            offset_shift_units: 0,
             indent_columns: state.row.indent_columns,
             field_offset: state.hang_row.field_offset,
             field_offset_units: state.field_offset_units,

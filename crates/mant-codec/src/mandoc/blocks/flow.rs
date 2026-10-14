@@ -120,6 +120,9 @@ impl BlockState {
         self.flush_preformatted();
         self.flush_paragraph();
         self.indent_columns = indent;
+        self.formatter.row_presentation.parent =
+            i32::try_from(indent.physical_basic_units()).unwrap_or(i32::MAX);
+        self.formatter.row_presentation.offset_shift = 0;
         self.hanging_origin = None;
     }
 
@@ -130,6 +133,12 @@ impl BlockState {
     pub(super) fn consume_hanging_first_line(&mut self) {
         if let Some(origin) = self.hanging_origin.take() {
             self.indent_columns = origin;
+            // The filled field's output adopts its hanging continuation
+            // origin. Native no-fill first-child posts are executed by
+            // the node driver, independently of these output drains.
+            self.formatter.row_presentation.parent =
+                i32::try_from(origin.physical_basic_units()).unwrap_or(i32::MAX);
+            self.formatter.row_presentation.offset_shift = 0;
         }
     }
 
@@ -140,6 +149,9 @@ impl BlockState {
         mut formatter: crate::mandoc::formatter::FormatterState,
     ) -> Self {
         formatter.set_spacing_enabled(spacing_enabled);
+        formatter
+            .execution
+            .set_presentation_parent(indent_columns.physical_basic_units());
         Self {
             output,
             formatter,
@@ -202,7 +214,8 @@ impl BlockState {
                 });
             if closes_head {
                 if self.formatter.consume_definition_head_row() {
-                    self.paragraph.consume_invisible_head_row();
+                    self.paragraph
+                        .consume_invisible_head_row(&mut self.formatter);
                 }
                 self.formatter.settle_definition_head_rows();
             }
@@ -224,15 +237,5 @@ fn has_formatter_text_cell(nodes: &[Inline]) -> bool {
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => has_formatter_text_cell(children),
         Inline::Anchor { .. } | Inline::LineBreak { .. } => false,
-    })
-}
-
-/// Only actual buffered rows satisfy an unconditional formatter flush.
-/// Zero-width target blocks remain available without masquerading as rows.
-pub(super) fn has_flushed_row(blocks: &[Block]) -> bool {
-    blocks.iter().any(|block| match block {
-        Block::Preformatted { children, .. } => mant_ir::geometry::has_literal_rows(children),
-        Block::Paragraph { children, .. } => mant_ir::has_printable_character(children),
-        _ => false,
     })
 }

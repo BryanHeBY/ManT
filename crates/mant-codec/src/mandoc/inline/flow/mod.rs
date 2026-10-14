@@ -12,6 +12,7 @@ pub(in crate::mandoc) mod field_buffer;
 use definition::DefinitionFieldState;
 mod lifecycle;
 mod native_field;
+mod presentation;
 mod tab_stops;
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
@@ -81,6 +82,7 @@ enum LeadingLineBoundary {
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum SourceLineObservation {
+    Grouped,
     Disabled,
     NoFill,
 }
@@ -98,6 +100,11 @@ enum CellProduction {
 // The formatter registers are independent native flags, not a state chart.
 #[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct InlineExecutionState {
+    pub(in crate::mandoc) row_presentation: presentation::RowPresentation,
+    pub(in crate::mandoc) text_alignment: mant_ir::TextAlignment,
+    /// An accepted aligned field followed earlier printing on the same row.
+    /// Owner-level alignment cannot reposition only that suffix.
+    pub(in crate::mandoc) partial_row_alignment: bool,
     pub(in crate::mandoc) escape_coverage: crate::mandoc::escape_coverage::EscapeCoverage,
     pub(in crate::mandoc) boundary: PendingBoundary,
     spacing: SpacingMode,

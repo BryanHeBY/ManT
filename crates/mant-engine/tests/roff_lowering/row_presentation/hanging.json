@@ -1,0 +1,202 @@
+{
+  "oracle": {
+    "source": "mandoc-cvs-20261013T025419Z",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "expectations_from_product": false
+  },
+  "cases": [
+    {
+      "id": "text",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "7dc8a829bec3873e6a7306036a65331a668b4d8157221228844c64e9b69c9506",
+      "profiles": {
+        "ascii": [
+          "     Alpha",
+          "         Beta"
+        ],
+        "utf8": [
+          "     Alpha",
+          "         Beta"
+        ]
+      },
+      "first_kind": "text",
+      "first_token": null
+    },
+    {
+      "id": "text-continued",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\nAlpha\\c\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "73fbbbf31bb5ad5f8b6fe8c8422ba0cee22536fc84ea64791fedd956008542be",
+      "profiles": {
+        "ascii": [
+          "     Alpha",
+          "         Beta"
+        ],
+        "utf8": [
+          "     Alpha",
+          "         Beta"
+        ]
+      },
+      "first_kind": "text",
+      "first_token": null
+    },
+    {
+      "id": "text-zero",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n\\zX\\c\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "7e9506a4a907104d56fb9c1a93f292d6547e250be92c095a074c5c4e0634a845",
+      "profiles": {
+        "ascii": [
+          "     X",
+          "         Beta"
+        ],
+        "utf8": [
+          "     X",
+          "         Beta"
+        ]
+      },
+      "first_kind": "text",
+      "first_token": null
+    },
+    {
+      "id": "font-request",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n.ft B\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "aec19e7b7448c97e88419ef288c9cf2f2e765f3e6f4b020d28e77bc1274ecf42",
+      "profiles": {
+        "ascii": [
+          "     Alpha",
+          "     Beta"
+        ],
+        "utf8": [
+          "     Alpha",
+          "     Beta"
+        ]
+      },
+      "first_kind": "element",
+      "first_token": "ft"
+    },
+    {
+      "id": "pd",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n.PD 0\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "5231968eb169fc23f0682f092d2da94c44388c3bd7d799ff48059060c429886f",
+      "profiles": {
+        "ascii": [
+          "         Alpha",
+          "         Beta"
+        ],
+        "utf8": [
+          "         Alpha",
+          "         Beta"
+        ]
+      },
+      "first_kind": "element",
+      "first_token": "PD"
+    },
+    {
+      "id": "dt",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n.DT\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "d46f2b1c83386f9c352513d36a06c3d5ebeaaf73862f410ed59c71b35663e8db",
+      "profiles": {
+        "ascii": [
+          "         Alpha",
+          "         Beta"
+        ],
+        "utf8": [
+          "         Alpha",
+          "         Beta"
+        ]
+      },
+      "first_kind": "element",
+      "first_token": "DT"
+    },
+    {
+      "id": "empty-text",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "3187d9127d7a100524cdba9ddb483dccb493fe1f3d5898e393789f44652dfc67",
+      "profiles": {
+        "ascii": [
+          "",
+          "     Alpha",
+          "     Beta"
+        ],
+        "utf8": [
+          "",
+          "     Alpha",
+          "     Beta"
+        ]
+      },
+      "first_kind": "text",
+      "first_token": null
+    },
+    {
+      "id": "empty-bold",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n.B \"\"\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "0b2aff0de029b577ee7da709db8b1931a43f755c651e6f3ca597adc3bd9deb6b",
+      "profiles": {
+        "ascii": [
+          "",
+          "         Alpha",
+          "         Beta"
+        ],
+        "utf8": [
+          "",
+          "         Alpha",
+          "         Beta"
+        ]
+      },
+      "first_kind": "element",
+      "first_token": "B"
+    },
+    {
+      "id": "comment",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n.\\\" retained\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "55b287410f8325fa350219a1fe018f38a3343e3f23cbc639686127277c0c044a",
+      "profiles": {
+        "ascii": [
+          "     Alpha",
+          "         Beta"
+        ],
+        "utf8": [
+          "     Alpha",
+          "         Beta"
+        ]
+      },
+      "first_kind": "text",
+      "first_token": null
+    },
+    {
+      "id": "equation",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n.EQ\nx\n.EN\nAlpha\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "a844fd328b719ee3c094d466541c8c278f41fce958b93cf6addb0b7123d3a953",
+      "profiles": {
+        "ascii": [
+          "     x",
+          "     Alpha",
+          "     Beta"
+        ],
+        "utf8": [
+          "     x",
+          "     Alpha",
+          "     Beta"
+        ]
+      },
+      "first_kind": "equation",
+      "first_token": null
+    },
+    {
+      "id": "table",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.HP 4n\n.TS\nl.\nTABLE\n.TE\nBeta\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "3512dce6d0f81938cd41938f085e12ffb9ca7f0f2d3f89ca61b29634b5c4bb12",
+      "profiles": {
+        "ascii": [
+          "     TABLE",
+          "     Beta"
+        ],
+        "utf8": [
+          "     TABLE",
+          "     Beta"
+        ]
+      },
+      "first_kind": "table",
+      "first_token": null
+    }
+  ]
+}

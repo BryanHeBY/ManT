@@ -106,6 +106,7 @@ fn actual_field_parent_and_child_origins_keep_query_links_search_and_copy() {
                     vec![mant_ir::RowLayoutHint {
                         row: 0,
                         indent_columns: correction,
+                        ..Default::default()
                     }]
                 },
             },

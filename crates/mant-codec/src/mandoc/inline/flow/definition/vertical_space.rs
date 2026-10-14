@@ -63,6 +63,7 @@ impl InlineBuilder {
         if rows == 0 {
             return;
         }
+        self.execution.row_presentation.endline();
         if let Some(definition) = &mut self.execution.definition {
             // term_vspace() emits an endline after the current field. Unlike
             // a HANG term_newln(), the next word starts a new device row.

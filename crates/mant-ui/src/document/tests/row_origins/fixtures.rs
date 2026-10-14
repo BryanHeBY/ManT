@@ -7,6 +7,7 @@ pub(super) fn layout(rows: &[(u32, i32)]) -> mant_ir::InlineLayout {
             .map(|&(row, indent_columns)| mant_ir::RowLayoutHint {
                 row,
                 indent_columns,
+                ..Default::default()
             })
             .collect(),
     }

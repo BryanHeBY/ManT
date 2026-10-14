@@ -65,13 +65,13 @@ impl InlineBuilder {
             usize::from(state.cleared_field_capacity_columns).saturating_mul(24)
         });
         native.is_some_and(|field| {
-            let column = field.viscol.saturating_mul(24);
+            let column = field.device_column_units();
             // ascii_advance() prints a cell only beyond half an EN from
             // the current device column (term_ascii.c:299-304). A positive
             // basic-unit remainder can therefore still mean no word gap.
             field.has_occupied_row()
                 && field.next_field_gap_cells == 0
-                && column.saturating_add(12) >= body_origin
+                && column.saturating_add(12) >= i64::try_from(body_origin).unwrap_or(i64::MAX)
         })
     }
 
@@ -140,7 +140,9 @@ impl InlineBuilder {
         // Observing its responsive layout must not replace the native minbl
         // register or execute another field pass (term.c:113-116,233-253).
         native.is_some_and(|field| {
-            gap_cells == 0 && !field.ends_row && field.viscol >= usize::from(body_width_columns)
+            gap_cells == 0
+                && !field.ends_row
+                && field.device_column_units() >= i64::from(body_width_columns) * 24
         })
     }
 
@@ -154,18 +156,11 @@ impl InlineBuilder {
         self.execution.trailing_output = TrailingOutput::FixedBlank;
     }
 
-    /// Execute `.ti` through its preceding `roff_term_pre_br()` boundary.
-    ///
-    /// `ManT` deliberately omits the device-specific temporary offset.  In
-    /// particular, the numeric operand is not printable padding: the pinned
-    /// renderer applies it to `p->ti` and `tcol->offset` only after flushing
-    /// the current field.  Retain the field's own trailspace and boundary,
-    /// then discard the temporary device position as documented.
-    pub(in crate::mandoc) fn temporary_indent(&mut self) {
-        // pre_ti always calls pre_br before inspecting its optional operand
-        // (roff_term.c:233-236). Numeric temporary offset is a responsive
-        // layout policy, never another field-exit or hard-row decision.
+    /// `pre_ti` executes `pre_br` before inspecting the operand. The numeric
+    /// register survives owner drains and is consumed only by device endline.
+    pub(in crate::mandoc) fn temporary_indent(&mut self, argument: Option<&str>) {
         self.control_line_break();
+        self.execution.apply_temporary_indent(argument);
     }
 
     /// The row origin survives each flush until a document scope restores it.
@@ -303,24 +298,27 @@ impl super::super::InlineExecutionState {
         {
             return None;
         }
-        self.definition
-            .as_ref()
-            .map(|definition| super::DefinitionGeometryCheckpoint {
-                indent_columns: definition.row.indent_columns,
-                field_offset: definition.hang_row.field_offset,
-                field_offset_units: definition.field_offset_units,
-                column_reading_origin: definition.column_reading_origin,
-                margin_override: definition.margin_override,
-            })
+        let mut checkpoint = super::DefinitionGeometryCheckpoint {
+            offset_shift_units: self.row_presentation.offset_shift,
+            ..Default::default()
+        };
+        if let Some(definition) = &self.definition {
+            checkpoint.indent_columns = definition.row.indent_columns;
+            checkpoint.field_offset = definition.hang_row.field_offset;
+            checkpoint.field_offset_units = definition.field_offset_units;
+            checkpoint.column_reading_origin = definition.column_reading_origin;
+            checkpoint.margin_override = definition.margin_override;
+        }
+        Some(checkpoint)
     }
 
     pub(in crate::mandoc) fn restore_definition_geometry(
         &mut self,
         checkpoint: Option<super::DefinitionGeometryCheckpoint>,
     ) {
-        if let Some(checkpoint) = checkpoint
-            && let Some(definition) = &mut self.definition
-        {
+        let Some(checkpoint) = checkpoint else { return };
+        self.row_presentation.offset_shift = checkpoint.offset_shift_units;
+        if let Some(definition) = &mut self.definition {
             definition.row.indent_columns = checkpoint.indent_columns;
             definition.hang_row.field_offset = checkpoint.field_offset;
             definition.field_offset_units = checkpoint.field_offset_units;

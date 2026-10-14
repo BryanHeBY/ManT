@@ -311,7 +311,7 @@ impl FormatterState {
     }
     /// Move document-global registers into one active inline session.
     ///
-    /// Keeping this paired with [`Self::finish_inline_line`] and
+    /// Keeping this paired with [`Self::finish_inline_line_with_rows`] and
     /// [`Self::finish_inline_scope`] returns every register to the same owner.
     /// Ordinary paragraphs borrow through [`Self::with_output_builder`];
     /// table fragments execute in a separately proved local scope.
@@ -337,10 +337,6 @@ impl FormatterState {
     }
 
     /// Commit an inline session at a native formatter-line boundary.
-    pub(super) fn finish_inline_line(&mut self, builder: InlineBuilder) -> FinishedInlineLine {
-        self.finish_inline_line_with_rows(builder, false)
-    }
-
     pub(super) fn finish_inline_line_with_rows(
         &mut self,
         mut builder: InlineBuilder,

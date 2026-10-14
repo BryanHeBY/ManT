@@ -6,6 +6,7 @@ use mant_protocol::{
 };
 use serde_json::Value;
 
+const V0_13_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.13.json");
 const V0_12_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.12.json");
 
 fn remove_non_structural_metadata(value: &mut Value) {
@@ -27,22 +28,49 @@ fn remove_non_structural_metadata(value: &mut Value) {
 }
 
 #[test]
-fn unreleased_v0_12_structural_schemas_match_the_registered_contract() {
-    assert_eq!(NATIVE_API_VERSION, "0.12");
+fn current_structural_schemas_match_the_registered_contract() {
+    assert_eq!(NATIVE_API_VERSION, "0.13");
 
-    let mut expected: Value = serde_json::from_str(V0_12_SNAPSHOT).expect("v0.12 schema snapshot");
+    let mut expected: Value = serde_json::from_str(V0_13_SNAPSHOT).expect("v0.13 schema snapshot");
     let mut actual = serde_json::to_value(query_json_schema_catalog()).expect("generated schemas");
     remove_non_structural_metadata(&mut expected);
     remove_non_structural_metadata(&mut actual);
 
     assert_eq!(
         actual, expected,
-        "the unreleased v0.12 structural contract changed; review the wire change, update its consumers and documentation, then regenerate the v0.12 snapshot without changing the version"
+        "the structural contract changed; review compatibility, version published contracts when necessary, and update current consumers and the matching snapshot; never overwrite published snapshots"
     );
 }
 
 #[test]
-fn v0_12_catalog_exposes_only_logical_document_identities() {
+fn published_v0_12_row_hints_remain_a_distinct_frozen_contract() {
+    let released: Value = serde_json::from_str(V0_12_SNAPSHOT).unwrap();
+    let current: Value = serde_json::from_str(V0_13_SNAPSHOT).unwrap();
+    for family in ["query", "excerpt", "explanation", "scope-query"] {
+        assert_eq!(released[family]["$id"], format!("urn:mant:{family}:v0.12"));
+        assert_eq!(current[family]["$id"], format!("urn:mant:{family}:v0.13"));
+        let old = &released[family]["$defs"]["RowLayoutHint"];
+        assert_eq!(old["additionalProperties"], false);
+        assert_eq!(old["required"], serde_json::json!(["row", "indentColumns"]));
+        assert_eq!(old["properties"].as_object().unwrap().len(), 2);
+        let new = &current[family]["$defs"]["RowLayoutHint"];
+        assert_eq!(new["additionalProperties"], false);
+        assert_eq!(new["required"], serde_json::json!(["row", "indentColumns"]));
+        assert_eq!(new["properties"].as_object().unwrap().len(), 4);
+        assert_eq!(
+            new["properties"]["firstLineIndentColumns"]["minimum"],
+            -65535
+        );
+        assert_eq!(
+            new["properties"]["firstLineIndentColumns"]["maximum"],
+            65535
+        );
+        assert!(new["properties"].get("alignment").is_some());
+    }
+}
+
+#[test]
+fn v0_13_catalog_exposes_only_logical_document_identities() {
     let catalog = serde_json::to_value(mant_protocol::document_catalog_json_schema())
         .expect("catalog schema");
     let summary = &catalog["$defs"]["DocumentSummary"];

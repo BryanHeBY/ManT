@@ -58,6 +58,7 @@ fn content(
                 row_hints: vec![RowLayoutHint {
                     row: 1,
                     indent_columns: 3,
+                    ..Default::default()
                 }],
             },
             children,
@@ -71,6 +72,7 @@ fn content(
                 row_hints: vec![RowLayoutHint {
                     row: 1,
                     indent_columns: 3,
+                    ..Default::default()
                 }],
             },
             children,

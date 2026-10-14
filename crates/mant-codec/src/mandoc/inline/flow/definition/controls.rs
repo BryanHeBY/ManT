@@ -78,6 +78,45 @@ impl InlineBuilder {
         let _ = self.execute_native_newline_with_tail();
     }
 
+    /// `roff_term_pre_ce()` calls `term_flushln()`, even over an empty buffer.
+    /// A HANG tail may keep its device row open; this is not a hard break.
+    pub(in crate::mandoc) fn flush_execution_line(&mut self) {
+        let occupied = self.has_formatter_cell()
+            || self.execution.has_open_native_device_row()
+            || self
+                .execution
+                .definition
+                .as_ref()
+                .is_some_and(|state| !state.field_buffer.is_empty())
+            || !self.execution.flush_unit.is_empty();
+        if occupied {
+            self.execute_native_newline();
+            return;
+        }
+        let native = self.native_field_device(false);
+        let ends_row = native
+            .as_ref()
+            .is_none_or(super::NativeFieldDevice::ends_row);
+        self.retire_native_field_with_device(native.as_ref());
+        self.execution.boundary = PendingBoundary::Tight;
+        if ends_row {
+            // term.c:233-253 applies the ordinary tail even when nbr == 0.
+            // Preserve this new empty row, independently of earlier breaks.
+            self.execution.row_presentation.endline();
+            self.nodes.push(Inline::Text {
+                value: String::new(),
+            });
+            self.nodes.push(Inline::line_break());
+            self.note_definition_output_row();
+            // This unconditional term_flushln() ended a new empty device
+            // row. Transfer its own receipt alongside earlier vspace rows;
+            // a paragraph drain must not count only the preceding .sp and
+            // trim this additional close (roff_term_pre_ce(), term.c:250).
+            self.record_completed_vertical_rows(1);
+            self.execution.last_visible_character = Some('\n');
+        }
+    }
+
     /// Return the consumed native tail to callers with a real post effect.
     /// This is the same execution, never another IR-width observation.
     pub(in crate::mandoc::inline::flow) fn execute_native_newline_with_tail(&mut self) -> bool {
@@ -150,7 +189,12 @@ impl InlineBuilder {
             ends_row = native
                 .as_ref()
                 .is_some_and(super::NativeFieldDevice::ends_row);
-            self.hard_break();
+            if let Some(native) = &native {
+                self.project_captured_definition_field(native);
+                self.hard_break_after_field_projection(Some(native));
+            } else {
+                self.hard_break();
+            }
             self.retire_native_field_with_device(native.as_ref());
         }
         if let Some(device) = resumed {

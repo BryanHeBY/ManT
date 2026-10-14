@@ -37,6 +37,10 @@ pub(super) enum NativeFieldEmission {
 /// Numeric state of the current print sweep. This is local to one receipt;
 /// persistent formatter flags and cells remain in the execution state.
 struct NativeFieldSweep {
+    presentation: super::super::presentation::RowPresentation,
+    partial_alignment: bool,
+    cleared_alignment: Option<(String, usize, mant_ir::RowLayoutHint)>,
+    row_presentations: Vec<(String, usize, mant_ir::RowLayoutHint)>,
     viscol: usize,
     printed_row: Option<usize>,
     emission: NativeFieldEmission,
@@ -76,6 +80,7 @@ pub(super) enum LoopRowEnd {
 }
 
 /// Position at which one accepted interval reaches `term_field()`.
+#[derive(Clone, Copy)]
 struct NativeFieldPrint {
     start: usize,
     end: usize,
@@ -90,6 +95,7 @@ struct NativeFieldTail {
     ends_row: bool,
     overruns: bool,
     trailspace_cells: usize,
+    offset_units: usize,
 }
 
 /// One completed pass sweep: the device row facts plus the fill width,
@@ -113,6 +119,16 @@ impl NativeFieldSweep {
         receipt: FlushReceipt,
     ) -> NativeFieldDevice {
         NativeFieldDevice {
+            partial_alignment: self.partial_alignment,
+            cleared_alignment: self.cleared_alignment,
+            presentation: {
+                let mut value = self.presentation;
+                if tail.ends_row {
+                    value.endline_at(tail.offset_units);
+                }
+                value
+            },
+            row_presentations: self.row_presentations,
             receipt,
             width,
             viscol: if tail.ends_row { 0 } else { self.viscol },
@@ -145,6 +161,10 @@ impl NativeFieldSweep {
 /// already carry the term.c:250-253 decision over the sweep-widened `vbr`
 /// (computed inside `native_field_device_with_resume`).
 pub(in crate::mandoc) struct NativeFieldDevice {
+    pub(super) partial_alignment: bool,
+    pub(super) cleared_alignment: Option<(String, usize, mant_ir::RowLayoutHint)>,
+    pub(super) presentation: super::super::presentation::RowPresentation,
+    pub(super) row_presentations: Vec<(String, usize, mant_ir::RowLayoutHint)>,
     /// Accepted passes and rejected suffix of this exact old-state sweep.
     /// Projection and retirement consume the same decision, never a rescan
     /// after a control changed BRIND/NOBREAK.
@@ -202,6 +222,10 @@ impl NativeFieldDevice {
         if let Some(field) = &mut self.separator_field {
             field.remap_output_positions(edit);
         }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn device_column_units(&self) -> i64 {
+        self.presentation.device_column(self.viscol)
     }
 
     pub(in crate::mandoc::inline::flow) const fn ends_row(&self) -> bool {
@@ -333,6 +357,7 @@ impl InlineBuilder {
                 ends_row,
                 overruns,
                 trailspace_cells: trailspace,
+                offset_units: state.field_offset_units,
             },
             state.no_break.or(resumed),
             self.native_field_output_start(),

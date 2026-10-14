@@ -247,6 +247,7 @@ impl<'a> LocatedStyles<'a> {
         decorate: &dyn Fn(TextPresentation, &str) -> String,
     ) -> String {
         crate::output::text::blocks::BlockRenderer {
+            width: None,
             names: None,
             locations: Some(self),
             decorate,

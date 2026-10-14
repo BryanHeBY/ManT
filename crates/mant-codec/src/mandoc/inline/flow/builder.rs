@@ -3,6 +3,9 @@ use super::{CellProduction, Inline, InlineBuilder, InlineExecutionState, output}
 use libmandoc_rs::MacroSet;
 
 impl InlineBuilder {
+    pub(in crate::mandoc) fn set_text_alignment(&mut self, alignment: mant_ir::TextAlignment) {
+        self.text_alignment = alignment;
+    }
     #[cfg(test)]
     pub(in crate::mandoc) fn new() -> Self {
         Self::with_spacing(true)
@@ -68,6 +71,9 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn visits_empty_text_as_space(&self, node: &libmandoc_rs::Node) -> bool {
+        if self.execution.observe_no_fill_source_lines == super::SourceLineObservation::Grouped {
+            return false;
+        }
         if self.direct_word_operands {
             return false;
         }

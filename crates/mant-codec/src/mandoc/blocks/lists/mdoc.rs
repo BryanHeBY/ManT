@@ -74,11 +74,24 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             formatter,
         )
     } else {
+        // List marker geometry belongs to this source scope. Rebase its
+        // inherited offset correction into the list's normal parent rather
+        // than shifting only the label and leaving the visible marker at
+        // the old origin (termp_it_pre HEAD/BODY offset, mdoc_term.c:874).
+        // The independent ti remains live until the actual BODY endline.
+        let shifted_indent = context.offset_indent(
+            node,
+            list_indent,
+            crate::mandoc::layout::Distance::from_basic_units(
+                formatter.row_presentation.offset_shift,
+            ),
+        );
+        formatter.row_presentation.offset_shift = 0;
         lower_mdoc_plain_list(
             node,
             items,
             context,
-            list_indent,
+            shifted_indent,
             paragraph_distance,
             paragraph_predecessor,
             formatter,

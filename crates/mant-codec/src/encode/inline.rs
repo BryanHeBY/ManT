@@ -165,7 +165,8 @@ pub(super) fn literal_row_layout(text: &str, layout: &InlineLayout) -> String {
         // An empty open tail or anchor-only root cannot become literal text
         // solely because its addressable row carries a layout correction.
         if !row.is_empty() {
-            output.push_str(&" ".repeat(mant_ir::geometry::padding(layout.row_indent(index))));
+            let origin = layout.row_layout(index).resolve(0, 0).first_visual_origin;
+            output.push_str(&" ".repeat(mant_ir::geometry::padding(origin)));
             output.push_str(row);
         }
     }
@@ -248,6 +249,7 @@ mod tests {
             row_hints: vec![mant_ir::RowLayoutHint {
                 row: 1,
                 indent_columns: 3,
+                ..Default::default()
             }],
         };
         let content = mant_ir::InlineContentRef {

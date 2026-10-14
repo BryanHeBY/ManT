@@ -92,6 +92,8 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// Native word start, stable private owner marker, and content start.
     /// Markers retain ownership through style/link wrapping and compaction.
     pub(in crate::mandoc::inline::flow) field_word_anchors: Vec<super::super::NativeWordAnchor>,
+    pub(in crate::mandoc::inline::flow) deferred_head_layout:
+        Option<super::head_presentation::DeferredHeadLayout>,
     pub(in crate::mandoc::inline::flow) outcome: DefinitionOutcome,
     pub(in crate::mandoc::inline::flow) no_break: Option<NoBreakField>,
     // A positive term_vspace() ends the HANG device row. The next author

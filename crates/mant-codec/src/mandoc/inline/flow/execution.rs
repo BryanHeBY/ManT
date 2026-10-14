@@ -11,6 +11,17 @@ use libmandoc_rs::{
 };
 
 impl InlineBuilder {
+    /// `roff_term_pre_ce()` directly visits words and roff requests. Source
+    /// coordinates remain provenance; its child `NODE_LINE` flags are not
+    /// additional `print_man_node/print_mdoc_node` entry events.
+    pub(in crate::mandoc) fn with_grouped_line_dispatch(&mut self, append: impl FnOnce(&mut Self)) {
+        let previous = std::mem::replace(
+            &mut self.execution.observe_no_fill_source_lines,
+            SourceLineObservation::Grouped,
+        );
+        append(self);
+        self.execution.observe_no_fill_source_lines = previous;
+    }
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
         self.execution.boundary = PendingBoundary::Tight;
     }
@@ -174,6 +185,10 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        if self.execution.observe_no_fill_source_lines == SourceLineObservation::Grouped {
+            self.execution.execute_tab_configuration(node);
+            return;
+        }
         self.execution.enter_tab_source_node(node);
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::NoFill
             && node.flags.no_fill

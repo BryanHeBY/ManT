@@ -32,7 +32,7 @@ const HEAD_CONTROL_CASES: [HeadControlCase; 16] = [
         "6n",
         ".ti 2n",
         "LONGTEXT\nA\nBob\nBODY",
-        "LONGTEXT\n        A\nBob\n        BODY",
+        "LONGTEXT\nA\nBob\n        BODY",
     ),
     (
         "tag temporary indent fit",
@@ -40,7 +40,7 @@ const HEAD_CONTROL_CASES: [HeadControlCase; 16] = [
         "12n",
         ".ti 2n",
         "LONGTEXT  A\nBob\nBODY",
-        "LONGTEXT      A\nBob\n              BODY",
+        "LONGTEXT  A\nBob\n              BODY",
     ),
     (
         "tag vertical space",
@@ -112,7 +112,7 @@ const HEAD_CONTROL_CASES: [HeadControlCase; 16] = [
         "12n",
         ".ti 2n",
         "LONGTEXT ABob BODY",
-        "LONGTEXT      ABobBODY",
+        "LONGTEXT ABob BODY",
     ),
     (
         "hang vertical space fit",
@@ -146,9 +146,10 @@ fn definition_head_controls_settle_the_same_native_field() {
     // `roff_term_pre_br/sp/ti()`, and `term_flushln()`.  NOBREAK, BRIND,
     // HANG, trailspace, and the body origin form one formatter field; none of
     // these requests may be lowered as an unrelated paragraph break.
-    // Every exact source was rechecked with registered pristine CVS. ti's
-    // numeric temporary origin stays native-only; lowering deliberately
-    // executes its pre_br boundary identically to .br (roff_term.c:233-280).
+    // Every exact source was rechecked with registered pristine CVS before
+    // updating these expectations. ti shares the pre_br boundary but then
+    // changes actual offset/minbl; accepted word seams follow that result.
+    // Common page padding is omitted from this portable reading projection.
 
     for (label, style, width, request, native_expected, lowered_expected) in HEAD_CONTROL_CASES {
         let source = format!(
@@ -160,13 +161,6 @@ fn definition_head_controls_settle_the_same_native_field() {
             "{label} native output: {native:?}"
         );
         let lowered = lowered_terminal(&source);
-        if request.starts_with(".ti") {
-            assert_eq!(
-                lowered,
-                lowered_terminal(&source.replace(request, ".br")),
-                "{label}: numeric temporary geometry changed the shared pre_br result"
-            );
-        }
         assert!(
             lowered.contains(lowered_expected),
             "{label} lowered output: {lowered:?}"
@@ -178,8 +172,9 @@ fn definition_head_controls_settle_the_same_native_field() {
 fn temporary_indent_keeps_the_field_boundary_without_printing_its_operand() {
     // Verified against pinned CVS roff_term.c::roff_term_pre_ti(): every
     // spelling first executes roff_term_pre_br(), while valid signed and
-    // unsigned operands only update p->ti/tcol->offset. ManT intentionally
-    // omits that device position, but must retain the tag field's two cells.
+    // unsigned operands update p->ti/tcol->offset. All five exact sources
+    // reran pristine: the surrounding source scope still prints A/B with
+    // two cells between them. Resolved layout cannot print the operand.
     for (label, operand) in [
         ("absolute", " 10n"),
         ("relative-positive", " +10n"),

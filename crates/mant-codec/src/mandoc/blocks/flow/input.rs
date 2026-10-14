@@ -3,6 +3,31 @@ use super::{BlockState, InlineBuilder};
 use mant_ir::{Block, Inline};
 
 impl BlockState {
+    pub(in crate::mandoc::blocks) fn temporary_indent(&mut self, node: &libmandoc_rs::Node) {
+        self.pre_break_request();
+        self.formatter.execution.apply_temporary_indent(
+            node.children
+                .first()
+                .and_then(|child| child.text.as_deref()),
+        );
+    }
+
+    pub(in crate::mandoc::blocks) fn set_text_alignment(
+        &mut self,
+        alignment: mant_ir::TextAlignment,
+    ) {
+        if self.formatter.no_fill || self.column_uses_literal_output() {
+            self.literal
+                .with_inline_builder(&mut self.formatter, |builder| {
+                    builder.set_text_alignment(alignment);
+                });
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, |builder| {
+                    builder.set_text_alignment(alignment);
+                });
+        }
+    }
     pub(in crate::mandoc::blocks) fn literal_mode_boundary(&mut self) {
         // Native fi/nf execute term_newln even when the requested mode is
         // already active. Keep adjacent literal blocks coalesced while ending
@@ -119,7 +144,9 @@ impl BlockState {
             }
             self.formatter.note_definition_boundary();
             if self.formatter.definition_head_row_pending()
-                && self.paragraph.consume_invisible_head_row()
+                && self
+                    .paragraph
+                    .consume_invisible_head_row(&mut self.formatter)
             {
                 self.formatter.consume_definition_head_row();
             }
@@ -147,7 +174,9 @@ impl BlockState {
     /// writes cells; request dispatch must not bypass this ownership seam.
     pub(super) fn settle_definition_line_boundary(&mut self) {
         if self.formatter.definition_head_row_pending()
-            && self.paragraph.consume_invisible_head_row()
+            && self
+                .paragraph
+                .consume_invisible_head_row(&mut self.formatter)
         {
             self.formatter.consume_definition_head_row();
         }

@@ -1,7 +1,6 @@
 //! Drain output owners and settle their current row, target and spacing receipts.
 use super::{
-    BlockState, ClosedOutputTail, InlineBuilder, OutputRowEnd, has_flushed_row,
-    has_formatter_text_cell, layout,
+    BlockState, ClosedOutputTail, InlineBuilder, OutputRowEnd, has_formatter_text_cell, layout,
 };
 use mant_ir::{Block, Inline};
 
@@ -265,24 +264,18 @@ impl BlockState {
     /// after an embedded spacing/font request emptied its pending content.
     pub(in crate::mandoc::blocks) fn flush_requested_line(
         &mut self,
-        source: Option<mant_ir::SourceSpan>,
+        _source: Option<mant_ir::SourceSpan>,
     ) {
-        let start = self.output.len();
+        if self.formatter.no_fill || self.column_uses_literal_output() {
+            self.literal
+                .with_inline_builder(&mut self.formatter, InlineBuilder::flush_execution_line);
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, InlineBuilder::flush_execution_line);
+        }
+        self.formatter.no_fill_inline.retire_consumed_cell();
         self.flush_preformatted();
         self.flush_paragraph();
-        if !has_flushed_row(&self.output[start..]) {
-            let start = self.output.len();
-            self.output.push(Block::Preformatted {
-                inline_layout: mant_ir::InlineLayout::default(),
-                children: vec![Inline::Text {
-                    value: String::new(),
-                }],
-                language: None,
-                layout: layout(self.indent_columns),
-                source,
-            });
-            self.attach_pending_to_new_output(start);
-        }
         self.consume_hanging_first_line();
     }
 

@@ -20,12 +20,16 @@ impl CellOriginBounds {
 
     fn inline(&mut self, layout: &crate::InlineLayout, origin: i32, hanging: i32) {
         for hint in &layout.row_hints {
-            self.negative_displacement |= hint.indent_columns < 0;
-            self.observe(compose_origin(origin, hint.indent_columns));
-            self.observe(compose_origin(
-                compose_origin(origin, hanging),
-                hint.indent_columns,
-            ));
+            // First-only correction composes with the persistent row
+            // correction before any consumer clips its local origin. A
+            // negative component can cancel a positive one without making
+            // either actual visual origin an outdent.
+            let corrections = hint.resolve(0, 0);
+            self.negative_displacement |=
+                corrections.first_visual_origin < 0 || corrections.continuation_origin < 0;
+            let origins = hint.resolve(origin, compose_origin(origin, hanging));
+            self.observe(origins.first_visual_origin);
+            self.observe(origins.continuation_origin);
         }
     }
 
@@ -283,11 +287,46 @@ mod tests {
     }
 
     #[test]
+    fn first_only_components_are_composed_before_selecting_origin_fallback() {
+        // The precise column `.ti 2n` source reran on pristine before this
+        // regression: mdoc_term.c::print_mdoc_node restores source offset,
+        // not ti, and the field remains beside its following column. The
+        // resulting first-only negative component cancels a positive row
+        // correction; the actual first and continued origins are not negative.
+        for (continued, first_only, outdent) in [
+            (3, -3, false),
+            (3, -2, false),
+            (-3, 3, true),
+            (-3, 6, true),
+            (0, -3, true),
+        ] {
+            let mut content = paragraph(0, 0);
+            let Block::Paragraph { inline_layout, .. } = &mut content else {
+                unreachable!()
+            };
+            inline_layout.row_hints.push(crate::RowLayoutHint {
+                row: 0,
+                indent_columns: continued,
+                first_line_indent_columns: first_only,
+                ..Default::default()
+            });
+            for parent in [0, 5] {
+                assert_eq!(
+                    table_requires_origin_preserving_stack(&rows(content.clone()), parent),
+                    outdent,
+                    "{continued} {first_only} {parent}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn owner_row_hints_preserve_signed_parent_composition_before_cell_clipping() {
         let inline_layout = |correction| crate::InlineLayout {
             row_hints: vec![crate::RowLayoutHint {
                 row: 0,
                 indent_columns: correction,
+                ..Default::default()
             }],
         };
         let paragraph = |correction, hanging| Block::Paragraph {
@@ -332,6 +371,7 @@ mod tests {
                 row_hints: vec![crate::RowLayoutHint {
                     row: 1,
                     indent_columns: -2,
+                    ..Default::default()
                 }],
             },
             language: None,
@@ -354,6 +394,7 @@ mod tests {
                         row_hints: vec![crate::RowLayoutHint {
                             row: 0,
                             indent_columns: correction,
+                            ..Default::default()
                         }],
                     },
                 }],
@@ -396,6 +437,7 @@ mod tests {
                         vec![crate::RowLayoutHint {
                             row: 0,
                             indent_columns: correction,
+                            ..Default::default()
                         }]
                     },
                 },

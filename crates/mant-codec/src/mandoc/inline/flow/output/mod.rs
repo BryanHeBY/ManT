@@ -58,6 +58,7 @@ pub(in crate::mandoc::inline::flow) fn is_private_output_marker(node: &Inline) -
 mod boundary;
 mod drain;
 mod projection;
+mod row_layout;
 mod words;
 
 pub(in crate::mandoc) use projection::consume_one_row_ending;
@@ -80,6 +81,32 @@ pub(in crate::mandoc) use row_origins::{
 pub(in crate::mandoc::inline::flow) mod split;
 
 impl InlineBuilder {
+    /// Rehome an already represented HEAD row without moving the remaining
+    /// native unit's output cursors away from their source owners.
+    pub(in crate::mandoc) fn consume_invisible_head_row(&mut self) -> bool {
+        let Some(end) = self
+            .nodes
+            .iter()
+            .position(|node| matches!(node, Inline::LineBreak {}))
+        else {
+            return false;
+        };
+        if has_rendered_formatter_glyph(&self.nodes[..end]) {
+            return false;
+        }
+        let removed = end + 1;
+        let mut identities: Vec<_> = self.nodes.drain(..removed).collect();
+        retain_inline_identities(&mut identities);
+        let inserted = identities.len();
+        self.nodes.splice(0..0, identities);
+        self.remap_output_positions(row_origins::OutputNodeEdit {
+            start: 0,
+            removed,
+            inserted,
+        });
+        true
+    }
+
     /// Row-layout carriers can be inserted into an already accepted prefix.
     /// Keep every live root-vector address on its original content boundary.
     /// `NativeWordAnchor` and field owner ranges are `FieldBuffer` cell/scalar
@@ -252,7 +279,16 @@ impl InlineBuilder {
         // (term.c:475-481). An empty word may have cleared it without
         // buffering a cell, so a no-output return still owns this update.
         self.execution.boundary = PendingBoundary::Tight;
-        self.hard_break_using_field(None, false);
+        if let Some(native) = self.native_field_device(false) {
+            // term_newln consumes the actual old field before clearing its
+            // cells. Preserve accepted row ownership even when that owner
+            // is a HEAD already drained into a different IR container.
+            self.project_captured_definition_field(&native);
+            self.project_consumed_row_layout(&native);
+            self.hard_break_using_field(Some(&native), true);
+        } else {
+            self.hard_break_using_field(None, false);
+        }
         self.execution.boundary = PendingBoundary::Tight;
     }
 
@@ -405,6 +441,15 @@ impl InlineBuilder {
         exited_discarded_buffer: bool,
         retiring_rejection: bool,
     ) {
+        // This is a committed device-row end, including a detached HEAD
+        // whose buffer already belongs to another IR owner. ascii_endline()
+        // consumes ti here; an owner drain or a retained HANG field does not.
+        let offset = self
+            .execution
+            .definition
+            .as_ref()
+            .map_or(0, |state| state.field_offset_units);
+        self.execution.row_presentation.endline_at(offset);
         self.execution.boundary = PendingBoundary::Ordinary;
         self.execution.empty_word = false;
         self.execution.trailing_output = TrailingOutput::None;

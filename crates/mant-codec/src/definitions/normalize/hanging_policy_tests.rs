@@ -30,6 +30,7 @@ fn head(children: Vec<Inline>, continuation: i32) -> Block {
             row_hints: vec![RowLayoutHint {
                 row: 0,
                 indent_columns: -2,
+                ..Default::default()
             }],
         },
         layout: LayoutHint {
@@ -50,6 +51,7 @@ fn description() -> Vec<Block> {
                 row_hints: vec![RowLayoutHint {
                     row: 1,
                     indent_columns: -1,
+                    ..Default::default()
                 }],
             },
             layout: LayoutHint {
@@ -192,6 +194,7 @@ fn multipart_head(continuation: i32) -> Block {
     inline_layout.row_hints.push(RowLayoutHint {
         row: 2,
         indent_columns: 3,
+        ..Default::default()
     });
     head
 }
@@ -276,6 +279,7 @@ fn assert_sparse_owner_geometry(owner: EntryOwner<'_>, continuation: i32) {
         [RowLayoutHint {
             row: 0,
             indent_columns: 3,
+            ..Default::default()
         }]
     );
     assert_eq!(

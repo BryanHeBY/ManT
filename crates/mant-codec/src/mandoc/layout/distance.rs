@@ -11,6 +11,10 @@ const LIMIT: i32 = 4096 * UNITS_PER_CELL;
 pub(in crate::mandoc) struct Distance(i32);
 
 impl Distance {
+    pub(in crate::mandoc) fn from_basic_units(value: i32) -> Self {
+        Self(value.clamp(-LIMIT, LIMIT))
+    }
+
     /// Parse one finite literal distance, using ens for a bare number.
     /// Expressions, registers and unsupported units remain explicit failures.
     pub(in crate::mandoc) fn parse(value: &str) -> Option<Self> {

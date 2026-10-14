@@ -99,7 +99,7 @@ fn content() -> ResolvedContent {
 
 fn outline() -> QueryOutline {
     QueryOutline {
-        schema: OutlineSchema::V0Dot12,
+        schema: OutlineSchema::V0Dot13,
         entries: EntryProjection::None,
         root: None,
         references: Default::default(),
@@ -123,7 +123,7 @@ fn outline() -> QueryOutline {
 
 fn excerpt() -> QueryExcerpt {
     QueryExcerpt {
-        schema: ExcerptSchema::V0Dot12,
+        schema: ExcerptSchema::V0Dot13,
         label: "specimen".into(),
         display_title: Some("Render specimen".into()),
         address: None,
@@ -240,6 +240,7 @@ fn check_hinted_json_owner() -> Result<(), Box<dyn std::error::Error>> {
     inline_layout.row_hints = vec![mant_ir::RowLayoutHint {
         row: 1,
         indent_columns: 3,
+        ..Default::default()
     }];
     let wire = render_query_json(&authored, false)?;
     let value: serde_json::Value = serde_json::from_str(&wire)?;

@@ -10,8 +10,38 @@ pub const MAX_INLINE_ROW_HINTS: usize = 4096;
 /// Maximum magnitude of a relative row displacement, in display cells.
 pub const MAX_ROW_INDENT_COLUMNS: i32 = u16::MAX as i32;
 
+/// Horizontal placement within the available content area of a visual row.
+/// Without a viewport, consumers retain the ordinary left origin.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum TextAlignment {
+    /// Use the row's resolved left origin.
+    #[default]
+    Left,
+    /// Center each visual line in its available content area.
+    Center,
+    /// Place each visual line at the area's right edge.
+    Right,
+}
+
+impl TextAlignment {
+    /// Additional viewport padding; empty rows never acquire layout cells.
+    #[must_use]
+    pub const fn padding(self, available: usize, content_width: usize) -> usize {
+        if content_width == 0 {
+            return 0;
+        }
+        let remaining = available.saturating_sub(content_width);
+        match self {
+            Self::Left => 0,
+            Self::Center => remaining / 2,
+            Self::Right => remaining,
+        }
+    }
+}
+
 /// An exceptional displacement of one logical hard row within its owner.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RowLayoutHint {
     /// Zero-based owner-local row; never a source or viewport coordinate.
@@ -19,6 +49,14 @@ pub struct RowLayoutHint {
     /// Relative display-cell correction applied to both visual origins.
     #[schemars(range(min = -65535, max = 65535))]
     pub indent_columns: i32,
+    /// Additional correction for this logical row's first visual line only.
+    /// Soft-wrap continuations retain their ordinary owner/hanging origin.
+    #[serde(default, skip_serializing_if = "zero_indent")]
+    #[schemars(range(min = -65535, max = 65535))]
+    pub first_line_indent_columns: i32,
+    /// Viewport-relative placement, independent of text and source commands.
+    #[serde(default, skip_serializing_if = "left_alignment")]
+    pub alignment: TextAlignment,
 }
 
 #[derive(Deserialize)]
@@ -26,6 +64,10 @@ pub struct RowLayoutHint {
 struct RowLayoutHintWire {
     row: u32,
     indent_columns: i32,
+    #[serde(default)]
+    first_line_indent_columns: i32,
+    #[serde(default)]
+    alignment: TextAlignment,
 }
 
 impl<'de> Deserialize<'de> for RowLayoutHint {
@@ -34,6 +76,8 @@ impl<'de> Deserialize<'de> for RowLayoutHint {
         Ok(Self {
             row: wire.row,
             indent_columns: wire.indent_columns,
+            first_line_indent_columns: wire.first_line_indent_columns,
+            alignment: wire.alignment,
         })
     }
 }
@@ -73,7 +117,7 @@ impl InlineLayout {
     /// Whether this owner needs no exceptional row layout.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.row_hints.iter().all(|hint| hint.indent_columns == 0)
+        self.row_hints.iter().all(RowLayoutHint::is_empty)
     }
 
     /// Check the wire budget, ordering, displacements and addressed rows.
@@ -102,7 +146,9 @@ impl InlineLayout {
             return Err("inline row layout hints must be unique and increasing");
         }
         if self.row_hints.iter().any(|hint| {
-            !(-MAX_ROW_INDENT_COLUMNS..=MAX_ROW_INDENT_COLUMNS).contains(&hint.indent_columns)
+            [hint.indent_columns, hint.first_line_indent_columns]
+                .iter()
+                .any(|value| !(-MAX_ROW_INDENT_COLUMNS..=MAX_ROW_INDENT_COLUMNS).contains(value))
         }) {
             return Err("inline row displacement exceeds the accepted range");
         }
@@ -112,15 +158,21 @@ impl InlineLayout {
     /// Read a row's correction without changing any preceding row's origin.
     #[must_use]
     pub fn row_indent(&self, row: usize) -> i32 {
+        self.row_layout(row).indent_columns
+    }
+
+    /// Read all presentation corrections for one logical row.
+    #[must_use]
+    pub fn row_layout(&self, row: usize) -> RowLayoutHint {
         u32::try_from(row)
             .ok()
             .and_then(|row| {
                 self.row_hints
                     .binary_search_by_key(&row, |hint| hint.row)
                     .ok()
-                    .map(|index| self.row_hints[index].indent_columns)
+                    .map(|index| self.row_hints[index])
             })
-            .unwrap_or(0)
+            .unwrap_or_default()
     }
 }
 
@@ -327,7 +379,38 @@ fn text_chunks(content: &[Inline]) -> impl Iterator<Item = &str> {
 }
 
 fn hints_empty(hints: &[RowLayoutHint]) -> bool {
-    hints.iter().all(|hint| hint.indent_columns == 0)
+    hints.iter().all(RowLayoutHint::is_empty)
+}
+
+impl RowLayoutHint {
+    /// Resolve first and continued visual origins without clipping.
+    #[must_use]
+    pub const fn resolve(self, first: i32, continuation: i32) -> RowOrigins {
+        RowOrigins {
+            first_visual_origin: first
+                .saturating_add(self.indent_columns)
+                .saturating_add(self.first_line_indent_columns),
+            continuation_origin: continuation.saturating_add(self.indent_columns),
+        }
+    }
+
+    /// Whether this row adds no presentation preference.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.indent_columns == 0
+            && self.first_line_indent_columns == 0
+            && self.alignment == TextAlignment::Left
+    }
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde skip predicates borrow fields.
+const fn zero_indent(value: &i32) -> bool {
+    *value == 0
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde skip predicates borrow fields.
+fn left_alignment(value: &TextAlignment) -> bool {
+    *value == TextAlignment::Left
 }
 
 /// Restrict these new owner-layout wire types to JSON objects while retaining
@@ -365,7 +448,7 @@ fn serialize_hints<S: serde::Serializer>(
 ) -> Result<S::Ok, S::Error> {
     use serde::ser::SerializeSeq;
     let mut sequence = serializer.serialize_seq(None)?;
-    for hint in hints.iter().filter(|hint| hint.indent_columns != 0) {
+    for hint in hints.iter().filter(|hint| !hint.is_empty()) {
         sequence.serialize_element(hint)?;
     }
     sequence.end()

@@ -8,6 +8,9 @@ use libmandoc_rs::{
     ManMacro, MdocMacro, RoffMacro,
 };
 
+mod lifecycle;
+pub(super) use lifecycle::body_origin;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SynopsisDeclarationRole {
     PostBreak,
@@ -147,7 +150,8 @@ pub(super) fn lower_synopsis_head(
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
-    let mut head = execute_synopsis_head(node, context, spacing_enabled, formatter);
+    let saved_offset_shift = formatter.row_presentation.offset_shift;
+    let mut head = execute_synopsis_head(node, context, indent_columns, spacing_enabled, formatter);
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // The HEAD post already selected Roman; BODY entry is another
         // print_man_node() pre transition, even if its font is Roman too.
@@ -155,13 +159,16 @@ pub(super) fn lower_synopsis_head(
             .font
             .select(crate::mandoc::roff_escape::RoffFont::Regular);
     }
+    let body_origin = lifecycle::body_origin(node, context, indent_columns);
+    formatter.begin_definition_body(formatter.definition_head_row_occupied());
     let mut nested = lower_scope(
         first_part_children(node, NodeKind::Body),
         context,
         paragraph_distance,
         formatter,
-        ScopeFlow::filled(indent_columns, spacing_enabled),
+        ScopeFlow::filled(body_origin, spacing_enabled),
     );
+    let body_execution = formatter.finish_definition_body();
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // BODY post and BLOCK post both execute the man(7) font reset.
         // Replacing Roman twice matters to a following \fP.
@@ -171,18 +178,27 @@ pub(super) fn lower_synopsis_head(
         formatter
             .font
             .select(crate::mandoc::roff_escape::RoffFont::Regular);
+        super::reset_man_macro_offset(formatter, indent_columns);
+    } else {
+        // print_mdoc_node() restores Nm BODY/BLOCK's saved source offset;
+        // unlike offset, ti is never restored by a scope return.
+        formatter.row_presentation.offset_shift = saved_offset_shift;
+        formatter.row_presentation.parent =
+            i32::try_from(indent_columns.physical_basic_units()).unwrap_or(i32::MAX);
     }
     if head.is_empty() {
         output.extend(nested);
         return;
     }
 
-    if let Some(Block::Paragraph {
-        children,
-        source,
-        inline_layout,
-        ..
-    }) = nested.first_mut()
+    if !body_execution.placement_breaks()
+        && let Some(Block::Paragraph {
+            children,
+            source,
+            inline_layout,
+            layout,
+            ..
+        }) = nested.first_mut()
     {
         let head_layout = crate::mandoc::inline::take_inline_layout(&mut head);
         let row_offset = u32::try_from(mant_ir::logical_row_count(&head) - 1).unwrap_or(u32::MAX);
@@ -196,15 +212,19 @@ pub(super) fn lower_synopsis_head(
         *children = synopsis.finish();
         let mut hints = std::collections::BTreeMap::new();
         for hint in head_layout.row_hints.iter().chain(&inline_layout.row_hints) {
-            hints.insert(hint.row, hint.indent_columns);
+            hints.insert(hint.row, *hint);
         }
         inline_layout.row_hints = hints
             .into_iter()
-            .map(|(row, indent_columns)| mant_ir::RowLayoutHint {
-                row,
-                indent_columns,
-            })
+            .map(|(row, hint)| mant_ir::RowLayoutHint { row, ..hint })
             .collect();
+        // The first row shares the HEAD origin; later hard/wrapped rows
+        // retain pre_SY/termp_nm_pre(BODY)'s name-derived origin.
+        let body_delta = body_origin.offset_from(indent_columns);
+        layout.indent_columns = indent_columns.relative_columns();
+        layout.continuation_indent_columns = layout
+            .continuation_indent_columns
+            .saturating_add(body_delta);
         *source = source_span(node);
         output.extend(nested);
         return;
@@ -222,6 +242,7 @@ pub(super) fn lower_synopsis_head(
 pub(super) fn execute_synopsis_head(
     node: &Node,
     context: &LoweringContext<'_>,
+    indent_columns: crate::mandoc::layout::SourceIndent,
     spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
@@ -234,12 +255,18 @@ pub(super) fn execute_synopsis_head(
         formatter
             .font
             .select(crate::mandoc::roff_escape::RoffFont::Regular);
+        // pre_SY(HEAD) assigns mt->offset after the BLOCK print_bvspace.
+        super::reset_man_macro_offset(formatter, indent_columns.macro_origin());
     }
     let mut head_builder = formatter.begin_inline_session(
         spacing_enabled,
         context.active_mdoc_section() == crate::mandoc::source_context::MdocSectionContext::Authors,
-        crate::mandoc::inline::AuthorBreakEffect::Line,
+        lifecycle::head_effect(node),
     );
+    if lifecycle::flushes_head(node) {
+        head_builder.begin_definition_head_consumption();
+        head_builder.set_definition_native_margin(lifecycle::head_width(node).saturating_mul(24));
+    }
     head_builder.scope_posts = context.scope_posts.clone();
     let saved_font = head_builder
         .font
@@ -256,7 +283,9 @@ pub(super) fn execute_synopsis_head(
         // man_term.c::post_SY(HEAD) always flushes; mdoc_term.c's
         // termp_nm_post(HEAD) flushes when BODY is present. Settle pending
         // zero-width glyphs here before output ownership moves to BODY.
-        formatter.finish_inline_line(head_builder).output
+        formatter
+            .finish_inline_line_with_rows(head_builder, true)
+            .output
     } else {
         let (head, preserved) = formatter.finish_inline_scope(head_builder);
         let mut no_output = Vec::new();

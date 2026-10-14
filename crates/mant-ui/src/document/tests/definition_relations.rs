@@ -56,6 +56,7 @@ fn query(
                 row_hints: vec![mant_ir::RowLayoutHint {
                     row: 1,
                     indent_columns: 1,
+                    ..Default::default()
                 }],
             },
             children,
@@ -69,6 +70,7 @@ fn query(
                 row_hints: vec![mant_ir::RowLayoutHint {
                     row: 1,
                     indent_columns: 1,
+                    ..Default::default()
                 }],
             },
             children,
@@ -90,6 +92,7 @@ fn query(
                         vec![mant_ir::RowLayoutHint {
                             row: 1,
                             indent_columns: 2,
+                            ..Default::default()
                         }]
                     } else {
                         Vec::new()

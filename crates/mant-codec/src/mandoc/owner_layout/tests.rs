@@ -47,6 +47,7 @@ fn positioned(rows: usize) -> DefinitionTerm {
                 .map(|row| RowLayoutHint {
                     row: u32::try_from(row).unwrap(),
                     indent_columns: if row % 2 == 0 { 2 } else { -3 },
+                    ..Default::default()
                 })
                 .collect(),
         },

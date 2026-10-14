@@ -8,7 +8,7 @@ use mant_ir::{
 const DOCUMENT_HINT_BUDGET: usize = 65_536;
 
 /// Layout overflow omits only exceptional positions, never accepted glyphs.
-/// The producer must remain readable by the same strict v0.12 wire consumer.
+/// The producer must remain readable by the same strict v0.13 wire consumer.
 pub(crate) fn bound_layout_hints(document: &mut Document) {
     struct Budget {
         remaining: usize,
@@ -22,24 +22,13 @@ pub(crate) fn bound_layout_hints(document: &mut Document) {
                     let mut hints: std::collections::BTreeMap<_, _> = layout
                         .row_hints
                         .iter()
-                        .map(|hint| (hint.row, hint.indent_columns))
+                        .map(|hint| (hint.row, *hint))
                         .collect();
-                    hints.extend(
-                        extracted
-                            .row_hints
-                            .into_iter()
-                            .map(|hint| (hint.row, hint.indent_columns)),
-                    );
-                    layout.row_hints = hints
-                        .into_iter()
-                        .map(|(row, indent_columns)| mant_ir::RowLayoutHint {
-                            row,
-                            indent_columns,
-                        })
-                        .collect();
+                    hints.extend(extracted.row_hints.into_iter().map(|hint| (hint.row, hint)));
+                    layout.row_hints = hints.into_values().collect();
                 }
             }
-            layout.row_hints.retain(|hint| hint.indent_columns != 0);
+            layout.row_hints.retain(|hint| !hint.is_empty());
             let accepted = layout
                 .row_hints
                 .len()

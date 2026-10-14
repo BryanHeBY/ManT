@@ -287,7 +287,11 @@ fn execute_inline_macro_handler(
             builder.set_spacing(setting.trim());
         }
         Some(Roff(RoffMacro::Ti)) => {
-            builder.temporary_indent();
+            builder.temporary_indent(
+                node.children
+                    .first()
+                    .and_then(|child| child.text.as_deref()),
+            );
         }
         // The request's own roff_term_pre_br() dispatch (roff_term.c:45-58)
         // also clears the field's NOBREAK state.

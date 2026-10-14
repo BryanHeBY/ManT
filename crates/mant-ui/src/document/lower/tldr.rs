@@ -56,6 +56,9 @@ impl DocumentBuilder<'_> {
                 })
                 .collect();
             self.push(LogicalLine {
+                alignment: mant_ir::TextAlignment::Left,
+                alignment_prefix_scalars: 0,
+                defer_alignment: false,
                 indent: line.indent,
                 continuation_indent: line.indent,
                 layout_padding: 0,

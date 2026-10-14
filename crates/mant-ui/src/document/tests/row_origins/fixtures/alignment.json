@@ -1,0 +1,1913 @@
+{
+  "header": {
+    "count": 24,
+    "profiles_per_source": 6,
+    "expectations_from_product": false,
+    "oracle_identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "rules": [
+      "roff_term.c::roff_term_pre_ce",
+      "term.c::term_flushln",
+      "mdoc_term.c::print_mdoc_node"
+    ],
+    "subset_of": "crates/mant-engine/tests/roff_lowering/row_presentation/alignment.json"
+  },
+  "cases": [
+    {
+      "id": "man-ce-default-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.ce\nAlpha\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "d6196ff60be2dbe4ed593ad38f7795934c5925cff33fb051d5c5a072938a5a68",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "1e5fb6a7f7921180b10c14d1227c45ad0548359bf4e7f5647433d97aca343f84",
+          "body_rows": [
+            "                                        Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "36d8fec6abe1c5dcc79246ee06e91eb2c9493b345e6a29267be95169c3aaaad8",
+          "body_rows": [
+            "                    Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "1e5fb6a7f7921180b10c14d1227c45ad0548359bf4e7f5647433d97aca343f84",
+          "body_rows": [
+            "                                        Alpha",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "3ba899f5f02f821ccb7755774c7f8c84f5de9e929fbe28b7b9cbb317e657702d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      ce (elem) *5:2\n          1 (text) 5:4 NOSRC\n          Alpha (text) *6:1\n      AFTER (text) *7:1\nSH (block) *8:2\n  SH (head) 8:2 ID=HREF\n      PROBE_END (text) 8:5\n  SH (body) 8:2\n      END (text) *9:1\n",
+          "stderr": "",
+          "stdout_sha256": "58a37508b2cc4d86b46a3f7bd5adfc3ce9f17e1d726dea8b05c3ba98d73ef47f"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-ce-font-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.ce 2\n\\fBAlpha\\fP\n\\fIBeta\\fP\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "1f38f262c88ed5368788d24717e1aec2dab5fe7f7b8ebe425c8fad1269bde046",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        A\bAl\blp\bph\bha\ba\n                                        _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "9c9714e960059e997759170f408890352945bf0c914eb8480aa2ea1c2bd9ba4c",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    A\bAl\blp\bph\bha\ba\n                    _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "fe4d7d7df522ae75f132ac71a70c3ac7b6016b666c15d9cb2f7f49b94583c64d",
+          "body_rows": [
+            "                    Alpha",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        A\bAl\blp\bph\bha\ba\n                                        _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "9c9714e960059e997759170f408890352945bf0c914eb8480aa2ea1c2bd9ba4c",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\"><b>Alpha</b>\n  <br/>\n  <i>Beta</i>\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "9fbf4bd4b820d8786a765bc37890409eb148358ba6e1f24f414d2d37757126d2"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      ce (elem) *5:2\n          2 (text) 5:5\n          \\fBAlpha\\fP (text) *6:1\n          \\fIBeta\\fP (text) *7:1\n      AFTER (text) *8:1\nSH (block) *9:2\n  SH (head) 9:2 ID=HREF\n      PROBE_END (text) 9:5\n  SH (body) 9:2\n      END (text) *10:1\n",
+          "stderr": "",
+          "stdout_sha256": "858d7e7da2e5acc9cc60093c1f1101d3b8326833ac83c1a90b407559b4a13335"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-ce-break-request-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.ce 2\nAlpha\n.br\nBeta\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "147a079efd690087054657b6f99fe3f8ff61eadfc1b3ee9e87988d8ad5142f2c",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "c0309fa21b636dd24070e117d494d97dcba8706472fbb8dedff0ef65a39568ff",
+          "body_rows": [
+            "                                        Alpha",
+            "",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "2e69f3ac6f611ed1d111220bf28f2131532204728fb2205b92a49f62eaef72e4",
+          "body_rows": [
+            "                    Alpha",
+            "",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "c0309fa21b636dd24070e117d494d97dcba8706472fbb8dedff0ef65a39568ff",
+          "body_rows": [
+            "                                        Alpha",
+            "",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "199a785b898ff91166e9c86095cfed745b72738dafa44bd78815b75179e6de22"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      ce (elem) *5:2\n          2 (text) 5:5\n          Alpha (text) *6:1\n          br (elem) *7:2\n          Beta (text) *8:1\n      AFTER (text) *9:1\nSH (block) *10:2\n  SH (head) 10:2 ID=HREF\n      PROBE_END (text) 10:5\n  SH (body) 10:2\n      END (text) *11:1\n",
+          "stderr": "",
+          "stdout_sha256": "dd5772dd264097ef4cbef72bb91130b9422143958ef19e23703a365841ef4d14"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-ce-word-end-break-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.ce 2\nAlpha\\p\nBeta\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "bb962eee2d2d10aa43373c3156fa8da94b8b153852610514cf03661c1ee2e1ec",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "7e0ec1e804da2e378b7cb6bab3d5c3702d36c868c87c75891bcfec3e56b9d7ab",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "3f7f37d520e102709e41811674267c363142e6232871c805451a94e7cbf64c64",
+          "body_rows": [
+            "                    Alpha",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "7e0ec1e804da2e378b7cb6bab3d5c3702d36c868c87c75891bcfec3e56b9d7ab",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "bf8ecd4a6f2f0cc9e8283578d86dc04b1a16b418a8619fa810777aa8367afe47"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      ce (elem) *5:2\n          2 (text) 5:5\n          Alpha\\p (text) *6:1\n          Beta (text) *7:1\n      AFTER (text) *8:1\nSH (block) *9:2\n  SH (head) 9:2 ID=HREF\n      PROBE_END (text) 9:5\n  SH (body) 9:2\n      END (text) *10:1\n",
+          "stderr": "",
+          "stdout_sha256": "24a3d997b7d173d07966408337d1c9ff39dca1356322ed3ae9de906c808465db"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-rj-default-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.rj\nAlpha\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "38b285aadfa230f0e7614a3f3d1c1917a217868b38ee22d72c2912d85dbf9397",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "ccc37a68bc7228b8d18526780a60c3c1296d0b266ea79ceb7e085f4e686007cf",
+          "body_rows": [
+            "                                                                           Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "a1983cb09a8b0a99a2be9a036c60ae1bd97553c1c38007bd5c4ccb09ec06e355",
+          "body_rows": [
+            "                                   Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "ccc37a68bc7228b8d18526780a60c3c1296d0b266ea79ceb7e085f4e686007cf",
+          "body_rows": [
+            "                                                                           Alpha",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "3ba899f5f02f821ccb7755774c7f8c84f5de9e929fbe28b7b9cbb317e657702d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      rj (elem) *5:2\n          1 (text) 5:4 NOSRC\n          Alpha (text) *6:1\n      AFTER (text) *7:1\nSH (block) *8:2\n  SH (head) 8:2 ID=HREF\n      PROBE_END (text) 8:5\n  SH (body) 8:2\n      END (text) *9:1\n",
+          "stderr": "",
+          "stdout_sha256": "4125b9022b55202b0c464d68135212a4019055c849cf566d5da69ac080a41461"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-rj-font-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.rj 2\n\\fBAlpha\\fP\n\\fIBeta\\fP\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "f5bf73f29392340c18974579baec4678d17cd873f4cd29c4025f7a6928f58de5",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           A\bAl\blp\bph\bha\ba\n                                                                            _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "5e8eac9f56d4a4c06b214bbd3c7a09bb049d1947ee5aed70bd0976538cf7cf29",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   A\bAl\blp\bph\bha\ba\n                                    _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "9525534ed4040e5ee2fadd2ef9b7995c2ee5f682282e9d6af006d703eb8807e3",
+          "body_rows": [
+            "                                   Alpha",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           A\bAl\blp\bph\bha\ba\n                                                                            _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "5e8eac9f56d4a4c06b214bbd3c7a09bb049d1947ee5aed70bd0976538cf7cf29",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\"><b>Alpha</b>\n  <br/>\n  <i>Beta</i>\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "9fbf4bd4b820d8786a765bc37890409eb148358ba6e1f24f414d2d37757126d2"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      rj (elem) *5:2\n          2 (text) 5:5\n          \\fBAlpha\\fP (text) *6:1\n          \\fIBeta\\fP (text) *7:1\n      AFTER (text) *8:1\nSH (block) *9:2\n  SH (head) 9:2 ID=HREF\n      PROBE_END (text) 9:5\n  SH (body) 9:2\n      END (text) *10:1\n",
+          "stderr": "",
+          "stdout_sha256": "996d4c955463eed1f84323b60d8384702b66af6bb433d50eb052ee4738bdd7c2"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-rj-break-request-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.rj 2\nAlpha\n.br\nBeta\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "e6e269e410ee8d4f1228f9a9c7cbdfc19787e3544642b76e74c14b304aa56993",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "389639841358721891d4d8d8f5b7440ca6c4f353d2c45264959b3508a6c6b608",
+          "body_rows": [
+            "                                                                           Alpha",
+            "",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "14494d1be3770f9bf29969282ac133cc1ea761e7fc6e69d019666db1a1f39b93",
+          "body_rows": [
+            "                                   Alpha",
+            "",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "389639841358721891d4d8d8f5b7440ca6c4f353d2c45264959b3508a6c6b608",
+          "body_rows": [
+            "                                                                           Alpha",
+            "",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "199a785b898ff91166e9c86095cfed745b72738dafa44bd78815b75179e6de22"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      rj (elem) *5:2\n          2 (text) 5:5\n          Alpha (text) *6:1\n          br (elem) *7:2\n          Beta (text) *8:1\n      AFTER (text) *9:1\nSH (block) *10:2\n  SH (head) 10:2 ID=HREF\n      PROBE_END (text) 10:5\n  SH (body) 10:2\n      END (text) *11:1\n",
+          "stderr": "",
+          "stdout_sha256": "b65178fd4a68f66e2620e0a6515f5760d610a6233ff17bcf350a5683cfadbde0"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-rj-word-end-break-filled",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.rj 2\nAlpha\\p\nBeta\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "12fba6ec84a7dfa2b60b3c83cd345bc4dac899e49a898b0420840b7d181d6b0c",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "c64f9b7e9b897c04c456c52aa2f0c64349a263b2a93fa92ef2e01efb193f1426",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "9984e0225b346734c7abf713652c0c3ba276d4564c89f9d7c84d509f93a4e9fc",
+          "body_rows": [
+            "                                   Alpha",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "c64f9b7e9b897c04c456c52aa2f0c64349a263b2a93fa92ef2e01efb193f1426",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "bf8ecd4a6f2f0cc9e8283578d86dc04b1a16b418a8619fa810777aa8367afe47"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      rj (elem) *5:2\n          2 (text) 5:5\n          Alpha\\p (text) *6:1\n          Beta (text) *7:1\n      AFTER (text) *8:1\nSH (block) *9:2\n  SH (head) 9:2 ID=HREF\n      PROBE_END (text) 9:5\n  SH (body) 9:2\n      END (text) *10:1\n",
+          "stderr": "",
+          "stdout_sha256": "92008e1fc118cc3ad4f16add4abcb8d85790072c350980092c4ef6dcd5a9a700"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-ce-two-nofill",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.nf\n.ce 2\nAlpha\nBeta\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "eac63275cedcda800a056f340d59d7f9a3f4397ea26db4195cf6a0200489b60b",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "7e0ec1e804da2e378b7cb6bab3d5c3702d36c868c87c75891bcfec3e56b9d7ab",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "3f7f37d520e102709e41811674267c363142e6232871c805451a94e7cbf64c64",
+          "body_rows": [
+            "                    Alpha",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "7e0ec1e804da2e378b7cb6bab3d5c3702d36c868c87c75891bcfec3e56b9d7ab",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\nAlpha\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "e5180e6515f561167d65d4e2090c42460b4e428afb4915275ddceed98ae1d1a4"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      ce (elem) *6:2 NOFILL\n          2 (text) 6:5 NOFILL\n          Alpha (text) *7:1 NOFILL\n          Beta (text) *8:1 NOFILL\n      AFTER (text) *9:1 NOFILL\n      fi (elem) *10:2 NOFILL\nSH (block) *11:2\n  SH (head) 11:2 ID=HREF\n      PROBE_END (text) 11:5\n  SH (body) 11:2\n      END (text) *12:1\n",
+          "stderr": "",
+          "stdout_sha256": "00b9e7368a476cd1108449e75997f65bee7c9bf9108e842e3501105386e33f78"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-ce-unicode-nofill",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.nf\n.ce 2\nα中\nBeta\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "747d0b6cba4cafcdc4c55d9ad1fcda132201394d9af22271c51aa4ea07876ff8",
+      "geometry": true,
+      "needle": "α中",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                     <alpha><?>\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "d95c13e22d45c3cc004e04a245a1a79732b34156fa81adb9e7d7555c85d18592",
+          "body_rows": [
+            "                                     <alpha><?>",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                     α中\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "bc05e4ac056e69f78990233a6940587dd744d571b2d165e6c902ad0ad5de8ba9",
+          "body_rows": [
+            "                     α中",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                         α中\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "76d94147de9eff0d0e6c6a05ef9fdef73e8e89d35b52dcc8f00a144c6a3eb0fd",
+          "body_rows": [
+            "                                         α中",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\n&#x03B1;&#x4E2D;\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "d6f68870f08456e958fc8fa68bc8f779601833d3d7264e19d14ac9bcd0a7239d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      ce (elem) *6:2 NOFILL\n          2 (text) 6:5 NOFILL\n          \\[u03B1]\\[u4E2D] (text) *7:1 NOFILL\n          Beta (text) *8:1 NOFILL\n      AFTER (text) *9:1 NOFILL\n      fi (elem) *10:2 NOFILL\nSH (block) *11:2\n  SH (head) 11:2 ID=HREF\n      PROBE_END (text) 11:5\n  SH (body) 11:2\n      END (text) *12:1\n",
+          "stderr": "",
+          "stdout_sha256": "c6fe2bdd2c14519e5f34d71acff576d0aebfbefc0f1849c3d9953b5fecd7b5c6"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-rj-two-nofill",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.nf\n.rj 2\nAlpha\nBeta\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "9023febc108f5d0005f56ee2872447b04f6c189a7234d255c70fe53f2112ff6d",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "c64f9b7e9b897c04c456c52aa2f0c64349a263b2a93fa92ef2e01efb193f1426",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "9984e0225b346734c7abf713652c0c3ba276d4564c89f9d7c84d509f93a4e9fc",
+          "body_rows": [
+            "                                   Alpha",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "c64f9b7e9b897c04c456c52aa2f0c64349a263b2a93fa92ef2e01efb193f1426",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\nAlpha\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "e5180e6515f561167d65d4e2090c42460b4e428afb4915275ddceed98ae1d1a4"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      rj (elem) *6:2 NOFILL\n          2 (text) 6:5 NOFILL\n          Alpha (text) *7:1 NOFILL\n          Beta (text) *8:1 NOFILL\n      AFTER (text) *9:1 NOFILL\n      fi (elem) *10:2 NOFILL\nSH (block) *11:2\n  SH (head) 11:2 ID=HREF\n      PROBE_END (text) 11:5\n  SH (body) 11:2\n      END (text) *12:1\n",
+          "stderr": "",
+          "stdout_sha256": "17fcc874dfe4dd50ad007cafe0c851b4da4d12146c09bf1835208ac50a235ccf"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "man-rj-unicode-nofill",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- audit\n.SH PROBE_START\n.nf\n.rj 2\nα中\nBeta\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "93304817109a0d0c8542722f0486f19aac3725b8662208ffa1408baf5ab4d4ef",
+      "geometry": true,
+      "needle": "α中",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                      <alpha><?>\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "c27aad628e0acf9e9fbe32e1496fd1d99be5aaceecbe90023c6a27c2117f430b",
+          "body_rows": [
+            "                                                                      <alpha><?>",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                     α中\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "20a616220ff18b81a1906495691133023f9db62febb28a4e745ebef8c68011d7",
+          "body_rows": [
+            "                                     α中",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     probe - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                             α中\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "7fd8e669f395fd1404f77a458c20a7fd5297540b6ba11eb007c2d00e094778df",
+          "body_rows": [
+            "                                                                             α中",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\">probe - audit</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\n&#x03B1;&#x4E2D;\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\">END</p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\"></span><span class=\"foot-date\">October 14,\n  2026</span> <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "d6f68870f08456e958fc8fa68bc8f779601833d3d7264e19d14ac9bcd0a7239d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\ndate  = \"October 14, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- audit (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      PROBE_START (text) 4:5\n  SH (body) 4:2\n      nf (elem) *5:2\n      rj (elem) *6:2 NOFILL\n          2 (text) 6:5 NOFILL\n          \\[u03B1]\\[u4E2D] (text) *7:1 NOFILL\n          Beta (text) *8:1 NOFILL\n      AFTER (text) *9:1 NOFILL\n      fi (elem) *10:2 NOFILL\nSH (block) *11:2\n  SH (head) 11:2 ID=HREF\n      PROBE_END (text) 11:5\n  SH (body) 11:2\n      END (text) *12:1\n",
+          "stderr": "",
+          "stdout_sha256": "c92eb1b828ad4db5673a2c34897e7e396db89cf94b4996f18396f36dda27ccc6"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-ce-default-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ce\nAlpha\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "5c90d5878506f266e0a2d0c66355a6b74a406616e973cbf0e8dec8421e6c9889",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "25ec3c277bdd1662f4f5dbcc5456f022d9015e3819cdfa44a8e7ea9dabad54d4",
+          "body_rows": [
+            "                                        Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "ca040f4b573cf9b13ae33076758f74c0237d8c1620837a09ee2c6d227e1f7b84",
+          "body_rows": [
+            "                    Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "66b0aaff3b7ef70009829d0ee5e9139e00e5868b3237778cb9ab0600359e1a32",
+          "body_rows": [
+            "                                        Alpha",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "673dca7bf1dc8f9d8b47acf160a828603f4d87f285a8230ec5d606dc7a7ba178"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      ce (elem) *8:2\n          1 (text) 8:4 NOSRC\n          Alpha (text) *9:1\n      AFTER (text) *10:1\nSh (block) *11:2\n  Sh (head) 11:2 ID=HREF\n      PROBE_END (text) 11:5\n  Sh (body) 11:2\n      No (elem) *12:2\n          END (text) 12:5\n",
+          "stderr": "",
+          "stdout_sha256": "7dbf914f409ac0d80e5f81a9e6cb8481466c9cb94f14cac88045cd315e54873e"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-ce-font-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ce 2\n\\fBAlpha\\fP\n\\fIBeta\\fP\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "3d553096bbe92b3d022f97071155ff1a708aab5f968b91221107efa809fd7084",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        A\bAl\blp\bph\bha\ba\n                                        _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "8bc0e71b4d461b5764be9a4a8c1fd93a5215ebfda44c4cf6561168e6f58e5ebe",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    A\bAl\blp\bph\bha\ba\n                    _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "1ec7e5c09db775380b839721fb2254c67322ef787a0889ad0d26e1802078e6ca",
+          "body_rows": [
+            "                    Alpha",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        A\bAl\blp\bph\bha\ba\n                                        _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "ac3236ba7f01f4d346d50664f3f77c19d08229dc17d2f67f7fd77f379e2c8665",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\"><b>Alpha</b>\n  <br/>\n  <i>Beta</i>\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "2ad138642c0d00bfbe41c0ffe678894b0ef15909e9a784eb8a27ba6101929ef6"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      ce (elem) *8:2\n          2 (text) 8:5\n          \\fBAlpha\\fP (text) *9:1\n          \\fIBeta\\fP (text) *10:1\n      AFTER (text) *11:1\nSh (block) *12:2\n  Sh (head) 12:2 ID=HREF\n      PROBE_END (text) 12:5\n  Sh (body) 12:2\n      No (elem) *13:2\n          END (text) 13:5\n",
+          "stderr": "",
+          "stdout_sha256": "da8624adec3a396122f541ade701ade83b022bb7f3e78961707701fe0949290e"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-ce-break-request-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ce 2\nAlpha\n.br\nBeta\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "77f1717ebf1c2b0b6bd3881b7eaf68386a9695aac2c21aa22ec0cecb8dbfb738",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "cc88d3a348e6dff0ab651c12dadd266dadcedefaeb10e09ae39fe1697bacb0ee",
+          "body_rows": [
+            "                                        Alpha",
+            "",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "8cb5962c5b3b1912b176364791ec6b46b5e4e12e22da177d6c100ad60a8eb2f9",
+          "body_rows": [
+            "                    Alpha",
+            "",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "b6277b7f81c9a3a8e2f9a4157531304a5a35d52dc1fc11f10783afbe8eef6e92",
+          "body_rows": [
+            "                                        Alpha",
+            "",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "cd569f9010eabc8619c63598c1c5945cd5b98eb15c4eec11779252bda003a35d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      ce (elem) *8:2\n          2 (text) 8:5\n          Alpha (text) *9:1\n          br (elem) *10:2\n          Beta (text) *11:1\n      AFTER (text) *12:1\nSh (block) *13:2\n  Sh (head) 13:2 ID=HREF\n      PROBE_END (text) 13:5\n  Sh (body) 13:2\n      No (elem) *14:2\n          END (text) 14:5\n",
+          "stderr": "",
+          "stdout_sha256": "7186687a8cddfeedf4e00fdfb676d2ea6bb17c81321b5f5d3fc323affed6a65c"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-ce-word-end-break-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ce 2\nAlpha\\p\nBeta\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "e34244d9aa8f5dc9d889bb47949f8cbf57e3f8b13dda1f237e24cb115d3c9944",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "ed87a6e32e5c5f151fc226952018d29aa623ffb2aa90ba6b22b0d4cdf8d43833",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "38a245083aa14f881911cf8d857cb96ada21f4e52f7b8d31ac1a8664e541f7bb",
+          "body_rows": [
+            "                    Alpha",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "71d29e428b1c0f735059c4596872a67df8037157ece8c3458d96af529175d8f7",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "08ffc22f5b2cd0851d27b014afed8223c931b3400af057edddd7d23e8c36601d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      ce (elem) *8:2\n          2 (text) 8:5\n          Alpha\\p (text) *9:1\n          Beta (text) *10:1\n      AFTER (text) *11:1\nSh (block) *12:2\n  Sh (head) 12:2 ID=HREF\n      PROBE_END (text) 12:5\n  Sh (body) 12:2\n      No (elem) *13:2\n          END (text) 13:5\n",
+          "stderr": "",
+          "stdout_sha256": "2b9fdb9e5e5d1ab91abebd4b65549e868b18cb29ceaee7c02111f46a8ff01dc1"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-rj-default-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.rj\nAlpha\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "be41061d5a1d8c759b2018a5db2a4063f4977063f20e84058608f4e133aa7beb",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "f4be74877856f684851859d442c6f076f334dd45a75a27d9d3e9edc8d6b3d2f6",
+          "body_rows": [
+            "                                                                           Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "805b09bba73143d58f3effc793a5b02253410638f2fe938e76bb8585f5c209f7",
+          "body_rows": [
+            "                                   Alpha",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "ad2ce812cd9c073a5fa3d8d991fe2561bf88170a034b05b224787eac4bf76b49",
+          "body_rows": [
+            "                                                                           Alpha",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "673dca7bf1dc8f9d8b47acf160a828603f4d87f285a8230ec5d606dc7a7ba178"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      rj (elem) *8:2\n          1 (text) 8:4 NOSRC\n          Alpha (text) *9:1\n      AFTER (text) *10:1\nSh (block) *11:2\n  Sh (head) 11:2 ID=HREF\n      PROBE_END (text) 11:5\n  Sh (body) 11:2\n      No (elem) *12:2\n          END (text) 12:5\n",
+          "stderr": "",
+          "stdout_sha256": "335e967fe4c5efce614c4727d69bfac39ba24e665ed83fa31c174b05c32a91c6"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-rj-font-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.rj 2\n\\fBAlpha\\fP\n\\fIBeta\\fP\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "a4f0d7236b62356730abb186fa43e664dcf34994f483dc64cf26ab8e18701476",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           A\bAl\blp\bph\bha\ba\n                                                                            _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "065342ad2be915503ba58656aab8076dd3ea197830f7504399467f0a0defb535",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   A\bAl\blp\bph\bha\ba\n                                    _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "a1172fe26a3604833affe31b636eded028d1011cdf715bbe9516b38d2eab5926",
+          "body_rows": [
+            "                                   Alpha",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           A\bAl\blp\bph\bha\ba\n                                                                            _\bB_\be_\bt_\ba\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "09c309b56c62525259e21c609ad036cea3dd0c1bb7bff52b9b2d533f075e7f3e",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\"><b>Alpha</b>\n  <br/>\n  <i>Beta</i>\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "2ad138642c0d00bfbe41c0ffe678894b0ef15909e9a784eb8a27ba6101929ef6"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      rj (elem) *8:2\n          2 (text) 8:5\n          \\fBAlpha\\fP (text) *9:1\n          \\fIBeta\\fP (text) *10:1\n      AFTER (text) *11:1\nSh (block) *12:2\n  Sh (head) 12:2 ID=HREF\n      PROBE_END (text) 12:5\n  Sh (body) 12:2\n      No (elem) *13:2\n          END (text) 13:5\n",
+          "stderr": "",
+          "stdout_sha256": "fd46094b12cb229b50c02cc6e1b599c05a44bbb101757434504e6dda6af064b4"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-rj-break-request-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.rj 2\nAlpha\n.br\nBeta\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "927ad71085659ba03904f75a9ad45bbf0e3ea915a9131f98cbc55844509ee2f0",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "50f2af5bf3f1b87b1fba659ec51dcc205346a20c6f656123eab57f80a796d0b6",
+          "body_rows": [
+            "                                                                           Alpha",
+            "",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "8dd3e09dc54e47256362f9df363006d0ae5ee5070f75c5af47dfe1d693ab6aae",
+          "body_rows": [
+            "                                   Alpha",
+            "",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "73a341ce04f92469d314acd944901b8356a1514885c2d63249425fe11094343d",
+          "body_rows": [
+            "                                                                           Alpha",
+            "",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "cd569f9010eabc8619c63598c1c5945cd5b98eb15c4eec11779252bda003a35d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      rj (elem) *8:2\n          2 (text) 8:5\n          Alpha (text) *9:1\n          br (elem) *10:2\n          Beta (text) *11:1\n      AFTER (text) *12:1\nSh (block) *13:2\n  Sh (head) 13:2 ID=HREF\n      PROBE_END (text) 13:5\n  Sh (body) 13:2\n      No (elem) *14:2\n          END (text) 14:5\n",
+          "stderr": "",
+          "stdout_sha256": "8cb809540cfedb6317b098ebe5fb088f16ca678d02364e4e3cba3c93e4d65b79"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-rj-word-end-break-filled",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.rj 2\nAlpha\\p\nBeta\nAFTER\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "c2428864a5cec1ee6a11d6770e58b009e942c37807112473a4c6a4cab44c6031",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "f3c2726bd2234df8b132714e7eb288b9ff535a7ed225e5a2c605cf9dea99935f",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "a4b8761a05c0d91e42c14f7cf9206eb14f9e9e36ced731f32ca437620a645247",
+          "body_rows": [
+            "                                   Alpha",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "d9814eeb69f030410b3d4193fd4ed063d5583a895d87d31c543fc2c7a90e5be6",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<br/>\n<p class=\"Pp\">Alpha\n  <br/>\n  Beta\n  <br/>\n  AFTER</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "08ffc22f5b2cd0851d27b014afed8223c931b3400af057edddd7d23e8c36601d"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      rj (elem) *8:2\n          2 (text) 8:5\n          Alpha\\p (text) *9:1\n          Beta (text) *10:1\n      AFTER (text) *11:1\nSh (block) *12:2\n  Sh (head) 12:2 ID=HREF\n      PROBE_END (text) 12:5\n  Sh (body) 12:2\n      No (elem) *13:2\n          END (text) 13:5\n",
+          "stderr": "",
+          "stdout_sha256": "a001d35ad9de58a5b3a9643d204eeccb3242d9be8a9679e2a5c53a5608eeb92f"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-ce-two-nofill",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ce 2\nAlpha\nBeta\nAFTER\n.fi\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "710cdd19355a62f6c2a5c9351779c97f648b7f5c7cf213b81ee06272a3d3e8d6",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "ed87a6e32e5c5f151fc226952018d29aa623ffb2aa90ba6b22b0d4cdf8d43833",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                    Alpha\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "38a245083aa14f881911cf8d857cb96ada21f4e52f7b8d31ac1a8664e541f7bb",
+          "body_rows": [
+            "                    Alpha",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                        Alpha\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "71d29e428b1c0f735059c4596872a67df8037157ece8c3458d96af529175d8f7",
+          "body_rows": [
+            "                                        Alpha",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\nAlpha\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "e9dd181e7c9adb16373945a362798af7e766a613fc40d26e6a7ec2985d0035cf"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      nf (elem) *8:2\n      ce (elem) *9:2 NOFILL\n          2 (text) 9:5 NOFILL\n          Alpha (text) *10:1 NOFILL\n          Beta (text) *11:1 NOFILL\n      AFTER (text) *12:1 NOFILL\n      fi (elem) *13:2 NOFILL\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      PROBE_END (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "53fba916049c4e3bbd5531e16a2ed63befd9b0b7de0dad36e075dd8a2b6777e6"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-ce-unicode-nofill",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ce 2\nα中\nBeta\nAFTER\n.fi\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "0093d658c87fd2d8404d2bb3b19e580b6b224c3edd79fd5172e3cf019c9791fe",
+      "geometry": true,
+      "needle": "α中",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                     <alpha><?>\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "071ac8ee1fe4414bb3fffb7510909cdccb1b40c454f5a023de7204357dd1d3da",
+          "body_rows": [
+            "                                     <alpha><?>",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                     α中\n                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "5f875b8e0fd4245ab8021cbaa6071487eafc54c8fa567355c2f4942d28a6d339",
+          "body_rows": [
+            "                     α中",
+            "                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                         α中\n                                        Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "9ec94f4ad749f221d96be62b61902be3b309fb056ef2805fc4d09e940dfce9dc",
+          "body_rows": [
+            "                                         α中",
+            "                                        Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\n&#x03B1;&#x4E2D;\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "90a801f5456d465c00b896dff01bc00a96e7fb1159a7edb677257af5f8e10f8f"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      nf (elem) *8:2\n      ce (elem) *9:2 NOFILL\n          2 (text) 9:5 NOFILL\n          \\[u03B1]\\[u4E2D] (text) *10:1 NOFILL\n          Beta (text) *11:1 NOFILL\n      AFTER (text) *12:1 NOFILL\n      fi (elem) *13:2 NOFILL\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      PROBE_END (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "59476853e26f05589e79d1a49a0d8f1f40fba9158aeabb281386ab07c6c53688"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-rj-two-nofill",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.rj 2\nAlpha\nBeta\nAFTER\n.fi\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "537920d2849eed1e9a36e4616a66fac21f0b55f33fb6c4b266740396bd0069b4",
+      "geometry": true,
+      "needle": "Alpha",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "f3c2726bd2234df8b132714e7eb288b9ff535a7ed225e5a2c605cf9dea99935f",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                   Alpha\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "a4b8761a05c0d91e42c14f7cf9206eb14f9e9e36ced731f32ca437620a645247",
+          "body_rows": [
+            "                                   Alpha",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                           Alpha\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "d9814eeb69f030410b3d4193fd4ed063d5583a895d87d31c543fc2c7a90e5be6",
+          "body_rows": [
+            "                                                                           Alpha",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\nAlpha\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "e9dd181e7c9adb16373945a362798af7e766a613fc40d26e6a7ec2985d0035cf"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      nf (elem) *8:2\n      rj (elem) *9:2 NOFILL\n          2 (text) 9:5 NOFILL\n          Alpha (text) *10:1 NOFILL\n          Beta (text) *11:1 NOFILL\n      AFTER (text) *12:1 NOFILL\n      fi (elem) *13:2 NOFILL\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      PROBE_END (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "a26df7d7ed8440b4a817061f97f952f5509fff8cc448893a6a90a26841024e63"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "mdoc-rj-unicode-nofill",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.rj 2\nα中\nBeta\nAFTER\n.fi\n.Sh PROBE_END\n.No END\n",
+      "source_sha256": "4020a3169b7685d615396d97996696d0987409f19ab039e67990e58593771f07",
+      "geometry": true,
+      "needle": "α中",
+      "head": false,
+      "profiles": {
+        "ascii-80": {
+          "argv": [
+            "-Tascii",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be - audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                      <alpha><?>\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "a83cc01576b58fcc7257df289340192afe5d1324163307e8b200c763aaab4775",
+          "body_rows": [
+            "                                                                      <alpha><?>",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-40": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=40"
+          ],
+          "stdout": "PROBE(7)\n        Miscellaneous Information Manual\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                     α中\n                                    Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n            October 14, 2026    PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "5108a34fabd75c83e8e8fd7a70d35bee74dd4071d7faf8e361042d12ac27153f",
+          "body_rows": [
+            "                                     α中",
+            "                                    Beta",
+            "     AFTER"
+          ]
+        },
+        "utf8-80": {
+          "argv": [
+            "-Tutf8",
+            "-O",
+            "width=80"
+          ],
+          "stdout": "PROBE(7)                Miscellaneous Information Manual                PROBE(7)\n\nN\bNA\bAM\bME\bE\n     p\bpr\bro\bob\bbe\be – audit\n\nP\bPR\bRO\bOB\bBE\bE_\b_S\bST\bTA\bAR\bRT\bT\n                                                                             α中\n                                                                            Beta\n     AFTER\n\nP\bPR\bRO\bOB\bBE\bE_\b_E\bEN\bND\bD\n     END\n\nLinux 6.18.54.1-microsoft-standard-WSL2\n                                October 14, 2026                        PROBE(7)\n",
+          "stderr": "",
+          "stdout_sha256": "5e8ad9fddb1614691a371ff444b9204d376aaf6559cf2bfa4353c5ec1ce24820",
+          "body_rows": [
+            "                                                                             α中",
+            "                                                                            Beta",
+            "     AFTER"
+          ]
+        },
+        "html": {
+          "argv": [
+            "-Thtml"
+          ],
+          "stdout": "<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\"/>\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>\n  <style>\n    table.head, table.foot { width: 100%; }\n    td.head-rtitle, td.foot-os { text-align: right; }\n    td.head-vol { text-align: center; }\n    .Nd, .Bf, .Op { display: inline; }\n    .Pa, .Ad { font-style: italic; }\n    .Ms { font-weight: bold; }\n    .Bl-diag > dt { font-weight: bold; }\n    code.Nm, .Fl, .Cm, .Ic, code.In, .Fd, .Fn, .Cd { font-weight: bold;\n      font-family: inherit; }\n  </style>\n  <title>PROBE(7)</title>\n</head>\n<body>\n<div class=\"head\" role=\"doc-pageheader\" aria-label=\"Manual header\n  line\"><span class=\"head-ltitle\">PROBE(7)</span>\n  <span class=\"head-vol\">Miscellaneous Information Manual</span>\n  <span class=\"head-rtitle\">PROBE(7)</span></div>\n<main class=\"manual-text\">\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"NAME\"><a class=\"permalink\" href=\"#NAME\">NAME</a></h2>\n<p class=\"Pp\"><code class=\"Nm\">probe</code> &#x2014;\n    <span class=\"Nd\" role=\"doc-subtitle\">audit</span></p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_START\"><a class=\"permalink\" href=\"#PROBE_START\">PROBE_START</a></h2>\n<pre>\n<br/>\n&#x03B1;&#x4E2D;\n<br/>\nBeta\n<br/>\nAFTER</pre>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" id=\"PROBE_END\"><a class=\"permalink\" href=\"#PROBE_END\">PROBE_END</a></h2>\n<p class=\"Pp\"><span class=\"No\">END</span></p>\n</section>\n</main>\n<div class=\"foot\" role=\"doc-pagefooter\" aria-label=\"Manual footer\n  line\"><span class=\"foot-left\">Linux 6.18.54.1-microsoft-standard-WSL2</span>\n  <span class=\"foot-date\">October 14, 2026</span>\n  <span class=\"foot-right\">PROBE(7)</span></div>\n</body>\n</html>\n",
+          "stderr": "",
+          "stdout_sha256": "90a801f5456d465c00b896dff01bc00a96e7fb1159a7edb677257af5f8e10f8f"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree"
+          ],
+          "stdout": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"7\"\nvol   = \"Miscellaneous Information Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"October 14, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 14, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    7 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            audit (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      PROBE_START (text) 7:5\n  Sh (body) 7:2\n      nf (elem) *8:2\n      rj (elem) *9:2 NOFILL\n          2 (text) 9:5 NOFILL\n          \\[u03B1]\\[u4E2D] (text) *10:1 NOFILL\n          Beta (text) *11:1 NOFILL\n      AFTER (text) *12:1 NOFILL\n      fi (elem) *13:2 NOFILL\nSh (block) *14:2\n  Sh (head) 14:2 ID=HREF\n      PROBE_END (text) 14:5\n  Sh (body) 14:2\n      No (elem) *15:2\n          END (text) 15:5\n",
+          "stderr": "",
+          "stdout_sha256": "7f22a8d559152304d157373b995e62978f467781da051d065536f26e2bf0c0ea"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint"
+          ],
+          "stdout": "",
+          "stderr": "",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ]
+}

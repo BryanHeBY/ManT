@@ -581,6 +581,7 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
         use crate::mandoc::containers::Event;
         match event {
             Event::BeginNode(node) => self.builder.begin_executed_node(node),
+            Event::Alignment(alignment) => self.builder.set_text_alignment(alignment),
             Event::Anchor(target, source) => {
                 self.builder.append(vec![Inline::anchor_at(target, source)]);
             }
@@ -591,9 +592,12 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 self.builder.control_line_break();
             }
             Event::FlushLine => {
-                self.builder.append(vec![Inline::line_break()]);
+                self.builder.flush_execution_line();
             }
             Event::Children(nodes) => append_inline_nodes(self.builder, nodes, self.name),
+            Event::AlignedChildren(nodes) => self.builder.with_grouped_line_dispatch(|builder| {
+                append_inline_nodes(builder, nodes, self.name);
+            }),
             Event::Glyph(value) => self.builder.append_text(&value),
             Event::Tight => self.builder.tighten_next_boundary(),
             Event::Release => self.builder.release_next_boundary(),

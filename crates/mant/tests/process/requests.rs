@@ -21,7 +21,7 @@ fn default_file_stdin_and_request_outputs_are_text() {
         (
             vec!["--request-json"],
             serde_json::json!({
-                "schema": "mant.request/v0.12",
+                "schema": "mant.request/v0.13",
                 "input": {"kind": "file", "path": path_text, "format": "markdown"},
                 "view": {"kind": "full"}
             })
@@ -76,7 +76,7 @@ fn request_schema_is_discoverable_without_host_state() {
     assert!(
         String::from_utf8(output.stdout)
             .expect("UTF-8 schema")
-            .contains("mant.request/v0.12")
+            .contains("mant.request/v0.13")
     );
 }
 
@@ -90,12 +90,12 @@ fn protocol_version_is_a_clean_json_document() {
     assert!(output.status.success());
     assert_eq!(output.stderr.len(), 0);
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
-    assert_eq!(value["protocol"], "mant.cli/v0.12");
-    assert_eq!(value["requestSchema"], "mant.request/v0.12");
-    assert_eq!(value["querySchema"], "mant.query/v0.12");
-    assert_eq!(value["outlineSchema"], "mant.outline/v0.12");
-    assert_eq!(value["excerptSchema"], "mant.excerpt/v0.12");
-    assert_eq!(value["searchSchema"], "mant.search/v0.12");
+    assert_eq!(value["protocol"], "mant.cli/v0.13");
+    assert_eq!(value["requestSchema"], "mant.request/v0.13");
+    assert_eq!(value["querySchema"], "mant.query/v0.13");
+    assert_eq!(value["outlineSchema"], "mant.outline/v0.13");
+    assert_eq!(value["excerptSchema"], "mant.excerpt/v0.13");
+    assert_eq!(value["searchSchema"], "mant.search/v0.13");
 
     for (label, reference) in [
         ("protocol manual", PROTOCOL_REFERENCE),
@@ -165,7 +165,7 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#,
+            br#"{"schema":"mant.request/v0.13","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#,
         )
         .expect("write request");
     let output = child.wait_with_output().expect("wait for mant");
@@ -303,7 +303,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
         .spawn()
         .expect("start protocol query");
     let request = serde_json::json!({
-        "schema": "mant.request/v0.12",
+        "schema": "mant.request/v0.13",
         "input": {
             "kind": "file",
             "path": path.to_str().expect("UTF-8 path"),

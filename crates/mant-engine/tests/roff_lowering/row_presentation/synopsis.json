@@ -1,0 +1,497 @@
+{
+  "oracle": {
+    "source": "mandoc-cvs-20261013T025419Z",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "expectations_from_product": false
+  },
+  "cases": [
+    {
+      "id": "man-pre-PP-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.PP\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "9ed2dd79b39cd4409b8dacb5332e49c2e87dc42a69a460355f0c5a680906303a",
+      "profiles": {
+        "ascii": [
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-PP-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.PP\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "e2d278158d188555818011606e68c972e3bd5e958bbf784314cee65a90d94df5",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-PP-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.PP\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "b66f1b661b5c704d91dcdb4ad796ba7cfb4ce62d4df2491d3f1699ec509af34e",
+      "profiles": {
+        "ascii": [
+          "     BODY",
+          " AFTER"
+        ],
+        "utf8": [
+          "     BODY",
+          " AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-PP-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.PP\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "c8bb37759395ff0baa855645aabad369577b9fa27d4f59f1a3b9f85c0728a5ca",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-P-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.P\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "d029ff856d6acc27474ecaab79e2279689efaee1718169ae2b1a8d78ae7de2bf",
+      "profiles": {
+        "ascii": [
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-P-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.P\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "01bdf8b75efc79abc365af9a440510330d89d840da6ca32ba53935b1490aa1c6",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-P-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.P\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "a8c9d77db913121d7e631913dde516f76c0768ae5e48e9ede7344429e944671f",
+      "profiles": {
+        "ascii": [
+          "     BODY",
+          " AFTER"
+        ],
+        "utf8": [
+          "     BODY",
+          " AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-P-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.P\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "016ad2193e5789bd7ab58a1987b060b01f72ddbdd8ac492948f9cb4df50c6c41",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-LP-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.LP\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "bf200ca158f4ff6a591610b108e0da1c7cea485cd01724918ce7d4873982302d",
+      "profiles": {
+        "ascii": [
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-LP-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.LP\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "f9ca82ce52cfbb1bba68e0c5b756c031d42bcdecab0bdfdd19ede5aff7868f6c",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-LP-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.LP\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "43db1b714d24ee9a9545c98d93c56bbd8dfe1dca582f2e7551448e8068fa271a",
+      "profiles": {
+        "ascii": [
+          "     BODY",
+          " AFTER"
+        ],
+        "utf8": [
+          "     BODY",
+          " AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-LP-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.LP\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "4e02cdaac01f9aca2d5bef672f96dd12b30ff55bae63d1143eb37ed9d843a6cb",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-IP-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.IP KEY 4n\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "443964a388a9209c7c98d6d9056f8ca8d1579e101971329a1ec4171fc81365a9",
+      "profiles": {
+        "ascii": [
+          "     KEY BODY AFTER"
+        ],
+        "utf8": [
+          "     KEY BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-IP-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.IP KEY 4n\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "66a6a2fcbfe6a6baf8d3d55e09896506b8feef50a9aeaeb230bfd635773b0643",
+      "profiles": {
+        "ascii": [
+          "",
+          "     KEY BODY AFTER"
+        ],
+        "utf8": [
+          "",
+          "     KEY BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-IP-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.IP KEY 4n\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "4f9a926de57975b0e1188ed67f4cdeb73e4bed013ce022687c1ae7fbeb1c1c34",
+      "profiles": {
+        "ascii": [
+          "     KEY BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "     KEY BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-IP-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.IP KEY 4n\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "0f6d09c0e4d9107244c21b8f4c165c0cf27c661df9632c9c2c33e95d4b044af1",
+      "profiles": {
+        "ascii": [
+          "",
+          "     KEY BODY",
+          "         AFTER"
+        ],
+        "utf8": [
+          "",
+          "     KEY BODY",
+          "         AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-TP-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.TP 4n\nKEY\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "98a91d6d661b555a50b5d5c32b17bbf03c069dbe4213cac95723eb2c82c887ee",
+      "profiles": {
+        "ascii": [
+          "     KEY BODY AFTER"
+        ],
+        "utf8": [
+          "     KEY BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-TP-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.TP 4n\nKEY\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "cb2e66f357935446cf1cd75e1b9d3a0b8d99f3a4c532627a7e2285e405b4bb8e",
+      "profiles": {
+        "ascii": [
+          "",
+          "     KEY BODY AFTER"
+        ],
+        "utf8": [
+          "",
+          "     KEY BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-TP-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.TP 4n\nKEY\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "3747ab945a9fbe9a313c72eee4896005d0b826f87b5b4c6d93660c804bde97bb",
+      "profiles": {
+        "ascii": [
+          "     KEY BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "     KEY BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-TP-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.TP 4n\nKEY\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "e8f132018a428cdcc86975c9fff65828d0a39dc1568ab68ccdc528b7722b499a",
+      "profiles": {
+        "ascii": [
+          "",
+          "     KEY BODY",
+          "         AFTER"
+        ],
+        "utf8": [
+          "",
+          "     KEY BODY",
+          "         AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-HP-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.HP 4n\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "90fe7fdf9d4d43ca3b812bd6ed965bc771e3b6bb030f08dd9f3b735bdd8f1203",
+      "profiles": {
+        "ascii": [
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-HP-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.HP 4n\nBODY\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "8e5ad2158544f76548a5fe6c9076f10d6ce30ea21517877a5a4d62291729af62",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-HP-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.HP 4n\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "1b5d60d5f64bcdc69734ebf3bb3124c44642ee7af05efecb655349fc4481deef",
+      "profiles": {
+        "ascii": [
+          "     BODY",
+          "         AFTER"
+        ],
+        "utf8": [
+          "     BODY",
+          "         AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-HP-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.HP 4n\nBODY\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "6083f0d0dd8d995053d5caf6e052e57489571ec827dbe025b3caf18de53738c7",
+      "profiles": {
+        "ascii": [
+          "",
+          "     BODY",
+          "         AFTER"
+        ],
+        "utf8": [
+          "",
+          "     BODY",
+          "         AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-SY-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.SY call\nBODY\n.YS\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "b5357567d6e952b6c76190e58141781c2c8e814545590cf88bab698f278e89ed",
+      "profiles": {
+        "ascii": [
+          "     call BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "     call BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-SY-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.SY call\nBODY\n.YS\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "e5a40bdcd4a4bca7167b756c888f4ca7a3d44782ba6e960882837eee22750468",
+      "profiles": {
+        "ascii": [
+          "",
+          "     call BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "",
+          "     call BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-SY-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.SY call\nBODY\n.YS\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "27c0ea10f8f664b4e8c81acb81ecc9e207e74c2de7d6e9fdf1f6e41eb63143b6",
+      "profiles": {
+        "ascii": [
+          "     call",
+          "          BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "     call",
+          "          BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-SY-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.SY call\nBODY\n.YS\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "378d8372d92ef717da9046c94aa654a9f38b748d603fc0ecd5db7491c88b1804",
+      "profiles": {
+        "ascii": [
+          "",
+          "     call",
+          "          BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "",
+          "     call",
+          "          BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-RS-filled-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.ti +4n\n.RS 4n\nBODY\n.RE\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "7c94a65ab54e726592e12cddba9fb601a5d91ecf0fc261908d0e6b137dda4036",
+      "profiles": {
+        "ascii": [
+          "         BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "         BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-RS-filled-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.ti +4n\n.RS 4n\nBODY\n.RE\nAFTER\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "f401c15e62a7edddbb74dfb59d8106b4f00fc8aa7e70bc39f120ac598b19823d",
+      "profiles": {
+        "ascii": [
+          "         BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "         BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-RS-nofill-pd0",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 0\n.nf\n.ti +4n\n.RS 4n\nBODY\n.RE\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "1641347328e325090dcfffdc80e0b16601f8a54d919816beb6e8f0bec9ec7aa4",
+      "profiles": {
+        "ascii": [
+          "         BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "         BODY",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-pre-RS-nofill-pd1",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH PROBE_START\n.PD 1\n.nf\n.ti +4n\n.RS 4n\nBODY\n.RE\nAFTER\n.fi\n.PD 1\n.SH PROBE_END\nEND\n",
+      "source_sha256": "5fe546de88b920089aee1f3932f8214fbb0c6fd0008dce92f446f9f23835da66",
+      "profiles": {
+        "ascii": [
+          "         BODY",
+          "     AFTER"
+        ],
+        "utf8": [
+          "         BODY",
+          "     AFTER"
+        ]
+      }
+    }
+  ]
+}

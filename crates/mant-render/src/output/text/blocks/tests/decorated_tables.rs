@@ -8,6 +8,7 @@ fn preserved_public_ir_padding_keeps_plain_and_ansi_cursors_monotonic() {
         super::super::super::plain_renderer().render_blocks(std::slice::from_ref(&block), 0);
     assert_eq!(plain, expected);
     let decorated = BlockRenderer {
+        width: None,
         locations: None,
         names: None,
         decorate: &|_, text| format!("\u{1b}[1m{text}\u{1b}[0m"),
@@ -25,6 +26,7 @@ fn decorated_columns_measure_before_ansi_styling() {
     // before the decorator adds zero-width ANSI styles; the decorator
     // contract only preserves visible text, never byte length.
     let decorated = BlockRenderer {
+        width: None,
         locations: None,
         names: None,
         decorate: &|_, text| {

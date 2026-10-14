@@ -26,6 +26,12 @@ let plain = render_query_text(&content);
 assert_eq!(plain, render_query_text_with(&content, |_, text| text.to_owned()));
 ```
 
+`render_query_text_at_width` and `render_query_man_at_width` apply row alignment
+within a caller-supplied content width, bounded at 4096 cells. They preserve the
+accepted hard rows and do not impose terminal soft wrapping. Unbounded text
+and report functions use left alignment while retaining resolved row origins;
+no rendering API queries terminal dimensions or changes authoritative text.
+
 `cells` borrows complete grapheme clusters and preserves byte boundaries. Its input contract is already-sanitized single-line text. It does not replace source-neutral IR geometry or a frontend's wrapping policy.
 
 Scope report functions consume `ScopeQueryResponse` directly. They preserve the supplied evidence page, document order, failures and coverage; they do not execute a scope query or invent per-document pagination. CLI adapters supply ANSI decoration or terminal-safe Markdown identities. MCP uses the same plain/Markdown reports, then applies its own redaction, hints and character paging without depending on CLI format or error types.

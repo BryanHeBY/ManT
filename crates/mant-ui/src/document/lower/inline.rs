@@ -189,10 +189,10 @@ impl DocumentBuilder<'_> {
         wrap_mode: WrapMode,
     ) {
         for (index, line) in lines.into_iter().enumerate() {
-            let mut logical = LogicalLine::row_geometry(
+            let mut logical = LogicalLine::row_presentation(
                 if index == 0 { indent } else { continuation },
                 continuation,
-                line.indent_columns,
+                line.row_hint(),
                 line.spans,
             );
             logical.surface = surface;

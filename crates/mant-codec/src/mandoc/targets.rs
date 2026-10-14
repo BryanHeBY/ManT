@@ -224,7 +224,7 @@ pub(super) fn part_target_with_source(node: &Node, kind: NodeKind) -> Option<Own
 
 /// Attach zero-width targets to the first addressable descendant.
 ///
-/// The current v0.12 IR intentionally has no identity field on every block
+/// The current v0.13 IR intentionally has no identity field on every block
 /// variant. Anchors therefore live in the first inline-bearing descendant. If
 /// a structure contains no such descendant, an anchor-only paragraph retains
 /// the destination without adding visible text or spacing.

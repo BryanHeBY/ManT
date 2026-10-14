@@ -163,6 +163,22 @@ Frontends retain leading, trailing and entirely blank literal rows. For a
 multi-line definition term, run-in fitting measures the final open label row,
 not the longest earlier row; explicit hard breaks close that row.
 
+`InlineLayout` belongs to a paragraph, preformatted block, heading or definition
+term. Its sparse `RowLayoutHint` combines a common signed origin correction,
+an optional first-visual-only correction and viewport-relative `TextAlignment`.
+`RowLayoutHint::resolve()` keeps first and soft-wrap origins distinct;
+`InlineLayout::row_layout()` returns all preferences for a logical hard row.
+Alignment is applied after wrapping, with left placement when no viewport is
+known. Hints on empty or open tail positions create no text or clickable cells.
+Strong, emphasis and link wrappers share the owner's row coordinates.
+
+Version `0.13.0` adds public `first_line_indent_columns` and `alignment` fields
+to `RowLayoutHint`. Update existing Rust literals with explicit values or
+`..Default::default()`. The published `0.12.0` contract remains frozen; native
+wire consumers use the corresponding `mant.document/v0.13` family rather than
+mixing version markers. Authoritative content, pure `LineBreak {}` and semantic
+binding coordinates remain unchanged.
+
 `DocumentIndex` addresses content nodes. `SemanticIndex` separately groups
 identified content owners into commands, parameter families, configuration keys,
 variables, values, and terms. A semantic entry keeps exact selectable names,

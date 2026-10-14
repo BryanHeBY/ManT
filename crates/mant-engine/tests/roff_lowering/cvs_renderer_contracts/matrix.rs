@@ -190,14 +190,17 @@ fn terminal_divergence_matrix_pins_native_and_lowered_behavior_together() {
             selected: SelectedContract::Cvs,
         },
         TerminalCase {
-            label: "literal HP source continuation uses the portable joined projection",
+            label: "literal HP first-child post closes the row despite source continuation",
             source: concat!(
                 ".TH PROBE 1\n.SH DESCRIPTION\n.nf\n.HP 4\n",
                 "FIRST\\c\nSECOND\nTHIRD\n.fi\nAFTER\n",
             ),
             native_contains: &["     FIRST\n         SECOND\n         THIRD"],
-            lowered_contains: &["FIRSTSECOND\n    THIRD"],
-            selected: SelectedContract::Groff,
+            // Exact source reran pristine ASCII/UTF-8/lint. The common out
+            // in man_term.c:998 executes term_newln for the first HP BODY
+            // child independently of NODE_LINE's continuation check.
+            lowered_contains: &["FIRST\n    SECOND\n    THIRD"],
+            selected: SelectedContract::Cvs,
         },
         TerminalCase {
             label: "overrun hang field keeps source content across a margin flush",

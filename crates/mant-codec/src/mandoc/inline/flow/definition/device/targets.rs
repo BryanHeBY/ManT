@@ -105,8 +105,12 @@ impl InlineBuilder {
         let (flags, rmargin, _) = self.native_field_parameters(force_no_break, resumed)?;
         let row = &state.hang_row;
         let rmargin = self.native_margin_units(rmargin);
-        let viscol = row.viscol.saturating_mul(24);
-        let vbl = row.padding_units(state.field_offset_units);
+        let placement = self.execution.row_presentation.field_placement(
+            state.field_offset_units,
+            row.viscol,
+            row.minbl,
+            row.native_row_occupied(),
+        );
         let no_break = self.native_no_break(flags, force_no_break, resumed);
         // term.c:113-137,229-230 computes each pass from its current device
         // position. Zero is a real target: a leading blank can reject the
@@ -115,16 +119,21 @@ impl InlineBuilder {
             first: if no_break {
                 usize::MAX / 2
             } else {
-                rmargin.saturating_sub(viscol.saturating_add(vbl))
+                placement.capacity(rmargin)
             },
             rest: if no_break {
                 usize::MAX / 2
             } else {
-                rmargin.saturating_sub(if flags.contains(FieldFlag::Brind) {
+                let origin = if flags.contains(FieldFlag::Brind) {
                     rmargin
                 } else {
                     state.field_offset_units
-                })
+                };
+                let mut presentation = self.execution.row_presentation;
+                presentation.endline_at(state.field_offset_units);
+                presentation
+                    .field_placement(origin, 0, 0, false)
+                    .capacity(rmargin)
             },
             // The frozen reading contract keeps source words after an
             // overrun HANG margin flush instead of deleting them solely

@@ -1,0 +1,3100 @@
+{
+  "oracle": {
+    "identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "profile": "-Tutf8 -O width=80",
+    "rules": [
+      "roff_term.c::roff_term_pre_ti",
+      "out.c::a2roffsu",
+      "term_ascii.c::ascii_endline",
+      "mdoc_term.c::print_mdoc_node"
+    ],
+    "expectations_from_product": false
+  },
+  "cases": [
+    {
+      "id": "unit-man-filled-ti-4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "80c6f63fcc125d5910c71c7234f9b80423662bfa80c50a3d773a0b8d89c45ebc",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-+4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti +4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "0fbd3e860ac309ffb6c49fd8563418e50fb51ef8cf4d67f5fc8347069ba0a040",
+      "native_rows": [
+        "     BEFORE",
+        "         Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti--4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti -4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "57ac20730bfe8e3778398c60f8684b70fd2060d843565356628a384a54dc19a4",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-+0n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti +0n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "20234ea3bdb026eccb1ef14d8905ed172382093e3b717de55cf0d2a88e0b3545",
+      "native_rows": [
+        "     BEFORE",
+        "     Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-100n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "077e03fc0865f64922049761cae354489db1b06d32988d457960321080e722c8",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti--100n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti -100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "b6befb3dce9d35377f3ada7588b9ff646c7f60e3afb78c3db97dc6734a80c592",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-5000n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 5000n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "76f9b4f4c32db338b12555caffcbc392bc5088b513e0b232be9cf0d74d7d3b7d",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-1e2",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 1e2\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "09d4cda5f41bee643ce25a5bde25bf40bdbed5ce4983e072570eb33ee90317ee",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-2junk",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 2junk\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "ba43afc7504b03c0bf0a1686fec411bc50fbcee2936eb4c489e9ff644576ccd4",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-7.2p",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 7.2p\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "954c3da8628a6fdebb50868b3c05a6302c87bf9b104791e567f625eca5f40489",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-24u",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 24u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "75289f0d34676c5dbcbfb6fe7f7d92dace5916e8d85c84ce0c13cb912392f6c4",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-12u",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 12u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "55a084ea01883fed8a59d476a13ea27daf4f9bdfbd9d5323bba5b9ef529b4d31",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-13u",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 13u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "731368b54e738bb07ebd05388d2aa6afa09005900f7951e590a0feda2c8c216e",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "0a56d11c4d229c54c946b5e59250d36bd36c777f484b44114d8656c07abad1ab",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-+4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti +4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "317a3f211f1b86cbe83813a5a3ef2ad2f9ce65bcd7461c0203c758f943fbefb5",
+      "native_rows": [
+        "     BEFORE",
+        "         Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti--4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti -4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "c4c7d901d59b9b544c84fb69f959b3beeabe3553f6ae18fb87d54f3b7f1f0073",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-+0n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti +0n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "c2b5270c94283c107b18aba8eb741820ef079eb951ba3787a2a91461a9bde451",
+      "native_rows": [
+        "     BEFORE",
+        "     Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-100n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "451e3bc1bc6922a4ddea77134c0f9d3fc5ec35d3be8f9954a74337f8190e70ce",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti--100n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti -100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "6dd867db3b34539586aec50d937ba170e502819e8e8c44f2141c67188d88c5eb",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-5000n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 5000n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "13988bc9226e37368c91b6ec23113a5368f8a0f257386bacfec646aaa547dd6a",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-1e2",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 1e2\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "f1e8bf63ce1a3ed211a05aa6fc8443a1c80fad9233876429ddf6d17d33349ef3",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-2junk",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 2junk\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "588e7e3d854d7e287cbd4f101fe47915c48d24df5896bb1f60bcab5d0cadeae9",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-7.2p",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 7.2p\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "fa66acedd13a00f1e5211996e9008d98d5137dd2a7c00ac16adfc0a13c1bad45",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-24u",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 24u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "b7cf9347f65ab4c524d42dedf8ddcf90a2c392ca4758381a6046ab950cb1df14",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-12u",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 12u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "53da94a5dabf744e7727b974131d6cf69caef58a3ed1f18c23be512a30f72ec7",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-13u",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 13u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "898a6c62ae4999d2ff59c70d787ec44344540ca80490b865a6e10a2dbb7c16b0",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-cell-.B \"\"",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.ti +4n\n.B \"\"\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "4088cf29257445d819f1e2379599f16dae9b0d0db0d36b1d842647d32f095d7c",
+      "native_rows": [
+        "",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-cell-\\z",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.ti +4n\n\\z\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "c71354a70020f148735dc66cb67106e1db081339a8d7cbc3e18a6a90ab7a6fad",
+      "native_rows": [
+        "          lpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-cell-\\&",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.ti +4n\n\\&\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "c6065ad8e047ab51ab40e08aaf9d3c68356e551c6e85c47992f78fc86ba6ab81",
+      "native_rows": [
+        "          Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "lpha": 11,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-cell-\\p",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.ti +4n\n\\p\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "3a30f38bff20bde900001ea8f9239f5cd5e15d3f1e87915c8fff9bb08e5db10f",
+      "native_rows": [
+        "",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "lpha": null,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-cell-\\zX",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.ti +4n\n\\zX\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "58c4f0ec61b52fc01804fcc9e48b74b9373bdfe91c7de1006114bf03f6c08bf1",
+      "native_rows": [
+        "         XAlpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "lpha": 11,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-cell-\\zX\\c",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.ti +4n\n\\zX\\c\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "24ca3f7d23bc5cf01eb70a2fedbabf482f265032d82df8b8c4ebfdbdcd786d32",
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-cell-.B \"\"",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\n.ti +4n\n.B \"\"\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "820a577761504451411150a3378b57102c9eb4719fd64a6262acee145abb04bb",
+      "native_rows": [
+        "",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-cell-\\z",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\n.ti +4n\n\\z\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "ac4c8777612fe1bc72d2da93fc096ac9496bca5807e1b810468c83e05a96a5cd",
+      "native_rows": [
+        "         lpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "lpha": 9,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-cell-\\&",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\n.ti +4n\n\\&\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "1950b89c61ce425ad578664b155c5f706245689fc3225cc1259c7f929c0c4684",
+      "native_rows": [
+        "",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-cell-\\p",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\n.ti +4n\n\\p\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "4ad4164cf15f55fb78fa9c2c3db855ed59ffa150ec17a6b873d182e709ead0f3",
+      "native_rows": [
+        "",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-cell-\\zX",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\n.ti +4n\n\\zX\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "4bf08e33e88a2343459e851df1f891df956f6aa9509d89769982ee543a8bffe0",
+      "native_rows": [
+        "         X",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-cell-\\zX\\c",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\n.ti +4n\n\\zX\\c\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "fc37e424a689e7dc618c8a808f3f5df18b1d8456cea7ca011893a08c68676dfa",
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "832c72264306d4fa2fbdc13e314dd2ade489d067ad82a57cb74cba1061260303",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-+4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti +4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "1f0e7fa632209c2ee5dbecc414301747f38f5305e3ec59dba4c677e3c768fe66",
+      "native_rows": [
+        "     BEFORE",
+        "         Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti--4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti -4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "b9f3d5e5160a406f21251e0384b369fa02a1efa8b38879c83fa911eb98abf0dd",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-+0n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti +0n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "08a36183ac1bbbbe32ad85413a26273ea5fa2288e72a57aec4c7804ba082fc40",
+      "native_rows": [
+        "     BEFORE",
+        "     Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-100n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "f140dfa19bdd8c5293eddcd28bf5f46bcf3bf4c33fe5af3b1bd30b5a1253c7c3",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti--100n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti -100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "e41c3b54872e8f173b7a2810b6d286d97b245b14513483451e166a1919c956bf",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-5000n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 5000n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "b646afeb9917181a13d8862600aa4a83bf5cacdd2ab8cdf3f910ad4daf5aa9ea",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-1e2",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 1e2\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "7e4d9bcbdef86e641f6bcd39e7cbe5e9c980ee0f385fe36484fa6031498d8ad0",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-2junk",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 2junk\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "0aae4f2b49035d9b11f7bc4216134e9460c53c084d0d683e27758f7f2f5f9b4a",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-7.2p",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 7.2p\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "943804fcc9e4c3135249baa257d7065937a7e5c2971f2c0cb00bb6052772c78c",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-24u",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 24u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "59e4f7a79f24af3e36b5f919ddb83c76b307d7efdde206de97b4fdaed344113f",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-12u",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 12u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "ce4e5223da30a8c69805d69d937aacac1670e427a43e58a7201506370c64a057",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-13u",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 13u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "0a9a4c570cd3a305463c9b346ab90a11ae192e831e1ec57f6b881ccb40ee130e",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "684166db0119a8ada98fc15ae083205bd8020e9451cc40d7e05623cbde30b546",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-+4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti +4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d3cd96c37c0568611d8342d5488466f0608b939d7609c0fed0157315e9d1e532",
+      "native_rows": [
+        "     BEFORE",
+        "         Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti--4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti -4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "3ff12718d01f66c06021764497a05541fd1c96ae5f9b0ab66e8b36237c311464",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-+0n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti +0n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "1fcddee0a558fead97a2ccb681d159c2c438912f91fc055459cefd0d0bb74176",
+      "native_rows": [
+        "     BEFORE",
+        "     Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-100n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "b0116035d1c44312a6bad38e37d44682495e7fb767b3bf0cfcbe72b1405c50e2",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti--100n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti -100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "9652af0c0032e04e77924850920fd1db4422d370fbdaef32dcd9434383d9db41",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-5000n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 5000n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "081a86682e59edd08a2dac623ac41ecc93430552d9d4df229126c91e1ec93931",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-1e2",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 1e2\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "8ad2d709820c652664c08dcce746f3d8e58b4b209ad0e7dbfcda76cf4d595d34",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-2junk",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 2junk\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "93bb14718bef82ea83e90e05e97c2598c68d663d02306294ce3d391991f3fc18",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-7.2p",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 7.2p\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "49ff9d6d1ce3a0dfc97920d7e174458e38e9637cedb39014c756da51e47a8565",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-24u",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 24u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "36e91ee65b704a2e51c43e6e1dbdae822b55c8f82c53ef5294f30e5ed3c91392",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-12u",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 12u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "bf08b4de9fc44ee61dfa5451e8f763b35ac87d8251d7751153e5d99d2237a3f5",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-13u",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 13u\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "7d012e448a4d24d9c2836bcf58b4c54872371c3969755dacedbfe68da4986f54",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-cell-.No \"\"",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.No \"\"\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "5e173df80f0035e27b4f8c38ff82335f8d53302715775f4f81614656f90fc998",
+      "native_rows": [
+        "          Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "lpha": 11,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-cell-\\z",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n\\z\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "7fca4a83dafa633a11ae8620c8bf22363d08514abbc97b0ecc6317c3cf366835",
+      "native_rows": [
+        "          lpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-cell-\\&",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n\\&\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "92495a5be04dc320c736a3d2a91cd24122e2e8a20a15b3c2f3099e4264c2f130",
+      "native_rows": [
+        "          Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "lpha": 11,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-cell-\\p",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n\\p\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "34e57a4298be793dad24d4cc79f49d1733931c0925a08e802ddd3e353b6464c3",
+      "native_rows": [
+        "",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "lpha": null,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-cell-\\zX",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n\\zX\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "168fe76f7f63853be0661ee49f2350e38a42d63f72eb23741f15faa858476612",
+      "native_rows": [
+        "         XAlpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "lpha": 11,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-cell-\\zX\\c",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n\\zX\\c\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "507e21dc132e1609d39fa77469b2592cd465b126f64cdaf4751e3da20322df39",
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-cell-.No \"\"",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ti +4n\n.No \"\"\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "7530090284938da34b6474931144640a46cfee983c73ffc346538f9c8a954db5",
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-cell-\\z",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ti +4n\n\\z\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "30eb5f996dad68201dee10cc94c260bea7ec4729a2555401eeec38e69135151b",
+      "native_rows": [
+        "         lpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "lpha": 9,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-cell-\\&",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ti +4n\n\\&\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "0637c01dfd2ba84493aae489cb76ff6db175f22a5158b76fded5f78b9a6ef491",
+      "native_rows": [
+        "",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-cell-\\p",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ti +4n\n\\p\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "f0a62ee853e575135dd83190e3a6d7f1819c2da12daf8ac55aba9cb16fc913d4",
+      "native_rows": [
+        "",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-cell-\\zX",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ti +4n\n\\zX\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "4740faa04de25b8cb9df925bcc1c49b522808180e1c9845e848f6f02ed39dc74",
+      "native_rows": [
+        "         X",
+        "     Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "lpha": 6,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-cell-\\zX\\c",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ti +4n\n\\zX\\c\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "dab35d104f536488e92376d695def328d4a0e4c5a93462bf5fbd2ea4111c5dae",
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "lpha": 10,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-0x1p2n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 0x1p2n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "261f69627d7fb9341988a867ab8648d93aee8afbdaefc1959f798758e9c32e43",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-0x0.8p1n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 0x0.8p1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "da4b79cd58608ef2b58fae3745a86207b55629a17785f0eaf8afd8aa94e3a183",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-0x1n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 0x1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "c1a10b6e533b3e66d9622620920d305dcd74ea1351b6bd96afa5d6629d7c5f3b",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-0x1pn",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 0x1pn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "c0b50cab3e555877cb650c5f350be0f537c4e66010caabc5983c87ef086b67e3",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-+-4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti +-4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "db22aaa8e16de57bc623dae494bf88a0df147ef36926095f718a06b088082252",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti---4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti --4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "2de7eda10aa7ac53ff6afa0f7fa6c472707afe023fa8633ec571a82cbf3d0494",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-+-100n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti +-100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "68d5a006b70c8a182eb82b85623e1cc7f1c665d19660b19e82bfc908dbbb3936",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-2gn",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 2gn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "7c2e5ab99afe57ba1f3fba3caea11e7341317297e203ae9fcfee828268813381",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-0x1p2n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1p2n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "ae4d33381397b81061b6d68391ebcf01e21632d4620764ea02761545c9c59f81",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-0x0.8p1n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x0.8p1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "cf184011abe30f3d52ca7726fb818fecd13c9eabb3b7995a278308fb55ef06f9",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-0x1n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "f5addba595b616a4f4f60ae8df0d1720ca6da89e11d56255008a6f1bfb2ff323",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-0x1pn",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1pn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "1cfa3f8a0d51747ac679542a80f680a71cf266712d42f33bc05b7553e64ac3ef",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-+-4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti +-4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "07b44e826e5e074234babe061a18ef6f1b9fca73da90808e83af88545507240c",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti---4n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti --4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "5beb36086deadf9c38bcebc38acc4b7176de2321b74eaf9e91789b2df25e221f",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-+-100n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti +-100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "62d0f514fb1c9f1e2bbd8e8f2142033373386735972fd35ca0992f01ad3571c3",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-2gn",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 2gn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "6dc08edc50a0c26c6d74d86204e1473320e8fd6f5f93c71f07d8ff018c958520",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-0x1p2n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 0x1p2n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "7cd5fc7bdbbf12c9f86a23f1d84ccb89fc13ec079807abd16b9adbdad6f2fee1",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-0x0.8p1n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 0x0.8p1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "91a3474dd3fdf9d3a236677645cff3b3c029aa8ed823ad0ddac596f86c864c76",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-0x1n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 0x1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "787cae2d54b84638d3efedba6feb3265d34295f0d0ccc3e069df59b6eb7ab97a",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-0x1pn",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 0x1pn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "6b233775c3bcfe11ce07b09079371a826ff1c99243aff56125fba37f4e658b17",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-+-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti +-4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "99fc5fb25a4319a2d16fdc919b2c3ca170894f22e165066cfd2534ec682e24c5",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti---4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti --4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "9da55c3fef9516c5abaf5f754e20e9a8c066867239eb3623e93009db9f0a4300",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-+-100n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti +-100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "9da209c98e6e4993b7d6b88da0333948551671244154b6a60aa5a9e624c4b0eb",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha",
+        "     Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-2gn",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 2gn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "20a96aac6d6b67e58cacaaaa4383abd4d8618d3529b8e0ad95777395f28bf1e6",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-0x1p2n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1p2n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "67b727278a4a8e25ca327e1190f168883aca79265ef5b74a3cf6e2173aa2afba",
+      "native_rows": [
+        "     BEFORE",
+        "    Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "lpha": 5,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-0x0.8p1n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x0.8p1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "32a73b96f97dc7b4d819d595387450571973fbc783808d7cd0df87a4eaa575f8",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-0x1n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "947672ec9f925f553b4e6c6e195344196b6e68b54db269aefe57fd938865a8e8",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-0x1pn",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1pn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d0892b4d06bd5890c32df99326c27f8af50c552e17e574a0645bafb0015f6312",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-+-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti +-4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "97e74d6aad19baab366139f2b62d132f58af165871b6102916b5718d0de00549",
+      "native_rows": [
+        "     BEFORE",
+        " Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "lpha": 2,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti---4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti --4n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "5f4670b79476f8b9925ba0dfd4e74b8d68f6282e4260fb2028db62eda464643d",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-+-100n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti +-100n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "ab8473bcd2d091fa9764c294f2a742fb38e8da02b8a436267d7ffbf0f2f9677c",
+      "native_rows": [
+        "     BEFORE",
+        "                                                                        Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 72,
+        "lpha": 73,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-2gn",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 2gn\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "f71ff7f856af6c0ba2a4b49080bf711717a1e84536ecbac6ca4589447015bf35",
+      "native_rows": [
+        "     BEFORE",
+        "  Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 2,
+        "lpha": 3,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-0x0p1024n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 0x0p1024n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "436e42c20b11ceb73aeecdc54612f6ca71602f8285df736f8fd72a8040ba731d",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-0x0p-2147483649n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 0x0p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "eea15bac69916ef54316265f9a4e5c963919c78d25420452aeb58d9637b63e90",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-filled-ti-0x1p-2147483649n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\nBEFORE\n.br\n.ti 0x1p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "688228871d39183bff59bc0fc04222a57f075b8a528e02435773f064edbb5a12",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-0x0p1024n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x0p1024n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "e00f1c0bee6f2f98ffd5e464358dff0c5dcb78cc3b0997530283857e896628a1",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-0x0p-2147483649n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x0p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "8fb73bd2889c90cd4a6e29571cc09a9b6eb197b9170885ed98216b2c1f42e475",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-man-nofill-ti-0x1p-2147483649n",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "da60409579d6fd8852b6ace421788d92ca1a6f636c045b20d2ad63f840ba8ae7",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-0x0p1024n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 0x0p1024n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "23dfe51b0e9ee510d8050fd008327581651ffbf2612f8c5dc6093a218bc1fc45",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-0x0p-2147483649n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 0x0p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "f5541b7d23c7d05ae6cb8a9a9b99e3eab627cfb0dc5bdbb4d3b490eeaad17a45",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-filled-ti-0x1p-2147483649n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\nBEFORE\n.br\n.ti 0x1p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "dfe71cadf9d8110312cd5d70dc74837abf8ea5ddb3661fa4ae24ae55649b07e8",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-0x0p1024n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x0p1024n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "ede00b3ca63f7aa2fd74d794c3e5c491600fb0b2ed62d22ef86be7b5de724c42",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-0x0p-2147483649n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x0p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "224160d46a68ae09d73b5995b14da0756b638d916af0b466137852c7c392d0d1",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "unit-mdoc-nofill-ti-0x1p-2147483649n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\nBEFORE\n.br\n.ti 0x1p-2147483649n\nAlpha Beta\nGamma Delta\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "7f200b086fc30c5c7473431ea35b2d3ba76d6f8933ef8b7e5eeef8ccb5b1468c",
+      "native_rows": [
+        "     BEFORE",
+        "Alpha Beta",
+        "     Gamma Delta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 0,
+        "lpha": 1,
+        "AFTER": 5
+      },
+      "lint": ""
+    },
+    {
+      "id": "man-filled-ti-+-5n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.ti +-5n\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "9bef34f604042835c4223c560efb95c565af15e5fb3e0ee1480fb9187825e002",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "man-filled-ti-+-6n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.ti +-6n\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "eb58f364a139807d32138a3a58cf5a89a5288cee1e8ab9d84fccb445f919d2c0",
+      "native_columns": {
+        "Alpha": 72,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "                                                                        Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "man-filled-ti---100n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.ti --100n\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "a8ae0cda4695f92fba842b4408927501e9502f4dd9bfebc1b51e484fe3394158",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "man-filled-ti-+0x1p2n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.ti +0x1p2n\nAlpha\n.br\nAFTER\n.SH PROBE_END\nEND\n",
+      "source_sha256": "4deea24b2a0a04f42265b1cb7d314f0eba0548a70d33ef8cdae22af9dee0edee",
+      "native_columns": {
+        "Alpha": 9,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "man-nofill-ti-+-5n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.nf\n.ti +-5n\nAlpha\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "9764a07910335c750d923ce669076d362bae2a7b894a5949b96c0015bfd95d42",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "man-nofill-ti-+-6n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.nf\n.ti +-6n\nAlpha\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "f8a6e5afff26c4f6affea09750a0f8250d372efdbff7745aa698d75ad5b9fbf3",
+      "native_columns": {
+        "Alpha": 72,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "                                                                        Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "man-nofill-ti---100n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.nf\n.ti --100n\nAlpha\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "37ecc919ba80adaf9b2829a795fe4eff7478d2dfcdbd4e7a90b2e20bc26c8403",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "man-nofill-ti-+0x1p2n",
+      "source": ".TH TEST 7 \"2026-10-14\"\n.SH PROBE_START\n.nf\n.ti +0x1p2n\nAlpha\nAFTER\n.fi\n.SH PROBE_END\nEND\n",
+      "source_sha256": "e580491b584e885d46a437273d9616fcf3850cafc7e7c5f7ca758b9ac00241b1",
+      "native_columns": {
+        "Alpha": 9,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-filled-ti-+-5n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.ti +-5n\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "ea59e843aae0936fc0ba55a23369712d0512cb03e35f7a759a75057d47e0bfec",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-filled-ti-+-6n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.ti +-6n\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "dd32102c91259177a13d8e103079ec75c85527a1691870445b1ea21cf6617630",
+      "native_columns": {
+        "Alpha": 72,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "                                                                        Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-filled-ti---100n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.ti --100n\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "8b5444fdb1ad0a3fd45b4d1533313b63661b810faae19546ecf85aef7ab17383",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-filled-ti-+0x1p2n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.ti +0x1p2n\nAlpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d013365fd30a15c43a52e8676e77cb26b8320ed51f0712ed8d6d6b86a7ba46a3",
+      "native_columns": {
+        "Alpha": 9,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-nofill-ti-+-5n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.nf\n.ti +-5n\nAlpha\nAFTER\n.fi\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d9c6a2c9473d5b61107aa5bfeb6625de8767522a77e5271a5ef9d00d8060d44d",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-nofill-ti-+-6n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.nf\n.ti +-6n\nAlpha\nAFTER\n.fi\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "fc916d1c12212f35db37df39608788cf6970ce3e576e4119a2a91b0037079416",
+      "native_columns": {
+        "Alpha": 72,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "                                                                        Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-nofill-ti---100n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.nf\n.ti --100n\nAlpha\nAFTER\n.fi\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "412c2a4d7c9a64bf081408da52ac718a471d0f7154fd2b556d6a6789e7985ad9",
+      "native_columns": {
+        "Alpha": 0,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    },
+    {
+      "id": "mdoc-nofill-ti-+0x1p2n",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.nf\n.ti +0x1p2n\nAlpha\nAFTER\n.fi\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "5c3629c6a2d8e24a861648b3430942ed2f116cbcfb6774f63834bd02fc682bf5",
+      "native_columns": {
+        "Alpha": 9,
+        "AFTER": 5
+      },
+      "native_rows": [
+        "         Alpha",
+        "     AFTER"
+      ],
+      "lint": ""
+    }
+  ],
+  "structural_cases": [
+    {
+      "id": "mdoc-head-tag-filled-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -tag -width 4n -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "907ba754d2063f8a5ef4721d7957c56d828fef7df134218d94ab48ef462e23f5",
+      "native_rows": [
+        "     Alpha",
+        "            Beta",
+        "           BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 12,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 11,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-tag-filled-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -tag -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "a6c1b9047e9bda7d8d5616a224a4d89372347af206ac40ffa48e44cbdc2718f0",
+      "native_rows": [
+        "     Alpha",
+        " Beta",
+        "           BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 1,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 11,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-tag-filled-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -tag -width 4n -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "46b1f3d5953b4a475aa81de521194a9be8659a6a15cc39f3cb5bd06c4ea4ce04",
+      "native_rows": [
+        "     Alpha",
+        "         Beta",
+        "           BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 9,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 11,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-tag-nofill-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -tag -width 4n -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d9b84001a3035b3ab5abb1dffdfea807752e0ca89c313aee1ebbd9573f1edcb2",
+      "native_rows": [
+        "    Alpha",
+        "     Beta",
+        "           BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 11,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-tag-nofill-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -tag -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d0216465c9425ad6ba22e7ce185f41ee878909b26aeeafd7885f42e09ac4fd68",
+      "native_rows": [
+        "               Alpha",
+        "     Beta",
+        "           BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 15,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 11,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-tag-nofill-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -tag -width 4n -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "4e96d9a791bb7da85c8ee441b793a60403476358a3f2ec7e675859ee4dc8695d",
+      "native_rows": [
+        "       Alpha",
+        "     Beta",
+        "           BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 7,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 11,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-hang-filled-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "dc5e92ad282884644c25bcd10f3379c29e5884a5e0666f21f98dfb5bee77a6c9",
+      "native_rows": [
+        "     Alpha",
+        "            BetaBODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 12,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "joined",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-hang-filled-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "ed00586c00b038c5ea24a7dc796d5854ec1c62c722bfc7e2fb8078e2f8652fba",
+      "native_rows": [
+        "     Alpha",
+        " Beta      BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 1,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-hang-filled-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "8bec01a7d78642cb0af97ada8df1e70db223e65198b9e36a366d33c43c7ac961",
+      "native_rows": [
+        "     Alpha",
+        "         BetaBODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 9,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "joined",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-hang-nofill-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -hang -width 4n -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "fbf120f9a6aaad87d93d53b5cd7ab5c1712bc4b317adf432b350eeec04f46de7",
+      "native_rows": [
+        "    AlphaBeta",
+        "                  BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "Beta": 9,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 18,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-hang-nofill-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -hang -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "1b288d5d1f0baec65de005a61501331fc7afee7493ed934c65fe6947d04e54c1",
+      "native_rows": [
+        "               AlphaBeta",
+        "       BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 15,
+        "Beta": 20,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 7,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-hang-nofill-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -hang -width 4n -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "1236fce74aeddef2079ad84c72dc395a0b545364d8eb38b0c2f990145715eaf7",
+      "native_rows": [
+        "       AlphaBeta",
+        "               BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 7,
+        "Beta": 12,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 15,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-inset-filled-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -inset -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "bca8c2f3d822603e98be4b00c55b5b364a0230ba09a9cca49cfb8f88c0e000e2",
+      "native_rows": [
+        "     Alpha Beta BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 11,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-inset-filled-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -inset -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "005bba16bfefe3b5a4980b32fcc2160352970aaf3fd2cae723f0fe2cbb901aba",
+      "native_rows": [
+        "     Alpha Beta BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 11,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-inset-filled-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -inset -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "9a3960595a284c84d19d10fa53ef79d98734a39ca352e42cd00a0ce8196c7bd9",
+      "native_rows": [
+        "     Alpha Beta BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 11,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-inset-nofill-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -inset -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "752fef6d49eb487415139ca4b5a6e927c28d621d237991e7c937b72e3fd35519",
+      "native_rows": [
+        "    Alpha",
+        "     Beta",
+        "      ",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-inset-nofill-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -inset -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "e647ac9c8c3b6a7aee6dd9a9e7b1873e8eda99651e56abfc19b48cb626b944ef",
+      "native_rows": [
+        "         Alpha",
+        "     Beta",
+        "      ",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-inset-nofill-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -inset -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "3c5f78f7269ae61d7a341b7035592417f9e360a2f1ebcd56511bd2133fae2e62",
+      "native_rows": [
+        " Alpha",
+        "     Beta",
+        "      ",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-ohang-filled-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -ohang -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "53c6dcf0ab55897320993912cd2a579b8cfe92eeafe06ae4467e8efa535e1659",
+      "native_rows": [
+        "     Alpha Beta",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 11,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-ohang-filled-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -ohang -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "9e1e10bf1d89a65f26e8afbe9ec5b4e76fab8eb82c906cb0737c7d5c01e17518",
+      "native_rows": [
+        "     Alpha Beta",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 11,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-ohang-filled-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -ohang -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "c2ae354424104f2bbb7801fcfe73dbba7c519b68d715f4efc779d343138e8406",
+      "native_rows": [
+        "     Alpha Beta",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": 11,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-ohang-nofill-4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -ohang -compact\n.It Xo\n.ti 4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "66270f769971f19670ee45d2af582f67b05e963f60de8baef575d94f89c623a7",
+      "native_rows": [
+        "    Alpha",
+        "     Beta",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 4,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-ohang-nofill-plus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -ohang -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "b4516dda159dcd2346e9d289ffb8d72efbc28961d38a1e917726afcd9c9554df",
+      "native_rows": [
+        "         Alpha",
+        "     Beta",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-head-ohang-nofill-minus4n",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.Bl -ohang -compact\n.It Xo\n.ti -4n\n.No Alpha\n.No Beta\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "ff71558cf22658be2df1e039800f5991b5f7a102a013599b409ee5122b59a827",
+      "native_rows": [
+        " Alpha",
+        "     Beta",
+        "     BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 1,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-scope-bq",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.Bq Alpha\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d89cfc55644643f045b90a59179fc46a0fabd40da98c83ec79b69307ae644b91",
+      "native_rows": [
+        "         [Alpha]",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": false,
+      "relation": null,
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-scope-bo",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.Bo\nAlpha\n.br\nBeta\n.Bc\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "23e14628e9d221f480431989b399c89afc74e2416fa48898f951c649bfe4a5d5",
+      "native_rows": [
+        "         [Alpha",
+        "         Beta]",
+        "         AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "Beta": 9,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 9
+      },
+      "definition": false,
+      "relation": null,
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-scope-dl",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.Dl Alpha\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "13b4bc5b5527703984f08b9d2cef5b4c05c1c0c0a0eea024824a267c2db2b020",
+      "native_rows": [
+        "               Alpha",
+        "         AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 15,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 9
+      },
+      "definition": false,
+      "relation": null,
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-scope-bd",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bd -literal -offset 4n\n.ti +4n\nAlpha\nBeta\n.Ed\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "e9cf00c0c5b12e5b82b5b14a2a1864904aa98503078caa81508a5953cbc481ac",
+      "native_rows": [
+        "             Alpha",
+        "         Beta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 13,
+        "Beta": 9,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": false,
+      "relation": null,
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-scope-no-body-ti",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -inset -compact\n.It HEAD\n.ti +4n\n.No BODY\n.No NEXT\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "d4203e309b49989c88ab56c00f6b8933fa359b83cb671b61e7ceb8197e18f613",
+      "native_rows": [
+        "     HEAD ",
+        "         BODY NEXT",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "Beta": null,
+        "HEAD": 5,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 9,
+      "lint": ""
+    },
+    {
+      "id": "mdoc-scope-no-fi",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.nf\n.ti +4n\n.No Alpha\n.No Beta\n.fi\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "b25849413f60dc9c5707bf61ccce8edf10eb7dfada412f5d0e33813bee806b43",
+      "native_rows": [
+        "         Alpha",
+        "     Beta",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 9,
+        "Beta": 5,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": false,
+      "relation": null,
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "outdent-joined-gap",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No BBBBBBBB\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "35916698eca9e7b99ee9141f9de8df859b7c3781fbb44535d2ed83d541bf99a7",
+      "native_rows": [
+        "     Alpha",
+        " BBBBBBBB  BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": 1,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-inset-before-list",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.Bl -inset -compact\n.It HEAD\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "48e998f6559f090e308e42be495dbbc818212d5906ad623d7ddbb42ebcc7eb8b",
+      "native_rows": [
+        "         HEAD BODY",
+        "         AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "Beta": null,
+        "HEAD": 9,
+        "BBBBBBBB": null,
+        "AFTER": 9
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-before-inset-body-break",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.Bl -inset -compact\n.It HEAD\n.br\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "b531d341d7c7647b233a82ae19aa465e27280c2e7e6b97bfc72c0a8f895faea2",
+      "native_rows": [
+        "         HEAD ",
+        "     BODY",
+        "         AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "Beta": null,
+        "HEAD": 9,
+        "BBBBBBBB": null,
+        "AFTER": 9
+      },
+      "definition": true,
+      "relation": "separate",
+      "body_column": 5,
+      "lint": ""
+    },
+    {
+      "id": "ti-before-inset-body-continuation",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.Bl -inset -compact\n.It HEAD\n.No BODY\\c\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "83a6630d0aa8cb432b601a07df6c3fab335a52242a8044fd792e4771b4ecc8f2",
+      "native_rows": [
+        "         HEAD BODY",
+        "         AFTER"
+      ],
+      "native_columns": {
+        "Alpha": null,
+        "Beta": null,
+        "HEAD": 9,
+        "BBBBBBBB": null,
+        "AFTER": 9
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-before-ao-break",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.ti +4n\n.Ao\nAlpha\n.br\nBeta\n.Ac\n.br\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "7fa9cdc3685b3e5905b20beba187f2c8457104abc3dee5bde0c8480edda803da",
+      "native_rows": [
+        "         ⟨Alpha",
+        "         Beta⟩",
+        "         AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 10,
+        "Beta": 9,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 9
+      },
+      "definition": false,
+      "relation": null,
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-inset-head-scope",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -inset -compact\n.It Xo\n.ti +4n\n.Ao\nAlpha\n.Ac\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "b1875918ef68bf7e54ff2a669dd2ef23d8c59c9dc1d1ae1a126339da26e8e513",
+      "native_rows": [
+        "     ⟨Alpha⟩ BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 6,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": null,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-outdent-No",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.No BBBBBBBB\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "35916698eca9e7b99ee9141f9de8df859b7c3781fbb44535d2ed83d541bf99a7",
+      "native_rows": [
+        "     Alpha",
+        " BBBBBBBB  BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": 1,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-outdent-Sy",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.Sy BBBBBBBB\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "5a71ed36a80bbbd8af6ddf6b84531c6c147b0b3040ab1b7ac5df37ef732aeb7e",
+      "native_rows": [
+        "     Alpha",
+        " BBBBBBBB  BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": 1,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-outdent-Em",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.Em BBBBBBBB\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "cec670b93ce535ee7e929f71346d4878b871c818bee1336f7b47939d998debc5",
+      "native_rows": [
+        "     Alpha",
+        " BBBBBBBB  BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": 1,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-outdent-Li",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd audit\n.Sh PROBE_START\n.Bl -hang -width 4n -compact\n.It Xo\n.ti +4n\n.No Alpha\n.Li BBBBBBBB\n.Xc\n.No BODY\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "37a5abd847f6df296688c12ac9e6a66e0489810b04d4776e6574f8e2a89cfcf1",
+      "native_rows": [
+        "     Alpha",
+        " BBBBBBBB  BODY",
+        "     AFTER"
+      ],
+      "native_columns": {
+        "Alpha": 5,
+        "Beta": null,
+        "HEAD": null,
+        "BBBBBBBB": 1,
+        "AFTER": 5
+      },
+      "definition": true,
+      "relation": "separated",
+      "body_column": null,
+      "lint": ""
+    },
+    {
+      "id": "ti-before-bd-offset",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.ti +4n\n.Bd -literal -offset indent\nAlpha\n.Ed\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "f90d60caef0c8fa596bb3ad9e2b3499ffc580d249506a3317399d482c3f3a182",
+      "native_columns": {
+        "Alpha": 11,
+        "AFTER": 9
+      },
+      "native_rows": [
+        "           Alpha",
+        "         AFTER"
+      ],
+      "lint": "",
+      "definition": false,
+      "relation": null,
+      "body_column": null
+    },
+    {
+      "id": "ti-before-bd-no-offset",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.ti +4n\n.Bd -literal\nAlpha\n.Ed\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "4fc52515eeb62469d5e49e2b0d3e727a8c362358d95741395f8b451c22930be0",
+      "native_columns": {
+        "Alpha": 5,
+        "AFTER": 9
+      },
+      "native_rows": [
+        "     Alpha",
+        "         AFTER"
+      ],
+      "lint": "",
+      "definition": false,
+      "relation": null,
+      "body_column": null
+    },
+    {
+      "id": "ti-before-bullet",
+      "source": ".Dd October 14, 2026\n.Dt TEST 7\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh PROBE_START\n.ti +4n\n.Bl -bullet -compact\n.It\n.No Alpha\n.El\nAFTER\n.Sh PROBE_END\nEND\n",
+      "source_sha256": "510a19c60d0a2bb6927f257d5a6ef30edfb3665081828a70cfe6eba5dfce5d4b",
+      "native_columns": {
+        "Alpha": 13,
+        "AFTER": 9
+      },
+      "native_rows": [
+        "         •   Alpha",
+        "         AFTER"
+      ],
+      "lint": "",
+      "definition": false,
+      "relation": null,
+      "body_column": null
+    }
+  ]
+}

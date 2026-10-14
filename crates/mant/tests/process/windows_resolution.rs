@@ -160,7 +160,7 @@ fn request_windows_suffix(fixture_root: &std::path::Path) -> std::process::Outpu
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v0.12","input":{"kind":"document","selector":"ordered"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v0.13","input":{"kind":"document","selector":"ordered"},"view":{"kind":"full"}}"#,
         )
         .expect("write Windows suffix request");
     child.wait_with_output().expect("wait for suffix request")

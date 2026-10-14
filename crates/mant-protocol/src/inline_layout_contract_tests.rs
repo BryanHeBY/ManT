@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 fn query_with_owner(owner: &str, content: &Value, layout: &Value) -> Value {
     let mut document = json!({
-        "schema":"mant.document/v0.12", "producer":{"name":"test","version":"0"},
+        "schema":"mant.document/v0.13", "producer":{"name":"test","version":"0"},
         "source":{"format":"markdown"}, "meta":{}, "sections":[]
     });
     match owner {
@@ -31,7 +31,7 @@ fn query_with_owner(owner: &str, content: &Value, layout: &Value) -> Value {
         }
         _ => unreachable!("test owner"),
     }
-    json!({"schema":"mant.query/v0.12","label":"rows","document":document})
+    json!({"schema":"mant.query/v0.13","label":"rows","document":document})
 }
 
 const OWNERS: [&str; 5] = [
@@ -306,4 +306,106 @@ fn retired_break_indentation_is_rejected_inside_every_owner_and_annotation() {
     // cannot decode while silently discarding the owner coordinate system.
     let old_term = json!({"terms":[[{"type":"text","value":"old"}]],"description":[]});
     assert!(serde_json::from_str::<mant_ir::DefinitionItem>(&old_term.to_string()).is_err());
+}
+
+#[test]
+fn every_owner_preserves_alignment_and_first_visual_origin_in_actual_json() {
+    let content = wrapped_content();
+    for alignment in ["center", "right"] {
+        for correction in [-65535, -4, 0, 4, 65535] {
+            let mut layout = json!({"rowHints":[
+                {"row":0,"indentColumns":0,"alignment":alignment},
+                {"row":3,"indentColumns":-2,"firstLineIndentColumns":correction,
+                 "alignment":alignment}
+            ]});
+            if correction == 0 {
+                layout["rowHints"][1]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("firstLineIndentColumns");
+            }
+            for owner in OWNERS {
+                let original = query_with_owner(owner, &content, &layout);
+                assert_object_baseline(&original);
+                let query: QueryBundle = serde_json::from_str(&original.to_string()).unwrap();
+                let encoded = serde_json::to_string(&query).unwrap();
+                let restored: QueryBundle = serde_json::from_str(&encoded).unwrap();
+                assert_eq!(restored, query, "{owner}: {alignment}: {correction}");
+            }
+        }
+    }
+}
+
+#[test]
+fn every_owner_validates_first_visual_origin_and_alignment_before_normalizing() {
+    for hint in [
+        json!({"row":0,"indentColumns":0,"firstLineIndentColumns":65536}),
+        json!({"row":0,"indentColumns":0,"firstLineIndentColumns":-65536}),
+        json!({"row":0,"indentColumns":0,"firstLineIndentColumns":null}),
+        json!({"row":0,"indentColumns":0,"firstLineIndentColumns":1.5}),
+        json!({"row":0,"indentColumns":0,"alignment":"justify"}),
+        json!({"row":0,"indentColumns":0,"alignment":null}),
+        json!({"row":0,"indentColumns":0,"alignment":1}),
+        json!({"row":4,"indentColumns":0,"firstLineIndentColumns":0,"alignment":"left"}),
+    ] {
+        for owner in OWNERS {
+            assert_query_and_document_reject(&query_with_owner(
+                owner,
+                &wrapped_content(),
+                &json!({"rowHints":[hint]}),
+            ));
+        }
+    }
+    for owner in OWNERS {
+        let original = query_with_owner(
+            owner,
+            &wrapped_content(),
+            &json!({"rowHints":[{"row":0,"indentColumns":0,
+                                "firstLineIndentColumns":2,"alignment":"right"}]}),
+        );
+        for (field, duplicate) in [
+            (
+                "\"alignment\":\"right\"",
+                "\"alignment\":\"right\",\"alignment\":\"left\"",
+            ),
+            (
+                "\"firstLineIndentColumns\":2",
+                "\"firstLineIndentColumns\":2,\"firstLineIndentColumns\":3",
+            ),
+        ] {
+            let wire = original.to_string().replacen(field, duplicate, 1);
+            assert!(
+                serde_json::from_str::<QueryBundle>(&wire).is_err(),
+                "{wire}"
+            );
+            let wire = original["document"]
+                .to_string()
+                .replacen(field, duplicate, 1);
+            assert!(
+                serde_json::from_str::<DocumentResponse>(&wire).is_err(),
+                "{wire}"
+            );
+        }
+    }
+}
+
+#[test]
+fn presentation_defaults_omit_geometry_but_not_the_owner_body() {
+    for owner in OWNERS {
+        let original = query_with_owner(
+            owner,
+            &wrapped_content(),
+            &json!({"rowHints":[{"row":0,"indentColumns":0,
+                                "firstLineIndentColumns":0,"alignment":"left"}]}),
+        );
+        let decoded: QueryBundle = serde_json::from_str(&original.to_string()).unwrap();
+        let encoded = serde_json::to_string(&decoded).unwrap();
+        assert!(!encoded.contains("inlineLayout"), "{owner}");
+        assert!(!encoded.contains("firstLineIndentColumns"), "{owner}");
+        assert!(!encoded.contains("alignment"), "{owner}");
+        let restored: QueryBundle = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(serde_json::to_string(&restored).unwrap(), encoded);
+        assert!(encoded.contains("visible-owner"), "{owner}");
+        assert!(encoded.contains("https://example.org"), "{owner}");
+    }
 }

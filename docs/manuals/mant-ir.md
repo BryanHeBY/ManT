@@ -252,6 +252,16 @@ fallback when exceeded, retaining every later cell as well as the cells already
 prepared. It does not impose a source advance limit. ANSI decoration never changes
 measurement. TUI resizing may stack cells while retaining links, anchors, search
 ranges and selection coordinates.
+Owner row alignment is applied after intrinsic cell measurement and final
+placement. Its area is the allocated content slot, excluding the following
+inter-column gap; the last column can use the remaining viewport. Stacked cells
+use their available parent content area. Generated alignment padding does not
+participate in intrinsic measurement or turn an otherwise fitting declared row
+into a stacked row. Existing left-aligned overflow and responsive wrapping
+rules still apply. Text output without a known viewport retains left placement,
+including deterministic pipe-table output. A pipe separator occupies its own
+display cell, so that projection's column origins can differ from TUI columns;
+alignment never changes source words, hard-row counts or navigation ownership.
 Early topology fallback and late placement-budget fallback preserve the same
 physical cell receipts: no-output cells do not become blank rows, while authored
 empty literal rows, hard breaks and completed spacing keep their own boundaries.
@@ -309,7 +319,7 @@ text scalar regardless of presentation.
 
 Paragraph and Preformatted blocks, document and section Headings, and each
 DefinitionTerm may carry `inlineLayout` beside their original `children` or
-`content`. Its `rowHints` contains sparse `{row, indentColumns}` objects. `row`
+`content`. Its `rowHints` contains sparse row presentation objects. `row`
 is a zero-based logical hard-row position within that owner; `indentColumns`
 is a signed relative display-cell correction. Missing rows use zero without
 inheriting a preceding correction. Ordinary indentation and hanging layout
@@ -317,6 +327,30 @@ remain structural, so ordinary Markdown paragraphs and lists need no hints.
 Strong, Emphasis and Link wrappers share their owner's row counter; anchors
 do not advance it. Each LineBreak and each actual newline in Text, Code or
 an equation's readable text closes the current row and opens the next.
+
+| Row hint field | Meaning | Default |
+| --- | --- | --- |
+| `row` | Zero-based logical hard-row position | Required |
+| `indentColumns` | Signed correction to both first and continued visual origins | Required |
+| `firstLineIndentColumns` | Additional signed correction to the first visual line only | 0 |
+| `alignment` | Viewport-relative `left`, `center` or `right` placement | `left` |
+
+`firstLineIndentColumns` preserves ordinary hanging layout on soft wraps.
+For a first origin of 2, continued origin of 6, `indentColumns: 1` and
+`firstLineIndentColumns: 4`, the resolved origins are 7 and 7. Without the
+first-only correction they are 3 and 7. The next hard row uses its own hint.
+Alignment places each nonempty visual line in its available content area after
+origin composition and wrapping. Without a viewport, deterministic text and
+Markdown projections use the ordinary left origin; they cannot infer a page
+width. Neither correction nor alignment creates text, blank rows, bindings or
+clickable regions. Styles and links keep the owner's coordinate system.
+
+For a definition's shared HEAD/BODY physical line, compose the content before
+placing it. A non-left HEAD hint controls alignment; otherwise the first
+effective BODY hint controls it. That choice also applies to visual wraps of
+the composed logical line. Following hard rows use their own owner's hints.
+List markers remain fixed at the structural list origin: alignment applies to
+the content area after the marker, not to the marker itself.
 
 | Original content | Addressable row positions | Rows closed by hard breaks | Open tail |
 | --- | --- | --- | --- |
@@ -334,16 +368,18 @@ cannot be reused. `VerticalSpace` is separately owned completed block spacing
 and does not advance an inline owner's row counter.
 
 Actual owner decoding requires strictly increasing, unique, in-range `row`
-values and integer displacements from -65535 through 65535. Null layouts,
+values and both integer displacements from -65535 through 65535. Null layouts,
 unknown or duplicate fields, and more than 4096 hints in one owner are rejected.
-Zero corrections are validated before canonical output omits them; owners
-also omit empty or all-zero `inlineLayout`. Roff production retains at most
-65536 nonzero hints across a document, also respecting the per-owner limit.
+All-default hints are validated before canonical output omits them; owners
+also omit empty or all-default `inlineLayout`. Alignment-only and first-visual-only
+hints remain present even when `indentColumns` is zero. Roff production retains at most
+65536 non-default hints across a document, also respecting the per-owner limit.
 Excess optional hints are omitted with `layout.row-hint-budget` and diagnostic
 impact `none`; authoritative text and content completeness are preserved.
 65536 is a producer budget, not an additional whole-document JSON input limit.
 
-Consumers compose each correction with both signed visual origins, then bound
+Consumers compose the common correction with both signed visual origins and the
+first-only correction with the first visual origin, then bound
 padding only at the visible leaf. Text, located explanations and TUI use the
 same owner facts. Ordinary Markdown paragraph, heading and definition-term
 phrasing omits row hints. It retains authored text, NBSP, hard rows and the
@@ -361,6 +397,18 @@ Layout metadata cannot authorize trimming authored whitespace. The former
 hint-driven multi-Link formatting split is retired; a retained multiline label
 keeps one complete wrapper and its original owner.
 
+### Migration from 0.12
+
+`mant-ir 0.12.0` is published. Version `0.13.0` adds public
+`RowLayoutHint::first_line_indent_columns` and `RowLayoutHint::alignment` fields
+and the `TextAlignment` enum. Existing Rust row-hint literals should explicitly
+set the new fields or use `..Default::default()`. Read the entire row hint with
+`InlineLayout::row_layout()` and compose origins with `RowLayoutHint::resolve()`;
+`row_indent()` alone does not include first-visual or alignment preferences.
+The related native protocol family is `v0.13`. Published `v0.12` schema snapshots
+and examples remain frozen; clients negotiate complete discriminators before
+decoding. `LineBreak {}` and authoritative inline content remain unchanged.
+
 Inline children are the only visible body. Reading, Markdown export, search,
 semantic recognition and TUI copy traverse the same accepted glyphs, styles,
 links and hard boundaries. There is no replacement spelling or hidden URI
@@ -369,7 +417,7 @@ source-neutral IR; ordinary Markdown links do not acquire roff-generated text.
 Entry forms and name-binding paths address the final accepted inline tree.
 A selected partial name keeps its style and destination ancestry without
 expanding into the complete label. The retired `portable-display` wire shape
-and `display` fields on current variants are rejected by the v0.12
+and `display` fields on current variants are rejected by the v0.13
 contract.
 
 Links use a closed `LinkTarget` union rather than stringly typed URLs:
@@ -660,7 +708,7 @@ Add the crate when implementing an in-process parser, index, renderer, or truste
 
 ```toml
 [dependencies]
-mant-ir = "^0.12.0"
+mant-ir = "^0.13.0"
 ```
 
 Prefer constructors and visitors from the crate over recursively rewriting public fields by hand. Use `visit::Visit` or `visit::VisitMut` for whole-document passes and run validation after transformations that can affect identities or links.

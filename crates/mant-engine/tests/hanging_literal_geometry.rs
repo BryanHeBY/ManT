@@ -59,13 +59,16 @@ fn hanging_paragraph_entered_in_literal_mode_keeps_only_its_first_line_outdented
 }
 
 #[test]
-fn literal_hanging_source_continuation_stays_on_one_visible_line() {
-    // Preserve explicit source \c, as groff does, instead of the mandoc
-    // first-no-fill-child artifact that forcibly breaks this joined line.
+fn literal_hanging_first_child_post_ends_a_continued_source_row() {
+    // This exact source reran pristine before the assertion. man_term.c's
+    // print_man_node(out) calls term_newln after the first HP BODY child
+    // even with \c, then sets offset=rmargin. Follow that native post.
     let text = render(".nf\n.HP 4\nFIRST\\c\nSECOND\nTHIRD\n.fi\nAFTER\n");
-    assert_column(&text, "FIRSTSECOND", 0);
+    assert_column(&text, "FIRST", 0);
+    assert_column(&text, "SECOND", 4);
     assert_column(&text, "THIRD", 4);
     assert_column(&text, "AFTER", 4);
+    assert!(text.contains("FIRST\n    SECOND\n    THIRD\n    AFTER"));
 }
 
 #[test]

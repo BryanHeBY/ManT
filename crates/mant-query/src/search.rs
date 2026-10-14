@@ -127,7 +127,7 @@ fn search_with_matcher(
     let truncated = consumed < total;
 
     Ok(QuerySearch {
-        schema: SearchSchema::V0Dot12,
+        schema: SearchSchema::V0Dot13,
         label: query.label.clone(),
         source: query
             .document

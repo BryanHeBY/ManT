@@ -12,8 +12,6 @@ impl BlockLowerer<'_, '_> {
         // execution owner so a following UR/MT post can finish its last word.
         self.state.flush_preformatted();
         self.state.flush_paragraph();
-        self.state
-            .set_source_indent(self.indent_columns.macro_origin());
         self.man_list_state.reset();
         self.definition_hanging_width =
             crate::mandoc::layout::Distance::cells(DEFAULT_MAN_TAG_WIDTH);
@@ -28,6 +26,9 @@ impl BlockLowerer<'_, '_> {
         self.state.formatter.font.man_text_boundary(); // HEAD pre
         self.state.formatter.font.man_text_boundary(); // HEAD post
         self.state.formatter.font.man_text_boundary(); // BODY pre
+        // pre_PP(BODY) assigns mt->offset after BLOCK print_bvspace().
+        self.state
+            .set_source_indent(self.indent_columns.macro_origin());
         let inherited = std::mem::take(&mut self.man_source_predecessor);
         self.push_nodes(first_part_children(node, NodeKind::Body));
         self.man_source_predecessor = inherited;

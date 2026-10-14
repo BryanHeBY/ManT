@@ -17,6 +17,7 @@ fn layout(rows: &[(u32, i32)]) -> InlineLayout {
             .map(|&(row, indent_columns)| RowLayoutHint {
                 row,
                 indent_columns,
+                ..Default::default()
             })
             .collect(),
     }
@@ -165,6 +166,7 @@ fn hint_budget_counts_explicit_zero_and_accepts_the_exact_boundary() {
             .map(|row| RowLayoutHint {
                 row: row.try_into().unwrap(),
                 indent_columns: 0,
+                ..Default::default()
             })
             .collect(),
     };
@@ -180,6 +182,7 @@ fn hint_budget_counts_explicit_zero_and_accepts_the_exact_boundary() {
     hints.row_hints.push(RowLayoutHint {
         row: MAX_INLINE_ROW_HINTS.try_into().unwrap(),
         indent_columns: 0,
+        ..Default::default()
     });
     assert!(hints.validate(&content).is_err());
     assert!(serde_json::from_value::<InlineLayout>(json!({"rowHints":hints.row_hints})).is_err());

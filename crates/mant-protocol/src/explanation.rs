@@ -78,13 +78,13 @@ pub struct ExplanationQuery {
 /// Exact marker for the independent explanation result contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExplanationSchema {
-    /// Unreleased v0.12 explanation family.
-    #[serde(rename = "mant.explanation/v0.12")]
-    V0Dot12,
+    /// Unreleased v0.13 explanation family.
+    #[serde(rename = "mant.explanation/v0.13")]
+    V0Dot13,
 }
 impl ExplanationSchema {
     /// Serialized discriminator.
-    pub const ID: &'static str = "mant.explanation/v0.12";
+    pub const ID: &'static str = "mant.explanation/v0.13";
 }
 
 /// A normal result outcome, independent of pagination and source coverage.
@@ -308,7 +308,7 @@ pub enum ExplanationContent {
 /// One readable document's independently collected explanation evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:explanation:v0.12"))]
+#[schemars(extend("$id" = "urn:mant:explanation:v0.13"))]
 pub struct QueryExplanation {
     /// Source-qualified context shared by the direct owners on this page.
     pub supports: Vec<ExplanationSupport>,

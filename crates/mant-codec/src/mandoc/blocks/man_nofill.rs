@@ -108,6 +108,7 @@ impl super::BlockLowerer<'_, '_> {
         let nodes = super::synopsis::execute_synopsis_head(
             node,
             self.context,
+            self.state.source_indent().macro_origin(),
             self.state.spacing_enabled(),
             &mut self.state.formatter,
         );
@@ -124,6 +125,9 @@ impl super::BlockLowerer<'_, '_> {
             .formatter
             .font
             .select(crate::mandoc::roff_escape::RoffFont::Regular); // BODY pre
+        let original_origin = self.state.source_indent().macro_origin();
+        let body_origin = super::synopsis::body_origin(node, self.context, original_origin);
+        self.state.set_source_indent(body_origin);
         // SY is a scope, not a promise that its whole body is no-fill.
         // Execute each child through normal block dispatch so fi/nf, spacing
         // and structural children cannot become flattened pseudo-text.
@@ -133,6 +137,7 @@ impl super::BlockLowerer<'_, '_> {
         self.settle_no_fill_inline();
         self.state.flush_paragraph();
         self.state.flush_preformatted();
+        self.state.set_source_indent(original_origin);
         self.state
             .formatter
             .font

@@ -62,7 +62,8 @@ fn render_selection(
         ExcerptSelection::Tldr { .. } => EntryStyleMap::default(),
     });
     let renderer = blocks::BlockRenderer {
-        names,
+        width: None,
+        names: names.as_ref(),
         decorate,
         locations: None,
     };

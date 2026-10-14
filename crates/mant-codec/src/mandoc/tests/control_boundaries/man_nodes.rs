@@ -232,7 +232,7 @@ fn man_synopsis_spacing_obeys_native_previous_sibling_and_pd() {
         (
             "no-fill",
             ".nf\nBEFORE\n.SY call\narg\n.YS\n.fi\n",
-            "call\narg",
+            "call",
             1,
         ),
     ] {
@@ -285,6 +285,7 @@ fn man_synopsis_and_hanging_body_posts_settle_their_own_no_fill_rows() {
     let document = parse_manual_bytes(std::path::Path::new("man-sy-post.1"), synopsis)
         .expect("parse man synopsis post fixture");
     let [
+        Block::Preformatted { children: head, .. },
         Block::Preformatted {
             children: synopsis, ..
         },
@@ -295,7 +296,8 @@ fn man_synopsis_and_hanging_body_posts_settle_their_own_no_fill_rows() {
     else {
         panic!("unexpected synopsis output: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(synopsis), "call\nX", "{synopsis:?}");
+    assert_eq!(inline_text(head), "call", "{head:?}");
+    assert_eq!(inline_text(synopsis), "X", "{synopsis:?}");
     assert_eq!(inline_text(outer), "Y", "{outer:?}");
 
     let hanging =

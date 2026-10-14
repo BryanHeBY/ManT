@@ -23,8 +23,19 @@ reading contract. Signed actual parent and child origins survive source-order
 stacking; an open literal tail may be reused while completed blanks cannot.
 The UI stacks cells when their positions do not fit its viewport. Portable
 reading does not retain the native terminal's right-margin soft wrapping.
-`.ti` numeric geometry remains retired: its hard-row sources retain frozen
-native gold but the reading expectations preserve only their actual hard rows.
+The v0.13 row presentation enhancement retains `.ti` origins. The exact
+`hinted-hard-rows` source was rerun against the current pristine reference
+before updating its reading policy: native A starts at 10, C and D at 8.
+CLI removes the common five-cell origin; UI uses its three-cell origin.
+The resulting negative child correction selects the existing origin-preserving
+column stack, so B retains its own source origin on a subsequent reading row.
+Historical native profiles and positions remain unchanged.
+The matching `hinted-negative-rows` input also reran pristine: A remains at
+10, while restoring its negative temporary amount places C and D at 12.
+Its positive child corrections fit the declared slots and preserve D/B's
+shared row. A negative first-only component that cancels the common correction
+is not an outdent; fallback uses the composed first and continued origins.
+Neither reading policy derives native positions from candidate IR.
 The explicit JSON row-hint regression is a pure IR variation and makes no claim
 of native `.ti` equivalence.
 

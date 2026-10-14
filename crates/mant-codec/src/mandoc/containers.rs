@@ -29,7 +29,11 @@ pub(super) enum Event<'a> {
     Break,
     /// Emit the current output row even if preceding requests emptied it.
     FlushLine,
+    /// Viewport presentation changes without creating another text executor.
+    Alignment(mant_ir::TextAlignment),
     Children(&'a [Node]),
+    /// `pre_ce` visits `term_word/roff_term_pre` directly, without `NODE_LINE`.
+    AlignedChildren(&'a [Node]),
     Glyph(String),
     Tight,
     Release,
@@ -647,6 +651,13 @@ fn emit_enclosure_post<'a>(close: Option<&str>, emit: &mut impl FnMut(Event<'a>)
 /// body text nor state/spacing requests belong to the discarded count slot.
 fn aligned_line_payload<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
     emit(Event::Break);
+    emit(Event::Alignment(
+        if node.macro_token == Some(Roff(RoffMacro::Rj)) {
+            mant_ir::TextAlignment::Right
+        } else {
+            mant_ir::TextAlignment::Center
+        },
+    ));
     let children = node.children.get(1..).unwrap_or_default();
     let mut start = 0;
     while start < children.len() {
@@ -669,16 +680,17 @@ fn aligned_line_payload<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
                 ))
             ) {
                 if pending < index {
-                    emit(Event::Children(&children[pending..index]));
+                    emit(Event::AlignedChildren(&children[pending..index]));
                 }
                 emit(Event::Break);
                 pending = index;
             }
         }
-        emit(Event::Children(&children[pending..end]));
+        emit(Event::AlignedChildren(&children[pending..end]));
         emit(Event::FlushLine);
         start = end;
     }
+    emit(Event::Alignment(mant_ir::TextAlignment::Left));
 }
 
 /// Authored delimiters can be siblings of the body wrappers. Keep wrapper

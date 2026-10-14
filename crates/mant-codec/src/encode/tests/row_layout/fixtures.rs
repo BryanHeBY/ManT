@@ -9,6 +9,7 @@ pub(super) fn layout(rows: &[(u32, i32)]) -> InlineLayout {
             .map(|&(row, indent_columns)| RowLayoutHint {
                 row,
                 indent_columns,
+                ..Default::default()
             })
             .collect(),
     }

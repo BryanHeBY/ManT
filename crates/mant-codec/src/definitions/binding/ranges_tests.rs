@@ -209,10 +209,12 @@ fn owner_row_layout_never_changes_name_leaf_paths_or_utf8_byte_ranges() {
             mant_ir::RowLayoutHint {
                 row: 0,
                 indent_columns: 7,
+                ..Default::default()
             },
             mant_ir::RowLayoutHint {
                 row: 1,
                 indent_columns: -2,
+                ..Default::default()
             },
         ],
     };

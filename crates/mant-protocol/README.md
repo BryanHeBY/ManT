@@ -70,14 +70,14 @@ does not execute another query or load content.
 
 | Family | Current discriminator | Purpose |
 | --- | --- | --- |
-| Process framing | `mant.cli/v0.12` | Advertised by the `mant` executable |
-| Request | `mant.request/v0.12` | Closed input accepted by `--request-json` |
-| Scope request/result | `mant.scope-request/v0.12`, `mant.scope-query/v0.12` | Bounded multi-document search and explanation |
-| Full query | `mant.query/v0.12` | Document plus optional tldr content |
-| Document | `mant.document/v0.12` | Versioned projection of the normalized document |
-| Catalog | `mant.catalog/v0.12` | Registered Markdown and native-manual discovery |
-| Outline, excerpt, search | `mant.outline/v0.12`, `mant.excerpt/v0.12`, `mant.search/v0.12` | Focused query projections |
-| Explanation | `mant.explanation/v0.12` | Bounded independent name/form/content/relationship evidence |
+| Process framing | `mant.cli/v0.13` | Advertised by the `mant` executable |
+| Request | `mant.request/v0.13` | Closed input accepted by `--request-json` |
+| Scope request/result | `mant.scope-request/v0.13`, `mant.scope-query/v0.13` | Bounded multi-document search and explanation |
+| Full query | `mant.query/v0.13` | Document plus optional tldr content |
+| Document | `mant.document/v0.13` | Versioned projection of the normalized document |
+| Catalog | `mant.catalog/v0.13` | Registered Markdown and native-manual discovery |
+| Outline, excerpt, search | `mant.outline/v0.13`, `mant.excerpt/v0.13`, `mant.search/v0.13` | Focused query projections |
+| Explanation | `mant.explanation/v0.13` | Bounded independent name/form/content/relationship evidence |
 | Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
 | tldr update | `mant.tldr-update/v1` | Explicit native cache-maintenance result |
 
@@ -103,7 +103,7 @@ use mant_protocol::{
 };
 
 let request = QueryRequest {
-    schema: RequestSchema::V0Dot12,
+    schema: RequestSchema::V0Dot13,
     input: QueryInput::Document {
         selector: "git".to_owned(),
         source: None,
@@ -116,13 +116,13 @@ let request = QueryRequest {
     },
 };
 
-assert_eq!(NATIVE_API_VERSION, "0.12");
-assert_eq!(request.schema, RequestSchema::V0Dot12);
+assert_eq!(NATIVE_API_VERSION, "0.13");
+assert_eq!(request.schema, RequestSchema::V0Dot13);
 let _schema = query_request_json_schema();
 ```
 
 The native query family follows `ManT`'s pre-stable minor release line: `ManT`
-0.12.x uses `v0.12`, and patch releases remain backward compatible. They may
+0.13.x uses `v0.13`, and patch releases remain backward compatible. They may
 add documented optional response fields, but never change requests, required
 fields, tagged unions, or existing field semantics. The former
 bare `v1` through `v7` schemas were experimental and are intentionally not
@@ -137,7 +137,17 @@ Adding or changing a Rust field does not by itself authorize a wire change.
 The native discriminator must advance whenever its serialized contract
 changes outside a patch-compatible addition.
 
-The v0.12 document envelope retains authoritative heading inlines:
+Version `0.13.0` carries `mant-ir 0.13` row hints with optional
+`firstLineIndentColumns` and `alignment` (`left`, `center`, `right`). The first
+field corrects only the first visual line of a logical row; ordinary signed
+`indentColumns` still corrects both first and soft-wrap origins. Defaults are
+zero and left, with all-default hints omitted canonically. These preferences
+never create text or navigation regions, and unbounded text/CommonMark outputs
+do not invent a viewport for alignment. Existing `v0.12` schemas reject the
+new fields, so their snapshots and examples remain frozen under their released
+identifiers. Clients must negotiate `v0.13` and reject mixed family markers.
+
+The v0.13 document envelope retains authoritative heading inlines:
 `Document.heading` is optional, `Section.heading` is required, and a plain
 section `title` is rejected. Outline/excerpt `displayTitle` is only a derived
 report label. Root excerpts include the real heading even without body blocks.
@@ -201,7 +211,7 @@ occurrence/domain and 1,024 fragments per owner, all within the copy budget.
 `EntryFacts`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a
 Serde change to any of them is also a protocol change. CI compares every
-generated structural schema with the checked-in v0.12 snapshot, so an accidental
+generated structural schema with the checked-in v0.13 snapshot, so an accidental
 IR representation change fails until compatibility is restored or the
 affected protocol discriminator is advanced explicitly. Rustdoc descriptions
 and schema titles are excluded from that structural comparison.

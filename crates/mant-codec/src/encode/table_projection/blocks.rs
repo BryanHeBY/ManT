@@ -73,7 +73,9 @@ fn inline_projection(
     let open_row_indent = if ends_in_break && matches!(tail, Tail::Open) {
         content
             .layout
-            .row_indent(mant_ir::logical_row_count(content.content) - 1)
+            .row_layout(mant_ir::logical_row_count(content.content) - 1)
+            .resolve(0, 0)
+            .first_visual_origin
     } else {
         0
     };
@@ -85,7 +87,13 @@ fn inline_projection(
         if !text.is_empty() {
             if row > 0 || !shared_first {
                 mapped.push_str(
-                    &" ".repeat(mant_ir::geometry::padding(content.layout.row_indent(row))),
+                    &" ".repeat(mant_ir::geometry::padding(
+                        content
+                            .layout
+                            .row_layout(row)
+                            .resolve(0, 0)
+                            .first_visual_origin,
+                    )),
                 );
             }
             mapped.push_str(text);

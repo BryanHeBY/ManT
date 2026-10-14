@@ -6,7 +6,7 @@ use super::layout::LayoutText;
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
 use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
 use mant_ir::{
-    Block, DefinitionItem, InlineContentRef, ListItem, ListKind, Section, resolve_row_origins,
+    Block, DefinitionItem, InlineContentRef, ListItem, ListKind, RowLayoutHint, Section,
 };
 #[cfg(test)]
 use mant_ir::{Inline, TableCell};
@@ -20,8 +20,10 @@ mod tests;
 #[cfg(test)]
 mod visits;
 
+#[derive(Clone, Copy)]
 pub(in crate::output) struct BlockRenderer<'a> {
-    pub(in crate::output) names: Option<EntryStyleMap<'a>>,
+    pub(in crate::output) width: Option<usize>,
+    pub(in crate::output) names: Option<&'a EntryStyleMap<'a>>,
     pub(in crate::output) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
     pub(in crate::output) locations: Option<&'a super::super::styles::LocatedStyles<'a>>,
 }
@@ -44,9 +46,9 @@ impl BlockRenderer<'_> {
         &self,
         content: InlineContentRef<'_>,
         role: TextRole,
-    ) -> Vec<(LayoutText, i32)> {
+    ) -> Vec<(LayoutText, RowLayoutHint)> {
         let children = content.content;
-        let mut rows = vec![(LayoutText::default(), content.layout.row_indent(0))];
+        let mut rows = vec![(LayoutText::default(), content.layout.row_layout(0))];
         let names = self
             .names
             .as_ref()
@@ -59,7 +61,7 @@ impl BlockRenderer<'_> {
             // fragments and are composed before measuring a complete row.
             for (index, piece) in decorated.split(false).into_iter().enumerate() {
                 if index > 0 {
-                    rows.push((LayoutText::default(), content.layout.row_indent(rows.len())));
+                    rows.push((LayoutText::default(), content.layout.row_layout(rows.len())));
                 }
                 rows.last_mut().expect("open row").0.append(&piece);
             }
@@ -109,13 +111,31 @@ impl BlockRenderer<'_> {
         LayoutText::join(
             self.inline_rows(content, role)
                 .into_iter()
-                .map(|(row, indent)| {
-                    row.indented(padding(
-                        resolve_row_origins(origin, origin, indent).first_visual_origin,
-                    ))
-                }),
+                .map(|(row, indent)| self.position_row(row, indent, origin, origin)),
             "\n",
         )
+    }
+
+    fn position_row(
+        &self,
+        row: LayoutText,
+        hint: RowLayoutHint,
+        first: i32,
+        continuation: i32,
+    ) -> LayoutText {
+        let origin = padding(hint.resolve(first, continuation).first_visual_origin);
+        let extra = self.width.map_or(0, |width| {
+            hint.alignment.padding(
+                width.saturating_sub(origin),
+                mant_ir::geometry::text_width(&row.visible),
+            )
+        });
+        let row = row.indented(origin.saturating_add(extra));
+        if self.width.is_none() {
+            row.defer_alignment(hint.alignment, origin)
+        } else {
+            row
+        }
     }
 
     pub(super) fn sections_flow(&self, sections: &[Section], depth: usize) -> Flow {
@@ -311,9 +331,7 @@ impl BlockRenderer<'_> {
                     } else {
                         continuation_origin
                     };
-                    row.indented(padding(
-                        resolve_row_origins(first, continuation_origin, indent).first_visual_origin,
-                    ))
+                    self.position_row(row, indent, first, continuation_origin)
                 }),
             "\n",
         ))
@@ -343,9 +361,7 @@ impl BlockRenderer<'_> {
                 // An empty physical row has no device advance. Preserve its
                 // opaque decoration without turning the row origin into
                 // authored blank cells (term_ascii.c::ascii_endline()).
-                line.indented(padding(
-                    resolve_row_origins(origin, continuation_origin, indent).first_visual_origin,
-                ))
+                self.position_row(line, indent, origin, continuation_origin)
             }),
             "\n",
         );
@@ -356,7 +372,10 @@ impl BlockRenderer<'_> {
         }
     }
 
-    fn close_paragraph_rows(rows: &mut Vec<(LayoutText, i32)>, tail: ParagraphTail) -> bool {
+    fn close_paragraph_rows(
+        rows: &mut Vec<(LayoutText, RowLayoutHint)>,
+        tail: ParagraphTail,
+    ) -> bool {
         if tail == ParagraphTail::BlockBoundary
             && rows.len() > 1
             && rows.last().is_some_and(|(row, _)| row.is_empty())

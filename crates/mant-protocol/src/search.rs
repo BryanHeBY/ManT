@@ -87,14 +87,14 @@ pub const fn default_search_limit() -> u32 {
 /// Exact schema marker for structure-aware search results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum SearchSchema {
-    /// Version 0.12 of the pre-stable search protocol.
-    #[serde(rename = "mant.search/v0.12")]
-    V0Dot12,
+    /// Version 0.13 of the pre-stable search protocol.
+    #[serde(rename = "mant.search/v0.13")]
+    V0Dot13,
 }
 
 impl SearchSchema {
     /// Serialized identifier of the current search contract.
-    pub const ID: &'static str = "mant.search/v0.12";
+    pub const ID: &'static str = "mant.search/v0.13";
 }
 
 /// Markdown contract used as the coordinate space for every search format.
@@ -148,7 +148,7 @@ pub struct SearchRender {
     deny_unknown_fields,
     try_from = "QuerySearchUnchecked"
 )]
-#[schemars(extend("$id" = "urn:mant:search:v0.12"))]
+#[schemars(extend("$id" = "urn:mant:search:v0.13"))]
 pub struct QuerySearch {
     /// Exact response schema discriminator.
     pub schema: SearchSchema,

@@ -17,7 +17,7 @@ pub(super) fn stack_table_cells(
         if cell.empty_boundary {
             pending_anchors.extend(cell.anchors.keys().cloned());
             if rows.is_empty() || completed_tail {
-                rows.extend(wrap_table_cell(cell, width, indent, &mut next_group));
+                rows.extend(wrap_table_cell(cell, width, indent, &mut next_group, false));
             }
             if let Some(last) = rows.last_mut() {
                 last.anchors.append(&mut pending_anchors);
@@ -40,7 +40,7 @@ pub(super) fn stack_table_cells(
             // never by trimming author-written whitespace from a rendered row.
             pending_anchors.extend(last.anchors);
         }
-        let mut rendered = wrap_table_cell(cell, width, indent, &mut next_group);
+        let mut rendered = wrap_table_cell(cell, width, indent, &mut next_group, false);
         if let Some(first) = rendered.first_mut() {
             first.anchors.append(&mut pending_anchors);
         }
@@ -81,12 +81,14 @@ pub(super) fn wrap_table_cell(
     width: usize,
     indent: usize,
     next_group: &mut usize,
+    defer_alignment: bool,
 ) -> Vec<WrappedLine> {
     let mut rendered = Vec::new();
     let mut logical_rows = Vec::with_capacity(cell.lines.len());
     for line in &cell.lines {
         logical_rows.push(rendered.len());
         let mut line = line.clone();
+        line.defer_alignment = defer_alignment;
         line.indent = line.indent.saturating_add(indent);
         line.continuation_indent = line.continuation_indent.saturating_add(indent);
         let mut wrapped = wrap_line_with_links(&line, width);

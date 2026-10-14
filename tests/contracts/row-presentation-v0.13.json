@@ -1,0 +1,276 @@
+{
+  "schema": "mant.query/v0.13",
+  "label": "row-presentation",
+  "document": {
+    "schema": "mant.document/v0.13",
+    "producer": {
+      "name": "test",
+      "version": "0"
+    },
+    "source": {
+      "format": "markdown"
+    },
+    "meta": {},
+    "heading": {
+      "content": [
+        {
+          "type": "anchor",
+          "id": "title"
+        },
+        {
+          "type": "strong",
+          "children": [
+            {
+              "type": "text",
+              "value": "Title"
+            },
+            {
+              "type": "line-break"
+            },
+            {
+              "type": "link",
+              "target": {
+                "kind": "external",
+                "uri": "https://example.test/title"
+              },
+              "children": [
+                {
+                  "type": "code",
+                  "value": "尾行"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "inlineLayout": {
+        "rowHints": [
+          {
+            "row": 0,
+            "indentColumns": 0,
+            "firstLineIndentColumns": 4,
+            "alignment": "center"
+          },
+          {
+            "row": 1,
+            "indentColumns": 0,
+            "alignment": "center"
+          }
+        ]
+      }
+    },
+    "blocks": [
+      {
+        "inlineLayout": {
+          "rowHints": [
+            {
+              "row": 0,
+              "indentColumns": 2,
+              "firstLineIndentColumns": 4,
+              "alignment": "center"
+            },
+            {
+              "row": 1,
+              "indentColumns": 0,
+              "alignment": "center"
+            }
+          ]
+        },
+        "children": [
+          {
+            "type": "anchor",
+            "id": "paragraph"
+          },
+          {
+            "type": "strong",
+            "children": [
+              {
+                "type": "text",
+                "value": "Paragraph"
+              },
+              {
+                "type": "line-break"
+              },
+              {
+                "type": "link",
+                "target": {
+                  "kind": "external",
+                  "uri": "https://example.test/paragraph"
+                },
+                "children": [
+                  {
+                    "type": "code",
+                    "value": "尾行"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "type": "paragraph"
+      },
+      {
+        "inlineLayout": {
+          "rowHints": [
+            {
+              "row": 0,
+              "indentColumns": -2,
+              "firstLineIndentColumns": 4,
+              "alignment": "right"
+            },
+            {
+              "row": 1,
+              "indentColumns": 0,
+              "alignment": "right"
+            }
+          ]
+        },
+        "children": [
+          {
+            "type": "anchor",
+            "id": "literal"
+          },
+          {
+            "type": "strong",
+            "children": [
+              {
+                "type": "text",
+                "value": "Literal"
+              },
+              {
+                "type": "line-break"
+              },
+              {
+                "type": "link",
+                "target": {
+                  "kind": "external",
+                  "uri": "https://example.test/literal"
+                },
+                "children": [
+                  {
+                    "type": "code",
+                    "value": "尾行"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "type": "preformatted"
+      },
+      {
+        "type": "definition-list",
+        "items": [
+          {
+            "terms": [
+              {
+                "content": [
+                  {
+                    "type": "anchor",
+                    "id": "term"
+                  },
+                  {
+                    "type": "strong",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "Term"
+                      },
+                      {
+                        "type": "line-break"
+                      },
+                      {
+                        "type": "link",
+                        "target": {
+                          "kind": "external",
+                          "uri": "https://example.test/term"
+                        },
+                        "children": [
+                          {
+                            "type": "code",
+                            "value": "尾行"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "inlineLayout": {
+                  "rowHints": [
+                    {
+                      "row": 0,
+                      "indentColumns": -2,
+                      "firstLineIndentColumns": 4,
+                      "alignment": "right"
+                    },
+                    {
+                      "row": 1,
+                      "indentColumns": 0,
+                      "alignment": "right"
+                    }
+                  ]
+                }
+              }
+            ],
+            "description": []
+          }
+        ]
+      }
+    ],
+    "sections": [
+      {
+        "id": "section",
+        "heading": {
+          "content": [
+            {
+              "type": "anchor",
+              "id": "heading"
+            },
+            {
+              "type": "strong",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Heading"
+                },
+                {
+                  "type": "line-break"
+                },
+                {
+                  "type": "link",
+                  "target": {
+                    "kind": "external",
+                    "uri": "https://example.test/heading"
+                  },
+                  "children": [
+                    {
+                      "type": "code",
+                      "value": "尾行"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "inlineLayout": {
+            "rowHints": [
+              {
+                "row": 0,
+                "indentColumns": 2,
+                "firstLineIndentColumns": 4,
+                "alignment": "center"
+              },
+              {
+                "row": 1,
+                "indentColumns": 0,
+                "alignment": "center"
+              }
+            ]
+          }
+        },
+        "blocks": [],
+        "children": []
+      }
+    ]
+  }
+}

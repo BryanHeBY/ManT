@@ -17,6 +17,7 @@ use super::{
 };
 use crate::theme;
 
+mod alignment;
 mod cells;
 mod table;
 use cells::{
@@ -44,6 +45,7 @@ fn readable_origins(first: usize, continuation: usize, available: usize) -> (usi
     )
 }
 
+#[derive(Clone)]
 pub(super) struct WrappedLine {
     pub(super) source_end: Option<usize>,
     pub(super) anchors: Vec<String>,
@@ -57,6 +59,7 @@ pub(super) struct WrappedLine {
 /// This map is derived from the same cells as links/search, never whitespace.
 #[derive(Clone, Debug, Default)]
 pub(super) struct RowCopyMap {
+    alignment: Option<alignment::PreparedAlignment>,
     pub(super) omitted: Vec<std::ops::Range<usize>>,
     pub(super) end: Option<usize>,
 }
@@ -90,6 +93,7 @@ pub(super) struct WrappedSearchCell {
     pub(super) end_column: usize,
 }
 
+#[derive(Clone)]
 pub(super) struct WrappedLink {
     pub(super) target: LinkTarget,
     pub(super) start_column: usize,

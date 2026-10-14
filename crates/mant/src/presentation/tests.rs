@@ -32,6 +32,35 @@ The selected color is visible in terminal output.
 ";
 
 #[test]
+#[cfg(not(any(feature = "tui", feature = "pager")))]
+fn minimal_terminal_output_preserves_origins_with_unknown_width_alignment() {
+    let mut query = load_markdown_text("VALUE", None).unwrap();
+    let mant_ir::Block::Paragraph { inline_layout, .. } =
+        &mut query.document.as_mut().unwrap().blocks[0]
+    else {
+        panic!("paragraph fixture")
+    };
+    inline_layout.row_hints.push(mant_ir::RowLayoutHint {
+        row: 0,
+        indent_columns: 1,
+        first_line_indent_columns: 3,
+        alignment: mant_ir::TextAlignment::Center,
+    });
+    let terminal = super::terminal::render_full_query(
+        &query,
+        options(QueryFormat::Text, false, OutputTarget::Terminal),
+    )
+    .unwrap();
+    let stream = super::terminal::render_full_query(
+        &query,
+        options(QueryFormat::Text, false, OutputTarget::Stream),
+    )
+    .unwrap();
+    assert_eq!(terminal, stream);
+    assert!(terminal.lines().any(|line| line == "    VALUE"));
+}
+
+#[test]
 #[cfg(feature = "roff")]
 fn environment_names_use_the_same_distinct_palette_across_text_views() {
     use super::terminal::{TerminalRole, terminal_style};

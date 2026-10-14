@@ -132,7 +132,10 @@ pub(super) fn styled_reference_content_lines(
             hints.next();
         }
         if hints.peek().is_some_and(|hint| hint.row as usize == row) {
-            line.indent_columns = hints.next().expect("matching row hint").indent_columns;
+            let hint = hints.next().expect("matching row hint");
+            line.indent_columns = hint.indent_columns;
+            line.first_line_indent_columns = hint.first_line_indent_columns;
+            line.alignment = hint.alignment;
         }
     }
     lines

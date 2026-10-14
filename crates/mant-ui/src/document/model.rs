@@ -59,6 +59,11 @@ pub(crate) enum LinkTarget {
 
 #[derive(Debug, Clone)]
 pub(super) struct LogicalLine {
+    pub(super) alignment: mant_ir::TextAlignment,
+    /// A structural marker stays at its origin while its content aligns.
+    pub(super) alignment_prefix_scalars: usize,
+    /// Cell preparation defers viewport padding until its final slot is known.
+    pub(super) defer_alignment: bool,
     pub(super) indent: usize,
     pub(super) continuation_indent: usize,
     /// Generated row-hint padding, separate from structural list indentation.
@@ -214,9 +219,22 @@ pub(super) struct StyledInlineLine {
     /// Presentation origin of this hard row, relative to its inline root.
     /// Padding stays outside source scalar, link, and reference coordinates.
     pub(super) indent_columns: i32,
+    pub(super) first_line_indent_columns: i32,
+    pub(super) alignment: mant_ir::TextAlignment,
     pub(super) spans: Vec<Span<'static>>,
     pub(super) links: Vec<LogicalLinkRange>,
     pub(super) reference_marks: Vec<ReferenceMark>,
+}
+
+impl StyledInlineLine {
+    pub(super) fn row_hint(&self) -> mant_ir::RowLayoutHint {
+        mant_ir::RowLayoutHint {
+            row: 0,
+            indent_columns: self.indent_columns,
+            first_line_indent_columns: self.first_line_indent_columns,
+            alignment: self.alignment,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -240,13 +258,13 @@ pub(super) enum LineSurface {
 impl LogicalLine {
     /// Compose signed owner origins once, then bound display padding. Retain
     /// only the additional padding supplied by a hint for visual copy mapping.
-    pub(super) fn row_geometry(
+    pub(super) fn row_presentation(
         first: i32,
         continuation: i32,
-        correction: i32,
+        hint: mant_ir::RowLayoutHint,
         spans: Vec<Span<'static>>,
     ) -> Self {
-        let origins = mant_ir::resolve_row_origins(first, continuation, correction);
+        let origins = hint.resolve(first, continuation);
         let mut line = Self::hanging(
             mant_ir::geometry::padding(origins.first_visual_origin),
             mant_ir::geometry::padding(origins.continuation_origin),
@@ -258,11 +276,15 @@ impl LogicalLine {
         line.continuation_layout_padding = line
             .continuation_indent
             .saturating_sub(mant_ir::geometry::padding(continuation));
+        line.alignment = hint.alignment;
         line
     }
 
     pub(super) fn empty() -> Self {
         Self {
+            alignment: mant_ir::TextAlignment::Left,
+            alignment_prefix_scalars: 0,
+            defer_alignment: false,
             indent: 0,
             continuation_indent: 0,
             layout_padding: 0,
@@ -279,6 +301,9 @@ impl LogicalLine {
 
     pub(super) fn plain(indent: usize, value: impl Into<String>, style: Style) -> Self {
         Self {
+            alignment: mant_ir::TextAlignment::Left,
+            alignment_prefix_scalars: 0,
+            defer_alignment: false,
             indent,
             continuation_indent: indent,
             layout_padding: 0,
@@ -319,6 +344,9 @@ impl LogicalLine {
         spans: Vec<Span<'static>>,
     ) -> Self {
         Self {
+            alignment: mant_ir::TextAlignment::Left,
+            alignment_prefix_scalars: 0,
+            defer_alignment: false,
             indent,
             continuation_indent,
             layout_padding: 0,
@@ -363,6 +391,9 @@ impl LogicalLine {
                 .find(|cell| !cell.lines.is_empty())
                 .is_some_and(LogicalTableCell::has_open_tail);
         Self {
+            alignment: mant_ir::TextAlignment::Left,
+            alignment_prefix_scalars: 0,
+            defer_alignment: false,
             indent,
             continuation_indent: indent,
             layout_padding: 0,
@@ -389,6 +420,9 @@ impl LogicalLine {
         layout: Arc<LogicalTableLayout>,
     ) -> Self {
         Self {
+            alignment: mant_ir::TextAlignment::Left,
+            alignment_prefix_scalars: 0,
+            defer_alignment: false,
             indent,
             continuation_indent: indent,
             layout_padding: 0,

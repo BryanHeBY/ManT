@@ -215,6 +215,58 @@ fn cells_to_line(
     Line::from(spans)
 }
 
+/// Align only the content after a fixed structural prefix on the first row.
+/// Returned cells carry exact omission receipts for copying and searching.
+fn aligned_cells(
+    line: &LogicalLine,
+    width: usize,
+    indent: usize,
+    cells: &[StyledCell],
+) -> (Option<Vec<StyledCell>>, usize) {
+    let prefix_end =
+        cells.partition_point(|cell| cell.source_index < line.alignment_prefix_scalars);
+    let prefix_width = cells[..prefix_end]
+        .iter()
+        .map(|cell| cell.width)
+        .sum::<usize>();
+    let alignment_padding = if line.defer_alignment {
+        0
+    } else {
+        line.alignment.padding(
+            width.saturating_sub(indent + tldr_decoration_width(line, width) + prefix_width),
+            cells[prefix_end..].iter().map(|cell| cell.width).sum(),
+        )
+    };
+    // The marker belongs to its structural list. Position the paragraph's
+    // content after that fixed prefix; subsequent wrapped rows have no prefix.
+    let positioned_cells = (prefix_end > 0 && alignment_padding > 0).then(|| {
+        let mut positioned = Vec::with_capacity(cells.len() + alignment_padding);
+        positioned.extend_from_slice(&cells[..prefix_end]);
+        positioned.extend(std::iter::repeat_n(
+            StyledCell {
+                source_index: cells[prefix_end].source_index,
+                character: ' ',
+                display_character: Some(' '),
+                grapheme_start: true,
+                whitespace: true,
+                width: 1,
+                style: Style::default(),
+                link_index: None,
+                copyable: false,
+            },
+            alignment_padding,
+        ));
+        positioned.extend_from_slice(&cells[prefix_end..]);
+        positioned
+    });
+    let leading_alignment = if prefix_end == 0 {
+        alignment_padding
+    } else {
+        0
+    };
+    (positioned_cells, leading_alignment)
+}
+
 pub(super) fn wrapped_cells_to_line(
     line: &LogicalLine,
     width: usize,
@@ -223,12 +275,31 @@ pub(super) fn wrapped_cells_to_line(
     cells: &[StyledCell],
     join_with_space: bool,
 ) -> WrappedLine {
+    // Place after wrapping, using the same grapheme cells as navigation,
+    // search and selection. Generated alignment cells are never copy text.
+    let (positioned_cells, leading_alignment) = aligned_cells(line, width, indent, cells);
+    let cells = positioned_cells.as_deref().unwrap_or(cells);
+    let indent = indent.saturating_add(leading_alignment);
+    let layout_padding = layout_padding.saturating_add(leading_alignment);
     let mut links = Vec::new();
     let mut search_cells = Vec::with_capacity(cells.len());
     let mut column = indent + tldr_decoration_width(line, width) / 2;
     let mut grapheme_column = column;
     let mut active: Option<(usize, usize, usize)> = None;
     let mut copy_map = super::RowCopyMap::default();
+    if line.defer_alignment && line.alignment != mant_ir::TextAlignment::Left {
+        let prefix_end =
+            cells.partition_point(|cell| cell.source_index < line.alignment_prefix_scalars);
+        copy_map.alignment = Some(super::alignment::PreparedAlignment {
+            placement: line.alignment,
+            prefix: column
+                + cells[..prefix_end]
+                    .iter()
+                    .map(|cell| cell.width)
+                    .sum::<usize>(),
+            content: cells[prefix_end..].iter().map(|cell| cell.width).sum(),
+        });
+    }
     if layout_padding > 0 {
         let start = column.saturating_sub(layout_padding.min(indent));
         copy_map.omitted.push(start..column);

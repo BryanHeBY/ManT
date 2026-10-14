@@ -13,6 +13,32 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
+
+- Add source-neutral row alignment and first-visual indentation preferences to
+  owner-local `InlineLayout`. `RowLayoutHint::indent_columns` still corrects both
+  first and continued origins; the new `first_line_indent_columns` corrects only
+  the first, and `alignment` selects left, center or right within an actual
+  viewport. Migrate Rust literals with explicit fields or `..Default::default()`;
+  use `row_layout()` and `RowLayoutHint::resolve()` to retain the whole preference.
+- Retain counted `.ce`/`.rj` alignment and execute `.ti` against the pinned CVS
+  offset and actual line-end lifecycle before projecting accepted row origins.
+  Keep macro registers private, author text and pure hard breaks unchanged, and
+  preserve existing code-block spacing/background and HANG word-boundary rules.
+  Viewport readers resolve placement after wrapping; deterministic unbounded
+  text and ordinary Markdown use the left alignment fallback.
+- Follow the pinned man `SY` HEAD/BODY offsets and actual `HP` first-child
+  post when handing off row origins. No-fill synopsis names and arguments
+  retain separate literal owners when their origins differ. An `HP` first
+  TEXT row now closes even with `\c`, replacing the prior joined portable
+  projection; Roff requests and empty TEXT do not trigger that common post.
+- Advance the native request/response and CLI contract family to `v0.13`, with
+  `mant-ir ^0.13.0` and matching dependent crate versions. `mant-ir 0.12.0` is
+  already published: its closed schemas and checked-in examples stay frozen.
+  Existing `v0.12` markers are not accepted by the new family; negotiate complete
+  discriminators. The independent doctor, tldr-update and Markdown-coordinate
+  contracts, `libmandoc-rs 0.12.0` and `mant-sources 0.10.1` remain unchanged.
+
 ### libmandoc-rs and mant-codec
 
 - Refresh the pinned mandoc CVS source to `cvs-20261013T025419Z`, with a new

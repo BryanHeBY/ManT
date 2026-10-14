@@ -248,8 +248,9 @@ word at the request's changed offset, while an outer scope return can restore
 the original offset before the final word prints. Previously submitted rows
 retain their origin. The resulting owner-local `inlineLayout.rowHints` crosses
 JSON and is consumed by text, explain, Markdown, TUI, and visual selection
-copying. Each hint contains a zero-based logical `row` and signed
-`indentColumns`; `LineBreak` itself is a pure hard break. Paragraph and literal
+copying. Each hint contains a zero-based logical `row`, signed
+`indentColumns`, and optional first-visual displacement and alignment;
+`LineBreak` itself is a pure hard break. Paragraph and literal
 blocks, document and section headings, and each DefinitionTerm carry their
 own optional layout beside their single original inline body. Definition terms
 serialize as `{content, inlineLayout?}` objects, not nested inline arrays.
@@ -268,7 +269,11 @@ first visual origin and its soft-wrap continuation origin, after signed parent
 and hanging geometry are composed. For parent 0, block indent 2, hanging
 displacement 4 and correction +1, these origins are 3 and 7. The next hard row
 uses its own correction, never a previous row's temporary offset. Final padding
-is bounded only at the visible leaf.
+is bounded only at the visible leaf. Optional `firstLineIndentColumns` further
+corrects only the first visual line, preserving the ordinary continuation
+origin. Optional `alignment` is `left`, `center` or `right` within the reader's
+available content area. These source-neutral preferences have no roff register,
+request count, device width or second copy of the body.
 
 An empty or anchor-only owner has an initial row position without requesting
 blank output. `A\n` leaves row 1 open; `A\n\n` closes row 1 as an empty row and
@@ -303,8 +308,8 @@ identity remain unchanged.
 Hint displacements have the closed signed range -65535 through 65535. Strict
 owner decoding rejects unordered, duplicate or out-of-range row addresses and
 more than 4096 hints per owner, including invalid explicit zero hints.
-Canonical output omits zero corrections and empty owner layouts. Roff
-production additionally retains at most 65536 nonzero hints in a document;
+Canonical output omits all-default hints and empty owner layouts. Roff
+production additionally retains at most 65536 non-default hints in a document;
 excess optional layout is omitted with `layout.row-hint-budget` and diagnostic
 impact `none`. Accepted body text and content completeness remain intact.
 The document total is a producer budget, not a whole-document JSON input cap.
@@ -792,16 +797,23 @@ Requests with direct lowering behavior are:
 | `ta` | Updates shared tab stops used by native field acceptance and line joins; exact device columns remain a view concern |
 | `ll`, `po` | Device line length and page origin omitted; reader width/origin policy remains in charge |
 | `mc` | Margin-character decoration omitted; its no-break formatter flush is retained |
-| `ti` | Device temporary indentation omitted; its preceding line boundary is retained |
+| `ce` | Counted rows with viewport-relative center alignment |
+| `rj` | Counted rows with viewport-relative right alignment |
+| `ti` | Executes the pre-break and temporary native offset, then records accepted row presentation without inserting text padding |
 
 `br`, `nf`, `fi`, and `ti` share the native pre-break sequence: select
 `NOSPACE`, consume the current buffer under its existing field flags, then
 update `BRIND`/`NOBREAK` and the fill mode. Source no-fill row events remain
 separate from that request. An output-owner change does not execute either
-event. For `ti`, the reading projection retains declared field origins and
-omits the optional numerical temporary offset; its pre-break result therefore
-agrees with `br` in the same context. The native device can position a later
-field differently when that numerical offset is applied.
+event. `ti` then applies its absolute or signed relative distance to the active
+offset. The pinned character device bounds the absolute origin at 72 cells and
+restores the temporary amount only when an actual device line ends; merely
+visiting an empty buffer or changing an IR owner does not consume it. Repeated requests and mdoc
+node offset restoration therefore follow execution order rather than a
+"next source line" shortcut. The producer retains this private execution state
+and projects accepted row origins into `inlineLayout`, including the
+first-visual-only correction needed when responsive soft wrapping differs from
+the native page. Consumers do not execute the source request again.
 
 The native field calculation keeps the common manual-page origin separate
 from the public relative column. On a fresh row that origin already covers
@@ -843,7 +855,24 @@ and cannot authorize deletion of an authored fixed blank.
 
 Control operands are never printable descendants. The block, inline and display paths share this distinction while still executing supported font, fill and spacing effects. Logical-sibling transparency is separate: an ignored device effect does not automatically make its source node transparent, and a transparent `ft` or `Tg` still changes font state or retains a target.
 
-`ce` and `rj` omit device-specific centering/right alignment but preserve their counted text rows, entry/exit line boundaries and nested requests. Their first native child is the control count, including a synthesized default or invalid count spelling; only subsequent children own content. Numeric words in that content remain visible. A native line-group flush can produce an empty literal row even after another request already ended that group; it is not another paragraph-distance request.
+`ce` and `rj` retain counted text rows, entry/exit line boundaries and nested
+requests, and project `center` or `right` preferences onto their accepted row
+owners. Their first native child is the control count, including a synthesized
+default or invalid count spelling; only subsequent children own content.
+Numeric words in that content remain visible. A native line-group flush can
+produce an empty literal row even after another request already ended that
+group; it is not another paragraph-distance request. A viewport reader resolves
+alignment after wrapping against the current content area, not a captured
+mandoc page width. With no viewport, text and Markdown use the left origin;
+plain Markdown cannot preserve centering without adding source-specific markup.
+
+An aligned field can follow an earlier field on the same native physical row,
+particularly in tagged or hanging labels. Owner-local row alignment cannot
+move only that suffix while keeping the prefix fixed. This layout is reduced
+to left-to-right reading, with `manual.partial-row-alignment` recording the
+presentation reduction. Native field consumption still determines accepted
+words, their joined or separated boundaries, and actual hard row endings;
+the reduction does not mark document content incomplete.
 
 Inside these captured groups, `br`, `fi`, `nf` and the break preceding `ti` execute immediately before the unconditional group-end flush, independently of the surrounding fill mode. This follows mandoc's `roff_term_pre_ce` execution order: an embedded break after text can therefore leave a blank row that groff does not emit. Ordinary `br` outside a captured group does not gain that blank row, and fill/font state changes still apply normally.
 
@@ -851,7 +880,16 @@ Man's `.in` state is applied by lowering, not assumed to have been executed by p
 
 Man paragraph distance depends on source predecessors, including predecessors outside an enclosing `RS`; the first item in a newly created IR container is not necessarily the first source paragraph. Recovered ordered and bullet lists retain each item's resolved distance, including changes between zero and two rows, without splitting the list or changing entry ownership. Its gap precedes the entire marker and body and remains independent of explicit `sp` requests. A headless `IP` continuation likewise retains both its paragraph distance and any following explicit space. An invisible or empty tag does not itself become an additional content row: ManT does not reproduce a terminal formatter's empty-label flush artifact.
 
-Man `nf`/`fi` and `EX`/`EE` boundaries consume a pending `HP` first line even before text is emitted. If `HP` starts inside an existing no-fill region, its first physical line keeps the first-line origin and later lines use the hanging origin; `\c` continuations do not consume that boundary. This preserves significant literal rows without splitting ordinary adjacent no-fill regions unnecessarily.
+Man `nf`/`fi` and `EX`/`EE` boundaries execute their actual row and field
+transitions independently of IR output splitting. In an existing no-fill
+region, `HP` follows the pinned `print_man_node()` first-child post: a nonempty
+TEXT or man macro that reaches the common exit closes its row and switches to
+the hanging origin. That post closes the first TEXT row even when it ends in
+`\c`. Roff requests, empty TEXT, equations and tables return before the common
+exit; a later word cannot substitute for that original child. This replaces
+the former portable simplification that joined the first `HP` source
+continuation and then switched origins after the first visible line. Ordinary
+no-fill continuation remains unchanged outside this native `HP` post.
 
 `TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the distinction between requests implemented, ignored, unsupported, and insecure in the pinned upstream parser, consult the [vendored roff(7) source](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20261013T025419Z/roff.7), whose exact upstream revision and hash are recorded in the repository's `crates/libmandoc-rs/upstream/FILES` manifest. The [online mandoc roff(7) reference](https://mandoc.bsd.lv/man/roff.7.html) tracks an evolving revision rather than fixing the `cvs-20261013T025419Z` contract. ManT's local patches and stricter source/include boundary are described in this manual.
 
@@ -961,7 +999,7 @@ and no advance limit or extra-field width. Empty widths use content-derived
 layout, consuming the gap while retaining any supplied advance/extra-field
 constraints for declared-field layout only. Explicit zero constraints remain
 distinct from absence in IR and JSON. The retired `columnWidths` wire field is
-rejected in v0.12 rather than silently discarded.
+rejected in v0.13 rather than silently discarded.
 Plain and ANSI output use the same measurement before decoration. Successive
 cells continue after the preceding cell's last physical row; they are never
 zipped by local line number. A full field moves the following cell to a new

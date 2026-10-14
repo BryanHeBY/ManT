@@ -15,6 +15,9 @@ impl InlineExecutionState {
 
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
+            text_alignment: mant_ir::TextAlignment::Left,
+            partial_row_alignment: false,
+            row_presentation: super::presentation::RowPresentation::default(),
             escape_coverage: crate::mandoc::escape_coverage::EscapeCoverage::default(),
             boundary: PendingBoundary::Ordinary,
             spacing: SpacingMode::from_enabled(spacing_enabled),

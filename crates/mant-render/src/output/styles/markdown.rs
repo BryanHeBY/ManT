@@ -133,6 +133,7 @@ mod tests {
                 row_hints: vec![mant_ir::RowLayoutHint {
                     row: 1,
                     indent_columns: 6,
+                    ..Default::default()
                 }],
             },
             layout: mant_ir::LayoutHint::default(),

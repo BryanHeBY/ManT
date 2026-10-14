@@ -67,21 +67,8 @@ impl ParagraphFlow {
     /// The detached definition HEAD already represents its pending native
     /// row. Drop that row at the moment a real BODY break closes it, while
     /// retaining target anchors that identify the following visible word.
-    pub(super) fn consume_invisible_head_row(&mut self) -> bool {
-        let Some(break_index) = self
-            .nodes
-            .iter()
-            .position(|node| matches!(node, Inline::LineBreak { .. }))
-        else {
-            return false;
-        };
-        if crate::mandoc::inline::has_rendered_formatter_glyph(&self.nodes[..break_index]) {
-            return false;
-        }
-        let mut identities = self.nodes.drain(..=break_index).collect::<Vec<_>>();
-        crate::mandoc::inline::retain_inline_identities(&mut identities);
-        self.nodes.splice(0..0, identities);
-        true
+    pub(super) fn consume_invisible_head_row(&mut self, formatter: &mut FormatterState) -> bool {
+        self.with_inline_builder(formatter, InlineBuilder::consume_invisible_head_row)
     }
 
     pub(super) fn hard_break(&mut self, formatter: &mut FormatterState) {

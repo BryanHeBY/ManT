@@ -35,7 +35,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     common::assert_bounded_vertical_spacing(&document.sections, "fedora44/tar");
 }
 
-/// `--acls` option is addressable through a v0.12 outline and
+/// `--acls` option is addressable through a v0.13 outline and
 /// `select_excerpt` returns its identity.
 #[test]
 fn options_are_addressable_in_v0_12_outlines_and_excerpts() {

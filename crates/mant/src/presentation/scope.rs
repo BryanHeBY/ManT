@@ -51,7 +51,7 @@ mod tests {
     #[test]
     fn cli_scope_adapter_preserves_existing_search_ansi_and_terminal_markdown_bytes() {
         let local: QuerySearch = serde_json::from_value(serde_json::json!({
-            "schema": "mant.search/v0.12",
+            "schema": "mant.search/v0.13",
             "label": " odd\u{1b} ",
             "query": {"pattern": "needle"},
             "render": {
@@ -66,7 +66,7 @@ mod tests {
             origin: mant_ir::MarkdownOrigin::Documents,
         };
         let response = ScopeQueryResponse {
-            schema: ScopeQuerySchema::V0Dot12,
+            schema: ScopeQuerySchema::V0Dot13,
             scope: ResolvedDocumentScope {
                 query: DocumentScope {
                     documents: vec![],

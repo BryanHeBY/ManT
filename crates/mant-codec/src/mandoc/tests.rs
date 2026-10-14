@@ -122,9 +122,11 @@ mod entries;
 
 mod column_post_rows;
 mod navigation;
+mod synopsis_rows;
 mod table_equation_payloads;
 mod table_source_payloads;
 mod tables;
+mod temporary_indent;
 
 mod basic_inline;
 mod control_boundaries;

@@ -201,6 +201,9 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
             // In filled structural flow input-line wrappers alone are
             // not paragraph breaks. Literal DisplayFlow consumes them.
             Event::BeginNode(_) => {}
+            Event::Alignment(alignment) => {
+                self.lowerer.state.set_text_alignment(alignment);
+            }
             Event::Break => {
                 // roff_term_pre_br() ends the active formatter row before
                 // either IR destination is drained.
@@ -212,12 +215,34 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
             Event::FlushLine => {
                 // roff_term_pre_ce() calls term_flushln() after each grouped
                 // source row, including a pending zero-advance glyph.
-                self.lowerer.settle_no_fill_inline();
                 self.lowerer
                     .state
                     .flush_requested_line(source_span(self.root));
             }
             Event::Children(nodes) => self.lowerer.push_nodes(nodes),
+            Event::AlignedChildren(nodes) => {
+                let name = self.lowerer.context.default_name;
+                let append = |builder: &mut crate::mandoc::inline::InlineBuilder| {
+                    builder.with_grouped_line_dispatch(|builder| {
+                        crate::mandoc::inline::append_inline_nodes(builder, nodes, name);
+                    });
+                };
+                if self.lowerer.state.formatter.no_fill {
+                    self.lowerer.state.execute_no_fill_fragment(
+                        nodes.first().and_then(source_span),
+                        false,
+                        false,
+                        append,
+                    );
+                } else {
+                    self.lowerer.state.push_inline_with(
+                        nodes.first().and_then(source_span),
+                        false,
+                        false,
+                        append,
+                    );
+                }
+            }
             Event::EnterKeep => self.lowerer.state.formatter.enter_keep_words(),
             Event::ExitKeep => self.lowerer.state.formatter.exit_keep_words(),
             Event::FunctionArgument(argument, comma_after) => {

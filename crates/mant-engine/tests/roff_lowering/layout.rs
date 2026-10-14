@@ -192,7 +192,10 @@ fn preserves_man_sy_heads_with_body_content_and_inline_fonts() {
 }
 
 #[test]
-fn keeps_man_synopsis_lines_together_inside_no_fill_examples() {
+fn retains_man_synopsis_head_and_body_origins_inside_no_fill_examples() {
+    // Exact input reran pristine ASCII/UTF-8/lint before this assertion.
+    // pre_SY(HEAD/BODY) assigns distinct offsets; post_SY(HEAD) flushes
+    // even under no-fill. The name occupies 13 cells, so BODY starts at 14.
     let document = parse_manual_bytes(
         std::path::Path::new("no-fill-synopsis.2"),
         b".TH NO-FILL-SYNOPSIS 2\n\
@@ -205,20 +208,28 @@ fn keeps_man_synopsis_lines_together_inside_no_fill_examples() {
     )
     .expect("lower synopsis inside example");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+    let [
+        Block::Preformatted {
+            children: head,
+            layout: head_layout,
+            ..
+        },
+        Block::Preformatted {
+            children: body,
+            layout: body_layout,
+            ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
         panic!(
-            "no-fill synopsis must remain one preformatted block: {:?}",
+            "no-fill synopsis must retain independently positioned literal roots: {:?}",
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(children), "#!interpreter\n[optional-arg]");
-    assert_eq!(
-        children
-            .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
-            .count(),
-        1
-    );
+    assert_eq!(inline_text(head), "#!interpreter");
+    assert_eq!(inline_text(body), "[optional-arg]");
+    assert_eq!(head_layout.indent_columns, 0);
+    assert_eq!(body_layout.indent_columns, 14);
 }
 
 #[test]

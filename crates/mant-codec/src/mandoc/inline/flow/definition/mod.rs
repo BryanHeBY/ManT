@@ -12,6 +12,7 @@ mod device;
 mod fill_mode;
 mod flush;
 mod geometry;
+pub(in crate::mandoc::inline::flow) mod head_presentation;
 mod head_row;
 mod list_scope;
 mod no_break;

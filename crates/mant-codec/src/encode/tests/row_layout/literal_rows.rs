@@ -6,6 +6,107 @@ use super::super::{
 use super::fixtures::layout;
 
 #[test]
+fn fenced_rows_resolve_first_visual_offsets_without_inventing_empty_tail_text() {
+    let children = vec![Inline::Text {
+        value: "A\nB\n".into(),
+    }];
+    let hints = mant_ir::InlineLayout {
+        row_hints: vec![
+            mant_ir::RowLayoutHint {
+                row: 0,
+                indent_columns: -1,
+                first_line_indent_columns: 4,
+                alignment: mant_ir::TextAlignment::Center,
+            },
+            mant_ir::RowLayoutHint {
+                row: 1,
+                indent_columns: 2,
+                first_line_indent_columns: -1,
+                alignment: mant_ir::TextAlignment::Right,
+            },
+            mant_ir::RowLayoutHint {
+                row: 2,
+                indent_columns: 8,
+                ..Default::default()
+            },
+        ],
+    };
+    let block = Block::Preformatted {
+        children: children.clone(),
+        inline_layout: hints,
+        language: None,
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let original = block.clone();
+    let markdown =
+        render_blocks_fragment(&[block], MarkdownFragmentOptions::default()).join("\n\n");
+    assert_eq!(markdown, "```\n   A\n B\n\n```");
+    let parsed = parse_content(&markdown, None).unwrap();
+    let Block::Preformatted {
+        children: restored, ..
+    } = &parsed.document.as_ref().unwrap().blocks[0]
+    else {
+        panic!("fenced body")
+    };
+    assert_eq!(mant_ir::inline_plain_text(restored), "   A\n B\n");
+    let Block::Preformatted {
+        children: source, ..
+    } = original
+    else {
+        unreachable!()
+    };
+    assert_eq!(source, children);
+}
+
+#[test]
+fn table_fence_and_literal_fence_share_the_first_visual_origin_contract() {
+    let block = Block::Paragraph {
+        children: vec![Inline::Text {
+            value: "A\nB".into(),
+        }],
+        inline_layout: mant_ir::InlineLayout {
+            row_hints: vec![
+                mant_ir::RowLayoutHint {
+                    row: 0,
+                    indent_columns: 1,
+                    first_line_indent_columns: 3,
+                    alignment: mant_ir::TextAlignment::Right,
+                },
+                mant_ir::RowLayoutHint {
+                    row: 1,
+                    indent_columns: 2,
+                    first_line_indent_columns: -1,
+                    ..Default::default()
+                },
+            ],
+        },
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let table = Block::Table {
+        rows: vec![TableRow {
+            kind: mant_ir::TableRowKind::Data,
+            cells: vec![TableCell {
+                blocks: vec![block],
+                break_after: false,
+                kind: mant_ir::TableCellKind::Text,
+                column_span: 1,
+                row_span: 1,
+                alignment: None,
+            }],
+        }],
+        column_preferences: mant_ir::ColumnPreferences::default(),
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    assert_eq!(
+        render_blocks_fragment(&[table], MarkdownFragmentOptions::default()),
+        ["```\n    A\n B\n```"]
+    );
+}
+
+#[test]
 fn ordinary_heading_omits_hints_while_fenced_table_projection_retains_them() {
     let rows = layout(&[(0, 1), (1, 2)]);
     let heading = mant_ir::Heading {

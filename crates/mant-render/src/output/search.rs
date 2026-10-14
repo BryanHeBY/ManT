@@ -278,7 +278,7 @@ mod tests {
 
     fn result() -> QuerySearch {
         QuerySearch {
-            schema: SearchSchema::V0Dot12,
+            schema: SearchSchema::V0Dot13,
             label: "tar".to_owned(),
             source: None,
             diagnostics: Vec::new(),

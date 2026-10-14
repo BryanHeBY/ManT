@@ -21,7 +21,7 @@ pub(super) fn render_table_columns(
             if *column_width == 0 {
                 return Vec::new();
             }
-            let mut rows = wrap_table_cell(cell, *column_width, 0, &mut next_search_group);
+            let mut rows = wrap_table_cell(cell, *column_width, 0, &mut next_search_group, true);
             if cell.has_open_tail()
                 && let Some(tail) = rows.pop()
                 && let Some(last) = rows.last_mut()
@@ -57,8 +57,8 @@ pub(super) fn render_table_columns(
                 column_widths,
                 gap,
                 &rendered_cells,
-                &measured,
                 row_index,
+                width,
             )
         })
         .collect()
@@ -123,8 +123,8 @@ fn render_content_column_row(
     column_widths: &[usize],
     gap: usize,
     rendered_cells: &[Vec<WrappedLine>],
-    measured: &[Vec<usize>],
     row_index: usize,
+    width: usize,
 ) -> WrappedLine {
     let mut anchors = Vec::new();
     let mut spans = Vec::new();
@@ -137,15 +137,24 @@ fn render_content_column_row(
     }
     for (column, column_width) in column_widths.iter().enumerate() {
         let cell_rows = rendered_cells.get(column);
-        let alignment = table
+        let mut alignment = table
             .cells
             .get(column)
             .map_or(TableAlignment::Left, |cell| cell.alignment);
         let mut used = 0;
         let mut left_padding = 0;
         if let Some(row) = cell_rows.and_then(|rows| rows.get(row_index)) {
+            let mut row = row.clone();
+            let area = if column + 1 == column_widths.len() {
+                width.saturating_sub(column_offset)
+            } else {
+                *column_width
+            };
+            if row.position_alignment(area) {
+                alignment = TableAlignment::Left;
+            }
             anchors.extend(row.anchors.iter().cloned());
-            used = measured[column][row_index];
+            used = super::super::super::inline::spans_width(&row.line.spans);
             let free = column_width.saturating_sub(used);
             left_padding = match alignment {
                 TableAlignment::Left => 0,

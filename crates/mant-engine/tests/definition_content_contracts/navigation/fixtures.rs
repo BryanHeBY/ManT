@@ -265,6 +265,7 @@ pub(super) fn specimen(case: Case, navigation: bool) -> ResolvedContent {
                 row_hints: vec![RowLayoutHint {
                     row: 0,
                     indent_columns: 4,
+                    ..Default::default()
                 }],
             },
             layout: LayoutHint::default(),

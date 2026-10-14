@@ -190,7 +190,7 @@ fn scoped_search_projection(found: &ScopedSearchDocument, query: &SearchQuery) -
     };
     let returned = u32::try_from(found.matches.len()).unwrap_or(u32::MAX);
     QuerySearch {
-        schema: SearchSchema::V0Dot12,
+        schema: SearchSchema::V0Dot13,
         label,
         source: None,
         meta,

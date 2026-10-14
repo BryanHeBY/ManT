@@ -96,7 +96,7 @@ The authoritative format contracts are [mant-markdown(7)](https://github.com/Bry
 
 The private roff field buffer in
 `src/mandoc/inline/flow/field_buffer.rs` and the native field device
-calculation in `src/mandoc/inline/flow/definition/device.rs` derive from
+calculation in `src/mandoc/inline/flow/definition/device/` derive from
 the pinned CVS mandoc `term.c`. These translated modules
 carry the original ISC copyright and permission notice.
 `src/mandoc/inline/flow/tab_stops.rs` adapts the same snapshot's `term_tab.c`
@@ -105,4 +105,8 @@ The shared display Tab phases and nested list phases in
 `src/mandoc/inline/display_tabs.rs` and
 `src/mandoc/inline/flow/definition/list_scope.rs` adapt the pinned
 `mdoc_term.c`/`man_term.c` handlers and retain their ISC notices.
+The private row presentation kernel in `src/mandoc/inline/flow/presentation.rs`
+and its `presentation/field.rs` helper adapt `roff_term.c` temporary offsets
+and `term.c`/`term_ascii.c` field placement and line retirement. Their headers
+retain the applicable ISC notices; their public projection is source-neutral IR.
 The remaining `ManT` codec code uses the repository license.

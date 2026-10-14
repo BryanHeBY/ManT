@@ -594,6 +594,7 @@ fn query_with_owner_row_hints() -> ResolvedContent {
         row_hints: vec![mant_ir::RowLayoutHint {
             row: 1,
             indent_columns: -3,
+            ..Default::default()
         }],
     };
     let mut heading: mant_ir::Heading = "Heading\ncontinued".into();
@@ -617,6 +618,7 @@ fn query_with_owner_row_hints() -> ResolvedContent {
             row_hints: vec![mant_ir::RowLayoutHint {
                 row: 2,
                 indent_columns: 5,
+                ..Default::default()
             }],
         },
         layout: LayoutHint::default(),

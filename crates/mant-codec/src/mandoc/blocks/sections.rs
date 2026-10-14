@@ -79,7 +79,23 @@ pub(in crate::mandoc) fn lower_document_structure(
             spacing_enabled,
         ),
     ));
+    report_presentation_reductions(context, &formatter);
     (root_blocks, sections)
+}
+
+fn report_presentation_reductions(
+    context: &LoweringContext<'_>,
+    formatter: &crate::mandoc::formatter::FormatterState,
+) {
+    if formatter.execution.partial_row_alignment {
+        context.diagnostics.borrow_mut().push(mant_ir::Diagnostic {
+            impact: mant_ir::DiagnosticImpact::None,
+            level: mant_ir::DiagnosticLevel::Warning,
+            code: Some("manual.partial-row-alignment".into()),
+            message: "alignment of a later field on an already printed row was simplified to left-to-right reading; accepted text, word boundaries and hard rows were retained".into(),
+            source: None,
+        });
+    }
 }
 
 fn lower_section(
@@ -97,6 +113,11 @@ fn lower_section(
         context.active_mdoc_section()
     };
     let authored_title = authored_section_phrase(head, context.default_name);
+    // SH/Sh and SS/Ss assign their heading origin in pre, and BODY's
+    // ordinary manual origin afterwards (man_term.c::pre_SH/pre_SS,
+    // mdoc_term.c::termp_sh_pre/termp_ss_pre). No prior ti offset leaks.
+    formatter.row_presentation.offset_shift = 0;
+    formatter.row_presentation.parent = 0;
     let mut heading = context.lower_section_heading(
         head,
         formatter,
@@ -106,6 +127,8 @@ fn lower_section(
     // consumers, this makes `.Sx` resolution independent of tree recursion.
     let (id, fragment_aliases) = context.section_identity_for(&authored_title, node);
     let body = first_part_children(node, NodeKind::Body);
+    formatter.row_presentation.offset_shift = 0;
+    formatter.row_presentation.parent = 5 * 24;
     // mdoc Sh/Ss BODY resets tabs after HEAD; man SH/SS does not
     // (mdoc_term.c::termp_sh_pre/termp_ss_pre, man_term.c::pre_SH/pre_SS).
     if context.macro_set == libmandoc_rs::MacroSet::Mdoc {

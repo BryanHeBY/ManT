@@ -294,6 +294,7 @@ mod tests {
                             row_hints: vec![crate::RowLayoutHint {
                                 row: 0,
                                 indent_columns: 12,
+                                ..Default::default()
                             }],
                         },
                         layout: crate::LayoutHint::default(),

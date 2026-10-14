@@ -11,6 +11,17 @@ use mant_ir::{
 use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
+// These cases assert term_word rows, not the name-derived SY origin. Every
+// exact source was rerun with pristine CVS before accepting that BODY origin.
+// Remove display padding without folding authored words or empty/hard rows;
+// the separate row-presentation matrix checks the exact native columns.
+fn without_line_origins(text: &str) -> String {
+    text.split('\n')
+        .map(|line| line.trim_start_matches(' '))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[test]
 fn a_literal_display_switched_to_fill_keeps_source_word_and_indent_policy() {
     for (body, expected) in [
@@ -41,7 +52,7 @@ fn man_empty_font_macro_operands_and_invisible_glyphs_occupy_a_row() {
             ".B \"\"", ".I \"\"", ".B \\&", ".I \\&", ".BR \\&", ".BI \\&",
         ] {
             let content = query(mode, &format!("ALPHA\n{request}\nBETA"));
-            let text = render_query_text(&content);
+            let text = without_line_origins(&render_query_text(&content));
             assert!(text.contains("ALPHA\n\nBETA"), "{mode}: {request}: {text}");
         }
     }
@@ -80,10 +91,16 @@ fn font_only_words_end_the_old_row_without_occupying_the_next_one() {
     ] {
         for continued in [false, true] {
             let join = if continued { "\\c" } else { "" };
-            let text = render_query_text(&query(mode, &format!("ALPHA{join}\n{request}\nBETA")));
+            let text = without_line_origins(&render_query_text(&query(
+                mode,
+                &format!("ALPHA{join}\n{request}\nBETA"),
+            )));
             assert!(text.contains("ALPHA\nBETA"), "{mode}: {request}: {text}");
         }
-        let text = render_query_text(&query(mode, &format!("ALPHA\n{request}")));
+        let text = without_line_origins(&render_query_text(&query(
+            mode,
+            &format!("ALPHA\n{request}"),
+        )));
         assert!(text.contains("ALPHA\nAFTER"), "{mode}: {request}: {text}");
     }
 }
@@ -101,7 +118,7 @@ fn state_only_requests_and_continuation_words_do_not_invent_a_row() {
 #[test]
 fn synopsis_body_executes_fill_mode_changes_instead_of_flattening_every_child() {
     let content = query("SY", "ALPHA\n.fi\nBETA\nSECOND\n.nf\nGAMMA\n.sp 2\nDELTA");
-    let text = render_query_text(&content);
+    let text = without_line_origins(&render_query_text(&content));
     assert!(
         text.contains("ALPHA\nBETA SECOND\nGAMMA\n\n\nDELTA"),
         "{text}"
@@ -199,6 +216,6 @@ fn synopsis_font_changes_survive_spacing_until_the_synopsis_scope_ends() {
         "{:?}",
         styles.words
     );
-    let text = render_query_text(&content);
+    let text = without_line_origins(&render_query_text(&content));
     assert!(text.contains("ALPHA\n\n\nBETA\nGAMMA\nAFTER"), "{text}");
 }

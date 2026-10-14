@@ -1,6 +1,8 @@
 //! One text layout result, measured independently of zero-width decoration.
 
 use super::super::table::TableText;
+mod alignment;
+use alignment::RowAlignment;
 
 /// Both representations come from the same inline visit and share all layout
 /// operations. The visible side is local measurement material, not a second
@@ -10,15 +12,16 @@ use super::super::table::TableText;
 pub(in crate::output) struct LayoutText {
     pub(super) rendered: String,
     pub(super) visible: String,
+    alignments: Vec<RowAlignment>,
+    row_breaks: usize,
 }
 
 impl LayoutText {
     pub(super) fn decorated(visible: &str, rendered: String) -> Self {
         // The public decorator contract preserves newlines. An invalid
         // callback must not make the row zipper silently discard source text.
-        let rendered = if visible.bytes().filter(|byte| *byte == b'\n').count()
-            == rendered.bytes().filter(|byte| *byte == b'\n').count()
-        {
+        let row_breaks = visible.bytes().filter(|byte| *byte == b'\n').count();
+        let rendered = if row_breaks == rendered.bytes().filter(|byte| *byte == b'\n').count() {
             rendered
         } else {
             visible.to_owned()
@@ -26,6 +29,8 @@ impl LayoutText {
         Self {
             rendered,
             visible: visible.to_owned(),
+            alignments: Vec::new(),
+            row_breaks,
         }
     }
 
@@ -34,24 +39,42 @@ impl LayoutText {
     }
 
     pub(super) fn append(&mut self, other: &Self) {
+        let row = self.row_breaks;
+        self.alignments
+            .extend(other.alignments.iter().map(|receipt| RowAlignment {
+                row: row.saturating_add(receipt.row),
+                ..*receipt
+            }));
         self.rendered.push_str(&other.rendered);
         self.visible.push_str(&other.visible);
+        self.row_breaks = self.row_breaks.saturating_add(other.row_breaks);
     }
 
     pub(super) fn push_plain(&mut self, text: &str) {
         self.rendered.push_str(text);
         self.visible.push_str(text);
+        self.row_breaks = self
+            .row_breaks
+            .saturating_add(text.bytes().filter(|byte| *byte == b'\n').count());
     }
 
     pub(super) fn prefixed(mut self, prefix: &str) -> Self {
+        self.prefix_alignments(prefix, false);
         self.rendered.insert_str(0, prefix);
         self.visible.insert_str(0, prefix);
+        self.row_breaks = self
+            .row_breaks
+            .saturating_add(prefix.bytes().filter(|byte| *byte == b'\n').count());
         self
     }
 
     pub(super) fn strip_prefix(mut self, prefix: &str) -> Self {
         if self.visible.starts_with(prefix) && self.rendered.starts_with(prefix) {
+            self.prefix_alignments(prefix, true);
             self.visible.drain(..prefix.len());
+            self.row_breaks = self
+                .row_breaks
+                .saturating_sub(prefix.bytes().filter(|byte| *byte == b'\n').count());
             self.rendered.drain(..prefix.len());
         }
         self
@@ -82,6 +105,11 @@ impl LayoutText {
             .zip(self.rendered.split('\n'))
             .map(|(visible, rendered)| Self::decorated(visible, rendered.to_owned()))
             .collect::<Vec<_>>();
+        for receipt in &self.alignments {
+            if let Some(row) = rows.get_mut(receipt.row) {
+                row.alignments.push(RowAlignment { row: 0, ..*receipt });
+            }
+        }
         if completed && !self.visible.is_empty() && self.visible.ends_with('\n') {
             // Removing a completed row's delimiter does not remove decoration
             // after it (for example an ANSI reset following the final newline).
@@ -130,9 +158,12 @@ impl LayoutText {
 
 impl From<String> for LayoutText {
     fn from(visible: String) -> Self {
+        let row_breaks = visible.bytes().filter(|byte| *byte == b'\n').count();
         Self {
             rendered: visible.clone(),
             visible,
+            alignments: Vec::new(),
+            row_breaks,
         }
     }
 }
@@ -144,20 +175,19 @@ impl From<&str> for LayoutText {
 }
 
 impl TableText for LayoutText {
+    fn has_alignment(&self) -> bool {
+        !self.alignments.is_empty()
+    }
+
+    fn align_within(self, width: Option<usize>) -> Self {
+        self.position_alignments(width)
+    }
     fn plain(value: &str) -> Self {
         value.into()
     }
 
     fn is_empty(&self) -> bool {
         self.is_empty()
-    }
-
-    fn line_count(&self) -> usize {
-        if self.is_empty() {
-            1
-        } else {
-            self.visible.split_terminator('\n').count()
-        }
     }
 
     fn ends_with_break(&self) -> bool {

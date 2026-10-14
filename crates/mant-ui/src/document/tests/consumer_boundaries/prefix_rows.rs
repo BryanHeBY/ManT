@@ -46,6 +46,7 @@ fn hinted_paragraph(children: Vec<Inline>) -> Block {
         inline_layout.row_hints = vec![RowLayoutHint {
             row: 0,
             indent_columns: 4,
+            ..Default::default()
         }];
     }
     block
@@ -187,6 +188,7 @@ fn definition(prefix: Prefix, heads: usize, relation: HeadBodyRelation, literal:
                 row_hints: vec![RowLayoutHint {
                     row: 0,
                     indent_columns: 2,
+                    ..Default::default()
                 }],
             };
         }

@@ -91,6 +91,8 @@ run "test escape grammar fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_escape_rule_fixtures
 run "test field rule source and owner bindings" \
   python3 -m unittest scripts.roff.tests.test_field_rule_fixtures
+run "test exact row presentation source and profile bindings" \
+  python3 -m unittest scripts.roff.tests.test_row_presentation_fixtures
 run "test Markdown hard-row fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_markdown_rule_fixtures
 run "test Markdown reader structural observation" \

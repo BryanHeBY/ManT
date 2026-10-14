@@ -215,7 +215,7 @@ impl InlineBuilder {
         sweep: &mut NativeFieldSweep,
         print: &NativeFieldPrint,
         resumed: Option<NoBreakField>,
-    ) {
+    ) -> bool {
         let state = self.execution.definition.as_ref().expect("field session");
         if print.first
             && state.column_origin_units.is_some()
@@ -232,7 +232,7 @@ impl InlineBuilder {
             print.tab_offset,
             print.padding_units,
         ) else {
-            return;
+            return false;
         };
         if print.first {
             sweep.separator_retention = if sweep.printed_row.is_none() {
@@ -269,5 +269,6 @@ impl InlineBuilder {
         // fresh row; only an endline that stays final hands its row
         // boundary to the next field (term.c:217,233-237).
         sweep.loop_row_end = LoopRowEnd::Open;
+        true
     }
 }

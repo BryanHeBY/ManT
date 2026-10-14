@@ -49,7 +49,14 @@ fn explicit_initial_body_requests_end_short_heads_without_adding_blank_rows() {
                     .position(|line| line.trim() == "window")
                     .unwrap();
                 assert_eq!(lines[head_row + 1].trim(), "BODY", "{source}\n{text}");
-                assert!(lines[head_row + 1].starts_with(' '), "{source}\n{text}");
+                if request == ".ti 0\n" {
+                    // All twelve exact head/prefix variants reran pristine
+                    // before this assertion. roff_term_pre_ti sets offset=0
+                    // after pre_br; absolute page zero has no reading pad.
+                    assert_eq!(lines[head_row + 1], "BODY", "{source}\n{text}");
+                } else {
+                    assert!(lines[head_row + 1].starts_with(' '), "{source}\n{text}");
+                }
                 assert_eq!(
                     mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
                     0

@@ -126,7 +126,7 @@ def verify(name, enabled, inputs, log):
     result = run(["--list", "--kind", "manual", "--format", "json", "--compact"])
     require(result.returncode == 0 and json.loads(result.stdout)["total"] == 1,
             f"{name}: read-only manual inventory must not require native parsing")
-    request = {"schema": "mant.request/v0.12", "input": {
+    request = {"schema": "mant.request/v0.13", "input": {
         "kind": "file", "path": str(inputs / "probe.1"), "format": "roff"},
         "view": {"kind": "full"}}
     result = run(["--request-json", "--format", "json"], json.dumps(request))

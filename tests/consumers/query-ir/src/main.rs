@@ -244,6 +244,7 @@ fn check_row_layout_owner(
     inline_layout.row_hints = vec![mant_ir::RowLayoutHint {
         row: 1,
         indent_columns: 6,
+        ..Default::default()
     }];
     let restored: ResolvedContent = mant_protocol::QueryBundle::from(&hinted).into();
     assert_eq!(restored, hinted);

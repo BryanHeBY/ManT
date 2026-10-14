@@ -175,5 +175,7 @@ that display register can otherwise consume a byte of the stateful HTML href.
 The immutable authored identity contract does not inherit that display state.
 Both original HTML output and isolated destination evidence are retained.
 
-The schema remains v0.12. Fixtures do not authorize a version bump
-or a new renderer backend.
+These execution fixtures were frozen against v0.12 and do not authorize
+changes to its published contract. Current consumers use v0.13 for the
+source-neutral row presentation additions; the accepted text, field rules
+and historical oracle observations here remain unchanged.

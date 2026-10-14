@@ -4,9 +4,14 @@ use mant_ir::{TableCell, TableCellKind, TableRow, TableRowPlan, bounded_table_ro
 const MAX_DENSE_PHYSICAL_SLOTS: usize = 16_384;
 
 pub(super) trait TableText: Clone {
+    fn has_alignment(&self) -> bool {
+        false
+    }
+    fn align_within(self, _width: Option<usize>) -> Self {
+        self
+    }
     fn plain(value: &str) -> Self;
     fn is_empty(&self) -> bool;
-    fn line_count(&self) -> usize;
     fn width(&self) -> usize;
     fn physical_lines(&self) -> Vec<Self>;
     fn ends_with_break(&self) -> bool;
@@ -16,36 +21,29 @@ pub(super) trait TableText: Clone {
 }
 
 struct CellText<T> {
-    value: T,
+    rows: Vec<T>,
+    widths: Vec<usize>,
+    empty: bool,
     origins: mant_ir::geometry::CellOriginBounds,
     completed: bool,
     break_after: bool,
 }
 
 impl<T: TableText> CellText<T> {
-    fn closes_open_tail(&self) -> bool {
-        self.break_after && !self.completed && self.value.ends_with_break()
-    }
-
     fn line_count(&self) -> usize {
-        self.value.line_count() + usize::from(self.closes_open_tail())
+        self.rows.len()
     }
+}
 
-    fn physical_rows(&self) -> Vec<T> {
-        let mut rows = self.value.physical_lines();
-        // The callback retires one provisional final delimiter. An explicit
-        // cell boundary closes that retained empty source row, rather than
-        // silently retiring it along with an occupied row's close.
-        if self.closes_open_tail() {
-            rows.push(T::plain(""));
-        }
-        rows
-    }
+enum PreparedRow<T> {
+    Complete(Vec<T>, bool),
+    Dense(Vec<Option<CellText<T>>>),
+    Sparse(Vec<(usize, CellText<T>)>),
 }
 
 #[cfg(test)]
 fn table_rows(rows: &[TableRow], mut render_cell: impl FnMut(&TableCell) -> String) -> Vec<String> {
-    projected_table_rows(rows, 2, 0, |cell| (render_cell(cell), false)).0
+    projected_table_rows(rows, 2, 0, None, |cell| (render_cell(cell), false)).0
 }
 
 /// Prepare every source cell once, then place only its physical rows. Actual
@@ -55,19 +53,19 @@ pub(super) fn projected_table_rows<T: TableText>(
     rows: &[TableRow],
     gap_columns: u16,
     origin: i32,
+    viewport: Option<usize>,
     mut render_cell: impl FnMut(&TableCell) -> (T, bool),
 ) -> (Vec<T>, bool) {
     let gap = usize::from(gap_columns);
-    let mut output = Vec::new();
-    let mut completed = false;
+    let mut prepared = Vec::new();
     for (plan, row) in bounded_table_rows(rows).into_iter().zip(rows) {
         if mant_ir::table_row_is_navigation_only(row) {
             continue;
         }
-        let (lines, closed) = match plan {
-            TableRowPlan::Empty => (vec![T::plain("")], true),
+        let prepared_row = match plan {
+            TableRowPlan::Empty => PreparedRow::Complete(vec![T::plain("")], true),
             TableRowPlan::WholeRule { double } => {
-                (vec![T::plain(if double { "===" } else { "---" })], false)
+                PreparedRow::Complete(vec![T::plain(if double { "===" } else { "---" })], false)
             }
             TableRowPlan::LayoutRule { cells } => {
                 let parts = cells
@@ -82,31 +80,66 @@ pub(super) fn projected_table_rows<T: TableText>(
                 if gap.saturating_mul(parts.len().saturating_sub(1))
                     > mant_ir::geometry::MAX_COLUMN_PADDING
                 {
-                    (parts, false)
+                    PreparedRow::Complete(parts, false)
                 } else {
-                    (vec![T::join(&parts, &separator(gap))], false)
+                    PreparedRow::Complete(vec![T::join(&parts, &separator(gap))], false)
                 }
             }
-            TableRowPlan::Dense { slots } => dense_physical_rows(
+            TableRowPlan::Dense { slots } => PreparedRow::Dense(
                 slots
                     .into_iter()
                     .map(|cell| cell.map(|cell| render_table_cell(cell, &mut render_cell)))
                     .collect(),
-                gap,
-                origin,
             ),
-            TableRowPlan::Sparse { cells } => sparse_physical_rows(
+            TableRowPlan::Sparse { cells } => PreparedRow::Sparse(
                 cells
                     .into_iter()
                     .map(|cell| (cell.column, render_table_cell(cell.cell, &mut render_cell)))
                     .collect(),
-                origin,
             ),
+        };
+        prepared.push(prepared_row);
+    }
+    let viewport = viewport.map(|width| width.saturating_sub(mant_ir::geometry::padding(origin)));
+    let slots = measured_alignment_slots(&prepared, viewport);
+    let mut output = Vec::new();
+    let mut completed = false;
+    for row in prepared {
+        let (lines, closed) = match row {
+            PreparedRow::Complete(lines, closed) => (lines, closed),
+            PreparedRow::Dense(cells) => {
+                dense_physical_rows(cells, gap, origin, viewport, slots.as_deref())
+            }
+            PreparedRow::Sparse(cells) => sparse_physical_rows(cells, origin, viewport),
         };
         output.extend(lines);
         completed = closed;
     }
     (output, completed)
+}
+
+/// Column measurements are intrinsic and table-wide, just as in the viewport
+/// consumer. Generated owner alignment is applied only after these slots exist.
+fn measured_alignment_slots<T: TableText>(
+    prepared: &[PreparedRow<T>],
+    viewport: Option<usize>,
+) -> Option<Vec<usize>> {
+    viewport?;
+    let mut alignment = false;
+    let mut widths = Vec::new();
+    for row in prepared {
+        if let PreparedRow::Dense(cells) = row {
+            widths.resize(widths.len().max(cells.len()), 0);
+            for (column, cell) in cells.iter().enumerate() {
+                if let Some(cell) = cell {
+                    alignment |= cell.rows.iter().any(TableText::has_alignment);
+                    widths[column] =
+                        widths[column].max(cell.widths.iter().copied().max().unwrap_or(0));
+                }
+            }
+        }
+    }
+    alignment.then_some(widths)
 }
 
 fn separator(gap: usize) -> String {
@@ -128,31 +161,51 @@ fn render_table_cell<T: TableText>(
             (T::plain("==="), false)
         }
     };
+    let empty = value.is_empty();
+    let closes_open_tail = cell.break_after && !completed && value.ends_with_break();
+    let mut rows = value.physical_lines();
+    // Retiring an occupied row's close must not retire an explicitly completed
+    // empty source row. Keep this fact in the prepared cell for every fallback.
+    if closes_open_tail {
+        rows.push(T::plain(""));
+    }
+    let widths = rows.iter().map(TableText::width).collect();
     CellText {
-        value,
+        rows,
+        widths,
+        empty,
         completed,
         break_after: cell.break_after,
         origins: mant_ir::geometry::table_cell_origin_bounds(cell),
     }
 }
 
-fn stacked_physical_rows<T: TableText>(cells: Vec<CellText<T>>) -> (Vec<T>, bool) {
+fn stacked_physical_rows<T: TableText>(
+    cells: Vec<CellText<T>>,
+    viewport: Option<usize>,
+) -> (Vec<T>, bool) {
     let mut completed = false;
     let mut rows = Vec::new();
     for cell in cells {
-        if cell.break_after && !cell.completed && cell.value.is_empty() {
+        if cell.break_after && !cell.completed && cell.empty {
             // An empty field can complete the current data row. With no
             // active row (or after an already completed row) it owns one
             // existing empty row, rather than disappearing from topology.
             if rows.is_empty() || completed {
-                rows.push(cell.value);
+                rows.extend(cell.rows);
             } else if let Some(last) = rows.last_mut() {
-                last.append(&cell.value);
+                for row in cell.rows {
+                    last.append(&row);
+                }
             }
             completed = true;
             continue;
         }
-        let physical = cell.physical_rows();
+        let physical = cell
+            .rows
+            .into_iter()
+            .map(|row| row.align_within(viewport))
+            .collect::<Vec<_>>();
         completed =
             cell.completed || cell.break_after || physical.last().is_some_and(TableText::is_empty);
         rows.extend(physical);
@@ -164,14 +217,17 @@ fn dense_physical_rows<T: TableText>(
     cells: Vec<Option<CellText<T>>>,
     gap: usize,
     origin: i32,
+    viewport: Option<usize>,
+    slots: Option<&[usize]>,
 ) -> (Vec<T>, bool) {
     if cells
         .iter()
         .take(cells.len().saturating_sub(1))
         .flatten()
         .any(|cell| cell.break_after)
+        || gap.saturating_mul(cells.len().saturating_sub(1)) > mant_ir::geometry::MAX_COLUMN_PADDING
     {
-        return stacked_physical_rows(cells.into_iter().flatten().collect());
+        return stacked_physical_rows(cells.into_iter().flatten().collect(), viewport);
     }
     let height = cells
         .iter()
@@ -179,9 +235,6 @@ fn dense_physical_rows<T: TableText>(
         .map(CellText::line_count)
         .max()
         .unwrap_or(1);
-    if gap.saturating_mul(cells.len().saturating_sub(1)) > mant_ir::geometry::MAX_COLUMN_PADDING {
-        return stacked_physical_rows(cells.into_iter().flatten().collect());
-    }
     if height
         .checked_mul(cells.len())
         .is_none_or(|work| work > MAX_DENSE_PHYSICAL_SLOTS)
@@ -193,55 +246,106 @@ fn dense_physical_rows<T: TableText>(
                 .filter_map(|(column, cell)| cell.map(|cell| (column, cell)))
                 .collect(),
             origin,
+            viewport,
         );
     }
-    let physical = cells
-        .iter()
-        .map(|cell| {
-            cell.as_ref()
-                .map_or_else(|| vec![T::plain("")], CellText::physical_rows)
-        })
-        .collect::<Vec<_>>();
-    let measured = physical
-        .iter()
-        .map(|rows| rows.iter().map(TableText::width).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
+    if slots.is_some_and(|slots| {
+        slots
+            .iter()
+            .sum::<usize>()
+            .saturating_add((gap + 1).saturating_mul(slots.len().saturating_sub(1)))
+            > viewport.unwrap_or(0)
+    }) || !dense_origins_fit(&cells, height, gap, origin, slots)
+    {
+        return stacked_physical_rows(cells.into_iter().flatten().collect(), viewport);
+    }
+    let completed = cells.iter().flatten().any(|cell| {
+        (cell.completed || cell.break_after || cell.rows.last().is_some_and(TableText::is_empty))
+            && cell.rows.len() == height
+    });
+    (
+        assemble_dense_rows(&cells, height, gap, viewport, slots),
+        completed,
+    )
+}
+
+fn dense_origins_fit<T: TableText>(
+    cells: &[Option<CellText<T>>],
+    height: usize,
+    gap: usize,
+    origin: i32,
+    slots: Option<&[usize]>,
+) -> bool {
     let mut maximum = vec![0_usize; cells.len()];
     for line in 0..height {
         let mut column = 0_usize;
-        for (index, widths) in measured.iter().enumerate() {
+        for (index, cell) in cells.iter().enumerate() {
             maximum[index] = maximum[index].max(column);
             column = column
-                .saturating_add(widths.get(line).copied().unwrap_or(0))
+                .saturating_add(slots.map_or_else(
+                    || {
+                        cell.as_ref()
+                            .and_then(|cell| cell.widths.get(line))
+                            .copied()
+                            .unwrap_or(0)
+                    },
+                    |slots| slots[index],
+                ))
                 .saturating_add(gap + 1);
         }
     }
-    if cells.iter().zip(maximum).any(|(cell, start)| {
-        cell.as_ref().is_some_and(|cell| {
-            !cell.origins.fits_at(mant_ir::geometry::compose_origin(
+    cells.iter().zip(maximum).all(|(cell, start)| {
+        cell.as_ref().is_none_or(|cell| {
+            cell.origins.fits_at(mant_ir::geometry::compose_origin(
                 origin,
                 mant_ir::geometry::coordinate(start),
             ))
         })
-    }) {
-        return stacked_physical_rows(cells.into_iter().flatten().collect());
-    }
-    let completed = cells.iter().zip(&physical).any(|(cell, rows)| {
-        cell.as_ref().is_some_and(|cell| {
-            (cell.completed || cell.break_after || rows.last().is_some_and(TableText::is_empty))
-                && rows.len() == height
-        })
-    });
+    })
+}
+
+fn assemble_dense_rows<T: TableText>(
+    cells: &[Option<CellText<T>>],
+    height: usize,
+    gap: usize,
+    viewport: Option<usize>,
+    slots: Option<&[usize]>,
+) -> Vec<T> {
     let separator = separator(gap);
-    let output = (0..height)
+    (0..height)
         .map(|line| {
-            let mut segments = physical
+            let mut segments = cells
                 .iter()
-                .map(|cell| cell.get(line).cloned().unwrap_or_else(|| T::plain("")))
+                .map(|cell| {
+                    cell.as_ref()
+                        .and_then(|cell| cell.rows.get(line))
+                        .cloned()
+                        .unwrap_or_else(|| T::plain(""))
+                })
                 .collect::<Vec<_>>();
             let mut retired = Vec::new();
             while line > 0 && segments.last().is_some_and(TableText::is_empty) {
                 retired.push(segments.pop().expect("empty tail"));
+            }
+            let mut slot_start = 0usize;
+            for (column, segment) in segments.iter_mut().enumerate() {
+                let area = slots.and_then(|slots| {
+                    if column + 1 == cells.len() {
+                        viewport.map(|width| width.saturating_sub(slot_start))
+                    } else {
+                        slots.get(column).copied()
+                    }
+                });
+                *segment = segment.clone().align_within(area);
+                if let Some(area) = area
+                    && column + 1 < cells.len()
+                    && segment.width() < area
+                {
+                    segment.append(&T::plain(&" ".repeat(area - segment.width())));
+                }
+                slot_start = slot_start
+                    .saturating_add(slots.map_or(0, |slots| slots[column]))
+                    .saturating_add(gap + 1);
             }
             let mut output = T::join(&segments, &separator);
             for tail in retired.into_iter().rev() {
@@ -249,13 +353,13 @@ fn dense_physical_rows<T: TableText>(
             }
             output
         })
-        .collect();
-    (output, completed)
+        .collect()
 }
 
 fn sparse_physical_rows<T: TableText>(
     cells: Vec<(usize, CellText<T>)>,
     origin: i32,
+    viewport: Option<usize>,
 ) -> (Vec<T>, bool) {
     if cells.iter().any(|(column, cell)| {
         let prefix = format!("column {}: ", column.saturating_add(1));
@@ -264,13 +368,13 @@ fn sparse_physical_rows<T: TableText>(
             mant_ir::geometry::coordinate(prefix.len()),
         ))
     }) {
-        return stacked_physical_rows(cells.into_iter().map(|(_, cell)| cell).collect());
+        return stacked_physical_rows(cells.into_iter().map(|(_, cell)| cell).collect(), viewport);
     }
     let mut completed = false;
     let output = cells
         .into_iter()
         .flat_map(|(column, cell)| {
-            let physical = cell.physical_rows();
+            let physical = cell.rows;
             completed = cell.completed
                 || cell.break_after
                 || physical.last().is_some_and(TableText::is_empty);
@@ -278,11 +382,13 @@ fn sparse_physical_rows<T: TableText>(
                 .into_iter()
                 .enumerate()
                 .map(|(line, value)| {
-                    value.prefixed(&if line == 0 {
-                        format!("column {}: ", column.saturating_add(1))
-                    } else {
-                        "  ".into()
-                    })
+                    value
+                        .prefixed(&if line == 0 {
+                            format!("column {}: ", column.saturating_add(1))
+                        } else {
+                            "  ".into()
+                        })
+                        .align_within(viewport)
                 })
                 .collect::<Vec<_>>()
         })
@@ -297,13 +403,6 @@ impl TableText for String {
     }
     fn is_empty(&self) -> bool {
         self.is_empty()
-    }
-    fn line_count(&self) -> usize {
-        if self.is_empty() {
-            1
-        } else {
-            self.split_terminator('\n').count()
-        }
     }
     fn ends_with_break(&self) -> bool {
         self.ends_with('\n')

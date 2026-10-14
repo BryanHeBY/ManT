@@ -131,7 +131,6 @@ fn block_state_finish_keeps_target_only_tail_and_original_source() {
         matches!(children.as_slice(), [Inline::Anchor { id, owner_source: Some(span), .. }] if id == "tail-target" && span.line == 9)
     );
     assert_eq!(*owner, Some(source(9)));
-    assert!(!super::has_flushed_row(&blocks));
 }
 
 #[test]

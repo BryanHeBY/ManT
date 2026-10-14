@@ -293,6 +293,9 @@ struct BlockLowerer<'a, 'source> {
     man_source_predecessor: bool,
     display_fill: Option<DisplayFillMode>,
     column_field: bool,
+    // HP's first direct BODY child has a native out action, independent of
+    // the first visible row or a nested child's projection return.
+    first_body_post: Option<(u32, crate::mandoc::layout::SourceIndent)>,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -329,6 +332,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             man_source_predecessor: false,
             display_fill: None,
             column_field: false,
+            first_body_post: None,
         }
     }
 
@@ -400,4 +404,16 @@ pub(super) fn restores_macro_indent(node: &Node) -> bool {
             | ManMacro::Rs
             | ManMacro::Sy))
     )
+}
+
+/// The native pre handler assigned mt->offset (or a derived BODY offset).
+/// This is after its real paragraph/row boundary, never BLOCK entry. The
+/// independent ti register still belongs to the next actual device endline.
+pub(super) fn reset_man_macro_offset(
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    origin: crate::mandoc::layout::SourceIndent,
+) {
+    formatter.row_presentation.parent =
+        i32::try_from(origin.physical_basic_units()).unwrap_or(i32::MAX);
+    formatter.row_presentation.offset_shift = 0;
 }

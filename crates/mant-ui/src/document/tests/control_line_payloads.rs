@@ -1,4 +1,4 @@
-//! Device alignment is omitted, but native captured rows remain exact.
+//! Viewport alignment preserves exact captured native hard rows.
 use super::*;
 
 #[test]

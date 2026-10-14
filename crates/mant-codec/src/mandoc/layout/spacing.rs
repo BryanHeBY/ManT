@@ -29,9 +29,15 @@ pub(in crate::mandoc) fn execute_man_paragraph_spacing(
     // man_term.c::print_bvspace() calls term_vspace() once for every PD row.
     // term_vspace() first consumes the skipvsp debt left by a negative .sp;
     // the layout hint receives only rows that actually remain visible.
-    formatter
+    let rows = formatter
         .execution
-        .resolve_vertical_space(i32::from(paragraph_distance))
+        .resolve_vertical_space(i32::from(paragraph_distance));
+    if rows > 0 {
+        // Each actual term_vspace endline consumes ti. A skipvsp-cancelled
+        // row does not; the following macro pre separately assigns offset.
+        formatter.row_presentation.endline();
+    }
+    rows
 }
 
 impl crate::mandoc::LoweringContext<'_> {

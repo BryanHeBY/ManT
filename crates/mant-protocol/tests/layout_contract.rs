@@ -1,6 +1,69 @@
 use mant_ir::LayoutHint;
 
 #[test]
+fn all_inline_owners_preserve_row_presentation_in_the_current_golden_wire() {
+    use mant_ir::{Block, TextAlignment};
+    let original = include_str!("../../../tests/contracts/row-presentation-v0.13.json");
+    let query: mant_protocol::QueryBundle = serde_json::from_str(original).unwrap();
+    let wire = serde_json::to_string(&query).unwrap();
+    let restored: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
+    assert_eq!(restored, query);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&wire).unwrap(),
+        serde_json::from_str::<serde_json::Value>(original).unwrap()
+    );
+    let document = query.document.unwrap();
+    let Block::Paragraph {
+        inline_layout,
+        children,
+        ..
+    } = &document.blocks[0]
+    else {
+        panic!("paragraph fixture");
+    };
+    assert_eq!(inline_layout.row_layout(0).alignment, TextAlignment::Center);
+    assert_eq!(inline_layout.row_layout(0).first_line_indent_columns, 4);
+    assert_eq!(mant_ir::inline_plain_text(children), "Paragraph\n尾行");
+    let Block::Preformatted {
+        inline_layout,
+        children,
+        ..
+    } = &document.blocks[1]
+    else {
+        panic!("literal fixture");
+    };
+    assert_eq!(inline_layout.row_layout(0).alignment, TextAlignment::Right);
+    assert_eq!(inline_layout.row_layout(0).indent_columns, -2);
+    assert_eq!(mant_ir::inline_plain_text(children), "Literal\n尾行");
+    let Block::DefinitionList { items, .. } = &document.blocks[2] else {
+        panic!("definition fixture");
+    };
+    let term = &items[0].terms[0];
+    assert_eq!(
+        term.inline_layout.row_layout(0).alignment,
+        TextAlignment::Right
+    );
+    assert_eq!(mant_ir::inline_plain_text(term.as_slice()), "Term\n尾行");
+    for (heading, text) in [
+        (document.heading.as_ref().unwrap(), "Title\n尾行"),
+        (&document.sections[0].heading, "Heading\n尾行"),
+    ] {
+        assert_eq!(
+            heading.inline_layout.row_layout(0).alignment,
+            TextAlignment::Center
+        );
+        assert_eq!(
+            heading
+                .inline_layout
+                .row_layout(0)
+                .first_line_indent_columns,
+            4
+        );
+        assert_eq!(heading.plain_text(), text);
+    }
+}
+
+#[test]
 fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
     use mant_ir::DefinitionLayout;
     let layout: DefinitionLayout = serde_json::from_value(serde_json::json!({
@@ -31,7 +94,7 @@ fn definition_body_geometry_round_trips_independently_of_run_in_policy() {
 }
 
 #[test]
-fn definition_rows_round_trip_through_actual_v0_12_query_json() {
+fn definition_rows_round_trip_through_actual_current_query_json() {
     use mant_ir::{DefinitionBodyAlignment, HeadBodyRelation};
     for (relation, alignment) in [
         (
@@ -60,9 +123,9 @@ fn definition_rows_round_trip_through_actual_v0_12_query_json() {
         ),
     ] {
         let input = serde_json::json!({
-            "schema":"mant.query/v0.12", "label":"rows",
+            "schema":"mant.query/v0.13", "label":"rows",
             "document":{
-                "schema":"mant.document/v0.12",
+                "schema":"mant.document/v0.13",
                 "producer":{"name":"test","version":"0"},
                 "source":{"format":"mdoc"}, "meta":{}, "sections":[],
                 "blocks":[{"type":"definition-list","items":[{
@@ -84,7 +147,7 @@ fn definition_rows_round_trip_through_actual_v0_12_query_json() {
         let restored: mant_protocol::QueryBundle =
             serde_json::from_str(&serialized).expect("real JSON round trip");
         let serialized: serde_json::Value = serde_json::to_value(restored).unwrap();
-        assert_eq!(serialized["schema"], "mant.query/v0.12");
+        assert_eq!(serialized["schema"], "mant.query/v0.13");
         let item = &serialized["document"]["blocks"][0]["items"][0];
         let restored_relation = item
             .get("headBodyRelation")

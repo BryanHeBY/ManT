@@ -223,6 +223,24 @@ fn sanitize_terminal_meta(meta: &mut DocumentMeta) {
     }
 }
 
+/// Minimal builds have no terminal backend and keep the unknown-width
+/// projection. Optional readers can discover the actual content viewport.
+fn known_terminal_width(output_terminal: bool) -> Option<usize> {
+    if !output_terminal {
+        return None;
+    }
+    #[cfg(any(feature = "tui", feature = "pager"))]
+    {
+        crossterm::terminal::size()
+            .ok()
+            .map(|(width, _)| usize::from(width))
+    }
+    #[cfg(not(any(feature = "tui", feature = "pager")))]
+    {
+        None
+    }
+}
+
 pub(super) fn render_full_query(
     query: &ResolvedContent,
     options: RenderOptions,
@@ -245,9 +263,14 @@ pub(super) fn render_full_query(
                 },
             ))
         }
-        QueryFormat::Text => Ok(mant_render::render_query_text_with(query, |style, text| {
-            super::content::decorate(style, text, options.color)
-        })),
+        QueryFormat::Text => {
+            let decorate = |style, text: &str| super::content::decorate(style, text, options.color);
+            Ok(if let Some(width) = known_terminal_width(output_terminal) {
+                mant_render::render_query_text_at_width(query, width, decorate)
+            } else {
+                mant_render::render_query_text_with(query, decorate)
+            })
+        }
         QueryFormat::Man => {
             let Some(document) = query.document.as_ref() else {
                 return Err(Failure::operational(
@@ -260,7 +283,11 @@ pub(super) fn render_full_query(
                 ));
             }
             let query = terminal_content(query);
-            Ok(mant_render::render_query_man(&query))
+            Ok(if let Some(width) = known_terminal_width(output_terminal) {
+                mant_render::render_query_man_at_width(&query, width)
+            } else {
+                mant_render::render_query_man(&query)
+            })
         }
         QueryFormat::Json => {
             mant_render::render_query_json(query, pretty).map_err(Failure::operational)

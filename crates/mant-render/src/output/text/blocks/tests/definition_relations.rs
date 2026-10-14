@@ -50,6 +50,7 @@ fn definition(
                 row_hints: vec![mant_ir::RowLayoutHint {
                     row: 1,
                     indent_columns: 1,
+                    ..Default::default()
                 }],
             },
             layout,
@@ -62,6 +63,7 @@ fn definition(
                 row_hints: vec![mant_ir::RowLayoutHint {
                     row: 1,
                     indent_columns: 1,
+                    ..Default::default()
                 }],
             },
             layout,
@@ -80,6 +82,7 @@ fn definition(
                         vec![mant_ir::RowLayoutHint {
                             row: 1,
                             indent_columns: 2,
+                            ..Default::default()
                         }]
                     } else {
                         vec![]

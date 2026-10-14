@@ -118,6 +118,7 @@ fn empty_head_prefix_rows_preserve_the_recorded_run_in_body_origin() {
                 }
             };
             let renderer = BlockRenderer {
+                width: None,
                 names: None,
                 locations: None,
                 decorate: &paint,

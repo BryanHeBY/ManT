@@ -570,6 +570,7 @@ fn install_pure_ir_hints(content: &mut ResolvedContent) {
         .map(|(row, indent_columns)| mant_ir::RowLayoutHint {
             row,
             indent_columns,
+            ..Default::default()
         })
         .collect();
 }

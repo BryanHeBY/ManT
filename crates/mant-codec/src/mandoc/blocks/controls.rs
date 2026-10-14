@@ -46,6 +46,9 @@ impl super::BlockLowerer<'_, '_> {
             .state
             .resolve_vertical_space(vertical_space_delta(node));
         self.state.flush_paragraph_for_line_request();
+        if lines > 0 {
+            self.state.formatter.row_presentation.endline();
+        }
         self.state.consume_hanging_first_line();
         if space {
             self.state.output.push(Block::VerticalSpace {
@@ -121,6 +124,7 @@ impl super::BlockLowerer<'_, '_> {
             let lines = self.state.resolve_vertical_space(1);
             self.state.flush_paragraph_for_line_request();
             if lines > 0 {
+                self.state.formatter.row_presentation.endline();
                 self.state.output.push(Block::VerticalSpace {
                     lines,
                     source: source_span(node),
@@ -163,7 +167,7 @@ fn execute_block_control(
             // body origin, including when no text preceded the request.
             state.literal_mode_boundary();
         }
-        BlockControl::PreBreak => state.pre_break_request(),
+        BlockControl::PreBreak => state.temporary_indent(node),
         BlockControl::Spacing => {
             let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
             state.set_spacing(setting.trim());

@@ -252,7 +252,7 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
         .spawn()
         .expect("start outline request");
     let request = serde_json::json!({
-        "schema": "mant.request/v0.12",
+        "schema": "mant.request/v0.13",
         "input": {
             "kind": "file",
             "path": path.to_str().expect("UTF-8 path"),

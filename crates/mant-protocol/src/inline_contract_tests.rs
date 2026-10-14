@@ -1,4 +1,4 @@
-//! One accepted inline body in the unreleased v0.12 contract.
+//! One accepted inline body in the unreleased v0.13 contract.
 
 use crate::QueryBundle;
 use mant_ir::Inline;
@@ -56,9 +56,9 @@ fn accepted_styles_links_and_rows_round_trip_without_a_second_spelling() {
 // Package-local contract construction: no workspace-only include resource.
 pub(super) fn query_fixture() -> serde_json::Value {
     json!({
-        "schema": "mant.query/v0.12", "label": "test",
+        "schema": "mant.query/v0.13", "label": "test",
         "document": {
-            "schema": "mant.document/v0.12",
+            "schema": "mant.document/v0.13",
             "producer": {"name": "mant-native", "version": "0.12.0",
                          "engine": {"name": "libmandoc", "version": "1.14.6"}},
             "source": {"format": "man", "path": "/test.1"},

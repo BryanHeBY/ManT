@@ -10,6 +10,7 @@ pub(in crate::output) fn render_located_blocks<'a>(
     decorate: &'a dyn Fn(TextPresentation, &str) -> String,
 ) -> String {
     blocks::BlockRenderer {
+        width: None,
         names: None,
         locations: Some(locations),
         decorate,
@@ -31,7 +32,18 @@ pub fn render_query_text_with(
     query: &ResolvedContent,
     decorate: impl Fn(TextPresentation, &str) -> String,
 ) -> String {
-    render_query_body_with(query, true, &decorate, true)
+    render_query_body_with(query, true, &decorate, true, None)
+}
+
+/// Render text with viewport-relative alignment at a known content width.
+/// This does not insert device soft wraps; hard rows remain source content.
+#[must_use]
+pub fn render_query_text_at_width(
+    query: &ResolvedContent,
+    width: usize,
+    decorate: impl Fn(TextPresentation, &str) -> String,
+) -> String {
+    render_query_body_with(query, true, &decorate, true, Some(width.min(4096)))
 }
 
 /// Render the manual as `man(1)`-faithful plain text.
@@ -48,8 +60,24 @@ pub fn render_query_man(query: &ResolvedContent) -> String {
     render_query_body(query, false)
 }
 
+/// Render only the manual at a known content width, without terminal styles.
+/// Alignment uses the viewport; authored hard rows and source text are kept.
+#[must_use]
+pub fn render_query_man_at_width(query: &ResolvedContent, width: usize) -> String {
+    if query.document.is_none() {
+        return String::new();
+    }
+    render_query_body_with(
+        query,
+        false,
+        &|_, text| text.to_owned(),
+        false,
+        Some(width.min(4096)),
+    )
+}
+
 fn render_query_body(query: &ResolvedContent, include_tldr: bool) -> String {
-    render_query_body_with(query, include_tldr, &|_, text| text.to_owned(), false)
+    render_query_body_with(query, include_tldr, &|_, text| text.to_owned(), false, None)
 }
 
 fn render_query_body_with(
@@ -57,6 +85,7 @@ fn render_query_body_with(
     include_tldr: bool,
     decorate: &dyn Fn(TextPresentation, &str) -> String,
     styled: bool,
+    width: Option<usize>,
 ) -> String {
     let section = query
         .document
@@ -73,6 +102,7 @@ fn render_query_body_with(
             },
             |heading| {
                 blocks::BlockRenderer {
+                    width,
                     names: None,
                     decorate,
                     locations: None,
@@ -92,8 +122,10 @@ fn render_query_body_with(
         output.push_text(render_tldr_text(tldr).into());
     }
     if let Some(document) = &query.document {
+        let names = styled.then(|| EntryStyleMap::for_document(document));
         let renderer = blocks::BlockRenderer {
-            names: styled.then(|| EntryStyleMap::for_document(document)),
+            width,
+            names: names.as_ref(),
             decorate,
             locations: None,
         };

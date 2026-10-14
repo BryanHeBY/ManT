@@ -14,14 +14,14 @@ use crate::{ContentSelector, NodePath, Producer, coverage::validate_coverage_sum
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum OutlineSchema {
-    /// Version 0.12 of the pre-stable outline protocol.
-    #[serde(rename = "mant.outline/v0.12")]
-    V0Dot12,
+    /// Version 0.13 of the pre-stable outline protocol.
+    #[serde(rename = "mant.outline/v0.13")]
+    V0Dot13,
 }
 
 impl OutlineSchema {
     /// Serialized identifier of the current outline contract.
-    pub const ID: &'static str = "mant.outline/v0.12";
+    pub const ID: &'static str = "mant.outline/v0.13";
 }
 
 /// Semantic entry material included beneath structural outline nodes.
@@ -97,7 +97,7 @@ impl From<OutlineDetail> for EntryProjection {
 /// A block-free tree used to discover selectable query content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:outline:v0.12"))]
+#[schemars(extend("$id" = "urn:mant:outline:v0.13"))]
 pub struct QueryOutline {
     /// Exact response schema discriminator.
     pub schema: OutlineSchema,
@@ -353,20 +353,20 @@ impl OutlineNode {
 /// Exact schema marker for selected query content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExcerptSchema {
-    /// Version 0.12 of the pre-stable excerpt protocol.
-    #[serde(rename = "mant.excerpt/v0.12")]
-    V0Dot12,
+    /// Version 0.13 of the pre-stable excerpt protocol.
+    #[serde(rename = "mant.excerpt/v0.13")]
+    V0Dot13,
 }
 
 impl ExcerptSchema {
     /// Serialized identifier of the current excerpt contract.
-    pub const ID: &'static str = "mant.excerpt/v0.12";
+    pub const ID: &'static str = "mant.excerpt/v0.13";
 }
 
 /// One or more independently selected nodes from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:excerpt:v0.12"))]
+#[schemars(extend("$id" = "urn:mant:excerpt:v0.13"))]
 pub struct QueryExcerpt {
     /// Exact response schema discriminator.
     pub schema: ExcerptSchema,

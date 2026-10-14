@@ -157,10 +157,12 @@ fn table_shared_rows_ignore_body_origin_but_keep_authored_spaces_and_continuatio
                             RowLayoutHint {
                                 row: 0,
                                 indent_columns: 7,
+                                ..Default::default()
                             },
                             RowLayoutHint {
                                 row: 1,
                                 indent_columns: 3,
+                                ..Default::default()
                             },
                         ],
                     };
@@ -193,6 +195,7 @@ fn table_shared_rows_ignore_body_origin_but_keep_authored_spaces_and_continuatio
                         row_hints: vec![RowLayoutHint {
                             row: u32::try_from(tail).unwrap(),
                             indent_columns: 4,
+                            ..Default::default()
                         }],
                     };
                     let mut expected = head.to_owned();
@@ -259,6 +262,7 @@ fn unoccupied_heads_do_not_consume_the_body_first_row_hint() {
         inline_layout.row_hints.push(RowLayoutHint {
             row: 0,
             indent_columns: 7,
+            ..Default::default()
         });
         let block = wrap(
             definition(head, HeadBodyRelation::joined(), vec![body]),
@@ -300,6 +304,7 @@ fn an_authored_empty_body_can_keep_the_shared_open_row_for_the_next_cell() {
             .push(RowLayoutHint {
                 row: 1,
                 indent_columns: 4,
+                ..Default::default()
             });
         let mut block = wrap(definition, "table");
         let Block::Table { rows, .. } = &mut block else {

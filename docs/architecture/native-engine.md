@@ -352,7 +352,7 @@ page-local jumps, prose that resembles a manual name, and physical paths from
 silently changing the documents searched by an agent or frontend.
 
 At a structured integration boundary, `mant-protocol::DocumentResponse` adds
-the exact `mant.document/v0.12` discriminator and producer metadata. `mant.query/v0.12`
+the exact `mant.document/v0.13` discriminator and producer metadata. `mant.query/v0.13`
 combines an optional document response with an optional tldr quick reference
 while preserving their different origins and licences.
 

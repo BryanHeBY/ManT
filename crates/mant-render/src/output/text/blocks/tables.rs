@@ -49,11 +49,19 @@ impl BlockRenderer<'_> {
         if !preferences.widths.is_empty() {
             return self.declared_column_flow(rows, preferences, origin);
         }
+        // Intrinsic cell preparation precedes placement. A page viewport is
+        // not a cell viewport: alignment padding must not enlarge measured
+        // content or change the table's hard-row placement decisions.
+        let cell_renderer = BlockRenderer {
+            width: None,
+            ..*self
+        };
         let (physical_rows, completed) = super::super::super::table::projected_table_rows(
             rows,
             preferences.gap_columns,
             origin,
-            |cell| self.cell_block_flow(&cell.blocks, 0).finish_cell(),
+            self.width,
+            |cell| cell_renderer.cell_block_flow(&cell.blocks, 0).finish_cell(),
         );
         let value = LayoutText::join(physical_rows.iter().cloned(), "\n");
         if physical_rows.is_empty() {
@@ -92,6 +100,10 @@ impl BlockRenderer<'_> {
             return self.stacked_table_flow(rows, preferences.gap_columns, origin, false);
         }
         let mut output = Flow::default();
+        let cell_renderer = BlockRenderer {
+            width: None,
+            ..*self
+        };
         for row in rows {
             if mant_ir::table_row_is_navigation_only(row) {
                 continue;
@@ -106,8 +118,10 @@ impl BlockRenderer<'_> {
             let mut cells = Vec::with_capacity(row.cells.len());
             let mut widths = Vec::with_capacity(row.cells.len());
             for cell in &row.cells {
-                let prepared =
-                    PreparedCell::new(self.cell_block_flow(&cell.blocks, 0), cell.break_after);
+                let prepared = PreparedCell::new(
+                    cell_renderer.cell_block_flow(&cell.blocks, 0),
+                    cell.break_after,
+                );
                 widths.push(prepared.widths());
                 cells.push(prepared);
             }
@@ -119,7 +133,30 @@ impl BlockRenderer<'_> {
             let placements = columns.place_at(&widths, origin).filter(|placements| {
                 mant_ir::geometry::table_column_origins_fit(&bounds, placements, origin)
             });
-            output.extend(Self::placed_column_row(placements, cells, &widths, origin));
+            let ends = (0..cells.len())
+                .map(|column| {
+                    (column + 1 < cells.len())
+                        .then(|| columns.field_end(column))
+                        .flatten()
+                        .map(|end| {
+                            if column < preferences.widths.len() {
+                                end.saturating_sub(usize::from(preferences.gap_columns))
+                            } else {
+                                end
+                            }
+                        })
+                })
+                .collect::<Vec<_>>();
+            output.extend(Self::placed_column_row(
+                placements,
+                cells,
+                &widths,
+                origin,
+                &ends,
+                usize::from(preferences.gap_columns),
+                self.width
+                    .map(|width| width.saturating_sub(padding(origin))),
+            ));
         }
         output
     }
@@ -129,23 +166,41 @@ impl BlockRenderer<'_> {
         cells: Vec<PreparedCell>,
         widths: &[Vec<mant_ir::geometry::ColumnFieldWidth>],
         origin: i32,
+        ends: &[Option<usize>],
+        gap: usize,
+        viewport: Option<usize>,
     ) -> Flow {
         let mut output = Flow::default();
         let Some(placements) = placements else {
             // Reuse each prepared cell receipt exactly once, preserving
             // its open/completed tail and all decoration on empty rows.
-            return Self::stacked_column_row(cells, origin);
+            return Self::stacked_column_row(cells, origin, viewport);
         };
         let mut lines = Vec::new();
         for pieces in placements {
             let mut line = LayoutText::default();
             let mut visible = 0_usize;
-            for piece in pieces {
+            for (index, piece) in pieces.iter().enumerate() {
                 line.push_plain(&" ".repeat(piece.column.saturating_sub(visible)));
-                line.append(&cells[piece.cell].lines[piece.line]);
+                let area = viewport.map(|width| {
+                    let end = ends
+                        .get(piece.cell)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(width)
+                        .min(width);
+                    let end = pieces
+                        .get(index + 1)
+                        .map_or(end, |next| end.min(next.column.saturating_sub(gap)));
+                    end.saturating_sub(piece.column)
+                });
+                let content = cells[piece.cell].lines[piece.line]
+                    .clone()
+                    .position_alignments(area);
                 visible = piece
                     .column
-                    .saturating_add(widths[piece.cell][piece.line].output);
+                    .saturating_add(mant_ir::geometry::text_width(&content.visible));
+                line.append(&content);
             }
             lines.push(line);
         }
@@ -276,21 +331,39 @@ impl BlockRenderer<'_> {
     /// A fallback selected only by column topology still has independent
     /// cell budgets. Reuse its original physical receipts and tail policy.
     fn independent_stacked_row(&self, cells: &[mant_ir::TableCell], origin: i32) -> Flow {
+        // Topology has already selected stacking, so this area's width is
+        // known before each cell's single visit. Late placement fallback
+        // instead reuses its prepared, unaligned intrinsic cell receipts.
+        let cell_renderer = BlockRenderer {
+            width: None,
+            ..*self
+        };
         Self::stacked_column_row(
-            cells
-                .iter()
-                .map(|cell| PreparedCell::new(self.stacked_cell_flow(cell, 0), cell.break_after)),
+            cells.iter().map(|cell| {
+                PreparedCell::new(cell_renderer.stacked_cell_flow(cell, 0), cell.break_after)
+            }),
             origin,
+            self.width
+                .map(|width| width.saturating_sub(padding(origin))),
         )
     }
 
     /// Both early topology fallback and late placement fallback consume the
     /// same receipt. No subsequent decision revisits the cell's source tree.
-    fn stacked_column_row(cells: impl IntoIterator<Item = PreparedCell>, origin: i32) -> Flow {
+    fn stacked_column_row(
+        cells: impl IntoIterator<Item = PreparedCell>,
+        origin: i32,
+        viewport: Option<usize>,
+    ) -> Flow {
         let mut lines = Vec::new();
         let mut open = false;
         let mut completed = false;
-        for cell in cells {
+        for mut cell in cells {
+            cell.lines = cell
+                .lines
+                .into_iter()
+                .map(|row| row.position_alignments(viewport))
+                .collect();
             if !cell.has_physical_rows && !cell.break_after {
                 continue;
             }

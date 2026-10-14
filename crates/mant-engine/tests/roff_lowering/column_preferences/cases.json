@@ -3327,16 +3327,18 @@
         "A\nC\nD",
         "B"
       ],
-      "reading_policy": "ti-numeric-device-geometry-retired-hard-rows-preserved",
+      "reading_policy": "ti-row-origins-retained-outdent-preserves-source-column-order",
       "cli_rows": [
         "     A",
-        "     C",
-        "     D           B"
+        "   C",
+        "   D",
+        "     B"
       ],
       "ui_rows_78": [
         "        A",
-        "        C",
-        "        D           B"
+        "      C",
+        "      D",
+        "        B"
       ],
       "linked": false,
       "stop_heading": "NEXT"
@@ -3471,16 +3473,16 @@
         "A\nC\nD",
         "B"
       ],
-      "reading_policy": "ti-numeric-device-geometry-retired-hard-rows-preserved",
+      "reading_policy": "ti-row-origins-retained-within-declared-column-slots",
       "cli_rows": [
         "     A",
-        "     C",
-        "     D           B"
+        "       C",
+        "       D         B"
       ],
       "ui_rows_78": [
         "        A",
-        "        C",
-        "        D           B"
+        "          C",
+        "          D         B"
       ],
       "linked": false,
       "stop_heading": "NEXT"

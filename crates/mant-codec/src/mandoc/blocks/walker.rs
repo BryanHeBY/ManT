@@ -72,6 +72,7 @@ impl BlockLowerer<'_, '_> {
                     previous_is_sy,
                 },
             );
+            self.finish_node_execution(node);
             if reference_body && let Some(punctuation) = reference_field_post(nodes, index) {
                 self.push_generated_container_event(node, crate::mandoc::containers::Event::Tight);
                 self.push_generated_container_event(
@@ -92,6 +93,23 @@ impl BlockLowerer<'_, '_> {
             if !synopsis::transparent_synopsis_predecessor(node) {
                 synopsis_previous = Some(node);
             }
+        }
+    }
+
+    fn finish_node_execution(&mut self, node: &Node) {
+        let Some((first_id, origin)) = self.first_body_post else {
+            return;
+        };
+        if node.id != first_id {
+            return;
+        }
+        self.first_body_post = None;
+        if node.flags.no_fill && reaches_man_node_out(node) {
+            // man_term.c::print_man_node(out): the first HP BODY child
+            // closes its real row, then assigns offset=rmargin. Roff,
+            // empty TEXT, comments, equations and tables returned earlier.
+            self.state.finish_native_structural_row();
+            self.state.set_source_indent(origin);
         }
     }
 
@@ -174,7 +192,10 @@ impl BlockLowerer<'_, '_> {
             }
         }
         if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Br)) {
-            self.state.hard_break();
+            // roff_term_pre_br consumes the live native field before its
+            // BRIND/NOBREAK update; a projection-only hard break loses the
+            // late accepted HEAD presentation receipt.
+            self.state.pre_break_request();
         } else if participates_in_inline_flow(node) {
             self.push_inline_node(node, next);
         } else {
@@ -411,5 +432,16 @@ impl BlockLowerer<'_, '_> {
         if was_no_fill && !self.state.formatter.no_fill {
             self.state.formatter.clear_trailing_literal_row();
         }
+    }
+}
+
+/// Native dispatch result, independent of whether Rust emitted any Inline.
+fn reaches_man_node_out(node: &Node) -> bool {
+    match node.kind {
+        libmandoc_rs::NodeKind::Text => node.text.as_ref().is_some_and(|text| !text.is_empty()),
+        libmandoc_rs::NodeKind::Comment
+        | libmandoc_rs::NodeKind::Equation
+        | libmandoc_rs::NodeKind::Table => false,
+        _ => matches!(node.macro_token.as_ref(), Some(Man(_))),
     }
 }

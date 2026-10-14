@@ -66,6 +66,7 @@ fn navigation_table_rows_preserve_physical_empty_row_counters() {
                         }
                     };
                     let renderer = BlockRenderer {
+                        width: None,
                         names: None,
                         locations: None,
                         decorate: &paint,
@@ -109,6 +110,7 @@ fn hard_row_origins_compose_for_paragraph_and_literal_rows() {
                 row_hints: vec![mant_ir::RowLayoutHint {
                     row: 1,
                     indent_columns: 6,
+                    ..Default::default()
                 }],
             },
             layout: LayoutHint::default(),
@@ -121,6 +123,7 @@ fn hard_row_origins_compose_for_paragraph_and_literal_rows() {
                 row_hints: vec![mant_ir::RowLayoutHint {
                     row: 1,
                     indent_columns: 6,
+                    ..Default::default()
                 }],
             },
             layout: LayoutHint::default(),

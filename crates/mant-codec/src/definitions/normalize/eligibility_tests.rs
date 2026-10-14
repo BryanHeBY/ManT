@@ -184,6 +184,7 @@ fn normalization_moves_original_styled_content_and_source_without_flattening() {
             row_hints: vec![mant_ir::RowLayoutHint {
                 row: 1,
                 indent_columns: 2,
+                ..Default::default()
             }],
         },
         children: vec![
@@ -207,6 +208,7 @@ fn normalization_moves_original_styled_content_and_source_without_flattening() {
         row_hints: vec![mant_ir::RowLayoutHint {
             row: 0,
             indent_columns: -2,
+            ..Default::default()
         }],
     };
     let mut blocks = vec![

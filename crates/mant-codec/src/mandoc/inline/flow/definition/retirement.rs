@@ -26,6 +26,48 @@ struct PlainFlushUnit {
     output_start: usize,
 }
 
+/// Bind resolved layout to accepted source cells before output edits retire
+/// their stable owner coordinates. An IR drain is not this native flush.
+fn retire_plain_presentation(
+    execution: &mut super::super::InlineExecutionState,
+    nodes: &mut Vec<Inline>,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    passes: &[super::super::field_buffer::FillPass],
+    output_start: usize,
+) {
+    let offset = execution
+        .definition
+        .as_ref()
+        .map_or(0, |state| state.field_offset_units);
+    let mut presentation = execution.row_presentation;
+    let mut start = 0;
+    let mut row_presentations = Vec::new();
+    for pass in passes {
+        if let Some(receipt) = super::super::presentation::pass_receipt(
+            buffer,
+            anchors,
+            start,
+            pass.end,
+            presentation.hint_at(execution.text_alignment, offset),
+        ) {
+            row_presentations.push(receipt);
+        }
+        start = pass.end;
+        presentation.endline_at(offset);
+    }
+    // Even nbr=0 reaches the ordinary tail endline over this nonempty
+    // plain buffer (term.c:143-146,250-253). The absent-buffer early return
+    // in retirement never reaches this helper or consumes a pending ti.
+    presentation.endline_at(offset);
+    execution.row_presentation = presentation;
+    super::super::output::row_origins::project_row_presentations(
+        nodes,
+        &row_presentations,
+        output_start,
+    );
+}
+
 impl InlineBuilder {
     /// The plain-flow analogue of `project_definition_field_receipt()`
     /// (`term_flushln` over the shared `tcol->buf`, term.c:233-237 reached
@@ -84,6 +126,7 @@ impl InlineBuilder {
         let passes = match &receipt {
             FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => passes,
         };
+        retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
         let empty_rows = completed_empty_plain_passes(
             &buffer,
             passes,

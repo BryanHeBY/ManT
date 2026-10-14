@@ -67,6 +67,7 @@ pub(super) fn nested(depth: usize) -> Block {
 
 pub(super) fn renderer(decorate: &dyn Fn(TextPresentation, &str) -> String) -> BlockRenderer<'_> {
     BlockRenderer {
+        width: None,
         names: None,
         locations: None,
         decorate,

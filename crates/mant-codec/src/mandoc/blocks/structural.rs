@@ -26,6 +26,20 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
 }
 
 impl StructuralLowerer<'_, '_, '_> {
+    fn execute_mdoc_block_spacing(&mut self, node: &Node, has_predecessor: bool) -> u16 {
+        if !has_predecessor || node.compact || self.formatter.execution.has_column_output_scope() {
+            return 0;
+        }
+        // mdoc_term.c::print_bvspace first term_newlns in the active owner;
+        // its following term_vspace is a real backend endline, unlike the
+        // layout hint eventually attached to the detached display body.
+        let rows = self.formatter.execution.resolve_vertical_space(1);
+        if rows > 0 {
+            self.formatter.row_presentation.endline();
+        }
+        rows
+    }
+
     fn has_paragraph_predecessor(&self) -> bool {
         self.paragraph_predecessor || !self.output.is_empty()
     }
@@ -58,6 +72,11 @@ impl StructuralLowerer<'_, '_, '_> {
         next: Option<&Node>,
         table_embedding: Option<&TableEmbedding>,
     ) {
+        let geometry = self
+            .formatter
+            .execution
+            .definition_geometry_checkpoint(node);
+        let presentation_parent = self.formatter.row_presentation.parent;
         let scoped_body = if matches!(
             node.macro_token.as_ref(),
             Some(Mdoc(MdocMacro::Bl | MdocMacro::Rs))
@@ -80,6 +99,15 @@ impl StructuralLowerer<'_, '_, '_> {
             && let Some(saved) = self.context.scope_posts.exit_body(body.id)
         {
             self.formatter.font.pop_scope(saved);
+        }
+        if geometry.is_some() {
+            // print_mdoc_node restores its entry offset after the real post;
+            // source scopes restore the canonical parent and correction,
+            // while ascii_endline owns the independent ti register.
+            self.formatter
+                .execution
+                .restore_definition_geometry(geometry);
+            self.formatter.row_presentation.parent = presentation_parent;
         }
     }
 
@@ -130,6 +158,11 @@ impl StructuralLowerer<'_, '_, '_> {
             }
             Some(Mdoc(MdocMacro::Bd | MdocMacro::D1 | MdocMacro::Dl)) => {
                 let has_predecessor = self.has_paragraph_predecessor();
+                let spacing = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
+                    self.execute_mdoc_block_spacing(node, has_predecessor)
+                } else {
+                    0
+                };
                 let mut nested = preformatted_blocks(
                     node,
                     self.context,
@@ -142,25 +175,17 @@ impl StructuralLowerer<'_, '_, '_> {
                     has_predecessor,
                     self.formatter,
                 );
-                if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
-                    && has_predecessor
-                    && !node.compact
-                    // The shared column driver already executed native
-                    // print_bvspace against the live field, including its
-                    // completed-row receipt. IR spacing is not a second
-                    // execution of that request.
-                    && !self.formatter.execution.has_column_output_scope()
-                {
+                if spacing > 0 {
                     if nested.is_empty() {
                         // Even an empty display executes its own vertical
                         // request. Do not lose it merely because no literal
                         // leaf exists to carry a layout hint.
                         nested.push(Block::VerticalSpace {
-                            lines: 1,
+                            lines: spacing,
                             source: source_span(node),
                         });
                     } else {
-                        add_leading_spacing(&mut nested, 1);
+                        add_leading_spacing(&mut nested, spacing);
                     }
                 }
                 self.output.extend(nested);
@@ -217,6 +242,8 @@ impl StructuralLowerer<'_, '_, '_> {
         self.formatter.font.man_text_boundary(); // HEAD pre
         self.formatter.font.man_text_boundary(); // HEAD post
         self.formatter.font.man_text_boundary(); // BODY pre
+        // pre_HP(BODY) assigns mt->offset after BLOCK print_bvspace.
+        super::reset_man_macro_offset(self.formatter, self.indent_columns);
         let mut lowerer = super::BlockLowerer::new(
             self.context,
             self.indent_columns,
@@ -225,12 +252,19 @@ impl StructuralLowerer<'_, '_, '_> {
             Vec::new(),
             std::mem::take(self.formatter),
         );
-        if !children.is_empty() {
-            lowerer.state.start_hanging(self.context.offset_indent(
+        if let Some(first) = children.first() {
+            let continuation_origin = self.context.offset_indent(
                 node,
                 self.indent_columns,
                 *self.definition_hanging_width,
-            ));
+            );
+            if lowerer.state.formatter.no_fill || first.flags.no_fill {
+                // print_man_node(out) belongs to this exact first BODY
+                // child, not the first text row produced by a later child.
+                lowerer.first_body_post = Some((first.id, continuation_origin));
+            } else {
+                lowerer.state.start_hanging(continuation_origin);
+            }
         }
         let next_owner = next.filter(|next| {
             next.kind == NodeKind::Block
@@ -279,7 +313,7 @@ impl StructuralLowerer<'_, '_, '_> {
             Some(Man(ManMacro::Hp)) => self.lower_man_hanging_paragraph(node, next),
             Some(Mdoc(MdocMacro::Bd)) if node.display_kind == Some(DisplayKind::Filled) => {
                 let has_predecessor = self.has_paragraph_predecessor();
-                let spacing_before = u16::from(has_predecessor && !node.compact);
+                let spacing_before = self.execute_mdoc_block_spacing(node, has_predecessor);
                 let nested = super::lower_scope(
                     first_part_children(node, NodeKind::Body),
                     self.context,
@@ -306,6 +340,9 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.formatter.font.man_text_boundary(); // HEAD pre
                 self.formatter.font.man_text_boundary(); // HEAD post
                 self.formatter.font.man_text_boundary(); // BODY pre
+                // pre_RS(BODY) replaces the offset derived from mt->offset,
+                // after BLOCK term_newln; a preceding ti is not that base.
+                super::reset_man_macro_offset(self.formatter, self.indent_columns);
                 let continues_item = self.man_list_state.is_active();
                 let output = if continues_item {
                     Vec::new()

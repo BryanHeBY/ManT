@@ -23,6 +23,7 @@ fn open_head_rows_apply_hints_after_body_composition_for_plain_and_ansi() {
                                 row_hints: vec![RowLayoutHint {
                                     row: u32::try_from(last_row).unwrap(),
                                     indent_columns: correction,
+                                    ..Default::default()
                                 }],
                             },
                         }],
@@ -79,6 +80,7 @@ fn open_head_rows_apply_hints_after_body_composition_for_plain_and_ansi() {
                             }
                         };
                         let renderer = BlockRenderer {
+                            width: None,
                             names: None,
                             locations: None,
                             decorate: &paint,

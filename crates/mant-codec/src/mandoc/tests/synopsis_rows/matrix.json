@@ -1,0 +1,181 @@
+{
+  "oracle": {
+    "source": "mandoc-cvs-20261013T025419Z",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "expectations_from_product": false
+  },
+  "cases": [
+    {
+      "id": "man-before-sy",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH SYNOPSIS\n.ti +4n\n.SY call\narg\n.YS\nAFTER\n.SH END\nEND\n",
+      "source_sha256": "d97405c18043063c966dd930997e56e0c3bb970f7f84f7add8d01ef34f136d69",
+      "native_columns": {
+        "call": 5,
+        "arg": 10,
+        "AFTER": 5
+      },
+      "native_rows": {
+        "ascii": [
+          "",
+          "     call arg",
+          "     AFTER"
+        ],
+        "utf8": [
+          "",
+          "     call arg",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-inside-sy",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH SYNOPSIS\n.SY call\n.ti +4n\narg\n.YS\nAFTER\n.SH END\nEND\n",
+      "source_sha256": "e67e9d50f81596677c365f7b29294c335b7e66f73be3e0763acdd9be494619be",
+      "native_columns": {
+        "call": 5,
+        "arg": 14,
+        "AFTER": 5
+      },
+      "native_rows": {
+        "ascii": [
+          "     call",
+          "              arg",
+          "     AFTER"
+        ],
+        "utf8": [
+          "     call",
+          "              arg",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-broken-sy",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH SYNOPSIS\n.SY call\narg\n.br\n.ti +4n\nnext\n.YS\nAFTER\n.SH END\nEND\n",
+      "source_sha256": "8cfd9b6264b6c02542bd2c400163500f2eeb7f6630e9bb7216df47054516c548",
+      "native_columns": {
+        "call": 5,
+        "arg": 10,
+        "next": 14,
+        "AFTER": 5
+      },
+      "native_rows": {
+        "ascii": [
+          "     call arg",
+          "              next",
+          "     AFTER"
+        ],
+        "utf8": [
+          "     call arg",
+          "              next",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "mdoc-before-nm",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd probe\n.Sh SYNOPSIS\n.ti +4n\n.Nm call\n.Ar arg\nAFTER\n.Sh END\nEND\n",
+      "source_sha256": "00f072cb7b33741938ee1662957a645413788cb70175b8452900bd4f41a57d6b",
+      "native_columns": {
+        "call": 9,
+        "arg": 14,
+        "AFTER": 18
+      },
+      "native_rows": {
+        "ascii": [
+          "         call arg AFTER"
+        ],
+        "utf8": [
+          "         call arg AFTER"
+        ]
+      }
+    },
+    {
+      "id": "mdoc-inside-nm",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd probe\n.Sh SYNOPSIS\n.Nm call\n.ti +4n\n.Ar arg\nAFTER\n.Sh END\nEND\n",
+      "source_sha256": "6ba4e7ae69fa00b2b26e7caddc09f2cc89621a1f6fa51f113357d9abaef50904",
+      "native_columns": {
+        "call": 5,
+        "arg": 14,
+        "AFTER": 18
+      },
+      "native_rows": {
+        "ascii": [
+          "     call",
+          "              arg AFTER"
+        ],
+        "utf8": [
+          "     call",
+          "              arg AFTER"
+        ]
+      }
+    },
+    {
+      "id": "mdoc-broken-nm",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd probe\n.Sh SYNOPSIS\n.Nm call\n.Ar arg\n.br\n.ti +4n\n.Ar next\nAFTER\n.Sh END\nEND\n",
+      "source_sha256": "25f7b5db30a391324d3ac9afe839e11c5523d361159951f2fa4428baaf6a17ea",
+      "native_columns": {
+        "call": 5,
+        "arg": 10,
+        "next": 14,
+        "AFTER": 19
+      },
+      "native_rows": {
+        "ascii": [
+          "     call arg",
+          "              next AFTER"
+        ],
+        "utf8": [
+          "     call arg",
+          "              next AFTER"
+        ]
+      }
+    },
+    {
+      "id": "man-nofill-synopsis",
+      "source": ".TH PROBE 7 \"October 14, 2026\"\n.SH NAME\nprobe \\- probe\n.SH SYNOPSIS\n.nf\n.SY call\narg\n.YS\n.fi\nAFTER\n.SH END\nEND\n",
+      "source_sha256": "26592543d553eff50d06a4731a5880327adacef2c55c4bb0b72f803cd2394608",
+      "native_columns": {
+        "call": 5,
+        "arg": 10,
+        "AFTER": 5
+      },
+      "native_rows": {
+        "ascii": [
+          "",
+          "     call",
+          "          arg",
+          "     AFTER"
+        ],
+        "utf8": [
+          "",
+          "     call",
+          "          arg",
+          "     AFTER"
+        ]
+      }
+    },
+    {
+      "id": "mdoc-nofill-synopsis",
+      "source": ".Dd October 14, 2026\n.Dt PROBE 7\n.Os\n.Sh NAME\n.Nm probe\n.Nd probe\n.Sh SYNOPSIS\n.nf\n.Nm call\n.Ar arg\n.fi\nAFTER\n.Sh END\nEND\n",
+      "source_sha256": "c2c03fe6365c6d008cb53d3b6dc075d1459e1a99e330e7fffce314d454bae70e",
+      "native_columns": {
+        "call": 5,
+        "arg": 10,
+        "AFTER": 10
+      },
+      "native_rows": {
+        "ascii": [
+          "     call",
+          "          arg",
+          "          AFTER"
+        ],
+        "utf8": [
+          "     call",
+          "          arg",
+          "          AFTER"
+        ]
+      }
+    }
+  ]
+}

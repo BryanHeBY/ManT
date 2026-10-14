@@ -16,7 +16,19 @@ fn rendered(mode: &str, body: &str) -> String {
         mant_ir::validate_document(query.document.as_ref().unwrap()).len(),
         0
     );
-    render_query_text(&query)
+    let text = render_query_text(&query);
+    if mode == "SY" {
+        // The sixteen exact SY variants reran pristine before this change.
+        // pre_SY(BODY) uses term_strlen("probe") + 1 = six cells. These
+        // assertions measure executed rows, not that separately tested
+        // origin: remove exactly its generated prefix, retaining every row.
+        text.lines()
+            .map(|row| row.strip_prefix("      ").unwrap_or(row))
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        text
+    }
 }
 
 #[test]

@@ -20,10 +20,12 @@ fn evidence() -> ExplanationEvidence {
                 RowLayoutHint {
                     row: 1,
                     indent_columns: correction,
+                    ..Default::default()
                 },
                 RowLayoutHint {
                     row: 2,
                     indent_columns: -2,
+                    ..Default::default()
                 },
             ],
         },

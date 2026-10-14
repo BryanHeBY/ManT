@@ -34,7 +34,10 @@ impl DocumentBuilder<'_> {
                 && let Some(gap) = marker_run_in_gap(
                     indent,
                     marker_width,
-                    compose_origin(layout.indent_columns, inline_layout.row_indent(0)),
+                    inline_layout
+                        .row_layout(0)
+                        .resolve(layout.indent_columns, layout.indent_columns)
+                        .first_visual_origin,
                 )
             {
                 self.run_in_list_paragraph(&item.blocks[0], marker, indent, marker_width, gap);
@@ -120,9 +123,10 @@ impl DocumentBuilder<'_> {
             theme::style(theme::StyleRole::ListMarker),
         )];
         spans.push(Span::raw(" ".repeat(gap)));
+        let first_hint = first.row_hint();
+        let prefix_scalars = spans_scalars(&spans);
         spans.extend(first.spans);
-        let origins =
-            mant_ir::resolve_row_origins(content_indent, continuation_indent, first.indent_columns);
+        let origins = first_hint.resolve(content_indent, continuation_indent);
         let base_gap = marker_run_in_gap(indent, marker_width, layout.indent_columns).unwrap_or(0);
         let mut logical =
             LogicalLine::hanging(padding(indent), padding(origins.continuation_origin), spans)
@@ -134,6 +138,8 @@ impl DocumentBuilder<'_> {
         logical.continuation_layout_padding = logical
             .continuation_indent
             .saturating_sub(padding(continuation_indent));
+        logical.alignment = first.alignment;
+        logical.alignment_prefix_scalars = prefix_scalars;
         if gap > base_gap {
             logical
                 .layout_scalars
@@ -142,10 +148,10 @@ impl DocumentBuilder<'_> {
         self.push(logical);
         for line in inline_lines.into_iter().skip(1) {
             self.push(
-                LogicalLine::row_geometry(
+                LogicalLine::row_presentation(
                     continuation_indent,
                     continuation_indent,
-                    line.indent_columns,
+                    line.row_hint(),
                     line.spans,
                 )
                 .with_links(line.links)
@@ -228,7 +234,7 @@ impl DocumentBuilder<'_> {
         let last = head_lines.pop().unwrap_or_default();
         for line in head_lines {
             self.push(
-                LogicalLine::row_geometry(indent, indent, line.indent_columns, line.spans)
+                LogicalLine::row_presentation(indent, indent, line.row_hint(), line.spans)
                     .with_links(line.links)
                     .with_reference_marks(line.reference_marks),
             );
@@ -272,10 +278,10 @@ impl DocumentBuilder<'_> {
             self.push(logical);
             for line in description_lines.into_iter().skip(1) {
                 self.push(
-                    LogicalLine::row_geometry(
+                    LogicalLine::row_presentation(
                         continuation_indent,
                         continuation_indent,
-                        line.indent_columns,
+                        line.row_hint(),
                         line.spans,
                     )
                     .wrap_mode(wrap_mode)
@@ -290,7 +296,7 @@ impl DocumentBuilder<'_> {
             );
         } else {
             self.push(
-                LogicalLine::row_geometry(indent, indent, last.indent_columns, last.spans)
+                LogicalLine::row_presentation(indent, indent, last.row_hint(), last.spans)
                     .with_links(last.links)
                     .with_reference_marks(last.reference_marks),
             );
@@ -306,7 +312,9 @@ impl DocumentBuilder<'_> {
         layout: &mant_ir::LayoutHint,
         wrap_mode: WrapMode,
     ) -> (LogicalLine, i32) {
-        let term_origin = compose_origin(indent, head.indent_columns);
+        let head_hint = head.row_hint();
+        let body_hint = body.row_hint();
+        let term_origin = head_hint.resolve(indent, indent).first_visual_origin;
         let mut term_spans = head.spans;
         let mut term_links = head.links;
         let mut term_marks = head.reference_marks;
@@ -320,7 +328,9 @@ impl DocumentBuilder<'_> {
             &item.layout,
             term_origin,
             term_width,
-            compose_origin(first_indent, body.indent_columns),
+            body_hint
+                .resolve(first_indent, continuation_indent)
+                .first_visual_origin,
         );
         term_spans.push(Span::raw(" ".repeat(gap)));
         let description_scalar_offset = spans_scalars(&term_spans);
@@ -330,8 +340,7 @@ impl DocumentBuilder<'_> {
             description_scalar_offset,
         ));
         term_spans.extend(body.spans);
-        let origins =
-            mant_ir::resolve_row_origins(first_indent, continuation_indent, body.indent_columns);
+        let origins = body_hint.resolve(first_indent, continuation_indent);
         let base_gap = mant_ir::geometry::definition_body_gap(
             item.head_body_relation,
             &item.layout,
@@ -348,6 +357,11 @@ impl DocumentBuilder<'_> {
         .with_links(term_links)
         .with_reference_marks(term_marks);
         logical.layout_padding = logical.indent.saturating_sub(padding(indent));
+        logical.alignment = if head.alignment == mant_ir::TextAlignment::Left {
+            body.alignment
+        } else {
+            head.alignment
+        };
         logical.continuation_layout_padding = logical
             .continuation_indent
             .saturating_sub(padding(continuation_indent));

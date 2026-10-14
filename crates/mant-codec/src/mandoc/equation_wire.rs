@@ -334,10 +334,10 @@ fn wire_probe(document: &Document) -> bool {
         version: &'static str,
     }
     let query = ProbeQuery {
-        schema: "mant.query/v0.12",
+        schema: "mant.query/v0.13",
         label: "",
         document: ProbeDocument {
-            schema: "mant.document/v0.12",
+            schema: "mant.document/v0.13",
             producer: ProbeProducer {
                 name: "mant",
                 version: "0.12.0",

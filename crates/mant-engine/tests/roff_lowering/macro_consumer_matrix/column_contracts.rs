@@ -68,7 +68,7 @@ fn assert_reparsed_column_cell(query: &ResolvedContent, expected: &str) {
 #[test]
 fn nested_definition_cells_keep_content_order_and_entry_identity() {
     // Native termp_it_pre/term_flushln reuse the device field for the nested
-    // tag, producing A x / B / blank / C. The reviewed v0.12 responsive
+    // tag, producing A x / B / blank / C. The reviewed v0.13 responsive
     // contract preserves the definition owner and its actually closed HEAD
     // row, while the outer source-order cell origin puts A on its own row.
     // A prior native viscol must not disappear merely because IR drained.

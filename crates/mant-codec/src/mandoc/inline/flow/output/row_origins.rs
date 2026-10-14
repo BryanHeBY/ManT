@@ -4,8 +4,42 @@ use std::collections::BTreeMap;
 
 use super::{INTERNAL_FIELD_PREFIX, INTERNAL_FIELD_WORD, INTERNAL_ROW_ORIGIN, Inline};
 
-const NEXT_ROW: &str = "\0mant:row-layout:next:";
-const CURRENT_ROW: &str = "\0mant:row-layout:current:";
+pub(super) const NEXT_ROW: &str = "\0mant:row-layout:next:";
+pub(super) const CURRENT_ROW: &str = "\0mant:row-layout:current:";
+pub(super) const PRESENTATION: &str = "\0mant:row-layout:presentation:";
+
+pub(in crate::mandoc::inline::flow) fn project_row_presentations(
+    nodes: &mut Vec<Inline>,
+    receipts: &[(String, usize, mant_ir::RowLayoutHint)],
+    output_start: usize,
+) {
+    if receipts.is_empty() {
+        return;
+    }
+    let mut positions = BTreeMap::<String, Vec<(usize, NativePosition, bool)>>::new();
+    for (owner, scalar, hint) in receipts {
+        positions.entry(owner.clone()).or_default().push((
+            *scalar,
+            NativePosition::Presentation(*hint),
+            // An accepted encoded graph can still live in BACKAFTER's
+            // pending glyph rather than an IR Text scalar. Its receipt
+            // belongs at that source owner before the glyph settles.
+            true,
+        ));
+    }
+    for values in positions.values_mut() {
+        values.sort_by_key(|(scalar, _, _)| *scalar);
+    }
+    let mut cursor = OriginCursor {
+        positions: &positions,
+        owner: None,
+        scalar: 0,
+        next: 0,
+        previous: BTreeMap::new(),
+    };
+    let pending = nodes.split_off(output_start.min(nodes.len()));
+    nodes.extend(cursor.project(pending));
+}
 
 /// A mutation of the active top-level output vector. Native cell/scalar
 /// receipts have a different coordinate space and must never use this map.
@@ -76,7 +110,8 @@ pub(in crate::mandoc::inline::flow) fn set_last_break_origin(
 
 pub(in crate::mandoc::inline::flow) fn is_layout_carrier(node: &Inline) -> bool {
     matches!(node, Inline::Anchor { id, .. }
-        if id.as_str().starts_with(NEXT_ROW) || id.as_str().starts_with(CURRENT_ROW))
+        if id.as_str().starts_with(NEXT_ROW) || id.as_str().starts_with(CURRENT_ROW)
+            || id.as_str().starts_with(PRESENTATION))
 }
 
 /// Keep layout next to its executed delimiter until the final owner drains.
@@ -141,66 +176,7 @@ pub(in crate::mandoc) fn take_definition_term_breaks(nodes: &mut Vec<Inline>) ->
 }
 
 pub(in crate::mandoc) fn take_inline_layout(nodes: &mut Vec<Inline>) -> mant_ir::InlineLayout {
-    fn take(
-        nodes: &mut Vec<Inline>,
-        row: &mut u32,
-        pending: &mut Option<i32>,
-        hints: &mut BTreeMap<u32, i32>,
-    ) {
-        nodes.retain_mut(|node| {
-            if super::is_term_alternative(node) {
-                return false;
-            }
-            if let Inline::Anchor { id, .. } = node {
-                if let Some(value) = id.as_str().strip_prefix(NEXT_ROW) {
-                    *pending = value.parse().ok();
-                    return false;
-                }
-                if let Some(value) = id.as_str().strip_prefix(CURRENT_ROW) {
-                    if let Ok(value) = value.parse() {
-                        hints.insert(*row, value);
-                    }
-                    return false;
-                }
-            }
-            match node {
-                Inline::LineBreak {} => {
-                    *row = row.saturating_add(1);
-                    if let Some(value) = pending.take() {
-                        hints.insert(*row, value);
-                    }
-                }
-                Inline::Text { value }
-                | Inline::Code { value }
-                | Inline::Equation { value, .. } => {
-                    if !value.is_empty() {
-                        *pending = None;
-                    }
-                    *row = row.saturating_add(
-                        u32::try_from(value.bytes().filter(|c| *c == b'\n').count())
-                            .unwrap_or(u32::MAX),
-                    );
-                }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => take(children, row, pending, hints),
-                Inline::Anchor { .. } => {}
-            }
-            true
-        });
-    }
-    let mut hints = BTreeMap::new();
-    take(nodes, &mut 0, &mut None, &mut hints);
-    mant_ir::InlineLayout {
-        row_hints: hints
-            .into_iter()
-            .filter(|(_, indent)| *indent != 0)
-            .map(|(row, indent_columns)| mant_ir::RowLayoutHint {
-                row,
-                indent_columns,
-            })
-            .collect(),
-    }
+    super::row_layout::take(nodes)
 }
 
 pub(in crate::mandoc::inline::flow) fn project_native_positions(
@@ -320,6 +296,7 @@ fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<u16>) {
 enum NativePosition {
     RowOrigin(i32),
     FieldPadding(usize),
+    Presentation(mant_ir::RowLayoutHint),
 }
 
 struct OriginCursor<'a> {
@@ -400,6 +377,12 @@ impl OriginCursor<'_> {
             }
             output.push(node);
         }
+        // A final accepted native graph can be waiting in BACKAFTER at the
+        // end of this IR owner. No following marker or Text exists yet to
+        // discharge its layout receipt before the glyph settles.
+        if self.has_unprojected_graph_here() {
+            self.emit_here(&mut output);
+        }
         output
     }
 
@@ -434,6 +417,17 @@ impl OriginCursor<'_> {
                 NativePosition::FieldPadding(cells) => Inline::Text {
                     value: " ".repeat(*cells),
                 },
+                NativePosition::Presentation(hint) => {
+                    let alignment = match hint.alignment {
+                        mant_ir::TextAlignment::Left => 0,
+                        mant_ir::TextAlignment::Center => 1,
+                        mant_ir::TextAlignment::Right => 2,
+                    };
+                    Inline::anchor(format!(
+                        "{PRESENTATION}{alignment}:{}:{}",
+                        hint.first_line_indent_columns, hint.indent_columns
+                    ))
+                }
             });
             self.next += 1;
         }

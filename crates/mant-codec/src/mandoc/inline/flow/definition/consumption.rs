@@ -397,6 +397,39 @@ impl InlineBuilder {
     /// A real `term_flushln()` commits this input field irreversibly. Keep
     /// device viscol/minbl and the enclosing BODY lifetime, but retire its
     /// cells and projection ranges before another formatter word executes.
+    pub(in crate::mandoc::inline::flow) fn project_consumed_row_layout(
+        &mut self,
+        device: &NativeFieldDevice,
+    ) {
+        self.execution.row_presentation = device.presentation;
+        self.execution.partial_row_alignment |= device.partial_alignment;
+        if let Some(receiver) = self
+            .execution
+            .definition
+            .as_ref()
+            .and_then(|state| state.deferred_head_layout.as_ref())
+        {
+            receiver.accept(&device.row_presentations);
+            if let Some(receipt) = &device.cleared_alignment {
+                receiver.accept(std::slice::from_ref(receipt));
+            }
+        }
+        if let Some(receipt) = &device.cleared_alignment {
+            // One bounded old-owner metadata revocation per device row.
+            // Text rejection still uses the new field's output_start.
+            super::super::output::row_origins::project_row_presentations(
+                &mut self.nodes,
+                std::slice::from_ref(receipt),
+                0,
+            );
+        }
+        super::super::output::row_origins::project_row_presentations(
+            &mut self.nodes,
+            &device.row_presentations,
+            device.output_start,
+        );
+    }
+
     pub(in crate::mandoc::inline::flow) fn retire_native_field_with_device(
         &mut self,
         device: Option<&NativeFieldDevice>,
@@ -412,6 +445,7 @@ impl InlineBuilder {
         #[cfg(test)]
         super::control_trace::retired();
         if let Some(device) = device {
+            self.project_consumed_row_layout(device);
             let mut output_start = device.output_start;
             self.retire_unprinted_no_break_separator(
                 device.emission,

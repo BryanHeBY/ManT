@@ -38,6 +38,7 @@ fn code_state_crosses_authored_styles_links_anchors_and_structural_breaks() {
         row_hints: vec![mant_ir::RowLayoutHint {
             row: 1,
             indent_columns: 7,
+            ..Default::default()
         }],
     };
     let lines = crate::document::inline::styled_reference_content_lines(

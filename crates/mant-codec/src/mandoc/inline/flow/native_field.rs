@@ -98,7 +98,7 @@ impl FieldFlags {
         Self::new(&[], 0)
     }
 
-    const fn new(flags: &[FieldFlag], trailspace: u8) -> Self {
+    pub(in crate::mandoc) const fn new(flags: &[FieldFlag], trailspace: u8) -> Self {
         let mut bits = 0;
         let mut index = 0;
         while index < flags.len() {

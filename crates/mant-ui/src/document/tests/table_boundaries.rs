@@ -214,6 +214,7 @@ fn closed_anchor_hint_rows_keep_json_navigation_and_empty_source_copy() {
                         row_hints: vec![mant_ir::RowLayoutHint {
                             row: 0,
                             indent_columns: 12,
+                            ..Default::default()
                         }],
                     },
                     layout: LayoutHint::default(),

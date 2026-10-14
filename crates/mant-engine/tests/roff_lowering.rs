@@ -52,6 +52,8 @@ mod hanging_owners;
 mod inline_boundaries;
 #[path = "roff_lowering/link_seams.rs"]
 mod link_seams;
+#[path = "roff_lowering/row_presentation.rs"]
+mod row_presentation;
 #[path = "roff_lowering/table_definitions.rs"]
 mod table_definitions;
 

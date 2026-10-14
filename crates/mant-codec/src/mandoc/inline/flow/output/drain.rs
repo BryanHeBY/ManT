@@ -333,6 +333,17 @@ impl InlineBuilder {
     ) -> (Vec<Inline>, PreservedInlineState, InlineExecutionState) {
         let _ = self.commit_definition_row_origin();
         self.project_definition_owner_prefix();
+        let deferred_head = self
+            .execution
+            .row_presentation
+            .has_pending_layout(self.execution.text_alignment);
+        if deferred_head && let Some(definition) = &mut self.execution.definition {
+            definition.deferred_head_layout = Some(
+                super::super::definition::head_presentation::DeferredHeadLayout::new(
+                    &definition.field_word_anchors,
+                ),
+            );
+        }
         if let Some(definition) = &mut self.execution.definition {
             definition.row.retire_row_origin();
             definition.field_buffer.detach_projection_owner();
@@ -370,8 +381,11 @@ impl InlineBuilder {
         // br/sp at the end of an inset HEAD closed its last physical row;
         // keep that break in the detached term so the BODY cannot run in.
         self.execution.word_end_break = WordEndBreak::Clear;
-        let output = self.drain_ir_nodes();
-        if let Some(field) = &mut state.definition_field {
+        // Run-in HEAD post does not flush (mdoc_term.c:939-945). Keep
+        // only its private word coordinates until the real BODY flush can
+        // return accepted layout to this already detached semantic owner.
+        let output = self.drain_ir_nodes_with_native_owners(deferred_head);
+        if !deferred_head && let Some(field) = &mut state.definition_field {
             field.state.field_word_anchors.clear();
         }
         // The plain flush unit carries across the scope return like the
@@ -408,6 +422,10 @@ impl InlineBuilder {
     }
 
     fn drain_ir_nodes(&mut self) -> Vec<Inline> {
+        self.drain_ir_nodes_with_native_owners(false)
+    }
+
+    fn drain_ir_nodes_with_native_owners(&mut self, preserve_owners: bool) -> Vec<Inline> {
         if let Some(definition) = &mut self.execution.definition {
             definition.row.retire_row_origin();
         }
@@ -416,7 +434,11 @@ impl InlineBuilder {
         if let Some(capture) = &self.head_operand_capture {
             super::projection::prepare_inline_output(&mut nodes);
             capture.borrow_mut().observe_accepted_output(&nodes);
-            super::projection::strip_native_projection_markers(&mut nodes);
+            if !preserve_owners {
+                super::projection::strip_native_projection_markers(&mut nodes);
+            }
+        } else if preserve_owners {
+            super::projection::prepare_inline_output(&mut nodes);
         } else {
             finalize_inline_output(&mut nodes);
         }
