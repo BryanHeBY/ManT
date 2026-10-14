@@ -1,5 +1,20 @@
 # Repository agent rules
 
+## Document IR responsibility
+
+- Treat document IR as enhanced Markdown after source execution, shared by
+  TUI, CLI, Markdown export and future HTML/UI consumers, not as a native AST,
+  formatter instruction stream or fixed-width terminal snapshot.
+- Resolve macro/mode/register/counter and native execution effects in the
+  producer. IR retains complete content owners, semantic relationships and
+  resolved layout facts; consumers own theme colors, surfaces and viewport
+  wrapping. Do not add UI stitching hints to compensate for fragmented output.
+- Review new fields, nesting and names against the responsibility checklist in
+  `crates/mant-ir/README.md`. Preserve the distinctions carried by existing
+  compatibility fields before removing them; do not merely rename execution
+  state or flatten semantic structures. Verify round trips and all consumers,
+  and leave frozen protocol families unchanged.
+
 ## Roff and mandoc compatibility
 
 - Treat `crates/libmandoc-rs/vendor/mandoc-cvs-20261013T025419Z` as the pinned primary

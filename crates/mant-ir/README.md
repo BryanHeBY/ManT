@@ -10,6 +10,72 @@ or render a document without depending on the parser that produced it. It does
 not perform source lookup, parsing, rendering, filesystem access, or process
 protocol handling.
 
+## Responsibility boundary
+
+The document IR is **enhanced Markdown after source execution**: a complete
+content tree with source-neutral semantics and resolved layout facts. It is
+neither a source AST nor an instruction stream, and it is not a screenshot of
+one terminal at one width. TUI, CLI text, Markdown export and future HTML/UI
+consumers must be able to consume the same document without understanding
+roff macros, parser node flags, registers, or native formatter lifetimes.
+
+The boundary has three layers:
+
+| Layer | Owns |
+| --- | --- |
+| Source producer (`mant-codec`, source AST in `libmandoc-rs`) | Macro expansion, fill modes, fonts, counters, pending rows, native execution and recovery decisions |
+| Document IR | Complete paragraphs/code blocks, lists/definitions, tables, mathematical structure, links, anchors, semantic annotations and resolved spacing/origin/alignment facts |
+| Consumer | Theme colors, code accents, surfaces, viewport wrapping, clipping, responsive table layout and format-specific export syntax |
+
+A resolved layout fact describes the result, not how to obtain it. Relative
+indentation, hard-row alignment, explicit blank rows and shared definition
+head/body boundaries are legitimate extensions. Source requests, device
+advance operations, parser argument counters, pending execution receipts and
+UI-only background-joining instructions are not. Provenance and diagnostics
+can describe the source or a reduction, but must not become rendering commands.
+
+Preserve complete content owners. One continuous literal display should become
+one `Preformatted`, with internal blank lines, styled inlines and owner-local
+row layout. A paragraph request or indentation change inside that display does
+not itself create a second code block. Independent displays and real nested
+structures retain their boundaries. Consumers must not reconstruct the owner
+by joining neighboring fragments or inspecting the original source. Do not
+flatten tables, definitions or links merely to make their terminal background
+continuous.
+
+Normalized content and optional layout remain distinct. A width-dependent
+consumer may translate supported layout facts to its own presentation (for
+example, HTML alignment or monospace-relative indentation); it must disclose or
+document unsupported preferences rather than inventing lost source text.
+Markdown is a checked projection and need not round-trip every enhancement.
+No format may reinterpret layout as semantic ownership or change copy/search
+text to simulate padding.
+
+### Review checklist for model changes
+
+- Can a Markdown or custom producer construct the same fact without a native
+  parser, and can an HTML consumer interpret it without a roff emulator?
+- Is the value content, a semantic relationship, resolved layout, provenance,
+  or a diagnostic? If it describes a source operation or a pending transition,
+  resolve it in the producer instead.
+- Does the authoritative tree already express it? Do not add mutable duplicate
+  text, parser child counters or a second pre-wrapped body.
+- Are naming, nesting, defaults and validation defined in document terms?
+  Preserve meaningful distinctions with explicit structures, not native
+  sentinels or overloaded flags.
+- Verify original text, ownership, links/anchors, row layout and diagnostics
+  through JSON round trips and each current consumer. A terminal screenshot
+  alone is not model acceptance evidence.
+- Change an unreleased wire family deliberately and document migration. Never
+  rewrite a frozen schema or weaken an assertion to hide a representation loss.
+
+Existing native-compatibility fields are not precedents for new execution
+fields. In particular, equation parser arity counters require normalization
+into mathematical groups/sequences, and the table `advance_limit_columns`
+device bound requires a separately verified migration. Removing a field must
+preserve the actual distinction it currently carries; a renamed execution
+field is not a normalized result.
+
 ## Model at a glance
 
 ```text

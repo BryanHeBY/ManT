@@ -27,6 +27,36 @@ Shared IR geometry and original text coordinates remain independent of rendering
 styles, actual terminal wrapping and viewport state. Reusable link addresses
 come from `LinkTarget::to_uri`, not a renderer's human-readable label.
 
+### Responsibility Boundary
+
+The IR is enhanced Markdown after source execution, not a roff AST, a replayable
+formatter or a fixed-width terminal screenshot. TUI, CLI text, Markdown export
+and future HTML/UI output share authoritative content and semantics. Producers
+execute macros, fill/font transitions, counters and native row effects; the IR
+retains complete content owners and resolved layout results. Consumers choose
+colors, surfaces, actual wrapping, clipping and export syntax.
+
+One continuous literal display belongs in one `preformatted` block. Internal
+paragraph spacing becomes blank content rows; row-origin changes belong in
+`inlineLayout`. Independent displays and real list/definition/table boundaries
+remain distinct. A consumer must not reassemble a display from execution
+fragments or receive a background-continuation command.
+
+Signed indentation, alignment, hard breaks, resolved spacing and head/body
+relations are results, not parser state. A future HTML renderer can translate
+these preferences without understanding `.nf`, `.P`, `term_newln` or registers.
+Provenance and diagnostics may retain source information, but cannot direct
+rendering. Markdown may simplify unsupported layout; it must retain content and
+respect its documented projection limits.
+
+For every field, distinguish content, semantics, layout, provenance and
+diagnostics from source execution. Prefer explicit document relationships over
+parser counters, native sentinels, duplicate bodies or overloaded flags. Test
+the normalized tree and current consumers, not only a terminal image. Existing
+compatibility constraints need evidence-backed migrations and must not justify
+new execution fields. The detailed model review checklist lives in the
+[crate guide](https://github.com/BryanHeBY/ManT/blob/main/crates/mant-ir/README.md#responsibility-boundary).
+
 ## Document
 
 `Document` is the root of a normalized manual body. It contains:
