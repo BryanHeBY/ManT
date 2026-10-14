@@ -16,6 +16,7 @@ pub(crate) enum StyleRole {
     Equation,
     Unsupported,
     Metadata,
+    PaneFocus,
     Parameter,
     Command,
     Environment,

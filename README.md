@@ -119,22 +119,39 @@ Parameter, command and configuration-key signatures accent structural brackets,
 assignment signs and candidate separators in both the body and complete Outline
 labels, while keeping name colors, original text and source emphasis intact.
 
-- `j` / `k` or arrow keys move through visible nodes.
-- `h` / `l` collapse and expand branches.
-- `d` / `u` or page keys scroll the document.
+- The reader starts with **Content** keyboard focus. `Tab` / `Shift+Tab`
+  switches between Content and the visible Outline without moving the page;
+  clicking a region also focuses it. The English bottom hint identifies the
+  focused region, while `▶ OUTLINE` marks active Outline focus independently
+  of the selected reading location. Hidden/narrow sidebars are not focus targets.
+- `j` / `k` or Up/Down scroll Content one row, or select visible nodes with
+  Outline focus. `h` / `l` or Left/Right collapse/expand only with Outline focus.
+- `g` / `G` or Home/End go to the first/last position in the focused region.
+- `d` / `u` and `Ctrl+d` / `Ctrl+u` scroll Content by half the viewport.
+  PageDown/PageUp scroll by a viewport with one row of overlap. With Content
+  focus, Space or `f` pages down and `b` pages up; Space folds a node only with
+  Outline focus. Enter activates a node only with Outline focus.
+- Uppercase `B` toggles the Outline sidebar in either reading region; lowercase
+  `b` never toggles it. `B` means the input character, not a required Shift modifier:
+  Caps Lock can also produce it. Search fields accept `b`/`B` as ordinary text.
 - `Ctrl+O` opens a live finder for registered Markdown and native manuals.
 - The upper-right tab strip keeps successfully opened documents in first-open
   order; click a tab to return to its last selected node.
 - `Alt+Left` / `Alt+Right` move backward and forward through document jumps.
-- `Ctrl+F` or `/` opens confirmed full-page search.
+- `Ctrl+F` or `/` opens live full-page search. Typing previews highlights without
+  moving the page or opening another document; Enter confirms and reveals a hit.
 - `Ctrl+G` searches the current Outline's complete titles, entry names/forms
   and document-reference labels/targets, including folded nodes. Both scopes
   share the bottom search field but keep separate queries and editing positions.
-  Confirm with Enter, then use Up/Down or Enter to cycle results. Outline counts
+  Both fields update after a short typing pause; Up/Down selects live results
+  and confirms the draft, while Enter confirms and then cycles results. Outline counts
   are per node; generated `Entries`/`Doc Refs` labels are not search results.
 - `n` and `Shift+N` resume the next and previous match in the last confirmed or
   navigated search scope. Outline finding reveals ancestor paths temporarily;
   Escape removes highlighting and retains only the current position's path.
+- Large searches advance in cancellable byte-bounded slices, including within
+  long paragraphs. `searching` means counts are provisional; `partial` discloses
+  result/index limits. Navigation waits for unfinished results before wrapping.
 - Mouse drag selects and immediately copies rendered text as plain text; a
   short confirmation appears after success. `y` or `Ctrl+Shift+C` copies the
   current selection again, as does right-clicking inside the document.
@@ -144,7 +161,9 @@ labels, while keeping name colors, original text and source emphasis intact.
   Navigate, Search, or Help directly. Underlined initials identify these keys.
   Inside a menu, letters or Left/Right switch menus, Up/Down select an item,
   Enter/Space runs it, and Escape/F10 returns to reading or search.
-- `?` opens keyboard help, and `q` quits.
+- `?` opens scrollable keyboard help, and `q` quits. Idle bottom hints adapt to
+  terminal width; errors, search and menu feedback take priority. No first-run
+  marker or keybinding configuration file is created.
 
 The mouse can select and fold outline nodes, follow underlined in-page,
 cross-document, and web/email links, scroll both panes, drag scrollbars, and

@@ -6,6 +6,21 @@ use ratatui::style::{Color, Modifier, Style};
 use super::*;
 
 #[test]
+fn pane_focus_is_customizable_independently_of_selection_and_search() {
+    let mut custom = DEFAULT_THEME.clone();
+    custom.set_style(StyleRole::PaneFocus, Style::new().fg(Color::Red));
+    assert_eq!(custom.style(StyleRole::PaneFocus).fg, Some(Color::Red));
+    assert_eq!(
+        custom.style(StyleRole::TreeFocus),
+        style(StyleRole::TreeFocus)
+    );
+    assert_eq!(
+        custom.interact(Style::new(), InteractionRole::SearchActive),
+        interact(Style::new(), InteractionRole::SearchActive)
+    );
+}
+
+#[test]
 fn every_default_role_has_a_style_and_structural_roles_are_distinct() {
     assert!(
         DEFAULT_THEME

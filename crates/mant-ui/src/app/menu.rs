@@ -146,7 +146,7 @@ const EDIT_MENU: &[MenuEntry] = &[
 const VIEW_MENU: &[MenuEntry] = &[
     MenuEntry {
         label: "Outline Sidebar",
-        shortcut: "",
+        shortcut: "B",
         action: MenuAction::ToggleSidebar,
     },
     MenuEntry {
@@ -189,22 +189,22 @@ const NAVIGATE_MENU: &[MenuEntry] = &[
     },
     MenuEntry {
         label: "Previous Node",
-        shortcut: "↑ / k",
+        shortcut: "↑ / k (Outline)",
         action: MenuAction::Previous,
     },
     MenuEntry {
         label: "Next Node",
-        shortcut: "↓ / j",
+        shortcut: "↓ / j (Outline)",
         action: MenuAction::Next,
     },
     MenuEntry {
         label: "Parent Node",
-        shortcut: "← / h",
+        shortcut: "← / h (Outline)",
         action: MenuAction::Parent,
     },
     MenuEntry {
         label: "First Child Node",
-        shortcut: "→ / l",
+        shortcut: "→ / l (Outline)",
         action: MenuAction::FirstChild,
     },
     MenuEntry {
@@ -288,11 +288,20 @@ impl App {
     pub(super) fn handle_overlay_key(&mut self, key: KeyEvent) {
         match self.overlay {
             Overlay::None => {}
-            Overlay::Help => {
-                if matches!(key.code, KeyCode::Esc | KeyCode::Char('?')) {
-                    self.overlay = Overlay::None;
+            Overlay::Help => match key.code {
+                KeyCode::Esc | KeyCode::Char('?') => self.overlay = Overlay::None,
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.help_scroll = self.help_scroll.saturating_add(1);
                 }
-            }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.help_scroll = self.help_scroll.saturating_sub(1);
+                }
+                KeyCode::PageDown => self.help_scroll = self.help_scroll.saturating_add(8),
+                KeyCode::PageUp => self.help_scroll = self.help_scroll.saturating_sub(8),
+                KeyCode::Home | KeyCode::Char('g') => self.help_scroll = 0,
+                KeyCode::End | KeyCode::Char('G') => self.help_scroll = usize::MAX,
+                _ => {}
+            },
             Overlay::DocumentFinder => self.handle_finder_key(key),
             Overlay::References(_) => self.handle_reference_key(key),
             Overlay::Menu { id, cursor } => match key.code {
@@ -451,7 +460,7 @@ impl App {
             }
             MenuAction::Back => self.navigate_history(true),
             MenuAction::Forward => self.navigate_history(false),
-            MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
+            MenuAction::ToggleSidebar => self.toggle_sidebar(),
             MenuAction::ToggleFullOutlineLabels => {
                 let row = self.selected_navigation_viewport_row();
                 self.full_outline_labels = !self.full_outline_labels;
@@ -490,6 +499,7 @@ impl App {
             MenuAction::FindNext => self.select_last_search_relative(1),
             MenuAction::FindPrevious => self.select_last_search_relative(-1),
             MenuAction::Help => {
+                self.help_scroll = 0;
                 self.close_search();
                 self.overlay = Overlay::Help;
             }
@@ -561,7 +571,7 @@ impl App {
             Overlay::None => {}
             Overlay::Menu { id, cursor } => self.draw_menu_overlay(frame, id, cursor),
             Overlay::DocumentFinder => self.draw_document_finder(frame),
-            Overlay::Help => Self::draw_help(frame),
+            Overlay::Help => self.draw_help(frame),
             Overlay::References(_) => self.draw_reference_chooser(frame),
         }
     }
@@ -622,7 +632,7 @@ impl App {
         }
     }
 
-    fn draw_help(frame: &mut Frame<'_>) {
+    fn draw_help(&mut self, frame: &mut Frame<'_>) {
         let lines = vec![
             Line::styled(
                 "Keyboard Shortcuts",
@@ -630,14 +640,16 @@ impl App {
                     .fg(theme::BLUE)
                     .add_modifier(Modifier::BOLD),
             ),
+            Line::raw("q            quit"),
             Line::raw("F10 / Alt+M/E/V/N/S/H  open a menu"),
             Line::raw("M/E/V/N/S/H  switch menus while a menu is open"),
             Line::raw("←/→ menus · ↑/↓ items · Enter/Space run"),
             Line::raw("Esc / F10    close menu and return"),
-            Line::raw("↑/↓ or j/k  select outline node"),
-            Line::raw("←/→ or h/l  move through the outline tree"),
-            Line::raw("Enter        open reference / fold node"),
-            Line::raw("Space        fold or unfold selected node"),
+            Line::raw("Tab / Shift+Tab  switch Outline / Content focus"),
+            Line::raw("↑/↓ or j/k  select node / scroll focused Content"),
+            Line::raw("←/→ or h/l  move through the focused Outline"),
+            Line::raw("Enter (Outline)  open reference / fold node"),
+            Line::raw("Space (Outline)  fold or unfold selected node"),
             Line::raw("Ctrl+O       find and open a document"),
             Line::raw("top tabs     switch opened documents"),
             Line::raw("Alt+←/→      back / forward"),
@@ -650,11 +662,13 @@ impl App {
             Line::raw("Shift+Y      copy selected reference target"),
             Line::raw("O            choose associated reference to open"),
             Line::raw("r (chooser)  reveal occurrence source; Esc returns"),
-            Line::raw("d/u          scroll content by ten rows"),
-            Line::raw("b            toggle sidebar"),
-            Line::raw("q            quit"),
+            Line::raw("g/G · Home/End  first/last in focused region"),
+            Line::raw("d/u · Ctrl+d/u  scroll Content by half a viewport"),
+            Line::raw("Space/f/b (Content) · PgDn/PgUp  page down/up"),
+            Line::raw("search       live highlights; Enter/↑/↓ select"),
+            Line::raw("B (uppercase)  toggle Outline sidebar"),
         ];
-        let width = 58.min(frame.area().width.saturating_sub(2));
+        let width = 76.min(frame.area().width.saturating_sub(2));
         let height = u16::try_from(lines.len())
             .unwrap_or(u16::MAX)
             .saturating_add(5)
@@ -680,13 +694,22 @@ impl App {
         frame.render_widget(block, area);
         let [body, footer] =
             Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
+        self.help_scroll = self
+            .help_scroll
+            .min(lines.len().saturating_sub(usize::from(body.height)));
         frame.render_widget(
-            Paragraph::new(lines).style(Style::default().fg(theme::TEXT).bg(theme::BASE)),
+            Paragraph::new(lines)
+                .scroll((u16::try_from(self.help_scroll).unwrap_or_default(), 0))
+                .style(Style::default().fg(theme::TEXT).bg(theme::BASE)),
             body,
         );
         frame.render_widget(
-            Paragraph::new("Esc or ? closes this window")
-                .style(Style::default().fg(theme::SUBTEXT).bg(theme::BASE)),
+            Paragraph::new(if footer.width >= 55 {
+                "↑/↓ scroll · Esc or ? closes this window"
+            } else {
+                "Esc or ? closes this window"
+            })
+            .style(Style::default().fg(theme::SUBTEXT).bg(theme::BASE)),
             footer,
         );
     }

@@ -8,6 +8,9 @@ use ratatui::text::{Line, Span, Text};
 use super::{RenderedDocument, RenderedSelection, WrappedLine};
 use crate::theme;
 
+mod stream;
+pub(crate) use stream::{MAX_QUERY_BYTES, SearchStream};
+
 /// One exact visual-row range found in a width-dependent document rendering.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedSearchMatch {
@@ -20,6 +23,12 @@ pub struct RenderedSearchMatch {
     pub(super) additional_fragments: Vec<RenderedSearchFragment>,
 }
 
+impl RenderedSearchMatch {
+    pub(crate) fn fragment_count(&self) -> usize {
+        1 + self.additional_fragments.len()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct RenderedSearchFragment {
     pub(super) row: usize,
@@ -29,6 +38,7 @@ pub(super) struct RenderedSearchFragment {
 
 #[derive(Debug, Clone)]
 pub(super) struct RenderedSearchRecord {
+    pub(super) key: (usize, usize),
     pub(super) text: String,
     pub(super) cells: Vec<RenderedSearchSourceCell>,
 }
@@ -41,6 +51,24 @@ pub(super) struct RenderedSearchSourceCell {
 }
 
 impl RenderedDocument {
+    pub(crate) fn search_record_key(&self, index: usize) -> (usize, usize) {
+        self.search_records[index].key
+    }
+    pub(crate) fn search_record_count(&self) -> usize {
+        self.search_records.len()
+    }
+
+    pub(crate) fn search_record_text(&self, index: usize) -> &str {
+        &self.search_records[index].text
+    }
+
+    pub(crate) fn project_search_range(
+        &self,
+        index: usize,
+        range: Range<usize>,
+    ) -> Option<RenderedSearchMatch> {
+        search_match_for_range(&self.search_records[index], range.start, range.end)
+    }
     /// Search visible terminal rows without rebuilding or traversing the IR.
     #[must_use]
     pub fn search(&self, query: &str) -> Vec<RenderedSearchMatch> {
@@ -166,6 +194,7 @@ impl LiteralSearch {
 pub(super) fn search_records_for_lines(
     lines: &[WrappedLine],
     first_row: usize,
+    logical_line: usize,
 ) -> Vec<RenderedSearchRecord> {
     #[derive(Default)]
     struct RecordBuilder {
@@ -198,9 +227,10 @@ pub(super) fn search_records_for_lines(
         }
     }
     records
-        .into_values()
-        .filter_map(|record| {
+        .into_iter()
+        .filter_map(|(group, record)| {
             (!record.text.is_empty()).then_some(RenderedSearchRecord {
+                key: (logical_line, group),
                 text: record.text,
                 cells: record.cells,
             })
@@ -214,10 +244,12 @@ fn search_match_for_range(
     source_end: usize,
 ) -> Option<RenderedSearchMatch> {
     let mut fragments: Vec<RenderedSearchFragment> = Vec::new();
-    for cell in record
+    let first_cell = record
         .cells
+        .partition_point(|cell| cell.source_end <= source_start);
+    for cell in record.cells[first_cell..]
         .iter()
-        .filter(|cell| cell.source_start < source_end && cell.source_end > source_start)
+        .take_while(|cell| cell.source_start < source_end)
     {
         if let Some(last) = fragments.last_mut()
             && last.row == cell.fragment.row

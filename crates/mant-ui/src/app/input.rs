@@ -57,20 +57,26 @@ impl App {
             self.handle_search_key(key);
             return UpdateOutcome::Redraw;
         }
-        if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('f'))
-            || key.code == KeyCode::Char('/')
-        {
+        if key.code == KeyCode::Char('/') {
             self.open_search();
             return UpdateOutcome::Redraw;
         }
         if key.code == KeyCode::Char('?') {
             self.overlay = Overlay::Help;
+            self.help_scroll = 0;
             return UpdateOutcome::Redraw;
         }
-        if key.code == KeyCode::Esc && self.pointer.clear_selection() {
-            return UpdateOutcome::Redraw;
+        if let Some(outcome) = self.reading_key(key) {
+            return outcome;
+        }
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            return UpdateOutcome::Unchanged;
         }
         match key.code {
+            KeyCode::Esc if self.pointer.clear_selection() => {}
             KeyCode::Char('q' | 'Q') => self.quit = true,
             KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.select_last_search_relative(-1);
@@ -83,11 +89,6 @@ impl App {
             KeyCode::Char('l') | KeyCode::Right => self.expand_or_select_child(),
             KeyCode::Enter => self.open_selected_reference(),
             KeyCode::Char(' ') => self.toggle_selected(),
-            KeyCode::PageDown | KeyCode::Char('d') => self.scroll_content(10),
-            KeyCode::PageUp | KeyCode::Char('u') => self.scroll_content(-10),
-            KeyCode::Home => self.jump_content(false),
-            KeyCode::End => self.jump_content(true),
-            KeyCode::Char('b') => self.show_sidebar = !self.show_sidebar,
             KeyCode::Char('y') => self.copy_selection(),
             KeyCode::Char('Y') => self.copy_selected_reference(),
             KeyCode::Char('O') => {
@@ -115,6 +116,7 @@ impl App {
         if let Some(outcome) = self.handle_overlay_mouse(mouse) {
             return outcome;
         }
+        let focus_changed = self.focus_pointer(mouse);
         if let Some(outcome) = self.handle_pointer_control(mouse) {
             return outcome;
         }
@@ -192,6 +194,7 @@ impl App {
                 }
                 UpdateOutcome::Redraw
             }
+            _ if focus_changed => UpdateOutcome::Redraw,
             _ => UpdateOutcome::Unchanged,
         }
     }

@@ -766,16 +766,37 @@ document and history unchanged.
 
 ### Navigation
 
-- `j`, `Down`: Select the next visible node.
-- `k`, `Up`: Select the previous visible node.
-- `h`, `Left`: Collapse the current branch or select its parent.
-- `l`, `Right`: Expand the current branch or select its first child.
-- `Enter`: Open a reference row; on a content row, toggle expansion only.
-- `Space`: Toggle the selected branch without opening a target.
+The reader starts with **Content** keyboard focus. `Tab` and `Shift+Tab` switch
+between Content and the visible Outline without changing the reading position.
+Clicking either region or its scrollbar also focuses it. A hidden sidebar or
+one omitted by narrow-terminal layout is not a focus target. Scrolling still
+synchronizes the selected Outline location after settling, without stealing
+Content focus.
+
+Resize events and sidebar toggles correct an unavailable Outline focus before
+the next draw. Rendering only derives a Content fallback from the current
+layout; it does not overwrite the requested keyboard focus. Embedding hosts
+should deliver Resize events for immediate input-state correction.
+
+- `j`, `Down`: Scroll Content one row, or select the next visible Outline node.
+- `k`, `Up`: Scroll Content one row up, or select the previous visible Outline node.
+- `h`, `Left`: With Outline focus, collapse the branch or select its parent.
+- `l`, `Right`: With Outline focus, expand the branch or select its first child.
+- `g`, `Home`: Go to the beginning of the focused region.
+- `G`, `End`: Go to the end of the focused region.
+- `Enter`: With Outline focus, open a reference row or toggle a content node.
+  It does not activate an Outline node while Content is focused.
+- `Space`: With Outline focus, toggle the selected branch without opening a
+  target; with Content focus, page down.
 - `O`: Open Reference; choose an associated target without changing the content row's Enter behavior.
 - `Shift+Y`: Copy Reference Target; associated rows use a chooser, while a reference row copies its own target.
-- `d`, `PageDown`: Scroll the content down.
-- `u`, `PageUp`: Scroll the content up.
+- `d`/`u`, `Ctrl+d`/`Ctrl+u`: Scroll Content down/up by half its viewport height.
+- `PageDown`, `PageUp`: Scroll Content down/up by a viewport, with one row of overlap.
+- `Space`, `f`: With Content focus, page down.
+- `b`: With Content focus, page up; it never toggles the sidebar.
+- `B`: Toggle the Outline sidebar from either reading region. This is the
+  uppercase character, not a required Shift modifier; Caps Lock input also
+  counts. In search fields, `b` and `B` remain ordinary text.
 - `Ctrl+O`: Open the document finder.
 - `Alt+Left`: Return to the previous document or in-page jump.
 - `Alt+Right`: Move forward after returning.
@@ -837,18 +858,39 @@ terminal accepted it.
 - `Shift+N`: Select the previous confirmed match.
 - `Escape`: Close search and remove match highlighting.
 
-Search runs only after confirmation. Matches stay highlighted while the field
-is open, and the active match uses a stronger background and moves into view.
+Typing previews case-insensitive literal matches after a short pause, without
+moving the page or switching documents. `Up`/`Down` selects live results and
+confirms the draft; `Enter` confirms and reveals a match, then selects the next
+one on subsequent presses. Matches stay highlighted while the field is open,
+and explicit result navigation moves the active match into view.
 Closing the field removes highlighting but retains the confirmed query, so
-`n`, `Shift+N`, and the Search menu can resume navigation without rerunning it.
+`n`, `Shift+N`, and the Search menu can resume navigation. Unconfirmed drafts
+do not replace that query. Opening a field again or resuming an interrupted
+search can restart its bounded scan.
+
+Search-menu next/previous actions also confirm a draft when that field is the
+last active search scope. Opening another modal surface cancels deferred result
+navigation so a background scan cannot jump behind a menu or finder; matching
+may finish without moving the reader.
+
+Large documents are scanned in resumable byte-bounded slices, including inside
+a single long paragraph. `Searching`/`searching` indicates provisional counts,
+not a verified miss. Result navigation waits for the remaining scan before
+wrapping to the opposite end. Query edits, scope switches, field closure and
+document changes retire obsolete work; terminal reflow retires stale cell
+coordinates and remaps results. The existing ordered, pre-resolved document
+scope is retained, but preview scanning never activates another document.
+Page results retain at most 4,096 matches and 32,768 visual fragments, with
+`partial` displayed when a bound is reached. Both search editors accept up to
+4,096 UTF-8 query bytes and disclose rejected input at that limit.
 
 ### Outline Search
 
 - `Ctrl+G`: Open `Find Outline` in the same bottom search field. The Search
   menu also exposes `Find in Outline`; opening it shows the Outline sidebar.
 - `Enter`: Confirm the query; after confirmation, select the next matching node.
-- `Up` / `Down`: Select the previous / next confirmed matching node, wrapping
-  at the ends. `n` / `Shift+N` also navigate confirmed results.
+- `Up` / `Down`: Confirm the draft and select a live matching node. Completed
+  results wrap at the ends; `n` / `Shift+N` also navigate confirmed results.
 - `Escape`: Close the field, remove highlighting and retain the current position.
 
 Outline search is a case-insensitive literal search of the current document,
@@ -859,6 +901,10 @@ Associated heading/entry references match their existing owner node; ordinary
 reference occurrences remain distinct. Selecting a result reveals its source,
 never opens a referenced document or URI. Explicit reference activation is
 still required after leaving search.
+
+Like page search, typing previews matches in cancellable slices without moving
+the selection or revealing new ancestors. Only explicit result navigation
+changes the reading position and temporarily reveals its ancestor path.
 
 Generated `Entries` and `Doc Refs` groups, repeated-target summary groups,
 counts, tree guides and limited-inventory notices do not participate in
@@ -905,6 +951,16 @@ Navigate contains backward/forward history and current-document movement.
   View, Navigate, Search, or Help directly. Each title's initial is underlined.
 - `?`: Show keyboard shortcuts.
 - `q`: Quit.
+
+Idle status hints are English, matching the menus and keyboard help. They name
+the focused region and applicable shortcuts, selecting shorter complete hints
+as the terminal narrows rather than clipping key names. `▶ OUTLINE` and the
+independent pane-focus theme role distinguish keyboard focus from the selected
+reading location. Menus and search own input while open; region indicators are
+subdued while a modal surface owns input. Notices, incomplete-content warnings
+and search/menu feedback take priority over idle hints. No persistent first-run
+marker or keybinding configuration is introduced. Keyboard help scrolls with
+Up/Down, `j`/`k`, page keys and Home/End or `g`/`G`.
 
 While a menu is open, `Left`/`Right` cycle between menus and `Up`/`Down`
 cycle between items. `M`, `E`, `V`, `N`, `S`, and `H` also switch directly

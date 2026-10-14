@@ -124,6 +124,15 @@ fn confirmed_search_moves_across_a_pre_resolved_document_scope() {
         app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
     }
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    for _ in 0..4 {
+        if let Some(deadline) = app.search.deadline {
+            app.tick(deadline);
+        }
+    }
+    assert!(
+        app.search.job.is_none(),
+        "scope preparation and scanning are resumable"
+    );
 
     assert_eq!(app.search.scope_matches.len(), 1);
     assert_eq!(

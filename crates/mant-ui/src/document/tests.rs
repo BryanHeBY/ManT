@@ -430,6 +430,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
         anchor_rows: HashMap::new(),
         links: Vec::new(),
         search_records: vec![RenderedSearchRecord {
+            key: (0, 0),
             text: "İstanbul".to_owned(),
             cells: "İstanbul"
                 .char_indices()

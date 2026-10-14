@@ -6,7 +6,7 @@ pub(super) struct DocumentSession {
     pub(super) document: DocumentView,
     pub(super) content_scroll: usize,
     pub(super) content_render_width: u16,
-    pub(super) rendered_cache: HashMap<u16, RenderedDocument>,
+    pub(super) rendered_cache: HashMap<u16, Arc<RenderedDocument>>,
 }
 impl DocumentSession {
     pub(super) fn new(current_bundle: Arc<ResolvedContent>, document: DocumentView) -> Self {

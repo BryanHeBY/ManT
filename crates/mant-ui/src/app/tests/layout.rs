@@ -141,13 +141,13 @@ fn status_counts_nodes_visible_in_the_folded_outline() {
     terminal
         .draw(|frame| app.draw(frame))
         .expect("initial draw");
-    assert!(terminal.backend().to_string().contains("3 visible nodes"));
+    assert!(terminal.backend().to_string().contains("1/3"));
 
     app.set_selected_index(1);
     app.activate_menu_action(MenuAction::CollapseAll);
     terminal.draw(|frame| app.draw(frame)).expect("folded draw");
     let screen = terminal.backend().to_string();
-    assert!(screen.contains("1 visible nodes"));
+    assert!(screen.contains("1/1"));
     assert_eq!(app.selected, 0, "hidden child selects its visible parent");
 }
 

@@ -195,7 +195,7 @@ fn body_position(buffer: &Buffer, label: &str) -> (u16, u16) {
 
 fn assert_actions(query: &ResolvedContent, label: &str, target: Option<&str>) {
     let mut app = App::new(query);
-    app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('B'), KeyModifiers::NONE));
     let mut terminal = Terminal::new(TestBackend::new(24, 60)).unwrap();
     for content_width in WIDTHS {
         // Sidebar is hidden. The real App reserves two content margins
@@ -304,7 +304,7 @@ fn wrapped_label_fragments(
 
 fn assert_wrapped_link_actions(query: &ResolvedContent, label: &str, target: &str) {
     let mut app = App::new(query);
-    app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('B'), KeyModifiers::NONE));
     let mut terminal = Terminal::new(TestBackend::new(24, 60)).unwrap();
     for width in WIDTHS {
         terminal.backend_mut().resize(width + 4, 60);

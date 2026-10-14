@@ -883,9 +883,11 @@ fn closing_search_removes_highlights_but_retains_navigation() {
     app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     assert_eq!(app.search.matches.len(), 0);
     app.refresh_search(80);
+    app.tick(app.search.deadline.expect("resumable refresh"));
     assert_eq!(app.search.matches.len(), 0);
 
     app.open_search();
+    app.tick(app.search.deadline.expect("new-width search"));
     assert_eq!(app.search.matches.len(), 1);
 }
 
@@ -1174,6 +1176,7 @@ fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections(
     let mut with_tldr = navigation_bundle();
     with_tldr.tldr = tldr_bundle().tldr;
     let mut app = App::new(&with_tldr);
+    app.focus = super::super::focus::ReaderFocus::Outline;
     assert_eq!(
         app.session.document.navigation()[app.selected].kind,
         NavKind::Tldr
@@ -1194,6 +1197,7 @@ fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections(
         source: None,
     }];
     let mut app = App::new(&with_overview);
+    app.focus = super::super::focus::ReaderFocus::Outline;
     assert_eq!(
         app.session.document.navigation()[app.selected].kind,
         NavKind::Root

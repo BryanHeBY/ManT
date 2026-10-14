@@ -4,6 +4,7 @@ use super::*;
 #[test]
 fn semantic_entries_are_revealed_only_after_their_group_expands() {
     let mut app = App::new(&navigation_bundle());
+    app.focus = super::super::focus::ReaderFocus::Outline;
 
     assert_eq!(app.visible_navigation_indices(), vec![0, 1, 3]);
     app.selected = 1;

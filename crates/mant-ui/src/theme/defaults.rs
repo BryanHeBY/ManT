@@ -43,6 +43,10 @@ const fn text(theme: &mut Theme) {
     theme.set_style(Role::Equation, Style::new().fg(YELLOW));
     theme.set_style(Role::Unsupported, Style::new().fg(PEACH));
     theme.set_style(Role::Metadata, Style::new().fg(SUBTEXT));
+    theme.set_style(
+        Role::PaneFocus,
+        Style::new().fg(PEACH).add_modifier(Modifier::BOLD),
+    );
     theme.set_style(Role::Notice, Style::new().fg(YELLOW));
     theme.set_style(
         Role::TldrTitle,

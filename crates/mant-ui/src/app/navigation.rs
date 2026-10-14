@@ -52,7 +52,7 @@ impl App {
             .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+            .or_insert_with(|| std::sync::Arc::new(self.session.document.render(width)));
         let mut selected = None;
         for index in visible {
             let item = &self.session.document.navigation()[index];
@@ -82,7 +82,7 @@ impl App {
             .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+            .or_insert_with(|| std::sync::Arc::new(self.session.document.render(width)));
         if let Some(row) = rendered.anchor_row(&item.target_id) {
             self.session.content_scroll = row;
         }
@@ -94,7 +94,7 @@ impl App {
             .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+            .or_insert_with(|| std::sync::Arc::new(self.session.document.render(width)));
         let document_row = self.session.content_scroll + usize::from(row - self.geometry.content.y);
         let document_column = usize::from(column - self.geometry.content.x);
         let Some(target) = rendered
@@ -167,7 +167,7 @@ impl App {
             .session
             .rendered_cache
             .entry(width)
-            .or_insert_with(|| self.session.document.render(width));
+            .or_insert_with(|| std::sync::Arc::new(self.session.document.render(width)));
         let Some(target_row) = rendered.anchor_row(target) else {
             self.notice = Some(format!("No outline node matches #{target}"));
             return false;
@@ -288,10 +288,6 @@ impl App {
             }
         }
         indices
-    }
-
-    pub(super) fn visible_node_count(&self) -> usize {
-        self.visible_navigation_indices().len()
     }
 
     pub(super) fn select_nearest_visible_ancestor(&mut self) {

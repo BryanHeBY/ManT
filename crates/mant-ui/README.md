@@ -30,7 +30,12 @@ catalog, search, and cross-document interactions without serializing the IR.
   source row; Enter on a reference explicitly opens it while Enter/Space on an
   owner retain folding. `O` opens the reference chooser and Shift+Y copies a
   reference target (choosing first when invoked on an associated owner).
-- Confirmed full-document search with active and inactive match highlighting.
+- Live literal page/Outline search with active and inactive match highlighting.
+  Query edits are debounced and retire obsolete work; a scalar-folded streaming
+  prefix matcher yields even inside a long record. Previewing does not navigate.
+  Enter or result arrows confirm; unfinished scans disclose provisional counts
+  and defer end wrapping. Page results cap matches and visual fragments, while
+  existing Outline text/field bounds remain independent.
 - Current-snapshot Outline finding through `Ctrl+G` and the Search menu.
   Complete labels, entry names/forms and inventoried reference labels/targets
   match independently of folding and truncation; synthetic groups are context,
@@ -43,6 +48,22 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Span-aware table columns and cell-local anchors that retain their exact
   rendered rows through independent wrapping, stacking and nested tables.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
+- Content-first reading focus, with Tab/Shift+Tab and region clicks switching
+  between Content and a visible Outline. `j/k` and arrows act on the focused
+  region; `g/G` and Home/End select its edges. Half/full-page scrolling uses
+  actual viewport height: `d/u` and `Ctrl+d/u` scroll half a page, page keys scroll
+  a full page with one-row overlap, and Content's Space/`f`/`b` page down/up.
+  Outline's Space/Enter retain node actions; Content's Enter does not activate
+  a node. Uppercase-character `B` toggles the sidebar regardless of Shift/Caps
+  Lock provenance; editors and overlays retain their input priority.
+  Passive Outline synchronization never steals focus. Resize events and sidebar
+  changes normalize focus using the shared visibility rule before drawing;
+  frames record dimensions and derive an effective fallback without changing
+  requested focus. Hosts delivering Resize events also correct focus before
+  the next input; hosts drawing directly get the same visual/input fallback.
+  Independent `PaneFocus` styling and width-adaptive English bottom hints keep
+  focus distinct from the selected node; menus, search and notices take priority.
+  Help is scrollable. No persistent first-run state or configurable keymap yet.
 - Keyboard-accessible menus with underlined title initials: `F10` opens the
   first menu and `Alt+M/E/V/N/S/H` opens Manual/Edit/View/Navigate/Search/Help.
   Menu-local letters or Left/Right switch menus, Up/Down selects items,
@@ -75,6 +96,27 @@ history keeps weak provenance instead of retaining every old document body;
 local replay requires the same allocation, otherwise the host reloads the
 address and the reader validates the destination before committing. Tab grouping
 by address is only a display policy, never a revision cache.
+
+A single-page reader's search follows each newly opened snapshot. An explicit
+multi-page scope retains host order and includes at most one additional current
+snapshot; opening many documents does not accumulate an unbounded search scope.
+
+Live search reuses the current viewport's shared immutable rendering instead of
+rebuilding a view for every query. Search records preserve logical phrases across
+soft wraps and retain cell boundaries and generated-padding exclusions. The
+stream matcher returns original UTF-8 byte ranges; projection uses binary-search
+cell lookup. Queries are bounded to 4 KiB; each timer slice charges 8 KiB of
+source/record work before yielding, with a 100 ms typing debounce and 8 ms slice
+wakeup. These are work bounds, not a hard wall-time deadline.
+Preview redraws are coalesced to 50 ms intervals; explicit input/result navigation
+and completed scans redraw immediately. Initial view/layout
+preparation remains the ordinary synchronous renderer; other pre-resolved scope
+snapshots are prepared lazily, with only one extra rendering retained. Width
+changes cancel old cell results and rescan at the new width; current-source
+match ranges retain the active hit where available. Page inventories retain at
+most 4,096 matches and 32,768 fragments. No per-query folded copy of the entire
+document, worker thread or new dependency is needed. Hosts must continue driving
+`tick` and `next_wakeup` while a scan is pending, even without keyboard events.
 
 One private pointer owner retains the live gesture, selection and coalesced
 resize/auto-scroll timers. Replacing or ending a gesture cancels its timers;

@@ -48,8 +48,10 @@ use model::{
 };
 
 pub(crate) use self::outline::{OutlineField, OutlineRecord};
+#[cfg(test)]
 pub(crate) use self::search::LiteralSearch;
 pub use self::search::RenderedSearchMatch;
+pub(crate) use self::search::{MAX_QUERY_BYTES, SearchStream};
 #[cfg(test)]
 use self::search::{RenderedSearchFragment, RenderedSearchSourceCell};
 use self::search::{RenderedSearchRecord, search_records_for_lines};
@@ -398,10 +400,14 @@ impl DocumentView {
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
         let mut anchor_rows = HashMap::new();
 
-        for line in &self.lines {
+        for (logical_line, line) in self.lines.iter().enumerate() {
             logical_rows.push(rows.len());
             let wrapped_lines = wrap_line_with_links(line, width);
-            search_records.extend(search_records_for_lines(&wrapped_lines, rows.len()));
+            search_records.extend(search_records_for_lines(
+                &wrapped_lines,
+                rows.len(),
+                logical_line,
+            ));
             for wrapped in wrapped_lines {
                 let row = rows.len();
                 for id in wrapped.anchors {

@@ -60,6 +60,23 @@ that crate was not published for that change.
 
 ### mant-ui
 
+- Open documents with Content focus: browse with `j/k`, `g/G` and half-page
+  `d/u` or `Ctrl+d/u`; use Space/`f`/`b` or page keys for full-page reading.
+  Tab/Shift+Tab switches to/from Outline without moving the page. Space folds
+  nodes only in Outline; uppercase `B` toggles the sidebar in either region.
+  English status hints and scrollable help explain the active controls. Keep
+  focus distinct from the selected reading location, correct unavailable focus
+  on resize/sidebar changes, and leave focus ownership out of painting. No
+  persistent first-run files or configurable keymaps are introduced.
+- Preview page and Outline search while typing, without unexpected jumps.
+  Large-document searches run in cancellable batches and show provisional or
+  limited counts; explicit result navigation waits before wrapping incomplete
+  results. Retain confirmed queries independently of drafts, preserve Unicode
+  highlighting through reflow, and bound query/result memory. Public IR, host
+  capabilities and synchronous rendered-search APIs remain unchanged.
+- Keep single-page search bound to the newly opened snapshot. Retain explicit
+  multi-page scope order with at most one extra current snapshot rather than
+  searching only the initial page or retaining every visited document.
 - Keep command-synopsis context across more-indented, signature-only hard rows
   after explicit option-group evidence, without leaking it across blank lines,
   unindented rows or executable/code syntax. Recognize closed option candidates

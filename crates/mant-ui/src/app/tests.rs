@@ -340,7 +340,8 @@ fn renders_the_application_chrome_in_a_test_backend() {
     assert!(screen.contains("Manual"));
     assert!(screen.contains("OUTLINE"));
     assert!(screen.contains("MANUAL · demo"));
-    assert!(screen.contains("0 visible nodes"));
+    assert!(screen.contains("0/0"));
+    assert!(screen.contains("Content"));
 }
 
 #[test]
@@ -603,7 +604,9 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
 
 mod entries;
 mod hierarchy_geometry;
+mod keyboard;
 mod layout;
+mod live_search;
 mod menus;
 mod navigation;
 mod outline_search;

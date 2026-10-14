@@ -509,6 +509,7 @@ fn reference_selection_reveals_but_only_enter_opens_and_copy_target_is_separate(
     app.reveal_anchor(&id);
     let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.scroll_to_selected();
     assert!(app.take_open_request().is_none());
     assert_eq!(
@@ -526,6 +527,7 @@ fn reference_selection_reveals_but_only_enter_opens_and_copy_target_is_separate(
         matches!(app.take_copy_request(), Some(CopyRequest::Reference { text }) if text == "target.md#details")
     );
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
     let request = app.take_open_request().unwrap();
     assert_eq!(request.target.id(), Some("details"));
     assert!(

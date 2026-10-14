@@ -80,7 +80,10 @@ impl App {
         match event {
             Event::Key(key) if key.is_press() => self.handle_key(*key),
             Event::Mouse(mouse) => self.handle_mouse(*mouse),
-            Event::Resize(_, _) => UpdateOutcome::Redraw,
+            Event::Resize(width, _) => {
+                self.resize_reading_viewport(*width);
+                UpdateOutcome::Redraw
+            }
             Event::FocusGained | Event::FocusLost | Event::Paste(_) | Event::Key(_) => {
                 UpdateOutcome::Unchanged
             }

@@ -329,6 +329,21 @@ cargo test --locked -p mant-ui
 cargo build --locked --release -p mant
 ```
 
+The explicit-input live-search probe separates initial view/layout preparation,
+per-key editing, timer scan slices and redraw cost. It advances a host-provided
+clock instead of sleeping, retains no diagnostic scratch files, and accepts a
+manual source or Markdown file:
+
+```sh
+cargo run --locked -p mant-ui --example live_search_profile -- /path/to/gcc.1.gz --help
+```
+
+Scan work is byte-bounded even within long records; initial renderer preparation
+is measured separately and is not a promised wall-time-bounded search slice.
+No host-specific performance threshold is asserted in CI. Deterministic reader
+tests cover debounce/cancellation, partial counts, result navigation, Unicode
+folding, reflow and focus/overlay ownership using source-neutral input.
+
 Run formatting and strict Clippy before the complete verification script.
 Prefer named execution arguments and helpers that correspond to actual
 ownership or ordered lifecycle steps. Keep a local lint exception only when

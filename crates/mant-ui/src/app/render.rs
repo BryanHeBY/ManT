@@ -16,14 +16,21 @@ use super::{
 };
 use crate::{
     layout::{
-        CONTENT_MARGIN, CONTENT_SCROLLBAR_GAP, MIN_CONTENT_WIDTH, MIN_SIDEBAR_WIDTH,
-        SIDEBAR_SPLITTER_WIDTH, maximum_sidebar_width,
+        CONTENT_MARGIN, CONTENT_SCROLLBAR_GAP, MIN_SIDEBAR_WIDTH, SIDEBAR_SPLITTER_WIDTH,
+        maximum_sidebar_width, outline_visible,
     },
     navigation,
     scrollbar::VerticalScrollbar,
     text::sanitize_terminal_text,
     theme,
 };
+
+struct SearchFeedback {
+    text: String,
+    pending: bool,
+    limited: bool,
+    missing: bool,
+}
 
 impl App {
     /// Render one complete frame and retain its geometry for input hit testing.
@@ -37,9 +44,9 @@ impl App {
 
         self.draw_menu(frame, menu_area);
         self.geometry.body = body_area;
-        if self.show_sidebar
-            && body_area.width > MIN_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + MIN_CONTENT_WIDTH
-        {
+        // This completed frame supersedes any host-announced resize dimensions.
+        self.viewport_width = Some(body_area.width);
+        if outline_visible(self.show_sidebar, body_area.width) {
             let sidebar_width = self
                 .sidebar_width
                 .clamp(MIN_SIDEBAR_WIDTH, maximum_sidebar_width(body_area.width));
@@ -55,6 +62,7 @@ impl App {
             self.draw_content(frame, content_area);
         } else {
             self.geometry.navigation = Rect::default();
+            self.geometry.outline_region = Rect::default();
             self.geometry.navigation_scrollbar = None;
             self.geometry.sidebar_splitter = Rect::default();
             self.geometry.navigation_rows.clear();
@@ -122,6 +130,7 @@ impl App {
     }
 
     fn draw_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        self.geometry.outline_region = area;
         frame.render_widget(
             Block::default().style(theme::style(theme::StyleRole::OutlineSurface)),
             area,
@@ -135,9 +144,25 @@ impl App {
 
         self.draw_navigation_header(frame, header_area);
         frame.render_widget(
-            Paragraph::new(" OUTLINE").style(
-                theme::style(theme::StyleRole::OutlineSurface)
-                    .patch(theme::style(theme::StyleRole::Metadata)),
+            Paragraph::new(
+                if self.reading_focus_visible()
+                    && self.reading_focus() == super::focus::ReaderFocus::Outline
+                {
+                    " ▶ OUTLINE"
+                } else {
+                    " OUTLINE"
+                },
+            )
+            .style(
+                theme::style(theme::StyleRole::OutlineSurface).patch(theme::style(
+                    if self.reading_focus_visible()
+                        && self.reading_focus() == super::focus::ReaderFocus::Outline
+                    {
+                        theme::StyleRole::PaneFocus
+                    } else {
+                        theme::StyleRole::Metadata
+                    },
+                )),
             ),
             outline_label_area,
         );
@@ -302,6 +327,7 @@ impl App {
     }
 
     fn draw_content(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        self.geometry.content_region = area;
         frame.render_widget(
             Block::default().style(theme::style(theme::StyleRole::ContentSurface)),
             area,
@@ -320,7 +346,7 @@ impl App {
             .session
             .rendered_cache
             .entry(sizing_width)
-            .or_insert_with(|| self.session.document.render(sizing_width))
+            .or_insert_with(|| std::sync::Arc::new(self.session.document.render(sizing_width)))
             .row_count;
         let needs_scrollbar = virtual_content_rows(sizing_rows, viewport_height) > viewport_height;
         let document_area = if needs_scrollbar && inner.width > scrollbar_gutter {
@@ -352,10 +378,10 @@ impl App {
         self.session
             .rendered_cache
             .entry(render_width)
-            .or_insert_with(|| self.session.document.render(render_width));
-        if (self.search.is_open()
-            || self.last_search_target == super::outline_search::SearchTarget::Page)
-            && !self.search.query.is_empty()
+            .or_insert_with(|| std::sync::Arc::new(self.session.document.render(render_width)));
+        if !self.outline_search.input.is_open()
+            && (self.search.is_open() || self.search.job.is_some())
+            && (!self.search.matching_query.is_empty() || !self.search.query.is_empty())
             && self.search.render_width != render_width
         {
             self.refresh_search(render_width);
@@ -373,7 +399,7 @@ impl App {
         let virtual_rows = virtual_content_rows(rendered.row_count, viewport_height);
         let maximum = virtual_rows.saturating_sub(viewport_height);
         self.session.content_scroll = self.session.content_scroll.min(maximum);
-        let matches = if self.search.query.is_empty() {
+        let matches = if self.search.matching_query.is_empty() {
             &[]
         } else {
             self.search.matches.as_slice()
@@ -423,27 +449,38 @@ impl App {
             .map_or(0, |index| index + 1);
         let style = Style::default().bg(theme::BASE);
         frame.render_widget(Block::default().style(style), area);
-        frame.render_widget(
-            Paragraph::new(format!(
-                " {}/{} · {current}",
-                selected_position,
-                visible.len()
-            ))
-            .style(style.fg(theme::TEXT)),
-            area,
-        );
-        let suffix = if let Some(notice) = &self.notice {
-            format!(
-                "{} ",
-                sanitize_terminal_text(notice.lines().next().unwrap_or_default())
+        let position = format!(" {}/{} · {current}", selected_position, visible.len());
+        let ordinary_budget = usize::from(area.width)
+            .saturating_sub(position.width().min(usize::from(area.width) / 3) + 1);
+        let (suffix, important) = if let Some(notice) = &self.notice {
+            (
+                format!(
+                    "{} ",
+                    sanitize_terminal_text(notice.lines().next().unwrap_or_default())
+                ),
+                true,
             )
         } else if !self.session.document.content_complete() {
-            "Warning: source content is incomplete ".into()
+            ("Warning: source content is incomplete ".into(), true)
+        } else if self.search.job.is_some() {
+            (
+                format!("Searching · {} found ", self.search.scope_matches.len()),
+                true,
+            )
         } else if !self.search.query.is_empty() && !self.search.scope_matches.is_empty() {
-            format!(
-                "Find “{}” · {} matches ",
-                self.search.query,
-                self.search.scope_matches.len()
+            (
+                format!(
+                    "{} · Find “{}” · {}{} matches ",
+                    self.focus_label(),
+                    self.search.query,
+                    self.search.scope_matches.len(),
+                    if self.search.limited {
+                        "+ (partial)"
+                    } else {
+                        ""
+                    },
+                ),
+                true,
             )
         } else if self
             .session
@@ -457,35 +494,51 @@ impl App {
                     .contains_key(&node.id)
             })
         {
-            "O: Open Reference · Y: Copy Target ".into()
-        } else if self.session.document.has_tldr() {
-            format!("{} visible nodes · TLDR ", self.visible_node_count())
+            (
+                format!(
+                    "{} · O: Open Reference · Y: Copy Target ",
+                    self.focus_label()
+                ),
+                true,
+            )
         } else {
-            format!("{} visible nodes ", self.visible_node_count())
+            (self.reading_hint(ordinary_budget), false)
         };
+        let suffix_width = suffix.width().min(usize::from(area.width));
+        let left_width = usize::from(area.width).saturating_sub(suffix_width + 1);
+        frame.render_widget(
+            Paragraph::new(fit_to_width(&position, left_width)).style(style.fg(theme::TEXT)),
+            Rect::new(
+                area.x,
+                area.y,
+                u16::try_from(left_width).unwrap_or_default(),
+                area.height,
+            ),
+        );
         frame.render_widget(
             Paragraph::new(suffix)
                 .alignment(Alignment::Right)
-                .style(style.fg(if self.notice.is_some() {
-                    theme::PEACH
+                .style(if important {
+                    style.fg(theme::PEACH)
+                } else if !self.reading_focus_visible() {
+                    style.patch(theme::style(theme::StyleRole::Metadata))
                 } else {
-                    theme::SUBTEXT
-                })),
-            area,
+                    style.patch(theme::style(theme::StyleRole::PaneFocus))
+                }),
+            Rect::new(
+                area.x
+                    + area
+                        .width
+                        .saturating_sub(u16::try_from(suffix_width).unwrap_or_default()),
+                area.y,
+                u16::try_from(suffix_width).unwrap_or_default(),
+                area.height,
+            ),
         );
     }
 
     fn draw_search(&self, frame: &mut Frame<'_>, area: Rect) {
         let input = self.active_search_input();
-        let outline = self.search_target == super::outline_search::SearchTarget::Outline;
-        let (count, active) = if outline {
-            (
-                self.outline_search.matches.len(),
-                self.outline_search.active_match,
-            )
-        } else {
-            (self.search.scope_matches.len(), self.search.active_match)
-        };
         let style = Style::default().bg(theme::MENU);
         frame.render_widget(Block::default().style(style), area);
         let (before_cursor, after_cursor) = input.draft.split_at(input.cursor);
@@ -511,7 +564,69 @@ impl App {
             ])),
             area,
         );
-        let mut suffix = if !input.is_editing() && !input.query.is_empty() {
+        let feedback = self.search_feedback();
+        let suffix_style = if feedback.missing {
+            style
+                .fg(theme::BASE)
+                .bg(theme::PEACH)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            style.fg(theme::SUBTEXT)
+        };
+        if prompt.width() + feedback.text.width() < usize::from(area.width) {
+            frame.render_widget(
+                Paragraph::new(Span::styled(feedback.text, suffix_style))
+                    .alignment(Alignment::Right),
+                area,
+            );
+        } else if feedback.limited || feedback.pending || input.input_limited {
+            // Coverage and input bounds remain visible behind a long query.
+            frame.render_widget(
+                Paragraph::new(if feedback.limited {
+                    " partial "
+                } else if input.input_limited {
+                    " query limit "
+                } else {
+                    " searching "
+                })
+                .alignment(Alignment::Right)
+                .style(suffix_style),
+                area,
+            );
+        }
+    }
+
+    fn search_feedback(&self) -> SearchFeedback {
+        let input = self.active_search_input();
+        let outline = self.search_target == super::outline_search::SearchTarget::Outline;
+        let (count, active) = if outline {
+            (
+                self.outline_search.matches.len(),
+                self.outline_search.active_match,
+            )
+        } else {
+            (self.search.scope_matches.len(), self.search.active_match)
+        };
+        let pending = if outline {
+            self.outline_search.job.is_some()
+        } else {
+            self.search.job.is_some()
+        };
+        let limited = if outline {
+            self.outline_search.limited
+        } else {
+            self.search.limited
+        };
+        let effective_query = if input.is_editing() {
+            &input.draft
+        } else {
+            &input.query
+        };
+        let mut suffix = if input.input_limited {
+            " Query limit: 4096 bytes · Edit query · Esc close ".to_owned()
+        } else if pending {
+            format!(" Searching · {count} found · Enter select · Esc close ")
+        } else if !effective_query.is_empty() {
             if count == 0 {
                 if outline && self.outline_search.limited {
                     " No indexed matches · Esc close ".to_owned()
@@ -520,40 +635,28 @@ impl App {
                 }
             } else {
                 format!(
-                    " {}/{}{} · Enter next · Esc close ",
+                    " {}/{}{} · {} · Esc close ",
                     active + 1,
                     count,
-                    if outline { " nodes" } else { "" }
+                    if outline { " nodes" } else { "" },
+                    if input.is_editing() {
+                        "Enter select"
+                    } else {
+                        "Enter next"
+                    },
                 )
             }
         } else {
-            " Enter search · Esc cancel ".to_owned()
+            " Type to search · Esc close ".to_owned()
         };
-        if outline && self.outline_search.limited {
+        if limited {
             suffix.push_str("· partial ");
         }
-        let suffix_style = if count == 0 && !input.is_editing() && !input.query.is_empty() {
-            style
-                .fg(theme::BASE)
-                .bg(theme::PEACH)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            style.fg(theme::SUBTEXT)
-        };
-        let prompt_width = prompt.width();
-        if prompt_width + suffix.width() < usize::from(area.width) {
-            frame.render_widget(
-                Paragraph::new(Span::styled(suffix, suffix_style)).alignment(Alignment::Right),
-                area,
-            );
-        } else if outline && self.outline_search.limited {
-            // Coverage disclosure must not disappear behind a long query.
-            frame.render_widget(
-                Paragraph::new(" partial ")
-                    .alignment(Alignment::Right)
-                    .style(suffix_style),
-                area,
-            );
+        SearchFeedback {
+            text: suffix,
+            pending,
+            limited,
+            missing: count == 0 && !pending && !effective_query.is_empty(),
         }
     }
 

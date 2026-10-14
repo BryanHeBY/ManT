@@ -5,6 +5,7 @@ use effects::PendingEffects;
 mod pointer;
 use pointer::{PointerDrag, PointerState};
 mod finder;
+mod focus;
 mod input;
 mod menu;
 mod navigation;
@@ -143,8 +144,10 @@ impl Overlay {
 struct FrameGeometry {
     body: Rect,
     content: Rect,
+    content_region: Rect,
     content_scrollbar: Option<VerticalScrollbar>,
     navigation: Rect,
+    outline_region: Rect,
     navigation_scrollbar: Option<VerticalScrollbar>,
     sidebar_splitter: Rect,
     document_tabs: Vec<DocumentTabHit>,
@@ -205,6 +208,8 @@ pub struct App {
     navigation_viewport_request: Option<NavigationViewportRequest>,
     sidebar_width: u16,
     show_sidebar: bool,
+    focus: focus::ReaderFocus,
+    viewport_width: Option<u16>,
     full_outline_labels: bool,
     quit: bool,
     search: SearchState,
@@ -212,12 +217,14 @@ pub struct App {
     search_target: SearchTarget,
     last_search_target: SearchTarget,
     scope_documents: Vec<Arc<ResolvedContent>>,
+    scope_base_len: usize,
     finder: FinderState,
     effects: PendingEffects,
     navigation: NavigationState,
     notice: Option<String>,
     copy_toast: Option<CopyToast>,
     overlay: Overlay,
+    help_scroll: usize,
     pointer: PointerState,
     geometry: FrameGeometry,
     navigation_sync_deadline: Option<Instant>,
@@ -297,12 +304,15 @@ impl App {
             navigation_viewport_request: Some(NavigationViewportRequest::Reveal { node_index: 0 }),
             sidebar_width: DEFAULT_SIDEBAR_WIDTH,
             show_sidebar: true,
+            focus: focus::ReaderFocus::Content,
+            viewport_width: None,
             full_outline_labels: false,
             quit: false,
             search: SearchState::default(),
             outline_search: OutlineSearchState::default(),
             search_target: SearchTarget::Page,
             last_search_target: SearchTarget::Page,
+            scope_base_len: scope_documents.len(),
             scope_documents,
             finder,
             effects: PendingEffects::default(),
@@ -317,6 +327,7 @@ impl App {
             notice: None,
             copy_toast: None,
             overlay: Overlay::None,
+            help_scroll: 0,
             pointer: PointerState::default(),
             geometry: FrameGeometry::default(),
             navigation_sync_deadline: None,
@@ -405,6 +416,21 @@ impl App {
         reason: DocumentChangeReason,
         view: DocumentView,
     ) {
+        if reason != DocumentChangeReason::SearchResult {
+            // A single-page reader follows its new current snapshot. Explicit
+            // multi-page scopes retain host order and at most one extra current
+            // snapshot, not every document visited through history or the finder.
+            self.scope_documents.truncate(self.scope_base_len);
+            if self.scope_base_len == 1 {
+                self.scope_documents[0] = Arc::clone(&bundle);
+            } else if !self
+                .scope_documents
+                .iter()
+                .any(|source| Arc::ptr_eq(source, &bundle))
+            {
+                self.scope_documents.push(Arc::clone(&bundle));
+            }
+        }
         self.remember_current_document_tab();
         self.navigation.replace_current(
             bundle.address.clone(),
@@ -636,6 +662,10 @@ impl App {
     /// and does not sleep; the host remains responsible for drawing and input.
     pub fn tick(&mut self, now: Instant) -> UpdateOutcome {
         let mut outcome = UpdateOutcome::Unchanged;
+        let page_changed = self.advance_page_search(now);
+        if self.advance_outline_search(now) || page_changed {
+            outcome = UpdateOutcome::Redraw;
+        }
         if let Some(column) = self.pointer.take_resize_due(now)
             && self.commit_sidebar_at(column)
         {
@@ -668,6 +698,8 @@ impl App {
     #[must_use]
     pub fn next_wakeup(&self, now: Instant) -> Option<Duration> {
         [
+            self.search.deadline,
+            self.outline_search.deadline,
             self.navigation_sync_deadline,
             self.pointer.resize_deadline(),
             self.copy_toast.as_ref().map(|toast| toast.deadline),

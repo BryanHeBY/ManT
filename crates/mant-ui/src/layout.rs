@@ -16,6 +16,10 @@ pub(crate) const CONTENT_MARGIN: Margin = Margin {
 /// Blank column separating a full-width document surface from its scrollbar.
 pub(crate) const CONTENT_SCROLLBAR_GAP: u16 = 1;
 
+pub(crate) const fn outline_visible(show_sidebar: bool, body_width: u16) -> bool {
+    show_sidebar && body_width > MIN_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + MIN_CONTENT_WIDTH
+}
+
 pub(crate) const fn maximum_sidebar_width(body_width: u16) -> u16 {
     let available = body_width
         .saturating_sub(MIN_CONTENT_WIDTH)

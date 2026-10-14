@@ -15,12 +15,108 @@ use unicode_width::UnicodeWidthStr;
 use super::{NavigationRow, TreePlan, bounded_tree_prefix};
 use crate::{
     NavKind,
-    document::{LiteralSearch, OutlineField, OutlineRecord},
+    document::{OutlineField, OutlineRecord},
     theme,
 };
 
 const MAX_RESULTS: usize = 4096;
 const MAX_RANGES: usize = 32768;
+
+/// A bounded, resumable scan over complete outline fields. User folds and
+/// display truncation never become inputs to matching.
+#[derive(Debug)]
+pub(crate) struct OutlineScan {
+    record: usize,
+    field: usize,
+    stream: crate::document::SearchStream,
+    ranges: Vec<Range<usize>>,
+    fields: Vec<FieldHit>,
+    remaining: usize,
+}
+
+impl OutlineScan {
+    pub(crate) fn new(query: &str) -> Self {
+        Self {
+            record: 0,
+            field: 0,
+            stream: crate::document::SearchStream::new(query),
+            ranges: Vec::new(),
+            fields: Vec::new(),
+            remaining: MAX_RANGES,
+        }
+    }
+
+    /// Returns whether the scan is finished and whether its results are limited.
+    pub(crate) fn advance(
+        &mut self,
+        records: &[OutlineRecord],
+        matches: &mut Vec<OutlineHit>,
+        mut budget: usize,
+    ) -> (bool, bool) {
+        while budget > 0 && self.record < records.len() {
+            let record = &records[self.record];
+            if self.field == record.fields.len() {
+                if !self.fields.is_empty() {
+                    matches.push(OutlineHit {
+                        node_index: record.node_index,
+                        label: Arc::clone(&record.label),
+                        fields: std::mem::take(&mut self.fields),
+                    });
+                }
+                self.record += 1;
+                self.field = 0;
+                budget = budget.saturating_sub(1);
+                continue;
+            }
+            let field = &record.fields[self.field];
+            if !field.target
+                && field.text != record.label
+                && record.label.contains(field.text.as_ref())
+            {
+                self.next_field();
+                budget = budget.saturating_sub(field.text.len().max(1));
+                continue;
+            }
+            let ranges = self.stream.advance(&field.text, &mut budget);
+            for range in ranges {
+                if matches.len() == MAX_RESULTS || self.remaining == 0 {
+                    if !self.ranges.is_empty() {
+                        self.fields.push(FieldHit {
+                            field: field.clone(),
+                            ranges: std::mem::take(&mut self.ranges),
+                        });
+                    }
+                    if !self.fields.is_empty() {
+                        matches.push(OutlineHit {
+                            node_index: record.node_index,
+                            label: Arc::clone(&record.label),
+                            fields: std::mem::take(&mut self.fields),
+                        });
+                    }
+                    return (true, true);
+                }
+                self.remaining -= 1;
+                self.ranges.push(range);
+            }
+            if self.stream.offset == field.text.len() {
+                if !self.ranges.is_empty() {
+                    self.fields.push(FieldHit {
+                        field: field.clone(),
+                        ranges: std::mem::take(&mut self.ranges),
+                    });
+                }
+                self.next_field();
+                budget = budget.saturating_sub(1);
+            }
+        }
+        (self.record == records.len(), false)
+    }
+
+    fn next_field(&mut self) {
+        self.field += 1;
+        self.stream.reset();
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct FieldHit {
@@ -35,8 +131,9 @@ pub(crate) struct OutlineHit {
     pub(crate) fields: Vec<FieldHit>,
 }
 
+#[cfg(test)]
 pub(crate) fn find(records: &[OutlineRecord], query: &str) -> (Vec<OutlineHit>, bool) {
-    let search = LiteralSearch::new(query);
+    let search = crate::document::LiteralSearch::new(query);
     let mut matches = Vec::new();
     let mut remaining = MAX_RANGES;
     let mut limited = false;
