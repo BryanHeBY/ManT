@@ -43,6 +43,7 @@ impl BlockLowerer<'_, '_> {
         }
         self.state.flush_preformatted();
         self.state.flush_paragraph();
+        self.state.literal_assembly.end(self.state.output.len());
         if source.previous_is_sy {
             return;
         }

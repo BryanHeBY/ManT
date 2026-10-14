@@ -37,6 +37,8 @@ impl BlockState {
         self.pending_targets
             .attach_leading(&mut lowered, layout(self.indent_columns));
         self.output.append(&mut lowered);
+        self.literal_assembly
+            .insert(output_start, self.output.len().saturating_sub(previous_end));
         if let Some(tail) = &mut self.closed_output_tail
             && tail.output_end == previous_end
         {
@@ -249,15 +251,16 @@ impl BlockState {
         if self.output.len() > output_start {
             self.closed_output_tail = closed_tail.is_closed().then_some(ClosedOutputTail {
                 output_end: self.output.len(),
-                // Literal origins can split one accepted vector into
-                // several blocks. Its tail proof belongs to the final
-                // projected owner, including a trailing literal group.
+                // Completed layout rows can add separate gap/empty-literal
+                // fragments. The tail proof belongs to the final projected
+                // owner, before source-proven assembly changes their topology.
                 owner: self.output.len() - 1,
                 row_end: closed_tail,
             });
             self.consume_hanging_first_line();
         }
         self.attach_pending_to_new_output(output_start);
+        self.literal_assembly.after_drain(self.output.len());
     }
 
     /// Unlike an ordinary break, native `term_flushln` emits a row even
@@ -292,10 +295,10 @@ impl BlockState {
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: super::super::FormatterRowBoundary,
         next_column_entry: Option<&libmandoc_rs::Node>,
-    ) -> (Vec<Block>, bool) {
+    ) -> (Vec<Block>, bool, super::LiteralAssembly) {
         let break_after = self.settle(row_boundary, next_column_entry);
         *formatter = self.formatter;
-        (self.output, break_after)
+        (self.output, break_after, self.literal_assembly)
     }
 
     pub(super) fn settle(

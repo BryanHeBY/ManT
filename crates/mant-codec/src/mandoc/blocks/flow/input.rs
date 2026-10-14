@@ -257,6 +257,7 @@ impl BlockState {
         else {
             unreachable!("the last block was checked above")
         };
+        self.literal_assembly.remove(self.output.len());
         self.literal.adopt(children, source, layout);
         true
     }

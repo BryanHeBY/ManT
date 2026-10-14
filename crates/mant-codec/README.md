@@ -69,6 +69,16 @@ newlines through nested flow composition, sharing cell/marker/gap rules with
 the UI through `mant-ir::geometry`. Zero block spacing is tight, not a
 frontend default; each source request has one consumption point.
 
+An execution drain is not a document boundary. Private literal-owner ranges
+survive formatting, link resolution and transparent relative-indent scopes;
+after execution, a continuous no-fill/literal display becomes one complete
+`Preformatted` block. Internal resolved gaps become blank content rows, and
+accepted origin changes use existing owner-local row hints. Links, styles and
+anchors keep their original annotation trees. Separate displays and semantic
+structures retain their boundaries. Unproven leading/trailing gaps and unusual
+metadata-only fragments remain separate resolved boundaries, not guessed code
+rows. No public continuation flag or frontend stitching pass is required.
+
 Definition fields record native cells as the text executor decodes them,
 before text is styled, linked, or compacted. The pinned CVS `term_fill()`
 consumer decides accepted source intervals and rejected suffixes; semantic

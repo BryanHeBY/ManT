@@ -20,6 +20,7 @@ fn parse_manual_source(
 mod breakpoint_controls;
 mod equations;
 mod equations_literals;
+mod literal_owners;
 mod literal_space_rows;
 mod parser_contracts;
 

@@ -354,22 +354,35 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn finish_into_before_column_entry(
-        mut self,
+        self,
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: FormatterRowBoundary,
         next_column_entry: Option<&Node>,
     ) -> (Vec<Block>, bool) {
+        let (blocks, break_after, assembly) =
+            self.finish_into_with_assembly(formatter, row_boundary, next_column_entry);
+        (assembly.finish(blocks), break_after)
+    }
+
+    /// A transparent RS moves the existing output and its private owner ranges
+    /// together. Do not assemble before the parent's source walk has finished.
+    fn finish_into_with_assembly(
+        mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+        row_boundary: FormatterRowBoundary,
+        next_column_entry: Option<&Node>,
+    ) -> (Vec<Block>, bool, flow::LiteralAssembly) {
         if row_boundary == FormatterRowBoundary::Settle {
             // Native BODY posts settle the field before its IR owner drains.
             // In a column, NOBREAK may leave the device row occupied afterwards.
             self.state.finish_column_nested_row();
             self.settle_no_fill_inline();
         }
-        let (blocks, break_after) =
+        let (blocks, break_after, assembly) =
             self.state
                 .finish_with_formatter(formatter, row_boundary, next_column_entry);
         self.context.check_gap_bounds(&blocks);
-        (blocks, break_after)
+        (blocks, break_after, assembly)
     }
 }
 

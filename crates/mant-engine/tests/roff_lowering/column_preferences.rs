@@ -528,8 +528,11 @@ fn source_cell_metadata_keeps_closed_gap_and_signed_descendant_owners() {
         panic!("one accepted literal owner: {cell:?}")
     };
     assert_eq!(mant_ir::inline_plain_text(children), "A");
-    assert_eq!(layout.indent_columns, -3);
-    assert_eq!(inline_layout.row_hints, Vec::new());
+    // Rechecked this exact matrix source on the fixed five profiles.
+    // The accepted offset belongs to row zero of the complete content
+    // owner, not a synthetic block created to carry the native offset.
+    assert_eq!(layout.indent_columns, 0);
+    assert_eq!(inline_layout.row_indent(0), -3);
     assert!(cell.break_after);
     assert_reading(&content, &outdent);
     assert_query(&content, &outdent);

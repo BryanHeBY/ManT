@@ -105,6 +105,13 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-codec 0.13.0
 
+- Keep each continuous roff no-fill/literal display in one complete
+  `Preformatted` owner. Internal paragraph/space breaks remain blank code rows,
+  and changing row origins use existing row hints, so TUI backgrounds and
+  Markdown fences no longer split at formatter drains. Preserve styles, link
+  identity, anchors and executed spacing; independent displays and semantic
+  structures remain separate. Block paths can change with normalization;
+  always resolve references against the resulting document snapshot.
 - Preserve the actual destination of a single TLDR `More information:` link
   before flattening presentation markup. Exclude surrounding sentence punctuation
   from browser targets, retain meaningful terminal dots and URL spelling, and

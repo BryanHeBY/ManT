@@ -73,21 +73,34 @@ fn literal_hanging_first_child_post_ends_a_continued_source_row() {
 
 #[test]
 fn nofill_hanging_geometry_is_preserved_in_ir_not_added_by_the_renderer() {
+    // Exact source rechecked on fixed CVS ASCII/UTF-8/HTML/tree/lint.
+    // print_man_node(out) ends HP's first no-fill row and assigns its
+    // hanging origin; pre_literal then keeps that origin after fi.
     let query =
         load_roff_bytes(b".TH PROBE 1\n.SH DESCRIPTION\n.nf\n.HP 4\nFIRST\nSECOND\n.fi\nAFTER\n")
             .unwrap();
     let blocks = &query.document.as_ref().unwrap().sections[0].blocks;
     let [
-        Block::Preformatted { layout: first, .. },
-        Block::Preformatted { layout: second, .. },
+        Block::Preformatted {
+            children,
+            inline_layout,
+            layout: first,
+            ..
+        },
         Block::Paragraph { layout: after, .. },
     ] = blocks.as_slice()
     else {
         panic!("unexpected flow: {blocks:#?}");
     };
     assert_eq!(first.indent_columns, 0);
-    assert_eq!(second.indent_columns, 4);
+    assert_eq!(mant_ir::inline_plain_text(children), "FIRST\nSECOND");
+    assert_eq!(inline_layout.row_indent(0), 0);
+    assert_eq!(inline_layout.row_indent(1), 4);
     assert_eq!(after.indent_columns, 4);
+    let text = render_query_text(&query);
+    assert_column(&text, "FIRST", 0);
+    assert_column(&text, "SECOND", 4);
+    assert_column(&text, "AFTER", 4);
 }
 
 #[test]

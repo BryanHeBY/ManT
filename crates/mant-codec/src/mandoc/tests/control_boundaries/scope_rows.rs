@@ -588,22 +588,31 @@ fn native_body_posts_settle_no_fill_rows_in_their_output_owner() {
         .expect("parse man relative-indent row fixture");
         let [
             Block::Preformatted {
-                children: inner,
-                layout: inner_layout,
+                children,
+                inline_layout,
+                layout,
                 source: Some(inner_source),
                 ..
-            },
-            Block::Preformatted {
-                children: outer, ..
             },
         ] = document.sections[0].blocks.as_slice()
         else {
             panic!("{label}: unexpected man blocks: {:#?}", document.sections);
         };
-        assert_eq!(inline_text(inner), expected, "{label}: {inner:?}");
+        // Exact sources rechecked on all five fixed profiles. post_RS
+        // closes the native row, but RE only restores the offset; the
+        // same no-fill owner retains Y as its next hard row.
+        assert_eq!(
+            inline_text(children),
+            format!("{expected}\nY"),
+            "{label}: {children:?}"
+        );
         assert_eq!(inner_source.line, 5, "{label}: {inner_source:?}");
-        assert_eq!(inner_layout.indent_columns, 7, "{label}: {inner_layout:?}");
-        assert_eq!(inline_text(outer), "Y", "{label}: {outer:?}");
+        assert_eq!(layout.indent_columns, 7, "{label}: {layout:?}");
+        assert_eq!(
+            inline_layout.row_indent(1),
+            -7,
+            "{label}: {inline_layout:?}"
+        );
     }
 }
 

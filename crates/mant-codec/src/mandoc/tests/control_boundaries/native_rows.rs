@@ -168,6 +168,9 @@ fn formatter_requests_use_the_current_cell_not_prior_document_output() {
 
 #[test]
 fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
+    // Both exact sources rechecked with fixed CVS ASCII/UTF-8/HTML/tree/lint.
+    // roff_term_pre_sp's invalid operand falls back to one term_vspace;
+    // within Bd the executed empty row belongs to that display's content.
     for (label, opening, closing) in [("top", "", ""), ("display", ".Bd -literal\n", ".Ed\n")] {
         let source = format!(
             ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n{opening}.No A\n.sp bogus\n.No B\n{closing}"
@@ -178,6 +181,14 @@ fn vertical_space_uses_the_cvs_fallback_and_preserves_unflushed_execution() {
         )
         .expect("parse invalid vertical-space operand");
         let blocks = &document.sections[0].blocks;
+        if label == "display" {
+            assert!(
+                matches!(blocks.as_slice(), [Block::Preformatted { children, .. }] if inline_text(children) == "A\n\nB"),
+                "{blocks:#?}"
+            );
+            assert!(!visible_document_text(&document).contains("bogus"));
+            continue;
+        }
         assert_eq!(blocks.len(), 3, "{label}: {blocks:#?}");
         assert!(matches!(
             blocks[0],

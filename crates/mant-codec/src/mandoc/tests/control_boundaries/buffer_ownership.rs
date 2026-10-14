@@ -519,7 +519,9 @@ fn accepted_invisible_rows_belong_to_the_consumed_unit_not_its_last_word() {
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(rows, ["", "BODY"], "{document:#?}");
+    // Rechecked exact source on pinned CVS ASCII/UTF-8/HTML/tree/lint:
+    // the accepted empty literal row stays before BODY inside one owner.
+    assert_eq!(rows, ["\nBODY"], "{document:#?}");
     let completed_rows = items[0]
         .description
         .iter()
@@ -528,9 +530,9 @@ fn accepted_invisible_rows_belong_to_the_consumed_unit_not_its_last_word() {
             _ => None,
         })
         .sum::<u16>();
-    // The generated BODY row and the later accepted invisible source row
-    // have separate output owners. The engine regression for this exact
-    // source also checks their actual rendered row sequence.
+    // The generated BODY row remains a resolved outer gap; the later
+    // accepted invisible source row is content in the complete literal
+    // owner. The engine regression checks their rendered row sequence.
     assert_eq!(completed_rows + 1, 2, "{document:#?}");
 }
 

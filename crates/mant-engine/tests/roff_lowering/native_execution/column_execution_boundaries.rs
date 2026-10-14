@@ -674,11 +674,23 @@ fn no_break_flush_keeps_the_origins_of_accepted_prefixes() {
         let literals = rows[0].cells[0]
             .blocks
             .iter()
-            .filter_map(|block| match block {
+            .flat_map(|block| match block {
                 Block::Preformatted {
-                    children, layout, ..
-                } => Some((mant_ir::inline_plain_text(children), layout.indent_columns)),
-                _ => None,
+                    children,
+                    layout,
+                    inline_layout,
+                    ..
+                } => mant_ir::inline_plain_text(children)
+                    .split('\n')
+                    .enumerate()
+                    .map(|(row, value)| {
+                        (
+                            value.to_owned(),
+                            layout.indent_columns + inline_layout.row_indent(row),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
             })
             .collect::<Vec<_>>();
         assert!(
@@ -824,22 +836,24 @@ fn resumed_column_separators_preserve_authored_spaces_and_fixed_blanks() {
 fn literal_content_and_spacing_rows_keep_their_execution_order() {
     // These exact full sources ran pristine in ASCII/UTF-8/HTML/tree/lint,
     // all lint=0, before the assertions. Empty NODE_NOFILL TEXT executes
-    // term_vspace() as content; roff_term_pre_sp() executes bounded layout.
-    // Both resolve skipvsp in term.c:489-497 at their own source positions.
-    for (body, empty_rows, layout_rows) in [
-        ("\n.sp 1\n\n".to_owned(), 3_usize, 1_u16),
-        (".sp 1\n\n.sp 1\n".to_owned(), 3, 2),
-        ("\n.sp 2\n\n".to_owned(), 4, 2),
-        (".sp -1\n\n.sp 1\n".to_owned(), 1, 1),
-        ("\n.sp -1\n\n".to_owned(), 1, 0),
-        (format!(".sp 1\n{}", "\n".repeat(2)), 3, 1),
-        (format!(".sp 1\n{}", "\n".repeat(4095)), 4096, 1),
-        (format!(".sp 1\n{}", "\n".repeat(4096)), 4097, 1),
-        (format!(".sp 1\n{}", "\n".repeat(4097)), 4098, 1),
-        (format!("{}.sp 1\n", "\n".repeat(2)), 3, 1),
-        (format!("{}.sp 1\n", "\n".repeat(4095)), 4096, 1),
-        (format!("{}.sp 1\n", "\n".repeat(4096)), 4097, 1),
-        (format!("{}.sp 1\n", "\n".repeat(4097)), 4098, 1),
+    // term_vspace() as content; roff_term_pre_sp() resolves bounded gaps.
+    // Rechecked all exact sources on five fixed profiles: both consume
+    // skipvsp at their own position, then internal gaps become content in
+    // a completed literal owner; only its unjoined trailing gap stays outside.
+    for (body, empty_rows) in [
+        ("\n.sp 1\n\n".to_owned(), 3_usize),
+        (".sp 1\n\n.sp 1\n".to_owned(), 3),
+        ("\n.sp 2\n\n".to_owned(), 4),
+        (".sp -1\n\n.sp 1\n".to_owned(), 1),
+        ("\n.sp -1\n\n".to_owned(), 1),
+        (format!(".sp 1\n{}", "\n".repeat(2)), 3),
+        (format!(".sp 1\n{}", "\n".repeat(4095)), 4096),
+        (format!(".sp 1\n{}", "\n".repeat(4096)), 4097),
+        (format!(".sp 1\n{}", "\n".repeat(4097)), 4098),
+        (format!("{}.sp 1\n", "\n".repeat(2)), 3),
+        (format!("{}.sp 1\n", "\n".repeat(4095)), 4096),
+        (format!("{}.sp 1\n", "\n".repeat(4096)), 4097),
+        (format!("{}.sp 1\n", "\n".repeat(4097)), 4098),
     ] {
         let source = format!(
             ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n.nf\nBEFORE\n{body}.fi\n.SH NEXT\nAFTER\n"
@@ -856,6 +870,16 @@ fn literal_content_and_spacing_rows_keep_their_execution_order() {
             .iter()
             .find(|section| section.id.as_str() == "description")
             .unwrap();
+        let content_rows = section
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Preformatted { children, .. } => {
+                    Some(mant_ir::inline_plain_text(children).matches('\n').count())
+                }
+                _ => None,
+            })
+            .sum::<usize>();
         let layout = section
             .blocks
             .iter()
@@ -865,8 +889,9 @@ fn literal_content_and_spacing_rows_keep_their_execution_order() {
             })
             .sum::<u16>();
         assert_eq!(
-            layout, layout_rows,
-            "only spacing requests are layout: {source}"
+            content_rows + usize::from(layout),
+            empty_rows,
+            "completed owner preserves every executed content and gap row: {source}"
         );
         let text = mant_render::render_query_text(&query);
         let styled = mant_render::render_query_text_with(&query, |_, value| {

@@ -5,6 +5,14 @@ an interactive TUI, deterministic command-line projections, and a read-only
 MCP server. Native man/mdoc pages and Markdown enter the same renderer-neutral
 document model before any interface sees them.
 
+That model is enhanced Markdown after source execution, not a native AST,
+formatter program or pre-rendered terminal snapshot. Producers publish complete
+content owners plus source-neutral semantic relationships and layout facts;
+TUI, CLI, Markdown export and future HTML/UI consumers choose surfaces, colors
+and viewport layout. See the IR README's responsibility checklist before
+adding fields or changing nesting. Literal output is assembled before this
+boundary rather than repaired separately by each frontend.
+
 The architecture follows four constraints:
 
 - parse each source once and share the resulting semantics;

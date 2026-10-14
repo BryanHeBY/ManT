@@ -891,6 +891,9 @@ fn carries_mdoc_spacing_state_out_of_nested_synopsis_enclosures() {
 
 #[test]
 fn adjacent_no_fill_regions_scale_without_changing_their_topology() {
+    // Complete 2048-region input rechecked with fixed CVS five profiles.
+    // roff_term_pre_br closes each fi/nf row without a visible gap; explicit
+    // fi/nf pairs nevertheless delimit separate document content owners.
     const REGION_COUNT: usize = 2_048;
     let mut source = String::from(".TH NO-FILL-SCALE 7\n.SH EXAMPLE\n");
     for index in 0..REGION_COUNT {
@@ -900,24 +903,14 @@ fn adjacent_no_fill_regions_scale_without_changing_their_topology() {
     let document = parse_manual_bytes(std::path::Path::new("no-fill-scale.7"), source.as_bytes())
         .expect("lower adjacent no-fill regions");
 
-    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
-        panic!(
-            "adjacent regions must remain one preformatted block: {:?}",
-            document.sections[0].blocks
-        );
-    };
-    assert_eq!(
-        children
-            .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
-            .count(),
-        REGION_COUNT - 1
-    );
-    assert!(inline_text(children).starts_with("line 0\nline 1\n"));
-    assert!(
-        inline_text(children).ends_with(&format!("line {}", REGION_COUNT - 1)),
-        "last no-fill region must remain visible"
-    );
+    let blocks = &document.sections[0].blocks;
+    assert_eq!(blocks.len(), REGION_COUNT);
+    for (index, block) in blocks.iter().enumerate() {
+        let Block::Preformatted { children, .. } = block else {
+            panic!("each actual nf/fi region is a complete literal owner");
+        };
+        assert_eq!(inline_text(children), format!("line {index}"));
+    }
 }
 
 #[test]

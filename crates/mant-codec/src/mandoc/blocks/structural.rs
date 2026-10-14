@@ -16,6 +16,7 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) indent_columns: crate::mandoc::layout::SourceIndent,
     pub(super) paragraph_distance: &'state mut u16,
     pub(super) output: &'state mut Vec<Block>,
+    pub(super) literal_assembly: &'state mut super::flow::LiteralAssembly,
     pub(super) paragraph_predecessor: bool,
     pub(super) man_source_predecessor: bool,
     pub(super) definition_hanging_width: &'state mut crate::mandoc::layout::Distance,
@@ -361,14 +362,21 @@ impl StructuralLowerer<'_, '_, '_> {
                     output,
                     std::mem::take(self.formatter),
                 );
+                if !continues_item {
+                    lowerer.state.literal_assembly = std::mem::take(self.literal_assembly);
+                }
                 lowerer.paragraph_predecessor = paragraph_predecessor;
                 lowerer.man_source_predecessor = self.man_source_predecessor;
                 lowerer.push_nodes(first_part_children(node, NodeKind::Body));
-                let mut nested =
-                    lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
+                let (mut nested, _, assembly) = lowerer.finish_into_with_assembly(
+                    self.formatter,
+                    super::FormatterRowBoundary::Settle,
+                    None,
+                );
                 self.formatter.font.man_text_boundary(); // BODY post
                 self.formatter.font.man_text_boundary(); // BLOCK post
                 if continues_item {
+                    nested = assembly.finish(nested);
                     if append_relative_continuation(
                         self.output,
                         &mut nested,
@@ -382,6 +390,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     return true;
                 }
                 *self.output = nested;
+                *self.literal_assembly = assembly;
             }
             _ => return false,
         }

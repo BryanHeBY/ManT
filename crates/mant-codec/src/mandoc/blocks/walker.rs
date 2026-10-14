@@ -200,6 +200,7 @@ impl BlockLowerer<'_, '_> {
             self.push_inline_node(node, next);
         } else {
             self.state.flush_paragraph();
+            self.end_literal_for_structure(node);
             let output_start = self.state.output.len();
             let accepted_before = self.state.formatter.execution.visible_content_checkpoint();
             let spacing_enabled = self.state.spacing_enabled();
@@ -212,6 +213,7 @@ impl BlockLowerer<'_, '_> {
                 },
                 paragraph_distance: self.paragraph_distance,
                 output: &mut self.state.output,
+                literal_assembly: &mut self.state.literal_assembly,
                 paragraph_predecessor: self.paragraph_predecessor,
                 man_source_predecessor: source.predecessor,
                 definition_hanging_width: &mut self.definition_hanging_width,
@@ -260,6 +262,16 @@ impl BlockLowerer<'_, '_> {
             return true;
         }
         false
+    }
+
+    fn end_literal_for_structure(&mut self, node: &Node) {
+        // RS changes only the source offset; its output and ownership are
+        // transferred together below. Semantic structures have their own
+        // content owners, even if the surrounding fill mode remains nf.
+        if node.macro_token.as_ref() != Some(&Man(ManMacro::Rs)) || self.man_list_state.is_active()
+        {
+            self.state.literal_assembly.end(self.state.output.len());
+        }
     }
 
     /// The output destination changes field flags, never macro interpretation.
@@ -431,6 +443,15 @@ impl BlockLowerer<'_, '_> {
         }
         if was_no_fill && !self.state.formatter.no_fill {
             self.state.formatter.clear_trailing_literal_row();
+            self.state.literal_assembly.mark_close();
+        }
+        if self.state.formatter.no_fill {
+            // A preceding fi/EE already executed its row close. Drain that
+            // old owner before starting another nf/EX, without replaying it.
+            if self.state.literal_assembly.close_pending() {
+                self.state.flush_preformatted();
+            }
+            self.state.literal_assembly.begin(self.state.output.len());
         }
     }
 }

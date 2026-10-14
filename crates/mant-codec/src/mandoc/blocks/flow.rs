@@ -2,7 +2,9 @@
 use super::{FilledBoundary, InlineBuilder, layout, targets};
 use mant_ir::{Block, Inline};
 
+mod assembly;
 mod columns;
+pub(super) use assembly::LiteralAssembly;
 mod input;
 mod literal;
 mod output;
@@ -23,6 +25,7 @@ struct ClosedOutputTail {
 pub(super) struct BlockState {
     pub(super) output: Vec<Block>,
     pub(super) formatter: crate::mandoc::formatter::FormatterState,
+    pub(super) literal_assembly: LiteralAssembly,
     // Filled and literal buffers are independent, not mutually exclusive modes.
     paragraph: ParagraphFlow,
     literal: LiteralFlow,
@@ -87,6 +90,7 @@ impl BlockState {
                 // rejected/empty label cannot migrate to a later list item.
                 if matches!(block, Block::Paragraph { children, .. } | Block::Preformatted { children, .. } if children.is_empty())
                 {
+                    self.literal_assembly.remove(index);
                     self.output.remove(index);
                 }
                 return wrapped;
@@ -105,8 +109,16 @@ impl BlockState {
     pub(super) fn discard_link_cursor(&mut self, cursor: LinkOutputCursor) {
         let marker = super::man_links::link_cursor_marker(cursor.node_id);
         let mut scoped_output = self.output.split_off(cursor.output);
-        scoped_output
-            .retain_mut(|block| !super::man_links::remove_link_cursor_block(block, &marker));
+        let mut index = cursor.output;
+        scoped_output.retain_mut(|block| {
+            if super::man_links::remove_link_cursor_block(block, &marker) {
+                self.literal_assembly.remove(index);
+                false
+            } else {
+                index += 1;
+                true
+            }
+        });
         self.output.extend(scoped_output);
         self.paragraph.discard_link_cursor(&marker);
         self.literal.discard_link_cursor(&marker);
@@ -155,6 +167,7 @@ impl BlockState {
         Self {
             output,
             formatter,
+            literal_assembly: LiteralAssembly::default(),
             paragraph: ParagraphFlow::new(),
             literal: LiteralFlow::new(),
             column_display_owner: false,

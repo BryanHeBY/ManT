@@ -117,6 +117,9 @@ fn state_only_requests_and_continuation_words_do_not_invent_a_row() {
 
 #[test]
 fn synopsis_body_executes_fill_mode_changes_instead_of_flattening_every_child() {
+    // Rechecked exact source on fixed CVS five profiles. pre_SY/post_SY
+    // preserve source fi/nf switches; roff_term_pre_sp's two completed
+    // empty rows belong inside the second complete no-fill owner.
     let content = query("SY", "ALPHA\n.fi\nBETA\nSECOND\n.nf\nGAMMA\n.sp 2\nDELTA");
     let text = without_line_origins(&render_query_text(&content));
     assert!(
@@ -132,7 +135,7 @@ fn synopsis_body_executes_fill_mode_changes_instead_of_flattening_every_child() 
     assert!(
         blocks
             .iter()
-            .any(|block| matches!(block, Block::VerticalSpace { lines: 2, .. }))
+            .any(|block| matches!(block, Block::Preformatted { children, .. } if mant_ir::inline_plain_text(children) == "GAMMA\n\n\nDELTA"))
     );
     assert_eq!(
         mant_ir::validate_document(content.document.as_ref().unwrap()).len(),
@@ -142,6 +145,9 @@ fn synopsis_body_executes_fill_mode_changes_instead_of_flattening_every_child() 
 
 #[test]
 fn literal_display_executes_explicit_fill_switches_and_restores_literal_rows() {
+    // Both complete sources rechecked on fixed CVS five profiles. Bd's
+    // fill switches retain a filled Paragraph between literal owners;
+    // the second owner's executed .sp remains content, including through Bf.
     for wrapped in [false, true] {
         let body = "ALPHA\n.fi\nBETA\nSECOND\n.br\nTHIRD\n.nf\nGAMMA\n.sp 2\nDELTA";
         let body = if wrapped {
@@ -161,11 +167,9 @@ fn literal_display_executes_explicit_fill_switches_and_restores_literal_rows() {
             [
                 Block::Preformatted { .. },
                 Block::Paragraph { .. },
-                Block::Preformatted { .. },
-                Block::VerticalSpace { lines: 2, .. },
-                Block::Preformatted { .. },
+                Block::Preformatted { children, .. },
                 Block::Paragraph { .. }
-            ]
+            ] if mant_ir::inline_plain_text(children) == "GAMMA\n\n\nDELTA"
         ));
         assert_eq!(
             mant_ir::validate_document(content.document.as_ref().unwrap()).len(),

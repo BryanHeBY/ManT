@@ -657,6 +657,9 @@ See\n.Sx NAME\n.Sh NAME\n.Nm root-section-reference\n.Nd root reference\n",
 
 #[test]
 fn preserves_targets_moved_to_paragraph_breaks_inside_no_fill_displays() {
+    // Exact source rechecked with the fixed five profiles. termp_pp_pre
+    // contributes an empty row inside Bd; NODE_ID still marks its following
+    // semantic owner with the original source coordinate.
     let document = parse_manual_bytes(
         std::path::Path::new("no-fill-paragraph-target.8"),
         b".Dd September 4, 2026\n.Dt NO-FILL-PARAGRAPH-TARGET 8\n.Os\n\
@@ -669,25 +672,14 @@ fn preserves_targets_moved_to_paragraph_breaks_inside_no_fill_displays() {
     )
     .expect("lower a target moved onto a no-fill paragraph break");
 
-    let [
-        Block::Preformatted {
-            children: before, ..
-        },
-        Block::VerticalSpace { lines: 1, .. },
-        Block::Preformatted { children, .. },
-    ] = document.sections[0].blocks.as_slice()
-    else {
+    let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
         panic!(
-            "literal runs must retain their intervening paragraph request: {:?}",
+            "complete display retains the executed paragraph gap: {:?}",
             document.sections[0].blocks
         );
     };
-    assert_eq!(inline_text(before), "first line");
-    assert!(
-        !before
-            .iter()
-            .any(|inline| matches!(inline, Inline::Anchor { .. }))
-    );
+    assert_eq!(inline_text(children), "first line\n\nprompt hp(0,0)");
+    assert!(matches!(children.first(), Some(Inline::Code { value }) if value == "first line"));
     assert_eq!(
         children
             .iter()

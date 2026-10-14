@@ -1,116 +1,97 @@
-//! Accepted physical-row origins become existing per-block layout hints.
+//! Accepted physical-row origins become owner-local row layout, not blocks.
 
-use mant_ir::{Block, Inline, LayoutHint, SourceSpan};
-
-struct Segment {
-    origin: i32,
-    nodes: Vec<Inline>,
-}
+use mant_ir::{Block, Inline, LayoutHint, RowLayoutHint, SourceSpan};
+use std::collections::BTreeMap;
 
 pub(super) fn literal_blocks(
-    nodes: Vec<Inline>,
+    mut nodes: Vec<Inline>,
     layout: LayoutHint,
     source: Option<SourceSpan>,
 ) -> Vec<Block> {
-    let (segments, _) = split_origins(nodes, 0);
-    segments
-        .into_iter()
-        .filter_map(|mut segment| {
-            crate::mandoc::inline::strip_native_projection_markers(&mut segment.nodes);
-            let inline_layout = crate::mandoc::inline::take_inline_layout(&mut segment.nodes);
-            if segment.nodes.is_empty() {
-                return None;
-            }
-            let mut layout = layout;
-            layout.indent_columns = layout.indent_columns.saturating_add(segment.origin);
-            Some(Block::Preformatted {
-                inline_layout,
-                children: segment.nodes,
-                language: None,
-                layout,
-                source,
-            })
-        })
-        .collect()
+    let mut rows = Origins::default();
+    rows.visit(&mut nodes);
+    crate::mandoc::inline::strip_native_projection_markers(&mut nodes);
+    let mut inline_layout = crate::mandoc::inline::take_inline_layout(&mut nodes);
+    if nodes.is_empty() {
+        return Vec::new();
+    }
+    let mut hints: BTreeMap<_, _> = inline_layout
+        .row_hints
+        .drain(..)
+        .map(|hint| (hint.row, hint))
+        .collect();
+    for (row, origin) in rows.hints {
+        let hint = hints.entry(row).or_insert_with(|| RowLayoutHint {
+            row,
+            ..RowLayoutHint::default()
+        });
+        hint.indent_columns = hint.indent_columns.saturating_add(origin);
+    }
+    inline_layout.row_hints = hints
+        .into_values()
+        .filter(|hint| !hint.is_empty())
+        .collect();
+    vec![Block::Preformatted {
+        inline_layout,
+        children: nodes,
+        language: None,
+        layout,
+        source,
+    }]
 }
 
-fn split_origins(nodes: Vec<Inline>, inherited: i32) -> (Vec<Segment>, i32) {
-    let mut segments = vec![Segment {
-        origin: inherited,
-        nodes: Vec::new(),
-    }];
-    let mut origin = inherited;
-    for mut node in nodes {
-        if let Some(next) = crate::mandoc::inline::native_row_origin(&node) {
-            origin = next;
-            append_segment(
-                &mut segments,
-                Segment {
-                    origin,
-                    nodes: Vec::new(),
-                },
-            );
-            continue;
-        }
-        let children = match &mut node {
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => Some(std::mem::take(children)),
-            _ => None,
-        };
-        if let Some(children) = children {
-            let (pieces, last) = split_origins(children, origin);
-            let mut first = true;
-            for piece in pieces {
-                if !first && matches!(node, Inline::Link { .. }) {
-                    append_segment(&mut segments, piece);
-                    continue;
-                }
-                let mut wrapped = node.clone();
-                match &mut wrapped {
-                    Inline::Strong { children }
-                    | Inline::Emphasis { children }
-                    | Inline::Link { children, .. } => {
-                        *children = piece.nodes;
-                    }
-                    // A semantic owner remains one identity. Later physical
-                    // rows retain its accepted glyphs without inventing a
-                    // second authored link or portable fallback.
-                    _ => unreachable!("only transparent inline containers have children"),
-                }
-                append_segment(
-                    &mut segments,
-                    Segment {
-                        origin: piece.origin,
-                        nodes: vec![wrapped],
-                    },
-                );
-                first = false;
-            }
-            origin = last;
-        } else {
-            segments
-                .last_mut()
-                .expect("open origin segment")
-                .nodes
-                .push(node);
+#[derive(Default)]
+struct Origins {
+    row: u32,
+    origin: i32,
+    occupied: bool,
+    hints: BTreeMap<u32, i32>,
+}
+
+impl Origins {
+    fn advance(&mut self) {
+        self.row = self.row.saturating_add(1);
+        self.occupied = false;
+        if self.origin != 0 {
+            self.hints.insert(self.row, self.origin);
         }
     }
-    (segments, origin)
-}
 
-fn append_segment(segments: &mut Vec<Segment>, mut incoming: Segment) {
-    let previous = segments.last_mut().expect("open origin segment");
-    if previous.origin == incoming.origin {
-        previous.nodes.append(&mut incoming.nodes);
-    } else if !mant_ir::geometry::has_literal_rows(&previous.nodes) {
-        previous.origin = incoming.origin;
-        previous.nodes.append(&mut incoming.nodes);
-    } else {
-        // A new actually printed origin starts a native physical row. The
-        // block join owns its delimiter once, rather than adding a second
-        // newline to the existing inline row close.
-        crate::mandoc::inline::consume_one_row_ending(&mut previous.nodes);
-        segments.push(incoming);
+    fn visit(&mut self, nodes: &mut Vec<Inline>) {
+        let mut output = Vec::with_capacity(nodes.len());
+        for mut node in std::mem::take(nodes) {
+            if let Some(origin) = crate::mandoc::inline::native_row_origin(&node) {
+                // term_field() can accept a later native physical row without
+                // another authored newline. Its changed accepted origin owns
+                // that delimiter exactly once, inside the original annotation.
+                if origin != self.origin && self.occupied {
+                    output.push(Inline::line_break());
+                    self.advance();
+                }
+                self.origin = origin;
+                self.hints.insert(self.row, origin);
+                continue;
+            }
+            match &mut node {
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => self.visit(children),
+                Inline::LineBreak {} => self.advance(),
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    self.occupied = true;
+                    for _ in value.bytes().filter(|byte| *byte == b'\n') {
+                        self.advance();
+                    }
+                    if !value.ends_with('\n') {
+                        self.occupied = true;
+                    }
+                }
+                Inline::Anchor { .. } => {}
+            }
+            output.push(node);
+        }
+        *nodes = output;
     }
 }

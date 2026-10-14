@@ -137,6 +137,7 @@ impl super::BlockLowerer<'_, '_> {
         self.settle_no_fill_inline();
         self.state.flush_paragraph();
         self.state.flush_preformatted();
+        self.state.literal_assembly.end(self.state.output.len());
         self.state.set_source_indent(original_origin);
         self.state
             .formatter

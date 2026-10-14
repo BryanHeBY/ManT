@@ -187,6 +187,17 @@ it represents that requested spacing, never an empty navigation placeholder.
 
 Lists contain block-capable items so nested lists and displays do not flatten into prose. Each definition term is a `DefinitionTerm { content, inline_layout }` with one authoritative inline tree and optional row corrections; its JSON object uses `content` and `inlineLayout`. `DefinitionItem.terms` is an array of these objects, not an array of inline arrays. Descriptions contain blocks. Table cells likewise contain blocks even when a source parser currently produces a single paragraph.
 
+A continuous roff no-fill/literal display produces one complete
+`Preformatted` block: internal paragraph spacing is blank code content, and
+changes of accepted row origin use `InlineLayout`, not additional blocks.
+Explicitly separate displays, prose and semantic structures remain separate.
+Only source-proven internal gaps are absorbed; unproven leading/trailing gaps
+and metadata-only layout boundaries retain their resolved representation.
+This owner contract is shared by terminal backgrounds, copy/search, Markdown
+fences and future HTML code surfaces; consumers do not infer continuations
+from neighboring blocks. Normalization can change block paths, which are always
+relative to the resulting snapshot.
+
 An equation expression retains mathematical structure, not parser boxes or
 argument counters. `EquationKind` distinguishes `Text`, `Operation`, `Sequence`,
 `Group`, `Pile`, and `Matrix`: a sequence orders expressions without introducing
