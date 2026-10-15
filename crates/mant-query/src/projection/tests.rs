@@ -175,6 +175,60 @@ fn query_with_semantic_entries() -> ResolvedContent {
 }
 
 #[test]
+fn manual_entry_citations_remain_queries_while_explicit_entry_sets_stay_exact() {
+    let mut query = query();
+    query.address = Some(mant_ir::DocumentAddress::Manual {
+        name: "regex".into(),
+        manual_section: "7".into(),
+    });
+    let mut item = definition("ed", EntryKind::Command, &["ed"], &["ed"], Vec::new());
+    let reference = mant_ir::DocumentReference::Manual {
+        name: "ed".into(),
+        manual_section: Some("1".into()),
+    };
+    item.terms[0].content = vec![Inline::Link {
+        target: mant_ir::LinkTarget::Manual {
+            name: "ed".into(),
+            manual_section: Some("1".into()),
+        },
+        title: None,
+        children: vec![Inline::Code { value: "ed".into() }],
+    }];
+    item.entry.as_mut().unwrap().value_domain = Some(mant_ir::ValueDomain::EntrySet {
+        reference: reference.clone(),
+        entry_kinds: vec![EntryKind::Command],
+        source: None,
+    });
+    query.document.as_mut().unwrap().blocks = vec![Block::DefinitionList {
+        items: vec![item],
+        declaration_groups: Vec::new(),
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let outline = build_outline_projection(&query, EntryProjection::All, None).unwrap();
+    let OutlineNode::DocumentEntry {
+        document_targets,
+        value_domain,
+        ..
+    } = &outline.nodes[0].children()[0]
+    else {
+        panic!("expected projected root entry");
+    };
+    assert_eq!(document_targets.len(), 1);
+    assert_eq!(document_targets[0].reference, reference);
+    assert_eq!(document_targets[0].address, None);
+    let Some(domain) = value_domain else {
+        panic!("expected declared entry set")
+    };
+    assert!(
+        matches!(domain.as_ref(), mant_protocol::EntryValueDomain::EntrySet {
+        address: Some(mant_ir::DocumentAddress::Manual { name, manual_section }), ..
+    } if name == "ed" && manual_section == "1")
+    );
+}
+
+#[test]
 fn builds_one_based_tree_paths_without_copying_blocks() {
     let outline = build_outline(&query()).expect("outline");
 

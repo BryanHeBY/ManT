@@ -81,12 +81,9 @@ fn link_targets() -> Vec<(mant_ir::LinkTarget, LinkTarget)> {
                 name: "printf".into(),
                 manual_section: Some("3".into()),
             },
-            LinkTarget::Document {
-                address: DocumentAddress::Manual {
-                    name: "printf".into(),
-                    manual_section: "3".into(),
-                },
-                fragment: None,
+            LinkTarget::Manual {
+                name: "printf".into(),
+                manual_section: Some("3".into()),
             },
         ),
         (

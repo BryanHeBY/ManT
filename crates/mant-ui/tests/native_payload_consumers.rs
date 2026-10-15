@@ -225,13 +225,11 @@ fn assert_link_actions(query: &ResolvedContent) {
         });
         assert_eq!(
             opened,
-            [DocumentOpenTarget::Address {
-                // A retained section qualifies the manual identity before
-                // the host request; section-less names use Manual instead.
-                address: mant_protocol::DocumentAddress::Manual {
-                    name: "printf".into(),
-                    manual_section: "3".into(),
-                },
+            [DocumentOpenTarget::Manual {
+                // A citation retains its requested section; only the loader
+                // can select and return an actual registered page address.
+                name: "printf".into(),
+                manual_section: Some("3".into()),
             }]
         );
         assert_eq!(opened_targets(&mut app).len(), 0);

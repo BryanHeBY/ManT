@@ -63,6 +63,7 @@ struct ScopeResolution {
     queue: VecDeque<usize>,
     content_bytes: u64,
     failures: ResolutionFailures,
+    resolved_queries: BTreeMap<ResolutionKey, DocumentAddress>,
     unresolved_keys: BTreeSet<UnresolvedKey>,
 }
 
@@ -72,6 +73,22 @@ struct ResolutionKey {
     selector: String,
     source: Option<String>,
     manual_section: Option<String>,
+}
+
+impl ResolutionKey {
+    fn new(selector: &DocumentSelector, policy: LoadPolicy) -> Self {
+        Self {
+            policy: match policy {
+                LoadPolicy::Combined => 0,
+                LoadPolicy::ManualOnly => 1,
+                LoadPolicy::TldrOnly => 2,
+                LoadPolicy::ManualWithTldr => 3,
+            },
+            selector: selector.selector.clone(),
+            source: selector.source.clone(),
+            manual_section: selector.manual_section.clone(),
+        }
+    }
 }
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct UnresolvedKey {
@@ -94,17 +111,7 @@ impl ResolutionFailures {
         policy: LoadPolicy,
         load: impl FnOnce() -> Result<T, String>,
     ) -> Result<T, String> {
-        let key = ResolutionKey {
-            policy: match policy {
-                LoadPolicy::Combined => 0,
-                LoadPolicy::ManualOnly => 1,
-                LoadPolicy::TldrOnly => 2,
-                LoadPolicy::ManualWithTldr => 3,
-            },
-            selector: selector.selector.clone(),
-            source: selector.source.clone(),
-            manual_section: selector.manual_section.clone(),
-        };
+        let key = ResolutionKey::new(selector, policy);
         if let Some(reason) = self.0.get(&key) {
             return Err(reason.clone());
         }
@@ -132,6 +139,7 @@ impl ScopeResolution {
             queue: VecDeque::new(),
             content_bytes: 0,
             failures: ResolutionFailures::default(),
+            resolved_queries: BTreeMap::new(),
             unresolved_keys: BTreeSet::new(),
         }
     }
@@ -144,7 +152,22 @@ impl ScopeResolution {
                     .map_err(|error| error.to_string())
             }) {
                 Ok(bundle) => {
+                    let address = bundle.address.clone();
                     self.insert_root(bundle, selector, root_index);
+                    if let Some(address) =
+                        address.filter(|address| self.positions.contains_key(address))
+                    {
+                        self.resolved_queries.insert(
+                            ResolutionKey::new(selector, LoadPolicy::Combined),
+                            address.clone(),
+                        );
+                        if matches!(address, DocumentAddress::Manual { .. }) {
+                            self.resolved_queries.insert(
+                                ResolutionKey::new(selector, LoadPolicy::ManualOnly),
+                                address,
+                            );
+                        }
+                    }
                 }
                 Err(error) => self.record_unresolved(UnresolvedDocument {
                     from: None,
@@ -215,7 +238,7 @@ impl ScopeResolution {
     fn record_depth_frontier(&mut self, position: usize) {
         let from = self.graph.documents[position].address.clone();
         for reference in self.collect_outbound_references(position) {
-            if let Some(address) = reference.exact_address(&from) {
+            if let Some(address) = self.known_reference_address(&reference, &from) {
                 let edge = DocumentEdge {
                     from: from.clone(),
                     to: address,
@@ -250,7 +273,7 @@ impl ScopeResolution {
         depth: u16,
         reference: &ScopeReference,
     ) {
-        if let Some(address) = reference.exact_address(from) {
+        if let Some(address) = self.known_reference_address(reference, from) {
             let edge = DocumentEdge {
                 from: from.clone(),
                 to: address.clone(),
@@ -310,15 +333,48 @@ impl ScopeResolution {
             kind: reference.kind,
         };
         if self.record_existing_edge(&edge) {
+            self.resolved_queries
+                .insert(ResolutionKey::new(&selector, policy), address);
             return;
         }
         if self.at_document_limit() {
             self.record_frontier(from, reference, TraversalLimit::MaxDocuments);
             return;
         }
-        if !self.insert_linked(bundle, address, from, depth + 1, edge) {
+        if self.insert_linked(bundle, address.clone(), from, depth + 1, edge) {
+            self.resolved_queries
+                .insert(ResolutionKey::new(&selector, policy), address);
+        } else {
             self.record_frontier(from, reference, TraversalLimit::MaxContentBytes);
         }
+    }
+
+    /// A citation becomes an alias only after a successful selection and
+    /// admission. A category spelling alone is never a resolved identity.
+    fn known_reference_address(
+        &self,
+        reference: &ScopeReference,
+        from: &DocumentAddress,
+    ) -> Option<DocumentAddress> {
+        reference.exact_address(from).or_else(|| {
+            // An already admitted preferred exact page proves existence and
+            // wins every compatible query. A loaded extension alone cannot
+            // prove that a main-category query would select that extension.
+            if let Some(preferred) = reference.target.resolve_from(from)
+                && self.positions.contains_key(&preferred)
+            {
+                return Some(preferred);
+            }
+            let selector = reference.selector(from)?;
+            let policy = if reference.kind == DocumentEdgeKind::Manual {
+                LoadPolicy::ManualOnly
+            } else {
+                LoadPolicy::Combined
+            };
+            self.resolved_queries
+                .get(&ResolutionKey::new(&selector, policy))
+                .cloned()
+        })
     }
 
     fn record_existing_edge(&mut self, edge: &DocumentEdge) -> bool {

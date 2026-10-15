@@ -49,11 +49,9 @@ fn clicked_manual_links_keep_the_quick_reference_and_native_document() {
     for (href, expected_target) in [
         (
             "man:git(1)",
-            mant_protocol::DocumentOpenTarget::Address {
-                address: DocumentAddress::Manual {
-                    name: "git".into(),
-                    manual_section: "1".into(),
-                },
+            mant_protocol::DocumentOpenTarget::Manual {
+                name: "git".into(),
+                manual_section: Some("1".into()),
             },
         ),
         (

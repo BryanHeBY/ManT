@@ -270,7 +270,8 @@ pub enum LoadedFragment {
 pub enum ReferenceResolution {
     /// External/email targets are not probed.
     NotApplicable {},
-    /// Catalog lookup is required, such as a manual without a section.
+    /// Catalog lookup is required, including manual citations with a section.
+    /// A citation states a query constraint, not the selected page's address.
     NotQueried {
         /// Only unloaded fragment facts may be stated.
         fragment: UnloadedFragment,

@@ -217,7 +217,7 @@ fn authored_fragments_jump_to_their_canonical_target_rows() {
 }
 
 #[test]
-fn manual_references_are_typed_clickable_links_when_the_section_is_known() {
+fn manual_references_preserve_their_unresolved_section_query() {
     let lines = styled_inline_lines(
         &[Inline::Link {
             target: mant_ir::LinkTarget::Manual {
@@ -242,12 +242,9 @@ fn manual_references_are_typed_clickable_links_when_the_section_is_known() {
     );
     assert_eq!(
         lines[0].links[0].target,
-        LinkTarget::Document {
-            address: DocumentAddress::Manual {
-                name: "printf".to_owned(),
-                manual_section: "3".to_owned(),
-            },
-            fragment: None,
+        LinkTarget::Manual {
+            name: "printf".to_owned(),
+            manual_section: Some("3".to_owned()),
         }
     );
 }

@@ -16,22 +16,46 @@ pub(crate) use scan::deduplicate_paths;
 use scan::normalize_locale;
 use scan::{current_locale, scan_manual_root};
 
+/// Whether a native category selects an exact page or an unresolved query.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ManualLookupMode {
+    /// Require the supplied category, including a bare major category, exactly.
+    #[default]
+    Exact,
+    /// Prefer an exact category, then allow alphabetic extensions of a bare
+    /// single-digit major category. Suffixed and letter categories stay exact.
+    Compatible,
+}
+
 /// One validated manual lookup independent from CLI token syntax.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManualRequest {
     /// Manual topic without its category suffix.
     pub name: String,
-    /// Optional exact native category such as `1` or `3p`.
+    /// Optional native category such as `1` or `3p`.
     pub manual_section: Option<String>,
+    /// Whether the category denotes an exact page identity or a query.
+    pub lookup_mode: ManualLookupMode,
 }
 
 impl ManualRequest {
-    /// Construct a normalized lookup request without performing I/O.
+    /// Construct an exact lookup request without performing I/O.
     #[must_use]
     pub fn new(name: impl Into<String>, manual_section: Option<String>) -> Self {
         Self {
             name: name.into(),
             manual_section,
+            lookup_mode: ManualLookupMode::Exact,
+        }
+    }
+
+    /// Construct an unresolved query or reference with major-category fallback.
+    #[must_use]
+    pub fn query(name: impl Into<String>, manual_section: Option<String>) -> Self {
+        Self {
+            name: name.into(),
+            manual_section,
+            lookup_mode: ManualLookupMode::Compatible,
         }
     }
 }
@@ -52,7 +76,7 @@ pub struct ManualPage {
     pub manual_root: PathBuf,
 }
 
-/// Immutable index shared by discovery and exact manual lookup.
+/// Immutable index shared by discovery, queries and exact manual lookup.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ManualIndex {
     roots: Vec<PathBuf>,
@@ -119,6 +143,27 @@ impl ManualIndex {
         })
     }
 
+    /// Resolve a query, preferring the exact category across all roots before
+    /// trying same-major alphabetic extensions in this index's section order.
+    /// No file is opened and no different major category can satisfy a request.
+    #[must_use]
+    pub fn find_query(&self, name: &str, section: Option<&str>) -> Option<&ManualPage> {
+        if let Some(page) = self.find(name, section) {
+            return Some(page);
+        }
+        let section = section?.trim();
+        if section.len() != 1 || !section.as_bytes()[0].is_ascii_digit() {
+            return None;
+        }
+        let name = name.trim();
+        self.pages.iter().find(|page| {
+            manual_names_equal(&page.name, name)
+                && page.section.strip_prefix(section).is_some_and(|suffix| {
+                    !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_alphabetic())
+                })
+        })
+    }
+
     /// Exact manual categories available for one logical page name.
     #[must_use]
     pub fn available_manual_sections(&self, name: &str) -> Vec<String> {
@@ -149,7 +194,7 @@ pub enum LocateError {
     NotFound {
         /// Requested manual topic.
         name: String,
-        /// Exact requested native category, when supplied.
+        /// Requested native category, when supplied.
         requested_manual_section: Option<String>,
         /// Other indexed categories available for the same topic.
         available_manual_sections: Vec<String>,
@@ -228,12 +273,13 @@ pub fn locate_manual_source_in(
     if section.is_some_and(|section| !crate::is_manual_section(section)) {
         return Err(LocateError::InvalidManualSection);
     }
-    index
-        .find(name, section)
-        .cloned()
-        .ok_or_else(|| LocateError::NotFound {
-            name: name.to_owned(),
-            requested_manual_section: section.map(ToOwned::to_owned),
-            available_manual_sections: index.available_manual_sections(name),
-        })
+    let page = match request.lookup_mode {
+        ManualLookupMode::Exact => index.find(name, section),
+        ManualLookupMode::Compatible => index.find_query(name, section),
+    };
+    page.cloned().ok_or_else(|| LocateError::NotFound {
+        name: name.to_owned(),
+        requested_manual_section: section.map(ToOwned::to_owned),
+        available_manual_sections: index.available_manual_sections(name),
+    })
 }

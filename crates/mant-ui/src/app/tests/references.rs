@@ -105,33 +105,89 @@ fn an_entry_and_its_own_inline_anchor_are_one_destination() {
 }
 
 #[test]
-fn unqualified_manual_link_preserves_manual_only_intent_for_the_host() {
-    let mut bundle = navigation_bundle();
-    bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
-        inline_layout: mant_ir::InlineLayout::default(),
-        children: vec![Inline::Link {
-            target: mant_ir::LinkTarget::Manual {
-                name: "printf".into(),
-                manual_section: None,
-            },
-            title: None,
-            children: vec![Inline::Text {
-                value: "printf".into(),
+fn manual_link_clicks_preserve_manual_only_queries_with_any_section_constraint() {
+    for section in [None, Some("1"), Some("1p"), Some("l")] {
+        let mut bundle = navigation_bundle();
+        bundle.document.as_mut().unwrap().sections[0].blocks = vec![AstBlock::Paragraph {
+            inline_layout: mant_ir::InlineLayout::default(),
+            children: vec![Inline::Link {
+                target: mant_ir::LinkTarget::Manual {
+                    name: "ed".into(),
+                    manual_section: section.map(str::to_owned),
+                },
+                title: None,
+                children: vec![Inline::Text { value: "ed".into() }],
             }],
-        }],
-        layout: LayoutHint::default(),
-        source: None,
-    }];
-    let mut app = App::new(&bundle);
-    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
-    terminal.draw(|frame| app.draw(frame)).unwrap();
-    let region =
-        app.session.rendered_cache[&app.geometry.content.width].search("printf")[0].clone();
-    click_document_cell(&mut app, region.start_column, region.row);
-    assert!(matches!(app.take_open_request().unwrap().document,
-        mant_protocol::DocumentOpenTarget::Manual { name, manual_section: None } if name == "printf"));
-    assert_eq!(app.navigation.history_lengths().0, 0);
-    assert_eq!(app.session.current_bundle.label, "demo");
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let mut app = App::new(&bundle);
+        let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let region =
+            app.session.rendered_cache[&app.geometry.content.width].search("ed")[0].clone();
+        click_document_cell(&mut app, region.start_column, region.row);
+        let expected = mant_protocol::DocumentOpenTarget::Manual {
+            name: "ed".into(),
+            manual_section: section.map(str::to_owned),
+        };
+        assert_eq!(app.take_open_request().unwrap().document, expected);
+        assert_eq!(app.navigation.history_lengths().0, 0);
+        assert_eq!(app.session.current_bundle.label, "demo");
+
+        app.selected = app
+            .session
+            .document
+            .navigation()
+            .iter()
+            .position(|node| node.kind == NavKind::Reference)
+            .unwrap();
+        app.open_selected_reference();
+        assert_eq!(app.take_open_request().unwrap().document, expected);
+    }
+}
+
+#[test]
+fn resolved_manual_queries_store_actual_addresses_and_reopen_history_exactly() {
+    let source = manual_bundle("regex", "7");
+    let destination = manual_bundle("ed", "1p");
+    let mut app = App::new(&source);
+    app.activate_link_target(crate::document::LinkTarget::Manual {
+        name: "ed".into(),
+        manual_section: Some("1".into()),
+    });
+    let request = app.take_open_request().unwrap();
+    assert_eq!(
+        request.document,
+        mant_protocol::DocumentOpenTarget::Manual {
+            name: "ed".into(),
+            manual_section: Some("1".into()),
+        }
+    );
+    app.complete_open(&destination, request);
+    assert_eq!(app.session.current_bundle.address, destination.address);
+    assert_eq!(app.navigation.tabs().last().unwrap().label(), "ed(1p)");
+
+    app.navigate_history(true);
+    let request = app.take_open_request().unwrap();
+    assert_eq!(request.document, source.address.clone().unwrap().into());
+    app.complete_open(&source, request);
+    app.navigate_history(false);
+    let request = app.take_open_request().unwrap();
+    assert_eq!(
+        request.document,
+        destination.address.clone().unwrap().into()
+    );
+    app.complete_open(&destination, request);
+
+    // A catalog selection already identifies a concrete page: it does not
+    // become a query even when its address has a numeric main section.
+    let exact = DocumentAddress::Manual {
+        name: "ed".into(),
+        manual_section: "1".into(),
+    };
+    app.request_open(exact.clone(), None);
+    assert_eq!(app.take_open_request().unwrap().document, exact.into());
 }
 
 #[test]

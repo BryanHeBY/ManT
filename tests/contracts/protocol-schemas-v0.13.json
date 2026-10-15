@@ -8335,11 +8335,11 @@
         ]
       },
       "EntryDocumentTarget": {
-        "description": "One exact cross-document destination declared by a semantic entry term.",
+        "description": "One cross-document reference declared by a semantic entry term.",
         "type": "object",
         "properties": {
           "address": {
-            "description": "Exact logical destination resolved in the source document namespace.\n\nThis is absent for direct-file inputs and references, such as an\nunqualified manual name, that require catalog lookup.",
+            "description": "Exact logical destination resolved in the source document namespace.\n\nThis is absent for direct-file inputs and manual citations, including\nsection-constrained citations, that require catalog selection.",
             "anyOf": [
               {
                 "$ref": "#/$defs/DocumentAddress"
@@ -9711,7 +9711,7 @@
             ]
           },
           {
-            "description": "Catalog lookup is required, such as a manual without a section.",
+            "description": "Catalog lookup is required, including manual citations with a section.\nA citation states a query constraint, not the selected page's address.",
             "type": "object",
             "properties": {
               "fragment": {
@@ -13174,7 +13174,7 @@
                 "const": "document"
               },
               "manualSection": {
-                "description": "Optional native manual category such as `1` or `3p`.",
+                "description": "Optional exact-first native category query. An absent single-digit\nmain category can select an alphabetic extension; suffixes stay exact.",
                 "type": [
                   "string",
                   "null"
@@ -14563,7 +14563,7 @@
         "type": "object",
         "properties": {
           "manualSection": {
-            "description": "Optional native manual category for an unqualified selector.",
+            "description": "Optional exact-first native category query for an unqualified selector;\nan absent single-digit main category permits alphabetic extensions.",
             "type": [
               "string",
               "null"
@@ -18560,7 +18560,7 @@
         "type": "object",
         "properties": {
           "manualSection": {
-            "description": "Optional native manual category for an unqualified selector.",
+            "description": "Optional exact-first native category query for an unqualified selector;\nan absent single-digit main category permits alphabetic extensions.",
             "type": [
               "string",
               "null"

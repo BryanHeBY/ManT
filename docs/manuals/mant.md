@@ -205,9 +205,20 @@ a system `mandoc` executable is required for ordinary use.
 An unqualified name with pages in several native categories follows `MANSECT`
 when that variable contains a colon-separated order. Without it, ManT uses the
 stable man-db order `1:1p:n:l:8:3:3p:0:0p:2:3type:5:4:9:6:7`; categories absent
-from that list follow in lexical order. An explicit `--man-section`, leading
-section argument, or `manual/SECTION/NAME` catalog path always selects exactly
-that category.
+from that list follow in lexical order. A named query with `--man-section`, a
+leading section argument, or `NAME(SECTION)` first selects that exact category.
+If a single-digit category such as `1` is absent, the same query may select an
+alphabetic extension such as `1p` or `1m`, following the captured category order.
+An explicit suffix, `l`, or `n` stays exact; `1` never selects `10`, `1p2`, or `3`.
+Existing root and language precedence still choose among copies of one page.
+An existing page that fails to read or parse is an error, not permission to
+select an extension instead.
+
+Complete `manual/SECTION/NAME` catalog addresses, catalog filters and navigation
+history remain exact in both name and category. They do not apply extensionless
+executable-name discovery on Windows. Resolved results record the actual page:
+when only `ed(1p)` is installed, `mant 1 ed` opens it as `ed(1p)`, while
+`mant manual/1/ed` reports that its exact destination is missing.
 
 The accepted section spellings are deliberately unambiguous:
 
@@ -244,8 +255,9 @@ expansion pass; for example, a shell expands `$HOME` in
 and local Git repository strings do not use this configuration expansion.
 
 <!-- mant:entries role=option case=sensitive -->
-- `--man-section MAN_SECTION`: Select the full document from one exact native
-  manual category such as `1` or `3p`. In an ordinary combined query, a selected
+- `--man-section MAN_SECTION`: Select native full content using exact-first
+  category matching; an absent single-digit category permits alphabetic
+  extensions. Catalog discovery still filters one exact category. In a combined query, a selected
   section `1` or `8` family page may still receive its command quick reference.
 - `--manual`: Require only a native manual instead of registered Markdown with
   the same name or an attached quick reference.
@@ -759,8 +771,10 @@ Underlined references can be followed directly. Markdown fragments and mdoc
 `Sx` references jump inside the current page. Relative Markdown links preserve
 their hierarchy but resolve only inside the current registered source. mdoc
 `Xr`, GNU man `MR`, recognized strong `name(section)` references, and validated
-legacy Sphinx empty-destination references resolve to an exact manual section
-wherever they occur in a page. Bare `name(section)` prose is not inferred as a
+legacy Sphinx empty-destination references use the same exact-first manual query
+resolver wherever they occur in a page. Thus `ed(1)` can open an installed
+`ed(1p)` when `ed(1)` is absent. The source label stays `ed(1)`; the opened page
+and its history retain the actual `1p` identity. Bare `name(section)` prose is not inferred as a
 link. HTTP(S) and email links open through the platform's
 default handler; local-file and executable URL schemes remain visible but
 inert. Successful document and in-page jumps are recorded in a bounded

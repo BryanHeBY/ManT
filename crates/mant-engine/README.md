@@ -306,7 +306,9 @@ assert!(evidence.evidence.iter().any(|owner| owner.bases.iter().any(|basis| matc
 ```
 
 Named resolution treats the full document and command quick reference as two
-orthogonal facets. A manual section selects an exact native full document; it
+orthogonal facets. A manual query prefers its exact category, then permits
+alphabetic extensions of an absent single-digit main category. Exact catalog
+addresses, suffixed categories and letter categories retain exact selection. It
 does not by itself disable a compatible section `1` or `8` tldr attachment.
 `mant_loader::LoadPolicy::ManualOnly` excludes that facet, while `TldrOnly` requests it
 without requiring a full document. Dotted names are never split heuristically.

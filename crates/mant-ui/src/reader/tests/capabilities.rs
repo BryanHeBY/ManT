@@ -98,11 +98,9 @@ fn explicit_capabilities_are_called_once_in_original_service_order() {
         calls.borrow_mut().push("open");
         assert_eq!(
             target,
-            &DocumentOpenTarget::Address {
-                address: mant_protocol::DocumentAddress::Manual {
-                    name: "destination".into(),
-                    manual_section: "1".into(),
-                },
+            &DocumentOpenTarget::Manual {
+                name: "destination".into(),
+                manual_section: Some("1".into()),
             }
         );
         Err("load failed".into())

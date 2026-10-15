@@ -34,6 +34,21 @@ Loading errors are separate from the application's view-validation errors.
 Only the composition layer accepts a complete request and joins loading with
 semantic query execution.
 
+Manual queries and references resolve before they become page addresses. A bare
+single-digit category such as `1` first selects the exact category across all
+indexed roots; only if it is absent may an alphabetic extension such as `1p`
+match. Extension candidates follow the index's captured `MANSECT`/default order,
+while root and locale precedence remain unchanged within a category. Suffixed
+categories and `l`/`n` stay exact. A selected source's read, parse or empty-document
+failure never retries another category. The resolved address and missing parsed
+section metadata use the selected page's real category.
+
+Catalog addresses such as `manual/1/tool` are exact in both topic and category;
+history and catalog selection cannot silently retarget another page. For direct
+index users, `ManualRequest::new` and `ManualIndex::find` retain exact lookup;
+`ManualRequest::query` and `ManualIndex::find_query` opt into query compatibility.
+Neither lookup rewrites a source reference's visible label or changes document IR.
+
 ```rust,no_run
 use mant_loader::{DocumentLoader, LoadSpec, LoadPolicy};
 use mant_protocol::InputFormat;
@@ -74,9 +89,9 @@ See [configuration and migration](https://github.com/BryanHeBY/ManT/blob/main/do
   single admission operation commits content, graph positions, traversal work
   and byte accounting together; failed candidates do not consume a document
   slot or leave half a graph node.
-- Negative resolution caching is request-local and qualified by policy, source
-  and manual section. A frontier is a coverage boundary, not proof that a
-  document does not exist.
+- Negative resolution caching is request-local and qualified by query/address
+  intent, policy, source and manual section. A frontier is a coverage boundary,
+  not proof that a document does not exist.
 - Tldr cache discovery may inspect executable availability but never starts a
   program. Cache updates and host process execution belong to the application.
 

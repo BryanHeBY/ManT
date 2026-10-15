@@ -35,7 +35,9 @@ pub use manual_paths::{
     ManualPathDiagnostic, ManualRootDiscovery, discover_manual_roots, inspect_manual_roots,
 };
 pub use scope_load::{LoadedDocumentScope, ScopeLoadError, validate_document_scope};
-pub use source::{LocateError, ManualIndex, ManualPage, ManualRequest, locate_manual_source_in};
+pub use source::{
+    LocateError, ManualIndex, ManualLookupMode, ManualPage, ManualRequest, locate_manual_source_in,
+};
 pub use tldr::{
     HostPlatform, TldrCacheError, get_system_tldr_cache_dirs, get_tldr_cache_dir,
     get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs, normalize_tldr_topic,

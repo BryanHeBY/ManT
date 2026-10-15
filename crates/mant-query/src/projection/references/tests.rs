@@ -277,6 +277,49 @@ fn cross_document_address_never_claims_unloaded_fragment_validity() {
 }
 
 #[test]
+fn manual_citations_need_lookup_except_for_the_known_exact_loaded_source() {
+    let document = document(vec![
+        json!({"type":"link","target":{"kind":"manual","name":"ed","manualSection":"1"},"children":[]}),
+        json!({"type":"link","target":{"kind":"manual","name":"ed","manualSection":"1p"},"children":[]}),
+        json!({"type":"link","target":{"kind":"manual","name":"ed","manualSection":"l"},"children":[]}),
+        json!({"type":"link","target":{"kind":"manual","name":"ed"},"children":[]}),
+    ]);
+    let source = DocumentAddress::Manual {
+        name: "ed".into(),
+        manual_section: "1p".into(),
+    };
+    for current in [None, Some(&source)] {
+        let result = project_references(&document, current, ReferenceScope::Document, &all());
+        assert_eq!(result.records.len(), 4);
+        for (index, record) in result.records.iter().enumerate() {
+            if index == 1 && current.is_some() {
+                // The exact preferred page is already loaded. No fallback or
+                // existence inference is needed for this self reference.
+                assert_eq!(
+                    record.resolution,
+                    ReferenceResolution::Loaded {
+                        address: Some(source.clone()),
+                        fragment: LoadedFragment::Absent {},
+                    }
+                );
+            } else {
+                assert_eq!(
+                    record.resolution,
+                    ReferenceResolution::NotQueried {
+                        fragment: UnloadedFragment::Absent {},
+                    }
+                );
+            }
+        }
+        let wire = serde_json::to_string(&result).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ReferenceInventory>(&wire).unwrap(),
+            result
+        );
+    }
+}
+
+#[test]
 fn local_validation_exhaustion_is_not_missing_and_does_not_change_exact_inventory() {
     let document = document(vec![
         local("target"),

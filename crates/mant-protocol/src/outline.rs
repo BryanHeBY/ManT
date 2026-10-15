@@ -173,7 +173,7 @@ impl<'de> Deserialize<'de> for QueryOutline {
     }
 }
 
-/// One exact cross-document destination declared by a semantic entry term.
+/// One cross-document reference declared by a semantic entry term.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EntryDocumentTarget {
@@ -184,8 +184,8 @@ pub struct EntryDocumentTarget {
     pub reference: DocumentReference,
     /// Exact logical destination resolved in the source document namespace.
     ///
-    /// This is absent for direct-file inputs and references, such as an
-    /// unqualified manual name, that require catalog lookup.
+    /// This is absent for direct-file inputs and manual citations, including
+    /// section-constrained citations, that require catalog selection.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<DocumentAddress>,
 }

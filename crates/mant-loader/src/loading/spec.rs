@@ -20,7 +20,9 @@ pub enum LoadSpec<'a> {
         selector: &'a str,
         /// Optional registered source namespace.
         source: Option<&'a str>,
-        /// Optional native manual category.
+        /// Optional native manual query category. A bare single digit prefers
+        /// that exact category, then its alphabetic extensions. A catalog
+        /// selector such as `manual/1/tool` always identifies an exact page.
         manual_section: Option<&'a str>,
     },
     /// Read an explicitly authorized local file.

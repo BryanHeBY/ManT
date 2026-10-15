@@ -513,7 +513,7 @@ fn f1_opens_and_escape_closes_keyboard_help() {
 }
 
 #[test]
-fn clicking_a_manual_reference_requests_the_exact_page() {
+fn clicking_a_manual_reference_requests_a_section_constrained_query() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("manual").sections[0]
         .blocks
@@ -549,10 +549,10 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
     click_document_cell(&mut app, region.start_column, region.row);
 
     assert_eq!(
-        app.take_open_request().expect("manual request").address(),
-        &DocumentAddress::Manual {
+        app.take_open_request().expect("manual request").document,
+        mant_protocol::DocumentOpenTarget::Manual {
             name: "git-add".to_owned(),
-            manual_section: "1".to_owned(),
+            manual_section: Some("1".to_owned()),
         }
     );
 }
@@ -588,16 +588,16 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
         app.session.content_scroll = region.row;
         click_document_cell(&mut app, region.start_column, region.row);
         if let Some(request) = app.take_open_request() {
-            opened = Some(request.address().clone());
+            opened = Some(request.document);
             break;
         }
     }
 
     assert_eq!(
         opened,
-        Some(DocumentAddress::Manual {
+        Some(mant_protocol::DocumentOpenTarget::Manual {
             name: "git-add".to_owned(),
-            manual_section: "1".to_owned(),
+            manual_section: Some("1".to_owned()),
         })
     );
 }

@@ -340,12 +340,9 @@ fn assert_references(
     assert_eq!(rendered.links.len(), 1);
     assert_eq!(
         rendered.link_target_at(body.row, body.start_column),
-        Some(&LinkTarget::Document {
-            address: mant_ir::DocumentAddress::Manual {
-                name: "destination".into(),
-                manual_section: "1".into()
-            },
-            fragment: None,
+        Some(&LinkTarget::Manual {
+            name: "destination".into(),
+            manual_section: Some("1".into()),
         })
     );
     assert_eq!(rendered.link_target_at(body.row, body.end_column), None);

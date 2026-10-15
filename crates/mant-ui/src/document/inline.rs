@@ -305,19 +305,10 @@ pub(super) fn local_link_target(
         mant_ir::LinkTarget::Manual {
             name,
             manual_section,
-        } => Some(manual_section.as_ref().map_or_else(
-            || LinkTarget::Manual {
-                name: name.clone(),
-                manual_section: None,
-            },
-            |manual_section| LinkTarget::Document {
-                address: DocumentAddress::Manual {
-                    name: name.clone(),
-                    manual_section: manual_section.clone(),
-                },
-                fragment: None,
-            },
-        )),
+        } => Some(LinkTarget::Manual {
+            name: name.clone(),
+            manual_section: manual_section.clone(),
+        }),
         mant_ir::LinkTarget::Section { id } => Some(LinkTarget::Section(id.to_string())),
     }
 }

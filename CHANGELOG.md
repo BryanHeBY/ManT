@@ -19,6 +19,21 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
+- Unify native manual queries across CLI, interactive citations and linked
+  document traversal. Prefer an exact main category, then allow alphabetic
+  extensions when it is absent: `mant 1 ed` and an `ed(1)` citation can open
+  `ed(1p)`. Suffixed categories remain exact. Catalog addresses, filters,
+  explicit entry-set domain paths and history remain exact, including the
+  topic spelling on Windows. Report actual selected identities and preserve
+  original citation labels; read or parse failures never select another page.
+  `ManualRequest::new` and `ManualIndex::find` retain exact lookup; opt into
+  query selection with `ManualRequest::query` or `ManualIndex::find_query`.
+  Update Rust `ManualRequest` literals with the new `lookup_mode` field.
+  Unreleased v0.13 navigation requests with `kind: "manual"` now retain query
+  intent even with a section; use `kind: "address"` for precise reopening.
+  Pure reference/outline projections retain unresolved manual intent rather
+  than claiming a selected destination. No document IR fields or wire shapes
+  change; synchronize current schema descriptions, leaving v0.12 frozen.
 - Normalize equations into source-neutral text, operations, sequences, groups,
   piles and matrices. Replace `EquationPosition`/`position` with
   `EquationOperator`/`operator` and descriptive fraction, square-root and limit

@@ -193,6 +193,11 @@ impl DocumentReference {
 
     /// Resolve this reference without catalog I/O in the referring namespace.
     ///
+    /// A section-qualified manual yields its exact logical candidate, not proof
+    /// that a manual query would select it. Exact entry-set domain paths can use
+    /// that candidate directly; ordinary manual citations require the loader's
+    /// query resolver before recording a selected page identity.
+    ///
     /// An unqualified manual reference remains unresolved because selecting a
     /// section requires catalog precedence and ambiguity handling.
     #[must_use]

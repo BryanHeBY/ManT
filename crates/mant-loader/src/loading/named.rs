@@ -5,6 +5,7 @@ use super::{
     ManualLoadError, ManualRequest, QuickReferenceMode, RegisteredLookupPhase, RegisteredSelection,
     RegisteredSelectionGroup, ResolvedContent, TldrDocument, load_markdown_text,
 };
+use crate::ManualLookupMode;
 
 pub(super) fn query_named_document(
     name: &str,
@@ -12,6 +13,24 @@ pub(super) fn query_named_document(
     requested_manual_section: Option<&str>,
     policy: LoadPolicy,
     host: &dyn LoadHost,
+) -> Result<ResolvedContent, LoadError> {
+    query_named_with_mode(
+        name,
+        requested_source,
+        requested_manual_section,
+        policy,
+        host,
+        ManualLookupMode::Compatible,
+    )
+}
+
+fn query_named_with_mode(
+    name: &str,
+    requested_source: Option<&str>,
+    requested_manual_section: Option<&str>,
+    policy: LoadPolicy,
+    host: &dyn LoadHost,
+    lookup_mode: ManualLookupMode,
 ) -> Result<ResolvedContent, LoadError> {
     let name = name.trim();
     if name.is_empty() {
@@ -36,7 +55,10 @@ pub(super) fn query_named_document(
     if source.is_some() && (section.is_some() || plan.document == FullDocumentMode::NativeManual) {
         return Err(LoadError::ConflictingSourceSelectors);
     }
-    let candidates = host.name_candidates(name);
+    let candidates = match lookup_mode {
+        ManualLookupMode::Compatible => host.name_candidates(name),
+        ManualLookupMode::Exact => vec![name.to_owned()],
+    };
 
     if plan.quick_reference == QuickReferenceMode::Only {
         if let Some(section) = section.as_deref()
@@ -70,19 +92,12 @@ pub(super) fn query_named_document(
     if plan.document == FullDocumentMode::NativeManual && !host.native_available() {
         return Err(LoadError::NativeBackendUnavailable { tldr_topic: None });
     }
-    let mut manual = if host.native_available() {
-        load_manual(name, &candidates, section.as_deref(), host).map_err(LoadError::Manual)
+    let manual = if host.native_available() {
+        load_manual(name, &candidates, section.as_deref(), lookup_mode, host)
+            .map_err(LoadError::Manual)
     } else {
         Err(LoadError::NativeBackendUnavailable { tldr_topic: None })
     };
-
-    // A malformed page may omit its own section metadata. Preserve the
-    // requested section so labels stay `name(N)`.
-    if let (Ok(manual), Some(section)) = (&mut manual, section.as_deref())
-        && manual.document.meta.manual_section.is_none()
-    {
-        manual.document.meta.manual_section = Some(section.to_owned());
-    }
 
     let tldr = match plan.quick_reference {
         QuickReferenceMode::AttachToCommandManual => match &manual {
@@ -153,7 +168,14 @@ fn query_catalog_address(
         DocumentAddress::Manual {
             name,
             manual_section,
-        } => query_named_document(name, None, Some(manual_section), policy, host),
+        } => query_named_with_mode(
+            name,
+            None,
+            Some(manual_section),
+            policy,
+            host,
+            ManualLookupMode::Exact,
+        ),
     }
 }
 
@@ -327,12 +349,17 @@ fn load_manual(
     requested_name: &str,
     candidates: &[String],
     section: Option<&str>,
+    lookup_mode: ManualLookupMode,
     host: &dyn LoadHost,
 ) -> Result<LoadedManual, ManualLoadError> {
     let mut first_locate_error = None;
     let mut located = None;
     for candidate in candidates {
-        let request = ManualRequest::new(candidate, section.map(ToOwned::to_owned));
+        let request = ManualRequest {
+            name: candidate.clone(),
+            manual_section: section.map(ToOwned::to_owned),
+            lookup_mode,
+        };
         match host.locate_manual(&request) {
             Ok(page) => {
                 located = Some(page);
@@ -357,7 +384,7 @@ fn load_manual(
         name: page.name.clone(),
         manual_section: page.section.clone(),
     };
-    let document = host
+    let mut document = host
         .parse_manual(&page)
         .map_err(|detail| ManualLoadError::Parse {
             name: requested_name.to_owned(),
@@ -380,5 +407,8 @@ fn load_manual(
             diagnostics,
         });
     }
+    // Missing source metadata must describe the selected page, not a broader
+    // query such as `1` which may have resolved to an installed `1p` page.
+    document.meta.manual_section.get_or_insert(page.section);
     Ok(LoadedManual { document, address })
 }

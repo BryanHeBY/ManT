@@ -197,6 +197,7 @@ fn decoded_document_paths_still_respect_the_registered_namespace() {
             kind: DocumentEdgeKind::Document,
             source_offset: None,
             sequence: 0,
+            lookup_mode: crate::ManualLookupMode::Exact,
         };
         assert_eq!(
             reference.selector(&from).map(|s| s.selector),
@@ -216,6 +217,7 @@ fn relative_links_use_the_current_markdown_namespace() {
         kind: DocumentEdgeKind::Document,
         source_offset: None,
         sequence: 0,
+        lookup_mode: crate::ManualLookupMode::Exact,
     };
     let from = DocumentAddress::Markdown {
         path: "guide/start".to_owned(),

@@ -16,6 +16,7 @@ use std::{
     sync::Mutex,
 };
 mod manual_policy;
+mod manual_query;
 struct TestRequest {
     input: TestInput,
 }
@@ -68,6 +69,9 @@ struct StubHost {
     registered_source_priority: Option<i32>,
     locate: Result<ManualPage, String>,
     manual_name: Option<String>,
+    manual_index: Option<crate::ManualIndex>,
+    manual_requests: std::sync::Arc<Mutex<Vec<ManualRequest>>>,
+    parsed_manuals: std::sync::Arc<Mutex<Vec<ManualPage>>>,
     direct: Result<Document, String>,
     tldr: Result<Option<TldrDocument>, String>,
     markdown: Result<String, String>,
@@ -185,6 +189,14 @@ impl LoadHost for StubHost {
 
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String> {
         self.calls.lock().expect("calls lock").push("locate");
+        self.manual_requests
+            .lock()
+            .expect("manual requests lock")
+            .push(request.clone());
+        if let Some(index) = &self.manual_index {
+            return crate::locate_manual_source_in(request, index)
+                .map_err(|error| error.load_detail());
+        }
         if self
             .manual_name
             .as_deref()
@@ -195,8 +207,12 @@ impl LoadHost for StubHost {
         self.locate.clone()
     }
 
-    fn parse_manual(&self, _page: &ManualPage) -> Result<Document, String> {
+    fn parse_manual(&self, page: &ManualPage) -> Result<Document, String> {
         self.calls.lock().expect("calls lock").push("parse");
+        self.parsed_manuals
+            .lock()
+            .expect("parsed manuals lock")
+            .push(page.clone());
         self.direct.clone()
     }
 
@@ -295,6 +311,9 @@ fn host(direct: Result<Document, String>) -> StubHost {
             manual_root: PathBuf::from("/man"),
         }),
         manual_name: None,
+        manual_index: None,
+        manual_requests: std::sync::Arc::default(),
+        parsed_manuals: std::sync::Arc::default(),
         direct,
         tldr: Ok(None),
         markdown: Err("Markdown unavailable".to_owned()),

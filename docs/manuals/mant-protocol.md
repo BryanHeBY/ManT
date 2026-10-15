@@ -321,8 +321,11 @@ available on Linux, macOS, and Windows through the same owned IR boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires only readable native manual content, without an
-attached tldr quick reference. A `manualSection` selects the full document from
-one exact native category and bypasses registered Markdown, but the default
+attached tldr quick reference. A `manualSection` selects native full content
+with exact-first category matching and bypasses registered Markdown. A bare
+single-digit category may select an alphabetic extension only when the exact
+category is absent; suffixed and letter categories remain exact. Complete
+`manual/SECTION/NAME` addresses and catalog filters always stay exact. The default
 combined policy may still attach a quick reference when that category belongs
 to command family `1` or `8`. `--tldr` selects the reserved `tldr` channel
 through the document priority chain and explicitly permits an embedded or
@@ -641,7 +644,18 @@ The request has three fields:
 
 `maxDepth` and `maxDocuments` are optional and valid only when `followLinks` is `true`; supplying either field while traversal is disabled is rejected. `maxDepth = 0` resolves only the initial documents and follows no links. `maxDepth = 1` additionally resolves their one-hop neighbours.
 
-`LinkTarget::Document` and `LinkTarget::Manual` create edges. Explicit semantic entry destinations and entry-set value domains use the same restricted Markdown/manual reference family and also participate in traversal. Markdown targets resolve relative to the referring document and retain its personal/source namespace; a path escaping that namespace is rejected. Manual links with a section resolve that exact logical address. Page-local, external, and email links are excluded. Plain prose and filename prefixes are never interpreted as edges.
+`LinkTarget::Document` and `LinkTarget::Manual` create edges. Explicit semantic
+entry destinations and entry-set value domains also participate in traversal.
+Markdown targets resolve relative to the referring document and retain its
+personal/source namespace; a path escaping that namespace is rejected. Manual
+citations use the shared exact-first query resolver, including alphabetic
+extensions of an absent main category. Explicit entry-set domains authored as
+`manual/SECTION/NAME` remain exact. Edges and deduplication use the actual
+selected page address, not a guessed address from the citation spelling.
+Successful query aliases are request-local and retain lookup policy; an unknown
+query at a traversal limit remains a frontier, rather than proving absence or
+inventing a destination. Page-local, external, and email links are excluded.
+Plain prose and filename prefixes are never interpreted as edges.
 
 Traversal is breadth-first. Initial selector order comes first, followed by typed links in source order. A canonical `DocumentAddress` supplies cycle detection and deduplication. A document reached by several parents is queried once while `reachedFrom` retains each distinct parent. Missing roots and links appear in `unresolved`; `from` is absent for an initial selector and present for a followed link. A request fails only when no initial document is readable.
 
@@ -1322,7 +1336,9 @@ Nested values can declare a `choices` value domain. Cross-document `entry-set`
 domains are available only when a producer has explicit evidence; ManT does not infer them from prose. An entry-set carries the authored `reference`, an exact `address` when namespace-only resolution is possible, and the accepted `entryKinds`. An unqualified manual reference or direct-file input can therefore retain its source reference without claiming an exact address.
 
 `documentTargets` has the same reference/address distinction but serves
-navigation rather than value validation. Each target records the visible
+navigation rather than value validation. Manual citations retain their original
+reference without a guessed address; explicit entry-set domain paths retain
+their exact-address contract. Each target records the visible
 linked-term `label`. Plain-text outlines render a differing label as
 `label → logical-target`, retain an authored `#fragment` after a resolved
 Markdown address, and list multiple aliases even when they share one target.
@@ -1477,8 +1493,9 @@ wrapping and serialization of the same IR, not across source edits.
 
 Resolution never loads another document during ordinary outline projection.
 `logical-address` only proves namespace resolution; its fragment is absent or
-unchecked. `not-queried` retains unresolved manual intent, including a missing
-manual section; `missing-context` means a direct file has no registered source
+unchecked. `not-queried` retains manual intent requiring catalog selection,
+including section-qualified citations; a known exact reference to the loaded
+source may still report `loaded`. `missing-context` means a direct file has no registered source
 namespace. Only the already loaded source can report `loaded` with a fragment
 that is absent, valid, missing, ambiguous or limited. `targetCoverage` records
 the optional local validation scan, sharing the same operation budget.

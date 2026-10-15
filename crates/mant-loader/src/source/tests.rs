@@ -6,6 +6,8 @@ use super::{
 };
 use crate::manual_paths::discover_manual_roots_with;
 
+mod query;
+
 fn temporary_root(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
         "mant-manual-index-{label}-{}-{:?}",

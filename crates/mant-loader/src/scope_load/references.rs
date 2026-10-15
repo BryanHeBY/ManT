@@ -1,6 +1,7 @@
 //! Scope references: preserve request-local ownership and source order.
 use std::{collections::BTreeMap, ops::ControlFlow};
 
+use crate::ManualLookupMode;
 use mant_ir::{
     NavigationEvent, NavigationScanOptions, ReferenceLinkFilter, ReferenceScanLimits,
     ReferenceScanReport, ReferenceScope, scan_navigation_scope,
@@ -27,6 +28,7 @@ pub(super) struct ScopeReferences {
 enum ScopeTarget<'a> {
     Document(&'a str),
     Manual(&'a str, Option<&'a str>),
+    ManualAddress(&'a str, &'a str),
 }
 
 impl ScopeTarget<'_> {
@@ -34,6 +36,7 @@ impl ScopeTarget<'_> {
         match self {
             Self::Document(name) => name.len(),
             Self::Manual(name, section) => name.len().saturating_add(section.map_or(0, str::len)),
+            Self::ManualAddress(name, section) => name.len().saturating_add(section.len()),
         }
     }
 
@@ -47,6 +50,17 @@ impl ScopeTarget<'_> {
                 name: name.to_owned(),
                 manual_section: section.map(str::to_owned),
             },
+            Self::ManualAddress(name, section) => DocumentReference::Manual {
+                name: name.to_owned(),
+                manual_section: Some(section.to_owned()),
+            },
+        }
+    }
+
+    const fn lookup_mode(self) -> ManualLookupMode {
+        match self {
+            Self::Manual(..) => ManualLookupMode::Compatible,
+            Self::Document(_) | Self::ManualAddress(..) => ManualLookupMode::Exact,
         }
     }
 }
@@ -57,10 +71,14 @@ pub(super) struct ScopeReference {
     pub(super) kind: DocumentEdgeKind,
     pub(super) source_offset: Option<u32>,
     pub(super) sequence: usize,
+    pub(super) lookup_mode: ManualLookupMode,
 }
 
 impl ScopeReference {
     pub(super) fn exact_address(&self, from: &DocumentAddress) -> Option<DocumentAddress> {
+        if self.lookup_mode == ManualLookupMode::Compatible {
+            return None;
+        }
         self.target.resolve_from(from)
     }
 
@@ -77,11 +95,21 @@ impl ScopeReference {
             DocumentReference::Manual {
                 name,
                 manual_section,
-            } => Some(DocumentSelector {
-                selector: name.clone(),
-                source: None,
-                manual_section: manual_section.clone(),
-            }),
+            } => {
+                if let Some(address) = self.exact_address(from) {
+                    Some(DocumentSelector {
+                        selector: address.catalog_path(),
+                        source: None,
+                        manual_section: None,
+                    })
+                } else {
+                    Some(DocumentSelector {
+                        selector: name.clone(),
+                        source: None,
+                        manual_section: manual_section.clone(),
+                    })
+                }
+            }
         }
     }
 
@@ -175,12 +203,14 @@ fn collect_references(
     let mut references: Vec<_> = retained
         .into_iter()
         .map(|(target, (source_offset, sequence))| {
+            let lookup_mode = target.lookup_mode();
             let target = target.owned();
             ScopeReference {
                 kind: reference_edge_kind(&target),
                 target,
                 source_offset,
                 sequence,
+                lookup_mode,
             }
         })
         .collect();
@@ -221,8 +251,12 @@ fn source_target<'ir>(
                 DocumentReference::Document { name, .. } => ScopeTarget::Document(name),
                 DocumentReference::Manual {
                     name,
-                    manual_section,
-                } => ScopeTarget::Manual(name, manual_section.as_deref()),
+                    manual_section: Some(section),
+                } => ScopeTarget::ManualAddress(name, section),
+                DocumentReference::Manual {
+                    name,
+                    manual_section: None,
+                } => ScopeTarget::Manual(name, None),
             };
             Some((target, relation.source))
         }
@@ -241,6 +275,39 @@ const fn reference_edge_kind(reference: &DocumentReference) -> DocumentEdgeKind 
 mod tests {
     use super::*;
     use mant_ir::Block;
+
+    #[test]
+    fn citations_and_explicit_domains_retain_distinct_lookup_intent() {
+        let query = crate::scope_load::tests::markdown_content(
+            "# Index\n\n[ed](man:ed(1))\n\n<!-- mant:entries role=option case=sensitive -->\n- `--key`: Description.\n\n  <!-- mant:domain entries=manual/1/ed roles=command -->\n",
+            None,
+        ).unwrap();
+        let from = DocumentAddress::Markdown {
+            path: "index".into(),
+            origin: mant_ir::MarkdownOrigin::Documents,
+        };
+        let references = document_references(&query).references;
+        assert_eq!(
+            references.len(),
+            2,
+            "identical spelling does not erase lookup intent"
+        );
+        assert_eq!(references[0].lookup_mode, ManualLookupMode::Compatible);
+        assert!(references[0].exact_address(&from).is_none());
+        assert_eq!(
+            references[0]
+                .selector(&from)
+                .unwrap()
+                .manual_section
+                .as_deref(),
+            Some("1")
+        );
+        assert_eq!(references[1].lookup_mode, ManualLookupMode::Exact);
+        assert_eq!(
+            references[1].selector(&from).unwrap().selector,
+            "manual/1/ed"
+        );
+    }
 
     #[test]
     fn heading_references_keep_source_order_without_metadata_or_body_duplicates() {

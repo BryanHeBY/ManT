@@ -135,8 +135,14 @@ target can contain a fragment result of `absent`, `valid`, `missing` or
 with a fragment remain `unchecked`.
 Read failure is not fragment absence. Valid results carry an exact reveal
 location in that loaded document. Original typed targets and fragments are
-never replaced with guesses. A section-less manual goes through the resolver;
-the UI must not supply section 1 or 8.
+never replaced with guesses. Manual citations, including section-qualified
+ones, go through the loader's manual query resolver; the UI must neither supply
+a default category nor promote a citation into an already resolved address.
+The resolver prefers the exact category, then permits alphabetic extensions
+of an absent single-digit main category. Suffixed and letter categories stay
+exact. Exact catalog addresses, entry-set domain paths and history bypass this
+query fallback. The selected page supplies the actual address and missing
+section metadata; a read or parse failure never retries another category.
 
 Ordinary outline never loads target documents. Direct-file inputs without a
 registered namespace expose references without arbitrary path resolution.
@@ -161,8 +167,10 @@ owners remain rejected.
 The interactive host opens manual links and manual catalog addresses with the
 loader's `ManualWithTldr` policy. It requires the native target, bypasses registered
 Markdown, and attaches an available cached quick reference only when the resolved
-manual belongs to command family `1` or `8`. Section-less links retain resolver
-selection, including non-command categories. History reopens use the same policy.
+manual belongs to command family `1` or `8`. Original citation labels remain
+unchanged when selection finds an extension; tabs and history store the actual
+selected address. Section-less links retain resolver selection, including
+non-command categories. History reopens use the same policy with exact identity.
 A missing cache leaves the manual readable; a missing or invalid manual remains
 an open failure even when cached tldr exists. Navigation neither updates caches
 nor fetches content. Explicit CLI `--manual` continues excluding quick references.

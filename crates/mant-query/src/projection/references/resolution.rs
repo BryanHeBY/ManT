@@ -83,8 +83,10 @@ pub(super) fn initial(
                     fragment: LoadedFragment::Absent {},
                 }
             } else {
-                ReferenceResolution::LogicalAddress {
-                    address,
+                // Even an explicit main section may select an extension such
+                // as 1p. Only the loaded exact source above proves a preferred
+                // exact page exists; the projection performs no catalog lookup.
+                ReferenceResolution::NotQueried {
                     fragment: UnloadedFragment::Absent {},
                 }
             }

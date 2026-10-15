@@ -102,6 +102,7 @@ fn frontier_retains_unresolved_manual_targets_without_inventing_an_address() {
         kind: DocumentEdgeKind::Manual,
         source_offset: None,
         sequence: 0,
+        lookup_mode: crate::ManualLookupMode::Compatible,
     };
     let mut resolution = ScopeResolution::new(&scope);
     resolution.record_frontier(&from, &reference, TraversalLimit::MaxDocuments);
@@ -112,6 +113,88 @@ fn frontier_retains_unresolved_manual_targets_without_inventing_an_address() {
     assert_eq!(
         resolution.graph.frontier[0].limit,
         TraversalLimit::MaxDocuments
+    );
+}
+
+#[test]
+fn admitted_exact_pages_resolve_query_edges_at_caps_without_guessing_major_aliases() {
+    let scope = DocumentScope {
+        documents: vec![DocumentSelector {
+            selector: "manual/1p/ed".into(),
+            source: None,
+            manual_section: None,
+        }],
+        traversal: mant_protocol::DocumentTraversal {
+            follow_links: true,
+            max_depth: Some(0),
+            max_documents: Some(1),
+        },
+    };
+    let address = DocumentAddress::Manual {
+        name: "ed".into(),
+        manual_section: "1p".into(),
+    };
+    let content = crate::scope_load::tests::markdown_content(
+        "# ED\n\n[self](man:ed(1p)) [main](man:ed(1))\n",
+        None,
+    )
+    .unwrap();
+    let mut resolution = ScopeResolution::new(&scope);
+    resolution.insert_root(
+        ResolvedContent {
+            address: Some(address.clone()),
+            ..content
+        },
+        &scope.documents[0],
+        0,
+    );
+    resolution.record_depth_frontier(0);
+    assert_eq!(
+        resolution.graph.edges,
+        [DocumentEdge {
+            from: address.clone(),
+            to: address.clone(),
+            kind: DocumentEdgeKind::Manual,
+        }]
+    );
+    assert_eq!(resolution.graph.frontier.len(), 1);
+    assert_eq!(
+        resolution.graph.frontier[0]
+            .target
+            .manual_section
+            .as_deref(),
+        Some("1")
+    );
+    let reference = ScopeReference {
+        target: DocumentReference::Manual {
+            name: "ed".into(),
+            manual_section: Some("1".into()),
+        },
+        kind: DocumentEdgeKind::Manual,
+        source_offset: None,
+        sequence: 0,
+        lookup_mode: crate::ManualLookupMode::Compatible,
+    };
+    let selector = reference.selector(&address).unwrap();
+    resolution.resolved_queries.insert(
+        ResolutionKey::new(&selector, LoadPolicy::ManualOnly),
+        address.clone(),
+    );
+    assert_eq!(
+        resolution.known_reference_address(&reference, &address),
+        Some(address)
+    );
+    let exact = ScopeReference {
+        lookup_mode: crate::ManualLookupMode::Exact,
+        ..reference
+    };
+    assert_eq!(
+        resolution.known_reference_address(&exact, &resolution.graph.documents[0].address),
+        Some(DocumentAddress::Manual {
+            name: "ed".into(),
+            manual_section: "1".into(),
+        }),
+        "a successful query alias never changes an exact address"
     );
 }
 

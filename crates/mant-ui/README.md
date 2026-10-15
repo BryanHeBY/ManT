@@ -323,10 +323,15 @@ Typed email links use the IR-owned mailto serializer, so URI-sensitive mailbox
 characters are encoded before the resulting `ExternalUri` crosses that same
 activation boundary.
 
-`DocumentOpenTarget::Address` identifies an exact logical source. Its `Manual`
-variant preserves an optional manual section: an unqualified `printf` manual
-must be resolved with manual-only policy, without inventing section 1 or falling
-back to a Markdown document. A destination fragment is validated against the
+`DocumentOpenTarget::Address` identifies an exact logical source, including
+catalog selections and restored history. `DocumentOpenTarget::Manual` carries
+an unresolved manual citation, including its optional requested section. The
+host resolves it with manual-only policy: a numeric main section prefers an
+exact page, then registered extensions of that section; a suffixed or nonnumeric
+section is exact. An unqualified `printf` uses the configured section order,
+without inventing section 1 or falling back to a Markdown document. The actual
+returned address, rather than the citation's requested section, becomes the tab
+and history identity. A destination fragment is validated against the
 actual returned IR before changing the displayed page, tab or history. Missing,
 ambiguous or budget-unverifiable targets leave the source view intact.
 Each immutable view caches a target-verification index built by the shared IR

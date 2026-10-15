@@ -84,7 +84,8 @@ pub struct DocumentSelector {
     #[schemars(length(min = 1, max = MAX_SOURCE_SELECTOR_CHARS))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
-    /// Optional native manual category for an unqualified selector.
+    /// Optional exact-first native category query for an unqualified selector;
+    /// an absent single-digit main category permits alphabetic extensions.
     #[schemars(length(min = 1, max = MAX_MANUAL_SECTION_CHARS))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manual_section: Option<String>,

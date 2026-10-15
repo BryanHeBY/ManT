@@ -59,7 +59,8 @@ pub enum QueryInput {
         #[schemars(length(min = 1, max = MAX_SOURCE_SELECTOR_CHARS))]
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<String>,
-        /// Optional native manual category such as `1` or `3p`.
+        /// Optional exact-first native category query. An absent single-digit
+        /// main category can select an alphabetic extension; suffixes stay exact.
         #[schemars(length(min = 1, max = MAX_MANUAL_SECTION_CHARS))]
         #[serde(skip_serializing_if = "Option::is_none")]
         manual_section: Option<String>,

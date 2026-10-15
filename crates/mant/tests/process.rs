@@ -26,6 +26,10 @@ mod semantic_queries;
 #[path = "process/document_resolution.rs"]
 mod document_resolution;
 
+#[cfg(feature = "roff")]
+#[path = "process/manual_resolution.rs"]
+mod manual_resolution;
+
 #[path = "process/quick_references.rs"]
 mod quick_references;
 

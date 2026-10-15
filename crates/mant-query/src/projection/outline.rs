@@ -423,8 +423,13 @@ fn project_entries(
                     .map(|target| EntryDocumentTarget {
                         label: target.label.clone(),
                         reference: target.reference.clone(),
-                        address: current_address
-                            .and_then(|address| target.reference.resolve_from(address)),
+                        address: match target.reference {
+                            // A term citation is a query, even with a section.
+                            // Only catalog resolution can select its address.
+                            mant_ir::DocumentReference::Manual { .. } => None,
+                            mant_ir::DocumentReference::Document { .. } => current_address
+                                .and_then(|address| target.reference.resolve_from(address)),
+                        },
                     })
                     .collect(),
                 value_domain: entry
