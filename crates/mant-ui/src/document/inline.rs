@@ -258,22 +258,14 @@ fn append_inline(
         let first_line = lines.len() - 1;
         let first_scalar = spans_scalars(&lines[first_line].spans);
         if let Some(code) = &mut code {
-            // Code fonts inside displays supply the neutral base, not a final
-            // foreground that erases lexical accents. Source emphasis, links
-            // and validated names still compose above those accents.
-            let base = if source.code {
-                style.patch(theme::style(theme::StyleRole::InlineCode))
-            } else {
-                style
-            };
-            let authored = mant_render::InlinePresentation {
-                code: false,
-                ..source
-            };
+            // Fonts supply fallback appearance before lexical colors. The
+            // theme then preserves their modifiers, links and validated names
+            // without allowing generic emphasis colors to erase code roles.
+            let base = theme::DEFAULT_THEME.code_base_style(style, source);
             for span in code.spans(text, base, theme::DEFAULT_THEME.code_styles()) {
                 for decorated in entry.spans(
                     &span.content,
-                    theme::inline_style(span.style, authored),
+                    theme::DEFAULT_THEME.code_inline_style(span.style, source),
                     &theme::DEFAULT_THEME,
                 ) {
                     append_text(&decorated.content, decorated.style, lines);

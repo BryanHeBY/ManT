@@ -65,21 +65,61 @@ impl Theme {
         base.patch(self.interactions[role as usize])
     }
 
-    /// Authored markup layers over the base; validated name roles come last.
+    /// Prose retains full authored styling; validated name roles come last.
     pub(crate) fn inline_style(
         &self,
         mut base: Style,
         source: mant_render::InlinePresentation,
     ) -> Style {
+        base = self.font_style(base, source);
+        if source.code {
+            base = base.patch(self.style(StyleRole::InlineCode));
+        }
+        self.inline_overlays(base, source)
+    }
+
+    /// A display's code font is a neutral base beneath authored emphasis.
+    /// Unlike prose inline code, it must not repaint the fallback emphasis.
+    pub(crate) fn code_base_style(
+        &self,
+        mut base: Style,
+        source: mant_render::InlinePresentation,
+    ) -> Style {
+        if source.code {
+            base = base.patch(self.style(StyleRole::InlineCode));
+        }
+        self.font_style(base, source)
+    }
+
+    fn font_style(&self, mut base: Style, source: mant_render::InlinePresentation) -> Style {
         for (enabled, role) in [
             (source.strong, StyleRole::Strong),
             (source.emphasis, StyleRole::Emphasis),
-            (source.code, StyleRole::InlineCode),
-            (source.link, StyleRole::Link),
         ] {
             if enabled {
                 base = base.patch(self.style(role));
             }
+        }
+        base
+    }
+
+    /// In a display, preserve authored font modifiers without repainting token
+    /// colors or surfaces. Link and validated-name affordances still win.
+    pub(crate) fn code_inline_style(
+        &self,
+        base: Style,
+        source: mant_render::InlinePresentation,
+    ) -> Style {
+        let fonts = self.code_base_style(Style::new(), source);
+        let modifiers = Style::new()
+            .add_modifier(fonts.add_modifier)
+            .remove_modifier(fonts.sub_modifier);
+        self.inline_overlays(base.patch(modifiers), source)
+    }
+
+    fn inline_overlays(&self, mut base: Style, source: mant_render::InlinePresentation) -> Style {
+        if source.link {
+            base = base.patch(self.style(StyleRole::Link));
         }
         if let Some(kind) = source.entry_kind {
             base = base.patch(self.style(StyleRole::for_entry(kind)));

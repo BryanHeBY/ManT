@@ -23,8 +23,8 @@ struct Accent {
     role: StyleRole,
 }
 
-/// Cached byte ranges consumed in original inline visitation order. Colors
-/// remain weaker than authored markup, links and validated name bindings.
+/// Cached byte ranges consumed in original inline visitation order. The theme
+/// composes source fonts, lexical colors and link/name affordances separately.
 #[derive(Default)]
 pub(crate) struct CodeHighlights {
     accents: Vec<Accent>,

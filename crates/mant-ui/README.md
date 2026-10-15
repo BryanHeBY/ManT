@@ -210,13 +210,25 @@ Language tags are metadata, not grammar selectors or highlighter opt-outs;
 view are unchanged.
 Quotes and block comments span original inline pieces and hard rows. Accents
 store byte ranges and semantic roles, not colors. A borrowed `CodeStyles` set
-resolves those roles through the same `Theme` as other UI content, beneath
-authored emphasis, links and validated
-names; code fonts inside displays supply the neutral base, not a final color
-override. Blocks exceeding 64 KiB or 64 nested contexts fall back as a whole
-without changing text. Incomplete and mismatched snippets do not produce syntax
-errors or invented characters. Theme values remain hardcoded; no code palette
-configuration or runtime selector is exposed.
+resolves those roles through the same `Theme` as other UI content.
+The theme owns display composition, independently of token scanning:
+
+1. Code fonts supply a neutral base; source bold/italic styles supply fallback
+   emphasis above it. Ordinary prose inline code keeps its separate, stronger
+   inline-code styling.
+2. Lexical roles supply token colors and presentation.
+3. Source font modifiers are retained without repainting token colors or surfaces.
+4. Links, validated name roles and entry-form accents apply their affordances;
+   entry-form accents exclude bound names. Selection/search overlays apply last.
+
+Thus roff `.B`/`.BI` and nested Markdown emphasis cannot whiten keywords,
+strings, comments or delimiters. Unknown tokens and whole-block scan fallbacks
+retain source appearance. Link/name colors intentionally remain stronger than
+lexical guesses. Ordinary prose and inline code outside displays retain their
+full source-style composition. Blocks exceeding 64 KiB or 64 nested contexts
+fall back as a whole without changing text. Incomplete and mismatched snippets
+do not produce syntax errors or invented characters. Theme values remain
+hardcoded; no code palette configuration or runtime selector is exposed.
 Accents are prepared during document construction, never during resize/search.
 
 Outline and body adapters request semantic styles from the private `theme`

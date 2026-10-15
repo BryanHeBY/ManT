@@ -132,6 +132,12 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-ui and mant 0.13.0
 
+- Preserve syntax colors inside source bold/italic/code wrappers, including
+  roff `.B/.BI` C synopses such as `regex(3)`. Centralize display composition in
+  the theme: source fallback appearance, lexical colors, retained source font
+  modifiers, then link/name/form affordances and interaction overlays. Keep
+  unknown-token/bounded-scan fallback, ordinary prose, IR, copy/search text and
+  TLDR behavior unchanged; no additional dependency or language guessing.
 - Read with Content focus by default and use less-style movement/search:
   `j/k`, `g/G`, half-page `d/u` or `Ctrl+d/u`, full-page Space/`f`/`b`, and
   `Tab` to switch to Outline. `/`/`?` previews case-sensitive regex matches
@@ -192,8 +198,8 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 - Resolve cached lexical roles through a borrowed code-style set in the shared
   theme rather than scanner-owned colors. Defaults remain hardcoded and
   customizable internally; semantic scan tests are independent of palette
-  assertions. Source markup, validated names and interaction overlays retain
-  precedence over lexical accents.
+  assertions. Source font modifiers survive lexical accents without repainting
+  token colors; validated names and interaction overlays retain precedence.
 
 - Cache bounded fragment verification per immutable document view instead of
   rescanning the full IR on every local jump or history restoration. Use the

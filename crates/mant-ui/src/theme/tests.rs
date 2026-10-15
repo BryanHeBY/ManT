@@ -183,6 +183,94 @@ fn code_style_sets_resolve_the_same_semantics_through_custom_theme_values() {
 }
 
 #[test]
+fn display_composition_separates_fallback_fonts_token_colors_and_affordances() {
+    let mut theme = DEFAULT_THEME.clone();
+    theme.set_style(
+        StyleRole::Strong,
+        Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+    );
+    theme.set_style(
+        StyleRole::Emphasis,
+        Style::new()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::ITALIC),
+    );
+    theme.set_style(
+        StyleRole::InlineCode,
+        Style::new().fg(Color::Cyan).bg(Color::Black),
+    );
+    theme.set_style(
+        StyleRole::CodeKeyword,
+        Style::new()
+            .fg(Color::Green)
+            .bg(Color::Blue)
+            .remove_modifier(Modifier::BOLD | Modifier::ITALIC),
+    );
+    let source = mant_render::InlinePresentation {
+        strong: true,
+        emphasis: true,
+        code: true,
+        ..Default::default()
+    };
+    let base = theme.code_base_style(Style::new(), source);
+    assert_eq!(base.fg, Some(Color::Magenta));
+    assert_eq!(base.bg, Some(Color::Black));
+    // No accent (including bounded whole-block fallback) is ordinary markup.
+    assert_eq!(theme.code_inline_style(base, source), base);
+
+    let mut code = crate::code::CodeHighlights::new("return");
+    let spans = code.spans("return", base, theme.code_styles());
+    let token = theme.code_inline_style(spans[0].style, source);
+    assert_eq!(token.fg, Some(Color::Green));
+    assert_eq!(token.bg, Some(Color::Blue));
+    assert!(
+        token
+            .add_modifier
+            .contains(Modifier::BOLD | Modifier::ITALIC)
+    );
+    assert!(
+        !token
+            .sub_modifier
+            .intersects(Modifier::BOLD | Modifier::ITALIC)
+    );
+
+    let linked = theme.code_inline_style(
+        token,
+        mant_render::InlinePresentation {
+            link: true,
+            ..source
+        },
+    );
+    assert_eq!(linked.fg, Some(LINK));
+    assert!(linked.add_modifier.contains(Modifier::UNDERLINED));
+    let named = theme.code_inline_style(
+        token,
+        mant_render::InlinePresentation {
+            link: true,
+            entry_kind: Some(EntryKind::Command),
+            ..source
+        },
+    );
+    assert_eq!(named.fg, theme.style(StyleRole::Command).fg);
+    assert!(
+        named
+            .add_modifier
+            .contains(Modifier::BOLD | Modifier::ITALIC | Modifier::UNDERLINED)
+    );
+    let selected = theme.interact(named, InteractionRole::Selection);
+    assert_eq!(selected.fg, Some(SELECTED_TEXT));
+    assert_eq!(selected.bg, Some(SELECTED));
+    let active = theme.interact(named, InteractionRole::SearchActive);
+    assert_eq!(active.fg, Some(BASE));
+    assert_eq!(active.bg, Some(SEARCH_ACTIVE));
+    // Code composition never mutates shared roles or ordinary inline styling.
+    let prose = theme.inline_style(Style::new(), source);
+    assert_eq!(prose.fg, Some(Color::Cyan));
+    assert_eq!(prose.bg, Some(Color::Black));
+    assert_eq!(theme.style(StyleRole::Strong).fg, Some(Color::Red));
+}
+
+#[test]
 fn outline_section_style_can_change_independently_of_body_heading_style() {
     let mut theme = DEFAULT_THEME.clone();
     let section = Style::new().fg(Color::Green).add_modifier(Modifier::ITALIC);

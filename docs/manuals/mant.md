@@ -1302,6 +1302,13 @@ Reference-inventory notices use yellow and a visible `!`. The theme is currently
 fixed in code; semantic roles and selection/search overlays are resolved
 separately in preparation for configurable colors and styles.
 
+Inside preformatted blocks, best-effort syntax colors remain visible beneath
+source bold/italic font modifiers: a manual's bold declaration does not repaint
+every keyword or bracket white. Unrecognized text retains its original style;
+link and validated-name colors remain stronger than lexical guesses. Search
+and selection overlays apply last. This changes only TUI presentation, not IR,
+copied text, ordinary prose, Markdown export or the separate TLDR presentation.
+
 ## Diagnostics
 
 <!-- mant:entries role=option case=sensitive -->

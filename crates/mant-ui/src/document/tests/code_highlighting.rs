@@ -3,6 +3,9 @@
 use super::*;
 use crate::document::inline::styled_reference_inline_lines;
 
+#[path = "code_highlighting/markup.rs"]
+mod markup;
+
 fn text(value: &str) -> Inline {
     Inline::Text {
         value: value.into(),
@@ -278,7 +281,7 @@ fn structural_accents_keep_source_markup_links_copy_and_reflow_unchanged() {
                 span.content.contains('p') && span.style.add_modifier.contains(Modifier::BOLD)
             })
             .expect("authored command emphasis");
-        assert_eq!(source_style.style.fg, Some(theme::STRONG));
+        assert_eq!(source_style.style.fg, Some(theme::PEACH));
         assert!(rendered.anchor_row("variable-anchor").is_some());
         assert_eq!(view.render(width).text, rendered.text);
     }
