@@ -221,6 +221,8 @@ fn table_cell_and_root_semantic_owner_positions_agree_with_scanner() {
         if table {
             let blocks = std::mem::take(&mut query.document.as_mut().unwrap().blocks);
             query.document.as_mut().unwrap().blocks = vec![mant_ir::Block::Table {
+                alignment: None,
+                column_count: None,
                 column_preferences: mant_ir::ColumnPreferences::default(),
                 rows: vec![mant_ir::TableRow {
                     kind: mant_ir::TableRowKind::Data,

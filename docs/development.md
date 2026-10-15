@@ -319,6 +319,28 @@ compiler environment. Workspace crates and incremental artifacts are excluded
 to keep restore time and repository cache use bounded. Pull requests may
 restore an existing cache but only branch pushes persist new entries.
 
+### Table placement regressions
+
+The table matrices use independent expectations for source facts, portable
+Markdown and viewport geometry. A compact pipe projection and a TUI table need
+not have identical columns. Never fold whitespace to validate hard rows or
+rule endpoints.
+
+| Boundary | Executable coverage |
+| --- | --- |
+| Native options and topology | `libmandoc-rs/tests/tables.rs` and codec `mandoc/tests/tables/placement.rs`: center/centre, leading rules, T&, unused tails, adjacent tables and mixed rules; exact pristine probes precede assertions |
+| JSON and schema | IR `tests/table_placement.rs`, protocol `table_placement_contract_tests`, `layout_contract` and `schema_snapshot`: None versus explicit Left, positive count bounds, spans, duplicates, 256/257 and u32::MAX |
+| Text layout | render `text/blocks/tests/table_frames.rs`: whole/cell/owner alignment, unknown width, ANSI, declared fields, global fallback and final origin bounds |
+| Viewport layout and navigation | UI `document/tests/tables/placement.rs`: independent rule endpoints, nested containers, empty tails, resize, real buffers, links, anchors, search and copy; missing cell rows participate in padding budgets |
+| Complete source path | UI `tests/tbl_placement.rs`: native source → actual query JSON → CLI/TUI and Markdown readback; caption, cell and table alignment remain separate |
+
+Explicit frames bound the last owner-row alignment at the frame edge. Automatic
+tables retain the existing remaining-parent area for that owner preference;
+ordinary cell alignment stays in its column. A fallback changes placement, not
+physical-row receipts or owner identity. Document thematic breaks remain
+independent from table rules. The unreleased v0.13 snapshot changes in place;
+published v0.12 fixtures remain frozen.
+
 Focused commands are useful while iterating:
 
 ```sh

@@ -117,6 +117,8 @@ impl DocumentBuilder<'_> {
                 );
             }
             Block::Table {
+                alignment,
+                column_count,
                 rows,
                 column_preferences,
                 layout,
@@ -125,6 +127,8 @@ impl DocumentBuilder<'_> {
                 self.table(
                     rows,
                     column_preferences,
+                    *column_count,
+                    *alignment,
                     compose_origin(base_indent, layout.indent_columns),
                 );
             }

@@ -192,15 +192,15 @@ pub struct NormalizedEnclosure {
     pub closing: Option<String>,
 }
 
-/// Horizontal alignment retained for one parsed tbl(7) cell.
+/// Horizontal alignment retained for a parsed tbl(7) table or cell.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableAlignment {
-    /// Align cell content to the left edge.
+    /// Align contents to the left edge.
     Left,
-    /// Center cell content horizontally.
+    /// Center contents horizontally.
     Center,
-    /// Align cell content to the right edge.
+    /// Align contents to the right edge.
     Right,
 }
 
@@ -418,6 +418,12 @@ pub struct Node {
     pub table_source_recovery_safe: bool,
     /// Native tbl row kind, when this node represents a table span.
     pub table_row_kind: Option<TableRowKind>,
+    /// Explicit whole-table positioning. `None` retains ordinary table flow;
+    /// native `center` and `centre` both select [`TableAlignment::Center`].
+    pub table_alignment: Option<TableAlignment>,
+    /// Final declared logical column count, shared by all rows of this table.
+    /// Includes unoccupied trailing columns and later `T&` layout declarations.
+    pub table_column_count: Option<u32>,
     /// Source and renderer flags attached to the node.
     pub flags: NodeFlags,
     /// Normalized list behavior for an mdoc list block.

@@ -179,6 +179,10 @@ impl TableText for LayoutText {
         !self.alignments.is_empty()
     }
 
+    fn alignment_offset(&self, width: Option<usize>) -> usize {
+        self.alignment_padding(width)
+    }
+
     fn align_within(self, width: Option<usize>) -> Self {
         self.position_alignments(width)
     }

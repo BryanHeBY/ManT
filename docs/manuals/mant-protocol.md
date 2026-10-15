@@ -897,7 +897,7 @@ Every block is tagged by `type`:
 | `preformatted` | `children`, optional `language`, optional `inlineLayout` | Literal/code display |
 | `list` | structured `kind`, `items`, `compact` | Bullet, dash, ordered, or plain list |
 | `definition-list` | `items`, `compact` | Terms with block-capable descriptions |
-| `table` | `rows`, optional `columnPreferences` | Block-capable cells, spans, alignment, and reading preferences |
+| `table` | `rows`, optional `columnCount`, `alignment`, `columnPreferences` | Block-capable cells, logical column range, whole-table placement and reading preferences |
 | `equation` | `value`, optional `expression`, `display` | Readable text projected from parsed equation structure when available |
 | `vertical-space` | `lines` | Executed blank rows |
 | `thematic-break` | None | Semantic horizontal break |
@@ -949,6 +949,18 @@ are rejected. The closure consumes any resolved gap at that boundary once;
 subsequent cells start a new gap budget. Without the closure, adjacent requests
 in an origin-preserving stacked row share their parent's budget. Ordinary
 column cells retain independent budgets.
+
+Table `columnCount` optionally preserves a positive logical column range,
+including unoccupied trailing columns. It must contain every cell span and
+layout-rule column; omission derives the range from rows. It is not a display
+width, and readers must bound dense allocation independently of the count.
+Table `alignment` optionally selects `left`, `center` or `right` for a
+content-sized frame. Omission retains automatic placement, including the final
+cell's remaining-parent alignment area; explicit `left` is not omitted.
+These optional fields accept null as absence and reject duplicate fields,
+unknown alignments, zero/negative/fractional counts and ranges smaller than
+actual topology. Regenerate current v0.13 clients after adding them to Rust
+constructors; the published v0.12 schemas remain frozen.
 
 Table `columnPreferences` is a closed object containing optional reading
 preferences. `widths` defaults to `[]` and contains preferred content widths,

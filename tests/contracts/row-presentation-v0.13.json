@@ -215,6 +215,57 @@
             "description": []
           }
         ]
+      },
+      {
+        "type": "table",
+        "rows": [
+          {
+            "cells": [
+              {
+                "blocks": [
+                  {
+                    "type": "paragraph",
+                    "children": [
+                      {
+                        "type": "text",
+                        "value": "Left"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "blocks": [
+                  {
+                    "type": "paragraph",
+                    "children": [
+                      {
+                        "type": "link",
+                        "target": {
+                          "kind": "external",
+                          "uri": "https://example.test/table"
+                        },
+                        "children": [
+                          {
+                            "type": "text",
+                            "value": "Right"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "alignment": "right"
+              }
+            ]
+          },
+          {
+            "kind": "horizontal-rule",
+            "cells": []
+          }
+        ],
+        "columnCount": 3,
+        "alignment": "center"
       }
     ],
     "sections": [

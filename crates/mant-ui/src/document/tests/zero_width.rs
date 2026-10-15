@@ -71,6 +71,8 @@ fn native_list_spacing_distinguishes_source_items_from_navigation_carriers() {
 
 fn navigation_table(widths: &[u16], cells: Vec<Vec<Block>>) -> Block {
     Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: cells

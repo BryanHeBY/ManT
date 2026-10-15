@@ -41,6 +41,8 @@ pub(super) fn cell(blocks: Vec<Block>) -> TableCell {
 
 pub(super) fn table(widths: &[u16], cells: Vec<TableCell>, origin: i32) -> Block {
     Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             cells,
             kind: TableRowKind::Data,

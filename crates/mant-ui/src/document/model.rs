@@ -109,6 +109,7 @@ pub(super) struct LogicalTableCell {
 pub(super) struct LogicalTableRow {
     pub(super) cells: Vec<LogicalTableCell>,
     pub(super) rules: Option<Vec<TableRuleCellKind>>,
+    pub(super) whole_rule: Option<bool>,
     pub(super) completed_tail: bool,
     pub(super) open_tail: bool,
     pub(super) layout: Arc<LogicalTableLayout>,
@@ -117,6 +118,7 @@ pub(super) struct LogicalTableRow {
 #[derive(Debug)]
 pub(super) struct LogicalTableLayout {
     pub(super) preferred_widths: Vec<usize>,
+    pub(super) alignment: Option<TableAlignment>,
     pub(super) force_stack: bool,
     /// Declared or actual-origin cells retain a provisional final row;
     /// generic measured projection retires that row even on bounded fallback.
@@ -127,19 +129,21 @@ pub(super) struct LogicalTableLayout {
 
 impl LogicalTableLayout {
     pub(super) fn for_rows(rows: &[Vec<LogicalTableCell>]) -> Self {
-        let column_count = rows.iter().map(Vec::len).max().unwrap_or(0);
-        let preferred_widths = (0..column_count)
-            .map(|column| {
-                rows.iter()
-                    .filter_map(|row| row.get(column))
-                    .map(LogicalTableCell::preferred_width)
-                    .max()
-                    .unwrap_or(1)
-                    .max(1)
-            })
-            .collect();
+        let column_count = rows
+            .iter()
+            .map(Vec::len)
+            .max()
+            .unwrap_or(0)
+            .min(mant_ir::MAX_DENSE_TABLE_COLUMNS);
+        let mut preferred_widths = vec![1; column_count];
+        for row in rows {
+            for (width, cell) in preferred_widths.iter_mut().zip(row) {
+                *width = (*width).max(cell.preferred_width());
+            }
+        }
         Self {
             preferred_widths,
+            alignment: None,
             force_stack: false,
             retain_open_tail: false,
             column_preferences: mant_ir::ColumnPreferences::default(),
@@ -407,6 +411,7 @@ impl LogicalLine {
                 completed_tail,
                 open_tail,
                 rules: None,
+                whole_rule: None,
                 layout,
             }),
             links: Vec::new(),
@@ -436,6 +441,7 @@ impl LogicalLine {
                 completed_tail: false,
                 open_tail: false,
                 rules: Some(rules),
+                whole_rule: None,
                 layout,
             }),
             links: Vec::new(),

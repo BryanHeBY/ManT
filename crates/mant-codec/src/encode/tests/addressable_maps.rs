@@ -9,6 +9,8 @@ fn navigation_only_tables_emit_targets_without_empty_fences() {
         source: None,
     };
     let table = |cells| Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells,

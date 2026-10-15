@@ -422,6 +422,8 @@ mod tests {
     fn signed_stacked_tables_share_the_gap_budget_with_their_parent() {
         for (origin, expected) in [(-2, true), (2, false)] {
             let table = Block::Table {
+                alignment: None,
+                column_count: None,
                 column_preferences: crate::ColumnPreferences::default(),
                 rows: vec![TableRow {
                     kind: crate::TableRowKind::Data,

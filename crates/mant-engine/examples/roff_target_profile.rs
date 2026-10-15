@@ -565,6 +565,8 @@ Escape.
             compact: false,
             offset: None,
             width: None,
+            table_alignment: None,
+            table_column_count: None,
             table_cells: Vec::new(),
             equation: None,
             children,

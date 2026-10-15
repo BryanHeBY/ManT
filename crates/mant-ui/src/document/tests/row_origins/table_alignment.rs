@@ -57,6 +57,8 @@ fn query(alignment: TextAlignment, declared: bool, stacked: bool) -> ResolvedCon
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences {
             widths: if declared { vec![6, 6] } else { vec![] },
             ..Default::default()

@@ -1,6 +1,7 @@
 //! Table cells compose one reusable layout into declared or fallback rows.
 
 use super::{BlockRenderer, Flow, LayoutText, indent_lines, padding};
+mod declared;
 
 /// One completed cell visit, including whether it produced any physical row.
 /// Empty text alone cannot distinguish an absent paragraph from literal rows.
@@ -9,6 +10,8 @@ pub(super) struct PreparedCell {
     has_physical_rows: bool,
     completed: bool,
     break_after: bool,
+    alignment: Option<mant_ir::TableAlignment>,
+    origins: mant_ir::geometry::CellOriginBounds,
 }
 
 impl PreparedCell {
@@ -20,6 +23,8 @@ impl PreparedCell {
             has_physical_rows,
             completed,
             break_after,
+            alignment: None,
+            origins: mant_ir::geometry::CellOriginBounds::default(),
         }
     }
 
@@ -41,13 +46,17 @@ impl BlockRenderer<'_> {
         &self,
         rows: &[mant_ir::TableRow],
         preferences: &mant_ir::ColumnPreferences,
+        alignment: Option<mant_ir::TableAlignment>,
+        column_count: Option<u32>,
         origin: i32,
     ) -> Flow {
         if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
-            return self.stacked_table_flow(rows, preferences.gap_columns, origin, true);
+            return self
+                .stacked_table_flow(rows, preferences.gap_columns, origin, true)
+                .position_table(None, self.width, origin, None);
         }
         if !preferences.widths.is_empty() {
-            return self.declared_column_flow(rows, preferences, origin);
+            return self.declared_column_flow(rows, preferences, alignment, column_count, origin);
         }
         // Intrinsic cell preparation precedes placement. A page viewport is
         // not a cell viewport: alignment padding must not enlarge measured
@@ -56,167 +65,60 @@ impl BlockRenderer<'_> {
             width: None,
             ..*self
         };
-        let (physical_rows, completed) = super::super::super::table::projected_table_rows(
+        let physical_rows = super::super::super::table::projected_table_rows(
             rows,
-            preferences.gap_columns,
-            origin,
-            self.width,
-            |cell| cell_renderer.cell_block_flow(&cell.blocks, 0).finish_cell(),
-        );
-        let value = LayoutText::join(physical_rows.iter().cloned(), "\n");
-        if physical_rows.is_empty() {
-            Flow::default()
-        } else if value.is_empty() {
-            // The table plan owns this physical data row. Empty cells can
-            // share it, but its whole-row boundary consumes the incoming gap.
-            Flow::completed_text(value)
-        } else if completed {
-            Flow::completed_text(value.indented(padding(origin)))
-        } else {
-            Flow::text(value.indented(padding(origin)))
-        }
-    }
-
-    /// Shared declared-field placement. Complex topology uses the existing
-    /// source-order fallback; declarations never bypass origin preservation.
-    fn declared_column_flow(
-        &self,
-        rows: &[mant_ir::TableRow],
-        preferences: &mant_ir::ColumnPreferences,
-        origin: i32,
-    ) -> Flow {
-        let Some(columns) = mant_ir::geometry::DeclaredColumns::new(preferences) else {
-            return self.stacked_table_flow(rows, preferences.gap_columns, origin, false);
-        };
-        if rows.iter().any(|row| {
-            !matches!(row.kind, mant_ir::TableRowKind::Data)
-                || row.cells.len() > mant_ir::geometry::MAX_DECLARED_COLUMNS
-                || row.cells.iter().any(|cell| {
-                    cell.column_span != 1
-                        || cell.row_span != 1
-                        || cell.kind != mant_ir::TableCellKind::Text
-                })
-        }) {
-            return self.stacked_table_flow(rows, preferences.gap_columns, origin, false);
-        }
-        let mut output = Flow::default();
-        let cell_renderer = BlockRenderer {
-            width: None,
-            ..*self
-        };
-        for row in rows {
-            if mant_ir::table_row_is_navigation_only(row) {
-                continue;
-            }
-            if row.cells.is_empty() {
-                output.extend(Flow::completed_text(LayoutText::default()));
-                continue;
-            }
-            // A hard inline break leaves an open final row which the next
-            // cell may use. A completed vertical row owns its final delimiter
-            // and cannot be reused; both consumers pass that fact to the plan.
-            let mut cells = Vec::with_capacity(row.cells.len());
-            let mut widths = Vec::with_capacity(row.cells.len());
-            for cell in &row.cells {
-                let prepared = PreparedCell::new(
-                    cell_renderer.cell_block_flow(&cell.blocks, 0),
-                    cell.break_after,
-                );
-                widths.push(prepared.widths());
-                cells.push(prepared);
-            }
-            let bounds = row
-                .cells
-                .iter()
-                .map(mant_ir::geometry::table_cell_origin_bounds)
-                .collect::<Vec<_>>();
-            let placements = columns.place_at(&widths, origin).filter(|placements| {
-                mant_ir::geometry::table_column_origins_fit(&bounds, placements, origin)
-            });
-            let ends = (0..cells.len())
-                .map(|column| {
-                    (column + 1 < cells.len())
-                        .then(|| columns.field_end(column))
-                        .flatten()
-                        .map(|end| {
-                            if column < preferences.widths.len() {
-                                end.saturating_sub(usize::from(preferences.gap_columns))
-                            } else {
-                                end
-                            }
-                        })
-                })
-                .collect::<Vec<_>>();
-            output.extend(Self::placed_column_row(
-                placements,
-                cells,
-                &widths,
+            super::super::super::table::TableProjection {
+                gap: preferences.gap_columns,
                 origin,
-                &ends,
-                usize::from(preferences.gap_columns),
-                self.width
-                    .map(|width| width.saturating_sub(padding(origin))),
-            ));
-        }
-        output
-    }
-
-    pub(super) fn placed_column_row(
-        placements: Option<Vec<Vec<mant_ir::geometry::ColumnPiece>>>,
-        cells: Vec<PreparedCell>,
-        widths: &[Vec<mant_ir::geometry::ColumnFieldWidth>],
-        origin: i32,
-        ends: &[Option<usize>],
-        gap: usize,
-        viewport: Option<usize>,
-    ) -> Flow {
-        let mut output = Flow::default();
-        let Some(placements) = placements else {
-            // Reuse each prepared cell receipt exactly once, preserving
-            // its open/completed tail and all decoration on empty rows.
-            return Self::stacked_column_row(cells, origin, viewport);
-        };
-        let mut lines = Vec::new();
-        for pieces in placements {
-            let mut line = LayoutText::default();
-            let mut visible = 0_usize;
-            for (index, piece) in pieces.iter().enumerate() {
-                line.push_plain(&" ".repeat(piece.column.saturating_sub(visible)));
-                let area = viewport.map(|width| {
-                    let end = ends
-                        .get(piece.cell)
-                        .copied()
-                        .flatten()
-                        .unwrap_or(width)
-                        .min(width);
-                    let end = pieces
-                        .get(index + 1)
-                        .map_or(end, |next| end.min(next.column.saturating_sub(gap)));
-                    end.saturating_sub(piece.column)
-                });
-                let content = cells[piece.cell].lines[piece.line]
-                    .clone()
-                    .position_alignments(area);
-                visible = piece
-                    .column
-                    .saturating_add(mant_ir::geometry::text_width(&content.visible));
-                line.append(&content);
-            }
-            lines.push(line);
-        }
-        let text = LayoutText::join(lines, "\n").indented(padding(origin));
-        output.extend(
-            if widths
-                .last()
-                .and_then(|rows| rows.last())
-                .is_some_and(|row| row.completed)
-            {
-                Flow::completed_text(text)
-            } else {
-                Flow::literal(text)
+                viewport: self.width,
+                bounded_frame: alignment.is_some(),
+                column_count,
+            },
+            |cell| {
+                let flow = cell_renderer.cell_block_flow(&cell.blocks, 0);
+                let physical = flow.has_physical_rows();
+                let (text, completed) = flow.finish_cell();
+                (text, completed, physical)
             },
         );
-        output
+        let logical = mant_ir::TableGrid::with_column_count(rows, column_count).column_count;
+        let mut output = Flow::default();
+        let mut stacked = logical > mant_ir::MAX_DENSE_TABLE_COLUMNS;
+        for row in physical_rows {
+            match row {
+                super::super::super::table::ProjectedTableRow::Content(
+                    rows,
+                    completed,
+                    fallback,
+                ) => {
+                    stacked |= fallback;
+                    if rows.is_empty() {
+                        continue;
+                    }
+                    let value = LayoutText::join(rows, "\n").indented(padding(origin));
+                    output.extend(if value.is_empty() || completed {
+                        Flow::completed_text(value)
+                    } else {
+                        Flow::text(value)
+                    });
+                }
+                super::super::super::table::ProjectedTableRow::Rule(cells, widths) => {
+                    output.push_table_rule(cells, preferences.gap_columns, widths, true);
+                }
+            }
+        }
+        let minimum = (!stacked && logical <= mant_ir::MAX_DENSE_TABLE_COLUMNS).then(|| {
+            logical.saturating_add(
+                (usize::from(preferences.gap_columns) + 1)
+                    .saturating_mul(logical.saturating_sub(1)),
+            )
+        });
+        output.position_table(
+            if stacked { None } else { alignment },
+            self.width,
+            origin,
+            minimum,
+        )
     }
 
     fn close_empty_cell(
@@ -278,33 +180,23 @@ impl BlockRenderer<'_> {
                     });
                 }
                 mant_ir::TableRowKind::HorizontalRule => {
-                    output.push_text(indent_lines("---", padding(origin)).into());
+                    output.push_table_rule(
+                        vec![mant_ir::TableRuleCellKind::Horizontal],
+                        gap_columns,
+                        None,
+                        true,
+                    );
                 }
                 mant_ir::TableRowKind::DoubleHorizontalRule => {
-                    output.push_text(indent_lines("===", padding(origin)).into());
+                    output.push_table_rule(
+                        vec![mant_ir::TableRuleCellKind::DoubleHorizontal],
+                        gap_columns,
+                        None,
+                        true,
+                    );
                 }
                 mant_ir::TableRowKind::LayoutRule { cells } => {
-                    let parts = cells
-                        .iter()
-                        .map(|kind| match kind {
-                            mant_ir::TableRuleCellKind::Horizontal => "---",
-                            mant_ir::TableRuleCellKind::DoubleHorizontal => "===",
-                        })
-                        .collect::<Vec<_>>();
-                    let gap = usize::from(gap_columns);
-                    if gap.saturating_mul(parts.len().saturating_sub(1))
-                        > mant_ir::geometry::MAX_COLUMN_PADDING
-                    {
-                        for part in parts {
-                            output.push_text(indent_lines(part, padding(origin)).into());
-                        }
-                    } else {
-                        let separator =
-                            format!("{}|{}", " ".repeat(gap / 2), " ".repeat(gap - gap / 2));
-                        output.push_text(
-                            indent_lines(&parts.join(&separator), padding(origin)).into(),
-                        );
-                    }
+                    output.push_table_rule(cells.clone(), gap_columns, None, true);
                 }
             }
         }

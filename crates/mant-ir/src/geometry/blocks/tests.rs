@@ -69,6 +69,8 @@ fn variants(source: Option<SourceSpan>) -> Vec<(Block, bool)> {
         ),
         (
             Block::Table {
+                alignment: None,
+                column_count: None,
                 column_preferences: crate::ColumnPreferences::default(),
                 rows: Vec::new(),
                 layout,
@@ -157,6 +159,8 @@ fn nested_reparenting_never_translates_descendants_or_source_twice() {
         source: Some(source()),
     };
     let table = Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: crate::ColumnPreferences::default(),
         rows: vec![TableRow {
             kind: crate::TableRowKind::Data,

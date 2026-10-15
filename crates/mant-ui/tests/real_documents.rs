@@ -110,13 +110,29 @@ fn empty_cells_and_span_owners_keep_payloads_in_every_terminal_width() {
         b".TH GRID 1\n.SH DESCRIPTION\n.TS\nl s l\nl l l.\nWIDE\tRIGHT\nLEFT\t\tEND\n.TE\nAFTER\n",
     )
     .unwrap();
-    for output in [
-        mant_render::render_query_text(&query),
-        mant_codec::encode::render_markdown(&query),
-    ] {
-        assert!(output.contains("WIDE |  | RIGHT"), "{output}");
-        assert!(output.contains("LEFT |  | END"), "{output}");
+    // Fixed CVS tbl_data.c::getdata skips the covered span column; the
+    // pristine ASCII/UTF-8/tree run retains RIGHT/END in logical column 2.
+    // CLI measures the whole grid, while portable Markdown remains compact.
+    let plain = mant_render::render_query_text(&query);
+    let rows = plain
+        .lines()
+        .filter(|row| row.contains("WIDE") || row.contains("LEFT"))
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2);
+    for (row, expected) in rows
+        .iter()
+        .zip([["WIDE", "", "RIGHT"], ["LEFT", "", "END"]])
+    {
+        assert_eq!(row.split('|').map(str::trim).collect::<Vec<_>>(), expected);
     }
+    assert_eq!(rows[0].find("RIGHT"), rows[1].find("END"));
+    let markdown = mant_codec::encode::render_markdown(&query);
+    assert!(markdown.contains("WIDE |  | RIGHT"), "{markdown}");
+    assert!(markdown.contains("LEFT |  | END"), "{markdown}");
+    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let readback = mant_render::render_query_text(&readback);
+    assert!(readback.contains("WIDE |  | RIGHT"), "{readback}");
+    assert!(readback.contains("LEFT |  | END"), "{readback}");
     let view = DocumentView::new(&query);
     for width in [5, 24, 80] {
         let rendered = view.render(width);

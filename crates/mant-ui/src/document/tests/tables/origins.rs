@@ -35,6 +35,8 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         let mut query = bundle();
         let document = query.document.as_mut().unwrap();
         document.blocks = vec![Block::Table {
+            alignment: None,
+            column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -144,6 +146,8 @@ fn actual_field_parent_and_child_origins_keep_query_links_search_and_copy() {
             alignment: None,
         };
         document.blocks = vec![Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(paragraph("LEFT")), cell(body)],
@@ -169,6 +173,8 @@ fn generic_alignment_checks_actual_origins_without_losing_source_mapping() {
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![
             TableRow {
                 kind: mant_ir::TableRowKind::Data,

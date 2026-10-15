@@ -410,6 +410,8 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         alignment: None,
     };
     let table = |cells| Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,

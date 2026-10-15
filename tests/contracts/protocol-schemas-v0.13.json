@@ -914,6 +914,27 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "alignment": {
+                "description": "Explicit placement of a content-sized table frame in its parent.\nAbsence retains automatic flow, whose final cell can use the\nremaining parent width. Explicit left placement is distinct.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TableAlignment"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "columnCount": {
+                "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint32",
+                "maximum": 4294967295,
+                "minimum": 1
+              },
               "columnPreferences": {
                 "description": "Preferred column geometry, independent of source macro rules.",
                 "$ref": "#/$defs/ColumnPreferences"
@@ -3304,7 +3325,7 @@
         ]
       },
       "TableAlignment": {
-        "description": "Horizontal alignment requested by a source table.",
+        "description": "Horizontal placement of a complete table frame or content within a cell.",
         "oneOf": [
           {
             "description": "Align content to the left edge.",
@@ -4044,6 +4065,27 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "alignment": {
+                "description": "Explicit placement of a content-sized table frame in its parent.\nAbsence retains automatic flow, whose final cell can use the\nremaining parent width. Explicit left placement is distinct.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TableAlignment"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "columnCount": {
+                "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint32",
+                "maximum": 4294967295,
+                "minimum": 1
+              },
               "columnPreferences": {
                 "description": "Preferred column geometry, independent of source macro rules.",
                 "$ref": "#/$defs/ColumnPreferences"
@@ -7262,7 +7304,7 @@
         ]
       },
       "TableAlignment": {
-        "description": "Horizontal alignment requested by a source table.",
+        "description": "Horizontal placement of a complete table frame or content within a cell.",
         "oneOf": [
           {
             "description": "Align content to the left edge.",
@@ -10244,6 +10286,27 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "alignment": {
+                "description": "Explicit placement of a content-sized table frame in its parent.\nAbsence retains automatic flow, whose final cell can use the\nremaining parent width. Explicit left placement is distinct.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TableAlignment"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "columnCount": {
+                "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint32",
+                "maximum": 4294967295,
+                "minimum": 1
+              },
               "columnPreferences": {
                 "description": "Preferred column geometry, independent of source macro rules.",
                 "$ref": "#/$defs/ColumnPreferences"
@@ -12410,7 +12473,7 @@
         ]
       },
       "TableAlignment": {
-        "description": "Horizontal alignment requested by a source table.",
+        "description": "Horizontal placement of a complete table frame or content within a cell.",
         "oneOf": [
           {
             "description": "Align content to the left edge.",
@@ -13778,6 +13841,27 @@
             "description": "Block-capable table.",
             "type": "object",
             "properties": {
+              "alignment": {
+                "description": "Explicit placement of a content-sized table frame in its parent.\nAbsence retains automatic flow, whose final cell can use the\nremaining parent width. Explicit left placement is distinct.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TableAlignment"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "columnCount": {
+                "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint32",
+                "maximum": 4294967295,
+                "minimum": 1
+              },
               "columnPreferences": {
                 "description": "Preferred column geometry, independent of source macro rules.",
                 "$ref": "#/$defs/ColumnPreferences"
@@ -18164,7 +18248,7 @@
         ]
       },
       "TableAlignment": {
-        "description": "Horizontal alignment requested by a source table.",
+        "description": "Horizontal placement of a complete table frame or content within a cell.",
         "oneOf": [
           {
             "description": "Align content to the left edge.",

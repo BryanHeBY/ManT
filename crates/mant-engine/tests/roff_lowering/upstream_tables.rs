@@ -45,20 +45,50 @@ fn escaped_literal_backslash_cells_are_not_decoded_a_second_time() {
 
 #[test]
 fn horizontal_spans_keep_following_cells_in_the_same_logical_column() {
+    // Exact pinned -Ttree/-Tascii/-Tutf8 replay: tbl_data.c skips the span
+    // layout cell, leaving RIGHT at column 2; tbl_term.c places every row in
+    // the same table-wide column frame. The reader's pipe glyphs occupy cells
+    // of their own; portable Markdown keeps its compact fence projection.
     let document = man(".TS\nl s l\nl l l.\nTOPSPAN\tRIGHT\nLEFT\tMIDDLE\tEND\n.TE");
+    let [
+        Block::Table {
+            rows, column_count, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
+        panic!("one table owns both rows");
+    };
+    assert_eq!(*column_count, Some(3));
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].cells.len(), 2);
+    assert_eq!(rows[0].cells[0].column_span, 2);
+    assert_eq!(mant_ir::TableGrid::new(rows).rows[0][1].column, 2);
     let query = ResolvedContent {
         label: "probe".into(),
         address: None,
         document: Some(document),
         tldr: None,
     };
-    for rendered in [
-        mant_render::render_query_text(&query),
-        mant_codec::encode::render_markdown(&query),
-    ] {
-        assert!(rendered.contains("TOPSPAN |  | RIGHT"), "{rendered}");
-        assert!(rendered.contains("LEFT | MIDDLE | END"), "{rendered}");
-    }
+    let rendered = mant_render::render_query_text(&query);
+    let rows = rendered
+        .lines()
+        .filter(|line| line.starts_with("TOPSPAN") || line.starts_with("LEFT"))
+        .collect::<Vec<_>>();
+    assert_eq!(rows, ["TOPSPAN |        | RIGHT", "LEFT    | MIDDLE | END"]);
+    assert_eq!(rows[0].find("RIGHT"), rows[1].find("END"));
+
+    let markdown = mant_codec::encode::render_markdown(&query);
+    let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let [Block::Preformatted { children, .. }] = decoded.document.as_ref().unwrap().sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!("portable table fence changed: {markdown}");
+    };
+    assert_eq!(
+        inline_text(children),
+        "TOPSPAN |  | RIGHT\nLEFT | MIDDLE | END"
+    );
 }
 
 #[test]

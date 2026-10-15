@@ -227,6 +227,27 @@ nonprinting. This boundary remains distinct from an inline break's open tail and
 an already completed empty row. Producers resolve it; readers consume the fact
 without source formatter state.
 
+`Block::Table.alignment` optionally places a content-sized table frame at the
+left, center or right of its actual parent content area. It applies to the
+complete table, including its horizontal rules, rather than independently
+centering rows or changing cell alignment. An absent value retains automatic
+flow: an owner-local alignment hint in the final cell may use the remaining
+parent width. Explicit `left` instead selects a finite content-sized frame, so
+it is distinct from absence and is serialized. Consumers resolve the frame at
+their viewport and may stack cells in source order when the frame does not fit;
+the preference does not create padding text, alter ownership or fix a device
+width in the document.
+
+`Block::Table.column_count` (`columnCount`) optionally preserves the table's
+logical column range, including unoccupied trailing columns and the extent of
+a rule-only table. It is a positive count, not a preferred display width, and
+must cover every cell span and layout-rule column. Absence derives the range
+from those rows. Large counts must not cause dense allocations:
+`TableGrid::with_column_count` keeps storage proportional to original cells,
+and `bounded_table_rows_with_column_count` uses sparse plans beyond 256 columns.
+Neither fact duplicates empty cell owners. These optional fields join the
+unreleased v0.13 contract; published v0.12 remains unchanged.
+
 `EquationExpression` contains mathematical text, operations, sequences, groups,
 piles and matrices. Producers resolve native counters into scope boundaries;
 readers never replay parser rules. `operator` names fractions, roots, scripts

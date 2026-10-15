@@ -1,6 +1,6 @@
 //! Cell wrapping and stacked rows preserve open and completed tail receipts.
 use super::super::{
-    Line, LogicalTableCell, LogicalTableRow, RowCopyMap, WrappedLine, wrap_line_with_links,
+    Line, LogicalTableCell, LogicalTableRow, RowCopyMap, WrappedLine, wrap_lines_with_links,
 };
 
 pub(super) fn stack_table_cells(
@@ -85,13 +85,19 @@ pub(super) fn wrap_table_cell(
 ) -> Vec<WrappedLine> {
     let mut rendered = Vec::new();
     let mut logical_rows = Vec::with_capacity(cell.lines.len());
-    for line in &cell.lines {
+    let lines = cell
+        .lines
+        .iter()
+        .map(|line| {
+            let mut line = line.clone();
+            line.defer_alignment = defer_alignment;
+            line.indent = line.indent.saturating_add(indent);
+            line.continuation_indent = line.continuation_indent.saturating_add(indent);
+            line
+        })
+        .collect::<Vec<_>>();
+    for (line, mut wrapped) in lines.iter().zip(wrap_lines_with_links(&lines, width)) {
         logical_rows.push(rendered.len());
-        let mut line = line.clone();
-        line.defer_alignment = defer_alignment;
-        line.indent = line.indent.saturating_add(indent);
-        line.continuation_indent = line.continuation_indent.saturating_add(indent);
-        let mut wrapped = wrap_line_with_links(&line, width);
         if line.surface == super::super::super::LineSurface::Code && line.table_row.is_none() {
             // cells_to_line() appends exactly one renderer-owned
             // surface-fill span after every Code row. That viewport paint is

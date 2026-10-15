@@ -109,6 +109,8 @@ fn reference_origins_follow_actual_occurrence_through_wrapping_and_table_stackin
             source: None,
         },
         Block::Table {
+            alignment: None,
+            column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,

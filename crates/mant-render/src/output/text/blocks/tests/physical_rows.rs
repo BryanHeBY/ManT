@@ -236,6 +236,8 @@ fn paragraph_preserves_a_formatter_generated_leading_line_break() {
 fn table_cells_preserve_formatter_generated_line_breaks() {
     let renderer = super::super::super::plain_renderer();
     let table = Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![mant_ir::TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -289,6 +291,8 @@ fn table_cells_preserve_leading_and_trailing_physical_rows() {
         ),
     ] {
         let table = Block::Table {
+            alignment: None,
+            column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -317,6 +321,8 @@ fn table_cells_preserve_leading_and_trailing_physical_rows() {
 fn an_empty_table_row_remains_a_physical_row() {
     let renderer = super::super::super::plain_renderer();
     let table = Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![mant_ir::TableRow {
             kind: mant_ir::TableRowKind::Data,

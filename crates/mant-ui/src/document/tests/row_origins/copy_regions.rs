@@ -146,6 +146,8 @@ fn empty_cell_hard_rows_do_not_copy_the_parent_column_origin() {
     let document = content.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             cells: vec![TableCell {
                 break_after: false,
@@ -334,6 +336,8 @@ fn table_placement_moves_hint_copy_regions_with_their_cells() {
         row_span: 1,
     };
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             cells: vec![cell("LEFT", 3), cell("RIGHT", 1)],
             kind: mant_ir::TableRowKind::Data,

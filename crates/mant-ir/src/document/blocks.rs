@@ -97,6 +97,17 @@ pub enum Block {
     Table {
         /// Logical rows in source order.
         rows: Vec<TableRow>,
+        /// Optional logical column range, including unoccupied trailing columns.
+        /// Must be positive and contain every cell span and layout-rule column.
+        /// Absence derives the range from the rows without inventing columns.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(range(min = 1, max = 4_294_967_295_u32))]
+        column_count: Option<u32>,
+        /// Explicit placement of a content-sized table frame in its parent.
+        /// Absence retains automatic flow, whose final cell can use the
+        /// remaining parent width. Explicit left placement is distinct.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alignment: Option<TableAlignment>,
         /// Preferred column geometry, independent of source macro rules.
         #[serde(default, skip_serializing_if = "ColumnPreferences::is_empty")]
         column_preferences: ColumnPreferences,

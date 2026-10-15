@@ -53,6 +53,8 @@ pub(super) fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
 
 pub(super) fn table(cells: Vec<TableCell>, preferences: ColumnPreferences, origin: i32) -> Block {
     Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells,

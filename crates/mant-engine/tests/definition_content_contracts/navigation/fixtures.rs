@@ -195,6 +195,8 @@ impl Body {
                 source: Some(source(20)),
             },
             Self::Table => Block::Table {
+                alignment: None,
+                column_count: None,
                 rows: vec![TableRow {
                     kind: TableRowKind::Data,
                     cells: vec![table_cell(BODY), table_cell("CellEnd")],

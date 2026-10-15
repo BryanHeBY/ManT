@@ -44,6 +44,22 @@ fn all_inline_owners_preserve_row_presentation_in_the_current_golden_wire() {
         TextAlignment::Right
     );
     assert_eq!(mant_ir::inline_plain_text(term.as_slice()), "Term\n尾行");
+    let Block::Table {
+        rows,
+        column_count,
+        alignment,
+        ..
+    } = &document.blocks[3]
+    else {
+        panic!("whole-table fixture");
+    };
+    assert_eq!(*column_count, Some(3));
+    assert_eq!(*alignment, Some(mant_ir::TableAlignment::Center));
+    assert_eq!(rows[0].cells.len(), 2);
+    assert_eq!(
+        rows[0].cells[1].alignment,
+        Some(mant_ir::TableAlignment::Right)
+    );
     for (heading, text) in [
         (document.heading.as_ref().unwrap(), "Title\n尾行"),
         (&document.sections[0].heading, "Heading\n尾行"),

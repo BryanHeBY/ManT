@@ -9,6 +9,25 @@ use super::{
 };
 use crate::{TableAlignment, TableCell, TableCellKind, TableFont, TableRowKind, TableRuleCellKind};
 
+pub(super) fn table_options(
+    alignment: i32,
+    column_count: i32,
+) -> Result<(Option<TableAlignment>, Option<u32>), String> {
+    let alignment = match alignment {
+        0 => None,
+        1 => Some(TableAlignment::Center),
+        _ => return Err("libmandoc returned an invalid table alignment".to_owned()),
+    };
+    let column_count = match column_count {
+        0 => None,
+        count => Some(
+            u32::try_from(count)
+                .map_err(|_| "libmandoc returned an invalid table column count".to_owned())?,
+        ),
+    };
+    Ok((alignment, column_count))
+}
+
 pub(super) fn table_row_kind(
     value: i32,
     layout_rules: Vec<TableRuleCellKind>,

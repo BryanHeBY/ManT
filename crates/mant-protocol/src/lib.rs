@@ -116,3 +116,5 @@ mod column_preferences_contract_tests;
 
 #[cfg(test)]
 mod table_boundaries_contract_tests;
+#[cfg(test)]
+mod table_placement_contract_tests;

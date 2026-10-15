@@ -131,6 +131,14 @@ pub(super) fn append_table_row(
         rows.push(row);
     } else {
         output.push(Block::Table {
+            alignment: node.table_alignment.map(|alignment| match alignment {
+                MandocTableAlignment::Left => AstTableAlignment::Left,
+                MandocTableAlignment::Center => AstTableAlignment::Center,
+                MandocTableAlignment::Right => AstTableAlignment::Right,
+            }),
+            // CVS tbl_layout.c::cell_alloc grows the shared final opts.cols,
+            // even when no data cell occupies a declared trailing column.
+            column_count: node.table_column_count,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![row],
             layout: layout(indent_columns),

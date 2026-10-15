@@ -10,6 +10,22 @@ pub(super) struct RowAlignment {
 }
 
 impl LayoutText {
+    pub(in crate::output::text) fn has_row_alignment(&self) -> bool {
+        !self.alignments.is_empty()
+    }
+
+    pub(in crate::output::text) fn alignment_padding(&self, width: Option<usize>) -> usize {
+        self.alignments
+            .first()
+            .zip(width)
+            .map_or(0, |(receipt, width)| {
+                receipt.placement.padding(
+                    width.saturating_sub(receipt.prefix),
+                    text_width(&self.visible).saturating_sub(receipt.prefix),
+                )
+            })
+    }
+
     pub(in crate::output::text) fn defer_alignment(
         mut self,
         placement: TextAlignment,

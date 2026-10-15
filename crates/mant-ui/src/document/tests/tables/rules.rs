@@ -25,6 +25,8 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             data("BEFORE"),
@@ -69,6 +71,8 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
 fn partial_rule_cells_remain_visible_beside_text_cells() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -124,6 +128,8 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
 fn stacked_partial_rule_cells_are_not_dropped() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -195,6 +201,8 @@ fn rule_rows_do_not_split_table_wide_column_measurement() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             TableRow {
@@ -245,6 +253,8 @@ fn content_derived_extreme_gap_data_and_rule_output_remains_bounded() {
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![
             TableRow {
                 kind: mant_ir::TableRowKind::Data,

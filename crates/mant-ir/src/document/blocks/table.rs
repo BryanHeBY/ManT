@@ -161,7 +161,7 @@ impl TableCellKind {
     }
 }
 
-/// Horizontal alignment requested by a source table.
+/// Horizontal placement of a complete table frame or content within a cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TableAlignment {

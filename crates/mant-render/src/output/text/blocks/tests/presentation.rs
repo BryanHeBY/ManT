@@ -193,6 +193,8 @@ fn table_intrinsic_measurement_never_uses_page_alignment_padding() {
         ] {
             for declared in [false, true] {
                 let table = Block::Table {
+                    alignment: None,
+                    column_count: None,
                     column_preferences: mant_ir::ColumnPreferences {
                         widths: if declared { vec![6, 6] } else { vec![] },
                         ..Default::default()

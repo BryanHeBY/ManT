@@ -32,6 +32,15 @@ accepted hard rows and do not impose terminal soft wrapping. Unbounded text
 and report functions use left alignment while retaining resolved row origins;
 no rendering API queries terminal dimensions or changes authoritative text.
 
+Table `alignment` positions a content-sized frame at a known width; omission
+keeps automatic flow. Cell alignment uses its column slot, while a non-left
+owner-row hint can independently align within its final receiving area. One
+bounded table plan supplies data and all rule endpoints, including after a
+source-order fallback. `column_count` retains unoccupied trailing columns
+without adding cell owners. Pipe separators belong to this text projection,
+so its frame width can differ from TUI layout. Empty physical rows, navigation
+and authored spaces survive either plan.
+
 `cells` borrows complete grapheme clusters and preserves byte boundaries. Its input contract is already-sanitized single-line text. It does not replace source-neutral IR geometry or a frontend's wrapping policy.
 
 Scope report functions consume `ScopeQueryResponse` directly. They preserve the supplied evidence page, document order, failures and coverage; they do not execute a scope query or invent per-document pagination. CLI adapters supply ANSI decoration or terminal-safe Markdown identities. MCP uses the same plain/Markdown reports, then applies its own redaction, hints and character paging without depending on CLI format or error types.

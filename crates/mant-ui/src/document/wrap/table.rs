@@ -1,5 +1,5 @@
-//! Dispatch table rows to declared, measured, rule, or stacked cell layout.
-use super::{Line, LogicalTableRow, RowCopyMap, WrappedLine};
+//! A table's data and rules share one viewport decision and final region.
+use super::{Line, LogicalLine, LogicalTableRow, RowCopyMap, WrappedLine};
 
 mod cells;
 mod content;
@@ -9,46 +9,203 @@ mod rules;
 use cells::stack_table_cells;
 use content::{render_table_columns, table_column_widths};
 use declared::render_declared_columns;
-use rules::render_layout_rule;
 
 pub(super) fn render_table_row_with_links(
     indent: usize,
     table: &LogicalTableRow,
     width: usize,
 ) -> Vec<WrappedLine> {
-    if let Some(rules) = &table.rules {
-        return render_layout_rule(indent, rules, &table.layout, width);
-    }
-    if table.cells.is_empty() {
-        return vec![WrappedLine {
-            source_end: None,
-            anchors: Vec::new(),
-            line: Line::default(),
-            links: Vec::new(),
-            search_cells: Vec::new(),
-            copy_map: RowCopyMap::default(),
-        }];
-    }
+    resolve_rows(indent, &[table], width)
+        .pop()
+        .unwrap_or_default()
+}
+
+pub(super) fn render_table_rows(lines: &[LogicalLine], width: usize) -> Vec<Vec<WrappedLine>> {
+    let tables = lines
+        .iter()
+        .map(|line| line.table_row.as_ref().expect("table group"))
+        .collect::<Vec<_>>();
+    resolve_rows(lines[0].indent, &tables, width)
+}
+
+fn resolve_rows(indent: usize, tables: &[&LogicalTableRow], width: usize) -> Vec<Vec<WrappedLine>> {
+    let layout = &tables[0].layout;
     let indent = super::readable_origins(indent, indent, width).0;
     let available = width.saturating_sub(indent).max(1);
-    if table.layout.requires_stack(&table.cells) {
-        return stack_table_cells(indent, table, width);
-    }
-    if !table.layout.column_preferences.widths.is_empty() {
-        return render_declared_columns(indent, table, width, available);
-    }
-    let Some(column_widths) = table_column_widths(
-        &table.layout.preferred_widths,
-        available,
-        usize::from(table.layout.column_preferences.gap_columns),
-    ) else {
-        return stack_table_cells(indent, table, width);
+    let gap = usize::from(layout.column_preferences.gap_columns);
+    let natural = natural_width(layout);
+    let explicit = layout.alignment.is_some();
+    let area = if explicit {
+        natural.min(available).max(1)
+    } else {
+        available
     };
-    render_table_columns(
-        indent,
-        table,
-        &column_widths,
-        usize::from(table.layout.column_preferences.gap_columns),
-        width,
-    )
+    let widths = table_column_widths(&layout.preferred_widths, area, gap);
+    let mut stacked = tables
+        .iter()
+        .any(|table| layout.requires_stack(&table.cells))
+        || (explicit && natural > available)
+        || widths.is_none();
+    let mut rendered = Vec::with_capacity(tables.len());
+    if !stacked {
+        for table in tables {
+            let rows = if table.rules.is_some() {
+                Some(Vec::new())
+            } else if table.cells.is_empty() {
+                Some(vec![empty_row()])
+            } else if layout.column_preferences.widths.is_empty() {
+                render_table_columns(
+                    indent,
+                    table,
+                    widths.as_deref().unwrap_or_default(),
+                    gap,
+                    indent.saturating_add(area),
+                )
+            } else {
+                render_declared_columns(indent, table, area)
+            };
+            let Some(rows) = rows else {
+                stacked = true;
+                break;
+            };
+            rendered.push(rows);
+        }
+    }
+    if stacked {
+        rendered = tables
+            .iter()
+            .map(|table| {
+                if table.rules.is_some() {
+                    Vec::new()
+                } else if table.cells.is_empty() {
+                    vec![empty_row()]
+                } else {
+                    stack_table_cells(indent, table, width)
+                }
+            })
+            .collect();
+    }
+    // Measure the prepared output, never source text or theme padding. Explicit
+    // frames also retain unoccupied logical columns. A stacked fallback has no
+    // rectangular column grid and uses only its actual source-order extent.
+    let occupied = rendered
+        .iter()
+        .flatten()
+        .map(|row| super::super::inline::spans_width(&row.line.spans).saturating_sub(indent))
+        .max()
+        .unwrap_or(0);
+    let extent = if stacked {
+        occupied.max(1)
+    } else if explicit {
+        natural.max(occupied).min(available)
+    } else {
+        occupied
+            .max(widths.as_ref().map_or(0, |widths| {
+                widths
+                    .iter()
+                    .sum::<usize>()
+                    .saturating_add(gap.saturating_mul(widths.len().saturating_sub(1)))
+            }))
+            .max(1)
+    };
+    for (table, rows) in tables.iter().zip(&mut rendered) {
+        if let Some(kinds) = &table.rules {
+            *rows = rules::render_rules(
+                indent,
+                table.whole_rule,
+                kinds,
+                if stacked { None } else { widths.as_deref() },
+                gap,
+                extent,
+            );
+        }
+    }
+    if !stacked {
+        let offset = table_offset(layout.alignment, available, extent, indent);
+        for row in rendered.iter_mut().flatten() {
+            translate(row, offset);
+        }
+    }
+    rendered
+}
+
+fn table_offset(
+    alignment: Option<mant_ir::TableAlignment>,
+    available: usize,
+    extent: usize,
+    indent: usize,
+) -> usize {
+    let offset = match alignment {
+        Some(mant_ir::TableAlignment::Center) => available.saturating_sub(extent) / 2,
+        Some(mant_ir::TableAlignment::Right) => available.saturating_sub(extent),
+        Some(mant_ir::TableAlignment::Left) | None => 0,
+    };
+    if offset.saturating_add(indent).saturating_add(extent) <= mant_ir::geometry::MAX_COLUMN_PADDING
+    {
+        offset
+    } else {
+        0
+    }
+}
+
+fn natural_width(layout: &super::LogicalTableLayout) -> usize {
+    let gap = usize::from(layout.column_preferences.gap_columns);
+    let widths = &layout.preferred_widths;
+    if let Some(columns) = mant_ir::geometry::DeclaredColumns::new(&layout.column_preferences) {
+        let count = widths.len().max(layout.column_preferences.widths.len());
+        (0..count)
+            .map(|index| {
+                columns.start(index).saturating_add(
+                    widths.get(index).copied().unwrap_or(1).max(
+                        layout
+                            .column_preferences
+                            .widths
+                            .get(index)
+                            .copied()
+                            .map_or(1, usize::from),
+                    ),
+                )
+            })
+            .max()
+            .unwrap_or(1)
+    } else {
+        widths
+            .iter()
+            .sum::<usize>()
+            .saturating_add(gap.saturating_mul(widths.len().saturating_sub(1)))
+            .max(1)
+    }
+}
+
+fn empty_row() -> WrappedLine {
+    WrappedLine {
+        source_end: None,
+        anchors: Vec::new(),
+        line: Line::default(),
+        links: Vec::new(),
+        search_cells: Vec::new(),
+        copy_map: RowCopyMap::default(),
+    }
+}
+
+fn translate(row: &mut WrappedLine, offset: usize) {
+    if offset == 0 || row.line.spans.iter().all(|span| span.content.is_empty()) {
+        return;
+    }
+    let original_width = super::super::inline::spans_width(&row.line.spans);
+    row.line
+        .spans
+        .insert(0, super::Span::raw(" ".repeat(offset)));
+    for link in &mut row.links {
+        link.start_column += offset;
+        link.end_column += offset;
+    }
+    for cell in &mut row.search_cells {
+        cell.start_column += offset;
+        cell.end_column += offset;
+    }
+    let mut map = RowCopyMap::default();
+    map.omitted.push(0..offset);
+    map.append_shifted(&row.copy_map, offset, original_width);
+    row.copy_map = map;
 }

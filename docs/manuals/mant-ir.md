@@ -92,7 +92,7 @@ The block union preserves structures that matter across renderers:
 | `preformatted` | Literal flow with an optional language |
 | `list` | Bullet, ordered, or plain items containing blocks |
 | `definition-list` | Terms and block descriptions with item layout, source, and optional `entry` facts |
-| `table` | Rows and block-capable cells with spans, alignment, and optional `columnPreferences` |
+| `table` | Rows and block-capable cells, optional logical `columnCount`, whole-table `alignment` and `columnPreferences` |
 | `equation` | Parsed expression and its checked readable text projection when available; legacy producers may supply text alone |
 | `vertical-space` | Executed blank terminal rows |
 | `thematic-break` | Semantic separator |
@@ -273,6 +273,26 @@ fields, and negative/fractional/oversized starts are rejected during decoding.
 
 Every canonical ID in `DocumentIndex` is a local navigation target, including entries attached directly to ordinary list items or native definitions. A `LinkTarget::Section` may target any such ID; its historical variant name does not restrict links to heading-backed sections. Entry targets do not need an additional inline anchor. Producers resolve exact authored fragments to canonical IDs before validation; duplicate identities and incompatible roles remain separate errors.
 
+A table's optional `columnCount` is its positive logical column range,
+including wholly unoccupied trailing columns. It must cover every cell span
+and layout-rule column. Omission derives the range from actual rows; it is
+not a width in terminal cells and does not create cells or content owners.
+Readers use sparse fallback above their dense-column budget even when this
+count is very large.
+
+Optional table `alignment` selects `left`, `center` or `right` for a
+content-sized table frame inside the actual parent. Omission retains automatic
+flow, where the final cell's owner-row alignment can use the remaining parent
+viewport. Explicit `left` therefore differs from omission. Within an explicit
+frame, owner-row alignment stays inside its column slot; it does not enlarge
+the frame to page width. The frame is measured and placed by the reader, not
+serialized as final coordinates. Captions and cell alignment are independent.
+Without a viewport whole-table placement is left; narrow or over-budget tables
+retain the preference while displaying cells in source order. All table rule
+kinds use the same chosen region and fallback as the data. Document thematic
+breaks still occupy their normal parent width. Markdown retains its portable
+structured/fenced projection rather than encoding terminal alignment.
+
 `Table.column_preferences: ColumnPreferences` carries optional reading preferences,
 serialized as `columnPreferences`. Its closed object has `widths`, an ordered
 array of preferred content widths excluding the gap; `gapColumns`, the preferred
@@ -317,7 +337,8 @@ measurement. TUI resizing may stack cells while retaining links, anchors, search
 ranges and selection coordinates.
 Owner row alignment is applied after intrinsic cell measurement and final
 placement. Its area is the allocated content slot, excluding the following
-inter-column gap; the last column can use the remaining viewport. Stacked cells
+inter-column gap; the last column of an automatically placed table can use the remaining viewport.
+An explicitly aligned table bounds that slot at the table-frame edge. Stacked cells
 use their available parent content area. Generated alignment padding does not
 participate in intrinsic measurement or turn an otherwise fitting declared row
 into a stacked row. Existing left-aligned overflow and responsive wrapping

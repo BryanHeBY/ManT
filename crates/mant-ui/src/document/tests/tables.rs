@@ -3,6 +3,7 @@ mod copy;
 mod fixtures;
 mod layout;
 mod origins;
+mod placement;
 mod preferences;
 mod receipts;
 mod rules;

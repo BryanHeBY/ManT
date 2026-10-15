@@ -97,6 +97,8 @@ mod tests {
                 table_escape,
                 table_source_recovery_safe,
                 table_row_kind,
+                table_alignment,
+                table_column_count,
                 flags,
                 list_kind,
                 definition_list_style,

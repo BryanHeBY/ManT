@@ -43,6 +43,8 @@ fn declared_column_selection_and_anchor_ranges_follow_shared_origins() {
     };
     let document = query.document.as_mut().unwrap();
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
@@ -123,6 +125,8 @@ fn public_ir_trailing_padding_keeps_link_search_copy_and_actual_cells_aligned() 
             let mut query = bundle();
             let document = query.document.as_mut().unwrap();
             document.blocks = vec![Block::Table {
+                alignment: None,
+                column_count: None,
                 rows: vec![TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: [first, next]
@@ -192,6 +196,8 @@ fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
         document.sections.clear();
         document.blocks = vec![
             Block::Table {
+                alignment: None,
+                column_count: None,
                 rows: vec![TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![cell(vec![Block::Preformatted {
@@ -228,6 +234,8 @@ fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
         source: None,
     };
     let inner = Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![cell(vec![author]), cell(vec![paragraph("RIGHT")])],
@@ -243,6 +251,8 @@ fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells: vec![cell(vec![inner])],

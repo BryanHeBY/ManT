@@ -92,6 +92,8 @@ fn geometry_bundle() -> ResolvedContent {
             source: None,
         },
         Block::Table {
+            alignment: None,
+            column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -381,6 +383,8 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
         alignment: None,
     };
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             TableRow {

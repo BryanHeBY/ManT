@@ -123,6 +123,8 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                     source: None,
                 },
                 Block::Table {
+                    alignment: None,
+                    column_count: None,
                     column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![TableRow {
                         kind: mant_ir::TableRowKind::Data,

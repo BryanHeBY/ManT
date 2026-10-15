@@ -4,6 +4,8 @@
 use mant_ir::geometry::GapPlan;
 
 use super::layout::LayoutText;
+mod table_frame;
+use table_frame::TableRule;
 
 #[derive(Default)]
 pub(super) struct Flow {
@@ -18,6 +20,7 @@ enum Part {
     /// Consume completed gap rows at a whole table-data-row boundary without
     /// manufacturing a second empty physical row.
     CompleteGap,
+    TableRule(TableRule),
 }
 
 impl Flow {
@@ -27,7 +30,7 @@ impl Flow {
 
     pub(super) fn has_physical_rows(&self) -> bool {
         self.parts.iter().any(|part| match part {
-            Part::Text(_) | Part::CompletedText(_) | Part::Literal(_) => true,
+            Part::Text(_) | Part::CompletedText(_) | Part::Literal(_) | Part::TableRule(_) => true,
             Part::Gap(rows) => *rows > 0,
             Part::CompleteGap => false,
         })
@@ -63,7 +66,7 @@ impl Flow {
     pub(super) fn prefix_first_row(mut self, removed: &str, prefix: &str) -> Self {
         if let Some(text) = self.parts.iter_mut().find_map(|part| match part {
             Part::Text(text) | Part::CompletedText(text) | Part::Literal(text) => Some(text),
-            Part::Gap(_) | Part::CompleteGap => None,
+            Part::Gap(_) | Part::CompleteGap | Part::TableRule(_) => None,
         }) {
             *text = std::mem::take(text).strip_prefix(removed).prefixed(prefix);
         } else {
@@ -85,7 +88,7 @@ impl Flow {
     /// completed gap intervenes; this never trims author whitespace.
     pub(super) fn append_stack_cell(&mut self, mut cell: Self, break_after: bool) {
         let completed = cell.parts.iter().rev().find_map(|part| match part {
-            Part::Text(_) | Part::Literal(_) => Some(false),
+            Part::Text(_) | Part::Literal(_) | Part::TableRule(_) => Some(false),
             Part::CompletedText(_) | Part::CompleteGap => Some(true),
             Part::Gap(rows) if *rows > 0 => Some(true),
             Part::Gap(_) => None,
@@ -149,7 +152,7 @@ impl Flow {
                     }
                     return;
                 }
-                Part::CompletedText(_) => return,
+                Part::CompletedText(_) | Part::TableRule(_) => return,
                 Part::Gap(_) | Part::CompleteGap => {}
             }
         }
@@ -163,7 +166,7 @@ impl Flow {
                     *part = Part::CompletedText(std::mem::take(text));
                     return;
                 }
-                Part::CompletedText(_) | Part::CompleteGap => break,
+                Part::CompletedText(_) | Part::CompleteGap | Part::TableRule(_) => break,
                 Part::Gap(_) => {}
             }
         }
@@ -197,12 +200,19 @@ impl Flow {
         let mut final_empty_literal_row = false;
         let mut final_completed_row = false;
         for part in self.parts {
+            // Normal table finalization consumes every rule receipt. A local
+            // default also keeps an incomplete private flow printable.
+            let part = match part {
+                Part::TableRule(rule) => Part::Text(rule.render_default()),
+                part => part,
+            };
             let completed_row = matches!(&part, Part::CompletedText(_));
             let empty_literal_tail = matches!(
                 &part,
                 Part::Literal(text) if text.is_empty() || text.visible.ends_with('\n')
             );
             match part {
+                Part::TableRule(_) => unreachable!("table receipts were positioned"),
                 Part::Gap(rows) => gap.append_resolved(rows),
                 Part::CompleteGap => {
                     let rows = gap.rows(0);

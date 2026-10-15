@@ -229,15 +229,18 @@ fn list_control_groups_execute_only_their_source_nodes_on_the_live_column() {
 #[test]
 fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
     // tbl_term.c::term_tbl draws the optional frame around the data span.
-    // The frozen IR contract retains table data and topology, while ASCII
+    // The IR retains both declared columns but only one actual data owner;
     // frame glyphs and their device-only rows are outside portable layout.
+    // Exact pristine replay confirms the empty trailing native column.
     let (_, native) = load_case("cw12_box");
     assert_eq!(&native[4..7], ["┌─────────┐", "│ A B     │", "└─────────┘"]);
-    let query = reading_roundtrip("cw12_box", &["A B"], "```\nA B\n```");
+    let query = reading_roundtrip("cw12_box", &["A B |"], "```\nA B\n```");
+    assert_reparsed_column_cell(&query, "A B");
     let document = query.document.as_ref().unwrap();
     let [
         Block::Table {
             rows,
+            column_count,
             column_preferences,
             ..
         },
@@ -247,6 +250,7 @@ fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
         panic!("boxed table boundaries changed: {:?}", document.sections);
     };
     assert_eq!(column_preferences, &mant_ir::ColumnPreferences::default());
+    assert_eq!(*column_count, Some(2));
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].kind, TableRowKind::Data);
     assert_eq!(rows[0].cells.len(), 1);
@@ -257,15 +261,17 @@ fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
 #[test]
 fn spanning_tbl_keeps_covered_slots_and_the_authored_rule_in_every_export() {
     // The tbl data '_' span is TBL_SPAN_HORIZ, not a box decoration. Its
-    // rule survives as a separate row. Device width six becomes portable
-    // '---'; covered slots remain empty rather than moving following cells.
+    // rule survives as a separate row, covering the projected table extent.
+    // Portable Markdown still uses its compact '---' fence projection;
+    // covered slots remain empty rather than moving following cells.
     let (_, native) = load_case("cw12_span");
     assert_eq!(&native[4..7], ["A", "──────", "B C"]);
     let query = reading_roundtrip(
         "cw12_span",
-        &["A |", "---", "B C |"],
+        &["A  |", "------", "B C |"],
         "```\nA | \n---\nB C | \n```",
     );
+    assert_reparsed_column_cell(&query, "A | \n---\nB C | ");
     let document = query.document.as_ref().unwrap();
     let [
         Block::Table { rows, .. },

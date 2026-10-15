@@ -46,6 +46,8 @@ fn enclosed(children: Vec<Inline>, container: u8) -> Block {
             source: None,
         },
         5 => Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {

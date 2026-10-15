@@ -33,6 +33,8 @@ fn wrap(block: Block, context: &str) -> Block {
         source: None,
     };
     let table = |block| Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::default(),
             cells: vec![TableCell {

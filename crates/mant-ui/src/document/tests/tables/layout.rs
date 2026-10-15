@@ -13,6 +13,8 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
         source: None,
     };
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -77,6 +79,8 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             TableRow {

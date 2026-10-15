@@ -233,6 +233,8 @@ fn parse_table(
         }
     }
     Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows,
         layout: LayoutHint::default(),

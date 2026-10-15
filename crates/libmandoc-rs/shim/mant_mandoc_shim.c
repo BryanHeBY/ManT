@@ -1375,6 +1375,8 @@ mant_mandoc_node_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_node_view, table_escape),
 		offsetof(struct mant_mandoc_node_view, table_source_recovery_safe),
 		offsetof(struct mant_mandoc_node_view, table_row_kind),
+		offsetof(struct mant_mandoc_node_view, table_alignment),
+		offsetof(struct mant_mandoc_node_view, table_column_count),
 		offsetof(struct mant_mandoc_node_view, flags),
 		offsetof(struct mant_mandoc_node_view, list_kind),
 		offsetof(struct mant_mandoc_node_view, definition_list_style),
@@ -1534,6 +1536,15 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	view->table_escape = source->type == ROFFT_TBL ? source->tbl_escape : -1;
 	if (source->type == ROFFT_TBL && source->span != NULL) {
 		const struct tbl_dat *dat;
+
+		/*
+		 * tbl_term.c positions the whole table from the shared final
+		 * options, including a T& layout restart or a leading rule.
+		 * These facts belong to the table, not an individual cell.
+		 */
+		view->table_alignment =
+		    (source->span->opts->opts & TBL_OPT_CENTRE) != 0;
+		view->table_column_count = source->span->opts->cols;
 
 		switch (source->span->pos) {
 		case TBL_SPAN_DATA: {

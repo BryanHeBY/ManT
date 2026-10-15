@@ -58,7 +58,7 @@ use self::search::{RenderedSearchRecord, search_records_for_lines};
 pub(crate) use self::selection::{RenderedSelection, TextPosition};
 #[cfg(test)]
 use self::wrap::wrap_line;
-use self::wrap::{WrappedLine, wrap_line_with_links};
+use self::wrap::{WrappedLine, wrap_lines_with_links};
 
 const TLDR_ID: &str = "tldr";
 const ROOT_ID: &str = mant_ir::DOCUMENT_ROOT_ID;
@@ -400,9 +400,13 @@ impl DocumentView {
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
         let mut anchor_rows = HashMap::new();
 
-        for (logical_line, line) in self.lines.iter().enumerate() {
+        for (logical_line, (line, wrapped_lines)) in self
+            .lines
+            .iter()
+            .zip(wrap_lines_with_links(&self.lines, width))
+            .enumerate()
+        {
             logical_rows.push(rows.len());
-            let wrapped_lines = wrap_line_with_links(line, width);
             search_records.extend(search_records_for_lines(
                 &wrapped_lines,
                 rows.len(),

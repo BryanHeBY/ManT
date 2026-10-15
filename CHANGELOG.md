@@ -19,6 +19,16 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
+- Preserve whole-table placement and the declared logical column range with
+  optional `Table.alignment` and `columnCount`. Native tbl `center`/`centre`
+  now reaches CLI and TUI independently of captions and cell alignment;
+  unoccupied trailing columns and `T&` layout changes retain their extent.
+  Explicit left/center/right selects a content-sized frame; omission keeps
+  automatic flow and its existing final-cell viewport alignment. All table
+  rules follow that frame and its bounded source-order fallback, while CLI
+  also honors cell alignment. Navigation and source coordinates stay attached
+  to original content. Update Rust table literals with the two optional fields
+  and regenerate unreleased v0.13 clients; frozen v0.12 remains unchanged.
 - Unify native manual queries across CLI, interactive citations and linked
   document traversal. Prefer an exact main category, then allow alphabetic
   extensions when it is absent: `mant 1 ed` and an `ed(1)` citation can open
@@ -75,6 +85,12 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### libmandoc-rs and mant-codec 0.13.0
 
+- Add `Node.table_alignment` and `table_column_count` for finalized tbl
+  placement and declared logical extent. The latter includes unoccupied tails
+  and later `T&` declarations; leading rules retain the same table identity.
+  Add `None` fields to downstream Rust node literals. Snapshot/serde transfer
+  preserves these facts without inserting data cells or modifying vendor
+  sources; C/Rust size, alignment and field-offset checks cover the extension.
 - Refresh the pinned mandoc CVS source to `cvs-20261013T025419Z`, with a new
   independently reproduced pristine oracle. Preserve the local patch series
   and owned AST shape. Restore no-fill mode when a list item implicitly

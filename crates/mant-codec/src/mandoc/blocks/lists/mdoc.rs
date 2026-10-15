@@ -642,6 +642,8 @@ fn lower_mdoc_column_list(
         .collect();
     formatter.execution.exit_column_output_scope();
     Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences,
         rows,
         layout: layout(indent_columns),

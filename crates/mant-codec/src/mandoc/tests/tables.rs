@@ -1,6 +1,8 @@
 //! Codec-internal lowering contracts; no query or rendering dependencies.
 use super::*;
 
+mod placement;
+
 #[test]
 fn table_layout_font_reaches_inline_consumers() {
     let document = parse_manual_bytes(

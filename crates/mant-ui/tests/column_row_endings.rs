@@ -146,6 +146,8 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
         let document = query.document.as_mut().unwrap();
         document.sections.clear();
         document.blocks = vec![Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 cells: vec![cell(first), cell(vec![second])],
                 kind: TableRowKind::Data,
@@ -242,6 +244,8 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             cells: vec![
                 cell(vec![

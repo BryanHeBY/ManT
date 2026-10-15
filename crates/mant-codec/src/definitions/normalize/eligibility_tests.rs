@@ -38,6 +38,8 @@ fn space(lines: u16) -> Block {
 
 fn table(indent_columns: i32) -> Block {
     Block::Table {
+        alignment: None,
+        column_count: None,
         rows: Vec::new(),
         column_preferences: native_column_preferences(&[4]),
         layout: LayoutHint {

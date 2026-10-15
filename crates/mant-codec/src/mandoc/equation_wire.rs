@@ -578,6 +578,8 @@ mod tests {
                     source: None,
                 },
                 Block::Table {
+                    alignment: None,
+                    column_count: None,
                     column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![TableRow {
                         kind: TableRowKind::Data,

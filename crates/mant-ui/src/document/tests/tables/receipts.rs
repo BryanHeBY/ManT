@@ -13,6 +13,8 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
     };
     for (parent, offset, expected) in [(4090, 0, 4090), (5, -3, 2), (-2, 3, 1)] {
         let inner = Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
@@ -34,6 +36,8 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
         let document = query.document.as_mut().unwrap();
         document.sections.clear();
         document.blocks = vec![Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(vec![inner])],
@@ -56,6 +60,8 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
     }
     for widths in [vec![], vec![8]] {
         let inner = Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(vec![
@@ -77,6 +83,8 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
         let document = query.document.as_mut().unwrap();
         document.sections.clear();
         document.blocks = vec![Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(vec![inner]), cell(vec![paragraph("SECOND")])],
@@ -126,6 +134,8 @@ fn nested_table_open_tail_receipts_propagate_across_every_cached_layer() {
             };
             for _ in 0..depth {
                 inner = Block::Table {
+                    alignment: None,
+                    column_count: None,
                     rows: vec![TableRow {
                         kind: mant_ir::TableRowKind::Data,
                         cells: vec![cell(vec![inner])],
@@ -142,6 +152,8 @@ fn nested_table_open_tail_receipts_propagate_across_every_cached_layer() {
             let document = query.document.as_mut().unwrap();
             document.sections.clear();
             document.blocks = vec![Block::Table {
+                alignment: None,
+                column_count: None,
                 rows: vec![TableRow {
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![cell(vec![inner]), cell(vec![paragraph("SECOND")])],

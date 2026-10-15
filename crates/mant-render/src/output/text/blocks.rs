@@ -279,11 +279,19 @@ impl BlockRenderer<'_> {
             Block::Table {
                 rows,
                 column_preferences,
+                alignment,
+                column_count,
                 layout,
                 ..
             } => {
                 let origin = compose_origin(base_indent, layout.indent_columns);
-                return self.table_flow(rows, column_preferences, origin);
+                return self.table_flow(
+                    rows,
+                    column_preferences,
+                    *alignment,
+                    *column_count,
+                    origin,
+                );
             }
             Block::Equation { value, layout, .. }
             | Block::Unsupported {

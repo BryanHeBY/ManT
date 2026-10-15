@@ -15,6 +15,8 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
             alignment: None,
         };
         let table = Block::Table {
+            alignment: None,
+            column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -37,6 +39,8 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
     }
     let nested = plain_list(
         vec![Block::Table {
+            alignment: None,
+            column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
@@ -62,6 +66,8 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
         format!("{}NESTED", " ".repeat(4096))
     );
     let table = Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![mant_ir::TableRow {
             kind: mant_ir::TableRowKind::Data,
@@ -92,6 +98,8 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
 fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
     let renderer = super::super::super::plain_renderer();
     let table = Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             mant_ir::TableRow {
@@ -138,7 +146,8 @@ fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
     };
     assert_eq!(
         renderer.render_blocks(&[table], 0),
-        "---\nVISIBLE\n\n===\n--- | ==="
+        // Whole and mixed rules share the final nine-column fallback region.
+        "---\nVISIBLE\n\n=========\n--- | ==="
     );
 }
 
@@ -365,6 +374,8 @@ fn placed_fields_compose_parent_child_and_hint_before_leaf_clipping() {
             alignment: None,
         };
         let block = Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![mant_ir::TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(paragraph("A", 0)), cell(body)],

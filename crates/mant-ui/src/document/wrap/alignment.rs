@@ -10,6 +10,14 @@ pub(super) struct PreparedAlignment {
 }
 
 impl WrappedLine {
+    pub(super) fn alignment_padding(&self, width: usize) -> Option<usize> {
+        self.copy_map.alignment.map(|receipt| {
+            receipt
+                .placement
+                .padding(width.saturating_sub(receipt.prefix), receipt.content)
+        })
+    }
+
     /// Returns whether an owner-local preference owns this row's alignment.
     /// Source cells were measured and placed before these generated cells.
     pub(super) fn position_alignment(&mut self, width: usize) -> bool {

@@ -31,6 +31,8 @@ pub(super) fn cell(value: &str, break_after: bool, completed: u16) -> TableCell 
 
 pub(super) fn table(cells: Vec<TableCell>) -> Block {
     Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,

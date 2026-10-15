@@ -97,7 +97,21 @@ pub enum TableRowPlan<'a> {
 /// column. No strings, presentation roles, or document facts are copied.
 #[must_use]
 pub fn bounded_table_rows(rows: &[TableRow]) -> Vec<TableRowPlan<'_>> {
-    let grid = TableGrid::new(rows);
+    bounded_table_rows_with_column_count(rows, None)
+}
+
+/// Plan rows with an optional declared logical column range.
+///
+/// Like [`bounded_table_rows`], this never allocates dense slots above
+/// [`MAX_DENSE_TABLE_COLUMNS`], including when a declared count is very large.
+/// Counts smaller than the actual rows are expanded defensively; validated
+/// documents reject such counts instead.
+#[must_use]
+pub fn bounded_table_rows_with_column_count(
+    rows: &[TableRow],
+    column_count: Option<u32>,
+) -> Vec<TableRowPlan<'_>> {
+    let grid = TableGrid::with_column_count(rows, column_count);
     grid.rows
         .into_iter()
         .zip(rows)
@@ -125,6 +139,24 @@ pub fn bounded_table_rows(rows: &[TableRow]) -> Vec<TableRowPlan<'_>> {
         .collect()
 }
 
+/// Logical range occupied by cells, spans and layout-only rule columns.
+///
+/// This scans original cells without allocating covered or missing columns.
+/// Whole-row rules alone do not imply a column count.
+#[must_use]
+pub fn table_logical_column_count(rows: &[TableRow]) -> usize {
+    rows.iter().fold(0, |maximum, row| {
+        let cells = row.cells.iter().fold(0_usize, |columns, cell| {
+            columns.saturating_add(usize::from(cell.column_span.max(1)))
+        });
+        let rules = match &row.kind {
+            TableRowKind::LayoutRule { cells } => cells.len(),
+            _ => 0,
+        };
+        maximum.max(cells).max(rules)
+    })
+}
+
 /// Renderer-neutral table coordinates, with storage proportional to cells,
 /// not span widths. Rows retain explicit empty vertical-continuation cells;
 /// `row_span` describes the original owner and does not shift later rows.
@@ -132,7 +164,7 @@ pub fn bounded_table_rows(rows: &[TableRow]) -> Vec<TableRowPlan<'_>> {
 pub struct TableGrid<'a> {
     /// Positioned cells in source row order.
     pub rows: Vec<Vec<PositionedTableCell<'a>>>,
-    /// Maximum logical row width, including horizontal spans.
+    /// Logical column range, including spans and any declared empty tail.
     pub column_count: usize,
 }
 
@@ -141,7 +173,18 @@ impl<'a> TableGrid<'a> {
     /// treated as one for defensive presentation; IR validation rejects them.
     #[must_use]
     pub fn new(rows: &'a [TableRow]) -> Self {
-        let mut column_count = 0;
+        Self::with_column_count(rows, None)
+    }
+
+    /// Place cells within a declared logical range, retaining empty tails.
+    ///
+    /// Storage stays proportional to actual cells even for `u32::MAX` columns.
+    /// Invalid undersized counts are expanded to retain all original cells.
+    #[must_use]
+    pub fn with_column_count(rows: &'a [TableRow], column_count: Option<u32>) -> Self {
+        let mut column_count = column_count
+            .and_then(|count| usize::try_from(count).ok())
+            .unwrap_or(0);
         let rows = rows
             .iter()
             .map(|row| {

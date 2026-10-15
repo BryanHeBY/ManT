@@ -16,6 +16,8 @@ fn content_derived_tables_consume_custom_gap_preferences() {
             alignment: None,
         };
         document.blocks = vec![Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("LEFT_TOKEN"), cell("RIGHT_TOKEN")],
@@ -65,6 +67,8 @@ fn full_query_padding_fallback_preserves_all_cells_at_maximum_viewport() {
             .map(|index| format!("CELL_{index:03}"))
             .collect::<Vec<_>>();
         document.blocks = vec![Block::Table {
+            alignment: None,
+            column_count: None,
             rows: vec![TableRow {
                 kind: mant_ir::TableRowKind::Data,
                 cells: words

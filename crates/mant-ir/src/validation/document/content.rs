@@ -23,6 +23,48 @@ impl InvariantCollector {
                 .push(invariant("ir.invalid-inline-layout", message.to_owned()));
         }
     }
+    fn validate_table(&mut self, rows: &[crate::TableRow], column_count: Option<u32>) {
+        if column_count.is_some_and(|count| {
+            count == 0
+                || usize::try_from(count).unwrap_or(usize::MAX)
+                    < crate::table_logical_column_count(rows)
+        }) {
+            self.diagnostics.push(invariant(
+                "ir.invalid-table-column-count",
+                "table column count must be positive and contain every logical column".to_owned(),
+            ));
+        }
+        for row in rows {
+            if !matches!(&row.kind, crate::TableRowKind::Data) && !row.cells.is_empty() {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-rule-cells",
+                    "whole-row table rules must not contain data cells".to_owned(),
+                ));
+            }
+            if let crate::TableRowKind::LayoutRule { cells } = &row.kind
+                && cells.is_empty()
+            {
+                self.diagnostics.push(invariant(
+                    "ir.empty-table-layout-rule",
+                    "layout-only table rules must contain at least one rule cell".to_owned(),
+                ));
+            }
+        }
+        for cell in rows.iter().flat_map(|row| &row.cells) {
+            if cell.kind != crate::TableCellKind::Text && !cell.blocks.is_empty() {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-rule-content",
+                    "table rule cells must not contain ordinary block content".to_owned(),
+                ));
+            }
+            if cell.column_span == 0 || cell.row_span == 0 {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-span",
+                    "table row and column spans must be at least one".to_owned(),
+                ));
+            }
+        }
+    }
     fn validate_entry(&mut self, item: crate::EntryOwner<'_>) {
         if let Some(source) = item.source() {
             validate_source_span(&mut self.diagnostics, source);
@@ -150,37 +192,11 @@ impl<'ir> Visit<'ir> for InvariantCollector {
         if let Some(source) = source {
             validate_source_span(&mut self.diagnostics, source);
         }
-        if let Block::Table { rows, .. } = block {
-            for row in rows {
-                if !matches!(&row.kind, crate::TableRowKind::Data) && !row.cells.is_empty() {
-                    self.diagnostics.push(invariant(
-                        "ir.invalid-table-rule-cells",
-                        "whole-row table rules must not contain data cells".to_owned(),
-                    ));
-                }
-                if let crate::TableRowKind::LayoutRule { cells } = &row.kind
-                    && cells.is_empty()
-                {
-                    self.diagnostics.push(invariant(
-                        "ir.empty-table-layout-rule",
-                        "layout-only table rules must contain at least one rule cell".to_owned(),
-                    ));
-                }
-            }
-            for cell in rows.iter().flat_map(|row| &row.cells) {
-                if cell.kind != crate::TableCellKind::Text && !cell.blocks.is_empty() {
-                    self.diagnostics.push(invariant(
-                        "ir.invalid-table-rule-content",
-                        "table rule cells must not contain ordinary block content".to_owned(),
-                    ));
-                }
-                if cell.column_span == 0 || cell.row_span == 0 {
-                    self.diagnostics.push(invariant(
-                        "ir.invalid-table-span",
-                        "table row and column spans must be at least one".to_owned(),
-                    ));
-                }
-            }
+        if let Block::Table {
+            rows, column_count, ..
+        } = block
+        {
+            self.validate_table(rows, *column_count);
         }
         visit::walk_block(self, block);
     }

@@ -28,15 +28,23 @@ fn lowers_tbl_and_eqn_payloads_into_structured_blocks() {
 #[test]
 fn preserves_empty_tbl_rows_and_whole_row_rule_kinds() {
     // Fixed CVS renders the blank data span as one empty physical row and the
-    // `_`/`=` spans as distinct single and double rules.
+    // `_`/`=` spans as distinct single and double rules. Exact pristine
+    // replay precedes this assertion: tbl_term.c::tbl_hrule spans the same
+    // table as its data. The reader uses its own six-cell content extent.
     let query = mant_loader::load_roff_bytes(
         b".TH PROBE 1\n.SH DESCRIPTION\n.TS\nl.\nBEFORE\n\n_\n=\nAFTER\n.TE\n",
     )
     .expect("lower empty and ruled tbl rows");
     let document = query.document.as_ref().expect("document");
-    let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+    let [
+        Block::Table {
+            rows, column_count, ..
+        },
+    ] = document.sections[0].blocks.as_slice()
+    else {
         panic!("expected one table: {:?}", document.sections[0].blocks);
     };
+    assert_eq!(*column_count, Some(1));
     assert_eq!(
         rows.iter().map(|row| row.kind.clone()).collect::<Vec<_>>(),
         [
@@ -49,7 +57,15 @@ fn preserves_empty_tbl_rows_and_whole_row_rule_kinds() {
     );
     assert_eq!(rows[1].cells.len(), 0);
     let rendered = mant_render::render_query_text(&query);
-    assert!(rendered.contains("BEFORE\n\n---\n===\nAFTER"), "{rendered}");
+    let physical_rows = rendered
+        .lines()
+        .skip_while(|line| *line != "BEFORE")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        physical_rows,
+        ["BEFORE", "", "------", "======", "AFTER"],
+        "{rendered}"
+    );
 }
 
 #[test]

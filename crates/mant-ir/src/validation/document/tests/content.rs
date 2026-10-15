@@ -57,6 +57,8 @@ fn rejects_equation_text_caches_that_disagree_with_the_structure() {
 #[test]
 fn rejects_rule_rows_with_data_or_without_layout_strengths() {
     let blocks = vec![Block::Table {
+        alignment: None,
+        column_count: None,
         column_preferences: crate::ColumnPreferences::default(),
         rows: vec![
             TableRow {

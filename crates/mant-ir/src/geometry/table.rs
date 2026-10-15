@@ -182,6 +182,8 @@ mod tests {
         assert!(table_requires_origin_preserving_stack(&positive, -2));
         for (indent, continuation) in [(-2, 0), (3, -2)] {
             let nested = rows(Block::Table {
+                alignment: None,
+                column_count: None,
                 column_preferences: crate::ColumnPreferences::default(),
                 rows: rows(paragraph(indent, continuation)),
                 layout: LayoutHint::default(),
@@ -234,6 +236,8 @@ mod tests {
             4096
         ));
         let nested = rows(Block::Table {
+            alignment: None,
+            column_count: None,
             column_preferences: crate::ColumnPreferences::default(),
             rows: rows(paragraph(4, 0)),
             layout: LayoutHint {

@@ -20,21 +20,25 @@ impl DocumentBuilder<'_> {
         &mut self,
         rows: &[TableRow],
         preferences: &mant_ir::ColumnPreferences,
+        column_count: Option<u32>,
+        alignment: Option<mant_ir::TableAlignment>,
         indent: i32,
     ) {
         if rows.is_empty() {
             return;
         }
         let origin_stack = mant_ir::geometry::table_requires_origin_preserving_stack(rows, indent);
-        let grid = mant_ir::TableGrid::new(rows);
-        let simple = rows.iter().all(|row| {
-            matches!(row.kind, TableRowKind::Data)
-                && row.cells.iter().all(|cell| {
+        let grid = mant_ir::TableGrid::with_column_count(rows, column_count);
+        let simple = rows
+            .iter()
+            .filter(|row| matches!(row.kind, TableRowKind::Data))
+            .all(|row| {
+                row.cells.iter().all(|cell| {
                     cell.kind == mant_ir::TableCellKind::Text
                         && cell.column_span == 1
                         && cell.row_span == 1
                 })
-        });
+            });
         let force_stack = origin_stack
             || grid.column_count > 256
             || (!preferences.widths.is_empty()
@@ -50,6 +54,10 @@ impl DocumentBuilder<'_> {
             .collect::<Vec<_>>();
         let mut table_layout = LogicalTableLayout::for_rows(&layout_rows);
         table_layout.force_stack = force_stack;
+        table_layout.alignment = alignment;
+        if !force_stack {
+            table_layout.preferred_widths.resize(grid.column_count, 1);
+        }
         table_layout.retain_open_tail = origin_stack || !preferences.widths.is_empty();
         table_layout.column_preferences = preferences.clone();
         let table_layout = Arc::new(table_layout);
@@ -76,18 +84,36 @@ impl DocumentBuilder<'_> {
                     }
                 }
                 TableRowKind::HorizontalRule => {
-                    self.push(LogicalLine::rule(padding(indent)));
+                    self.push(Self::whole_table_rule(
+                        padding(outer_origin),
+                        false,
+                        &table_layout,
+                    ));
                 }
                 TableRowKind::DoubleHorizontalRule => {
-                    self.push(LogicalLine::double_rule(padding(indent)));
+                    self.push(Self::whole_table_rule(
+                        padding(outer_origin),
+                        true,
+                        &table_layout,
+                    ));
                 }
                 TableRowKind::LayoutRule { cells } => self.push(LogicalLine::table_rule(
-                    padding(indent),
+                    padding(outer_origin),
                     cells.clone(),
                     Arc::clone(&table_layout),
                 )),
             }
         }
+    }
+
+    fn whole_table_rule(
+        indent: usize,
+        double: bool,
+        layout: &Arc<LogicalTableLayout>,
+    ) -> LogicalLine {
+        let mut line = LogicalLine::table_rule(indent, Vec::new(), Arc::clone(layout));
+        line.table_row.as_mut().expect("table row").whole_rule = Some(double);
+        line
     }
 
     fn prepare_table_rows(

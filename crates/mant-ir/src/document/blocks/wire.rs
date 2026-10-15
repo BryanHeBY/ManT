@@ -1,7 +1,7 @@
 //! Closed wire decoding of block owners and their local row hints.
 use super::{
     Block, ColumnPreferences, DefinitionItem, EquationExpression, Inline, LayoutHint, ListItem,
-    ListKind, SourceSpan, TableRow,
+    ListKind, SourceSpan, TableAlignment, TableRow,
 };
 use serde::Deserialize;
 
@@ -83,6 +83,10 @@ enum BlockWire {
     Table {
         /// Logical rows in source order.
         rows: Vec<TableRow>,
+        #[serde(default)]
+        column_count: Option<u32>,
+        #[serde(default)]
+        alignment: Option<TableAlignment>,
         /// Preferred column geometry, independent of source macro rules.
         #[serde(default, skip_serializing_if = "ColumnPreferences::is_empty")]
         column_preferences: ColumnPreferences,
@@ -158,6 +162,19 @@ impl<'de> Deserialize<'de> for Block {
             inline_layout
                 .validate(children)
                 .map_err(serde::de::Error::custom)?;
+        }
+        if let Self::Table {
+            rows,
+            column_count: Some(column_count),
+            ..
+        } = &block
+            && (*column_count == 0
+                || usize::try_from(*column_count).unwrap_or(usize::MAX)
+                    < crate::table_logical_column_count(rows))
+        {
+            return Err(serde::de::Error::custom(
+                "table columnCount must be positive and contain every logical column",
+            ));
         }
         Ok(block)
     }

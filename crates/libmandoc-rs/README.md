@@ -158,7 +158,12 @@ retain a native text payload for inspection; consumers must not print it or
 recover discarded source content as though it were a text cell.
 `TableRowKind` independently distinguishes an empty data span from whole-row
 `_`/`=` rules and per-column layout rules (including mixed strengths)
-whole-row rules; all three legitimately carry zero cells in the native tree.
+from ordinary data; all three legitimately carry zero cells in the native tree.
+Each table span also retains `table_alignment` and `table_column_count` from
+the table's shared final options. `center` and `centre` position the whole
+table independently of cell alignment; undeclared placement remains `None`.
+The count includes unoccupied trailing columns and later `T&` declarations
+without creating synthetic data cells.
 
 ## Basic use
 
@@ -658,6 +663,8 @@ libmandoc but unavailable through a public C API:
 - effective cell and row rule kinds plus first-span table boundaries,
   retaining native layout precedence, empty data rows, and the distinction
   between `T&` and a new table;
+- explicit whole-table centering and the final declared logical column count,
+  independent of cell alignment and occupied data cells;
 - the pinned native roff-request lookup used by consumers that need to retain
   libmandoc's tbl dispatch boundary without duplicating its request registry;
 - structured diagnostics and explicit source/include/compression policy.

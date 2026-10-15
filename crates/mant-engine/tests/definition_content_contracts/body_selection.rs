@@ -73,6 +73,8 @@ fn prefixes() -> Vec<(&'static str, Vec<Block>)> {
 
 fn wrap(block: Block, context: &str) -> Block {
     let table = |block| Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: TableRowKind::Data,
             cells: vec![TableCell {

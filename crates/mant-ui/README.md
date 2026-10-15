@@ -50,6 +50,11 @@ catalog, search, and cross-document interactions without serializing the IR.
 - tldr quick-reference and source-document rendering through one layout model.
 - Span-aware table columns and cell-local anchors that retain their exact
   rendered rows through independent wrapping, stacking and nested tables.
+  Optional whole-table alignment places a content-sized frame; captions,
+  cell alignment and owner-row hints remain independent. Data and every rule
+  kind share one viewport decision, bounded fallback and final region. Empty
+  declared columns extend that region without creating content owners;
+  resizing translates links, search cells and selection maps together.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
 - Content-first reading focus, with Tab/Shift+Tab and region clicks switching
   between Content and a visible Outline. `j/k` and arrows act on the focused

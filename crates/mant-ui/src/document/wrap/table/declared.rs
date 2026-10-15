@@ -2,20 +2,16 @@
 use super::super::{
     Line, LogicalTableRow, RowCopyMap, Span, WrappedLine, WrappedLink, WrappedSearchCell,
 };
-use super::cells::{stack_table_cells, wrap_table_cell};
+use super::cells::wrap_table_cell;
 
 /// The same measured origins and sequential cell rows as plain terminal
 /// output, while links/search/anchors travel with their original glyphs.
 pub(super) fn render_declared_columns(
     indent: usize,
     table: &LogicalTableRow,
-    width: usize,
     available: usize,
-) -> Vec<WrappedLine> {
-    let Some(columns) = mant_ir::geometry::DeclaredColumns::new(&table.layout.column_preferences)
-    else {
-        return stack_table_cells(indent, table, width);
-    };
+) -> Option<Vec<WrappedLine>> {
+    let columns = mant_ir::geometry::DeclaredColumns::new(&table.layout.column_preferences)?;
     let preferred_start = |index: usize| {
         let start = columns.start(index);
         table
@@ -33,7 +29,7 @@ pub(super) fn render_declared_columns(
             .enumerate()
             .any(|(i, _)| preferred_start(i) >= available)
     {
-        return stack_table_cells(indent, table, width);
+        return None;
     }
     let mut group = 0;
     let mut cells = table
@@ -64,9 +60,7 @@ pub(super) fn render_declared_columns(
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let Some(placements) = columns.place_at(&widths, mant_ir::geometry::coordinate(indent)) else {
-        return stack_table_cells(indent, table, width);
-    };
+    let placements = columns.place_at(&widths, mant_ir::geometry::coordinate(indent))?;
     let bounds = table
         .cells
         .iter()
@@ -77,67 +71,115 @@ pub(super) fn render_declared_columns(
         &placements,
         mant_ir::geometry::coordinate(indent),
     ) {
-        return stack_table_cells(indent, table, width);
+        return None;
     }
-    position_declared_cells(
+    if !position_declared_cells(
         &placements,
         &mut cells,
         &mut widths,
-        &columns,
-        &table.layout.column_preferences,
-        available,
-    );
+        &DeclaredArea {
+            columns: &columns,
+            preferences: &table.layout.column_preferences,
+            cells: &table.cells,
+            origin: indent,
+            available,
+        },
+    ) {
+        return None;
+    }
     if placements.iter().flatten().any(|piece| {
         piece
             .column
             .saturating_add(widths[piece.cell][piece.line].output)
             > available
     }) {
-        return stack_table_cells(indent, table, width);
+        return None;
     }
-    placements
-        .into_iter()
-        .map(|pieces| placed_column_row(&pieces, &cells, &widths, indent))
-        .collect()
+    Some(
+        placements
+            .into_iter()
+            .map(|pieces| placed_column_row(&pieces, &cells, &widths, indent))
+            .collect(),
+    )
+}
+
+struct DeclaredArea<'a> {
+    columns: &'a mant_ir::geometry::DeclaredColumns,
+    preferences: &'a mant_ir::ColumnPreferences,
+    cells: &'a [super::super::LogicalTableCell],
+    origin: usize,
+    available: usize,
 }
 
 fn position_declared_cells(
     placements: &[Vec<mant_ir::geometry::ColumnPiece>],
     cells: &mut [Vec<WrappedLine>],
     widths: &mut [Vec<mant_ir::geometry::ColumnFieldWidth>],
-    columns: &mant_ir::geometry::DeclaredColumns,
-    preferences: &mant_ir::ColumnPreferences,
-    available: usize,
-) {
-    // Intrinsic rows decide placement first. Alignment uses only the final
-    // slot and cannot feed viewport padding back into collision decisions.
+    area: &DeclaredArea<'_>,
+) -> bool {
+    // Cell alignment stays in its column. Only owner-local row alignment in
+    // the final cell of automatic flow can use the remaining parent width.
     for pieces in placements {
         for (index, piece) in pieces.iter().enumerate() {
-            let end = if piece.cell + 1 == cells.len() {
-                available
-            } else {
-                columns
-                    .field_end(piece.cell)
-                    .unwrap_or(available)
-                    .saturating_sub(if piece.cell < preferences.widths.len() {
-                        usize::from(preferences.gap_columns)
-                    } else {
-                        0
-                    })
-                    .min(available)
-            };
-            let end = pieces.get(index + 1).map_or(end, |next| {
-                end.min(
-                    next.column
-                        .saturating_sub(usize::from(preferences.gap_columns)),
-                )
+            let slot_end = area
+                .columns
+                .field_end(piece.cell)
+                .unwrap_or(area.available)
+                .saturating_sub(if piece.cell < area.preferences.widths.len() {
+                    usize::from(area.preferences.gap_columns)
+                } else {
+                    0
+                })
+                .min(area.available);
+            let next_end = pieces.get(index + 1).map_or(area.available, |next| {
+                next.column
+                    .saturating_sub(usize::from(area.preferences.gap_columns))
             });
+            let owner_end = if piece.cell + 1 == cells.len() {
+                area.available
+            } else {
+                slot_end
+            }
+            .min(next_end);
             let row = &mut cells[piece.cell][piece.line];
-            row.position_alignment(end.saturating_sub(piece.column));
-            widths[piece.cell][piece.line].output =
-                super::super::super::inline::spans_width(&row.line.spans);
+            let previous_width = super::super::super::inline::spans_width(&row.line.spans);
+            let owner_area = owner_end.saturating_sub(piece.column);
+            if row
+                .alignment_padding(owner_area)
+                .is_some_and(|padding| padding > mant_ir::geometry::MAX_COLUMN_PADDING)
+            {
+                return false;
+            }
+            if !row.position_alignment(owner_area) {
+                let spare = slot_end
+                    .min(next_end)
+                    .saturating_sub(piece.column)
+                    .saturating_sub(previous_width);
+                let offset = match area.cells[piece.cell].alignment {
+                    mant_ir::TableAlignment::Left => 0,
+                    mant_ir::TableAlignment::Center => spare / 2,
+                    mant_ir::TableAlignment::Right => spare,
+                };
+                if offset > mant_ir::geometry::MAX_COLUMN_PADDING {
+                    return false;
+                }
+                super::translate(row, offset);
+            }
+            let output = super::super::super::inline::spans_width(&row.line.spans);
+            let actual = area
+                .origin
+                .saturating_add(piece.column)
+                .saturating_add(output.saturating_sub(previous_width));
+            if !area.cells[piece.cell]
+                .origin_bounds
+                .fits_at(mant_ir::geometry::coordinate(actual))
+            {
+                return false;
+            }
+            widths[piece.cell][piece.line].output = output;
         }
     }
+    true
 }
 
 fn placed_column_row(

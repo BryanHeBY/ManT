@@ -15,6 +15,8 @@ fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
 
 fn table(cells: Vec<TableCell>, preferences: mant_ir::ColumnPreferences) -> Block {
     Block::Table {
+        alignment: None,
+        column_count: None,
         rows: vec![TableRow {
             kind: mant_ir::TableRowKind::Data,
             cells,

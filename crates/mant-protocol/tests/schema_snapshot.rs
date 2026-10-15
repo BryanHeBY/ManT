@@ -70,6 +70,35 @@ fn published_v0_12_row_hints_remain_a_distinct_frozen_contract() {
 }
 
 #[test]
+fn table_frame_and_logical_extent_belong_only_to_unreleased_v0_13() {
+    fn table_properties(family: &Value) -> &Value {
+        &family["$defs"]["Block"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|variant| variant["properties"]["type"]["const"] == "table")
+            .expect("table block schema")["properties"]
+    }
+    let released: Value = serde_json::from_str(V0_12_SNAPSHOT).unwrap();
+    let current = serde_json::to_value(query_json_schema_catalog()).unwrap();
+    for family in ["query", "excerpt", "explanation", "scope-query"] {
+        let old = table_properties(&released[family]);
+        assert!(old.get("alignment").is_none());
+        assert!(old.get("columnCount").is_none());
+        let new = table_properties(&current[family]);
+        assert!(
+            new["alignment"]["anyOf"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|branch| branch["$ref"] == "#/$defs/TableAlignment")
+        );
+        assert_eq!(new["columnCount"]["minimum"], 1);
+        assert_eq!(new["columnCount"]["maximum"], u32::MAX);
+    }
+}
+
+#[test]
 fn v0_13_catalog_exposes_only_logical_document_identities() {
     let catalog = serde_json::to_value(mant_protocol::document_catalog_json_schema())
         .expect("catalog schema");

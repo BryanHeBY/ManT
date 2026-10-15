@@ -116,6 +116,8 @@ pub(super) fn empty_table(shape: EmptyTable, break_after: bool) -> Block {
         }],
     };
     Block::Table {
+        alignment: None,
+        column_count: None,
         rows,
         column_preferences: ColumnPreferences::default(),
         layout: LayoutHint::default(),

@@ -43,6 +43,8 @@ pub(super) struct CNodeView {
     pub(super) table_escape: i32,
     pub(super) table_source_recovery_safe: i32,
     pub(super) table_row_kind: i32,
+    pub(super) table_alignment: i32,
+    pub(super) table_column_count: i32,
     pub(super) flags: u32,
     pub(super) list_kind: i32,
     pub(super) definition_list_style: i32,

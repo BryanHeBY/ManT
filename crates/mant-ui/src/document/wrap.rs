@@ -110,6 +110,50 @@ pub(super) fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> 
 
 pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     let mut rows = wrap_logical_line(line, width);
+    attach_reference_marks(line, &mut rows);
+    rows
+}
+
+/// Resolve each contiguous table at this viewport once. Every data and rule
+/// row shares the same fallback, extent and translation; nested cells use the
+/// same entry point without storing a second body or a viewport cache.
+pub(super) fn wrap_lines_with_links(
+    lines: &[LogicalLine],
+    width: usize,
+) -> impl Iterator<Item = Vec<WrappedLine>> + '_ {
+    let mut start = 0;
+    let mut pending = Vec::new().into_iter();
+    std::iter::from_fn(move || {
+        if let Some(rows) = pending.next() {
+            return Some(rows);
+        }
+        let line = lines.get(start)?;
+        let Some(table) = &line.table_row else {
+            start += 1;
+            return Some(wrap_line_with_links(line, width));
+        };
+        let end = start
+            + lines[start..]
+                .iter()
+                .take_while(|other| {
+                    other.indent == line.indent
+                        && other
+                            .table_row
+                            .as_ref()
+                            .is_some_and(|row| std::sync::Arc::ptr_eq(&row.layout, &table.layout))
+                })
+                .count();
+        let mut rows = table::render_table_rows(&lines[start..end], width);
+        for (line, rows) in lines[start..end].iter().zip(&mut rows) {
+            attach_reference_marks(line, rows);
+        }
+        start = end;
+        pending = rows.into_iter();
+        pending.next()
+    })
+}
+
+fn attach_reference_marks(line: &LogicalLine, rows: &mut [WrappedLine]) {
     for mark in &line.reference_marks {
         let index = rows
             .iter()
@@ -119,7 +163,6 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
             row.anchors.push(mark.id.to_string());
         }
     }
-    rows
 }
 
 fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {

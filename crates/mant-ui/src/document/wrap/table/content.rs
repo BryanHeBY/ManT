@@ -3,7 +3,7 @@ use super::super::{
     Line, LogicalTableRow, RowCopyMap, Span, TableAlignment, WrappedLine, WrappedLink,
     WrappedSearchCell,
 };
-use super::cells::{stack_table_cells, wrap_table_cell};
+use super::cells::wrap_table_cell;
 
 pub(super) fn render_table_columns(
     indent: usize,
@@ -11,9 +11,9 @@ pub(super) fn render_table_columns(
     column_widths: &[usize],
     gap: usize,
     width: usize,
-) -> Vec<WrappedLine> {
+) -> Option<Vec<WrappedLine>> {
     let mut next_search_group = 0;
-    let rendered_cells = table
+    let mut rendered_cells = table
         .cells
         .iter()
         .zip(column_widths)
@@ -38,93 +38,90 @@ pub(super) fn render_table_columns(
         .unwrap_or(0)
         .max(1);
 
-    let measured = rendered_cells
-        .iter()
-        .map(|rows| {
-            rows.iter()
-                .map(|row| super::super::super::inline::spans_width(&row.line.spans))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    if !content_column_origins_fit(indent, table, column_widths, gap, &measured, row_count) {
-        return stack_table_cells(indent, table, width);
+    if !position_cells(
+        indent,
+        table,
+        column_widths,
+        gap,
+        width,
+        &mut rendered_cells,
+        row_count,
+    ) {
+        return None;
     }
-    (0..row_count)
-        .map(|row_index| {
-            render_content_column_row(
-                indent,
-                table,
-                column_widths,
-                gap,
-                &rendered_cells,
-                row_index,
-                width,
-            )
-        })
-        .collect()
+    Some(
+        (0..row_count)
+            .map(|row_index| {
+                render_content_column_row(indent, column_widths, gap, &rendered_cells, row_index)
+            })
+            .collect(),
+    )
 }
 
-fn content_column_origins_fit(
+fn position_cells(
     indent: usize,
     table: &LogicalTableRow,
     widths: &[usize],
     gap: usize,
-    measured: &[Vec<usize>],
+    viewport: usize,
+    cells: &mut [Vec<WrappedLine>],
     height: usize,
 ) -> bool {
-    let mut maximum = vec![0_usize; widths.len()];
-    for row in 0..height {
-        let mut column = 0_usize;
-        let mut generated = gap.saturating_mul(widths.len().saturating_sub(1));
-        for (index, width) in widths.iter().enumerate() {
-            let used = measured[index].get(row).copied().unwrap_or(0);
-            let free = width.saturating_sub(used);
-            generated = generated.saturating_add(free);
-            let left = match table
-                .cells
-                .get(index)
-                .map_or(TableAlignment::Left, |cell| cell.alignment)
-            {
+    let row_width = widths.iter().fold(
+        gap.saturating_mul(widths.len().saturating_sub(1)),
+        |sum, width| sum.saturating_add(*width),
+    );
+    let mut generated = vec![row_width; height];
+    let mut column = 0_usize;
+    for (index, width) in widths.iter().enumerate() {
+        let Some(rows) = cells.get_mut(index) else {
+            column = column.saturating_add(*width).saturating_add(gap);
+            continue;
+        };
+        let owner_area = if index + 1 == widths.len() {
+            viewport.saturating_sub(indent.saturating_add(column))
+        } else {
+            *width
+        };
+        for (line, row) in rows.iter_mut().enumerate() {
+            let before = super::super::super::inline::spans_width(&row.line.spans);
+            let owner_padding = row.alignment_padding(owner_area);
+            let free = width.saturating_sub(before);
+            let offset = owner_padding.unwrap_or_else(|| match table.cells[index].alignment {
                 TableAlignment::Left => 0,
                 TableAlignment::Center => free / 2,
                 TableAlignment::Right => free,
-            };
-            maximum[index] = maximum[index].max(column.saturating_add(left));
-            column = column.saturating_add(*width).saturating_add(gap);
+            });
+            generated[line] = generated[line]
+                .saturating_sub(*width)
+                .saturating_add(free.max(offset));
+            let origin = indent.saturating_add(column).saturating_add(offset);
+            if offset > mant_ir::geometry::MAX_COLUMN_PADDING
+                || !table.cells[index]
+                    .origin_bounds
+                    .fits_at(mant_ir::geometry::coordinate(origin))
+            {
+                return false;
+            }
+            if owner_padding.is_some() {
+                row.position_alignment(owner_area);
+            } else {
+                super::translate(row, offset);
+            }
         }
-        if generated > mant_ir::geometry::MAX_COLUMN_PADDING {
-            return false;
-        }
+        column = column.saturating_add(*width).saturating_add(gap);
     }
-    let bounds = table
-        .cells
+    generated
         .iter()
-        .map(|cell| cell.origin_bounds)
-        .collect::<Vec<_>>();
-    let pieces = maximum
-        .into_iter()
-        .enumerate()
-        .map(|(cell, column)| mant_ir::geometry::ColumnPiece {
-            cell,
-            column,
-            line: 0,
-        })
-        .collect::<Vec<_>>();
-    mant_ir::geometry::table_column_origins_fit(
-        &bounds,
-        &[pieces],
-        mant_ir::geometry::coordinate(indent),
-    )
+        .all(|padding| *padding <= mant_ir::geometry::MAX_COLUMN_PADDING)
 }
 
 fn render_content_column_row(
     indent: usize,
-    table: &LogicalTableRow,
     column_widths: &[usize],
     gap: usize,
     rendered_cells: &[Vec<WrappedLine>],
     row_index: usize,
-    width: usize,
 ) -> WrappedLine {
     let mut anchors = Vec::new();
     let mut spans = Vec::new();
@@ -137,55 +134,26 @@ fn render_content_column_row(
     }
     for (column, column_width) in column_widths.iter().enumerate() {
         let cell_rows = rendered_cells.get(column);
-        let mut alignment = table
-            .cells
-            .get(column)
-            .map_or(TableAlignment::Left, |cell| cell.alignment);
         let mut used = 0;
-        let mut left_padding = 0;
         if let Some(row) = cell_rows.and_then(|rows| rows.get(row_index)) {
-            let mut row = row.clone();
-            let area = if column + 1 == column_widths.len() {
-                width.saturating_sub(column_offset)
-            } else {
-                *column_width
-            };
-            if row.position_alignment(area) {
-                alignment = TableAlignment::Left;
-            }
             anchors.extend(row.anchors.iter().cloned());
             used = super::super::super::inline::spans_width(&row.line.spans);
-            let free = column_width.saturating_sub(used);
-            left_padding = match alignment {
-                TableAlignment::Left => 0,
-                TableAlignment::Center => free / 2,
-                TableAlignment::Right => free,
-            };
-            if left_padding > 0 {
-                spans.push(Span::raw(" ".repeat(left_padding)));
-            }
             spans.extend(row.line.spans.clone());
-            copy_map.append_shifted(
-                &row.copy_map,
-                column_offset.saturating_add(left_padding),
-                used,
-            );
+            copy_map.append_shifted(&row.copy_map, column_offset, used);
             links.extend(row.links.iter().map(|link| WrappedLink {
                 target: link.target.clone(),
-                start_column: column_offset + left_padding + link.start_column,
-                end_column: column_offset + left_padding + link.end_column,
+                start_column: column_offset + link.start_column,
+                end_column: column_offset + link.end_column,
             }));
             search_cells.extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
                 group: cell.group,
                 join_before: cell.join_before,
                 character: cell.character,
-                start_column: column_offset + left_padding + cell.start_column,
-                end_column: column_offset + left_padding + cell.end_column,
+                start_column: column_offset + cell.start_column,
+                end_column: column_offset + cell.end_column,
             }));
         }
-        spans.push(Span::raw(
-            " ".repeat(column_width.saturating_sub(used + left_padding)),
-        ));
+        spans.push(Span::raw(" ".repeat(column_width.saturating_sub(used))));
         column_offset += column_width;
         if column + 1 < column_widths.len() {
             spans.push(Span::raw(" ".repeat(gap)));

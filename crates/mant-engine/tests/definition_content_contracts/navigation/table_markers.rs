@@ -58,6 +58,8 @@ fn table(data: bool) -> Block {
         });
     }
     Block::Table {
+        alignment: None,
+        column_count: None,
         rows,
         column_preferences: ColumnPreferences::default(),
         layout: LayoutHint::default(),

@@ -7,7 +7,7 @@ use super::{
     strings::{
         checked_macro, checked_string, copy_column_strings, split_visible_text, visible_string,
     },
-    tables::{copy_table_cells, copy_table_rule_cells, table_row_kind},
+    tables::{copy_table_cells, copy_table_rule_cells, table_options, table_row_kind},
 };
 use crate::{
     AuthorMode, DefinitionListStyle, DisplayKind, MacroSet, Node, NodeFlags, NodeKind,
@@ -241,6 +241,8 @@ unsafe fn copy_node_shallow(
     let enclosure_open = unsafe { checked_string(view.enclosure_open) }?;
     let enclosure_close = unsafe { checked_string(view.enclosure_close) }?;
     let kind = node_kind(view.kind)?;
+    let (table_alignment, table_column_count) =
+        table_options(view.table_alignment, view.table_column_count)?;
     let scope_end = match view.end_kind {
         0 if view.end_body.is_null() => None,
         1 if !view.end_body.is_null() => Some(ScopeEnd {
@@ -270,6 +272,8 @@ unsafe fn copy_node_shallow(
         table_row_kind: table_row_kind(view.table_row_kind, unsafe {
             copy_table_rule_cells(document, view.table_rule_cells, transfer_budget)
         }?)?,
+        table_alignment,
+        table_column_count,
         flags: NodeFlags {
             generated: view.flags & NODE_GENERATED != 0,
             sentence_end: view.flags & NODE_SENTENCE_END != 0,
