@@ -4,7 +4,9 @@ use super::Block;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+mod borders;
 mod wire;
+pub use borders::{TableBorderStyle, TableBorders, TableColumnBorder};
 
 /// Source-neutral preferences for measured table columns.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
@@ -63,7 +65,7 @@ impl ColumnPreferences {
 }
 
 /// One logical table row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TableRow {
     /// Structural row role retained independently from cell contents.
@@ -73,6 +75,11 @@ pub struct TableRow {
     /// continuations retain empty cells at their logical positions. Use
     /// [`crate::TableGrid`] to place cells without losing horizontal spans.
     pub cells: Vec<TableCell>,
+    /// Additional vertical edges at logical column boundaries in this row.
+    /// Entries are strictly ordered and unique; 0 and the table's column
+    /// count denote its outside edges. Spanned interiors remain unpainted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub column_borders: Vec<TableColumnBorder>,
 }
 
 /// Structural role of one logical table row.
@@ -127,14 +134,22 @@ pub struct TableCell {
     #[serde(default, skip_serializing_if = "is_false")]
     pub break_after: bool,
     /// Number of logical columns occupied by the cell.
-    #[serde(default = "one_u16", skip_serializing_if = "is_one_u16")]
-    pub column_span: u16,
+    #[serde(default = "one_u32", skip_serializing_if = "is_one_u32")]
+    #[schemars(range(min = 1, max = 4_294_967_295_u32))]
+    pub column_span: u32,
     /// Number of logical rows occupied by the cell.
-    #[serde(default = "one_u16", skip_serializing_if = "is_one_u16")]
-    pub row_span: u16,
+    #[serde(default = "one_u32", skip_serializing_if = "is_one_u32")]
+    #[schemars(range(min = 1, max = 4_294_967_295_u32))]
+    pub row_span: u32,
     /// Requested horizontal alignment, if explicitly known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alignment: Option<TableAlignment>,
+    /// Positive soft preferred content width in display cells. Readers may
+    /// shrink or wrap the cell at their viewport without changing its body.
+    /// This does not select declared-field placement or imply a fixed width.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 1, max = 65535))]
+    pub preferred_width_columns: Option<u16>,
 }
 
 /// Effective content role of one table cell.
@@ -174,10 +189,10 @@ pub enum TableAlignment {
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_one_u16(value: &u16) -> bool {
+const fn is_one_u32(value: &u32) -> bool {
     *value == 1
 }
 
-const fn one_u16() -> u16 {
+const fn one_u32() -> u32 {
     1
 }

@@ -203,8 +203,8 @@ struct AstTableRowTopology {
 #[derive(Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AstTableCellTopology {
-    column_span: u16,
-    row_span: u16,
+    column_span: u32,
+    row_span: u32,
     vertical_continuation: bool,
 }
 
@@ -221,8 +221,8 @@ struct IrTableRowTopology {
 #[derive(Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct IrTableCellTopology {
-    column_span: u16,
-    row_span: u16,
+    column_span: u32,
+    row_span: u32,
     empty: bool,
 }
 

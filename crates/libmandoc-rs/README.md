@@ -164,6 +164,14 @@ the table's shared final options. `center` and `centre` position the whole
 table independently of cell alignment; undeclared placement remains `None`.
 The count includes unoccupied trailing columns and later `T&` declarations
 without creating synthetic data cells.
+`table_frame` and `table_grid` retain requested box/frame/doublebox/allbox
+edges as styles rather than terminal glyphs. `table_layout` shares an immutable
+`Arc<TableLayout>` across rows that use the same native declaration, including
+`T&` restarts, row-local vertical edges and minimum widths in basic units.
+Layouts are copied and charged to the ownership-transfer budget once. Each
+data cell retains its zero-based `column`; its `column_span` and `row_span`
+are u32, so the formerly narrow 65,535-column boundary cannot silently move
+following cell owners. Widths are preferences, not clipped or prewrapped text.
 
 ## Basic use
 
@@ -665,6 +673,8 @@ libmandoc but unavailable through a public C API:
   between `T&` and a new table;
 - explicit whole-table centering and the final declared logical column count,
   independent of cell alignment and occupied data cells;
+- shared native layout rows, frame/grid styles, row-local vertical edges,
+  minimum widths in basic units and full 32-bit span lengths;
 - the pinned native roff-request lookup used by consumers that need to retain
   libmandoc's tbl dispatch boundary without duplicating its request registry;
 - structured diagnostics and explicit source/include/compression policy.

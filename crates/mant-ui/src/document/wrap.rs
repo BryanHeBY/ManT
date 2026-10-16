@@ -62,10 +62,19 @@ pub(super) struct RowCopyMap {
     alignment: Option<alignment::PreparedAlignment>,
     pub(super) omitted: Vec<std::ops::Range<usize>>,
     pub(super) end: Option<usize>,
+    /// A visual decoration row contributes no selection newline.
+    pub(super) skip_row: bool,
 }
 
 impl RowCopyMap {
     pub(super) fn append_shifted(&mut self, other: &Self, offset: usize, width: usize) {
+        if other.skip_row {
+            // A decoration-only child can share a visual row with another
+            // cell's body. Omit its own cells, rather than relying on the
+            // combined row also being decoration-only.
+            self.omitted.push(offset..offset.saturating_add(width));
+            return;
+        }
         self.omitted.extend(
             other
                 .omitted
@@ -158,6 +167,7 @@ fn attach_reference_marks(line: &LogicalLine, rows: &mut [WrappedLine]) {
         let index = rows
             .iter()
             .position(|row| row.source_end.is_some_and(|end| mark.scalar_offset < end))
+            .or_else(|| rows.iter().rposition(|row| !row.copy_map.skip_row))
             .unwrap_or_else(|| rows.len().saturating_sub(1));
         if let Some(row) = rows.get_mut(index) {
             row.anchors.push(mark.id.to_string());

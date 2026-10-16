@@ -33,11 +33,14 @@ fn wrap(block: Block, context: &str) -> Block {
         source: None,
     };
     let table = |block| Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::default(),
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 blocks: vec![block],
                 kind: mant_ir::TableCellKind::default(),
                 break_after: false,
@@ -313,6 +316,7 @@ fn an_authored_empty_body_can_keep_the_shared_open_row_for_the_next_cell() {
             unreachable!()
         };
         rows[0].cells.push(TableCell {
+            preferred_width_columns: None,
             blocks: vec![paragraph(vec![Inline::Text { value: "B".into() }])],
             break_after: false,
             kind: mant_ir::TableCellKind::Text,

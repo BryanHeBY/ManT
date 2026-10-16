@@ -193,6 +193,7 @@ fn table_intrinsic_measurement_never_uses_page_alignment_padding() {
         ] {
             for declared in [false, true] {
                 let table = Block::Table {
+                    borders: mant_ir::TableBorders::default(),
                     alignment: None,
                     column_count: None,
                     column_preferences: mant_ir::ColumnPreferences {
@@ -200,9 +201,11 @@ fn table_intrinsic_measurement_never_uses_page_alignment_padding() {
                         ..Default::default()
                     },
                     rows: vec![mant_ir::TableRow {
+                        column_borders: Vec::new(),
                         kind: mant_ir::TableRowKind::Data,
                         cells: ["X", "Y"]
                             .map(|value| TableCell {
+                                preferred_width_columns: None,
                                 blocks: vec![paragraph_with_hint(
                                     value,
                                     RowLayoutHint {

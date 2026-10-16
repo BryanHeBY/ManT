@@ -123,13 +123,16 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                     source: None,
                 },
                 Block::Table {
+                    borders: mant_ir::TableBorders::default(),
                     alignment: None,
                     column_count: None,
                     column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![TableRow {
+                        column_borders: vec![],
                         kind: mant_ir::TableRowKind::Data,
                         cells: vec![
                             TableCell {
+                                preferred_width_columns: None,
                                 break_after: false,
                                 kind: mant_ir::TableCellKind::Text,
                                 blocks: vec![paragraph(vec![Inline::Text {
@@ -140,6 +143,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
                                 alignment: None,
                             },
                             TableCell {
+                                preferred_width_columns: None,
                                 break_after: false,
                                 kind: mant_ir::TableCellKind::Text,
                                 blocks: vec![paragraph(vec![Inline::Text {

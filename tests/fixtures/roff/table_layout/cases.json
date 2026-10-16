@@ -1,0 +1,1110 @@
+{
+  "schema": "mant.table-regressions/v1",
+  "reference": {
+    "snapshot": "20261013T025419Z",
+    "identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "profiles": [
+      "ascii",
+      "utf8",
+      "html",
+      "tree",
+      "lint"
+    ],
+    "recipe": {
+      "binary": "target/mandoc-migration/reference/mandoc",
+      "input": "byte-for-byte copy in scratch directory; basename <case>.1 as final argument, cwd=scratch; no stdin transformation",
+      "environment": {
+        "LC_ALL": "C.UTF-8"
+      },
+      "profiles": {
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "<case>.1"
+          ],
+          "stdoutProjection": "exact stdout bytes"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "<case>.1"
+          ],
+          "stdoutProjection": "exact stdout bytes"
+        },
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=120",
+            "<case>.1"
+          ],
+          "stdoutProjection": "exact stdout bytes"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=120",
+            "<case>.1"
+          ],
+          "stdoutProjection": "exact stdout bytes"
+        },
+        "html": {
+          "argv": [
+            "-Thtml",
+            "-Ofragment",
+            "<case>.1"
+          ],
+          "stdoutProjection": "join all regex <table class=\"tbl\".*?</table> matches (DOTALL) with U+000A; no trailing newline"
+        }
+      },
+      "verifiedFixtures": 18,
+      "verifiedProfileRuns": 90
+    }
+  },
+  "cases": [
+    {
+      "file": "boxed-expressions.1",
+      "sourceSha256": "92a4ac36da232048d43339eacff3ceaa163988d67ba85bbb076209eae08bae0b",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 4,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "alignment": "center",
+          "rowCount": 40,
+          "rowKinds": {
+            "data": 22,
+            "horizontal-rule": 18
+          }
+        }
+      ],
+      "markers": [
+        "Syntax",
+        "PAREN_A",
+        "POWER_A",
+        "MEMBER_A",
+        "FOLLOWUP_2",
+        "FOLLOWUP_5",
+        "FOLLOWUP_8"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "d3da479566f6b2ed0a35c8e3666183f5757d26ba8f232592f8e0671e6c45e772",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "61759559ff1a4b65e2d19010f01883c64824d3296808d3f5ac00ccdccd534894",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "78976e0ceea698c59e13d78dcfc6228f6c8f59ed706030f7243e7bdf48f0f634",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "474e70fc48452a07b9d6fc7d73a497fd48fea202bf601e289d4938cc75db6afe",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "boxed-escape-paragraphs.1",
+      "sourceSha256": "df65264e0a67b00137dcea00aa83cc7eb7e2f45346774f7c8777f46a940e9cb6",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 3,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "alignment": "center",
+          "preferredWidthColumns": 34,
+          "rowCount": 10,
+          "rowKinds": {
+            "data": 6,
+            "horizontal-rule": 4
+          },
+          "preferredWidthCount": 8
+        }
+      ],
+      "markers": [
+        "ESC_QUOTE",
+        "ESC_SLASH",
+        "ESC_OCTAL",
+        "ESC_OTHER",
+        "DESC_BEGIN_0",
+        "DESC_END_0",
+        "MEAN_BEGIN_0",
+        "MEAN_END_0",
+        "DESC_BEGIN_1",
+        "DESC_END_1",
+        "MEAN_BEGIN_1",
+        "MEAN_END_1",
+        "DESC_BEGIN_2",
+        "DESC_END_2",
+        "MEAN_BEGIN_2",
+        "MEAN_END_2",
+        "DESC_BEGIN_3",
+        "DESC_END_3",
+        "MEAN_BEGIN_3",
+        "MEAN_END_3"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "6420f24b4ba32289faf166bae8d04877f023f6aab90406642d97d0635a897dbc",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "0207c82a1f1e02e438917d1addc3b318ae9357797beca81a55bb0a04b1bb8bf3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "6df09ca1f7b80748f83362aeb51efb83c04da9fdc4440e378eb1d8d197e49a44",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "604b3c4c04a0985171fab8285321960126f40dbc6a44091c7cc9e40fc775efc4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "frame-alias.1",
+      "sourceSha256": "25aaee61e50d48190d19181284e26072e9eea0545b4b7ade807c36f8c2e04b54",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "rowCount": 2,
+          "rowKinds": {
+            "data": 2
+          }
+        }
+      ],
+      "markers": [
+        "FRAME_A",
+        "FRAME_B",
+        "FRAME_C",
+        "FRAME_D"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "451284872b44bd56dc83c7dbbc459d05929e334bbf9135b0c0e4f5dc0d6da6c2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "e15228aa7a05b5c834ecacc11760fd4365522673351ea0ab1ecc8461f5ec28d0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "de8f620a8255d7f73b23b3e55b26942ad36284a521e7a2105cb3a826a2d1327d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "83b10d25ff2b06986b5a6a4e51a7a66c01b7d4f9bc15b00de7e6a9541b96e53a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "doublebox.1",
+      "sourceSha256": "c6131a2469c85296cf9683d3aa73d4ec81e633535abc1ed4a3c43aee6fb48aed",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "double"
+          },
+          "rowEdges": true,
+          "alignment": "center",
+          "rowCount": 2,
+          "rowKinds": {
+            "data": 2
+          }
+        }
+      ],
+      "markers": [
+        "DOUBLE_A",
+        "DOUBLE_B",
+        "DOUBLE_C",
+        "DOUBLE_D"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "39b2bacbe6261fb00f3d171c028aac1cd633d58e82edae052d65bf5dc717bf4d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "7687815d47fc9f57b96e15ab4b776d0d07bf1931aeee9af064c9287a29925206",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "ad62e770c9160ea2a31122512092654a6f67df05889c08b1d3e2f40eac6219b5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "63e0e69f723652cba9fc728cbd49ce990638d4256e24a59afac89d5e17d212e7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "allbox-spans.1",
+      "sourceSha256": "f7e178155b168557d8e80eeb6b49595d724a8aebf5e7ffb1198e701846de44d7",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 3,
+          "borders": {
+            "outer": "single",
+            "innerRows": "single",
+            "innerColumns": "single"
+          },
+          "rowEdges": false,
+          "columnSpan": 2,
+          "rowSpan": 2,
+          "rowCount": 3,
+          "rowKinds": {
+            "data": 3
+          }
+        }
+      ],
+      "markers": [
+        "SPAN_TOP",
+        "SPAN_RIGHT",
+        "SPAN_LEFT",
+        "SPAN_MIDDLE",
+        "SPAN_END",
+        "SPAN_BOTTOM",
+        "SPAN_TAIL"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "48e1adb07431f7567faa8ef544eea982213a297134905a2495cc3de78de89601",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "de5422d11a77f185f12257d2ec084e5c1c48996c27baf28a70d01c3f13f0ce2a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "8b65664ec00dde6c6728da28c654acb40a6b92ca06030e8f22dc6d0995d11df5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "3eeb7c8d3316e3a525cdc9b5454c5895380ccb02ada558872998405c7765ade1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "vertical-boundaries.1",
+      "sourceSha256": "832e1a926bf56318154e0afd68e05e2621482f6e7f80d1995740d294c4ceda8e",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {},
+          "rowEdges": true,
+          "rowCount": 2,
+          "rowKinds": {
+            "data": 2
+          },
+          "rowColumnBorders": [
+            [
+              {
+                "column": 0,
+                "style": "single"
+              },
+              {
+                "column": 1,
+                "style": "double"
+              },
+              {
+                "column": 2,
+                "style": "single"
+              }
+            ],
+            [
+              {
+                "column": 0,
+                "style": "double"
+              },
+              {
+                "column": 1,
+                "style": "single"
+              },
+              {
+                "column": 2,
+                "style": "double"
+              }
+            ]
+          ]
+        }
+      ],
+      "markers": [
+        "EDGE_A",
+        "EDGE_B",
+        "EDGE_C",
+        "EDGE_D"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "f22799f905265497ba30c4f00cd6ec7acb38ea87dda1ba0cef57a78fab8d48d2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "2de95b8fc25a8dcf034a9cf58d73d62addc3da431f9e1f99cca895c570caf8ea",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "b6f014580c72e2d35ba68c50ed925ab9ee8c7c8cbc3c8aa9306e386717e4e04d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "937f2f2b5bf6ea2399c0e6f47b72e477b59d02b71dc8e59191d5515d08edea0a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "trailing-columns.1",
+      "sourceSha256": "0313b6752c3002bf215818e96709e077b78948c9d4f68ff1e0008cc19d974ff4",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 3,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "alignment": "center",
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "TRAILING_ONLY"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "156e1999fedcc8944a7e1fe94b77871a03f830419d62ac5328b4a3efc9e3d85c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "c88ea02d0e6e459b2bd3b46e478db72272c4cbd22ad17d61406259cda25ef12d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "b713b1640a7182d814bd08528377a2d366fffd35487bd29712f74012354ee72c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "ebb56d2333d180bc16f64d1c6867b3e5f4d415d571b93dfa9538ef9f470bda75",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "leading-rules.1",
+      "sourceSha256": "0f90534f3bad64b0c87827fb0dc2183b9c1cea6da8449d2f0711d583f7dd3c5c",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "rowCount": 3,
+          "rowKinds": {
+            "horizontal-rule": 1,
+            "data": 1,
+            "double-horizontal-rule": 1
+          }
+        }
+      ],
+      "markers": [
+        "LEAD_A",
+        "LEAD_B"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "cb5efa4ad0d248b4918c05e58d0f42c993053f063102b1df55bf04111abdfa0f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "4a78e9372592bba20e399ae2f58baac33cc8d0026aafd4e916e176a5386f87f3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "8b3e5b8981f9c6d39825fbab32dca42a36f22074e1efd36cd3608ef0b73ab2f3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "9a02489af90a10bafef34b084ccf4f88ea5a102a33ef02a1c77fad6f74487d77",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "mixed-layout-rules.1",
+      "sourceSha256": "8a8ce39a951498bb0cd01fe12c806cdc71c30fd88765a06548b764a91cb24370",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 3,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "rowCount": 3,
+          "rowKinds": {
+            "layout-rule": 1,
+            "data": 2
+          }
+        }
+      ],
+      "markers": [
+        "MIXED_A",
+        "MIXED_B",
+        "MIXED_C",
+        "MIXED_D",
+        "MIXED_E"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "3ff64b96d7e98f7e19a072c6d7f609b2c2785d3a7d5755c0e0fadccf5c6cbfdb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "a400d35a59c70e8346268ccc2dd0342f92295dac3fc54db6b1059945c01af56c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "b5a2adfab0b345bca0c867015a1eb9272a4fa921b9e18fb9d1cf53d5f6bb83d1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "25d8e75ea69c24297cc73cdd0af50359d984b87cd4c680d4c26aebda93ee4f41",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "width-units.1",
+      "sourceSha256": "b9c10cb22cf3874fcff6913cf909bc4bc56c1dc4ad1d7d8c773c52533a9c486c",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "preferredWidthColumns": 10,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "WIDTH_A",
+        "WIDTH_B"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "c9514b392cc000d679f8a630addbaa80ecce673731c96eab756b892aa94f5c4d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "f37e8f5880a7235f61f723f671fa9974db18474c4c0a956250b39506385404ad",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "701b222b720bf7556aecc2ac2ffd313cff7082cf9b5bb63371273ec6760e4ba9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "338e8d795136b4597778f684835a184331ddc5dc80691b8739bc4a81b3d89002",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "unbreakable-width.1",
+      "sourceSha256": "075c43add74f2290fce667cd28f683d104ce18d77488bc4b2617d31510d30aa8",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "preferredWidthColumns": 4,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "UNBREAKABLE_LONG_TOKEN",
+        "WORD_RIGHT"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "88cecf7fbc5440f1e6f41d0cb8006772e0bd796b977bd4349d9738c41879befe",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "b98e2f73a3a7a83b3437692437937eec904f92852efbe4925e6021f23c5417ed",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "bd99797a29c766e50ddda27446d1af6ea9fca45901bba09785333c3909e5de04",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "d0b05a664ee32905a17d441a43c084523c2a82193e6f9a48d93e477fcbf1ee0d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "font-scope.1",
+      "sourceSha256": "22ce3a1cce60f40d8904f4dacd94096ac7b5bae45a1fef3e93962a0f66df95de",
+      "oracleLintStatus": 0,
+      "tables": 3,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": false,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        },
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": false,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        },
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": false,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "NEXT_CR",
+        "AFTER_CR",
+        "NEXT_CB",
+        "AFTER_CB",
+        "NEXT_CI",
+        "AFTER_CI"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "4e13d1f7ac96fe49ce142b7a3fc3e009926d1af7e02182749ef178cd4d71886e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "eda732ccbd2de51c02ef78e40d9f3a9b217c4670a44da06206d997868b2d388b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "8ae5f94872133f2b8f41c280fb065714f9d6d0a4f59cd2970e6672f85517dc15",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "5054fe11e85d704a0043854121c7e678c25eddb0c1e92e84adf6374f034db045",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "recovery-provenance.1",
+      "sourceSha256": "17f78f59d72728cf113016e45b567e77fcbd65ef3e22e727b6a10419fbf80472",
+      "oracleLintStatus": 4,
+      "tables": 2,
+      "facts": [
+        {
+          "columns": 1,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": false,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        },
+        {
+          "columns": 1,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": false,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "DIRECT_PAYLOAD",
+        "MACRO_PAYLOAD"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 4,
+          "stdoutProjectionSha256": "15c1418e47f4343b198c0071e40799971b2be44ea79e03142ef77a8f842eb5db",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "e80d698a9649d19821c8976a9d28e58bd90ea93f229cc2fcc47ac771f6898343",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "3e70f93412b9e544fb110426dd44210e711d5c3685b9f880b1d9988e5ee94414",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "1fd478ca64b150a14cd21471694573e949f8d2478093853857080849e204a9c7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "6079f676c2dfbac628ca3fd89dc8b3947ecae9e8e32e8b9cad7355a1d5ccc0de",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "independent-tables.1",
+      "sourceSha256": "ee711870168eb2d6eb1b3374b3393a52c315dc1ebd10e49ca401ac088566fc8f",
+      "oracleLintStatus": 0,
+      "tables": 2,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single",
+            "innerRows": "single",
+            "innerColumns": "single"
+          },
+          "rowEdges": true,
+          "alignment": "center",
+          "rowCount": 2,
+          "rowKinds": {
+            "data": 2
+          }
+        },
+        {
+          "columns": 1,
+          "borders": {},
+          "rowEdges": false,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "FIRST_A",
+        "FIRST_B",
+        "FIRST_C",
+        "FIRST_D",
+        "SECOND_ONLY"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "0a49b007f4411c2ccd18a7e9c9d82838d52157be233b9d9d941ee7f84e917300",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "3f6283cbd64f61d0b188068a78cab628521a92bedfc1cc08aeb394cbd3210be3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "b0f3957dc3b0148f884f8bd0f2b0c6c5c7df8248d055d7557d199db251daa716",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "8ed2114a77de30abbcf620d37454f3dbf28190099f62bd90609c81e26970100d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "empty-rows.1",
+      "sourceSha256": "1a2dab4b93b8e5f8f781ec3661e6185d56481333b5814cc2464fdc3e23c01b81",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single",
+            "innerRows": "single",
+            "innerColumns": "single"
+          },
+          "rowEdges": false,
+          "rowCount": 5,
+          "rowKinds": {
+            "data": 3,
+            "horizontal-rule": 1,
+            "double-horizontal-rule": 1
+          }
+        }
+      ],
+      "markers": [
+        "EMPTY_BEFORE",
+        "EMPTY_RIGHT",
+        "EMPTY_AFTER",
+        "EMPTY_LAST"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "b948cfb841edae2624f399d597647935442eeb1fad235cefef2bdeb5521ba80a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "a460e750b147efa55df0da5813d7402a96479c650bb72b4ce24b585d12d12671",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "252756b3d48d62d8ead7cffcc8ce740d30353e8ae312cfc7de667537117f2cb7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "1bd9295fec6ba6ef5f025bbe61bbc89aa7ebdcac1213b96260dd873b5a8feba0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "rule-payload.1",
+      "sourceSha256": "3baddd7915d779187ba779bc390a82b6e290d95b02ce2b5bd765f2ee2fa9e8ed",
+      "oracleLintStatus": 3,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": false,
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "VISIBLE_PAYLOAD"
+      ],
+      "forbidden": [
+        "HIDDEN_PAYLOAD"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 3,
+          "stdoutProjectionSha256": "7214c5d57ec809fdcf0e587108857716a028d7de8faf05901ac4301169925c2b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "7398e53e616e597b51c37ce2f52d7c93d51f2203d7467c94e6960edc2fbc8b95",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "1aad506b5ce304503c70e46c6614b6362ccd7e6ddd28afa15a92bc5b36f2dec7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "06314457a0a15e24a3a2b96553a4a535ee69a686ba7ffd37c57844360f1804a6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "0d9733fca79902630bd7d0fe653976ea6535adf6c834ef9cf4f999a354039aa6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "soft-wrap-auto.1",
+      "sourceSha256": "451ed0b0c348ccb9e36cf1778db1253284a93389345170eb522e4f06c0efed0c",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 2,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "alignment": "center",
+          "rowCount": 1,
+          "rowKinds": {
+            "data": 1
+          }
+        }
+      ],
+      "markers": [
+        "AUTO_BEGIN",
+        "AUTO_END",
+        "AUTO_RIGHT"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "9a8a143fa0ff6dc7488d8ef731e3500951774e027656586310d8e04dc76f25e7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "91946715908426ec2e1b1290d8156e6057af424ffccd271306ae1a01b4355395",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "73fab956d3663e2b1d6ce1710fb70f2efb666db30772559deab08f878ea53359",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "607a65a3686fd2789130968cd4e6a0083c3beaae7c9f3b467517f109e9ad92de",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "shared-layout.1",
+      "sourceSha256": "6be1d6c93e6b07d57108c2ab5bc698d68a476f6b1f8b068a1108230138d0dffa",
+      "oracleLintStatus": 0,
+      "tables": 1,
+      "facts": [
+        {
+          "columns": 8,
+          "borders": {
+            "outer": "single"
+          },
+          "rowEdges": true,
+          "rowCount": 3,
+          "rowKinds": {
+            "data": 3
+          }
+        }
+      ],
+      "markers": [
+        "SHARED_ONE",
+        "SHARED_TWO",
+        "SHARED_THREE"
+      ],
+      "profiles": {
+        "lint": {
+          "status": 0,
+          "stdoutProjectionSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdoutProjectionSha256": "dbfd044221579ea9b6051a92e4c932878f55ef0a844662bdcb0b19dbfbc218b7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii": {
+          "status": 0,
+          "stdoutProjectionSha256": "30b5d74c7b85b4762489d69b5e2c9a13683d8cb6b08f28bb7868d2143a5b3761",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdoutProjectionSha256": "e700aaa393c0468ddc4af28def5335918b29dfa89bddc42406d1c45f9129c3a0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdoutProjectionSha256": "dd4929ca1f178c68f69287c66c8045fda7b7c593e28d2549bc2fd417d7fac87d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ]
+}

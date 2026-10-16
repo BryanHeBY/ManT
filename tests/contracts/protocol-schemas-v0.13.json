@@ -925,6 +925,10 @@
                   }
                 ]
               },
+              "borders": {
+                "description": "Author-specified frame and grid edges, not theme or terminal glyphs.",
+                "$ref": "#/$defs/TableBorders"
+              },
               "columnCount": {
                 "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
                 "type": [
@@ -3344,6 +3348,61 @@
           }
         ]
       },
+      "TableBorderStyle": {
+        "description": "One or two parallel strokes; glyphs, color and occupied cells are consumer choices.",
+        "oneOf": [
+          {
+            "description": "A single stroke.",
+            "type": "string",
+            "const": "single"
+          },
+          {
+            "description": "A double stroke.",
+            "type": "string",
+            "const": "double"
+          }
+        ]
+      },
+      "TableBorders": {
+        "description": "Source-neutral table frame and grid preferences.\n\nGrid edges follow logical cells: covered span interiors have no edge.\nExplicit authored rule rows remain separate table content, rather than\nbeing duplicated by a grid edge at the same boundary.",
+        "type": "object",
+        "properties": {
+          "innerColumns": {
+            "description": "Stroke between logical columns, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "innerRows": {
+            "description": "Stroke between adjacent data rows, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outer": {
+            "description": "Stroke of the complete outside frame, if requested.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "TableCell": {
         "description": "Block-capable table cell with optional layout information.",
         "type": "object",
@@ -3373,20 +3432,30 @@
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           },
           "kind": {
             "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
+          "preferredWidthColumns": {
+            "description": "Positive soft preferred content width in display cells. Readers may\nshrink or wrap the cell at their viewport without changing its body.\nThis does not select declared-field placement or imply a fixed width.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 1
+          },
           "rowSpan": {
             "description": "Number of logical rows occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           }
         },
         "additionalProperties": false,
@@ -3424,6 +3493,28 @@
           }
         ]
       },
+      "TableColumnBorder": {
+        "description": "A row-local vertical edge at a zero-based logical column boundary.",
+        "type": "object",
+        "properties": {
+          "column": {
+            "description": "Boundary in `0..=columnCount`, independent of display-cell widths.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 0
+          },
+          "style": {
+            "description": "Requested edge stroke, combined with defaults using the stronger value.",
+            "$ref": "#/$defs/TableBorderStyle"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "column",
+          "style"
+        ]
+      },
       "TableRow": {
         "description": "One logical table row.",
         "type": "object",
@@ -3433,6 +3524,13 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/TableCell"
+            }
+          },
+          "columnBorders": {
+            "description": "Additional vertical edges at logical column boundaries in this row.\nEntries are strictly ordered and unique; 0 and the table's column\ncount denote its outside edges. Spanned interiors remain unpainted.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TableColumnBorder"
             }
           },
           "kind": {
@@ -4075,6 +4173,10 @@
                     "type": "null"
                   }
                 ]
+              },
+              "borders": {
+                "description": "Author-specified frame and grid edges, not theme or terminal glyphs.",
+                "$ref": "#/$defs/TableBorders"
               },
               "columnCount": {
                 "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
@@ -7323,6 +7425,61 @@
           }
         ]
       },
+      "TableBorderStyle": {
+        "description": "One or two parallel strokes; glyphs, color and occupied cells are consumer choices.",
+        "oneOf": [
+          {
+            "description": "A single stroke.",
+            "type": "string",
+            "const": "single"
+          },
+          {
+            "description": "A double stroke.",
+            "type": "string",
+            "const": "double"
+          }
+        ]
+      },
+      "TableBorders": {
+        "description": "Source-neutral table frame and grid preferences.\n\nGrid edges follow logical cells: covered span interiors have no edge.\nExplicit authored rule rows remain separate table content, rather than\nbeing duplicated by a grid edge at the same boundary.",
+        "type": "object",
+        "properties": {
+          "innerColumns": {
+            "description": "Stroke between logical columns, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "innerRows": {
+            "description": "Stroke between adjacent data rows, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outer": {
+            "description": "Stroke of the complete outside frame, if requested.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "TableCell": {
         "description": "Block-capable table cell with optional layout information.",
         "type": "object",
@@ -7352,20 +7509,30 @@
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           },
           "kind": {
             "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
+          "preferredWidthColumns": {
+            "description": "Positive soft preferred content width in display cells. Readers may\nshrink or wrap the cell at their viewport without changing its body.\nThis does not select declared-field placement or imply a fixed width.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 1
+          },
           "rowSpan": {
             "description": "Number of logical rows occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           }
         },
         "additionalProperties": false,
@@ -7403,6 +7570,28 @@
           }
         ]
       },
+      "TableColumnBorder": {
+        "description": "A row-local vertical edge at a zero-based logical column boundary.",
+        "type": "object",
+        "properties": {
+          "column": {
+            "description": "Boundary in `0..=columnCount`, independent of display-cell widths.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 0
+          },
+          "style": {
+            "description": "Requested edge stroke, combined with defaults using the stronger value.",
+            "$ref": "#/$defs/TableBorderStyle"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "column",
+          "style"
+        ]
+      },
       "TableRow": {
         "description": "One logical table row.",
         "type": "object",
@@ -7412,6 +7601,13 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/TableCell"
+            }
+          },
+          "columnBorders": {
+            "description": "Additional vertical edges at logical column boundaries in this row.\nEntries are strictly ordered and unique; 0 and the table's column\ncount denote its outside edges. Spanned interiors remain unpainted.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TableColumnBorder"
             }
           },
           "kind": {
@@ -10297,6 +10493,10 @@
                   }
                 ]
               },
+              "borders": {
+                "description": "Author-specified frame and grid edges, not theme or terminal glyphs.",
+                "$ref": "#/$defs/TableBorders"
+              },
               "columnCount": {
                 "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
                 "type": [
@@ -12492,6 +12692,61 @@
           }
         ]
       },
+      "TableBorderStyle": {
+        "description": "One or two parallel strokes; glyphs, color and occupied cells are consumer choices.",
+        "oneOf": [
+          {
+            "description": "A single stroke.",
+            "type": "string",
+            "const": "single"
+          },
+          {
+            "description": "A double stroke.",
+            "type": "string",
+            "const": "double"
+          }
+        ]
+      },
+      "TableBorders": {
+        "description": "Source-neutral table frame and grid preferences.\n\nGrid edges follow logical cells: covered span interiors have no edge.\nExplicit authored rule rows remain separate table content, rather than\nbeing duplicated by a grid edge at the same boundary.",
+        "type": "object",
+        "properties": {
+          "innerColumns": {
+            "description": "Stroke between logical columns, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "innerRows": {
+            "description": "Stroke between adjacent data rows, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outer": {
+            "description": "Stroke of the complete outside frame, if requested.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "TableCell": {
         "description": "Block-capable table cell with optional layout information.",
         "type": "object",
@@ -12521,20 +12776,30 @@
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           },
           "kind": {
             "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
+          "preferredWidthColumns": {
+            "description": "Positive soft preferred content width in display cells. Readers may\nshrink or wrap the cell at their viewport without changing its body.\nThis does not select declared-field placement or imply a fixed width.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 1
+          },
           "rowSpan": {
             "description": "Number of logical rows occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           }
         },
         "additionalProperties": false,
@@ -12572,6 +12837,28 @@
           }
         ]
       },
+      "TableColumnBorder": {
+        "description": "A row-local vertical edge at a zero-based logical column boundary.",
+        "type": "object",
+        "properties": {
+          "column": {
+            "description": "Boundary in `0..=columnCount`, independent of display-cell widths.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 0
+          },
+          "style": {
+            "description": "Requested edge stroke, combined with defaults using the stronger value.",
+            "$ref": "#/$defs/TableBorderStyle"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "column",
+          "style"
+        ]
+      },
       "TableRow": {
         "description": "One logical table row.",
         "type": "object",
@@ -12581,6 +12868,13 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/TableCell"
+            }
+          },
+          "columnBorders": {
+            "description": "Additional vertical edges at logical column boundaries in this row.\nEntries are strictly ordered and unique; 0 and the table's column\ncount denote its outside edges. Spanned interiors remain unpainted.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TableColumnBorder"
             }
           },
           "kind": {
@@ -13851,6 +14145,10 @@
                     "type": "null"
                   }
                 ]
+              },
+              "borders": {
+                "description": "Author-specified frame and grid edges, not theme or terminal glyphs.",
+                "$ref": "#/$defs/TableBorders"
               },
               "columnCount": {
                 "description": "Optional logical column range, including unoccupied trailing columns.\nMust be positive and contain every cell span and layout-rule column.\nAbsence derives the range from the rows without inventing columns.",
@@ -18267,6 +18565,61 @@
           }
         ]
       },
+      "TableBorderStyle": {
+        "description": "One or two parallel strokes; glyphs, color and occupied cells are consumer choices.",
+        "oneOf": [
+          {
+            "description": "A single stroke.",
+            "type": "string",
+            "const": "single"
+          },
+          {
+            "description": "A double stroke.",
+            "type": "string",
+            "const": "double"
+          }
+        ]
+      },
+      "TableBorders": {
+        "description": "Source-neutral table frame and grid preferences.\n\nGrid edges follow logical cells: covered span interiors have no edge.\nExplicit authored rule rows remain separate table content, rather than\nbeing duplicated by a grid edge at the same boundary.",
+        "type": "object",
+        "properties": {
+          "innerColumns": {
+            "description": "Stroke between logical columns, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "innerRows": {
+            "description": "Stroke between adjacent data rows, excluding covered span interiors.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outer": {
+            "description": "Stroke of the complete outside frame, if requested.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableBorderStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "TableCell": {
         "description": "Block-capable table cell with optional layout information.",
         "type": "object",
@@ -18296,20 +18649,30 @@
           "columnSpan": {
             "description": "Number of logical columns occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           },
           "kind": {
             "description": "Effective cell content after the producer resolves source rule precedence.",
             "$ref": "#/$defs/TableCellKind"
           },
+          "preferredWidthColumns": {
+            "description": "Positive soft preferred content width in display cells. Readers may\nshrink or wrap the cell at their viewport without changing its body.\nThis does not select declared-field placement or imply a fixed width.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 1
+          },
           "rowSpan": {
             "description": "Number of logical rows occupied by the cell.",
             "type": "integer",
-            "format": "uint16",
-            "maximum": 65535,
-            "minimum": 0
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 1
           }
         },
         "additionalProperties": false,
@@ -18347,6 +18710,28 @@
           }
         ]
       },
+      "TableColumnBorder": {
+        "description": "A row-local vertical edge at a zero-based logical column boundary.",
+        "type": "object",
+        "properties": {
+          "column": {
+            "description": "Boundary in `0..=columnCount`, independent of display-cell widths.",
+            "type": "integer",
+            "format": "uint32",
+            "maximum": 4294967295,
+            "minimum": 0
+          },
+          "style": {
+            "description": "Requested edge stroke, combined with defaults using the stronger value.",
+            "$ref": "#/$defs/TableBorderStyle"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "column",
+          "style"
+        ]
+      },
       "TableRow": {
         "description": "One logical table row.",
         "type": "object",
@@ -18356,6 +18741,13 @@
             "type": "array",
             "items": {
               "$ref": "#/$defs/TableCell"
+            }
+          },
+          "columnBorders": {
+            "description": "Additional vertical edges at logical column boundaries in this row.\nEntries are strictly ordered and unique; 0 and the table's column\ncount denote its outside edges. Spanned interiors remain unpainted.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TableColumnBorder"
             }
           },
           "kind": {

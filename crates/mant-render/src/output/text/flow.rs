@@ -4,6 +4,7 @@
 use mant_ir::geometry::GapPlan;
 
 use super::layout::LayoutText;
+mod table_border;
 mod table_frame;
 use table_frame::TableRule;
 

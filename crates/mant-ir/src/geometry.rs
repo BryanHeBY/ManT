@@ -20,10 +20,12 @@ mod list;
 pub use list::{list_item_spacing, list_marker, list_marker_width};
 
 mod table;
+mod table_columns;
 pub use table::{
     CellOriginBounds, table_cell_origin_bounds, table_column_origins_fit,
     table_requires_origin_preserving_stack,
 };
+pub use table_columns::allocate_table_columns;
 
 mod gaps;
 pub use gaps::has_bounded_gap;

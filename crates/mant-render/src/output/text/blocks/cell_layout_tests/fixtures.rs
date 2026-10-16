@@ -30,6 +30,7 @@ pub(super) fn literal(children: Vec<Inline>) -> Block {
 
 pub(super) fn cell(blocks: Vec<Block>) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         break_after: false,
         blocks,
         kind: TableCellKind::Text,
@@ -41,9 +42,11 @@ pub(super) fn cell(blocks: Vec<Block>) -> TableCell {
 
 pub(super) fn table(widths: &[u16], cells: Vec<TableCell>, origin: i32) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: Vec::new(),
             cells,
             kind: TableRowKind::Data,
         }],

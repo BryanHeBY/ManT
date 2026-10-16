@@ -29,6 +29,7 @@ fn cell(value: &str, alignment: TextAlignment, linked: bool) -> TableCell {
         text
     };
     TableCell {
+        preferred_width_columns: None,
         kind: mant_ir::TableCellKind::Text,
         break_after: false,
         column_span: 1,
@@ -57,6 +58,7 @@ fn query(alignment: TextAlignment, declared: bool, stacked: bool) -> ResolvedCon
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences {
@@ -65,10 +67,12 @@ fn query(alignment: TextAlignment, declared: bool, stacked: bool) -> ResolvedCon
         },
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("X", alignment, true), cell("Y", alignment, true)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     cell("XXXXXX", TextAlignment::Left, false),
@@ -190,9 +194,10 @@ fn check_case(width: u16, alignment: TextAlignment, declared: bool, stacked: boo
                 " ".repeat(x_column),
                 " ".repeat(y_column - x_column - 1)
             )
-        } else if alignment == TextAlignment::Left {
-            "X | Y".into()
         } else {
+            // The common table slot is six cells, including for a left
+            // owner on this short row; LONGXX in the next row fixes it.
+            // CLI's portable divider occupies one extra display cell.
             let end = 9 + offset(alignment, usize::from(width) - 9);
             format!(
                 "{}X{} | {}Y",

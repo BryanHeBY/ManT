@@ -4,6 +4,7 @@ use mant_ir::{
     bounded_table_rows_with_column_count,
 };
 
+mod responsive;
 mod rows;
 #[cfg(test)]
 mod tests;
@@ -15,6 +16,13 @@ use rows::{
 const MAX_DENSE_PHYSICAL_SLOTS: usize = 16_384;
 
 pub(super) trait TableText: Clone {
+    fn longest_word_width(&self) -> usize {
+        self.width()
+    }
+    fn wrap_within(&self, _width: usize) -> Option<Vec<Self>> {
+        None
+    }
+
     fn has_alignment(&self) -> bool {
         false
     }
@@ -75,6 +83,8 @@ enum TableMode {
 /// A rendered data row or a rule awaiting the final table extent. Rules do
 /// not establish a second viewport or choose a separate fallback policy.
 pub(super) enum ProjectedTableRow<T> {
+    /// Chosen geometry can exceed the final glyph without generating text.
+    FrameWidth(usize),
     Content(Vec<T>, bool, bool),
     Rule(Vec<TableRuleCellKind>, Option<Vec<usize>>),
 }
@@ -94,8 +104,12 @@ pub(super) struct TableProjection {
 pub(super) fn projected_table_rows<T: TableText>(
     rows: &[TableRow],
     projection: TableProjection,
+    borders: &mant_ir::TableBorders,
     mut render_cell: impl FnMut(&TableCell) -> (T, bool, bool),
 ) -> Vec<ProjectedTableRow<T>> {
+    if responsive_geometry(rows, projection, borders) {
+        return responsive::project(rows, projection, borders, &mut render_cell);
+    }
     let gap = usize::from(projection.gap);
     let prepared = prepare_table_rows(rows, projection.column_count, &mut render_cell);
     let viewport = projection
@@ -253,4 +267,20 @@ fn measured_alignment_slots<T: TableText>(
         }
     }
     alignment.then_some(widths)
+}
+
+fn responsive_geometry(
+    rows: &[TableRow],
+    projection: TableProjection,
+    borders: &mant_ir::TableBorders,
+) -> bool {
+    !borders.is_empty()
+        || rows.iter().any(|row| {
+            !row.column_borders.is_empty()
+                || row
+                    .cells
+                    .iter()
+                    .any(|cell| cell.column_span > 1 || cell.preferred_width_columns.is_some())
+        })
+        || projection.viewport.is_some()
 }

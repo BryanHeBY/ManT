@@ -99,6 +99,50 @@ fn table_frame_and_logical_extent_belong_only_to_unreleased_v0_13() {
 }
 
 #[test]
+fn borders_and_soft_cell_widths_are_closed_v0_13_facts() {
+    let released: Value = serde_json::from_str(V0_12_SNAPSHOT).unwrap();
+    let current = serde_json::to_value(query_json_schema_catalog()).unwrap();
+    for family in ["query", "excerpt", "explanation", "scope-query"] {
+        let old = &released[family]["$defs"];
+        assert!(old.get("TableBorders").is_none());
+        assert!(old["TableRow"]["properties"].get("columnBorders").is_none());
+        assert!(
+            old["TableCell"]["properties"]
+                .get("preferredWidthColumns")
+                .is_none()
+        );
+        let new = &current[family]["$defs"];
+        assert_eq!(new["TableBorders"]["additionalProperties"], false);
+        assert_eq!(
+            new["TableBorders"]["properties"].as_object().unwrap().len(),
+            3
+        );
+        assert_eq!(new["TableColumnBorder"]["additionalProperties"], false);
+        assert_eq!(
+            new["TableColumnBorder"]["properties"]["column"]["maximum"],
+            u32::MAX
+        );
+        assert_eq!(
+            new["TableRow"]["properties"]["columnBorders"]["items"]["$ref"],
+            "#/$defs/TableColumnBorder"
+        );
+        assert_eq!(
+            new["TableCell"]["properties"]["preferredWidthColumns"]["minimum"],
+            1
+        );
+        assert_eq!(
+            new["TableCell"]["properties"]["preferredWidthColumns"]["maximum"],
+            u16::MAX
+        );
+        for field in ["columnSpan", "rowSpan"] {
+            assert_eq!(new["TableCell"]["properties"][field]["minimum"], 1);
+            assert_eq!(new["TableCell"]["properties"][field]["maximum"], u32::MAX);
+            assert_eq!(old["TableCell"]["properties"][field]["format"], "uint16");
+        }
+    }
+}
+
+#[test]
 fn v0_13_catalog_exposes_only_logical_document_identities() {
     let catalog = serde_json::to_value(mant_protocol::document_catalog_json_schema())
         .expect("catalog schema");

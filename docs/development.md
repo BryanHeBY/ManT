@@ -333,6 +333,8 @@ rule endpoints.
 | Text layout | render `text/blocks/tests/table_frames.rs`: whole/cell/owner alignment, unknown width, ANSI, declared fields, global fallback and final origin bounds |
 | Viewport layout and navigation | UI `document/tests/tables/placement.rs`: independent rule endpoints, nested containers, empty tails, resize, real buffers, links, anchors, search and copy; missing cell rows participate in padding budgets |
 | Complete source path | UI `tests/tbl_placement.rs`: native source → actual query JSON → CLI/TUI and Markdown readback; caption, cell and table alignment remain separate |
+| Frames, width and spans | `tests/fixtures/roff/table_layout/cases.json` binds 18 original complete sources to native facts; UI `tests/table_layout.rs` checks final frame placement, responsive prose, complete span regions, precise empty-cell receipts and bounded fallback after actual JSON |
+| Real table sources | `table_layout/real_cases.json`: 7 immutable pages / 104 native tables, with 12 selected tables across awk, termios.h, sort, scanf, CMake, rclone and groff; original bytes, source-specific licenses, exact native runs and actual Markdown readback |
 
 Explicit frames bound the last owner-row alignment at the frame edge. Automatic
 tables retain the existing remaining-parent area for that owner preference;
@@ -340,6 +342,15 @@ ordinary cell alignment stays in its column. A fallback changes placement, not
 physical-row receipts or owner identity. Document thematic breaks remain
 independent from table rules. The unreleased v0.13 snapshot changes in place;
 published v0.12 fixtures remain frozen.
+
+Source identity checks run with
+`python3 -m unittest scripts.roff.tests.test_table_fixture_contract`. The frame
+matrix checks exact origins, endpoints and physical-row distances; it does not
+fold whitespace. Native table widths/borders are facts to retain, while the
+reader's final responsive gaps and soft wraps have independent expectations.
+Compare real Unicode buffers and source coordinates separately from glyph
+decoration. Known native parser warnings and unsupported tbl geometry remain
+documented, rather than being reclassified as a clean full-fidelity result.
 
 Focused commands are useful while iterating:
 

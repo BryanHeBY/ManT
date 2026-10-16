@@ -11,6 +11,7 @@ extern "C" {
 struct mant_mandoc_document;
 struct mant_mandoc_node;
 struct mant_mandoc_table_cell;
+struct mant_mandoc_table_layout_cell;
 struct mant_mandoc_eqn_box;
 struct mparse;
 
@@ -48,6 +49,10 @@ struct mant_mandoc_node_view {
 	int			 table_row_kind;
 	int			 table_alignment;
 	int			 table_column_count;
+	int			 table_frame;
+	int			 table_allbox;
+	int			 table_left_border;
+	const struct mant_mandoc_table_layout_cell *table_layout_cells;
 	unsigned int		 flags;
 	int			 list_kind;
 	int			 definition_list_style;
@@ -88,6 +93,7 @@ struct mant_mandoc_eqn_box_view {
 
 /* Borrowed projection of one live tbl(7) data cell. */
 struct mant_mandoc_table_cell_view {
+	unsigned int		 column;
 	const char		*text;
 	int			 kind;
 	int			 text_block;
@@ -98,6 +104,14 @@ struct mant_mandoc_table_cell_view {
 	int			 alignment;
 	int			 font;
 	const struct mant_mandoc_table_cell *next;
+};
+
+/* Shared layout slots, traversed once for each declaration identity. */
+struct mant_mandoc_table_layout_cell_view {
+	unsigned int		 column;
+	size_t			 minimum_width;
+	int			 right_border;
+	const struct mant_mandoc_table_layout_cell *next;
 };
 
 /* Borrowed projection of one layout-only tbl(7) rule cell. */
@@ -233,6 +247,12 @@ int mant_mandoc_is_native_roff_request(const char *, size_t);
 size_t mant_mandoc_node_view_size(void);
 size_t mant_mandoc_node_view_align(void);
 const size_t *mant_mandoc_node_view_offsets(size_t *);
+size_t mant_mandoc_table_layout_cell_view_size(void);
+size_t mant_mandoc_table_layout_cell_view_align(void);
+const size_t *mant_mandoc_table_layout_cell_view_offsets(size_t *);
+int mant_mandoc_table_layout_cell_snapshot(const struct mant_mandoc_document *,
+    const struct mant_mandoc_table_layout_cell *,
+    struct mant_mandoc_table_layout_cell_view *);
 size_t mant_mandoc_table_cell_view_size(void);
 size_t mant_mandoc_table_cell_view_align(void);
 const size_t *mant_mandoc_table_cell_view_offsets(size_t *);

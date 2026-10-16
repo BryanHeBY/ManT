@@ -4,6 +4,7 @@ use super::super::*;
 #[test]
 fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
     let cell = |blocks| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         blocks,
         kind: mant_ir::TableCellKind::Text,
@@ -13,9 +14,11 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
     };
     for (parent, offset, expected) in [(4090, 0, 4090), (5, -3, 2), (-2, 3, 1)] {
         let inner = Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     cell(vec![paragraph("LEFT")]),
@@ -36,9 +39,11 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
         let document = query.document.as_mut().unwrap();
         document.sections.clear();
         document.blocks = vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(vec![inner])],
             }],
@@ -58,11 +63,26 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
             assert_eq!(rendered.search("RIGHT")[0].start_column, expected);
         }
     }
+}
+
+#[test]
+fn nested_table_completed_rows_keep_one_shared_gap() {
+    let cell = |blocks| TableCell {
+        preferred_width_columns: None,
+        break_after: false,
+        blocks,
+        kind: mant_ir::TableCellKind::Text,
+        column_span: 1,
+        row_span: 1,
+        alignment: None,
+    };
     for widths in [vec![], vec![8]] {
         let inner = Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(vec![
                     paragraph("FIRST"),
@@ -83,9 +103,11 @@ fn nested_table_receipts_keep_parent_origins_and_completed_rows() {
         let document = query.document.as_mut().unwrap();
         document.sections.clear();
         document.blocks = vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(vec![inner]), cell(vec![paragraph("SECOND")])],
             }],
@@ -111,6 +133,7 @@ fn nested_table_open_tail_receipts_propagate_across_every_cached_layer() {
     // term_vspace separately completes a blank row. This model fixes the
     // reading contract without copying native macro spacing into layout.
     let cell = |blocks| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         blocks,
         kind: mant_ir::TableCellKind::Text,
@@ -134,9 +157,11 @@ fn nested_table_open_tail_receipts_propagate_across_every_cached_layer() {
             };
             for _ in 0..depth {
                 inner = Block::Table {
+                    borders: mant_ir::TableBorders::default(),
                     alignment: None,
                     column_count: None,
                     rows: vec![TableRow {
+                        column_borders: vec![],
                         kind: mant_ir::TableRowKind::Data,
                         cells: vec![cell(vec![inner])],
                     }],
@@ -152,9 +177,11 @@ fn nested_table_open_tail_receipts_propagate_across_every_cached_layer() {
             let document = query.document.as_mut().unwrap();
             document.sections.clear();
             document.blocks = vec![Block::Table {
+                borders: mant_ir::TableBorders::default(),
                 alignment: None,
                 column_count: None,
                 rows: vec![TableRow {
+                    column_borders: vec![],
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![cell(vec![inner]), cell(vec![paragraph("SECOND")])],
                 }],

@@ -2,7 +2,9 @@
 
 use super::super::table::TableText;
 mod alignment;
+mod wrapping;
 use alignment::RowAlignment;
+use wrapping::PaintedRun;
 
 /// Both representations come from the same inline visit and share all layout
 /// operations. The visible side is local measurement material, not a second
@@ -14,6 +16,7 @@ pub(in crate::output) struct LayoutText {
     pub(super) visible: String,
     alignments: Vec<RowAlignment>,
     row_breaks: usize,
+    painted: Vec<PaintedRun>,
 }
 
 impl LayoutText {
@@ -26,11 +29,13 @@ impl LayoutText {
         } else {
             visible.to_owned()
         };
+        let painted = vec![PaintedRun::new(visible, &rendered)];
         Self {
             rendered,
             visible: visible.to_owned(),
             alignments: Vec::new(),
             row_breaks,
+            painted,
         }
     }
 
@@ -40,6 +45,13 @@ impl LayoutText {
 
     pub(super) fn append(&mut self, other: &Self) {
         let row = self.row_breaks;
+        let offset = self.visible.len();
+        self.painted
+            .extend(other.painted.iter().cloned().map(|mut run| {
+                run.range.start += offset;
+                run.range.end += offset;
+                run
+            }));
         self.alignments
             .extend(other.alignments.iter().map(|receipt| RowAlignment {
                 row: row.saturating_add(receipt.row),
@@ -51,6 +63,9 @@ impl LayoutText {
     }
 
     pub(super) fn push_plain(&mut self, text: &str) {
+        let offset = self.visible.len();
+        self.painted
+            .push(PaintedRun::plain(offset..offset + text.len()));
         self.rendered.push_str(text);
         self.visible.push_str(text);
         self.row_breaks = self
@@ -58,8 +73,40 @@ impl LayoutText {
             .saturating_add(text.bytes().filter(|byte| *byte == b'\n').count());
     }
 
+    pub(super) fn insert_plain(&mut self, at: usize, value: &str) {
+        let mut runs = Vec::with_capacity(self.painted.len() + 2);
+        for run in &self.painted {
+            if run.range.end <= at {
+                runs.push(run.clone());
+            } else if run.range.start >= at {
+                let mut shifted = run.clone();
+                shifted.range.start += value.len();
+                shifted.range.end += value.len();
+                runs.push(shifted);
+            } else {
+                let mut before = run.clone();
+                before.range.end = at;
+                runs.push(before);
+                let mut after = run.clone();
+                after.range.start = at + value.len();
+                after.range.end += value.len();
+                runs.push(after);
+            }
+        }
+        runs.push(PaintedRun::plain(at..at + value.len()));
+        runs.sort_by_key(|run| run.range.start);
+        self.painted = runs;
+        self.visible.insert_str(at, value);
+        self.rendered.insert_str(at, value);
+    }
+
     pub(super) fn prefixed(mut self, prefix: &str) -> Self {
         self.prefix_alignments(prefix, false);
+        for run in &mut self.painted {
+            run.range.start += prefix.len();
+            run.range.end += prefix.len();
+        }
+        self.painted.insert(0, PaintedRun::plain(0..prefix.len()));
         self.rendered.insert_str(0, prefix);
         self.visible.insert_str(0, prefix);
         self.row_breaks = self
@@ -71,6 +118,14 @@ impl LayoutText {
     pub(super) fn strip_prefix(mut self, prefix: &str) -> Self {
         if self.visible.starts_with(prefix) && self.rendered.starts_with(prefix) {
             self.prefix_alignments(prefix, true);
+            self.painted.retain_mut(|run| {
+                if run.range.end < prefix.len() {
+                    return false;
+                }
+                run.range.start = run.range.start.saturating_sub(prefix.len());
+                run.range.end = run.range.end.saturating_sub(prefix.len());
+                true
+            });
             self.visible.drain(..prefix.len());
             self.row_breaks = self
                 .row_breaks
@@ -105,6 +160,7 @@ impl LayoutText {
             .zip(self.rendered.split('\n'))
             .map(|(visible, rendered)| Self::decorated(visible, rendered.to_owned()))
             .collect::<Vec<_>>();
+        self.distribute_paint(&mut rows);
         for receipt in &self.alignments {
             if let Some(row) = rows.get_mut(receipt.row) {
                 row.alignments.push(RowAlignment { row: 0, ..*receipt });
@@ -159,11 +215,13 @@ impl LayoutText {
 impl From<String> for LayoutText {
     fn from(visible: String) -> Self {
         let row_breaks = visible.bytes().filter(|byte| *byte == b'\n').count();
+        let painted = vec![PaintedRun::plain(0..visible.len())];
         Self {
             rendered: visible.clone(),
             visible,
             alignments: Vec::new(),
             row_breaks,
+            painted,
         }
     }
 }
@@ -175,6 +233,19 @@ impl From<&str> for LayoutText {
 }
 
 impl TableText for LayoutText {
+    fn longest_word_width(&self) -> usize {
+        self.visible
+            .split(|character: char| {
+                character.is_whitespace()
+                    && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
+            })
+            .map(mant_ir::geometry::text_width)
+            .max()
+            .unwrap_or(0)
+    }
+    fn wrap_within(&self, width: usize) -> Option<Vec<Self>> {
+        self.soft_wrapped(width)
+    }
     fn has_alignment(&self) -> bool {
         !self.alignments.is_empty()
     }

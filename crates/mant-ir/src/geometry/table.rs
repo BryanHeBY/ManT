@@ -149,8 +149,10 @@ mod tests {
 
     fn rows(block: Block) -> Vec<TableRow> {
         vec![TableRow {
+            column_borders: vec![],
             kind: crate::TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 break_after: false,
                 kind: crate::TableCellKind::Text,
                 blocks: vec![block],
@@ -182,6 +184,7 @@ mod tests {
         assert!(table_requires_origin_preserving_stack(&positive, -2));
         for (indent, continuation) in [(-2, 0), (3, -2)] {
             let nested = rows(Block::Table {
+                borders: crate::TableBorders::default(),
                 alignment: None,
                 column_count: None,
                 column_preferences: crate::ColumnPreferences::default(),
@@ -236,6 +239,7 @@ mod tests {
             4096
         ));
         let nested = rows(Block::Table {
+            borders: crate::TableBorders::default(),
             alignment: None,
             column_count: None,
             column_preferences: crate::ColumnPreferences::default(),

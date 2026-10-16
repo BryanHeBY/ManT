@@ -7,7 +7,10 @@ use super::{
     strings::{
         checked_macro, checked_string, copy_column_strings, split_visible_text, visible_string,
     },
-    tables::{copy_table_cells, copy_table_rule_cells, table_options, table_row_kind},
+    tables::{
+        TableLayouts, border_style, copy_table_cells, copy_table_rule_cells, table_options,
+        table_row_kind,
+    },
 };
 use crate::{
     AuthorMode, DefinitionListStyle, DisplayKind, MacroSet, Node, NodeFlags, NodeKind,
@@ -35,6 +38,7 @@ pub(super) struct IdentityState {
     // Only BODY nodes can be targets of mdoc_endbody_alloc's `body` link.
     // Keep their borrowed addresses for this synchronous transfer alone.
     bodies: HashMap<*const CNode, u32>,
+    table_layouts: TableLayouts,
 }
 
 impl IdentityState {
@@ -224,6 +228,24 @@ pub(super) unsafe fn copy_node(
     Err("libmandoc returned an empty syntax traversal".to_owned())
 }
 
+fn node_flags(bits: u32, line_continuation: bool) -> NodeFlags {
+    NodeFlags {
+        generated: bits & NODE_GENERATED != 0,
+        sentence_end: bits & NODE_SENTENCE_END != 0,
+        no_print: bits & NODE_NO_PRINT != 0,
+        no_fill: bits & NODE_NO_FILL != 0,
+        broken: bits & NODE_BROKEN != 0,
+        deep_link_target: bits & NODE_DEEP_LINK_TARGET != 0,
+        permalink: bits & NODE_PERMALINK != 0,
+        line_start: bits & NODE_LINE_START != 0,
+        delimiter_open: bits & NODE_DELIMITER_OPEN != 0,
+        delimiter_close: bits & NODE_DELIMITER_CLOSE != 0,
+        synopsis_pretty: bits & NODE_SYNOPSIS_PRETTY != 0,
+        table_start: bits & NODE_TABLE_START != 0,
+        line_continuation,
+    }
+}
+
 unsafe fn copy_node_shallow(
     document: *mut CDocument,
     pointer: *const CNode,
@@ -274,21 +296,17 @@ unsafe fn copy_node_shallow(
         }?)?,
         table_alignment,
         table_column_count,
-        flags: NodeFlags {
-            generated: view.flags & NODE_GENERATED != 0,
-            sentence_end: view.flags & NODE_SENTENCE_END != 0,
-            no_print: view.flags & NODE_NO_PRINT != 0,
-            no_fill: view.flags & NODE_NO_FILL != 0,
-            broken: view.flags & NODE_BROKEN != 0,
-            deep_link_target: view.flags & NODE_DEEP_LINK_TARGET != 0,
-            permalink: view.flags & NODE_PERMALINK != 0,
-            line_start: view.flags & NODE_LINE_START != 0,
-            delimiter_open: view.flags & NODE_DELIMITER_OPEN != 0,
-            delimiter_close: view.flags & NODE_DELIMITER_CLOSE != 0,
-            synopsis_pretty: view.flags & NODE_SYNOPSIS_PRETTY != 0,
-            table_start: view.flags & NODE_TABLE_START != 0,
-            line_continuation,
-        },
+        table_frame: border_style(view.table_frame)?,
+        table_grid: (view.table_allbox != 0).then_some(crate::TableBorderStyle::Single),
+        table_layout: unsafe {
+            identities.table_layouts.copy(
+                document,
+                view.table_layout_cells,
+                view.table_left_border,
+                transfer_budget,
+            )
+        }?,
+        flags: node_flags(view.flags, line_continuation),
         list_kind: list_kind(view.list_kind)?,
         definition_list_style: definition_list_style(view.definition_list_style)?,
         display_kind: display_kind(view.display_kind)?,

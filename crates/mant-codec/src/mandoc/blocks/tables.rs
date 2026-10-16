@@ -32,8 +32,10 @@ pub(super) fn append_table_row(
         return;
     }
     let mut text_block_index = 0;
+    let (column_borders, newly_reduced) = table_row_borders(node, context);
     let row = TableRow {
         kind,
+        column_borders,
         // `tbl_data.c` determines field boundaries using the table's executed
         // delimiter and escape state. The owned native row is consequently
         // the only authority for how many cells exist. Source text can enrich
@@ -111,16 +113,13 @@ pub(super) fn append_table_row(
                     }]
                 };
                 AstTableCell {
+                    preferred_width_columns: table_cell_width(node, cell),
                     break_after: false,
                     kind: table_cell_kind(cell.kind),
                     blocks,
                     column_span: cell.column_span,
                     row_span: cell.row_span,
-                    alignment: Some(match cell.alignment {
-                        MandocTableAlignment::Left => AstTableAlignment::Left,
-                        MandocTableAlignment::Center => AstTableAlignment::Center,
-                        MandocTableAlignment::Right => AstTableAlignment::Right,
-                    }),
+                    alignment: Some(table_alignment(cell.alignment)),
                 }
             })
             .collect(),
@@ -128,14 +127,20 @@ pub(super) fn append_table_row(
     if !node.flags.table_start
         && let Some(Block::Table { rows, .. }) = output.last_mut()
     {
+        if newly_reduced {
+            // Reduce this complete table consistently if repeated sparse
+            // authored edges exceed the derived-output allowance. Defaults
+            // and every data owner remain intact; earlier rows must not
+            // retain a fortuitously larger edge policy than later rows.
+            for previous in rows.iter_mut() {
+                previous.column_borders.clear();
+            }
+        }
         rows.push(row);
     } else {
         output.push(Block::Table {
-            alignment: node.table_alignment.map(|alignment| match alignment {
-                MandocTableAlignment::Left => AstTableAlignment::Left,
-                MandocTableAlignment::Center => AstTableAlignment::Center,
-                MandocTableAlignment::Right => AstTableAlignment::Right,
-            }),
+            borders: crate::mandoc::table_layout_budget::table_borders(node),
+            alignment: node.table_alignment.map(table_alignment),
             // CVS tbl_layout.c::cell_alloc grows the shared final opts.cols,
             // even when no data cell occupies a declared trailing column.
             column_count: node.table_column_count,
@@ -145,6 +150,38 @@ pub(super) fn append_table_row(
             source: source_span(node),
         });
     }
+}
+
+const fn table_alignment(alignment: MandocTableAlignment) -> AstTableAlignment {
+    match alignment {
+        MandocTableAlignment::Left => AstTableAlignment::Left,
+        MandocTableAlignment::Center => AstTableAlignment::Center,
+        MandocTableAlignment::Right => AstTableAlignment::Right,
+    }
+}
+
+fn table_row_borders(
+    node: &Node,
+    context: &LoweringContext<'_>,
+) -> (Vec<mant_ir::TableColumnBorder>, bool) {
+    let mut budget = context.table_layout_budget.borrow_mut();
+    let was_reduced = budget.exhausted();
+    let borders = budget.column_borders(node);
+    let newly_reduced = !was_reduced && budget.exhausted();
+    (borders, newly_reduced)
+}
+
+fn table_cell_width(node: &Node, cell: &libmandoc_rs::TableCell) -> Option<u16> {
+    let slot = node
+        .table_layout
+        .as_ref()?
+        .cells
+        .get(cell.column as usize)?;
+    // tbl_layout.c stores w() in basic units; out.c treats it as a minimum,
+    // never as clipping. Saturating this preference does not change a logical
+    // column, clip a word or discard any source contents.
+    let width = slot.minimum_width_basic_units.div_ceil(24);
+    (width != 0).then(|| u16::try_from(width).unwrap_or(u16::MAX))
 }
 
 fn table_cell_font(font: Option<TableFont>) -> Option<RoffFont> {

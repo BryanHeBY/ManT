@@ -20,6 +20,7 @@ pub fn table_row_is_navigation_only(row: &TableRow) -> bool {
         })
     }
     matches!(row.kind, TableRowKind::Data)
+        && row.column_borders.is_empty()
         && row.cells.len() == 1
         && row
             .cells
@@ -147,7 +148,7 @@ pub fn bounded_table_rows_with_column_count(
 pub fn table_logical_column_count(rows: &[TableRow]) -> usize {
     rows.iter().fold(0, |maximum, row| {
         let cells = row.cells.iter().fold(0_usize, |columns, cell| {
-            columns.saturating_add(usize::from(cell.column_span.max(1)))
+            columns.saturating_add(usize::try_from(cell.column_span.max(1)).unwrap_or(usize::MAX))
         });
         let rules = match &row.kind {
             TableRowKind::LayoutRule { cells } => cells.len(),
@@ -166,6 +167,19 @@ pub struct TableGrid<'a> {
     pub rows: Vec<Vec<PositionedTableCell<'a>>>,
     /// Logical column range, including spans and any declared empty tail.
     pub column_count: usize,
+}
+
+pub(crate) fn checked_table_logical_columns(rows: &[TableRow]) -> Option<u32> {
+    rows.iter().try_fold(0, |maximum, row| {
+        let cells = row.cells.iter().try_fold(0_u32, |columns, cell| {
+            columns.checked_add(cell.column_span.max(1))
+        })?;
+        let rules = match &row.kind {
+            TableRowKind::LayoutRule { cells } => u32::try_from(cells.len()).ok()?,
+            _ => 0,
+        };
+        Some(maximum.max(cells).max(rules))
+    })
 }
 
 impl<'a> TableGrid<'a> {
@@ -197,7 +211,9 @@ impl<'a> TableGrid<'a> {
                     .iter()
                     .map(|cell| {
                         let positioned = PositionedTableCell { column, cell };
-                        column = column.saturating_add(usize::from(cell.column_span.max(1)));
+                        column = column.saturating_add(
+                            usize::try_from(cell.column_span.max(1)).unwrap_or(usize::MAX),
+                        );
                         positioned
                     })
                     .collect();
@@ -231,8 +247,9 @@ fn dense_slots<'a>(row: &[PositionedTableCell<'a>], columns: usize) -> Vec<Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn cell(columns: u16, rows: u16) -> TableCell {
+    fn cell(columns: u32, rows: u32) -> TableCell {
         TableCell {
+            preferred_width_columns: None,
             break_after: false,
             kind: crate::TableCellKind::Text,
             blocks: Vec::new(),
@@ -254,8 +271,10 @@ mod tests {
             source: None,
         };
         let mut row = TableRow {
+            column_borders: vec![],
             kind: TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 blocks: vec![paragraph(vec![Inline::Strong {
                     children: vec![Inline::Emphasis {
                         children: vec![Inline::anchor("target")],
@@ -313,6 +332,7 @@ mod tests {
         row.cells.clear();
         assert!(!table_row_is_navigation_only(&row));
         row.cells.push(TableCell {
+            preferred_width_columns: None,
             kind: TableCellKind::HorizontalRule,
             blocks: vec![paragraph(vec![Inline::anchor("target")])],
             ..cell(1, 1)
@@ -324,6 +344,7 @@ mod tests {
     fn explicit_cell_closure_keeps_anchor_data_rows_without_body_or_hint_glyphs() {
         for break_after in [false, true] {
             let row = TableRow {
+                column_borders: vec![],
                 kind: TableRowKind::Data,
                 cells: vec![TableCell {
                     break_after,
@@ -371,14 +392,17 @@ mod tests {
     fn spans_and_explicit_vertical_continuations_keep_logical_columns() {
         let rows = vec![
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![cell(2, 2), cell(1, 1)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![cell(2, 1), cell(1, 1)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![cell(1, 1), cell(1, 1), cell(1, 1)],
             },
@@ -396,8 +420,9 @@ mod tests {
     #[test]
     fn extreme_and_invalid_spans_do_not_allocate_dense_storage() {
         let rows = vec![TableRow {
+            column_borders: vec![],
             kind: crate::TableRowKind::Data,
-            cells: vec![cell(u16::MAX, u16::MAX), cell(0, 0)],
+            cells: vec![cell(u32::from(u16::MAX), u32::from(u16::MAX)), cell(0, 0)],
         }];
         let grid = TableGrid::new(&rows);
         assert_eq!(grid.column_count, 65_536);
@@ -409,6 +434,7 @@ mod tests {
     fn bounded_plan_keeps_dense_slots_through_the_exact_column_limit() {
         for (span, dense) in [(255, true), (256, false)] {
             let rows = [TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![cell(span, 1), cell(1, 1)],
             }];
@@ -442,10 +468,12 @@ mod tests {
     fn sparse_plan_preserves_payloads_without_span_sized_allocations() {
         let rows = [
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
-                cells: vec![cell(u16::MAX, 2), cell(0, 0)],
+                cells: vec![cell(u32::from(u16::MAX), 2), cell(0, 0)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: Vec::new(),
             },
@@ -466,14 +494,17 @@ mod tests {
     fn bounded_plan_keeps_empty_rows_and_explicit_vertical_continuations() {
         let rows = [
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![cell(2, 2), cell(1, 1)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![cell(2, 1)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: Vec::new(),
             },
@@ -499,10 +530,12 @@ mod tests {
     fn bounded_plan_retains_whole_row_rule_strength_without_cells() {
         let rows = [
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::HorizontalRule,
                 cells: Vec::new(),
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::DoubleHorizontalRule,
                 cells: Vec::new(),
             },
@@ -519,6 +552,7 @@ mod tests {
     #[test]
     fn table_row_kind_json_round_trip_is_closed_and_backward_compatible() {
         let data = TableRow {
+            column_borders: vec![],
             kind: crate::TableRowKind::Data,
             cells: Vec::new(),
         };
@@ -549,6 +583,7 @@ mod tests {
             ),
         ] {
             let row = TableRow {
+                column_borders: vec![],
                 kind,
                 cells: Vec::new(),
             };

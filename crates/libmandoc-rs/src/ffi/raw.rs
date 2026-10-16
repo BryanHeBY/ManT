@@ -18,6 +18,11 @@ pub(super) struct CTableCell {
 }
 
 #[repr(C)]
+pub(super) struct CTableLayoutCell {
+    pub(super) _private: [u8; 0],
+}
+
+#[repr(C)]
 pub(super) struct CTableRuleCell {
     pub(super) _private: [u8; 0],
 }
@@ -45,6 +50,10 @@ pub(super) struct CNodeView {
     pub(super) table_row_kind: i32,
     pub(super) table_alignment: i32,
     pub(super) table_column_count: i32,
+    pub(super) table_frame: i32,
+    pub(super) table_allbox: i32,
+    pub(super) table_left_border: i32,
+    pub(super) table_layout_cells: *const CTableLayoutCell,
     pub(super) flags: u32,
     pub(super) list_kind: i32,
     pub(super) definition_list_style: i32,
@@ -67,6 +76,7 @@ pub(super) struct CNodeView {
 
 #[repr(C)]
 pub(super) struct CTableCellView {
+    pub(super) column: u32,
     pub(super) text: *const c_char,
     pub(super) kind: i32,
     pub(super) text_block: i32,
@@ -77,6 +87,14 @@ pub(super) struct CTableCellView {
     pub(super) alignment: i32,
     pub(super) font: i32,
     pub(super) next: *const CTableCell,
+}
+
+#[repr(C)]
+pub(super) struct CTableLayoutCellView {
+    pub(super) column: u32,
+    pub(super) minimum_width: usize,
+    pub(super) right_border: i32,
+    pub(super) next: *const CTableLayoutCell,
 }
 
 #[repr(C)]
@@ -242,6 +260,17 @@ unsafe extern "C" {
         document: *mut CDocument,
         node: *const CNode,
         view: *mut CNodeView,
+    ) -> i32;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_layout_cell_view_size() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_layout_cell_view_align() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_layout_cell_view_offsets(count: *mut usize) -> *const usize;
+    pub(super) fn mant_mandoc_table_layout_cell_snapshot(
+        document: *const CDocument,
+        cell: *const CTableLayoutCell,
+        view: *mut CTableLayoutCellView,
     ) -> i32;
     pub(super) fn mant_mandoc_table_cell_snapshot(
         document: *const CDocument,

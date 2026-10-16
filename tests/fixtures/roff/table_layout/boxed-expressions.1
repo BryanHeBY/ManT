@@ -1,0 +1,49 @@
+.TH TABLE-LAYOUT 1 "October 16, 2026"
+.SH DESCRIPTION
+.ce 1
+Expression groups
+.TS
+box tab(@) center;
+cB | cB | cB | cB
+l1 | l1 | l1 | l.
+Syntax@Operation@Result@Order
+_
+PAREN_A@Grouping words@Scalar value@None
+_
+FETCH_A@Field access@Text value@None
+_
+POST_A@Post increment@Number@None
+@FOLLOWUP_2
+_
+PRE_A@Pre increment@Number@None
+_
+POWER_A@Power operator@Number@Right
+_
+NOT_A@Logical inversion@Number@None
+@FOLLOWUP_5
+_
+MUL_A@Multiplication@Number@Left
+_
+ADD_A@Addition@Number@Left
+_
+JOIN_A@Text concatenation@Text value@Left
+@FOLLOWUP_8
+_
+COMPARE_A@Ordered comparison@Number@None
+_
+MATCH_A@Pattern comparison@Number@None
+_
+MEMBER_A@Membership lookup@Number@Left
+_
+AND_A@Boolean intersection@Number@Left
+_
+OR_A@Boolean alternative@Number@Left
+_
+SELECT_A@Conditional selection@Selected value@Right
+_
+STORE_A@Value storage@Assigned value@Right
+_
+SUM_STORE_A@Add and store@Number@Right
+_
+POWER_STORE_A@Power and store@Number@Right
+.TE

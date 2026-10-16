@@ -1,0 +1,352 @@
+{
+  "schema": "mant.table-regressions/v1",
+  "cases": [
+    {
+      "file": "archlinux/awk.1p.gz",
+      "sourceSha256": "a725342f71304157498e8bc276d67e5847113b100f299e692737634e939b0c2a",
+      "tableCount": 5,
+      "oracleLintStatus": 4,
+      "samples": [
+        {
+          "index": 0,
+          "columns": 4,
+          "outer": "single",
+          "markers": [
+            "Grouping",
+            "Exponentiation assignment"
+          ]
+        },
+        {
+          "index": 1,
+          "columns": 3,
+          "outer": "single",
+          "markers": [
+            "Multi-byte",
+            "octal-digit"
+          ]
+        },
+        {
+          "index": 4,
+          "columns": 4,
+          "outer": "single",
+          "markers": [
+            "ADD_ASSIGN",
+            "NO_MATCH"
+          ]
+        }
+      ],
+      "fixtureSha256": "abbbe9c67ae12f6b6c7e988c4897a2d1ec6c07d4353e6c671b42a702fe8b96d0",
+      "profiles": {
+        "ascii": {
+          "stdoutSha256": "38312ed9327241af39f42aac74820c278aac7e92180facd181aea0b922eb888f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdoutSha256": "64a595f2165554ee23b6601f05b2c5fd55c1216db37e8ec384c72c7af668b442",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdoutSha256": "b4aafaba55bd7a72354e8dc61559d3c6bd2c58a11508cbf7cb6f994647d80987",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdoutSha256": "0f5e7e563aa48ed8213a5fc13f1a12f6c6e615c4766318c65f6151c21f3b88df",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdoutSha256": "9b24b0415507966fa58fc86456be3a59df9889a9fbfb29f391194c65b52bb518",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "archlinux/termios.h.0p.gz",
+      "sourceSha256": "6425de9af7722216e2a05bf8eb86668b8e181ea987c2e027e383d679678d9d13",
+      "tableCount": 2,
+      "oracleLintStatus": 2,
+      "samples": [
+        {
+          "index": 0,
+          "columns": 3,
+          "outer": "single",
+          "markers": [
+            "Subscript Usage",
+            "VEOF",
+            "VMIN"
+          ]
+        }
+      ],
+      "fixtureSha256": "1aec1c4f951f5413fd633f0a1892a14a9e12fd4bcf29e7bff356f837710e54c2",
+      "profiles": {
+        "ascii": {
+          "stdoutSha256": "8a7270901293e22b5eb5e61a062b55142fbb98a0d2c7feff03d5da18a315004f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdoutSha256": "f6acd14a10c45dee5d194bf34b4d4c342ded1aea7e6aff7dc02faa8c0036a8e6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdoutSha256": "50afddd162487dfcd9312a9483e588eb1f5d43d9b32d5e8221eeb96791b53207",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdoutSha256": "a35ebd11242fd0893cf45466c0cc878f79af852c81bcb857af2da8c68f921120",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdoutSha256": "879f75907ffe8cf188312dc692272383dac8298eac7c011ac0334c1333a10d07",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "archlinux/sort.1p.gz",
+      "sourceSha256": "32493b693fb79c6637150b465eb262dad4e09e827810b897641d7c2bc7007e5c",
+      "tableCount": 1,
+      "oracleLintStatus": 2,
+      "samples": [
+        {
+          "index": 0,
+          "columns": 3,
+          "outer": "single",
+          "markers": [
+            "Field",
+            "Default"
+          ]
+        }
+      ],
+      "fixtureSha256": "9fbcc59769a820a52e87cd135b6e732d09770eab92f5fe796400379ab9758bbd",
+      "profiles": {
+        "ascii": {
+          "stdoutSha256": "d73d68ae36cd976956505b7c42d0ca7b249471c0e3887c2fb502ceca48df0dc0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdoutSha256": "9ecb0375e6c7cc1e76847a132d9d7bd37dada797cb802d328f9b5b229a4c0fe6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdoutSha256": "ecd45992974c12d0331ac5c51c734129b98ede24aaaecefab18b44eda06a256c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdoutSha256": "91663409908339fc49075fd84bd02b672de1ff1ee405ebc62bece005c8dc251d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdoutSha256": "5c5546ee9febe2327f7e416a56c9a9cd6c57547f25cf7e55976949d51e79a3c7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "archlinux/scanf.3.gz",
+      "sourceSha256": "07cbc46be4fd3150bcc3322d3cf1d1db217935e7406b44237880c5f54176a09d",
+      "tableCount": 1,
+      "oracleLintStatus": 4,
+      "samples": [
+        {
+          "index": 0,
+          "columns": 3,
+          "outer": "single",
+          "markers": [
+            "Thread safety",
+            "MT-Safe locale"
+          ]
+        }
+      ],
+      "fixtureSha256": "f87f98945ab8a44b3135ddcaf0b8724b4ca92d43b493b28d41375bb0b0bbe5aa",
+      "profiles": {
+        "ascii": {
+          "stdoutSha256": "8600f6b1c89ccac49ca339da9ebceee2b6585ca1f1d1f575356c14093b481079",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdoutSha256": "b8a01b73a5fce3296401a2e624a3bf910af5677e3bed82d5e26ba5ef6cf84c89",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdoutSha256": "23589e525d1bc2a01f219dc1147409250789cd2baf3bd021665e3da53d963f13",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdoutSha256": "0b85cdfb1c126e25afdedf2ee492629d6541036f8eb98ca5148881bdd1abc269",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdoutSha256": "edf07a990c6a24ae3edb02d51f8b9e860f8f9b5e3a1ea908c0be7cbdfc750346",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "cross-platform-releases/cmake-toolchains.7.zst",
+      "sourceSha256": "4f5e1946154896899d6471c4e5b0bf902394429641231074dcacc71bbc5dd20b",
+      "tableCount": 1,
+      "oracleLintStatus": 2,
+      "samples": [
+        {
+          "index": 0,
+          "columns": 5,
+          "outer": "single",
+          "markers": [
+            "CMAKE_SYSTEM_NAME",
+            "Catalyst SDK"
+          ]
+        }
+      ],
+      "fixtureSha256": "d8d0fb4d92127a154c2ba5704a550bbeb832eeaf6476059a9354a5e509c1611f",
+      "profiles": {
+        "ascii": {
+          "stdoutSha256": "16b182a919385f33172cfcdde9486da53083a5287c7049447fa1c6f36a167b5e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdoutSha256": "2b140d15c82b4b1fc969f4ad88e93c95b7e57a98694420afa9e6b7889c1209ff",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdoutSha256": "b0c05a8b65fb4e84109e5a8c0d81b12d2026abf01a06498b9614fd8a3e185cde",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdoutSha256": "a3c088f0b21f5b513e22b24419e1e1cc478307fead9bbc710feaaa477fe05b86",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdoutSha256": "d95afd3f3721f06a6d90e45b049a074c71e4e01076119f26a0188e82053eab34",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "windows-releases/rclone.1.zst",
+      "sourceSha256": "f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e",
+      "tableCount": 87,
+      "oracleLintStatus": 2,
+      "samples": [
+        {
+          "index": 0,
+          "columns": 2,
+          "outer": null,
+          "markers": [
+            "Format",
+            "Extensions"
+          ]
+        },
+        {
+          "index": 1,
+          "columns": 2,
+          "outer": null,
+          "markers": [
+            "--name-transform base64encode",
+            "regex-based"
+          ]
+        },
+        {
+          "index": 2,
+          "columns": 2,
+          "outer": null,
+          "markers": [
+            "Tag",
+            "Effect"
+          ]
+        }
+      ],
+      "fixtureSha256": "4e38c8e1a35e13faafda1d8bfa14b25f792e665476b7405d541e8462e049286e",
+      "profiles": {
+        "ascii": {
+          "stdoutSha256": "33bea18c25fdf9b9774ec643715229d2c02ba2fc0693a01f31daf74faba144a6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdoutSha256": "f0dfbd486753167ee349795ca37c67c78f84a4ff4288c343e19c3613f809df97",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdoutSha256": "7f104bf593650af31ff2c0fef9937e3a17509b00d57e1b890c74ca83bc23f136",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdoutSha256": "27d15bc2f39e2f1f3365f70241e099d5f0dc1a0d21837c5cf3e450c0cecd00e5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdoutSha256": "a744f14e85208abd2cdff71cc1aeda64849cb1ccd02815597d2c5125caa25204",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "file": "debian/groff_man_style.7.gz",
+      "sourceSha256": "ed7a60482e27fecfab69e715e490a7ad9e5b134774ecb485fde93ab15a7fcd5d",
+      "tableCount": 7,
+      "oracleLintStatus": 4,
+      "samples": [
+        {
+          "index": 1,
+          "columns": 1,
+          "outer": "single",
+          "markers": [
+            "affected both"
+          ]
+        },
+        {
+          "index": 2,
+          "columns": 1,
+          "outer": "single",
+          "markers": [
+            "affected only"
+          ]
+        }
+      ],
+      "fixtureSha256": "836bb1bf1827fc4d057abb50f254a428b62f3857dc969a200a8fa1a6113a4b2b",
+      "profiles": {
+        "ascii": {
+          "stdoutSha256": "86cd7e322bacb8add9c01d7fd44023ec0abc135e6d6ecd78845c0564659a0f29",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdoutSha256": "a74465d2d388af33ae8fd3c5e74b05e5fb797e5ca380c86c501fca3f27a40b75",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdoutSha256": "b9021a0306d779525a52ec565f44c9346b8d764233faacbf86f0a1dd6caa33ee",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdoutSha256": "9d5af406578fb76e4c9edbacd56b25d2738271f91dcd493ccceedd5d22446ba2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdoutSha256": "a5468ae52c2a02e77f04e1d55bb5d35d1c5064616e9f58ee0fb3f5794aceb486",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ],
+  "reference": {
+    "snapshot": "20261013T025419Z",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "input": "original decompressed stdin bytes",
+    "profiles": {
+      "ascii": [
+        "-Tascii"
+      ],
+      "utf8": [
+        "-Tutf8"
+      ],
+      "html": [
+        "-Thtml",
+        "-Ofragment"
+      ],
+      "tree": [
+        "-Ttree"
+      ],
+      "lint": [
+        "-Tlint"
+      ]
+    }
+  }
+}

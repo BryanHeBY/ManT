@@ -233,6 +233,7 @@ fn parse_table(
         }
     }
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
@@ -270,6 +271,7 @@ fn parse_table_row(
                     }]
                 };
                 cells.push(TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks,
@@ -284,6 +286,7 @@ fn parse_table_row(
             Event::Start(tag) => {
                 let whole = cursor.consume_balanced(range);
                 cells.push(TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![source.unsupported_block(
@@ -301,6 +304,7 @@ fn parse_table_row(
     }
     (
         TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells,
         },

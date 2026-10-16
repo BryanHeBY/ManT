@@ -48,15 +48,33 @@ impl BlockRenderer<'_> {
         preferences: &mant_ir::ColumnPreferences,
         alignment: Option<mant_ir::TableAlignment>,
         column_count: Option<u32>,
+        borders: &mant_ir::TableBorders,
         origin: i32,
     ) -> Flow {
         if mant_ir::geometry::table_requires_origin_preserving_stack(rows, origin) {
             return self
                 .stacked_table_flow(rows, preferences.gap_columns, origin, true)
-                .position_table(None, self.width, origin, None);
+                .frame_resolved_table(borders.outer, None, self.width, origin);
         }
         if !preferences.widths.is_empty() {
-            return self.declared_column_flow(rows, preferences, alignment, column_count, origin);
+            if borders.outer.is_none() {
+                return self.declared_column_flow(
+                    rows,
+                    preferences,
+                    alignment,
+                    column_count,
+                    origin,
+                );
+            }
+            return self
+                .declared_column_flow(
+                    rows,
+                    preferences,
+                    Some(mant_ir::TableAlignment::Left),
+                    column_count,
+                    origin,
+                )
+                .frame_resolved_table(borders.outer, alignment, self.width, origin);
         }
         // Intrinsic cell preparation precedes placement. A page viewport is
         // not a cell viewport: alignment padding must not enlarge measured
@@ -74,6 +92,7 @@ impl BlockRenderer<'_> {
                 bounded_frame: alignment.is_some(),
                 column_count,
             },
+            borders,
             |cell| {
                 let flow = cell_renderer.cell_block_flow(&cell.blocks, 0);
                 let physical = flow.has_physical_rows();
@@ -83,9 +102,13 @@ impl BlockRenderer<'_> {
         );
         let logical = mant_ir::TableGrid::with_column_count(rows, column_count).column_count;
         let mut output = Flow::default();
+        let mut frame_width = 0;
         let mut stacked = logical > mant_ir::MAX_DENSE_TABLE_COLUMNS;
         for row in physical_rows {
             match row {
+                super::super::super::table::ProjectedTableRow::FrameWidth(width) => {
+                    frame_width = frame_width.max(width);
+                }
                 super::super::super::table::ProjectedTableRow::Content(
                     rows,
                     completed,
@@ -107,12 +130,16 @@ impl BlockRenderer<'_> {
                 }
             }
         }
-        let minimum = (!stacked && logical <= mant_ir::MAX_DENSE_TABLE_COLUMNS).then(|| {
-            logical.saturating_add(
-                (usize::from(preferences.gap_columns) + 1)
-                    .saturating_mul(logical.saturating_sub(1)),
-            )
-        });
+        let minimum = (!stacked
+            && borders.is_empty()
+            && logical <= mant_ir::MAX_DENSE_TABLE_COLUMNS)
+            .then(|| {
+                logical.saturating_add(
+                    (usize::from(preferences.gap_columns) + 1)
+                        .saturating_mul(logical.saturating_sub(1)),
+                )
+            });
+        let minimum = minimum.map_or(Some(frame_width), |minimum| Some(minimum.max(frame_width)));
         output.position_table(
             if stacked { None } else { alignment },
             self.width,

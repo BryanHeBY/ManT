@@ -42,6 +42,7 @@ pub(super) fn literal_nodes(children: Vec<Inline>) -> Block {
 
 pub(super) fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         blocks,
         break_after,
         kind: mant_ir::TableCellKind::Text,
@@ -53,9 +54,11 @@ pub(super) fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
 
 pub(super) fn table(cells: Vec<TableCell>, preferences: ColumnPreferences, origin: i32) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells,
         }],

@@ -13,13 +13,16 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
         source: None,
     };
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
                 TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph("alpha beta gamma")],
@@ -28,6 +31,7 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
                     alignment: None,
                 },
                 TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph("right hand")],
@@ -70,6 +74,7 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
         source: None,
     };
     let cell = |value: &str| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         kind: mant_ir::TableCellKind::Text,
         blocks: vec![paragraph(value)],
@@ -79,15 +84,18 @@ fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("1"), cell("Executable programs and shell commands")],
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("8"), cell("System administration commands")],
             },

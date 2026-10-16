@@ -2,8 +2,9 @@
 use super::*;
 use mant_ir::{TableAlignment, TableRow, TableRowKind, TableRuleCellKind};
 
-fn cell(text: &str, alignment: Option<TableAlignment>) -> TableCell {
+pub(super) fn cell(text: &str, alignment: Option<TableAlignment>) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         blocks: vec![paragraph(text, 0)],
         alignment,
         break_after: false,
@@ -13,15 +14,17 @@ fn cell(text: &str, alignment: Option<TableAlignment>) -> TableCell {
     }
 }
 
-fn data(cells: Vec<TableCell>) -> TableRow {
+pub(super) fn data(cells: Vec<TableCell>) -> TableRow {
     TableRow {
+        column_borders: Vec::new(),
         kind: TableRowKind::Data,
         cells,
     }
 }
 
-fn block(rows: Vec<TableRow>, alignment: Option<TableAlignment>) -> Block {
+pub(super) fn block(rows: Vec<TableRow>, alignment: Option<TableAlignment>) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         rows,
         alignment,
         column_count: None,
@@ -31,7 +34,7 @@ fn block(rows: Vec<TableRow>, alignment: Option<TableAlignment>) -> Block {
     }
 }
 
-fn at_width(block: &Block, width: Option<usize>, decorated: bool) -> String {
+pub(super) fn at_width(block: &Block, width: Option<usize>, decorated: bool) -> String {
     let paint = |_: crate::presentation::TextPresentation, value: &str| {
         if decorated {
             format!("\x1b[1m{value}\x1b[0m")
@@ -65,14 +68,17 @@ fn table_frame_places_every_row_and_rule_at_one_measured_origin() {
                     ]),
                     data(vec![cell("LONGLEFT", None), cell("LONGRIGHT", None)]),
                     TableRow {
+                        column_borders: Vec::new(),
                         kind: TableRowKind::HorizontalRule,
                         cells: vec![],
                     },
                     TableRow {
+                        column_borders: Vec::new(),
                         kind: TableRowKind::DoubleHorizontalRule,
                         cells: vec![],
                     },
                     TableRow {
+                        column_borders: Vec::new(),
                         kind: TableRowKind::LayoutRule {
                             cells: vec![
                                 TableRuleCellKind::Horizontal,
@@ -216,6 +222,7 @@ fn narrower_and_budget_fallbacks_remain_left_and_keep_absent_cells_absent() {
                     cell("C", None),
                 ]),
                 TableRow {
+                    column_borders: Vec::new(),
                     kind: TableRowKind::HorizontalRule,
                     cells: vec![],
                 },
@@ -238,6 +245,7 @@ fn unused_logical_columns_do_not_repeat_partial_layout_rule_strengths() {
         vec![
             data(vec![cell("LONG", None), cell("END", None)]),
             TableRow {
+                column_borders: Vec::new(),
                 kind: TableRowKind::LayoutRule {
                     cells: vec![
                         TableRuleCellKind::Horizontal,
@@ -265,6 +273,7 @@ fn long_author_text_does_not_turn_rule_measurements_into_unbounded_padding() {
         vec![
             data(vec![cell(&"A".repeat(5000), None)]),
             TableRow {
+                column_borders: Vec::new(),
                 kind: TableRowKind::LayoutRule {
                     cells: vec![TableRuleCellKind::Horizontal],
                 },
@@ -287,10 +296,12 @@ fn cell_rule_lengths_follow_the_same_columns_as_styled_unicode_content() {
             data(vec![cell("界界", None), cell("e\u{301}", None)]),
             data(vec![
                 TableCell {
+                    preferred_width_columns: None,
                     kind: mant_ir::TableCellKind::HorizontalRule,
                     ..cell("", None)
                 },
                 TableCell {
+                    preferred_width_columns: None,
                     kind: mant_ir::TableCellKind::DoubleHorizontalRule,
                     ..cell("", None)
                 },
@@ -383,6 +394,7 @@ fn one_rows_hard_cell_boundary_selects_source_order_fallback_for_the_whole_table
             data(vec![first, cell("B", None)]),
             data(vec![cell("C", None), cell("D", None)]),
             TableRow {
+                column_borders: Vec::new(),
                 kind: TableRowKind::HorizontalRule,
                 cells: vec![],
             },
@@ -398,6 +410,7 @@ fn declared_layout_rules_use_declared_slots_and_leave_unruled_tail_columns_blank
         vec![
             data(vec![cell("A", None), cell("B", None)]),
             TableRow {
+                column_borders: Vec::new(),
                 kind: TableRowKind::LayoutRule {
                     cells: vec![
                         TableRuleCellKind::Horizontal,
@@ -431,6 +444,7 @@ fn rule_extents_follow_the_stack_when_the_gap_budget_precludes_a_grid() {
         vec![
             data(vec![cell("A", None), cell("B", None)]),
             TableRow {
+                column_borders: Vec::new(),
                 kind: TableRowKind::LayoutRule {
                     cells: vec![
                         TableRuleCellKind::Horizontal,
@@ -440,6 +454,7 @@ fn rule_extents_follow_the_stack_when_the_gap_budget_precludes_a_grid() {
                 cells: vec![],
             },
             TableRow {
+                column_borders: Vec::new(),
                 kind: TableRowKind::HorizontalRule,
                 cells: vec![],
             },

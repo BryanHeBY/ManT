@@ -92,13 +92,16 @@ fn geometry_bundle() -> ResolvedContent {
             source: None,
         },
         Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     TableCell {
+                        preferred_width_columns: None,
                         break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("alpha beta gamma")],
@@ -107,6 +110,7 @@ fn geometry_bundle() -> ResolvedContent {
                         alignment: None,
                     },
                     TableCell {
+                        preferred_width_columns: None,
                         break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("right hand value")],
@@ -370,6 +374,7 @@ fn manual_children_keep_the_same_gaps_as_the_established_layout() {
 fn horizontal_spans_align_the_following_cell_with_later_rows() {
     let mut bundle = bundle();
     let cell = |text: &str, column_span| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         kind: mant_ir::TableCellKind::Text,
         blocks: vec![Block::Paragraph {
@@ -383,15 +388,18 @@ fn horizontal_spans_align_the_following_cell_with_later_rows() {
         alignment: None,
     };
     bundle.document.as_mut().unwrap().sections[0].blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("TOPSPAN", 2), cell("RIGHT", 1)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("LEFT", 1), cell("MIDDLE", 1), cell("END", 1)],
             },

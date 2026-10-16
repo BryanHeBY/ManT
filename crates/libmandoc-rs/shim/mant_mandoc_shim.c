@@ -1377,6 +1377,10 @@ mant_mandoc_node_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_node_view, table_row_kind),
 		offsetof(struct mant_mandoc_node_view, table_alignment),
 		offsetof(struct mant_mandoc_node_view, table_column_count),
+		offsetof(struct mant_mandoc_node_view, table_frame),
+		offsetof(struct mant_mandoc_node_view, table_allbox),
+		offsetof(struct mant_mandoc_node_view, table_left_border),
+		offsetof(struct mant_mandoc_node_view, table_layout_cells),
 		offsetof(struct mant_mandoc_node_view, flags),
 		offsetof(struct mant_mandoc_node_view, list_kind),
 		offsetof(struct mant_mandoc_node_view, definition_list_style),
@@ -1417,6 +1421,7 @@ const size_t *
 mant_mandoc_table_cell_view_offsets(size_t *count)
 {
 	static const size_t offsets[] = {
+		offsetof(struct mant_mandoc_table_cell_view, column),
 		offsetof(struct mant_mandoc_table_cell_view, text),
 		offsetof(struct mant_mandoc_table_cell_view, kind),
 		offsetof(struct mant_mandoc_table_cell_view, text_block),
@@ -1427,6 +1432,32 @@ mant_mandoc_table_cell_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_table_cell_view, alignment),
 		offsetof(struct mant_mandoc_table_cell_view, font),
 		offsetof(struct mant_mandoc_table_cell_view, next),
+	};
+	if (count != NULL)
+		*count = sizeof(offsets) / sizeof(offsets[0]);
+	return offsets;
+}
+
+size_t
+mant_mandoc_table_layout_cell_view_size(void)
+{
+	return sizeof(struct mant_mandoc_table_layout_cell_view);
+}
+
+size_t
+mant_mandoc_table_layout_cell_view_align(void)
+{
+	return MANT_VIEW_ALIGNOF(struct mant_mandoc_table_layout_cell_view);
+}
+
+const size_t *
+mant_mandoc_table_layout_cell_view_offsets(size_t *count)
+{
+	static const size_t offsets[] = {
+		offsetof(struct mant_mandoc_table_layout_cell_view, column),
+		offsetof(struct mant_mandoc_table_layout_cell_view, minimum_width),
+		offsetof(struct mant_mandoc_table_layout_cell_view, right_border),
+		offsetof(struct mant_mandoc_table_layout_cell_view, next),
 	};
 	if (count != NULL)
 		*count = sizeof(offsets) / sizeof(offsets[0]);
@@ -1545,6 +1576,18 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 		view->table_alignment =
 		    (source->span->opts->opts & TBL_OPT_CENTRE) != 0;
 		view->table_column_count = source->span->opts->cols;
+		/* tbl_opts.c aliases frame/box and doubleframe/doublebox. */
+		view->table_frame = (source->span->opts->opts & TBL_OPT_DBOX) ?
+		    2 : (source->span->opts->opts & TBL_OPT_BOX) ? 1 : 0;
+		view->table_allbox =
+		    (source->span->opts->opts & TBL_OPT_ALLBOX) != 0;
+		/* tbl_term.c consumes row.vert and each slot's trailing vert. */
+		if (source->span->layout != NULL) {
+			view->table_left_border = source->span->layout->vert;
+			view->table_layout_cells =
+			    (const struct mant_mandoc_table_layout_cell *)
+			    source->span->layout->first;
+		}
 
 		switch (source->span->pos) {
 		case TBL_SPAN_DATA: {
@@ -1619,6 +1662,8 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 		return 0;
 	source = (const struct tbl_dat *)cell;
 	memset(view, 0, sizeof(*view));
+	if (source->layout != NULL)
+		view->column = (unsigned int)source->layout->col;
 	view->text = source->string;
 	/* Layout rules override data, including otherwise printable strings. */
 	if (source->layout != NULL && source->layout->pos == TBL_CELL_HORIZ)
@@ -1663,6 +1708,28 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 		default: return 0;
 		}
 	view->next = (const struct mant_mandoc_table_cell *)source->next;
+	return 1;
+}
+
+int
+mant_mandoc_table_layout_cell_snapshot(
+    const struct mant_mandoc_document *document,
+    const struct mant_mandoc_table_layout_cell *cell,
+    struct mant_mandoc_table_layout_cell_view *view)
+{
+	const struct tbl_cell *source;
+
+	if (document == NULL || document->parser == NULL || cell == NULL ||
+	    view == NULL)
+		return 0;
+	source = (const struct tbl_cell *)cell;
+	if (source->col < 0)
+		return 0;
+	memset(view, 0, sizeof(*view));
+	view->column = (unsigned int)source->col;
+	view->minimum_width = source->width;
+	view->right_border = source->vert;
+	view->next = (const struct mant_mandoc_table_layout_cell *)source->next;
 	return 1;
 }
 

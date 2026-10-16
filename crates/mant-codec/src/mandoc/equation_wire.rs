@@ -578,12 +578,15 @@ mod tests {
                     source: None,
                 },
                 Block::Table {
+                    borders: mant_ir::TableBorders::default(),
                     alignment: None,
                     column_count: None,
                     column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![TableRow {
+                        column_borders: vec![],
                         kind: TableRowKind::Data,
                         cells: vec![TableCell {
+                            preferred_width_columns: None,
                             break_after: false,
                             kind: TableCellKind::Text,
                             blocks: vec![Block::Paragraph {

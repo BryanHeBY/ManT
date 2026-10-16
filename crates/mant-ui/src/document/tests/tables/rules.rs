@@ -13,8 +13,10 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
         source: None,
     };
     let data = |value: &str| TableRow {
+        column_borders: vec![],
         kind: mant_ir::TableRowKind::Data,
         cells: vec![TableCell {
+            preferred_width_columns: None,
             break_after: false,
             kind: mant_ir::TableCellKind::Text,
             blocks: vec![paragraph(value)],
@@ -25,20 +27,24 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             data("BEFORE"),
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: Vec::new(),
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::HorizontalRule,
                 cells: Vec::new(),
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::DoubleHorizontalRule,
                 cells: Vec::new(),
             },
@@ -71,13 +77,16 @@ fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
 fn partial_rule_cells_remain_visible_beside_text_cells() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
                 TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::HorizontalRule,
                     blocks: Vec::new(),
@@ -86,6 +95,7 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
                     alignment: None,
                 },
                 TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
@@ -128,13 +138,16 @@ fn partial_rule_cells_remain_visible_beside_text_cells() {
 fn stacked_partial_rule_cells_are_not_dropped() {
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
                 TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::HorizontalRule,
                     blocks: Vec::new(),
@@ -143,6 +156,7 @@ fn stacked_partial_rule_cells_are_not_dropped() {
                     alignment: None,
                 },
                 TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![Block::Paragraph {
@@ -192,6 +206,7 @@ fn rule_rows_do_not_split_table_wide_column_measurement() {
         source: None,
     };
     let cell = |value: &str| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         kind: mant_ir::TableCellKind::Text,
         blocks: vec![paragraph(value)],
@@ -201,15 +216,18 @@ fn rule_rows_do_not_split_table_wide_column_measurement() {
     };
     let mut bundle = bundle();
     bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("A"), cell("FIRST")],
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::LayoutRule {
                     cells: vec![
                         mant_ir::TableRuleCellKind::Horizontal,
@@ -219,6 +237,7 @@ fn rule_rows_do_not_split_table_wide_column_measurement() {
                 cells: Vec::new(),
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("LONG LEFT COLUMN"), cell("SECOND")],
             },
@@ -253,16 +272,19 @@ fn content_derived_extreme_gap_data_and_rule_output_remains_bounded() {
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: (0..256)
                     .map(|_| generic_linked_cell("X", 0, TableAlignment::Left))
                     .collect(),
             },
             TableRow {
+                column_borders: vec![],
                 cells: vec![],
                 kind: mant_ir::TableRowKind::LayoutRule {
                     cells: vec![mant_ir::TableRuleCellKind::Horizontal; 256],

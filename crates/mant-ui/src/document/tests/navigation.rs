@@ -402,6 +402,7 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         source: None,
     };
     let cell = |blocks| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         kind: mant_ir::TableCellKind::Text,
         blocks,
@@ -410,10 +411,12 @@ fn table_anchors_follow_their_cell_content_through_wrapping_and_stacking() {
         alignment: None,
     };
     let table = |cells| Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells,
         }],

@@ -91,6 +91,9 @@ impl RenderedDocument {
                     (start_column, end_column)
                 };
                 let map = self.copy_maps.get(row);
+                if map.is_some_and(|map| map.skip_row) {
+                    return None;
+                }
                 let text = line_fragment(line, start_column, end_column, map);
                 Some(if map.is_some_and(|map| map.end.is_some()) {
                     text

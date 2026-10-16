@@ -22,6 +22,16 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 - Preserve cell-local authored literal rows, unsupported-text spaces and
   addressable anchors in portable table Markdown. Keep anchors outside the
   fence without duplicating original owners or shifting their artifact ranges.
+- Retain authored table frames, default grid strokes and row-local column
+  borders through native loading, JSON, CLI and TUI. Generic cells gain a soft
+  `preferredWidthColumns`, separate from sequential declared-column layout;
+  readers allocate columns and wrap prose before choosing source-order fallback.
+  Centering and rules use the final frame, and spanning cells align in their
+  complete region without internal dividers. Widen cell spans to positive u32
+  to prevent silent truncation at 65,535; reject aggregate logical-column
+  overflow. Update Rust table/row/cell literals and unreleased v0.13 clients;
+  the published v0.12 family stays frozen. Frame glyphs and alignment padding
+  stay outside body search, links and selection.
 - Preserve whole-table placement and the declared logical column range with
   optional `Table.alignment` and `columnCount`. Native tbl `center`/`centre`
   now reaches CLI and TUI independently of captions and cell alignment;
@@ -88,6 +98,12 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### libmandoc-rs and mant-codec 0.13.0
 
+- Expose shared owned tbl layout rows, native border strokes, logical cell
+  columns and width evidence without expanding missing cell owners. Repeated
+  data rows share immutable `Arc<TableLayout>` storage; serde support retains
+  values after a real JSON roundtrip. Native cell spans use u32. Lowering bounds
+  derived row-edge copies and reports `manual.table-layout-reduced` when it
+  simplifies an over-budget table, retaining every body owner and logical span.
 - Add `Node.table_alignment` and `table_column_count` for finalized tbl
   placement and declared logical extent. The latter includes unoccupied tails
   and later `T&` declarations; leading rules retain the same table identity.

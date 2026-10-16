@@ -22,7 +22,8 @@ mod transport;
 pub use ast::{
     AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
     NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, NormalizedSection, ScopeEnd,
-    TableAlignment, TableCell, TableCellKind, TableFont, TableRowKind, TableRuleCellKind,
+    TableAlignment, TableBorderStyle, TableCell, TableCellKind, TableFont, TableLayout,
+    TableLayoutCell, TableRowKind, TableRuleCellKind,
 };
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocation};

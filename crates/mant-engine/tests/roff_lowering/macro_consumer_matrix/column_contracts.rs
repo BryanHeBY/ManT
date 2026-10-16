@@ -227,14 +227,19 @@ fn list_control_groups_execute_only_their_source_nodes_on_the_live_column() {
 }
 
 #[test]
-fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
+fn boxed_tbl_keeps_its_single_owner_and_resolved_reader_frame() {
     // tbl_term.c::term_tbl draws the optional frame around the data span.
     // The IR retains both declared columns but only one actual data owner;
-    // frame glyphs and their device-only rows are outside portable layout.
-    // Exact pristine replay confirms the empty trailing native column.
+    // Frame preferences now reach readers, while glyphs remain outside the
+    // cell's authoritative text. Exact pristine replay confirms the empty
+    // trailing column; portable Markdown keeps its geometry simplification.
     let (_, native) = load_case("cw12_box");
     assert_eq!(&native[4..7], ["┌─────────┐", "│ A B     │", "└─────────┘"]);
-    let query = reading_roundtrip("cw12_box", &["A B |"], "```\nA B\n```");
+    let query = reading_roundtrip(
+        "cw12_box",
+        &["┌────────┐", "│ A B    │", "└────────┘"],
+        "```\nA B\n```",
+    );
     assert_reparsed_column_cell(&query, "A B");
     let document = query.document.as_ref().unwrap();
     let [
@@ -242,6 +247,7 @@ fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
             rows,
             column_count,
             column_preferences,
+            borders,
             ..
         },
         Block::VerticalSpace { lines: 1, .. },
@@ -250,6 +256,7 @@ fn boxed_tbl_keeps_its_single_cell_without_copying_device_frame_glyphs() {
         panic!("boxed table boundaries changed: {:?}", document.sections);
     };
     assert_eq!(column_preferences, &mant_ir::ColumnPreferences::default());
+    assert_eq!(borders.outer, Some(mant_ir::TableBorderStyle::Single));
     assert_eq!(*column_count, Some(2));
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].kind, TableRowKind::Data);
@@ -263,12 +270,14 @@ fn spanning_tbl_keeps_covered_slots_and_the_authored_rule_in_every_export() {
     // The tbl data '_' span is TBL_SPAN_HORIZ, not a box decoration. Its
     // rule survives as a separate row, covering the projected table extent.
     // Portable Markdown still uses its compact '---' fence projection;
-    // covered slots remain empty rather than moving following cells.
+    // Covered slots contribute their full area but no divider inside the
+    // owner (tbl_term.c's hspans loop). Exact source replay precedes this
+    // reader-geometry migration; the original native snapshot stays intact.
     let (_, native) = load_case("cw12_span");
     assert_eq!(&native[4..7], ["A", "──────", "B C"]);
     let query = reading_roundtrip(
         "cw12_span",
-        &["A  |", "------", "B C |"],
+        &["A", "-----", "B C"],
         "```\nA | \n---\nB C | \n```",
     );
     assert_reparsed_column_cell(&query, "A | \n---\nB C | ");

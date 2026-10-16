@@ -1,0 +1,36 @@
+.TH TABLE-LAYOUT 1 "October 16, 2026"
+.SH DESCRIPTION
+.ce 1
+Escaped input records
+.TS
+center tab(@) box;
+cB | cB | cB
+cB | cB | cB
+l | lw(34) | lw(34).
+Escape
+Sequence@Description@Meaning
+_
+ESC_QUOTE@T{
+DESC_BEGIN_0 A quoted input symbol starts a record with a distinct spelling. Readers must retain every word in this deliberately long explanatory paragraph. Responsive columns may wrap the words, but must not stack the entire wide table solely because this paragraph has a long intrinsic line. DESC_END_0
+T}@T{
+MEAN_BEGIN_0 The resulting record contributes ordinary display text. A second long paragraph makes the rightmost column exercise the same width policy without borrowing a line from the neighboring cell. MEAN_END_0
+T}
+_
+ESC_SLASH@T{
+DESC_BEGIN_1 A quoted input symbol starts a record with a distinct spelling. Readers must retain every word in this deliberately long explanatory paragraph. Responsive columns may wrap the words, but must not stack the entire wide table solely because this paragraph has a long intrinsic line. DESC_END_1
+T}@T{
+MEAN_BEGIN_1 The resulting record contributes ordinary display text. A second long paragraph makes the rightmost column exercise the same width policy without borrowing a line from the neighboring cell. MEAN_END_1
+T}
+_
+ESC_OCTAL@T{
+DESC_BEGIN_2 A quoted input symbol starts a record with a distinct spelling. Readers must retain every word in this deliberately long explanatory paragraph. Responsive columns may wrap the words, but must not stack the entire wide table solely because this paragraph has a long intrinsic line. DESC_END_2
+T}@T{
+MEAN_BEGIN_2 The resulting record contributes ordinary display text. A second long paragraph makes the rightmost column exercise the same width policy without borrowing a line from the neighboring cell. MEAN_END_2
+T}
+_
+ESC_OTHER@T{
+DESC_BEGIN_3 A quoted input symbol starts a record with a distinct spelling. Readers must retain every word in this deliberately long explanatory paragraph. Responsive columns may wrap the words, but must not stack the entire wide table solely because this paragraph has a long intrinsic line. DESC_END_3
+T}@T{
+MEAN_BEGIN_3 The resulting record contributes ordinary display text. A second long paragraph makes the rightmost column exercise the same width policy without borrowing a line from the neighboring cell. MEAN_END_3
+T}
+.TE

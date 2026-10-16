@@ -54,7 +54,7 @@ fn cell_closure_keeps_the_existing_empty_data_row_without_an_extra_eof_row() {
 #[test]
 fn sparse_cells_retain_the_same_hard_boundary_and_source_order() {
     let mut first = cell("A", true, 0);
-    first.column_span = u16::MAX;
+    first.column_span = u32::from(u16::MAX);
     let block = table(vec![first, cell("B", false, 0)]);
     assert_eq!(literal_readback(&block), "column 1: A\ncolumn 65536: B");
 }

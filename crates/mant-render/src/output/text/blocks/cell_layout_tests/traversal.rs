@@ -41,6 +41,7 @@ fn sibling_subtrees_are_layout_once_even_in_topology_and_budget_fallbacks() {
         match variant {
             "span" => cells[0].column_span = 2,
             "rule" => cells.push(TableCell {
+                preferred_width_columns: None,
                 kind: TableCellKind::IsolatedHorizontalRule,
                 ..cell(vec![])
             }),

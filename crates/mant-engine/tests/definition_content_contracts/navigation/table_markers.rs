@@ -23,6 +23,7 @@ fn paragraph(children: Vec<Inline>, line: u32) -> Block {
 
 fn cell(children: Vec<Inline>, line: u32) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         kind: TableCellKind::Text,
         blocks: vec![paragraph(children, line)],
         break_after: false,
@@ -34,6 +35,7 @@ fn cell(children: Vec<Inline>, line: u32) -> TableCell {
 
 fn table(data: bool) -> Block {
     let marker = TableRow {
+        column_borders: vec![],
         kind: TableRowKind::Data,
         cells: vec![cell(
             vec![Inline::Strong {
@@ -50,6 +52,7 @@ fn table(data: bool) -> Block {
     let mut rows = vec![marker];
     if data {
         rows.push(TableRow {
+            column_borders: vec![],
             kind: TableRowKind::Data,
             cells: vec![
                 cell(vec![text(FIRST_CELL)], 40),
@@ -58,6 +61,7 @@ fn table(data: bool) -> Block {
         });
     }
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows,

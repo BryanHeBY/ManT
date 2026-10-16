@@ -15,8 +15,8 @@ pub use definition::{
 pub use layout::LayoutHint;
 pub use list::{ListItem, ListItemLayout, ListKind};
 pub use table::{
-    ColumnPreferences, TableAlignment, TableCell, TableCellKind, TableRow, TableRowKind,
-    TableRuleCellKind,
+    ColumnPreferences, TableAlignment, TableBorderStyle, TableBorders, TableCell, TableCellKind,
+    TableColumnBorder, TableRow, TableRowKind, TableRuleCellKind,
 };
 
 /// A document block capable of preserving nested manual structures.
@@ -108,6 +108,9 @@ pub enum Block {
         /// remaining parent width. Explicit left placement is distinct.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         alignment: Option<TableAlignment>,
+        /// Author-specified frame and grid edges, not theme or terminal glyphs.
+        #[serde(default, skip_serializing_if = "TableBorders::is_empty")]
+        borders: TableBorders,
         /// Preferred column geometry, independent of source macro rules.
         #[serde(default, skip_serializing_if = "ColumnPreferences::is_empty")]
         column_preferences: ColumnPreferences,

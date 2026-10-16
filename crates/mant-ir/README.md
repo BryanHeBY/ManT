@@ -248,6 +248,40 @@ and `bounded_table_rows_with_column_count` uses sparse plans beyond 256 columns.
 Neither fact duplicates empty cell owners. These optional fields join the
 unreleased v0.13 contract; published v0.12 remains unchanged.
 
+`Table.borders: TableBorders` records author-specified outside and grid edges.
+Its optional `outer`, `inner_rows` and `inner_columns` strokes are `single` or
+`double`; an empty object is omitted. `TableRow.column_borders` adds ordered,
+unique row-local edges at logical boundaries `0..=columnCount`, including the
+outside edges. A coincident local/default edge uses the stronger stroke.
+Consumers suppress grid edges inside horizontal or vertical spans using the
+table topology. Existing authored rule rows and rule cells remain distinct;
+grid preferences must not duplicate those lines. None of these preferences
+chooses colors, line-drawing glyphs, terminal cell widths or fixed coordinates.
+Missing trailing columns and very large counts must not expand border facts
+into dense cells or unbounded generated output.
+
+`TableCell.preferred_width_columns` (`preferredWidthColumns`) is a positive
+soft preferred content width, independently of the authoritative cell blocks.
+Unlike `ColumnPreferences.widths`, it does not select declared-field placement
+or a fixed capacity. A reader may narrow the column and visually wrap ordinary
+prose before resorting to source-order stacking. Geometry helper
+`allocate_table_columns` distributes the available content area, excluding
+outside borders, with an eight-cell soft minimum or the column's shorter
+preferred width. It accepts at most 256 dense columns and a 4096-cell gap
+budget; work stays bounded independently of the numeric viewport width.
+Whole-table alignment places the final frame after this responsive allocation.
+`rowSpan` counts data rows, including explicit empty continuation cells;
+standalone rule rows and navigation-only carriers do not consume the span.
+The owner remains top-aligned
+with one content tree, and covered rows suppress intersecting grid segments.
+Both `TableCell` spans use positive u32 ranges in unreleased v0.13, preserving
+topology beyond 65535 without saturating later cell positions. A row's complete
+logical column range must also fit u32; serde and document validation reject
+overflow before platform-sized position arithmetic can hide it. Sparse plans
+retain each original cell once and do not allocate covered columns or rows.
+Global border preferences alone create no data rows: navigation-only carriers
+remain transparent, while a row-local authored column edge is physical output.
+
 `EquationExpression` contains mathematical text, operations, sequences, groups,
 piles and matrices. Producers resolve native counters into scope boundaries;
 readers never replay parser rules. `operator` names fractions, roots, scripts

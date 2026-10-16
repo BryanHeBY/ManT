@@ -2,13 +2,16 @@ use super::{Block, Inline, LayoutHint, ListItem, ListKind, TableCell};
 
 pub(super) fn navigation_table(widths: &[u16], origin: i32, cells: Vec<Vec<Block>>) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![mant_ir::TableRow {
+            column_borders: Vec::new(),
             kind: mant_ir::TableRowKind::Data,
             cells: cells
                 .into_iter()
                 .map(|blocks| TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     blocks,
                     kind: mant_ir::TableCellKind::Text,
@@ -59,14 +62,17 @@ pub(super) fn plain_list(blocks: Vec<Block>, indent: i32) -> Block {
 
 pub(super) fn declared_column_table(widths: &[u16], cells: &[&str]) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: declared_preferences(widths),
         rows: vec![mant_ir::TableRow {
+            column_borders: Vec::new(),
             kind: mant_ir::TableRowKind::Data,
             cells: cells
                 .iter()
                 .map(|text| TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph(text, 0)],

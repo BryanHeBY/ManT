@@ -57,13 +57,16 @@ fn rejects_equation_text_caches_that_disagree_with_the_structure() {
 #[test]
 fn rejects_rule_rows_with_data_or_without_layout_strengths() {
     let blocks = vec![Block::Table {
+        borders: crate::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: crate::ColumnPreferences::default(),
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::HorizontalRule,
                 cells: vec![TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: crate::TableCellKind::Text,
                     blocks: Vec::new(),
@@ -73,12 +76,15 @@ fn rejects_rule_rows_with_data_or_without_layout_strengths() {
                 }],
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::LayoutRule { cells: Vec::new() },
                 cells: Vec::new(),
             },
             TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: crate::TableCellKind::HorizontalRule,
                     blocks: vec![Block::Paragraph {

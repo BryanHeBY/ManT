@@ -4,6 +4,7 @@ use super::*;
 
 fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         blocks,
         break_after,
         kind: mant_ir::TableCellKind::Text,
@@ -15,9 +16,11 @@ fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
 
 fn table(cells: Vec<TableCell>, preferences: mant_ir::ColumnPreferences) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells,
         }],

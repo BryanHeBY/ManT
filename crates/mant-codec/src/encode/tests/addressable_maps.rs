@@ -9,9 +9,11 @@ fn navigation_only_tables_emit_targets_without_empty_fences() {
         source: None,
     };
     let table = |cells| Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells,
         }],
@@ -20,6 +22,7 @@ fn navigation_only_tables_emit_targets_without_empty_fences() {
         source: None,
     };
     let cell = |blocks| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         blocks,
         kind: mant_ir::TableCellKind::Text,

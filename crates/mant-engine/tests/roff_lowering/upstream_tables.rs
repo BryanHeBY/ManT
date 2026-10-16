@@ -47,8 +47,9 @@ fn escaped_literal_backslash_cells_are_not_decoded_a_second_time() {
 fn horizontal_spans_keep_following_cells_in_the_same_logical_column() {
     // Exact pinned -Ttree/-Tascii/-Tutf8 replay: tbl_data.c skips the span
     // layout cell, leaving RIGHT at column 2; tbl_term.c places every row in
-    // the same table-wide column frame. The reader's pipe glyphs occupy cells
-    // of their own; portable Markdown keeps its compact fence projection.
+    // the same table-wide column frame. Covered columns belong to one owner
+    // and have no interior divider; the reader's remaining pipe glyphs occupy
+    // cells of their own. Portable Markdown keeps its compact fence projection.
     let document = man(".TS\nl s l\nl l l.\nTOPSPAN\tRIGHT\nLEFT\tMIDDLE\tEND\n.TE");
     let [
         Block::Table {
@@ -74,7 +75,7 @@ fn horizontal_spans_keep_following_cells_in_the_same_logical_column() {
         .lines()
         .filter(|line| line.starts_with("TOPSPAN") || line.starts_with("LEFT"))
         .collect::<Vec<_>>();
-    assert_eq!(rows, ["TOPSPAN |        | RIGHT", "LEFT    | MIDDLE | END"]);
+    assert_eq!(rows, ["TOPSPAN       | RIGHT", "LEFT | MIDDLE | END"]);
     assert_eq!(rows[0].find("RIGHT"), rows[1].find("END"));
 
     let markdown = mant_codec::encode::render_markdown(&query);

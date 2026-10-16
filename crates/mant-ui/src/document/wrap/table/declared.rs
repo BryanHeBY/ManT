@@ -11,7 +11,11 @@ pub(super) fn render_declared_columns(
     table: &LogicalTableRow,
     available: usize,
 ) -> Option<Vec<WrappedLine>> {
-    let columns = mant_ir::geometry::DeclaredColumns::new(&table.layout.column_preferences)?;
+    let mut preferences = table.layout.column_preferences.clone();
+    if table.layout.rails.columns {
+        preferences.gap_columns = preferences.gap_columns.checked_add(1)?;
+    }
+    let columns = mant_ir::geometry::DeclaredColumns::new(&preferences)?;
     let preferred_start = |index: usize| {
         let start = columns.start(index);
         table
@@ -79,7 +83,7 @@ pub(super) fn render_declared_columns(
         &mut widths,
         &DeclaredArea {
             columns: &columns,
-            preferences: &table.layout.column_preferences,
+            preferences: &preferences,
             cells: &table.cells,
             origin: indent,
             available,

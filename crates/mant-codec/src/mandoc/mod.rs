@@ -18,6 +18,7 @@ mod roff_escape;
 pub use redirect::{RedirectSyntaxError, redirect_target};
 mod source_context;
 mod source_lines;
+mod table_layout_budget;
 mod table_recovery_budget;
 use source_context::{LoweringContext, TableTextBlock};
 mod ast;

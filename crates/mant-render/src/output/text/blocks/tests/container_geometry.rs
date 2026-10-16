@@ -31,12 +31,15 @@ fn an_empty_closed_data_row_consumes_its_incoming_gap_in_stacked_output() {
                 source: None,
             },
             Block::Table {
+                borders: mant_ir::TableBorders::default(),
                 alignment: None,
                 column_count: None,
                 column_preferences: mant_ir::ColumnPreferences::default(),
                 rows: vec![mant_ir::TableRow {
+                    column_borders: Vec::new(),
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![TableCell {
+                        preferred_width_columns: None,
                         break_after: closed,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: Vec::new(),
@@ -75,12 +78,15 @@ fn navigation_only_tables_do_not_reset_the_parent_gap_budget() {
         };
         *children = vec![Inline::anchor("target")];
         let table = Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![target],
@@ -121,12 +127,15 @@ fn origin_preserving_cells_keep_leading_gaps_in_the_parent_budget() {
     };
     layout.spacing_before_lines = 3000;
     let table = Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![mant_ir::TableRow {
+            column_borders: Vec::new(),
             kind: mant_ir::TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 break_after: false,
                 kind: mant_ir::TableCellKind::Text,
                 blocks: vec![body],
@@ -251,12 +260,15 @@ fn subtree_translation_is_applied_once_at_each_visible_leaf() {
                     source: None,
                 },
                 Block::Table {
+                    borders: mant_ir::TableBorders::default(),
                     alignment: None,
                     column_count: None,
                     column_preferences: mant_ir::ColumnPreferences::default(),
                     rows: vec![mant_ir::TableRow {
+                        column_borders: Vec::new(),
                         kind: mant_ir::TableRowKind::Data,
                         cells: vec![TableCell {
+                            preferred_width_columns: None,
                             break_after: false,
                             kind: mant_ir::TableCellKind::Text,
                             blocks: vec![paragraph("CELL", 1)],

@@ -9,6 +9,7 @@ use ratatui::{
 
 fn cell(value: &str, alignment: Option<TableAlignment>) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         blocks: vec![Block::Paragraph {
             children: vec![
                 Inline::anchor(format!("at-{value}")),
@@ -36,15 +37,18 @@ fn cell(value: &str, alignment: Option<TableAlignment>) -> TableCell {
 
 fn table(alignment: Option<TableAlignment>, count: Option<u32>) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment,
         column_count: count,
         column_preferences: ColumnPreferences::default(),
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: TableRowKind::HorizontalRule,
                 cells: vec![],
             },
             TableRow {
+                column_borders: vec![],
                 kind: TableRowKind::Data,
                 cells: vec![
                     cell("Q", Some(TableAlignment::Center)),
@@ -52,6 +56,7 @@ fn table(alignment: Option<TableAlignment>, count: Option<u32>) -> Block {
                 ],
             },
             TableRow {
+                column_borders: vec![],
                 kind: TableRowKind::LayoutRule {
                     cells: vec![
                         TableRuleCellKind::Horizontal,
@@ -61,10 +66,12 @@ fn table(alignment: Option<TableAlignment>, count: Option<u32>) -> Block {
                 cells: vec![],
             },
             TableRow {
+                column_borders: vec![],
                 kind: TableRowKind::Data,
                 cells: vec![cell("LLLL", None), cell("MMMMM", None)],
             },
             TableRow {
+                column_borders: vec![],
                 kind: TableRowKind::DoubleHorizontalRule,
                 cells: vec![],
             },
@@ -204,7 +211,9 @@ fn unoccupied_declared_columns_extend_the_frame_without_creating_rows_or_links()
     }
     for count in [Some(3), Some(u32::MAX)] {
         let value = query(Block::Table {
+            borders: mant_ir::TableBorders::default(),
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: TableRowKind::HorizontalRule,
                 cells: vec![],
             }],
@@ -408,6 +417,7 @@ fn final_cell_alignment_respects_composed_origin_bounds_in_both_column_plans() {
         layout.indent_columns = 3;
         let long = cell("BBBBBBBBBB", Some(TableAlignment::Right));
         let value = query(Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: Some(TableAlignment::Left),
             column_count: Some(1),
             column_preferences: ColumnPreferences {
@@ -416,10 +426,12 @@ fn final_cell_alignment_respects_composed_origin_bounds_in_both_column_plans() {
             },
             rows: vec![
                 TableRow {
+                    column_borders: vec![],
                     kind: TableRowKind::Data,
                     cells: vec![short],
                 },
                 TableRow {
+                    column_borders: vec![],
                     kind: TableRowKind::Data,
                     cells: vec![long],
                 },
@@ -485,11 +497,14 @@ fn table_region_composes_with_list_definition_and_nested_table_parents() {
                 source: None,
             },
             _ => Block::Table {
+                borders: mant_ir::TableBorders::default(),
                 alignment: None,
                 column_count: None,
                 rows: vec![TableRow {
+                    column_borders: vec![],
                     kind: TableRowKind::Data,
                     cells: vec![TableCell {
+                        preferred_width_columns: None,
                         blocks: vec![inner],
                         kind: mant_ir::TableCellKind::Text,
                         break_after: false,
@@ -522,9 +537,11 @@ fn translating_the_whole_frame_cannot_bypass_internal_origin_bounds() {
     };
     layout.indent_columns = 3;
     let value = query(Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: Some(TableAlignment::Center),
         column_count: Some(1),
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: TableRowKind::Data,
             cells: vec![entry],
         }],
@@ -554,9 +571,11 @@ fn absent_rows_in_a_wide_neighbor_cell_count_toward_the_padding_budget() {
         source: None,
     }];
     let value = query(Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: TableRowKind::Data,
             cells: vec![first, cell(&"B".repeat(5000), None)],
         }],

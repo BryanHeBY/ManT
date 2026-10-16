@@ -11,8 +11,8 @@ mod source;
 pub use blocks::{
     Block, ColumnPreferences, DefinitionBodyAlignment, DefinitionBodyRef, DefinitionItem,
     DefinitionLayout, DefinitionWordBoundary, HeadBodyRelation, LayoutHint, ListItem,
-    ListItemLayout, ListKind, TableAlignment, TableCell, TableCellKind, TableRow, TableRowKind,
-    TableRuleCellKind,
+    ListItemLayout, ListKind, TableAlignment, TableBorderStyle, TableBorders, TableCell,
+    TableCellKind, TableColumnBorder, TableRow, TableRowKind, TableRuleCellKind,
 };
 pub use diagnostic::{
     Diagnostic, DiagnosticImpact, DiagnosticLevel, content_complete, semantics_complete,

@@ -42,7 +42,7 @@ render = ["dep:unicode-width"]
 serde = ["dep:serde"]
 
 [dependencies]
-serde = { workspace = true, optional = true }
+serde = { workspace = true, optional = true, features = ["rc"] }
 unicode-width = { workspace = true, optional = true }
 zstd.workspace = true
 

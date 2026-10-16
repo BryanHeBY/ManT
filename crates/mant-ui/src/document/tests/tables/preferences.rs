@@ -8,6 +8,7 @@ fn content_derived_tables_consume_custom_gap_preferences() {
         let document = query.document.as_mut().unwrap();
         document.sections.clear();
         let cell = |text: &str| TableCell {
+            preferred_width_columns: None,
             break_after: false,
             blocks: vec![paragraph(text)],
             kind: mant_ir::TableCellKind::Text,
@@ -16,9 +17,11 @@ fn content_derived_tables_consume_custom_gap_preferences() {
             alignment: None,
         };
         document.blocks = vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("LEFT_TOKEN"), cell("RIGHT_TOKEN")],
             }],
@@ -67,13 +70,16 @@ fn full_query_padding_fallback_preserves_all_cells_at_maximum_viewport() {
             .map(|index| format!("CELL_{index:03}"))
             .collect::<Vec<_>>();
         document.blocks = vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: words
                     .iter()
                     .map(|word| TableCell {
+                        preferred_width_columns: None,
                         break_after: false,
                         blocks: vec![paragraph(word)],
                         kind: mant_ir::TableCellKind::Text,

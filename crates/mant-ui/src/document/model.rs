@@ -2,8 +2,13 @@
 
 use std::sync::Arc;
 
-use mant_ir::{DocumentAddress, TableAlignment, TableRuleCellKind};
+use mant_ir::{DocumentAddress, TableRuleCellKind};
 use ratatui::{style::Style, text::Span};
+
+mod table;
+pub(super) use table::{
+    LogicalTableCell, LogicalTableLayout, LogicalTableRow, TableCellOccupancy, TableRails,
+};
 
 /// External URI that passed `ManT`'s host-activation policy.
 ///
@@ -92,130 +97,6 @@ pub(super) struct LogicalLinkRange {
     /// Source scalar range, before complete-row grapheme shaping and tab expansion.
     pub(super) start_scalar: usize,
     pub(super) end_scalar: usize,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct LogicalTableCell {
-    pub(super) lines: Vec<LogicalLine>,
-    pub(super) alignment: TableAlignment,
-    pub(super) anchors: std::collections::HashMap<String, usize>,
-    pub(super) completed_tail: bool,
-    pub(super) break_after: bool,
-    pub(super) empty_boundary: bool,
-    pub(super) origin_bounds: mant_ir::geometry::CellOriginBounds,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct LogicalTableRow {
-    pub(super) cells: Vec<LogicalTableCell>,
-    pub(super) rules: Option<Vec<TableRuleCellKind>>,
-    pub(super) whole_rule: Option<bool>,
-    pub(super) completed_tail: bool,
-    pub(super) open_tail: bool,
-    pub(super) layout: Arc<LogicalTableLayout>,
-}
-
-#[derive(Debug)]
-pub(super) struct LogicalTableLayout {
-    pub(super) preferred_widths: Vec<usize>,
-    pub(super) alignment: Option<TableAlignment>,
-    pub(super) force_stack: bool,
-    /// Declared or actual-origin cells retain a provisional final row;
-    /// generic measured projection retires that row even on bounded fallback.
-    pub(super) retain_open_tail: bool,
-    /// Complete source-neutral geometry, including content-derived gaps.
-    pub(super) column_preferences: mant_ir::ColumnPreferences,
-}
-
-impl LogicalTableLayout {
-    pub(super) fn for_rows(rows: &[Vec<LogicalTableCell>]) -> Self {
-        let column_count = rows
-            .iter()
-            .map(Vec::len)
-            .max()
-            .unwrap_or(0)
-            .min(mant_ir::MAX_DENSE_TABLE_COLUMNS);
-        let mut preferred_widths = vec![1; column_count];
-        for row in rows {
-            for (width, cell) in preferred_widths.iter_mut().zip(row) {
-                *width = (*width).max(cell.preferred_width());
-            }
-        }
-        Self {
-            preferred_widths,
-            alignment: None,
-            force_stack: false,
-            retain_open_tail: false,
-            column_preferences: mant_ir::ColumnPreferences::default(),
-        }
-    }
-
-    pub(super) fn requires_stack(&self, cells: &[LogicalTableCell]) -> bool {
-        self.force_stack
-            || (self.column_preferences.widths.is_empty()
-                && cells
-                    .iter()
-                    .take(cells.len().saturating_sub(1))
-                    .any(|cell| cell.break_after))
-    }
-
-    fn preferred_width(&self) -> usize {
-        self.preferred_widths.iter().sum::<usize>()
-            + self.preferred_widths.len().saturating_sub(1)
-                * usize::from(self.column_preferences.gap_columns)
-    }
-}
-
-impl LogicalTableCell {
-    pub(super) fn has_open_tail(&self) -> bool {
-        !self.completed_tail
-            && self.lines.last().is_some_and(|line| {
-                if let Some(row) = &line.table_row {
-                    row.open_tail
-                } else {
-                    self.lines.len() > 1 && line.spans.iter().all(|span| span.content.is_empty())
-                }
-            })
-    }
-
-    fn reading_line_count(&self) -> usize {
-        self.lines
-            .len()
-            .saturating_sub(usize::from(self.has_open_tail()))
-            .max(1)
-    }
-
-    fn reading_completed_tail(&self) -> bool {
-        self.completed_tail
-            || self
-                .lines
-                .get(self.reading_line_count().saturating_sub(1))
-                .is_some_and(|line| {
-                    line.table_row.is_none()
-                        && line.spans.iter().all(|span| span.content.is_empty())
-                })
-    }
-
-    pub(super) fn new(lines: Vec<LogicalLine>, alignment: Option<TableAlignment>) -> Self {
-        Self {
-            lines,
-            alignment: alignment.unwrap_or(TableAlignment::Left),
-            anchors: std::collections::HashMap::new(),
-            completed_tail: false,
-            break_after: false,
-            empty_boundary: false,
-            origin_bounds: mant_ir::geometry::CellOriginBounds::default(),
-        }
-    }
-
-    fn preferred_width(&self) -> usize {
-        self.lines
-            .iter()
-            .map(LogicalLine::preferred_width)
-            .max()
-            .unwrap_or(1)
-            .max(1)
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -413,6 +294,7 @@ impl LogicalLine {
                 rules: None,
                 whole_rule: None,
                 layout,
+                column_borders: Vec::new(),
             }),
             links: Vec::new(),
             reference_marks: Vec::new(),
@@ -443,6 +325,7 @@ impl LogicalLine {
                 rules: Some(rules),
                 whole_rule: None,
                 layout,
+                column_borders: Vec::new(),
             }),
             links: Vec::new(),
             reference_marks: Vec::new(),

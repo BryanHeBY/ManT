@@ -28,6 +28,7 @@ fn declared_column_selection_and_anchor_ranges_follow_shared_origins() {
             children.extend(text);
         }
         TableCell {
+            preferred_width_columns: None,
             break_after: false,
             kind: mant_ir::TableCellKind::Text,
             blocks: vec![Block::Paragraph {
@@ -43,9 +44,11 @@ fn declared_column_selection_and_anchor_ranges_follow_shared_origins() {
     };
     let document = query.document.as_mut().unwrap();
     document.blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![
                 cell("A", None, false),
@@ -125,14 +128,17 @@ fn public_ir_trailing_padding_keeps_link_search_copy_and_actual_cells_aligned() 
             let mut query = bundle();
             let document = query.document.as_mut().unwrap();
             document.blocks = vec![Block::Table {
+                borders: mant_ir::TableBorders::default(),
                 alignment: None,
                 column_count: None,
                 rows: vec![TableRow {
+                    column_borders: vec![],
                     kind: mant_ir::TableRowKind::Data,
                     cells: [first, next]
                         .into_iter()
                         .enumerate()
                         .map(|(index, children)| TableCell {
+                            preferred_width_columns: None,
                             break_after: false,
                             kind: mant_ir::TableCellKind::Text,
                             blocks: vec![if index == 0 && wrapper == "literal" {
@@ -183,6 +189,7 @@ fn public_ir_trailing_padding_keeps_link_search_copy_and_actual_cells_aligned() 
 #[test]
 fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
     let cell = |blocks| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         blocks,
         kind: mant_ir::TableCellKind::Text,
@@ -196,9 +203,11 @@ fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
         document.sections.clear();
         document.blocks = vec![
             Block::Table {
+                borders: mant_ir::TableBorders::default(),
                 alignment: None,
                 column_count: None,
                 rows: vec![TableRow {
+                    column_borders: vec![],
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![cell(vec![Block::Preformatted {
                         children: vec![Inline::Text {
@@ -222,6 +231,19 @@ fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
             rows
         );
     }
+}
+
+#[test]
+fn nested_author_spaces_survive_copy() {
+    let cell = |blocks| TableCell {
+        preferred_width_columns: None,
+        break_after: false,
+        blocks,
+        kind: mant_ir::TableCellKind::Text,
+        column_span: 1,
+        row_span: 1,
+        alignment: None,
+    };
     let author = Block::Paragraph {
         children: vec![
             Inline::anchor("author-space"),
@@ -234,9 +256,11 @@ fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
         source: None,
     };
     let inner = Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![cell(vec![author]), cell(vec![paragraph("RIGHT")])],
         }],
@@ -251,9 +275,11 @@ fn derived_literal_receipts_and_nested_author_spaces_survive_copy() {
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![cell(vec![inner])],
         }],

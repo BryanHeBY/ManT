@@ -119,12 +119,18 @@ fn empty_cells_and_span_owners_keep_payloads_in_every_terminal_width() {
         .filter(|row| row.contains("WIDE") || row.contains("LEFT"))
         .collect::<Vec<_>>();
     assert_eq!(rows.len(), 2);
-    for (row, expected) in rows
-        .iter()
-        .zip([["WIDE", "", "RIGHT"], ["LEFT", "", "END"]])
-    {
-        assert_eq!(row.split('|').map(str::trim).collect::<Vec<_>>(), expected);
-    }
+    // A covered slot belongs to WIDE's complete region, so only the second
+    // row has an independently empty middle cell. Pinned tbl_term.c skips
+    // hspans without inserting a divider inside that owner. The exact input
+    // was replayed again before updating these portable geometry assertions.
+    assert_eq!(
+        rows[0].split('|').map(str::trim).collect::<Vec<_>>(),
+        ["WIDE", "RIGHT"]
+    );
+    assert_eq!(
+        rows[1].split('|').map(str::trim).collect::<Vec<_>>(),
+        ["LEFT", "", "END"]
+    );
     assert_eq!(rows[0].find("RIGHT"), rows[1].find("END"));
     let markdown = mant_codec::encode::render_markdown(&query);
     assert!(markdown.contains("WIDE |  | RIGHT"), "{markdown}");

@@ -28,7 +28,9 @@ assert_eq!(plain, render_query_text_with(&content, |_, text| text.to_owned()));
 
 `render_query_text_at_width` and `render_query_man_at_width` apply row alignment
 within a caller-supplied content width, bounded at 4096 cells. They preserve the
-accepted hard rows and do not impose terminal soft wrapping. Unbounded text
+accepted hard rows; ordinary document rows do not acquire terminal soft wrapping.
+Table prose may wrap inside responsive column slots before a table falls back
+to source order. Unbounded text
 and report functions use left alignment while retaining resolved row origins;
 no rendering API queries terminal dimensions or changes authoritative text.
 
@@ -40,6 +42,12 @@ source-order fallback. `column_count` retains unoccupied trailing columns
 without adding cell owners. Pipe separators belong to this text projection,
 so its frame width can differ from TUI layout. Empty physical rows, navigation
 and authored spaces survive either plan.
+
+Author-requested table frames and vertical edges use the chosen column plan,
+not the unwrapped intrinsic width. Soft cell widths remain separate from
+sequential declared fields. Declared-field tables retain their outside frame
+but may simplify interior grid lines. Horizontal spans receive their full covered area;
+frame/rule/grid glyphs are generated presentation and never replace cell text.
 
 `cells` borrows complete grapheme clusters and preserves byte boundaries. Its input contract is already-sanitized single-line text. It does not replace source-neutral IR geometry or a frontend's wrapping policy.
 

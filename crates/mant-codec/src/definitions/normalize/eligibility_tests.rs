@@ -38,6 +38,7 @@ fn space(lines: u16) -> Block {
 
 fn table(indent_columns: i32) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: Vec::new(),

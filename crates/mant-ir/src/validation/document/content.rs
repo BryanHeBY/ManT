@@ -24,6 +24,16 @@ impl InvariantCollector {
         }
     }
     fn validate_table(&mut self, rows: &[crate::TableRow], column_count: Option<u32>) {
+        if crate::checked_table_logical_columns(rows).is_none() {
+            self.diagnostics.push(invariant(
+                "ir.invalid-table-column-range",
+                "table logical column range must fit u32".to_owned(),
+            ));
+        }
+        let columns = column_count.map_or_else(
+            || crate::table_logical_column_count(rows),
+            |count| usize::try_from(count).unwrap_or(usize::MAX),
+        );
         if column_count.is_some_and(|count| {
             count == 0
                 || usize::try_from(count).unwrap_or(usize::MAX)
@@ -35,6 +45,12 @@ impl InvariantCollector {
             ));
         }
         for row in rows {
+            if !row.column_borders_valid(columns) {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-column-borders",
+                    "table column borders must be ordered, unique and within the logical column range".to_owned(),
+                ));
+            }
             if !matches!(&row.kind, crate::TableRowKind::Data) && !row.cells.is_empty() {
                 self.diagnostics.push(invariant(
                     "ir.invalid-table-rule-cells",
@@ -51,6 +67,12 @@ impl InvariantCollector {
             }
         }
         for cell in rows.iter().flat_map(|row| &row.cells) {
+            if cell.preferred_width_columns == Some(0) {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-table-cell-width",
+                    "table cell preferred width must be positive".to_owned(),
+                ));
+            }
             if cell.kind != crate::TableCellKind::Text && !cell.blocks.is_empty() {
                 self.diagnostics.push(invariant(
                     "ir.invalid-table-rule-content",

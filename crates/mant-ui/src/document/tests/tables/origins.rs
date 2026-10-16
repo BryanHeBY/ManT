@@ -8,6 +8,7 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         [(-2, 3, 1), (3, -2, 1), (4096, 3, 4096), (4090, 10, 4096)]
     {
         let cell = |id: &str, text: &str| TableCell {
+            preferred_width_columns: None,
             break_after: false,
             kind: mant_ir::TableCellKind::Text,
             blocks: vec![Block::Paragraph {
@@ -35,10 +36,12 @@ fn signed_table_cells_preserve_real_origins_links_and_anchors() {
         let mut query = bundle();
         let document = query.document.as_mut().unwrap();
         document.blocks = vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("first", "FIRST"), cell("second", "SECOND")],
             }],
@@ -138,6 +141,7 @@ fn actual_field_parent_and_child_origins_keep_query_links_search_and_copy() {
             body
         };
         let cell = |block| TableCell {
+            preferred_width_columns: None,
             break_after: false,
             blocks: vec![block],
             kind: mant_ir::TableCellKind::Text,
@@ -146,9 +150,11 @@ fn actual_field_parent_and_child_origins_keep_query_links_search_and_copy() {
             alignment: None,
         };
         document.blocks = vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(paragraph("LEFT")), cell(body)],
             }],
@@ -173,10 +179,12 @@ fn generic_alignment_checks_actual_origins_without_losing_source_mapping() {
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     generic_linked_cell("LEFT", 0, TableAlignment::Left),
@@ -184,6 +192,7 @@ fn generic_alignment_checks_actual_origins_without_losing_source_mapping() {
                 ],
             },
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     generic_linked_cell("OTHER", 0, TableAlignment::Left),

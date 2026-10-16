@@ -49,3 +49,10 @@ real-fixture test skips only in the published crate's staged package, where
 sibling repository fixtures are intentionally unavailable. The ASan runner
 executes the exact caller-buffer and output-limit regression under mixed
 Rust/C instrumentation.
+
+`table_layout.rs` checks the full u32 horizontal-span boundary with standalone
+sources and reuses the repository's original table-layout fixtures when
+available. These cover shared layout ownership, frames, T& border changes,
+empty declared columns and soft widths without copying device glyphs. The
+repository-only fixture assertions skip in a published crate package; the
+standalone span and private ABI tests still run there.

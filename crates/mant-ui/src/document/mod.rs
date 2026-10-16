@@ -433,7 +433,13 @@ impl DocumentView {
         anchor_rows.extend(self.anchors.iter().map(|(id, logical_line)| {
             (
                 id.clone(),
-                logical_rows.get(*logical_line).copied().unwrap_or_default(),
+                logical_rows.get(*logical_line).copied().map_or(0, |start| {
+                    let end = logical_rows.get(logical_line + 1).copied().unwrap_or(start);
+                    copy_maps
+                        .get(start..end)
+                        .and_then(|maps| maps.iter().position(|map| !map.skip_row))
+                        .map_or(start, |offset| start + offset)
+                }),
             )
         }));
 

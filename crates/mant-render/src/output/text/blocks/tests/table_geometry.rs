@@ -7,6 +7,7 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
         [(-2, 3, 1), (3, -2, 1), (4096, 3, 4096), (4090, 10, 4096)]
     {
         let cell = |text| TableCell {
+            preferred_width_columns: None,
             break_after: false,
             kind: mant_ir::TableCellKind::Text,
             blocks: vec![paragraph(text, child_indent)],
@@ -15,10 +16,12 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
             alignment: None,
         };
         let table = Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell("FIRST"), cell("SECOND")],
             }],
@@ -39,12 +42,15 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
     }
     let nested = plain_list(
         vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             column_preferences: mant_ir::ColumnPreferences::default(),
             rows: vec![mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![plain_list(vec![paragraph("NESTED", 5)], 3)],
@@ -66,13 +72,16 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
         format!("{}NESTED", " ".repeat(4096))
     );
     let table = Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![mant_ir::TableRow {
+            column_borders: Vec::new(),
             kind: mant_ir::TableRowKind::Data,
             cells: ["FIRST", "SECOND"]
                 .map(|text| TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: mant_ir::TableCellKind::Text,
                     blocks: vec![paragraph(text, 0)],
@@ -98,14 +107,17 @@ fn signed_table_cells_compose_parent_origins_before_clipping() {
 fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
     let renderer = super::super::super::plain_renderer();
     let table = Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: mant_ir::ColumnPreferences::default(),
         rows: vec![
             mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![
                     TableCell {
+                        preferred_width_columns: None,
                         break_after: false,
                         kind: mant_ir::TableCellKind::HorizontalRule,
                         blocks: Vec::new(),
@@ -114,6 +126,7 @@ fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
                         alignment: None,
                     },
                     TableCell {
+                        preferred_width_columns: None,
                         break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: vec![paragraph("VISIBLE", -1)],
@@ -124,14 +137,17 @@ fn stacked_tables_preserve_partial_whole_layout_rules_and_empty_rows() {
                 ],
             },
             mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::Data,
                 cells: Vec::new(),
             },
             mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::DoubleHorizontalRule,
                 cells: Vec::new(),
             },
             mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::LayoutRule {
                     cells: vec![
                         mant_ir::TableRuleCellKind::Horizontal,
@@ -366,6 +382,7 @@ fn placed_fields_compose_parent_child_and_hint_before_leaf_clipping() {
             body = plain_list(vec![body], 10);
         }
         let cell = |block| TableCell {
+            preferred_width_columns: None,
             break_after: false,
             blocks: vec![block],
             kind: mant_ir::TableCellKind::Text,
@@ -374,9 +391,11 @@ fn placed_fields_compose_parent_child_and_hint_before_leaf_clipping() {
             alignment: None,
         };
         let block = Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![mant_ir::TableRow {
+                column_borders: Vec::new(),
                 kind: mant_ir::TableRowKind::Data,
                 cells: vec![cell(paragraph("A", 0)), cell(body)],
             }],
@@ -423,7 +442,7 @@ fn derived_dense_sparse_and_rule_paths_bound_actual_origins_and_padding() {
     );
     let mut sparse = navigation_table(&[], 0, vec![vec![paragraph("B", 4094)]]);
     if let Block::Table { rows, .. } = &mut sparse {
-        rows[0].cells[0].column_span = u16::MAX;
+        rows[0].cells[0].column_span = u32::from(u16::MAX);
     }
     assert_eq!(
         renderer.render_blocks(&[sparse], 0),
@@ -439,6 +458,7 @@ fn derived_dense_sparse_and_rule_paths_bound_actual_origins_and_padding() {
     {
         column_preferences.gap_columns = u16::MAX;
         rows.push(mant_ir::TableRow {
+            column_borders: Vec::new(),
             cells: vec![],
             kind: mant_ir::TableRowKind::LayoutRule {
                 cells: vec![mant_ir::TableRuleCellKind::Horizontal; 256],

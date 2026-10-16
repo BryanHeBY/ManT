@@ -55,6 +55,11 @@ catalog, search, and cross-document interactions without serializing the IR.
   kind share one viewport decision, bounded fallback and final region. Empty
   declared columns extend that region without creating content owners;
   resizing translates links, search cells and selection maps together.
+  Source borders and soft cell widths are resolved against that same region;
+  prose can wrap before the table needs to stack. Frame and grid glyphs stay
+  outside body search, copied text and click ranges. Sequential declared-field
+  tables retain their placement contract and outside frame, with interior grids
+  permitted to simplify.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
 - Content-first reading focus, with Tab/Shift+Tab and region clicks switching
   between Content and a visible Outline. `j/k` and arrows act on the focused

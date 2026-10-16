@@ -59,18 +59,7 @@ impl DocumentBuilder<'_> {
                 layout,
                 ..
             } => {
-                let origin = compose_origin(base_indent, layout.indent_columns);
-                self.inline_lines_with_geometry_tail(
-                    mant_ir::InlineContentRef {
-                        content: children,
-                        layout: inline_layout,
-                    },
-                    origin,
-                    compose_origin(origin, layout.continuation_indent_columns),
-                    theme::style(theme::StyleRole::Text),
-                    LineSurface::Normal,
-                    true,
-                );
+                self.paragraph_block(children, inline_layout, layout, base_indent);
             }
             Block::Preformatted {
                 children,
@@ -118,6 +107,7 @@ impl DocumentBuilder<'_> {
             }
             Block::Table {
                 alignment,
+                borders,
                 column_count,
                 rows,
                 column_preferences,
@@ -126,6 +116,7 @@ impl DocumentBuilder<'_> {
             } => {
                 self.table(
                     rows,
+                    borders,
                     column_preferences,
                     *column_count,
                     *alignment,
@@ -153,5 +144,25 @@ impl DocumentBuilder<'_> {
                 );
             }
         }
+    }
+    fn paragraph_block(
+        &mut self,
+        children: &[mant_ir::Inline],
+        inline_layout: &mant_ir::InlineLayout,
+        layout: &mant_ir::LayoutHint,
+        base_indent: i32,
+    ) {
+        let origin = compose_origin(base_indent, layout.indent_columns);
+        self.inline_lines_with_geometry_tail(
+            mant_ir::InlineContentRef {
+                content: children,
+                layout: inline_layout,
+            },
+            origin,
+            compose_origin(origin, layout.continuation_indent_columns),
+            theme::style(theme::StyleRole::Text),
+            LineSurface::Normal,
+            true,
+        );
     }
 }

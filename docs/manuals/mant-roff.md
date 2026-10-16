@@ -1046,7 +1046,38 @@ Separate native tables remain separate IR blocks even when adjacent. A `T&` layo
 
 Rule cells retain their column positions but no printable body. Both layout rules and data rules suppress their payload; source recovery never resurrects that intentionally hidden text. Escaped literal underscores remain ordinary text.
 
-[mandoc tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html) rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right cell alignment, column spans, row spans, and parsed per-cell bold, italic, and code fonts supplied by libmandoc. Table `center`/`centre` becomes whole-table alignment, independently of a caption's `.ce` and header-cell `c`. The final declared logical column count includes unoccupied trailing columns and layout changes within `T&`; it does not fabricate empty cell owners. Width-aware readers center their chosen content-sized table region, and rules share its endpoints and responsive fallback. Their borders and gaps can differ from native output. ManT does not reproduce exact native column widths, vertical positioning, border decoration or device-specific rules.
+[mandoc tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html) rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right cell alignment, column spans, row spans, and parsed per-cell bold, italic, and code fonts supplied by libmandoc. Table `center`/`centre` becomes whole-table alignment, independently of a caption's `.ce` and header-cell `c`. The final declared logical column count includes unoccupied trailing columns and layout changes within `T&`; it does not fabricate empty cell owners. Width-aware readers center their chosen content-sized table region, and rules share its endpoints and responsive fallback.
+
+`box`/`frame`, `doublebox`/`doubleframe`, `allbox`, and the single/double
+vertical boundaries declared with `|` are retained as author edge preferences.
+CLI and TUI paint them around the final allocated columns, suppressing span
+interiors and duplicate coincident grid/rule boundaries. Their gaps and glyphs
+can differ from the native device. A spanning cell owns its complete region;
+covered columns are not separately printed or searched. Logical spans above
+65,535 retain their actual size and use bounded sparse presentation.
+
+An occupied native `w()` slot supplies a soft cell width preference in display
+columns. Readers may shrink columns and wrap ordinary cell prose at the actual
+viewport; a long unwrapped paragraph does not by itself force the complete
+table to stack. Existing sequential mdoc column preferences keep their distinct
+placement rules. When such declared-field placement is combined with borders,
+readers preserve the outside frame but may simplify interior grid lines; they
+do not reinterpret those sequential fields as independent parallel cells.
+Author text and hard rows remain authoritative. Frame/grid rails and
+whole-table alignment padding do not enter body search, copied labels or link
+hit ranges; ordinary structural-indent visual copying keeps its existing
+policy. Exact native
+column widths, numeric decimal alignment, equal-column sizing, vertical
+positioning and the width preference of a never-occupied column are not a
+pixel-equivalence contract.
+
+Native layout declarations share owned storage. Lowering allows at most
+65,536 derived row-edge copies per document; exceeding that allowance simplifies
+the affected table's local edges consistently and emits
+`manual.table-layout-reduced`. Outer/default grid facts, cell widths, original
+contents and logical topology remain intact. This warning does not claim body
+loss. Consumer viewport, padding and dense-column budgets independently select
+a source-order fallback that retains every prepared cell.
 
 Cell text passes through the same roff escape decoder as ordinary prose. CVS `mandoc` sends operands of high-level controls to `tbl`, while GNU `tbl` expands its inline man/mdoc language before formatting. ManT makes that divergence explicit: a source-backed `T{`/`T}` block containing only a bounded, self-contained inline macro sequence is parsed as one isolated inline fragment. It therefore preserves source meanings such as `.Fl Fl help` → `--help`, `.Ns` joins, `.Sm` spacing, mdoc enclosures, man font alternation, and typed `Mt`/`UR` links. The fragment never creates document structure, targets, includes, or semantic entries.
 

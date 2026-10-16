@@ -73,11 +73,14 @@ fn prefixes() -> Vec<(&'static str, Vec<Block>)> {
 
 fn wrap(block: Block, context: &str) -> Block {
     let table = |block| Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 blocks: vec![block],
                 kind: TableCellKind::Text,
                 break_after: false,

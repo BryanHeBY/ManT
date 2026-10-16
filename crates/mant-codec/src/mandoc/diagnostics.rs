@@ -67,6 +67,15 @@ impl LoweringContext<'_> {
 
     pub(super) fn take_diagnostics(&self) -> Vec<Diagnostic> {
         let mut diagnostics = self.diagnostics.take();
+        if self.table_layout_budget.borrow().exhausted() {
+            diagnostics.push(Diagnostic {
+                impact: mant_ir::DiagnosticImpact::None,
+                level: DiagnosticLevel::Warning,
+                code: Some("manual.table-layout-reduced".to_owned()),
+                message: "derived table edges reached their bounded allowance; additional row-local edges were omitted, retaining all cell contents, widths, spans and declared columns".to_owned(),
+                source: None,
+            });
+        }
         let table_budget = self.table_recovery_budget.borrow();
         if table_budget.exhaustion().is_some() || table_budget.refused_fragments() > 0 {
             diagnostics.push(Diagnostic {

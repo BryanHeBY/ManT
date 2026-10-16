@@ -92,6 +92,7 @@ pub(super) fn generic_linked_cell(
     alignment: mant_ir::TableAlignment,
 ) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         break_after: false,
         blocks: vec![Block::Paragraph {
             children: vec![Inline::Link {

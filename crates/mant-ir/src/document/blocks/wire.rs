@@ -1,7 +1,7 @@
 //! Closed wire decoding of block owners and their local row hints.
 use super::{
     Block, ColumnPreferences, DefinitionItem, EquationExpression, Inline, LayoutHint, ListItem,
-    ListKind, SourceSpan, TableAlignment, TableRow,
+    ListKind, SourceSpan, TableAlignment, TableBorders, TableRow,
 };
 use serde::Deserialize;
 
@@ -87,6 +87,8 @@ enum BlockWire {
         column_count: Option<u32>,
         #[serde(default)]
         alignment: Option<TableAlignment>,
+        #[serde(default)]
+        borders: TableBorders,
         /// Preferred column geometry, independent of source macro rules.
         #[serde(default, skip_serializing_if = "ColumnPreferences::is_empty")]
         column_preferences: ColumnPreferences,
@@ -175,6 +177,25 @@ impl<'de> Deserialize<'de> for Block {
             return Err(serde::de::Error::custom(
                 "table columnCount must be positive and contain every logical column",
             ));
+        }
+        if let Self::Table {
+            rows, column_count, ..
+        } = &block
+        {
+            if crate::checked_table_logical_columns(rows).is_none() {
+                return Err(serde::de::Error::custom(
+                    "table logical column range exceeds u32",
+                ));
+            }
+            let columns = column_count.map_or_else(
+                || crate::table_logical_column_count(rows),
+                |count| usize::try_from(count).unwrap_or(usize::MAX),
+            );
+            if rows.iter().any(|row| !row.column_borders_valid(columns)) {
+                return Err(serde::de::Error::custom(
+                    "table column borders must be ordered, unique and within the logical column range",
+                ));
+            }
         }
         Ok(block)
     }

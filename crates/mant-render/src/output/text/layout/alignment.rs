@@ -102,8 +102,7 @@ impl LayoutText {
             // written outside source decoration. No authored text is reparsed.
             if row.rendered.starts_with(prefix) {
                 let spaces = " ".repeat(padding);
-                row.rendered.insert_str(at, &spaces);
-                row.visible.insert_str(at, &spaces);
+                row.insert_plain(at, &spaces);
             }
         }
         Self::join(rows, "\n")

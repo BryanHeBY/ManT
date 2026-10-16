@@ -135,6 +135,7 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
             source: None,
         };
         let cell = |blocks| TableCell {
+            preferred_width_columns: None,
             break_after: false,
             blocks,
             kind: TableCellKind::Text,
@@ -146,9 +147,11 @@ fn stacked_cells_reuse_only_an_open_logical_tail() {
         let document = query.document.as_mut().unwrap();
         document.sections.clear();
         document.blocks = vec![Block::Table {
+            borders: mant_ir::TableBorders::default(),
             alignment: None,
             column_count: None,
             rows: vec![TableRow {
+                column_borders: vec![],
                 cells: vec![cell(first), cell(vec![second])],
                 kind: TableRowKind::Data,
             }],
@@ -233,6 +236,7 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
         }
     };
     let cell = |blocks| TableCell {
+        preferred_width_columns: None,
         break_after: false,
         blocks,
         kind: TableCellKind::Text,
@@ -244,9 +248,11 @@ fn nested_cell_query(definition: bool, literal: bool, gap: u16) -> ResolvedConte
     let document = query.document.as_mut().unwrap();
     document.sections.clear();
     document.blocks = vec![Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             cells: vec![
                 cell(vec![
                     first,

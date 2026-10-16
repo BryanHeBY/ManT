@@ -122,12 +122,15 @@ fn transparent_table_and_list_paths_keep_nested_semantic_coordinates() {
     let mut transparent = item("unused");
     transparent.entry = None;
     transparent.blocks = vec![Block::Table {
+        borders: crate::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences: crate::ColumnPreferences::default(),
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: crate::TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 break_after: false,
                 kind: crate::TableCellKind::Text,
                 blocks: vec![definitions(vec![

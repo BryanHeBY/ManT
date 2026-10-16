@@ -623,6 +623,7 @@ fn lower_mdoc_column_list(
                         ),
                     );
                     AstTableCell {
+                        preferred_width_columns: None,
                         kind: mant_ir::TableCellKind::Text,
                         blocks,
                         column_span: 1,
@@ -634,6 +635,7 @@ fn lower_mdoc_column_list(
                 .collect::<Vec<_>>();
             attach_column_item_targets(&mut cells, &item, cell_indent);
             TableRow {
+                column_borders: vec![],
                 kind: mant_ir::TableRowKind::Data,
                 cells,
             }
@@ -642,6 +644,7 @@ fn lower_mdoc_column_list(
         .collect();
     formatter.execution.exit_column_output_scope();
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         column_preferences,
@@ -664,6 +667,7 @@ fn attach_column_item_targets(
     attach_item_targets(&mut blocks, item, layout(indent.content_origin()));
     if !blocks.is_empty() {
         cells.push(AstTableCell {
+            preferred_width_columns: None,
             break_after: false,
             kind: mant_ir::TableCellKind::Text,
             blocks,
@@ -736,8 +740,10 @@ fn append_list_targets(
         Block::Table { rows, .. } => {
             if rows.is_empty() {
                 rows.push(TableRow {
+                    column_borders: vec![],
                     kind: mant_ir::TableRowKind::Data,
                     cells: vec![AstTableCell {
+                        preferred_width_columns: None,
                         break_after: false,
                         kind: mant_ir::TableCellKind::Text,
                         blocks: Vec::new(),

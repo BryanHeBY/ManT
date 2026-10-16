@@ -11,13 +11,14 @@ mod windows_root;
 use crate::{InputFormat, Node};
 #[cfg(test)]
 use raw::{
-    CEquationBoxView, CNodeView, CTableCellView, CTableRuleCellView,
+    CEquationBoxView, CNodeView, CTableCellView, CTableLayoutCellView, CTableRuleCellView,
     mant_mandoc_eqn_box_view_align, mant_mandoc_eqn_box_view_offsets,
     mant_mandoc_eqn_box_view_size, mant_mandoc_node_view_align, mant_mandoc_node_view_offsets,
     mant_mandoc_node_view_size, mant_mandoc_table_cell_view_align,
     mant_mandoc_table_cell_view_offsets, mant_mandoc_table_cell_view_size,
-    mant_mandoc_table_rule_cell_view_align, mant_mandoc_table_rule_cell_view_offsets,
-    mant_mandoc_table_rule_cell_view_size,
+    mant_mandoc_table_layout_cell_view_align, mant_mandoc_table_layout_cell_view_offsets,
+    mant_mandoc_table_layout_cell_view_size, mant_mandoc_table_rule_cell_view_align,
+    mant_mandoc_table_rule_cell_view_offsets, mant_mandoc_table_rule_cell_view_size,
 };
 #[cfg(windows)]
 use raw::{CResolvedSource, CSourceResolver};
@@ -49,13 +50,15 @@ mod tests {
     use flate2::read::MultiGzDecoder;
 
     use super::{
-        CEquationBoxView, CNodeView, CTableCellView, CTableRuleCellView, InputFormat, Node,
-        mant_mandoc_eqn_box_view_align, mant_mandoc_eqn_box_view_offsets,
+        CEquationBoxView, CNodeView, CTableCellView, CTableLayoutCellView, CTableRuleCellView,
+        InputFormat, Node, mant_mandoc_eqn_box_view_align, mant_mandoc_eqn_box_view_offsets,
         mant_mandoc_eqn_box_view_size, mant_mandoc_node_view_align, mant_mandoc_node_view_offsets,
         mant_mandoc_node_view_size, mant_mandoc_table_cell_view_align,
         mant_mandoc_table_cell_view_offsets, mant_mandoc_table_cell_view_size,
-        mant_mandoc_table_rule_cell_view_align, mant_mandoc_table_rule_cell_view_offsets,
-        mant_mandoc_table_rule_cell_view_size, parse_buffer,
+        mant_mandoc_table_layout_cell_view_align, mant_mandoc_table_layout_cell_view_offsets,
+        mant_mandoc_table_layout_cell_view_size, mant_mandoc_table_rule_cell_view_align,
+        mant_mandoc_table_rule_cell_view_offsets, mant_mandoc_table_rule_cell_view_size,
+        parse_buffer,
     };
 
     macro_rules! check_view {
@@ -99,6 +102,10 @@ mod tests {
                 table_row_kind,
                 table_alignment,
                 table_column_count,
+                table_frame,
+                table_allbox,
+                table_left_border,
+                table_layout_cells,
                 flags,
                 list_kind,
                 definition_list_style,
@@ -130,6 +137,7 @@ mod tests {
             mant_mandoc_table_cell_view_align,
             mant_mandoc_table_cell_view_offsets,
             [
+                column,
                 text,
                 kind,
                 text_block,
@@ -141,6 +149,18 @@ mod tests {
                 font,
                 next,
             ]
+        );
+    }
+
+    #[test]
+    fn borrowed_table_layout_view_matches_the_native_abi() {
+        check_view!(
+            "table layout cell",
+            CTableLayoutCellView,
+            mant_mandoc_table_layout_cell_view_size,
+            mant_mandoc_table_layout_cell_view_align,
+            mant_mandoc_table_layout_cell_view_offsets,
+            [column, minimum_width, right_border, next]
         );
     }
 

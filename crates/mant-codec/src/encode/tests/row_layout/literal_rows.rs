@@ -85,11 +85,14 @@ fn table_fence_and_literal_fence_share_the_first_visual_origin_contract() {
         source: None,
     };
     let table = Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 blocks: vec![block],
                 break_after: false,
                 kind: mant_ir::TableCellKind::Text,
@@ -123,11 +126,14 @@ fn ordinary_heading_omits_hints_while_fenced_table_projection_retains_them() {
         "A  \nB\n==="
     );
     let table = Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 break_after: false,
                 kind: mant_ir::TableCellKind::Text,
                 blocks: vec![Block::Paragraph {
@@ -196,11 +202,14 @@ fn fenced_payload_distinguishes_generated_spaces_author_nbsp_and_open_tails() {
 fn flattened_fenced_table_preserves_author_row_edges_and_explicit_hint_spaces() {
     let value = " A  \n B ";
     let table = Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: vec![],
             kind: mant_ir::TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 break_after: false,
                 kind: mant_ir::TableCellKind::Text,
                 column_span: 1,

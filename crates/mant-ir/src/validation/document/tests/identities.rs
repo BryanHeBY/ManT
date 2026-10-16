@@ -113,12 +113,15 @@ fn reports_invalid_ids_role_collisions_ranges_tables_and_uris() {
     let blocks = vec![
         invalid_uri_paragraph(),
         Block::Table {
+            borders: crate::TableBorders::default(),
             alignment: None,
             column_count: None,
             column_preferences: crate::ColumnPreferences::default(),
             rows: vec![TableRow {
+                column_borders: vec![],
                 kind: crate::TableRowKind::Data,
                 cells: vec![TableCell {
+                    preferred_width_columns: None,
                     break_after: false,
                     kind: crate::TableCellKind::Text,
                     blocks: Vec::new(),

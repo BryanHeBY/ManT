@@ -22,6 +22,7 @@ pub(super) struct LoweringContext<'a> {
     /// Optional T{} enhancement work is cumulative across this document,
     /// independent of speculative formatter/diagnostic transactions.
     pub(super) table_recovery_budget: RefCell<super::table_recovery_budget::TableRecoveryBudget>,
+    pub(super) table_layout_budget: RefCell<super::table_layout_budget::TableLayoutBudget>,
     pub(super) section_ids: HashMap<String, usize>,
     pub(super) assigned_section_ids: HashSet<String>,
     pub(super) authored_section_targets: HashMap<String, Option<String>>,
@@ -118,6 +119,7 @@ impl<'a> LoweringContext<'a> {
             source_lines: source.map(SourceLineIndex::new),
             native_table_requests: RefCell::new(HashMap::new()),
             table_recovery_budget: RefCell::default(),
+            table_layout_budget: RefCell::default(),
             section_ids: HashMap::new(),
             assigned_section_ids: HashSet::new(),
             authored_section_targets: HashMap::new(),

@@ -90,12 +90,15 @@ pub(super) fn empty_table(shape: EmptyTable, break_after: bool) -> Block {
     let rows = match shape {
         EmptyTable::NoRows => vec![],
         EmptyTable::NoCells => vec![TableRow {
+            column_borders: vec![],
             kind: TableRowKind::Data,
             cells: vec![],
         }],
         EmptyTable::EmptyBlocks | EmptyTable::EmptyLiteral => vec![TableRow {
+            column_borders: vec![],
             kind: TableRowKind::Data,
             cells: vec![TableCell {
+                preferred_width_columns: None,
                 kind: TableCellKind::Text,
                 blocks: if matches!(shape, EmptyTable::EmptyLiteral) {
                     vec![Block::Preformatted {
@@ -116,6 +119,7 @@ pub(super) fn empty_table(shape: EmptyTable, break_after: bool) -> Block {
         }],
     };
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows,

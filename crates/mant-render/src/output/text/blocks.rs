@@ -281,6 +281,7 @@ impl BlockRenderer<'_> {
                 column_preferences,
                 alignment,
                 column_count,
+                borders,
                 layout,
                 ..
             } => {
@@ -290,6 +291,7 @@ impl BlockRenderer<'_> {
                     column_preferences,
                     *alignment,
                     *column_count,
+                    borders,
                     origin,
                 );
             }

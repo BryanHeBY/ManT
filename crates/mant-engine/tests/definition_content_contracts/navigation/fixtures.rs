@@ -150,6 +150,7 @@ fn prose(value: &str, line: u32) -> Block {
 
 fn table_cell(value: &str) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         kind: TableCellKind::Text,
         blocks: vec![prose(value, 20)],
         break_after: false,
@@ -195,9 +196,11 @@ impl Body {
                 source: Some(source(20)),
             },
             Self::Table => Block::Table {
+                borders: mant_ir::TableBorders::default(),
                 alignment: None,
                 column_count: None,
                 rows: vec![TableRow {
+                    column_borders: vec![],
                     kind: TableRowKind::Data,
                     cells: vec![table_cell(BODY), table_cell("CellEnd")],
                 }],

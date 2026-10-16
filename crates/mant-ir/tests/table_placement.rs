@@ -6,8 +6,10 @@ use mant_ir::{
 
 fn cells() -> Vec<TableRow> {
     vec![TableRow {
+        column_borders: vec![],
         kind: TableRowKind::Data,
         cells: vec![TableCell {
+            preferred_width_columns: None,
             blocks: vec![],
             kind: mant_ir::TableCellKind::Text,
             break_after: false,
@@ -59,6 +61,7 @@ fn enormous_declared_counts_use_sparse_storage_and_rule_only_tables_keep_extent(
     };
     assert_eq!(cells.len(), 1);
     let rules = [TableRow {
+        column_borders: vec![],
         kind: TableRowKind::HorizontalRule,
         cells: vec![],
     }];
@@ -78,6 +81,7 @@ fn declared_range_must_cover_spans_and_layout_only_rules() {
     for rows in [
         cells(),
         vec![TableRow {
+            column_borders: vec![],
             kind: TableRowKind::LayoutRule {
                 cells: vec![TableRuleCellKind::Horizontal; 2],
             },
@@ -102,6 +106,7 @@ fn declared_range_must_cover_spans_and_layout_only_rules() {
                 diagnostics: vec![],
                 sections: vec![],
                 blocks: vec![Block::Table {
+                    borders: mant_ir::TableBorders::default(),
                     rows: rows.clone(),
                     column_count: count,
                     alignment: None,

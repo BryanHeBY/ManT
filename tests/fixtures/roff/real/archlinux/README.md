@@ -35,6 +35,15 @@ preformatted blocks, inline fonts, navigation, and source-markup regressions.
 The neighbouring Fedora corpus supplies independently packaged generator
 output.
 
+Four table fixtures were added on 2026-10-16 from the locally cached, signed
+Arch `man-pages` 6.19-1 package. The original gzip members are unchanged. The
+`awk(1p)` member is byte-identical to the installed page that exposed the boxed
+precedence and escape-sequence table regressions; it is not an approximation
+or a generated HTML snapshot. `termios.h(0p)` adds horizontal spans and equal
+columns, `sort(1p)` adds numeric alignment, and `scanf(3)` adds an allbox table
+with an expandable multiline cell. Table layout tests also reuse the existing
+CMake, rclone and groff fixtures instead of copying those pages again.
+
 | Fixture | Upstream and Arch package | Package member | Storage | Fixture license | Fixture SHA-256 |
 | --- | --- | --- | --- | --- | --- |
 | `ls.1.gz` | [GNU coreutils], [Arch `coreutils` 9.11-2] | `usr/share/man/man1/ls.1.gz` | Original member | [GPL-3.0-or-later] | `091e614c945887862980212abe697c63b946fbb4d189c741ad47c5dd71bd4ea0` |
@@ -45,23 +54,32 @@ output.
 | `gawk.1.zst` | [GNU gawk], [Arch `gawk` 5.2.0-1] | `usr/share/man/man1/gawk.1.gz` | Lossless zstd recompression | [gawk manual-page permission] | `942ba8de74fb6ef25f683a935edb54424ef61404fc9ddc5b47ebf822c23e2a50` |
 | `rsync.1.zst` | [Rsync], [Arch `rsync` 3.4.3-1] | `usr/share/man/man1/rsync.1.gz` | Lossless zstd recompression | [GPL-3.0-or-later] | `cb2becd7d2448b4f27fc28e36ea377d2667e9f814b9295b0b5ce45c06d0495a2` |
 | `sh.1p.gz` | [POSIX sh], [Arch `man-pages` 6.18-1] | `usr/share/man/man1p/sh.1p.gz` | Original member | [POSIX manual notice] | `464243a5da22f585063698896dc115ab81ef10950a3d75e3f00d3d3874b3785e` |
+| `awk.1p.gz` | POSIX awk, [Arch `man-pages` 6.19-1] | `usr/share/man/man1p/awk.1p.gz` | Original member | [POSIX manual notice] | `abbbe9c67ae12f6b6c7e988c4897a2d1ec6c07d4353e6c671b42a702fe8b96d0` |
+| `termios.h.0p.gz` | POSIX termios, [Arch `man-pages` 6.19-1] | `usr/share/man/man0p/termios.h.0p.gz` | Original member | [POSIX manual notice] | `1aec1c4f951f5413fd633f0a1892a14a9e12fd4bcf29e7bff356f837710e54c2` |
+| `sort.1p.gz` | POSIX sort, [Arch `man-pages` 6.19-1] | `usr/share/man/man1p/sort.1p.gz` | Original member | [POSIX manual notice] | `9fbcc59769a820a52e87cd135b6e732d09770eab92f5fe796400379ab9758bbd` |
+| `scanf.3.gz` | Linux man-pages, [Arch `man-pages` 6.19-1] | `usr/share/man/man3/scanf.3.gz` | Original member | [Linux man-pages copyleft] | `f87f98945ab8a44b3135ddcaf0b8724b4ca92d43b493b28d41375bb0b0bbe5aa` |
 | `archive_entry_stat.3` | [libarchive], [Arch `libarchive` 3.8.9-1] | `usr/share/man/man3/archive_entry_stat.3.gz` | Exact decompressed source | [BSD-2-Clause] | `06311cf3566f167804ef732defd0e5d1375dd68ceb001713be666de69e58581b` |
 | `bsdunzip.1` | [libarchive], [Arch `libarchive` 3.8.9-1] | `usr/share/man/man1/bsdunzip.1.gz` | Exact decompressed source | [libarchive BSD-2-Clause] | `a271c9471543684df90d1a3f0d988628588ed8ec4f49bb2f7e402fc752ff4a83` |
 | `expand_number.3bsd` | [libbsd], [Arch `libbsd` 0.12.2-2] | `usr/share/man/man3/expand_number.3bsd.gz` | Exact decompressed source | [BSD-2-Clause] | `4e0d2bd2af63de49f6c55ce96ae07b52a6c2214d837f4c33eec47699ca19de03` |
 | `zip_source_function.3` | [libzip], [Arch `libzip` 1.11.4-1] | `usr/share/man/man3/zip_source_function.3.gz` | Exact decompressed source | [BSD-3-Clause] | `73a409d297a001c885fc00092a92105f30fe4e6ecca0b57d06c6fecc40b5b898` |
 | `libpipeline.3.gz` | [libpipeline], [Arch `libpipeline` 1.5.8-1] | `usr/share/man/man3/libpipeline.3.gz` | Original member | [GPL-3.0-or-later] | `20d992e497e6f86a3abfc218aa349620a05e7b58250db0beefafedc07c7aed7e` |
 
-The two recompressed fixtures preserve these exact decompressed roff hashes:
+The compressed fixtures preserve these exact decompressed roff hashes:
 
 - `gawk.1`: `d28fc0d5bfdc08f85faaa6267b14223520967f9fdf0730550f12fee880b2ca31`
 - `rsync.1`: `12417d699e494cd5154195df53762f0043e2ffe3997634c4e5f4afc209f87d45`
 - `sh.1p`: `8caa52a52fcb46e6e4e38105408dac290b66865cf712f6897d81bfa438f16b2d`
+- `awk.1p`: `a725342f71304157498e8bc276d67e5847113b100f299e692737634e939b0c2a`
+- `termios.h.0p`: `6425de9af7722216e2a05bf8eb86668b8e181ea987c2e027e383d679678d9d13`
+- `sort.1p`: `32493b693fb79c6637150b465eb262dad4e09e827810b897641d7c2bc7007e5c`
+- `scanf.3`: `07cbc46be4fd3150bcc3322d3cf1d1db217935e7406b44237880c5f54176a09d`
 
 The corresponding immutable package archives have these SHA-256 values:
 
 - `gawk-5.2.0-1-x86_64.pkg.tar.zst`: `dd6a14cb65eec0754eb0d77a373bc685cff2776133007251e35593a3de8045f6`
 - `rsync-3.4.3-1-x86_64.pkg.tar.zst`: `f2ad0dcc4d7022cb7f04c4da716be067b93a95fc246f2c0259cb2dbb880684e5`
 - `man-pages-6.18-1-any.pkg.tar.zst`: `f03bbc27c6c14aed6c009a4780e618cf57c0eb9cdca390a3c4eacc600d197ba3`
+- `man-pages-6.19-1-any.pkg.tar.zst`: `1f97d7fb1acc29455b969dfc113a99f55cb4cb5076b6ce795f2369e97c42eb2d`
 - `libarchive-3.8.9-1-x86_64.pkg.tar.zst`: `07b7aaec008cc4892cb2da0c599a16438d2e70869a01b90c4e20bf153f58c3b3`
 - `libbsd-0.12.2-2-x86_64.pkg.tar.zst`: `e26194849786b0202828a348be3f4b90d410604cd7d48f113a4301584a49895a`
 - `libzip-1.11.4-1-x86_64.pkg.tar.zst`: `e6bc733cdc738d317d94f1906eb86229be174aa8362ad7dbb03ae68d9eb3dbf6`
@@ -78,6 +96,9 @@ transcribed in [`GAWK-MANPAGE.txt`](../LICENSES/GAWK-MANPAGE.txt).
 The POSIX shell page is redistributed under the IEEE and The Open Group
 permission shipped by Arch's man-pages package; its required notice is copied
 verbatim to [`POSIX-COPYRIGHT.txt`](../LICENSES/POSIX-COPYRIGHT.txt).
+The 6.19-1 package carries the identical POSIX notice. Its `scanf(3)` page
+retains its source copyright and SPDX notice; the complete corresponding
+package text is retained as [Linux man-pages copyleft].
 The libarchive `archive_entry_stat` and libbsd pages retain their complete
 BSD-2-Clause notices at the start of each fixture. The SPDX-identified
 `bsdunzip` page's complete page-specific terms are reproduced in
@@ -156,6 +177,8 @@ representative topics, grouped by source package.
 [Arch `clang` 22.1.8-1]: https://archive.archlinux.org/packages/c/clang/clang-22.1.8-1-x86_64.pkg.tar.zst
 [Arch `tar` 1.35-2]: https://archive.archlinux.org/packages/t/tar/tar-1.35-2-x86_64.pkg.tar.zst
 [Arch `gawk` 5.2.0-1]: https://archive.archlinux.org/packages/g/gawk/gawk-5.2.0-1-x86_64.pkg.tar.zst
+[Arch `man-pages` 6.19-1]: https://archive.archlinux.org/packages/m/man-pages/man-pages-6.19-1-any.pkg.tar.zst
+[Linux man-pages copyleft]: ../LICENSES/LINUX-MAN-PAGES-COPYLEFT.txt
 [Arch `rsync` 3.4.3-1]: https://archive.archlinux.org/packages/r/rsync/rsync-3.4.3-1-x86_64.pkg.tar.zst
 [Arch `man-pages` 6.18-1]: https://archive.archlinux.org/packages/m/man-pages/man-pages-6.18-1-any.pkg.tar.zst
 [Arch `libarchive` 3.8.9-1]: https://archive.archlinux.org/packages/l/libarchive/libarchive-3.8.9-1-x86_64.pkg.tar.zst

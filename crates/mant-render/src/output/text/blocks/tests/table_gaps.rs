@@ -5,6 +5,7 @@ use mant_ir::{ColumnPreferences, TableCell, TableRow};
 
 fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
     TableCell {
+        preferred_width_columns: None,
         blocks,
         break_after,
         kind: mant_ir::TableCellKind::Text,
@@ -16,9 +17,11 @@ fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
 
 fn table(cells: Vec<TableCell>, origin: i32, gap: u16) -> Block {
     Block::Table {
+        borders: mant_ir::TableBorders::default(),
         alignment: None,
         column_count: None,
         rows: vec![TableRow {
+            column_borders: Vec::new(),
             kind: mant_ir::TableRowKind::Data,
             cells,
         }],

@@ -293,6 +293,43 @@ kinds use the same chosen region and fallback as the data. Document thematic
 breaks still occupy their normal parent width. Markdown retains its portable
 structured/fenced projection rather than encoding terminal alignment.
 
+`Table.borders` retains author-specified frame/grid strokes. Its optional
+`outer`, `innerRows` and `innerColumns` values are `single` or `double`; the
+empty default object is omitted. Each row's optional `columnBorders` array
+contains `{column, style}` objects, strictly ordered and unique. The boundary
+range is `0..=columnCount`, using the inferred logical count when absent;
+zero and the final count identify the outside edges. Coincident global/local
+edges use the stronger stroke. Span interiors suppress grid edges. Authored
+rule rows/cells retain their separate structural meaning and must not acquire
+duplicate grid separators. Border colors, glyphs and occupied display cells
+belong to consumers, rather than protocol data. These v0.13 fields do not
+change the frozen v0.12 family.
+
+`TableCell.preferredWidthColumns` is an optional positive soft content-width
+preference, at most 65535. It does not replace the cell blocks, constrain body
+scalars or select `ColumnPreferences` declared-field placement. Readers may
+shrink the preference and visually wrap the complete cell at the real viewport.
+`geometry::allocate_table_columns` performs bounded responsive allocation:
+minimum eight cells per long column, shorter natural columns unchanged, at
+most 256 dense columns and 4096 cells of aggregate inter-column spacing.
+Readers first retain an unbreakable word's intrinsic width when there is room;
+a soft preference does not force a fitting word to split. A narrower actual
+viewport can still wrap it.
+Outside borders are excluded from the passed available content area. Center
+or right alignment applies to the resulting frame, not its unwrapped width.
+`rowSpan` counts data rows, including explicit empty continuation cells;
+standalone rule rows and navigation-only carriers do not consume the span.
+The owner remains top-aligned
+with one content tree, and covered rows suppress intersecting grid segments.
+`columnSpan` and `rowSpan` are positive u32 values in unreleased v0.13; the
+published v0.12 u16 family stays frozen. Aggregate logical columns must fit
+u32 even when `columnCount` is absent. Decoding and validation reject overflow
+rather than silently saturating subsequent cell positions, including on
+32-bit hosts. Large spans use sparse storage proportional to actual owners.
+Global border preferences do not manufacture data rows for empty tables or
+navigation-only carriers. A row's explicit `columnBorders`, an authored empty
+data row, or an existing rule row remains a physical contribution.
+
 `Table.column_preferences: ColumnPreferences` carries optional reading preferences,
 serialized as `columnPreferences`. Its closed object has `widths`, an ordered
 array of preferred content widths excluding the gap; `gapColumns`, the preferred

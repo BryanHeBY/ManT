@@ -17,7 +17,7 @@ pub(super) fn stack_table_cells(
         if cell.empty_boundary {
             pending_anchors.extend(cell.anchors.keys().cloned());
             if rows.is_empty() || completed_tail {
-                rows.extend(wrap_table_cell(cell, width, indent, &mut next_group, false));
+                rows.extend(wrap_stacked_cell(cell, width, indent, &mut next_group));
             }
             if let Some(last) = rows.last_mut() {
                 last.anchors.append(&mut pending_anchors);
@@ -40,7 +40,7 @@ pub(super) fn stack_table_cells(
             // never by trimming author-written whitespace from a rendered row.
             pending_anchors.extend(last.anchors);
         }
-        let mut rendered = wrap_table_cell(cell, width, indent, &mut next_group, false);
+        let mut rendered = wrap_stacked_cell(cell, width, indent, &mut next_group);
         if let Some(first) = rendered.first_mut() {
             first.anchors.append(&mut pending_anchors);
         }
@@ -73,6 +73,28 @@ pub(super) fn stack_table_cells(
     rows
 }
 
+/// The table has already resolved its structural origin and reserved frame
+/// rails. Wrap body coordinates locally so generic readability cannot compress
+/// that generated prefix a second time, then move glyphs and every map once.
+fn wrap_stacked_cell(
+    cell: &LogicalTableCell,
+    width: usize,
+    indent: usize,
+    next_group: &mut usize,
+) -> Vec<WrappedLine> {
+    let mut rows = wrap_table_cell(
+        cell,
+        width.saturating_sub(indent).max(1),
+        0,
+        next_group,
+        false,
+    );
+    for row in &mut rows {
+        super::place_row(row, indent, super::PrefixOwnership::Structural);
+    }
+    rows
+}
+
 /// Preserve child-local coordinates until the actual cell width is known.
 /// The resulting anchors travel with visual rows through columns, stacking
 /// and nested tables, just like links and search coordinates.
@@ -97,7 +119,13 @@ pub(super) fn wrap_table_cell(
         })
         .collect::<Vec<_>>();
     for (line, mut wrapped) in lines.iter().zip(wrap_lines_with_links(&lines, width)) {
-        logical_rows.push(rendered.len());
+        logical_rows.push(
+            rendered.len()
+                + wrapped
+                    .iter()
+                    .position(|row| !row.copy_map.skip_row)
+                    .unwrap_or(0),
+        );
         if line.surface == super::super::super::LineSurface::Code && line.table_row.is_none() {
             // cells_to_line() appends exactly one renderer-owned
             // surface-fill span after every Code row. That viewport paint is

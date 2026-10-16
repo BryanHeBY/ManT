@@ -6,6 +6,9 @@
 //! session has been released. It deliberately describes source semantics
 //! rather than imposing a presentation model on downstream renderers.
 
+mod table_layout;
+pub use table_layout::{TableBorderStyle, TableLayout, TableLayoutCell};
+
 /// High-level macro package detected by libmandoc.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -278,6 +281,8 @@ pub enum TableRuleCellKind {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableCell {
+    /// Zero-based native logical column, before horizontal span expansion.
+    pub column: u32,
     /// Native content kind; rule cells suppress even a nonempty text payload.
     pub kind: TableCellKind,
     /// Native tbl layout font, when this cell has a layout slot.
@@ -305,9 +310,9 @@ pub struct TableCell {
     /// this purpose. Neither spelling produces printable cell content.
     pub vertical_continuation: bool,
     /// Number of logical columns occupied by the cell.
-    pub column_span: u16,
+    pub column_span: u32,
     /// Number of logical rows occupied by the cell.
-    pub row_span: u16,
+    pub row_span: u32,
     /// Horizontal alignment requested by tbl(7).
     pub alignment: TableAlignment,
 }
@@ -424,6 +429,12 @@ pub struct Node {
     /// Final declared logical column count, shared by all rows of this table.
     /// Includes unoccupied trailing columns and later `T&` layout declarations.
     pub table_column_count: Option<u32>,
+    /// Whole-table frame requested by box/frame or doublebox/doubleframe.
+    pub table_frame: Option<TableBorderStyle>,
+    /// Default edges between adjacent cells and rows, requested by allbox.
+    pub table_grid: Option<TableBorderStyle>,
+    /// Shared finalized layout row, including widths and vertical edges.
+    pub table_layout: Option<std::sync::Arc<TableLayout>>,
     /// Source and renderer flags attached to the node.
     pub flags: NodeFlags,
     /// Normalized list behavior for an mdoc list block.
