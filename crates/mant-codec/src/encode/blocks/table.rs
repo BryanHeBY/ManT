@@ -2,10 +2,12 @@
 use super::nonempty;
 use crate::encode::{
     MarkdownOptions,
-    inline::{fenced_code, preformatted_anchor_markers},
+    inline::{fenced_code, html_anchor},
     mapped::{BlockSyntax, MappedText},
 };
-use mant_ir::{Block, TableRow};
+use mant_ir::visit::Visit;
+use mant_ir::{Inline, TableRow};
+use std::collections::HashSet;
 
 pub(super) fn render_table(
     rows: &[TableRow],
@@ -15,15 +17,7 @@ pub(super) fn render_table(
     // Empty data rows and native rules are authored structure, not fence
     // delimiters. Keep them in the same source-order portable row plan.
     let markers = if options.preserve_anchors {
-        rows.iter()
-            .filter(|row| mant_ir::table_row_is_navigation_only(row))
-            .flat_map(|row| &row.cells)
-            .flat_map(|cell| &cell.blocks)
-            .filter_map(|block| match block {
-                Block::Paragraph { children, .. } => Some(preformatted_anchor_markers(children)),
-                _ => None,
-            })
-            .collect::<String>()
+        table_markers(rows)
     } else {
         String::new()
     };
@@ -56,4 +50,43 @@ pub(super) fn render_table(
         })
         .tail_grammar(BlockSyntax::Fence, false)
     })
+}
+
+/// Destinations are transparent regardless of a sibling glyph or container.
+/// Keep them outside the fence; mapped insertion rebases the original owners.
+fn table_markers(rows: &[TableRow]) -> String {
+    #[derive(Default)]
+    struct Markers<'a> {
+        seen: HashSet<&'a str>,
+        output: Vec<String>,
+    }
+    impl<'a> Visit<'a> for Markers<'a> {
+        fn visit_inline(&mut self, inline: &'a Inline) {
+            if let Inline::Anchor {
+                id,
+                fragment_aliases,
+                ..
+            } = inline
+            {
+                for target in std::iter::once(id.as_str())
+                    .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
+                {
+                    if self.seen.insert(target) {
+                        self.output.push(html_anchor(target));
+                    }
+                }
+            } else {
+                mant_ir::visit::walk_inline(self, inline);
+            }
+        }
+    }
+    let mut markers = Markers::default();
+    for row in rows {
+        for cell in &row.cells {
+            for block in &cell.blocks {
+                markers.visit_block(block);
+            }
+        }
+    }
+    markers.output.join("\n")
 }

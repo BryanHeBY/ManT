@@ -28,6 +28,8 @@ struct Projection {
     mapped: MappedText,
     tail: Tail,
     physical: bool,
+    /// The last accepted block owns literal physical rows, not a flattened word.
+    literal_tail: bool,
     /// An empty open row has an origin, but no padding until content arrives.
     open_row_indent: i32,
     leading_gap: GapPlan,
@@ -96,6 +98,7 @@ impl Projection {
         }
         self.mapped.append(std::mem::take(&mut value.mapped));
         self.physical = true;
+        self.literal_tail = value.literal_tail;
         if !retains_open_row {
             self.tail = value.tail;
             self.open_row_indent = value.open_row_indent;

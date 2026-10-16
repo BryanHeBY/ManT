@@ -19,6 +19,9 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
+- Preserve cell-local authored literal rows, unsupported-text spaces and
+  addressable anchors in portable table Markdown. Keep anchors outside the
+  fence without duplicating original owners or shifting their artifact ranges.
 - Preserve whole-table placement and the declared logical column range with
   optional `Table.alignment` and `columnCount`. Native tbl `center`/`centre`
   now reaches CLI and TUI independently of captions and cell alignment;

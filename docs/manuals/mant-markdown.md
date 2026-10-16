@@ -508,6 +508,13 @@ the cell topology. Navigation-only carrier rows remain outside the fence without
 adding body rows. Existing open tails and completed empty rows keep their
 separate behavior. Imported Markdown tables default this fact to false.
 
+Cell-local literal blocks retain authored empty rows and trailing hard rows
+instead of joining them with prose separators. Unsupported text keeps author
+spaces. Addressable export retains anchors from visible and navigation-only
+cells once, outside the fence, while owner ranges continue to address the
+original content. Fenced table geometry and active links remain a portable
+simplification, not a lossless serialization of the table structure.
+
 A native definition whose label has completed its row uses a CommonMark hard
 break before a description exported as phrasing, including unsupported text
 and non-display equations. Resolved positive leading space keeps a

@@ -22,19 +22,27 @@ fn plain_blocks_in_row(
     for (index, block) in blocks.iter().enumerate() {
         output.gap(mant_ir::geometry::block_gap(block));
         if !matches!(block, Block::VerticalSpace { .. }) {
-            output.append(
-                plain_block(
-                    block,
-                    if index + 1 == blocks.len() {
-                        tail
-                    } else {
-                        ParagraphTail::BlockBoundary
-                    },
-                    track,
-                    shared_first == Some(index),
-                ),
-                separator,
+            let value = plain_block(
+                block,
+                if index + 1 == blocks.len() {
+                    tail
+                } else {
+                    ParagraphTail::BlockBoundary
+                },
+                track,
+                shared_first == Some(index),
             );
+            // Block composition cannot reuse an authored literal row as a
+            // semicolon-separated word. A different table cell still uses
+            // the independent open-tail receipt in Projection::append.
+            let seam =
+                if output.physical && value.physical && (output.literal_tail || value.literal_tail)
+                {
+                    "\n"
+                } else {
+                    separator
+                };
+            output.append(value, seam);
         }
     }
     output
@@ -100,6 +108,7 @@ fn inline_projection(
         }
     }
     Projection {
+        literal_tail: paragraph.is_none() && physical,
         open_row_indent,
         ..Projection::text(mapped.into(), tail, physical)
     }
@@ -178,7 +187,12 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool, shared_first: bo
         ),
         Block::Table { rows, .. } => join(project_rows(rows, track), "; "),
         Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
-            let text = value.trim().to_owned();
+            let text = if matches!(block, Block::Unsupported { .. }) {
+                value.trim_matches('\n')
+            } else {
+                value.trim()
+            }
+            .to_owned();
             let physical = !text.is_empty();
             Projection::text(text.into(), Tail::Shared, physical)
         }
