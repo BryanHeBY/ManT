@@ -167,6 +167,8 @@ fn fd_post_uses_the_same_empty_and_pending_word_rules_in_each_sink() {
             let source = format!(
                 "{HEADER}.No BEFORE\n{start}.Fd {operand}\n.No AFTER\n{end}.No TAIL\n.Sh NEXT\n.No END\n"
             );
+            let expected: Vec<String> = expected.iter().map(|row| (*row).to_owned()).collect();
+            let expected = crate::oracle_migrations::literal_reading::rows(&source, &expected);
             let actual = description_rows(&source);
             if actual != expected {
                 failures.push(format!(

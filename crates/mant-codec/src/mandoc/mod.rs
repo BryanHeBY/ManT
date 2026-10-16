@@ -10,6 +10,7 @@ mod escape_coverage;
 mod formatter;
 pub(crate) mod inline;
 mod layout;
+mod literal_reading;
 mod navigation;
 mod owner_layout;
 mod redirect;
@@ -62,6 +63,29 @@ pub fn parse_plain_manual_report(
     path: &Path,
     source: &[u8],
 ) -> Result<(Document, ParseReport), ParseError> {
+    parse_with_reading_policy(path, source, InitialCodeRow::OmitSingle)
+}
+
+#[derive(Clone, Copy)]
+enum InitialCodeRow {
+    OmitSingle,
+    #[cfg(test)]
+    RetainExecuted,
+}
+
+// Native execution fixtures retain their independent pre-reading oracle.
+// Public codec entry points always select the documented reading projection.
+#[cfg(test)]
+pub(crate) fn parse_native_manual(path: &Path, source: &[u8]) -> Result<Document, ParseError> {
+    parse_with_reading_policy(path, source, InitialCodeRow::RetainExecuted)
+        .map(|(document, _)| document)
+}
+
+fn parse_with_reading_policy(
+    path: &Path,
+    source: &[u8],
+    initial_code_row: InitialCodeRow,
+) -> Result<(Document, ParseReport), ParseError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
@@ -69,7 +93,8 @@ pub fn parse_plain_manual_report(
     })
     .parse_bytes(path, source.as_ref())?;
     let source_text = String::from_utf8_lossy(source.as_ref());
-    let mut document = lower_mandoc_document_with_source(path, &report, Some(&source_text));
+    let mut document =
+        lower_mandoc_document_with_source(path, &report, Some(&source_text), initial_code_row);
     if masked_controls > 0 {
         document.diagnostics.insert(
             0,
@@ -88,13 +113,14 @@ pub fn parse_plain_manual_report(
 /// Convert a completed low-level parse into the stable document contract.
 #[must_use]
 pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
-    lower_mandoc_document_with_source(path, report, None)
+    lower_mandoc_document_with_source(path, report, None, InitialCodeRow::OmitSingle)
 }
 
 fn lower_mandoc_document_with_source(
     path: &Path,
     report: &ParseReport,
     source: Option<&str>,
+    initial_code_row: InitialCodeRow,
 ) -> Document {
     let parsed: &MandocDocument = &report.document;
     let target_plan = targets::NativeTargetPlan::build(&parsed.root);
@@ -111,6 +137,15 @@ fn lower_mandoc_document_with_source(
     let (mut root_blocks, mut sections) =
         blocks::lower_document_structure(&parsed.root, &mut context);
     diagnostics.extend(context.take_diagnostics());
+    match initial_code_row {
+        InitialCodeRow::OmitSingle => literal_reading::normalize(
+            &mut root_blocks,
+            &mut sections,
+            &mut context.native_heads.borrow_mut(),
+        ),
+        #[cfg(test)]
+        InitialCodeRow::RetainExecuted => {}
+    }
     navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, explicit_targets);
     let mut retained_targets = navigation::native_anchor_ids(&root_blocks, &sections);
     retained_targets.extend(explicit_targets.iter().cloned());

@@ -1,6 +1,9 @@
 use super::*;
 
 fn plain_receipt_text(body: &str) -> String {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     let source = format!(
         ".Dd October 1, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n{body}.Sh ENDTEST\n.No FINISH\n"
     );
@@ -107,6 +110,9 @@ fn no_fill_receipt_retirement_does_not_replay_a_completed_source_row() {
 
 #[test]
 fn no_fill_words_project_only_their_surviving_native_separator() {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     // Every exact source ran pristine ASCII/UTF-8/tree/lint first. A word
     // buffers its incoming NOSPACE separator before decoding (term.c:573-589).
     // Empty/zero-width words do not erase that cell; BACKBEFORE pops a plain

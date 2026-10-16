@@ -152,7 +152,23 @@ fn assert_reader_view(content: &ResolvedContent, container: &str, carrier: &str,
     let first = view.render(20).text;
     for width in [20, 40, 78, 120, 20] {
         assert_rendered_carrier(&view, width, container, carrier, topology, &markdown);
-        if topology < 2 {
+        if container == "literal" && topology == 0 {
+            // Exact Bd/No/Em/Sy/Lk sources reran pristine before this change.
+            // mdoc_term.c::termp_bd_pre/post and term.c::ESCAPE_BREAK preserve
+            // the native initial row. The approved complete-literal reading
+            // exception removes that one row before Markdown export; a second
+            // read must not restore it or remove a row from the next owner.
+            let mut normalized = parsed.clone();
+            assert!(!remove_leading_hard_row(first_description_children(
+                &mut normalized
+            )));
+            assert_eq!(normalized, parsed);
+            assert_eq!(
+                assert_word(&view.render(width), width, "AFTER", &markdown).row,
+                view.render(width).search("DESCRIPTION")[0].row + 1,
+                "complete literal starts at AFTER: {markdown}"
+            );
+        } else if topology < 2 {
             let mut shortened = parsed.clone();
             assert!(remove_leading_hard_row(first_description_children(
                 &mut shortened

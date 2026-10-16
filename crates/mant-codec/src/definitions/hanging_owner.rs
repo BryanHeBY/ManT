@@ -34,6 +34,51 @@ pub(crate) struct HangingOwnerEvidence {
 }
 
 impl HangingOwnerEvidence {
+    /// Preserve only an already matching execution proof through a producer
+    /// reading transform. A changed/mismatching head cannot acquire evidence
+    /// merely because its normalized text resembles a captured head.
+    #[cfg(feature = "roff")]
+    pub(crate) fn transform_literal_head(
+        &mut self,
+        block: &mut Block,
+        transform: impl FnOnce(&mut Block) -> usize,
+    ) {
+        let key = match block {
+            Block::Preformatted { children, .. } => native_inline_owner(children),
+            _ => None,
+        };
+        let matches = key
+            .and_then(|key| self.pairs.get(&key))
+            .is_some_and(|witness| witness.head.matches(block));
+        let removed_bytes = transform(block);
+        if removed_bytes == 0 {
+            return;
+        }
+        // A transform cannot rehabilitate an already invalid witness even if
+        // the resulting content happens to equal its old snapshot.
+        if !matches {
+            if let Some(key) = key {
+                self.pairs.remove(&key);
+            }
+            return;
+        }
+        if let Some(witness) = key.and_then(|key| self.pairs.get_mut(&key))
+            && let Block::Preformatted {
+                children, layout, ..
+            } = block
+        {
+            witness.head.children = head_content(std::slice::from_ref(children))
+                .pop()
+                .unwrap_or_default();
+            witness.head.layout = *layout;
+            witness.head.operands.retain_mut(|operand| {
+                operand.bytes.start = operand.bytes.start.saturating_sub(removed_bytes);
+                operand.bytes.end = operand.bytes.end.saturating_sub(removed_bytes);
+                !operand.bytes.is_empty()
+            });
+        }
+    }
+
     /// Called after HP actually produced one paragraph, with the driver's
     /// immediate next sibling. A predicted IP alone is not a completed pair.
     #[cfg(feature = "roff")]
@@ -123,18 +168,7 @@ impl HangingOwnerEvidence {
     }
 
     pub(super) fn matches(&self, head: &Block, body: &DefinitionItem) -> bool {
-        let (Block::Paragraph {
-            children,
-            layout,
-            source,
-            ..
-        }
-        | Block::Preformatted {
-            children,
-            layout,
-            source,
-            ..
-        }) = head
+        let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = head
         else {
             return false;
         };
@@ -144,11 +178,7 @@ impl HangingOwnerEvidence {
         let Some(witness) = self.pairs.get(&key) else {
             return false;
         };
-        key == witness.head.key
-            && matches!(head, Block::Preformatted { .. }) == witness.head.literal
-            && *source == witness.head.source
-            && *layout == witness.head.layout
-            && head_content(std::slice::from_ref(children))[0] == witness.head.children
+        witness.head.matches(head)
             && body.source == witness.body_source
             && body_carrier(&body.description).and_then(native_inline_owner)
                 == Some(witness.body_key)
@@ -163,6 +193,31 @@ impl HangingOwnerEvidence {
         if let Some(children) = body_carrier_mut(&mut body.description) {
             remove_marker(children);
         }
+    }
+}
+
+impl HeadWitness {
+    fn matches(&self, block: &Block) -> bool {
+        let (Block::Paragraph {
+            children,
+            layout,
+            source,
+            ..
+        }
+        | Block::Preformatted {
+            children,
+            layout,
+            source,
+            ..
+        }) = block
+        else {
+            return false;
+        };
+        native_inline_owner(children) == Some(self.key)
+            && matches!(block, Block::Preformatted { .. }) == self.literal
+            && *source == self.source
+            && *layout == self.layout
+            && head_content(std::slice::from_ref(children))[0] == self.children
     }
 }
 
@@ -196,117 +251,4 @@ fn body_carrier_mut(blocks: &mut [Block]) -> Option<&mut Vec<Inline>> {
 }
 
 #[cfg(all(test, feature = "roff"))]
-mod tests {
-    use super::*;
-
-    fn head() -> Block {
-        Block::Paragraph {
-            inline_layout: mant_ir::InlineLayout::default(),
-            children: vec![Inline::Code {
-                value: "--one".into(),
-            }],
-            layout: LayoutHint {
-                continuation_indent_columns: 7,
-                ..LayoutHint::default()
-            },
-            source: Some(source(4)),
-        }
-    }
-
-    fn body() -> DefinitionItem {
-        DefinitionItem {
-            head_body_relation: mant_ir::HeadBodyRelation::Separate,
-            terms: Vec::new(),
-            description: vec![Block::Paragraph {
-                inline_layout: mant_ir::InlineLayout::default(),
-                children: vec![Inline::Text {
-                    value: "Description".into(),
-                }],
-                layout: LayoutHint::default(),
-                source: None,
-            }],
-            entry: None,
-            layout: mant_ir::DefinitionLayout::default(),
-            source: Some(source(5)),
-        }
-    }
-
-    fn source(line: u32) -> SourceSpan {
-        SourceSpan {
-            line,
-            column: 2,
-            byte_range: None,
-            end_line: None,
-            end_column: None,
-        }
-    }
-
-    #[test]
-    fn same_coordinates_cannot_substitute_a_different_executed_pair() {
-        let mut proof = HangingOwnerEvidence::default();
-        let mut left = head();
-        let mut left_body = body();
-        let mut right = head();
-        let mut right_body = body();
-        proof.head(
-            &mut left,
-            10,
-            11,
-            super::super::CapturedHeadOperands::default(),
-        );
-        proof.head(
-            &mut right,
-            20,
-            21,
-            super::super::CapturedHeadOperands::default(),
-        );
-        assert!(
-            !proof.matches(&left, &left_body),
-            "future IP has not executed"
-        );
-        proof.body(&mut left_body, 11);
-        proof.body(&mut right_body, 21);
-        assert!(proof.matches(&left, &left_body));
-        assert!(proof.matches(&right, &right_body));
-        assert!(!proof.matches(&left, &right_body));
-        assert!(!proof.matches(&right, &left_body));
-        if let Block::Paragraph { layout, .. } = &mut right {
-            layout.continuation_indent_columns += 1;
-        }
-        assert!(
-            !proof.matches(&right, &right_body),
-            "complete native geometry witness"
-        );
-    }
-
-    #[test]
-    fn consuming_one_pair_does_not_remove_other_native_owner_markers() {
-        let mut proof = HangingOwnerEvidence::default();
-        let mut head = head();
-        let mut body = body();
-        proof.head(
-            &mut head,
-            10,
-            11,
-            super::super::CapturedHeadOperands::default(),
-        );
-        proof.body(&mut body, 11);
-        let carrier = body_carrier_mut(&mut body.description).unwrap();
-        super::super::groups::mark_native_inline_owner(carrier, 99);
-        // Another owner cannot take over the handoff's direct carrier.
-        assert!(!proof.matches(&head, &body));
-        carrier_remove(&mut body.description, 99);
-        assert!(proof.matches(&head, &body));
-        HangingOwnerEvidence::consume(&mut head, &mut body);
-        assert!(
-            !proof.matches(&head, &body),
-            "one consumed pair cannot wrap recursively"
-        );
-    }
-
-    fn carrier_remove(blocks: &mut [Block], key: usize) {
-        body_carrier_mut(blocks)
-            .unwrap()
-            .retain(|inline| native_inline_owner(std::slice::from_ref(inline)) != Some(key));
-    }
-}
+mod tests;

@@ -79,6 +79,10 @@ fn assert_cases(matrix: &serde_json::Value, count: usize) {
                 format!("{}{}", " ".repeat(origin.saturating_sub(5)), &row[origin..])
             })
             .collect();
+        let expected = crate::oracle_migrations::literal_reading::rows(
+            case["source"].as_str().unwrap(),
+            &expected,
+        );
         let actual = super::body_rows(&mant_render::render_query_text_at_width(
             &restored,
             75,

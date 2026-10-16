@@ -538,6 +538,9 @@ fn formatter_request_boundaries_execute_inside_mdoc_scopes() {
 
 #[test]
 fn native_body_posts_settle_no_fill_rows_in_their_output_owner() {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     for (label, operand, expected) in [
         ("zero", "\\zX", "X"),
         ("continued-zero", "\\zX\\c", "X"),

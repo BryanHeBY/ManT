@@ -119,6 +119,9 @@ fn completed_vertical_rows_do_not_replay_their_invisible_cell() {
 
 #[test]
 fn consecutive_empty_formatter_words_occupy_one_native_row() {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     // Exact no-fill pairs and single/Ns counters checked with fixed CVS
     // -Tascii/-Tlint. term.c::term_word() writes the automatic separator
     // before decoding the second empty word; Ns suppresses that write.

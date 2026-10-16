@@ -1,4 +1,7 @@
 //! Finite current-oracle supplements leave historical recordings immutable.
+#[path = "oracle_migrations/literal_reading.rs"]
+pub(super) mod literal_reading;
+
 use std::sync::LazyLock;
 
 use serde::Deserialize;

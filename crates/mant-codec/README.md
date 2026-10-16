@@ -79,6 +79,14 @@ structures retain their boundaries. Unproven leading/trailing gaps and unusual
 metadata-only fragments remain separate resolved boundaries, not guessed code
 rows. No public continuation flag or frontend stitching pass is required.
 
+After complete roff owners are assembled, the reading projection omits exactly
+one empty initial code row when later nonblank body exists. This documented
+exception to native terminal output does not trim author spaces, tabs or NBSP,
+two-plus initial rows, wholly blank owners, internal/trailing rows, or a literal
+prefix sharing a definition HEAD row. Row origins and exact native HP evidence
+are rebased before semantic names and positions are identified. Markdown input
+is unchanged; consumers render the normalized IR without another trimming pass.
+
 Definition fields record native cells as the text executor decodes them,
 before text is styled, linked, or compacted. The pinned CVS `term_fill()`
 consumer decides accepted source intervals and rejected suffixes; semantic

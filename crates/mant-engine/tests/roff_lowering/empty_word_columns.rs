@@ -167,7 +167,12 @@ fn markdown_payloads(content: &ResolvedContent) -> Vec<String> {
 
 fn assert_columns(case: &Case, actual: &[String]) {
     for position in &case.body_positions {
-        let row = &actual[position.row];
+        let row_index = crate::oracle_migrations::literal_reading::row_index(
+            &case.source,
+            &case.expected_rows,
+            position.row,
+        );
+        let row = &actual[row_index];
         let start = row.find(&position.value).unwrap();
         assert_eq!(&row[..start], position.prefix, "{}: exact prefix", case.id);
         assert_eq!(
@@ -195,7 +200,9 @@ fn empty_buffer_newlines_preserve_exact_native_rows_and_real_json_columns() {
         }
         asserted += 1;
         let actual = rows(&mant_render::render_query_man(&content));
-        if actual == case.expected_rows {
+        let expected =
+            crate::oracle_migrations::literal_reading::rows(&case.source, &case.expected_rows);
+        if actual == expected {
             assert_columns(&case, &actual);
         } else {
             failures.push(format!(
@@ -240,7 +247,7 @@ fn native_markdown_readback_preserves_literal_columns_and_phrasing_hard_rows() {
             // this block boundary from the separate inline-payload comparison.
             assert_eq!(
                 rows(&mant_render::render_query_man(&decoded)),
-                case.expected_rows,
+                crate::oracle_migrations::literal_reading::rows(&case.source, &case.expected_rows),
                 "{}: leading spacing consumed exactly once: {markdown}",
                 case.id
             );

@@ -1,6 +1,9 @@
 //! Accepted native rows remain literal content after unprinted blanks retire.
 
-use super::{Block, parse_manual_bytes};
+// This suite checks accepted native rows before the documented reading policy.
+use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
+use super::Block;
 
 const MAN_HEADER: &str = ".TH TEST 1 \"2026-09-28\"\n.SH DESCRIPTION\n";
 const MDOC_HEADER: &str =

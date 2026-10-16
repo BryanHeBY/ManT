@@ -297,6 +297,11 @@ Frontends retain leading, trailing and entirely blank literal rows. For a
 multi-line definition term, run-in fitting measures the final open label row,
 not the longest earlier row; explicit hard breaks close that row.
 
+Those rows are the producer's published reading content. The roff codec's
+documented single-initial-empty-row normalization runs on complete independent
+owners before entry identification and public positions, without changing this
+model. Consumers do not trim again; Markdown-authored code remains literal.
+
 `InlineLayout` belongs to a paragraph, preformatted block, heading or definition
 term. Its sparse `RowLayoutHint` combines a common signed origin correction,
 an optional first-visual-only correction and viewport-relative `TextAlignment`.

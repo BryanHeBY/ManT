@@ -262,6 +262,9 @@ fn filled_margin_flush_settles_the_current_cell_without_a_hard_break() {
 
 #[test]
 fn margin_flush_obeys_current_cell_and_continuation_state() {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     for (label, header, opening, first, request, closing, expected) in [
         (
             "mdoc-column",

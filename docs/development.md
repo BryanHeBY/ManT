@@ -389,6 +389,32 @@ ordered formatter transitions, FFI/Serde layout, or an explicitly bounded
 numeric conversion. Splitting a function solely to meet a line count is not
 a substitute for a clear execution boundary.
 
+### Complete roff code owners and initial rows
+
+`tests/fixtures/roff/literal_leading_rows/cases.json` binds 23 original sources
+to 92 pristine CVS ASCII/UTF-8/tree/lint runs. Native facts retain every
+executed row; the separately recorded reading exception removes exactly one
+empty initial row only from a completed independent code owner with nonblank
+body. The fixture identity gate is
+`python3 -m unittest scripts.roff.tests.test_literal_leading_rows`.
+
+The producer policy tests cover empty Text/Code and nested annotation trees,
+row-hint rebasing, negative origins, overflow, transparent BODY prefixes and
+shared definition seams. The cross-consumer matrix in
+`mant-ui/tests/literal_leading_rows.rs` exercises source loading, actual JSON
+text, plain/ANSI output, TUI buffers and actual Markdown readback, including
+real awk/sh examples. Markdown-authored fences remain literal. Native source
+snapshots and approved reading expectations are separate; do not regenerate
+native gold from the normalized IR or fold whitespace to compare row counts. Existing native-execution
+unit matrices explicitly use the private pre-reading projection; that test-only
+entry retains the full pipeline and original gold, while public codec/loading
+entry points always apply the documented policy. The cross-consumer matrix
+exercises those public entry points. Public legacy reader matrices keep their
+sealed native gold and apply finite exact-source/row-window reading cards in
+`roff_lowering/oracle_migrations/literal_reading.json` and the UI
+`empty_word_columns/reading_policy.json`. The same fixture identity gate checks
+these source bindings; they are not general leading-blank filters.
+
 ### Regression suites and fixture maintenance
 
 Repository tools are grouped by responsibility under `scripts/`; see the

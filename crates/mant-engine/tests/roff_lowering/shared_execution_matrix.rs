@@ -27,7 +27,8 @@
 //! are paragraph structure and stay pinned; intra-row spacing survives
 //! because outer row whitespace alone is trimmed. These pins do not assert
 //! row origins or trailing spaces. Layer 1 is row equality —
-//! no whitespace collapsing and no blank-row squeezing.
+//! no whitespace collapsing or general blank-row squeezing. A finite exact-
+//! source supplement records the approved initial literal-row exception.
 //!
 //! Assertion layers:
 //! 1. row projection (execution result) — all cases;
@@ -121,6 +122,7 @@ fn load_case(name: &str) -> (mant_ir::ResolvedContent, Vec<String>) {
     )
     .unwrap_or(&expected)
     .to_vec();
+    let expected = crate::oracle_migrations::literal_reading::rows(&source, &expected);
     let query = mant_loader::load_roff_bytes(source.as_bytes())
         .unwrap_or_else(|error| panic!("{name}: lower case: {error}"));
     (query, expected)

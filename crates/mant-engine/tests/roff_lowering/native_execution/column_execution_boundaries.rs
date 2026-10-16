@@ -347,8 +347,13 @@ fn display_pre_and_source_line_flushes_remain_distinct_in_columns() {
             if compact { " -compact" } else { "" },
             if no_fill { ".fi\n" } else { "" },
         );
+        let native_rows = expected
+            .iter()
+            .map(|row| (*row).to_owned())
+            .collect::<Vec<_>>();
+        let reading_rows = crate::oracle_migrations::literal_reading::rows(&source, &native_rows);
         let query = round_trip(&source);
-        assert_eq!(physical_rows(&query), expected, "{source}");
+        assert_eq!(physical_rows(&query), reading_rows, "{source}");
     }
 }
 

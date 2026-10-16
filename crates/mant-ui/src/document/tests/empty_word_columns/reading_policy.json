@@ -1,0 +1,214 @@
+{
+  "schema": "mant.literal-leading-row-reading-policy/v1",
+  "native_gold": "cases.json remains unchanged; only these complete independent literal owners omit one initial resolved empty row. Earlier paragraph margins and internal rows remain native.",
+  "reference": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "source_rules": [
+    "mdoc_term.c::print_mdoc_node source-line entry before dispatch",
+    "term.c::term_word ESCAPE_IGNORE and term_fill ASCII_NBRZW",
+    "term.c::term_field defers and omits cells with no following graph",
+    "term.c::term_newln and term_vspace are separate from IR owner assembly"
+  ],
+  "policy": "The approved roff reading exception runs after final owner assembly. Empty zero-width or word-only rows qualify only when resolved owner scalars contain exactly one initial LF. A .No space-only native field has no retained authored cell; literal first rows retaining source spaces, Tab or NBSP remain protected.",
+  "cases": [
+    {
+      "id": "no-fill-False-1-No-zero-graph",
+      "source_sha256": "92348201bb7f2333a163b86a612c8b89a419505c9ef55ae258a6cc76732e2037",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-1-Em-zero-graph",
+      "source_sha256": "426345c81df5791a4b667c9b58e6d4421e846d71209a8e80294f2d83208dedda",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-1-Sy-zero-graph",
+      "source_sha256": "b7b9a6863669508132269fb59c69c155506136c9f3886ec1c6e7b25512e49e84",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-1-Li-zero-graph",
+      "source_sha256": "e754da2687dea391c16166de172e3dc02f18f23b7d2ba80c3581837e5a16eac5",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-2-No-zero-graph",
+      "source_sha256": "28f3a627ccfda2ca0cafba381f90d0e5cfb32f85841f61a12a988aa6f4b4ba50",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-2-Em-zero-graph",
+      "source_sha256": "c3465063bae1f658a6743cc99c419ca5a25ddd933ed4edac5607d285991c452c",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-2-Sy-zero-graph",
+      "source_sha256": "d5815209e914cbc95fa0263deba67b944f47ada870599b1ced9bd02fa46b22ff",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-2-Li-zero-graph",
+      "source_sha256": "6bfca3d6dd7a862fd613e48a1889853c750e6419543ebb8150719ecbecc24b3b",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-3-No-zero-graph",
+      "source_sha256": "34ceb0d196fafae39f135054d44f6fb11823bdab5c6b04795474ec95f28cf95a",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-3-Em-zero-graph",
+      "source_sha256": "7cc38c93ef53d63eaa9896b72b2177283c043b68a806df003a3db9c60c888a64",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-3-Sy-zero-graph",
+      "source_sha256": "8092b550c290753f544f124d5bf6ff1df7343c321c6b210752e5e346bc4ac133",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-3-Li-zero-graph",
+      "source_sha256": "7e3e03a041977f59ae20d9876bcf1e6c02be470a9d5f4f4b79abbeaab15b6916",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-366",
+      "source_sha256": "601b6a40dc7bc8aa6fa96e1e764cf35873e157767093d2c650dff56e13d964c8",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-367",
+      "source_sha256": "b7a5cd566a375fd1a1228a2161eb42d39734899f3dc9a12efa165bc1df43733c",
+      "omit_native_rows": [
+        1
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-374",
+      "source_sha256": "c6025efecf398d2035576b6c8618b41d46bfe16cd28a21f9d75307e50415d6f3",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-375",
+      "source_sha256": "d829b4b9075b8caf065701a69140e76d4b501cb2edfdfee1bd4d3ab9c5d3212d",
+      "omit_native_rows": [
+        1
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-382",
+      "source_sha256": "3cc65fdbabd19c08d17180d44ac9daa86430c7a43c4e22f8a0da5952625a658c",
+      "omit_native_rows": [
+        1
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-383",
+      "source_sha256": "5a2f25bafa3fafd35ddd802f3ca4518ae9d8bde71b7313167561cbf04f3312c1",
+      "omit_native_rows": [
+        1
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-390",
+      "source_sha256": "9da166902c4c2923038b797e82834734ce41104dac808ee5b4cab205334238e1",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "entry-391",
+      "source_sha256": "5ccd1807e95e2f165dd961fd7f301ad1162d5f25c573db04ef01b5642751f89e",
+      "omit_native_rows": [
+        1
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-1-No-author-space",
+      "source_sha256": "f87850d028e255c782da91af81042f0cc5fb0407e44af72a53ad542f9b57e159",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-2-No-author-space",
+      "source_sha256": "b22ce3b2f3636d1523f27cd5065f71df03a456d8996ab7a4f53bfd2aa6c13838",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "no-fill-False-3-No-author-space",
+      "source_sha256": "266a716c6b514e24037648176bec221ca70979ddd0dc975cc646e87e102fc164",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "flags-no-fill-False-spacing-off-zero-graph",
+      "source_sha256": "68268b1b9752466018a076eec067e61a3bfcbb4127dea4735b794bbe9282eb27",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    },
+    {
+      "id": "flags-no-fill-False-glued-zero-graph",
+      "source_sha256": "e6774ab9b9a37ff49cfce54984b578ff6189aa6d2f53f6764c3d287a0bde1cd7",
+      "omit_native_rows": [
+        0
+      ],
+      "owner": "ordinary complete no-fill body"
+    }
+  ]
+}

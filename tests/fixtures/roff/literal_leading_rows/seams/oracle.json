@@ -1,0 +1,357 @@
+{
+  "schema": "mant.literal-leading-row-seams-oracle/v1",
+  "reference": {
+    "snapshot": "20261013T025419Z",
+    "identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "environment": {
+      "LC_ALL": "C.UTF-8"
+    },
+    "workingDirectory": "temporary directory containing exact basename sources",
+    "widthColumns": 80
+  },
+  "cases": [
+    {
+      "id": "hp_literal_headless_ip",
+      "file": "hp-literal-headless-ip.1",
+      "sourceSha256": "eb3136273e42a4da319547e78bd87c576647cd862a9f7c2541ae83be90dce1e0",
+      "profiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "hp-literal-headless-ip.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "8a1b67c1eb3ada527437b8f97a5952399a3a01a7a337f6a3bc6fd24b51c6fefe",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n\n     -\b--\b-o\bon\bne\be\n\n            Description.\n            AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "hp-literal-headless-ip.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "8a1b67c1eb3ada527437b8f97a5952399a3a01a7a337f6a3bc6fd24b51c6fefe",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n\n     -\b--\b-o\bon\bne\be\n\n            Description.\n            AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree",
+            "-Ios=ManT",
+            "hp-literal-headless-ip.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "87e348e003b0bea3736c65344ebe41e2627cf482700d1b3cc0fc95b53390034b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"LITERAL-SEAMS\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"ManT\"\ndate  = \"October 17, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      DESCRIPTION (text) 2:5\n  SH (body) 2:2\n      BEFORE (text) *3:1\n      nf (elem) *4:2\n      HP (block) *5:2\n        HP (head) 5:2\n        HP (body) 5:2\n             (text) *6:1 NOFILL\n            B (elem) *7:2 NOFILL\n                --one (text) 7:4 NOFILL\n      IP (block) *8:2\n        IP (head) 8:2\n        IP (body) 8:2\n            Description. (text) *9:1 NOFILL\n            fi (elem) *10:2 NOFILL\n            AFTER (text) *11:1\nSH (block) *12:2\n  SH (head) 12:2 ID=HREF\n      NEXT (text) 12:5\n  SH (body) 12:2\n      END (text) *13:1\n",
+          "stderr": ""
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint",
+            "-Ios=ManT",
+            "hp-literal-headless-ip.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "id": "inset_shared_literal",
+      "file": "inset-shared-literal.1",
+      "sourceSha256": "f1dbecc8723edd68c524868a71d4f2d162e18edeccd4dbfa9b315b6f5d5c1d92",
+      "profiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "inset-shared-literal.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f1cf6946bfa11f6637ce2b36d05541481d7b8fffc8210d8d9ac919ece832c79c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nN\bNA\bAM\bME\bE\n     l\bli\bit\bte\ber\bra\bal\bl-\b-s\bse\bea\bam\bms\bs - demonstrate literal owner seams\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n     HEAD\n     BODY\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "inset-shared-literal.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "90b0bee0eb49f44ba4c3d26b854bf3561b99fc94188b1a794ba759fba6157ad3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nN\bNA\bAM\bME\bE\n     l\bli\bit\bte\ber\bra\bal\bl-\b-s\bse\bea\bam\bms\bs – demonstrate literal owner seams\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n     HEAD \n     BODY\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree",
+            "-Ios=ManT",
+            "inset-shared-literal.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "a5263ab49060429aa0c46cbf016ce9bbaf7ee912c9395c3bb728d5fe4312362c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"LITERAL-SEAMS\"\nname  = \"literal-seams\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"ManT\"\ndate  = \"October 17, 2026\"\n\nDd (elem) *1:2 NOPRT\n    October 17, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    LITERAL-SEAMS (text) 2:5\n    1 (text) 2:19\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          literal-seams (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            demonstrate literal owner seams (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          BEFORE (text) 8:5\n      nf (elem) *9:2\n      Bl (block) -inset -compact *10:2 NOFILL\n        Bl (head) 10:2 NOFILL\n        Bl (body) 10:2 NOFILL\n            It (block) *11:2 NOFILL\n              It (head) 11:2 ID=BODY NOFILL\n                  HEAD (text) 11:5 NOFILL\n              It (body) 11:2 NOFILL\n                  No (elem) *12:2 HREF NOFILL\n                      BODY (text) 12:5 NOFILL\n      fi (elem) *14:2 NOFILL\n      No (elem) *15:2\n          AFTER (text) 15:5\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      No (elem) *17:2\n          END (text) 17:5\n",
+          "stderr": ""
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint",
+            "-Ios=ManT",
+            "inset-shared-literal.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "id": "nf_zero_width_row",
+      "file": "nf-zero-width-row.1",
+      "sourceSha256": "a91161acf5213e08109a62686c4f684fb8313627132de48012a5cfe91c0d735d",
+      "profiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-zero-width-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "58eb722de595de89a12385ab5e83d615f6c498fc0db6966978fc6dc4185e1059",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     BODY\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-zero-width-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "58eb722de595de89a12385ab5e83d615f6c498fc0db6966978fc6dc4185e1059",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     BODY\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-zero-width-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e5824fd85da7afaa1ef5fb8590afa7c8985732c73d853b4531fcd075739a853e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"LITERAL-SEAMS\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"ManT\"\ndate  = \"October 17, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      DESCRIPTION (text) 2:5\n  SH (body) 2:2\n      BEFORE (text) *3:1\n      nf (elem) *4:2\n      \\& (text) *5:1 NOFILL\n      BODY (text) *6:1 NOFILL\n      fi (elem) *7:2 NOFILL\n      AFTER (text) *8:1\nSH (block) *9:2\n  SH (head) 9:2 ID=HREF\n      NEXT (text) 9:5\n  SH (body) 9:2\n      END (text) *10:1\n",
+          "stderr": ""
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-zero-width-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "id": "nf_word_break_row",
+      "file": "nf-word-break-row.1",
+      "sourceSha256": "82693015fa0c50686760edd0a0185580f097c3ee1e013f1be3bb75caa0427336",
+      "profiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-word-break-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "58eb722de595de89a12385ab5e83d615f6c498fc0db6966978fc6dc4185e1059",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     BODY\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-word-break-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "58eb722de595de89a12385ab5e83d615f6c498fc0db6966978fc6dc4185e1059",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n     BODY\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-word-break-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "fb56d40eb14e51a0fee2369fa7914242c4dd864727564434498b1b1adf5b5b8d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"LITERAL-SEAMS\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"ManT\"\ndate  = \"October 17, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      DESCRIPTION (text) 2:5\n  SH (body) 2:2\n      BEFORE (text) *3:1\n      nf (elem) *4:2\n      \\p (text) *5:1 NOFILL\n      BODY (text) *6:1 NOFILL\n      fi (elem) *7:2 NOFILL\n      AFTER (text) *8:1\nSH (block) *9:2\n  SH (head) 9:2 ID=HREF\n      NEXT (text) 9:5\n  SH (body) 9:2\n      END (text) *10:1\n",
+          "stderr": ""
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-word-break-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "id": "nf_independent_row_origins",
+      "file": "nf-independent-row-origins.1",
+      "sourceSha256": "8d3df26b81c0e4c7f6f834866d4a3ae24a861c816c77510731e88c9072eae7f3",
+      "profiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-independent-row-origins.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "3b48c9338c40069b0977bfb1bfca18a0cf875c137173d1bfa264c399ebe96dc2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n\n     CODE\n        SHIFTED\n     PLAIN\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-independent-row-origins.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "3b48c9338c40069b0977bfb1bfca18a0cf875c137173d1bfa264c399ebe96dc2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n\n\n     CODE\n        SHIFTED\n     PLAIN\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-independent-row-origins.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "ca2d080958138a6938f4ede0436c3303af8457b019d0f43837bb50076babf7ee",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"LITERAL-SEAMS\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"ManT\"\ndate  = \"October 17, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      DESCRIPTION (text) 2:5\n  SH (body) 2:2\n      BEFORE (text) *3:1\n      PP (block) *4:2\n        PP (head) 4:2\n        PP (body) 4:2\n            nf (elem) *5:2\n             (text) *6:1 NOFILL\n            CODE (text) *7:1 NOFILL\n            ti (elem) *8:2 NOFILL\n                +3n (text) 8:5 NOFILL\n            SHIFTED (text) *9:1 NOFILL\n            PLAIN (text) *10:1 NOFILL\n            fi (elem) *11:2 NOFILL\n            AFTER (text) *12:1\nSH (block) *13:2\n  SH (head) 13:2 ID=HREF\n      NEXT (text) 13:5\n  SH (body) 13:2\n      END (text) *14:1\n",
+          "stderr": ""
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-independent-row-origins.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "id": "tbl_literal_cell",
+      "file": "tbl-literal-cell.1",
+      "sourceSha256": "2839f02d44253b881a510c1547a3c9c9ae3c5d938525f055f86ed88200cba126",
+      "profiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "tbl-literal-cell.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "3d39ae1ed62d9b352938b7ba4db6abbb021f5a28eb78a4e8e3b73b8c15ac1115",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n      CODE\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "tbl-literal-cell.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "3d39ae1ed62d9b352938b7ba4db6abbb021f5a28eb78a4e8e3b73b8c15ac1115",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "LITERAL-SEAMS(1)             General Commands Manual            LITERAL-SEAMS(1)\n\nD\bDE\bES\bSC\bCR\bRI\bIP\bPT\bTI\bIO\bON\bN\n     BEFORE\n      CODE\n     AFTER\n\nN\bNE\bEX\bXT\bT\n     END\n\nManT                            October 17, 2026                LITERAL-SEAMS(1)\n",
+          "stderr": ""
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree",
+            "-Ios=ManT",
+            "tbl-literal-cell.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "0029cec0d6c5d79e1c547d80e332bcf832cb965ae558290cccb14f4cacf05041",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "title = \"LITERAL-SEAMS\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"ManT\"\ndate  = \"October 17, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      DESCRIPTION (text) 2:5\n  SH (body) 2:2\n      BEFORE (text) *3:1\n      1 (tbl options) 6:1\n      L 0L{ CODE} (tbl) 6:1\n      nf (elem) *7:2\n      AFTER (text) *12:1 NOFILL\nSH (block) *13:2\n  SH (head) 13:2 ID=HREF\n      NEXT (text) 13:5\n  SH (body) 13:2\n      END (text) *14:1\n",
+          "stderr": ""
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint",
+            "-Ios=ManT",
+            "tbl-literal-cell.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout": "",
+          "stderr": ""
+        }
+      }
+    }
+  ]
+}

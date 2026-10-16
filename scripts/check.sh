@@ -111,6 +111,8 @@ run "test immutable roff consumer fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_consumer_fixture_contract
 run "test table layout source and real-manual fixture identities" \
   python3 -m unittest scripts.roff.tests.test_table_fixture_contract
+run "test literal initial-row source identities and native profiles" \
+  python3 -m unittest scripts.roff.tests.test_literal_leading_rows
 run "test exact roff fixture checkout across newline settings" \
   python3 -m unittest scripts.roff.tests.test_fixture_checkout
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test

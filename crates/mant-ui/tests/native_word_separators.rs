@@ -37,19 +37,19 @@ fn empty_and_zero_width_native_words_keep_literal_columns_after_json() {
     // (term.c:573-589, 901-908). Compare columns against the same no-fill
     // origin, retaining actual source rows rather than folded whitespace.
     let baseline = round_trip(&format!("{MDOC}.nf\n.No B\n.fi\n.Sh ENDTEST\n.No FINISH\n"));
-    for (body, expected, extra_rows) in [
-        (".nf\n.No \\& No B\n.fi\n", " B", 0),
-        (".nf\n.No \"\" No B\n.fi\n", " B", 0),
-        (".nf\n.No \\fB No B\n.fi\n", " B", 0),
-        (".nf\n.No \\z No B\n.fi\n", " B", 0),
-        (".nf\n.No \\zX No B\n.fi\n", "XB", 0),
-        (".nf\n.No \"\" No \"\" No B\n.fi\n", "  B", 0),
-        (".nf\n.No \\&\n.No B\n.fi\n", "B", 1),
-        (".nf\n.No \\&\\c\n.No B\n.fi\n", "B", 0),
-        (".nf\n.No \\&\\c\n.Sm off\n.No B\n.fi\n", "B", 0),
-        (".nf\n.Bk -words\n.No \\zX No B\n.Ek\n.fi\n", "XB", 0),
-        (".nf\n.An \"\" An B\n.fi\n", " B", 0),
-        (".nf\n.No \\& Aq B\n.fi\n", " ⟨B⟩", 0),
+    for (body, expected, native_extra_rows, reading_omitted_rows) in [
+        (".nf\n.No \\& No B\n.fi\n", " B", 0, 0),
+        (".nf\n.No \"\" No B\n.fi\n", " B", 0, 0),
+        (".nf\n.No \\fB No B\n.fi\n", " B", 0, 0),
+        (".nf\n.No \\z No B\n.fi\n", " B", 0, 0),
+        (".nf\n.No \\zX No B\n.fi\n", "XB", 0, 0),
+        (".nf\n.No \"\" No \"\" No B\n.fi\n", "  B", 0, 0),
+        (".nf\n.No \\&\n.No B\n.fi\n", "B", 1, 1),
+        (".nf\n.No \\&\\c\n.No B\n.fi\n", "B", 0, 0),
+        (".nf\n.No \\&\\c\n.Sm off\n.No B\n.fi\n", "B", 0, 0),
+        (".nf\n.Bk -words\n.No \\zX No B\n.Ek\n.fi\n", "XB", 0, 0),
+        (".nf\n.An \"\" An B\n.fi\n", " B", 0, 0),
+        (".nf\n.No \\& Aq B\n.fi\n", " ⟨B⟩", 0, 0),
     ] {
         let source = format!("{MDOC}{body}.Sh ENDTEST\n.No FINISH\n");
         let query = round_trip(&source);
@@ -83,7 +83,12 @@ fn empty_and_zero_width_native_words_keep_literal_columns_after_json() {
             );
             assert_eq!(
                 hit.row - heading.row,
-                origin_hit.row - origin_heading.row + extra_rows,
+                // The exact zero-width-line source reran pristine first:
+                // print_mdoc_node + term_word(ASCII_NBRZW) keeps its native
+                // blank row. Public roff loading applies the approved reading
+                // exception to this complete independent literal, not to its
+                // automatic word prefix or a continued source line.
+                origin_hit.row - origin_heading.row + native_extra_rows - reading_omitted_rows,
                 "{source}, width={width}"
             );
             assert!(!rendered.text.to_string().contains('\u{fffd}'));

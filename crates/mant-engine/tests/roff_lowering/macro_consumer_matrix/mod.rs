@@ -9,7 +9,8 @@
 //! spaces and blank rows remain exact; these snapshots do not measure row
 //! origins or trailing spaces. Dedicated consumer tests cover those facts.
 //!
-//! Native row cases require equality and JSON text round trips. Approved
+//! Native row cases use sealed gold plus finite source-bound one-row literal
+//! reading cards, with JSON text round trips. Approved
 //! responsive and reading layouts have explicit family contracts rather
 //! than native device-row equality. Family checks also cover decoded
 //! targets, styled text and source-neutral IR.
@@ -65,11 +66,12 @@ pub(super) fn load_case(name: &str) -> (mant_ir::ResolvedContent, Vec<String>) {
     let source_path = format!("{CASES}/{name}.1");
     let source = std::fs::read_to_string(&source_path)
         .unwrap_or_else(|error| panic!("{name}: read case source: {error}"));
-    let expected = std::fs::read_to_string(format!("{CASES}/{name}.expected"))
+    let expected: Vec<String> = std::fs::read_to_string(format!("{CASES}/{name}.expected"))
         .unwrap_or_else(|error| panic!("{name}: read snapshot: {error}"))
         .lines()
         .map(str::to_owned)
         .collect();
+    let expected = crate::oracle_migrations::literal_reading::rows(&source, &expected);
     let query = mant_loader::load_roff_bytes(source.as_bytes())
         .unwrap_or_else(|error| panic!("{name}: lower case: {error}"));
     (query, expected)

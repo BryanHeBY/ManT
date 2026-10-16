@@ -118,7 +118,7 @@ a preceding negative `sp` can cancel rows requested by `PP`, `SY`, `HP`,
 generic Roman font transitions at entry and exit even without a macro post
 handler; these transitions update the previous-font register used by `\fP`.
 
-`br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next breakable field boundary, either ordinary word space or an optional `\:` breakpoint; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events: executed empty-row events are retained, including leading and trailing rows, and independent `sp` requests accumulate. Skipped conditions and uncalled macro definitions do not contribute rows. Leading empty literal rows follow mandoc's terminal behavior; groff may suppress them in no-space contexts. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
+`br` inside a flow becomes an immediate inline line break. The `\p` escape instead requests a break at the next breakable field boundary, either ordinary word space or an optional `\:` breakpoint; it crosses tight `Ns` joins and non-breaking spaces, and repeated requests before that boundary are idempotent. A following `\c` can continue the current formatter word but does not cancel that pending word-end break. This `\p\c` ordering follows the pinned mandoc CVS formatter; GNU troff can diagnose or project such non-portable combinations differently. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. No-fill rows follow executed AST events; independent `sp` requests accumulate, while skipped conditions and uncalled macro definitions do not contribute rows. The completed-code-block reading exception below removes one qualifying initial row after execution; other rows retain their native meaning. A final unescaped `\c` suppresses the next implicit space or line break and joins the next input line directly. Word spacing and physical-line continuation remain independent: a generated or explicitly empty formatter word consumes the latter even when it adds no visible glyph.
 
 Inside a definition field, `\p` remains an ordered native buffer cell until
 `term_fill()` consumes its actual word separator. A preceding operand's marker
@@ -453,9 +453,33 @@ preserve the same authored row events.
 
 Paragraph distance is resolved at its source boundary. A first paragraph inside `RS` checks predecessors through enclosing relative scopes, including an ordered-item continuation; `RS` without a paragraph request adds no default gap. Independent positive requests add: `.sp 1` followed by `.sp 2` produces three blank rows, while `.sp 0` still breaks flow without adding a row. A negative `.sp` accumulates bounded skip-space debt that cancels later vertical rows until a formatter word resets it, matching mandoc's terminal request state. Renderers do not erase a following `PP` distance just because explicit spacing precedes it. A boundary exceeding 4096 rows is bounded with `manual.vertical-spacing-limit`; literal blank lines remain separate content. Text, node and explain output preserve hard lines and these gaps without imposing a soft-wrap width; the TUI reflows its immutable logical lines for the current viewport.
 
-Document and section text facades consume the same source gaps, including spacing before subsections and explicit spacing at the end of a node. The page title has a separate one-line presentation separator. Preformatted content retains leading, trailing and entirely blank rows; an explicit empty text row is content, unlike an anchor-only block. Executed spacing requests remain bounded layout events rather than being converted into unbounded literal rows.
+Document and section text facades consume the same source gaps, including spacing before subsections and explicit spacing at the end of a node. The page title has a separate one-line presentation separator. Preformatted content retains trailing, internal and entirely blank rows; an explicit empty text row is content, unlike an anchor-only block. The initial-row exception below applies only to a complete roff code owner. Executed spacing requests remain bounded layout events rather than being converted into unbounded literal rows.
 
 `OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis; it does not create a separate IR variant. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
+
+## Code-block Initial Rows
+
+After source execution and complete `Preformatted` owner assembly, ManT omits
+exactly one empty initial logical row when later nonblank body exists. This
+reduces the common empty strip above shell examples in `sh(1p)` and `awk(1p)`.
+It is an explicit ManT reading policy: pinned mandoc retains that executed row,
+and groff behavior depends on the source's spacing context.
+
+The rule removes only the first newline scalar, never indentation or a row
+containing author spaces, Tab or NBSP. Zero or two-plus initial empty rows,
+wholly blank blocks, internal and trailing empty rows remain intact. The first
+literal BODY fragment of a shared definition relation is protected: its initial
+break can separate HEAD from BODY rather than represent an independent empty
+code row. Positive spacing before that BODY prevents sharing and restores the
+ordinary independent-code-block rule. Separate displays are normalized
+individually, never once per formatter drain.
+
+Normalization precedes semantic identification and public positions. Remaining
+row hints follow their original body rows; styles, navigation identities and
+source spans remain attached to the same source content. JSON, text, TUI,
+copying, search and Markdown export consume that one normalized IR. External
+block spacing and code surfaces are unchanged. Markdown-authored code blocks
+keep their exact leading rows, and Markdown reimport does not trim them.
 
 ## mdoc Structure
 

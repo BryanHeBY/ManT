@@ -523,9 +523,11 @@ fn definition_head_row_settles_at_the_first_real_request_boundary() {
     // The exact .nf/.fi and .Pp inputs were also run through fixed CVS
     // -Tutf8/-Tlint. man_term.c::print_man_node() changes the no-fill line
     // boundary at the request; mdoc_term.c::termp_pp_pre() calls term_vspace().
+    // The approved reading policy removes one empty initial row only from
+    // the complete no-fill BODY owner; native execution still closed it.
     for (name, body, blank_rows) in [
         ("cell-before-nofill", "\\&\\p\n.nf\nBODY\n.fi", 0),
-        ("nofill-before-cell", ".nf\n\\&\\p\nBODY\n.fi", 1),
+        ("nofill-before-cell", ".nf\n\\&\\p\nBODY\n.fi", 0),
     ] {
         let source =
             format!(".TH PROBE 1 \"September 28, 2026\"\n.SH DESCRIPTION\n.TP\nkey\n{body}\n");
@@ -593,9 +595,12 @@ fn author_pre_break_settles_an_invisible_definition_head_row() {
 
 #[test]
 fn no_fill_control_only_cells_survive_mode_and_spacing_boundaries() {
+    // Exact sources reran pristine ASCII/UTF-8/tree/lint. A br followed by
+    // AFTER leaves one empty initial literal row, omitted by reading policy.
+    // fi closes an all-blank owner, and sp adds two rows: both stay intact.
     for (label, request, expected) in [
         ("fill", ".fi", "DESCRIPTION\n\nAFTER"),
-        ("break", ".br", "DESCRIPTION\n\nAFTER"),
+        ("break", ".br", "DESCRIPTION\nAFTER"),
         ("space", ".sp 1", "DESCRIPTION\n\n\nAFTER"),
     ] {
         let source = format!(".TH PROBE 1\n.SH DESCRIPTION\n.nf\n\\p\n{request}\nAFTER\n.fi\n");

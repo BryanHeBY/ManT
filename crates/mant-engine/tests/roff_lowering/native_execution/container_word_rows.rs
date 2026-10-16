@@ -84,6 +84,7 @@ fn nested_containers_and_alternate_operands_preserve_native_word_consumption() {
             .iter()
             .map(|row| row.as_str().unwrap().to_owned())
             .collect::<Vec<_>>();
+        let expected = crate::oracle_migrations::literal_reading::rows(source, &expected);
         let query = mant_loader::load_roff_bytes(source.as_bytes())
             .unwrap_or_else(|error| panic!("{name}: {error}"));
         let json = mant_render::render_query_json(&query, false).unwrap();

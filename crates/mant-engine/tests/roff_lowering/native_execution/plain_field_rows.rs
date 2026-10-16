@@ -73,9 +73,10 @@ fn plain_flush_units_preserve_invisible_passes_and_reject_only_their_suffix() {
         let restored: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
         let query: ResolvedContent = restored.into();
         let actual = description_rows(&query);
-        if actual != case.rows {
+        let expected = crate::oracle_migrations::literal_reading::rows(&case.source, &case.rows);
+        if actual != expected {
             failures.push(format!(
-                "{}\n{}\nactual {actual:?}\nreference {:?}",
+                "{}\n{}\nactual {actual:?}\nreading {expected:?}\nnative reference {:?}",
                 case.name, case.source, case.rows
             ));
         }

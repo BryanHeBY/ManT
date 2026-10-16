@@ -6,6 +6,7 @@
 //! SPECIAL delimiters by their complete spelling; non-SPECIAL closers keep
 //! the trigger rule. Neither rule compares the displayed glyph.
 
+// Native gold covers execution before the initial-code-row reading exception.
 use mant_ir::{
     Block, Inline,
     visit::{Visit, walk_block},
@@ -135,7 +136,7 @@ fn known_and_size_syntax_share_native_extent_in_owned_json() {
         .iter()
         .filter(|case| matches!(case.rule_id.as_str(), "E01" | "E02" | "RC01" | "RC02"))
     {
-        let document = crate::mandoc::parse_plain_manual(
+        let document = crate::mandoc::parse_native_manual(
             std::path::Path::new("escape-rule.1"),
             case.source.as_bytes(),
         )
@@ -197,7 +198,7 @@ fn nested_delimiters_and_output_carriers_keep_native_rows() {
         {
             continue;
         }
-        let document = crate::mandoc::parse_plain_manual(
+        let document = crate::mandoc::parse_native_manual(
             std::path::Path::new("escape-carrier.1"),
             case.source.as_bytes(),
         )
@@ -351,7 +352,7 @@ fn font_postclassification_preserves_both_registers_and_native_style() {
         .iter()
         .filter(|case| case.metadata["branch"] == "font-postclass")
     {
-        let document = crate::mandoc::parse_plain_manual(
+        let document = crate::mandoc::parse_native_manual(
             std::path::Path::new("font-postclass.1"),
             case.source.as_bytes(),
         )

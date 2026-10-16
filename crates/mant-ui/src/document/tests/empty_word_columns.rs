@@ -10,9 +10,22 @@ use serde_json::Value;
 fn cases() -> Vec<Value> {
     let matrix: Value =
         serde_json::from_str(include_str!("empty_word_columns/cases.json")).unwrap();
+    let policy: Value =
+        serde_json::from_str(include_str!("empty_word_columns/reading_policy.json")).unwrap();
     assert_eq!(matrix["header"]["count"], 472);
     assert_eq!(matrix["header"]["asserted_row_count"], 460);
-    matrix["cases"].as_array().unwrap().clone()
+    let mut cases = matrix["cases"].as_array().unwrap().clone();
+    let exceptions = policy["cases"].as_array().unwrap();
+    assert_eq!(exceptions.len(), 25);
+    for exception in exceptions {
+        let case = cases
+            .iter_mut()
+            .find(|case| case["id"] == exception["id"])
+            .unwrap();
+        assert_eq!(case["source_sha256"], exception["source_sha256"]);
+        case["reading_omitted_native_rows"] = exception["omit_native_rows"].clone();
+    }
+    cases
 }
 
 fn text(value: &Value) -> &str {
@@ -20,6 +33,26 @@ fn text(value: &Value) -> &str {
 }
 fn number(value: &Value) -> usize {
     value.as_u64().unwrap().try_into().unwrap()
+}
+
+fn reading_row(case: &Value, position: &Value) -> usize {
+    let native = number(&position["row"]);
+    // These source-bound exceptions have independent pristine receipts. Never
+    // discover a removable row by looking at the candidate's rendered output.
+    // CVS print_mdoc_node/term_field still execute the original native row;
+    // final literal-owner normalization is the documented reading exception.
+    let omitted = case["reading_omitted_native_rows"]
+        .as_array()
+        .map_or(0, |rows| {
+            rows.iter()
+                .filter(|row| {
+                    let row = number(row);
+                    assert_ne!(row, native, "a body word cannot be a removed row");
+                    row < native
+                })
+                .count()
+        });
+    native - omitted
 }
 
 fn roundtrip(case: &Value) -> ResolvedContent {
@@ -65,6 +98,7 @@ fn check_body(
     cells: &Buffer,
     position: &Value,
     base_row: usize,
+    body_row: usize,
     exact_column: bool,
     context: &str,
 ) {
@@ -99,11 +133,7 @@ fn check_body(
         number(&position["column"]) + 3,
         "{context}: source column"
     );
-    assert_eq!(
-        hit.row,
-        base_row + number(&position["row"]),
-        "{context}: physical row"
-    );
+    assert_eq!(hit.row, base_row + body_row, "{context}: physical row");
     let expected = format!("   {}{word}", text(&position["prefix"]));
     let copied = rendered.selected_text(RenderedSelection {
         anchor: TextPosition {
@@ -167,6 +197,7 @@ fn check_view(case: &Value, content: &ResolvedContent) {
                 &cells,
                 position,
                 heading[0].row + 1,
+                reading_row(case, position),
                 exact_column,
                 &label,
             );

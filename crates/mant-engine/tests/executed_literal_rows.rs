@@ -199,9 +199,11 @@ fn state_only_requests_do_not_materialize_phantom_literal_rows() {
 }
 
 #[test]
-fn leading_and_all_blank_literal_rows_are_content_after_a_predecessor() {
-    // Checked against CVS HEAD and groff with visible preceding content;
-    // formatter no-space state at the page top is a different boundary.
+fn complete_literal_owners_apply_only_the_single_initial_row_reading_exception() {
+    // All 24 exact sources reran pinned pristine ASCII/UTF-8/lint before
+    // migrating this assertion. man/mdoc empty TEXT executes term_vspace().
+    // Public reading deliberately omits one initial row with later body;
+    // native gold retains it, and entirely blank owners remain unchanged.
     for mode in ["nf", "EX", "literal", "unfilled"] {
         for rows in 1..=3 {
             let open = if mode == "nf" {
@@ -230,8 +232,13 @@ fn leading_and_all_blank_literal_rows_are_content_after_a_predecessor() {
                 );
                 let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
                 let next = if middle.is_empty() { "AFTER" } else { "ALPHA" };
+                let reading_rows = if rows == 1 && !middle.is_empty() {
+                    0
+                } else {
+                    rows
+                };
                 assert!(
-                    text.contains(&format!("BEFORE{}{next}", "\n".repeat(rows + 1))),
+                    text.contains(&format!("BEFORE{}{next}", "\n".repeat(reading_rows + 1))),
                     "{source}\n{text:?}"
                 );
             }

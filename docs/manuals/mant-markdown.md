@@ -141,7 +141,11 @@ nor supplies an activation range.
 
 Export gives a closing fence its own framing newline. The reader removes that
 one syntax newline, preserving literal content's leading, repeated and final
-hard rows, including blocks made entirely of row breaks.
+hard rows, including blocks made entirely of row breaks. Markdown-authored fences
+are not trimmed. Roff input has a separate producer reading policy: a complete
+independent code block with exactly one empty initial row and later nonblank
+body omits that row before IR positions are established. Export uses that
+already normalized body without applying the rule again.
 
 ## Semantic Entry Lists
 

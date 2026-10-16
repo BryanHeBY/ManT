@@ -1,0 +1,225 @@
+{
+  "schema": "mant.literal-leading-row-seams/v1",
+  "sourceLicense": "Apache-2.0",
+  "expectationsFromProduct": false,
+  "oracle": "oracle.json",
+  "nativeBodyProjection": "Resolve each backspace overstrike, select complete rows strictly between BEFORE and AFTER, and remove only the BEFORE row structural prefix if present; preserve every row and authored whitespace.",
+  "cases": [
+    {
+      "id": "hp_literal_headless_ip",
+      "file": "hp-literal-headless-ip.1",
+      "sourceSha256": "eb3136273e42a4da319547e78bd87c576647cd862a9f7c2541ae83be90dce1e0",
+      "nativeBodyRows": {
+        "ascii": [
+          "",
+          "",
+          "--one",
+          "",
+          "       Description."
+        ],
+        "utf8": [
+          "",
+          "",
+          "--one",
+          "",
+          "       Description."
+        ]
+      },
+      "purpose": "Keep an executed HP/headless-IP semantic ownership proof valid when its literal HP loses one initial empty row.",
+      "nativeTreeFacts": {
+        "macrosInOrder": [
+          "nf",
+          "HP",
+          "IP"
+        ],
+        "hpHeadEmpty": true,
+        "hpBodyEmptyTextSourceLines": [
+          6
+        ],
+        "hpBodyText": [
+          "",
+          "--one"
+        ],
+        "hpBodyFontMacro": "B",
+        "ipHeadEmpty": true,
+        "ipBodyText": [
+          "Description."
+        ],
+        "hpAndIpAreAdjacentSiblings": true
+      },
+      "readingBoundary": "The literal HP body has one initial empty TEXT. Native screen rows additionally include HP/IP block spacing, which the reading exception must not remove.",
+      "sourceRules": [
+        "man_term.c::pre_HP/post_HP",
+        "man_term.c::pre_IP/post_IP",
+        "man_term.c::print_man_node"
+      ]
+    },
+    {
+      "id": "inset_shared_literal",
+      "file": "inset-shared-literal.1",
+      "sourceSha256": "f1dbecc8723edd68c524868a71d4f2d162e18edeccd4dbfa9b315b6f5d5c1d92",
+      "nativeBodyRows": {
+        "ascii": [
+          "HEAD",
+          "BODY"
+        ],
+        "utf8": [
+          "HEAD ",
+          "BODY"
+        ]
+      },
+      "purpose": "The leading break in a shared literal BODY separates HEAD from BODY; it is not an independent empty initial code row.",
+      "nativeTreeFacts": {
+        "listStyle": "inset",
+        "listCompact": true,
+        "itHeadText": "HEAD",
+        "itHeadSourceLine": 11,
+        "itBodyText": "BODY",
+        "itBodySourceLine": 12,
+        "headAndBodyNoFill": true,
+        "emptyTextSourceLines": []
+      },
+      "readingBoundary": "Preserve HEAD/BODY physical separation. The native HEAD ends in an inset-generated NBSP before the BODY source-line event.",
+      "sourceRules": [
+        "mdoc_term.c::print_mdoc_node",
+        "mdoc_term.c::termp_it_pre/post"
+      ]
+    },
+    {
+      "id": "nf_zero_width_row",
+      "file": "nf-zero-width-row.1",
+      "sourceSha256": "a91161acf5213e08109a62686c4f684fb8313627132de48012a5cfe91c0d735d",
+      "nativeBodyRows": {
+        "ascii": [
+          "",
+          "BODY"
+        ],
+        "utf8": [
+          "",
+          "BODY"
+        ]
+      },
+      "purpose": "A zero-width native cell occupies a standalone physical row without being empty source TEXT.",
+      "nativeTreeFacts": {
+        "nonemptyNoFillText": {
+          "sourceLine": 5,
+          "text": "\\&"
+        },
+        "emptyTextSourceLines": []
+      },
+      "readingBoundary": "Apply the approved exception only to the complete resolved owner. Do not mistake a nonempty source operand for an empty TEXT execution event.",
+      "sourceRules": [
+        "man_term.c::print_man_node",
+        "term.c::term_word ESCAPE_IGNORE",
+        "term.c::term_fill ASCII_NBRZW"
+      ]
+    },
+    {
+      "id": "nf_word_break_row",
+      "file": "nf-word-break-row.1",
+      "sourceSha256": "82693015fa0c50686760edd0a0185580f097c3ee1e013f1be3bb75caa0427336",
+      "nativeBodyRows": {
+        "ascii": [
+          "",
+          "BODY"
+        ],
+        "utf8": [
+          "",
+          "BODY"
+        ]
+      },
+      "purpose": "A word-end-break buffer on a standalone no-fill source line has a physical empty row even though there is no empty source TEXT.",
+      "nativeTreeFacts": {
+        "nonemptyNoFillText": {
+          "sourceLine": 5,
+          "text": "\\p"
+        },
+        "emptyTextSourceLines": []
+      },
+      "readingBoundary": "Preserve native row execution before the one-row reading policy. Do not de-duplicate this row with helper return or the next NODE_LINE.",
+      "sourceRules": [
+        "man_term.c::print_man_node",
+        "term.c::term_word ESCAPE_BREAK",
+        "term.c::term_fill newline"
+      ]
+    },
+    {
+      "id": "nf_independent_row_origins",
+      "file": "nf-independent-row-origins.1",
+      "sourceSha256": "8d3df26b81c0e4c7f6f834866d4a3ae24a861c816c77510731e88c9072eae7f3",
+      "nativeBodyRows": {
+        "ascii": [
+          "",
+          "",
+          "CODE",
+          "   SHIFTED",
+          "PLAIN"
+        ],
+        "utf8": [
+          "",
+          "",
+          "CODE",
+          "   SHIFTED",
+          "PLAIN"
+        ]
+      },
+      "purpose": "Keep preceding paragraph spacing distinct from the removable literal row, and rebase a later temporary indent without changing its physical origin.",
+      "nativeTreeFacts": {
+        "parentMacro": "PP",
+        "emptyNoFillTextSourceLines": [
+          6
+        ],
+        "textSourceLines": {
+          "CODE": 7,
+          "SHIFTED": 9,
+          "PLAIN": 10
+        },
+        "temporaryIndent": {
+          "sourceLine": 8,
+          "argument": "+3n",
+          "affectedText": "SHIFTED",
+          "relativeColumns": 3
+        }
+      },
+      "readingBoundary": "Only the initial row owned by the complete literal may be removed. PP spacing stays outside it; CODE and PLAIN share the base origin and SHIFTED remains three columns to their right.",
+      "sourceRules": [
+        "man_term.c::pre_PP",
+        "man_term.c::print_man_node",
+        "roff_term.c::roff_term_pre_ti"
+      ]
+    },
+    {
+      "id": "tbl_literal_cell",
+      "file": "tbl-literal-cell.1",
+      "sourceSha256": "2839f02d44253b881a510c1547a3c9c9ae3c5d938525f055f86ed88200cba126",
+      "nativeBodyRows": {
+        "ascii": [
+          " CODE"
+        ],
+        "utf8": [
+          " CODE"
+        ]
+      },
+      "purpose": "Exercise source-safe T{} recovery without pretending that pristine tbl contains a nested literal AST.",
+      "nativeTreeFacts": {
+        "tableCount": 1,
+        "tableCellCount": 1,
+        "cellIsTextBlock": true,
+        "cellTreeText": " CODE",
+        "globalRequestSibling": {
+          "token": "nf",
+          "sourceLine": 7
+        },
+        "emptyTextSourceLines": [],
+        "cellHasNestedLiteralAst": false
+      },
+      "readingBoundary": "Native renders one CODE row, with a one-column tbl inset relative to BEFORE. Current source-backed codec recovery may recover a literal owner; assert that actual parsed shape before testing its complete-owner normalization. Do not synthesize a native literal expectation.",
+      "sourceRules": [
+        "roff.c::roff_parseln",
+        "roff.c::roff_req_or_macro",
+        "tbl_data.c::tbl_cdata",
+        "tbl_term.c::tbl_literal/tbl_word"
+      ]
+    }
+  ]
+}

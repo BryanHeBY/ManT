@@ -48,7 +48,9 @@ fn assert_rows(prefix: &str) {
         // Exactly one section separator is furniture. Preserve all other
         // empty rows, indentation, trailing spaces and word boundaries.
         assert_eq!(rows.pop(), Some(""), "{}: section separator", case.id);
-        assert_eq!(rows, case.expected_rows, "{}", case.id);
+        let expected =
+            crate::oracle_migrations::literal_reading::rows(&case.source, &case.expected_rows);
+        assert_eq!(rows, expected, "{}", case.id);
         checked += 1;
     }
     assert!(checked > 0, "missing {prefix} cases");

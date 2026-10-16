@@ -495,6 +495,9 @@ fn invisible_section_operands_keep_their_native_word_boundary() {
 
 #[test]
 fn accepted_invisible_rows_belong_to_the_consumed_unit_not_its_last_word() {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     // Exact pristine probes preceded this assertion. NODE_LINE closes the
     // generated inset BODY cell before its first word (mdoc_term.c:314,
     // 764). NBRZW occupies the following row even when the last empty word's

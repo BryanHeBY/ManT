@@ -142,6 +142,9 @@ fn unrendered_definition_head_does_not_consume_body_row() {
 
 #[test]
 fn no_fill_body_does_not_replay_detached_head_cell() {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     // Exact forms checked with fixed CVS -Tutf8. A completed \zX belongs to
     // the HEAD row, and the inset BODY's generated `\ ` cell overstrikes it
     // (encode1 consumes BACKBEFORE, term.c:901-908): the HEAD term loses X.

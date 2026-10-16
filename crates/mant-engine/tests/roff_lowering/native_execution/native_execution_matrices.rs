@@ -131,10 +131,13 @@ fn verify(case: &Case) {
         // Both headers have five common device columns. The fixture also
         // records the separately frozen G-IND temporary device origin
         // exceptions, derived from source and oracle pairs, never product.
-        // No rule removes empty physical rows or authored word separators.
-        let expected = case.reading_utf8_rows.as_ref().unwrap();
+        // Exact-source reading cards omit only the approved one-row literal
+        // prefix; native gold and authored word separators remain unchanged.
+        let native_reading = case.reading_utf8_rows.as_ref().unwrap();
+        let expected =
+            crate::oracle_migrations::literal_reading::rows(&case.source, native_reading);
         assert_eq!(
-            &actual, expected,
+            actual, expected,
             "{}: native hard rows differ ({}; {})\n{}",
             case.id, case.scope_reason, case.reading_rule, case.source
         );

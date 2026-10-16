@@ -1,0 +1,1753 @@
+{
+  "schema": "mant.literal-leading-rows/v1",
+  "sourceLicense": "Apache-2.0",
+  "expectationsFromProduct": false,
+  "reference": {
+    "snapshot": "20261013T025419Z",
+    "identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "recipe": {
+      "environment": {
+        "LC_ALL": "C.UTF-8"
+      },
+      "input": "byte-for-byte copy under recorded basename, scratch cwd; no source rewriting",
+      "profiles": {
+        "ascii": [
+          "-Tascii",
+          "-Owidth=80",
+          "-Ios=ManT"
+        ],
+        "utf8": [
+          "-Tutf8",
+          "-Owidth=80",
+          "-Ios=ManT"
+        ],
+        "tree": [
+          "-Ttree",
+          "-Ios=ManT"
+        ],
+        "lint": [
+          "-Tlint",
+          "-Ios=ManT"
+        ]
+      },
+      "stdoutProjection": "complete raw stdout; hashes include terminal overstrikes and all hard rows"
+    }
+  },
+  "nativeBodyProjection": "take complete terminal rows strictly between BEFORE and AFTER; execute backspace overstrikes; remove only the common BEFORE structural prefix, preserving authored whitespace and empty rows",
+  "readingPolicy": "Apply only after complete roff Preformatted owners are assembled, before semantic identification: omit exactly one empty initial logical row only when later body exists; preserve zero/two-plus initial empties, entirely empty bodies and author whitespace. Do not apply to Markdown or intermediate builder fragments. Native rows below deliberately retain the CVS blank line.",
+  "cases": [
+    {
+      "id": "nf_leading_0",
+      "file": "nf-leading-0.1",
+      "sourceSha256": "b66cdeda0829ec0577e339761af9934cfe014c3c86e4cf4da8d6e1b7212ec587",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 0
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": []
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "646434bb016db9a6fdf93dbfaccc663f516ffd300d2e90754c4aecbc66839752",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "646434bb016db9a6fdf93dbfaccc663f516ffd300d2e90754c4aecbc66839752",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b7356faeaca5328407e980ff53c02192fa972de0cf4f56640990cacc5e8bbbb1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_leading_1",
+      "file": "nf-leading-1.1",
+      "sourceSha256": "870c44a83b5b3f6fe5b0dbcc316a70bf7ed2c82a966f21d8f523af9e5f06a985",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 1
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b3d98b63e66862ccc796414dc0dac31374b2aa0ac4305cc45150a59b57515519",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b3d98b63e66862ccc796414dc0dac31374b2aa0ac4305cc45150a59b57515519",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e9eaed8b080e22fb09a11f42fca0ef7068bb9aecf2d6c89d663389419c6d7ae0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_leading_2",
+      "file": "nf-leading-2.1",
+      "sourceSha256": "cfb8e5d05744238c440220aa4362b155688995cf2ae9c996291bf0460f44d852",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 2
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5,
+          6
+        ]
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f400ef929ba24503eab81bb64b8581edb42502778334aa5b929f5e987ab5505c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f400ef929ba24503eab81bb64b8581edb42502778334aa5b929f5e987ab5505c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b41d4eeaf42b1ed1d1718d3a8d20383e0b4eac9ca6280b5833d8c0f03de2e5c0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ex_leading_0",
+      "file": "ex-leading-0.1",
+      "sourceSha256": "e432c89693c7b5b8f3e79743e6c4a2ad3873da135456e9c005f6089d839815b9",
+      "sourceFacts": {
+        "kind": "ex",
+        "leadingSourceEmptyRows": 0
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": []
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "646434bb016db9a6fdf93dbfaccc663f516ffd300d2e90754c4aecbc66839752",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "646434bb016db9a6fdf93dbfaccc663f516ffd300d2e90754c4aecbc66839752",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "ex-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "a5db7f411cc7ff3ab5295b9f0275e7c5b8fe55de1a31d54959fc345ba3085eae",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "ex-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ex_leading_1",
+      "file": "ex-leading-1.1",
+      "sourceSha256": "f5568550d5b268279d42070930cd52baf6c535943087ea2d1eb8766e39edbe74",
+      "sourceFacts": {
+        "kind": "ex",
+        "leadingSourceEmptyRows": 1
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b3d98b63e66862ccc796414dc0dac31374b2aa0ac4305cc45150a59b57515519",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b3d98b63e66862ccc796414dc0dac31374b2aa0ac4305cc45150a59b57515519",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "ex-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "c60dc54b3e4782678562c5f531658a07b9dbdb88a49dae29d841bb18052c0d73",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "ex-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ex_leading_2",
+      "file": "ex-leading-2.1",
+      "sourceSha256": "16834d5f9c08b77cdf6df30a4ccb77c6484ba2a3bc5411af6257ce3aff5f4bb7",
+      "sourceFacts": {
+        "kind": "ex",
+        "leadingSourceEmptyRows": 2
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5,
+          6
+        ]
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f400ef929ba24503eab81bb64b8581edb42502778334aa5b929f5e987ab5505c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f400ef929ba24503eab81bb64b8581edb42502778334aa5b929f5e987ab5505c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "ex-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "71ce77f8da9ae80a48bebde3f420861aa9004959bcc0481c2b3cd7884e28a396",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "ex-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "bd_leading_0",
+      "file": "bd-leading-0.1",
+      "sourceSha256": "ba84b6efc4ec113ff9a1010668fa2d3c5516e0bd9a57b1c19b29e572264bd69b",
+      "sourceFacts": {
+        "kind": "bd",
+        "leadingSourceEmptyRows": 0
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": []
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "0273d236174cd824e6a14e964cc0e006758f2a9142823fe4d4ebd76c8152f318",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "042c6c205b5d94f8e196f3b675cb030587e4b9f1e0949ff30383109ac857fd3d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "bd-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "16d4d9c05c40a89846e18d46d3b2c933b74760ea586891793614f8748c46bc0e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "bd-leading-0.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "bd_leading_1",
+      "file": "bd-leading-1.1",
+      "sourceSha256": "473e2b781cf9d098b0d93202145cfc45322a7d3ef95e1c2869a48531311d7c66",
+      "sourceFacts": {
+        "kind": "bd",
+        "leadingSourceEmptyRows": 1
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          10
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "1f51316af38cf5510652a717e1289bb446d3f3ac3eef15efbd41d95327990f17",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "fc3d35db24ad683e198f004407d917992bb22ee7cac1508a3e07b8652862c139",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "bd-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "d427b3d62a65fbf9e9ec127367655b073f95f5dfb9ecfa93b89040e8cab2aec8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "bd-leading-1.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "bd_leading_2",
+      "file": "bd-leading-2.1",
+      "sourceSha256": "df0c4ba5cd03a52d60ed9eb7f6407c9c4d58adf2e96d8db1cfd5efaf273c5f73",
+      "sourceFacts": {
+        "kind": "bd",
+        "leadingSourceEmptyRows": 2
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          10,
+          11
+        ]
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e149a25467d17f797572e13247917341c8b6310c3624a3a19c01f8015661c3a6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "4aca4f6e8c1c9b647151732efe860dccb87edc6f518ce01f241b541dae0eb6ca",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "bd-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b041e0b3e25fdda3b170fd15cb11ef6d607b0daa1ba8cc97634f3611c8697d0b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "bd-leading-2.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_empty_zero",
+      "file": "nf-empty-zero.1",
+      "sourceSha256": "9ff6be6c57036f2d352ab3f5828ef331746dd18074b2e90c2befab3e82aebf69",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 0,
+        "allEmpty": true
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [],
+          "utf8": []
+        },
+        "emptyNoFillTextSourceLines": []
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-empty-zero.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "d874a06a7f9cd81cd1d11352bbad28327f0461978d31f89ffc89ada0616484b9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-empty-zero.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "d874a06a7f9cd81cd1d11352bbad28327f0461978d31f89ffc89ada0616484b9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-empty-zero.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "5b88ba910c0e1125cb8c652f517dcf393956151f295f3a9037a49d04984df614",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-empty-zero.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_empty_one",
+      "file": "nf-empty-one.1",
+      "sourceSha256": "c33907bbeae2a79ec5bfc583200716d3814230f3327ac01f1cbe57ed879c84eb",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 1,
+        "allEmpty": true
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            ""
+          ],
+          "utf8": [
+            ""
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5
+        ]
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "36b8191f6026aa50acfdc3f3eef815ceed254dd6ac19079e274652fe402824a7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "36b8191f6026aa50acfdc3f3eef815ceed254dd6ac19079e274652fe402824a7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "914597ff06f3ad2654061c339741ece5b8c756cb864ff0913f0732c9f2a146bc",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ex_empty_two",
+      "file": "ex-empty-two.1",
+      "sourceSha256": "64df9fef18f9f6de82aa55c86498a0c1fbb56fb9eb484efb12f16ce34864a875",
+      "sourceFacts": {
+        "kind": "ex",
+        "leadingSourceEmptyRows": 2,
+        "allEmpty": true
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            ""
+          ],
+          "utf8": [
+            "",
+            ""
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5,
+          6
+        ]
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-empty-two.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "53fd171013600d5556ac7d8f24be33122c30930e2edcca58c53abde8bde7ee84",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-empty-two.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "53fd171013600d5556ac7d8f24be33122c30930e2edcca58c53abde8bde7ee84",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "ex-empty-two.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "4de2f397efc4b17cf471c8ba563968ef9fbc80d6f858b4aed5e70140cd003a28",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "ex-empty-two.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "bd_empty_one",
+      "file": "bd-empty-one.1",
+      "sourceSha256": "b4a84c1257caf938916db782641dae524bd9ef7aaa372aa210563cf225f79280",
+      "sourceFacts": {
+        "kind": "bd",
+        "leadingSourceEmptyRows": 1,
+        "allEmpty": true
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            ""
+          ],
+          "utf8": [
+            ""
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          10
+        ]
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "a8fbfd3b861d9ca8244c7386e93cc2c4a5bf39b7d5dbadb4aaca64f0d75c840e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "266873d0ed18dd089347ea07c3ee66cf23648e3c9aaaa7d8f0286a91a33ee584",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "bd-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "8caaf318e4f1d671a1b27f968b4e25ee3426c3195ebc76fa50c1797673d65f77",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "bd-empty-one.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_authored_spaces",
+      "file": "nf-authored-spaces.1",
+      "sourceSha256": "813e5885ea1175f7c924b32f7b28016a7cb88854326cf2e018465ca5de16c6f6",
+      "sourceFacts": {
+        "kind": "nf",
+        "initialAuthoredWhitespace": "spaces",
+        "initialWhitespaceEvidence": "two source U+0020 cells followed by zero-width \\&"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A"
+          ],
+          "utf8": [
+            "",
+            "LINE_A"
+          ]
+        },
+        "emptyNoFillTextSourceLines": []
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-authored-spaces.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "657589c6309c7585342c9d2116d794a38577558d8ac7afabec027f8c28020dc9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-authored-spaces.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "657589c6309c7585342c9d2116d794a38577558d8ac7afabec027f8c28020dc9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-authored-spaces.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f138865ab29e02d173b0e9e557efe3fefdf0f2295f255b2ed0e63a03915691ce",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-authored-spaces.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ex_authored_tab",
+      "file": "ex-authored-tab.1",
+      "sourceSha256": "ef151499e2626ecabeccbbaa82e0d38458201c424c599526b726bafe5112be2f",
+      "sourceFacts": {
+        "kind": "ex",
+        "initialAuthoredWhitespace": "tab",
+        "initialWhitespaceEvidence": "source U+0009 followed by zero-width \\&"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A"
+          ],
+          "utf8": [
+            "",
+            "LINE_A"
+          ]
+        },
+        "emptyNoFillTextSourceLines": []
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-authored-tab.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "657589c6309c7585342c9d2116d794a38577558d8ac7afabec027f8c28020dc9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-authored-tab.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "657589c6309c7585342c9d2116d794a38577558d8ac7afabec027f8c28020dc9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "ex-authored-tab.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b9103a6bf98ceefbd1fe42a8cceb9d5c251d8ed6a5850ed5a0aac0036df6182e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "ex-authored-tab.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "bd_authored_nbsp",
+      "file": "bd-authored-nbsp.1",
+      "sourceSha256": "a3bfd1b1650d799bce3ced24ac8eabeb57ccbad323013edc4a3eabd5dd9de15c",
+      "sourceFacts": {
+        "kind": "bd",
+        "initialAuthoredWhitespace": "nbsp",
+        "initialWhitespaceEvidence": "authored nonbreaking-space escape \\~"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A"
+          ],
+          "utf8": [
+            " ",
+            "LINE_A"
+          ]
+        },
+        "emptyNoFillTextSourceLines": []
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-authored-nbsp.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "c85d13a5e3bd08a9abd55e30152534a70efc3a89d6f2707b13e7d0c7600769bd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-authored-nbsp.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "937a8a58a288615feb33797057238c54104a541160129e22f6376b0e120f21f6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "bd-authored-nbsp.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "9554dc5ef7c19455613115b26bc14a4a3a611cb7c4a2db67cf1e688fcc7c24f8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "bd-authored-nbsp.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_internal_and_trailing_rows",
+      "file": "nf-internal-and-trailing-rows.1",
+      "sourceSha256": "ff28ab7faa13e85d539c724239430a78ae11e11ec6eebeae36d134e60975001b",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 1,
+        "internalSourceEmptyRows": 1,
+        "trailingSourceEmptyRows": 2
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A",
+            "",
+            "LINE_B",
+            "",
+            ""
+          ],
+          "utf8": [
+            "",
+            "LINE_A",
+            "",
+            "LINE_B",
+            "",
+            ""
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5,
+          7,
+          9,
+          10
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-internal-and-trailing-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "83bc4ee1ade9fbb247c79aa1980f7cce9edf9ba858245a84ef1ef5ef490f7936",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-internal-and-trailing-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "83bc4ee1ade9fbb247c79aa1980f7cce9edf9ba858245a84ef1ef5ef490f7936",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-internal-and-trailing-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "b313494636d4ed3b4d297d4249a621e9cc3e97e4b42f981721b8d7b0e76bdfd8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-internal-and-trailing-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_controls_between_leading_rows",
+      "file": "nf-controls-between-leading-rows.1",
+      "sourceSha256": "cc56fc85fd8c9adedd481250893cd3674cbe85d7b1431a22a2b52679d2da76a8",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 2,
+        "assemblyBoundary": "formatter controls split the leading native row events"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5,
+          7
+        ]
+      },
+      "readingException": {
+        "rule": "preserve",
+        "dropLeadingEmptyRows": 0
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-controls-between-leading-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f400ef929ba24503eab81bb64b8581edb42502778334aa5b929f5e987ab5505c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-controls-between-leading-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "f400ef929ba24503eab81bb64b8581edb42502778334aa5b929f5e987ab5505c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-controls-between-leading-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "8b46794f6312e214296c4dfa48b7ffbbbd5833d143f9b7775ada14e4b492caa1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-controls-between-leading-rows.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_control_after_leading_row",
+      "file": "nf-control-after-leading-row.1",
+      "sourceSha256": "9dbd6170c3ea2916a341b901f5e3bfb5e5f6ec36562b21b646bd169eabb59b53",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRows": 1,
+        "assemblyBoundary": "font control after the leading row",
+        "fontEvidence": "LINE_A bold; LINE_B roman"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-control-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "27ac9b21ccae1af5f0a3f7186bcb60fc02dc6d9e59f79bfba4d293de1e86021d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-control-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "27ac9b21ccae1af5f0a3f7186bcb60fc02dc6d9e59f79bfba4d293de1e86021d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-control-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "c6804d1610657db34d06d6cf1822228b39bd80e2dcc3c5bec7d33eba5628a271",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-control-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "bd_style_scope_after_leading_row",
+      "file": "bd-style-scope-after-leading-row.1",
+      "sourceSha256": "98b093ea4779727dd9cc456f74ac2c4d43ac3b36b1245a7c2113e71da8017f2c",
+      "sourceFacts": {
+        "kind": "bd",
+        "leadingSourceEmptyRows": 1,
+        "assemblyBoundary": "font BODY pre/post inside one literal display",
+        "fontEvidence": "LINE_A emphasis; LINE_B roman"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          10
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-style-scope-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "aa58c73bbaf03e95a2ad67f9a686f1695ec78c548e73d8d3fc13f46e9147b6be",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-style-scope-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "d7ecdb5ef8606a55acfff1bc5de02040067c5755943f5603315713e9bb7d60ea",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "bd-style-scope-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "1749d088de6c2608bdf6a162bf7476b0284d45140ca830c199796144ab5e71d0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "bd-style-scope-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "ex_link_after_leading_row",
+      "file": "ex-link-after-leading-row.1",
+      "sourceSha256": "e15c197c8b1f7846ac999b4125b4cbcb1daef02f331c92ec267d65c387fb5060",
+      "sourceFacts": {
+        "kind": "ex",
+        "leadingSourceEmptyRows": 1,
+        "linkTarget": "https://example.test/literal-rows"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A <https://example.test/literal-rows>",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "LINE_A <https://example.test/literal-rows>",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-link-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "628a5be37000a0bee79f6da0af59a4357446dafc77d143895afc540f672b3d02",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "ex-link-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "628a5be37000a0bee79f6da0af59a4357446dafc77d143895afc540f672b3d02",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "ex-link-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "cb25641d67b634135afcefb7792c42ac3005ee6e09e4b8001d4054061c1d0ddf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "ex-link-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "bd_anchor_after_leading_row",
+      "file": "bd-anchor-after-leading-row.1",
+      "sourceSha256": "f2c748c8b5b431a77fb039a879615e4d9e73386af66b9f5b351679c24801f151",
+      "sourceFacts": {
+        "kind": "bd",
+        "leadingSourceEmptyRows": 1,
+        "anchor": "literal-anchor",
+        "fontEvidence": "LINE_A bold"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ],
+          "utf8": [
+            "",
+            "LINE_A",
+            "LINE_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          10
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty",
+        "dropLeadingEmptyRows": 1
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-anchor-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e2d5674e2c5aa70c3bcf38bda939b777838dd99d5f82d504dacda525adef34db",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "bd-anchor-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "90c6155f47f95539223ec7e841f2d8793736bd9da2956149c368141b6d80e50c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "bd-anchor-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "c2935a34c917d231090d913f8a948a4ac3d2fb330223f7674b89fb1f8b7f53d5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "bd-anchor-after-leading-row.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nf_independent_literal_owners",
+      "file": "nf-independent-literal-owners.1",
+      "sourceSha256": "76983b2b7fd07a99d7ca52c163f3da853afd272e14d8e92ead590286e29839d8",
+      "sourceFacts": {
+        "kind": "nf",
+        "leadingSourceEmptyRowsPerOwner": [
+          1,
+          1
+        ],
+        "assemblyBoundary": "a filled BETWEEN paragraph separates the complete literal owners"
+      },
+      "native": {
+        "bodyRows": {
+          "ascii": [
+            "",
+            "BLOCK_A",
+            "",
+            "BETWEEN",
+            "",
+            "BLOCK_B"
+          ],
+          "utf8": [
+            "",
+            "BLOCK_A",
+            "",
+            "BETWEEN",
+            "",
+            "BLOCK_B"
+          ]
+        },
+        "emptyNoFillTextSourceLines": [
+          5,
+          11
+        ]
+      },
+      "readingException": {
+        "rule": "remove-single-leading-empty-per-final-owner",
+        "dropLeadingEmptyRows": 0,
+        "dropLeadingEmptyRowsPerOwner": [
+          1,
+          1
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "-Tascii",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-independent-literal-owners.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "feb7ac2a2cfe2eb2dbaf30a4b0cf98f4ef6f52b3664ee63dfea1f0378719c341",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "-Tutf8",
+            "-Owidth=80",
+            "-Ios=ManT",
+            "nf-independent-literal-owners.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "feb7ac2a2cfe2eb2dbaf30a4b0cf98f4ef6f52b3664ee63dfea1f0378719c341",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "-Ttree",
+            "-Ios=ManT",
+            "nf-independent-literal-owners.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "861d5d5470c7e3d2623ea67d6f976dc8039a407ea75f44aa74e486e18efc21f3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "-Tlint",
+            "-Ios=ManT",
+            "nf-independent-literal-owners.1"
+          ],
+          "status": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ]
+}

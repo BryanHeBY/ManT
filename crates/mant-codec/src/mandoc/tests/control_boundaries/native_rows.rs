@@ -396,6 +396,9 @@ fn no_fill_execution_state_crosses_transparent_requests_only() {
 
 #[test]
 fn invisible_continued_no_fill_cells_reach_temporary_and_no_break_flushes() {
+    // Inspect native execution before the separate code-owner reading policy.
+    use crate::mandoc::parse_native_manual as parse_manual_bytes;
+
     for (label, header, opening, request, closing, expected) in [
         (
             "mdoc-ti",

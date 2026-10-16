@@ -82,6 +82,10 @@ fn aligned_execution_rows_survive_wire_and_two_known_viewports() {
                     )
                 })
                 .collect();
+            let expected = crate::oracle_migrations::literal_reading::rows(
+                case["source"].as_str().unwrap(),
+                &expected,
+            );
             let actual = body_rows(&mant_render::render_query_text_at_width(
                 &query,
                 width - 5,

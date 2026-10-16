@@ -60,6 +60,9 @@ fn tag_head_post_and_inset_body_own_distinct_physical_rows() {
     assert!(native.contains("X\n\nBODY"), "CVS: {native:?}");
     assert!(lowered.contains("X\n\nBODY"), "IR: {lowered:?}");
 
+    // Pristine replay confirms these native rows. The complete no-fill BODY
+    // has one empty initial row: the reading projection omits that row while
+    // leaving the already-rendered HEAD and every multi-row gap untouched.
     let inset = format!(
         "{prefix}.nf\n.Bl -inset\n.It Xo first\nsecond\n.Xc\n.No \\&\n.br\n.No BODY\n.El\n.fi\n"
     );
@@ -73,15 +76,12 @@ fn tag_head_post_and_inset_body_own_distinct_physical_rows() {
         native.contains("first\nsecond\n\n\nBODY"),
         "CVS: {native:?}"
     );
-    assert!(
-        lowered.contains("first\nsecond\n\n\nBODY"),
-        "IR: {lowered:?}"
-    );
+    assert!(lowered.contains("first\nsecond\n\nBODY"), "IR: {lowered:?}");
 
-    for (body, blank_rows) in [
-        (".No \\& No \"\"\n.br\n.No BODY\n", 2),
-        (".No \\&\n.sp 1\n.No BODY\n", 3),
-        (".No \"\"\n.br\n.No BODY\n", 1),
+    for (body, blank_rows, reading_rows) in [
+        (".No \\& No \"\"\n.br\n.No BODY\n", 2, 1),
+        (".No \\&\n.sp 1\n.No BODY\n", 3, 3),
+        (".No \"\"\n.br\n.No BODY\n", 1, 1),
     ] {
         let source =
             format!("{prefix}.nf\n.Bl -inset\n.It Xo first\nsecond\n.Xc\n{body}.El\n.fi\n");
@@ -90,7 +90,11 @@ fn tag_head_post_and_inset_body_own_distinct_physical_rows() {
         let lowered = rows(lowered_terminal(&source));
         let boundary = format!("second{}BODY", "\n".repeat(blank_rows + 1));
         assert!(native.contains(&boundary), "CVS {body}: {native:?}");
-        assert!(lowered.contains(&boundary), "IR {body}: {lowered:?}");
+        let reading_boundary = format!("second{}BODY", "\n".repeat(reading_rows + 1));
+        assert!(
+            lowered.contains(&reading_boundary),
+            "IR {body}: {lowered:?}"
+        );
     }
 
     // CVS mdoc_macro.c::blk_exp_close() breaks the intermediate It HEAD
@@ -102,7 +106,7 @@ fn tag_head_post_and_inset_body_own_distinct_physical_rows() {
         let native = rows(without_line_indentation(&native_terminal(&source)));
         let lowered = rows(lowered_terminal(&source));
         assert!(native.contains("\n\n\nBODY"), "CVS {head}: {native:?}");
-        assert!(lowered.contains("\n\n\nBODY"), "IR {head}: {lowered:?}");
+        assert!(lowered.contains("\n\nBODY"), "IR {head}: {lowered:?}");
     }
 }
 

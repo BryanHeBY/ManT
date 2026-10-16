@@ -49,6 +49,9 @@ class FixtureCheckoutTests(unittest.TestCase):
         files = {path.relative_to(ROOT): path.read_bytes()
                  for path in (ROOT / FIXTURES).rglob("*")
                  if path.suffix in {".1", ".expected"}}
+        for family in ("literal_leading_rows", "table_layout"):
+            files.update({path.relative_to(ROOT): path.read_bytes()
+                          for path in (ROOT / "tests/fixtures/roff" / family).rglob("*.1")})
         self.assertTrue(files)
         # This unprotected file proves that the scratch checkout really applies
         # autocrlf/core.eol, independently of the host's native line endings.

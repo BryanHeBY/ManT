@@ -19,6 +19,12 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
+- Omit exactly one empty initial row from a complete roff code block with
+  nonblank body, as an explicit reading policy shared by JSON, CLI, TUI and
+  Markdown export. Preserve two or more initial rows, entirely blank blocks,
+  authored whitespace, internal/trailing rows and shared definition seams.
+  Markdown-authored code blocks remain literal. Rebase row hints and semantic
+  positions before identifying entries; no IR fields or schema versions change.
 - Preserve cell-local authored literal rows, unsupported-text spaces and
   addressable anchors in portable table Markdown. Keep anchors outside the
   fence without duplicating original owners or shifting their artifact ranges.

@@ -52,6 +52,7 @@ fn all_original_acceptance_sources_keep_their_complete_body_row_window() {
             crate::oracle_migrations::Window::Body,
         )
         .unwrap_or(&expected);
+        let expected = crate::oracle_migrations::literal_reading::rows(source, expected);
         let query = mant_loader::load_roff_bytes(source.as_bytes())
             .unwrap_or_else(|error| panic!("{name}: {error}"));
         let json = mant_render::render_query_json(&query, false).unwrap();
@@ -62,7 +63,7 @@ fn all_original_acceptance_sources_keep_their_complete_body_row_window() {
         let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
         let query: ResolvedContent = decoded.into();
         let actual = body_rows(&mant_render::render_query_man(&query));
-        if actual.as_slice() != expected {
+        if actual != expected {
             failures.push(format!(
                 "{name}\nsource:\n{source}\nactual: {actual:?}\nreference: {expected:?}"
             ));

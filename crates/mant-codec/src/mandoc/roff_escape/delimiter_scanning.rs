@@ -9,6 +9,7 @@
 //! argument ends at its last proven-consumed unit (`iend`), and only the
 //! `Aow` families keep an unclosed payload (:343-351).
 
+// Native gold covers execution before the initial-code-row reading exception.
 use super::{decode, visible_text};
 
 mod character_delimiters;
@@ -252,7 +253,7 @@ fn partial_bracket_closers_preserve_rows_and_link_ownership_across_carriers() {
                         if no_fill { ".nf\n" } else { "" },
                         if no_fill { ".fi\n" } else { "" },
                     );
-                    let document = crate::mandoc::parse_plain_manual(
+                    let document = crate::mandoc::parse_native_manual(
                         std::path::Path::new("partial-bracket-closer.1"),
                         source.as_bytes(),
                     )

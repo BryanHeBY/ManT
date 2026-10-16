@@ -68,9 +68,10 @@ fn body_rows(output: &str) -> Vec<String> {
 fn assert_rows_match_reference(source: &str) {
     let source = framed_source(source);
     let native = body_rows(&native_terminal(&source));
+    let expected = crate::oracle_migrations::literal_reading::rows(&source, &native);
     let lowered = body_rows(&lowered_terminal(&source));
     assert_eq!(
-        lowered, native,
+        lowered, expected,
         "lowered rows must keep the pinned reference structure"
     );
 }
@@ -158,9 +159,15 @@ fn rejected_units_retire_glyphs_and_word_state_at_real_flushes() {
                         expected,
                         "native: {source:?}"
                     );
+                    let native_rows = expected
+                        .iter()
+                        .map(|row| (*row).to_owned())
+                        .collect::<Vec<_>>();
+                    let reading =
+                        crate::oracle_migrations::literal_reading::rows(&source, &native_rows);
                     assert_eq!(
                         body_rows(&lowered_terminal(&source)),
-                        expected,
+                        reading,
                         "lowered: {source:?}"
                     );
                 }
