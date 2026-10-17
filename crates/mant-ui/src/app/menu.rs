@@ -528,7 +528,7 @@ impl App {
             }
             MenuAction::SearchCase | MenuAction::SearchSyntax | MenuAction::SearchWrap => {
                 let editing = self.search_is_open();
-                if self.last_search_target == super::outline_search::SearchTarget::Outline {
+                if self.last_search_target == super::search::SearchTarget::Outline {
                     self.open_outline_search();
                 } else {
                     self.open_search();

@@ -1,70 +1,35 @@
-//! Owns search-field editing and translates keys into document-level commands.
-
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
-
-use std::{
-    ops::Range,
-    ops::{Deref, DerefMut},
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
-use super::App;
+//! Page-search jobs, result ownership and document navigation.
+use super::repaint::{SEARCH_BYTES_PER_SLICE, SEARCH_DEBOUNCE, SEARCH_SLICE_DELAY, SearchRepaint};
+use super::{App, SearchCommand, SearchInput, SearchMode, SearchOptions, SearchTarget};
 use crate::RenderedSearchMatch;
-use mant_protocol::{SearchCase, SearchSyntax};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct SearchOptions {
-    pub(super) syntax: SearchSyntax,
-    pub(super) case: SearchCase,
-}
-
-impl Default for SearchOptions {
-    fn default() -> Self {
-        Self {
-            syntax: SearchSyntax::Regex,
-            case: SearchCase::Sensitive,
-        }
-    }
-}
+use crossterm::event::KeyEvent;
+use std::{
+    ops::{Deref, DerefMut, Range},
+    sync::Arc,
+    time::Instant,
+};
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone)]
-pub(super) struct ScopedRenderedSearchMatch {
-    pub(super) document_index: usize,
+pub(in crate::app) struct ScopedRenderedSearchMatch {
+    pub(in crate::app) document_index: usize,
     record: (usize, usize),
     range: Range<usize>,
-    pub(super) rendered: RenderedSearchMatch,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SearchMode {
-    Closed,
-    Open { editing: bool },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SearchCommand {
-    None,
-    Changed,
-    Close,
-    Confirm,
-    Next,
-    Previous,
+    pub(in crate::app) rendered: RenderedSearchMatch,
 }
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct SearchState {
+pub(in crate::app) struct SearchState {
     input: SearchInput,
-    pub(super) matches: Vec<RenderedSearchMatch>,
-    pub(super) scope_matches: Vec<ScopedRenderedSearchMatch>,
-    pub(super) active_match: usize,
-    pub(super) render_width: u16,
-    pub(super) matching_query: String,
+    pub(in crate::app) matches: Vec<RenderedSearchMatch>,
+    pub(in crate::app) scope_matches: Vec<ScopedRenderedSearchMatch>,
+    pub(in crate::app) active_match: usize,
+    pub(in crate::app) render_width: u16,
+    pub(in crate::app) matching_query: String,
     matching_options: SearchOptions,
-    pub(super) job: Option<PageSearchJob>,
-    pub(super) deadline: Option<Instant>,
-    pub(super) limited: bool,
+    pub(in crate::app) job: Option<PageSearchJob>,
+    pub(in crate::app) deadline: Option<Instant>,
+    pub(in crate::app) limited: bool,
     repaint: SearchRepaint,
     restart_needed: bool,
     pending_move: Option<isize>,
@@ -82,279 +47,15 @@ struct SearchAnchor {
     range: Range<usize>,
 }
 
-pub(super) const SEARCH_DEBOUNCE: Duration = Duration::from_millis(100);
-pub(super) const SEARCH_SLICE_DELAY: Duration = Duration::from_millis(8);
-pub(super) const SEARCH_BYTES_PER_SLICE: usize = 8192;
-const SEARCH_REPAINT_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_PAGE_MATCHES: usize = 4096;
 const MAX_PAGE_FRAGMENTS: usize = 32768;
 
-/// Match inventories advance every slice; passive previews repaint at most
-/// every 50 ms. Input and explicit navigation still redraw immediately.
-#[derive(Debug, Clone, Default)]
-pub(super) struct SearchRepaint {
-    deadline: Option<Instant>,
-    dirty: bool,
-}
-
-impl SearchRepaint {
-    pub(super) fn update(
-        &mut self,
-        now: Instant,
-        changed: bool,
-        complete: bool,
-        navigated: bool,
-    ) -> bool {
-        self.dirty |= changed;
-        if complete
-            || navigated
-            || (self.dirty && self.deadline.is_none_or(|deadline| deadline <= now))
-        {
-            self.dirty = false;
-            self.deadline = Some(now + SEARCH_REPAINT_INTERVAL);
-            true
-        } else {
-            false
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
-pub(super) struct PageSearchJob {
+pub(in crate::app) struct PageSearchJob {
     document: usize,
     record: usize,
     fragments: usize,
     stream: crate::document::PatternStream,
-}
-
-/// Common input editor; each search surface owns its own query and cursor.
-#[derive(Debug, Clone)]
-pub(super) struct SearchInput {
-    resume_mode: Option<SearchMode>,
-    pub(super) mode: SearchMode,
-    pub(super) draft: String,
-    pub(super) cursor: usize,
-    pub(super) query: String,
-    pub(super) input_limited: bool,
-    pub(super) options: SearchOptions,
-    confirmed_options: SearchOptions,
-    pub(super) direction: isize,
-    confirmed_direction: isize,
-    pub(super) error: Option<String>,
-    pub(super) wrap: bool,
-    pub(super) highlighted: bool,
-}
-
-impl Default for SearchInput {
-    fn default() -> Self {
-        Self {
-            resume_mode: None,
-            mode: SearchMode::Closed,
-            draft: String::new(),
-            cursor: 0,
-            query: String::new(),
-            input_limited: false,
-            options: SearchOptions::default(),
-            confirmed_options: SearchOptions::default(),
-            direction: 1,
-            confirmed_direction: 1,
-            error: None,
-            wrap: false,
-            highlighted: false,
-        }
-    }
-}
-
-impl SearchInput {
-    pub(super) const fn is_open(&self) -> bool {
-        self.mode.is_open()
-    }
-
-    pub(super) const fn is_editing(&self) -> bool {
-        self.mode.is_editing()
-    }
-
-    pub(super) fn effective_query(&self) -> &str {
-        if self.is_editing() {
-            &self.draft
-        } else {
-            &self.query
-        }
-    }
-    pub(super) fn effective_options(&self) -> SearchOptions {
-        if self.is_editing() {
-            self.options
-        } else {
-            self.confirmed_options
-        }
-    }
-    pub(super) fn repeat_direction(&self) -> isize {
-        self.confirmed_direction
-    }
-    pub(super) fn has_changed_draft(&self) -> bool {
-        self.is_editing() && (self.draft != self.query || self.options != self.confirmed_options)
-    }
-
-    pub(super) fn open(&mut self) {
-        self.highlighted = true;
-        if let Some(mode) = self.resume_mode.take() {
-            self.mode = mode;
-            return;
-        }
-        self.mode = SearchMode::Open { editing: true };
-        self.draft.clear();
-        self.cursor = 0;
-    }
-
-    pub(super) fn close(&mut self) {
-        self.resume_mode = None;
-        self.mode = SearchMode::Closed;
-        self.draft.clear();
-        self.cursor = 0;
-        self.input_limited = false;
-        self.options = self.confirmed_options;
-        self.direction = self.confirmed_direction;
-        self.error = None;
-        self.highlighted = false;
-    }
-
-    pub(super) fn confirm_navigation(&mut self) {
-        if self.is_editing() {
-            self.query.clone_from(&self.draft);
-            self.confirmed_options = self.options;
-            self.confirmed_direction = self.direction;
-            self.mode = SearchMode::Open { editing: false };
-        }
-    }
-
-    pub(super) fn suspend(&mut self) {
-        self.highlighted = false;
-        if self.is_open() {
-            self.resume_mode = Some(self.mode);
-            self.mode = SearchMode::Closed;
-            self.highlighted = false;
-        }
-    }
-
-    pub(super) fn move_cursor_to_column(&mut self, column: usize) {
-        self.cursor = cursor_byte_at_column(&self.draft, column);
-    }
-
-    fn reuse_empty_pattern(&mut self) -> bool {
-        if !self.draft.is_empty() {
-            return true;
-        }
-        self.draft.clone_from(&self.query);
-        self.cursor = self.draft.len();
-        if !self.draft.is_empty()
-            && let Err(error) = crate::document::PatternStream::compile(
-                &self.draft,
-                self.options.syntax,
-                self.options.case,
-            )
-        {
-            self.error = Some(error);
-            self.mode = SearchMode::Open { editing: true };
-            return false;
-        }
-        true
-    }
-
-    pub(super) fn handle_key(&mut self, key: KeyEvent, _has_matches: bool) -> SearchCommand {
-        let previous = self.draft.clone();
-        match key.code {
-            KeyCode::Esc => return SearchCommand::Close,
-            KeyCode::Enter => {
-                if self.error.is_some() {
-                    return SearchCommand::None;
-                }
-                if !self.reuse_empty_pattern() {
-                    return SearchCommand::None;
-                }
-                self.query.clone_from(&self.draft);
-                self.confirmed_options = self.options;
-                self.confirmed_direction = self.direction;
-                self.mode = SearchMode::Open { editing: false };
-                return SearchCommand::Confirm;
-            }
-            KeyCode::Char('r' | 'R') if key.modifiers == KeyModifiers::CONTROL => {
-                self.options.syntax = if self.options.syntax == SearchSyntax::Regex {
-                    SearchSyntax::Literal
-                } else {
-                    SearchSyntax::Regex
-                };
-                self.mode = SearchMode::Open { editing: true };
-                return SearchCommand::Changed;
-            }
-            KeyCode::Char('c' | 'C') if key.modifiers == KeyModifiers::ALT => {
-                self.options.case = match self.options.case {
-                    SearchCase::Sensitive => SearchCase::Insensitive,
-                    SearchCase::Insensitive => SearchCase::Smart,
-                    SearchCase::Smart => SearchCase::Sensitive,
-                };
-                self.mode = SearchMode::Open { editing: true };
-                return SearchCommand::Changed;
-            }
-            KeyCode::Char('w' | 'W') if key.modifiers == KeyModifiers::ALT => {
-                self.wrap = !self.wrap;
-                return SearchCommand::None;
-            }
-            KeyCode::Backspace => {
-                if let Some(previous) = previous_char_boundary(&self.draft, self.cursor) {
-                    self.draft.drain(previous..self.cursor);
-                    self.cursor = previous;
-                    self.mode = SearchMode::Open { editing: true };
-                }
-            }
-            KeyCode::Delete => {
-                if let Some(next) = next_char_boundary(&self.draft, self.cursor) {
-                    self.draft.drain(self.cursor..next);
-                    self.mode = SearchMode::Open { editing: true };
-                }
-            }
-            KeyCode::Left => {
-                self.cursor = previous_char_boundary(&self.draft, self.cursor).unwrap_or_default();
-            }
-            KeyCode::Right => {
-                self.cursor =
-                    next_char_boundary(&self.draft, self.cursor).unwrap_or(self.draft.len());
-            }
-            KeyCode::Home => self.cursor = 0,
-            KeyCode::End => self.cursor = self.draft.len(),
-            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => self.cursor = 0,
-            KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.cursor = self.draft.len();
-            }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.draft.clear();
-                self.cursor = 0;
-                self.mode = SearchMode::Open { editing: true };
-            }
-            KeyCode::Down if self.error.is_none() => return SearchCommand::Next,
-            KeyCode::Up if self.error.is_none() => return SearchCommand::Previous,
-            KeyCode::Char(character)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                self.input_limited =
-                    self.draft.len() + character.len_utf8() > crate::document::MAX_QUERY_BYTES;
-                if self.input_limited {
-                    return SearchCommand::None;
-                }
-                self.draft.insert(self.cursor, character);
-                self.cursor += character.len_utf8();
-                self.mode = SearchMode::Open { editing: true };
-            }
-            _ => {}
-        }
-        if self.draft == previous {
-            SearchCommand::None
-        } else {
-            self.input_limited = false;
-            SearchCommand::Changed
-        }
-    }
 }
 
 // Preserve the page editor's field access while keeping result ownership out
@@ -372,7 +73,7 @@ impl DerefMut for SearchState {
 }
 
 impl SearchState {
-    pub(super) fn suspend(&mut self) {
+    pub(in crate::app) fn suspend(&mut self) {
         self.input.suspend();
         self.matches.clear();
         self.restart_needed = true;
@@ -380,7 +81,7 @@ impl SearchState {
         self.deadline = None;
         self.pending_move = None;
     }
-    pub(super) fn close(&mut self) {
+    pub(in crate::app) fn close(&mut self) {
         self.input.close();
         self.matches.clear();
         self.pending_move = None;
@@ -398,24 +99,13 @@ impl SearchState {
     }
 }
 
-impl SearchMode {
-    const fn is_open(self) -> bool {
-        matches!(self, Self::Open { .. })
-    }
-
-    const fn is_editing(self) -> bool {
-        matches!(self, Self::Open { editing: true })
-    }
-}
-
 impl App {
-    pub(super) fn open_search(&mut self) {
-        if self.search_target == super::outline_search::SearchTarget::Page && self.search.is_open()
-        {
+    pub(in crate::app) fn open_search(&mut self) {
+        if self.search_target == SearchTarget::Page && self.search.is_open() {
             return;
         }
         self.finish_outline_search(true);
-        self.search_target = super::outline_search::SearchTarget::Page;
+        self.search_target = SearchTarget::Page;
         self.search.open();
         if self.search.restart_needed
             || self.search.render_width != self.geometry.content.width.max(1)
@@ -427,15 +117,15 @@ impl App {
         self.sync_current_search_matches();
     }
 
-    pub(super) fn close_search(&mut self) {
+    pub(in crate::app) fn close_search(&mut self) {
         match self.search_target {
-            super::outline_search::SearchTarget::Page => self.search.close(),
-            super::outline_search::SearchTarget::Outline => self.close_outline_search(),
+            SearchTarget::Page => self.search.close(),
+            SearchTarget::Outline => self.close_outline_search(),
         }
     }
 
-    pub(super) fn handle_search_key(&mut self, key: KeyEvent) {
-        if self.search_target == super::outline_search::SearchTarget::Outline {
+    pub(in crate::app) fn handle_search_key(&mut self, key: KeyEvent) {
+        if self.search_target == SearchTarget::Outline {
             self.handle_outline_search_key(key);
             return;
         }
@@ -447,7 +137,7 @@ impl App {
             SearchCommand::Confirm => {
                 self.notice = None;
                 self.search.initial_direction = self.search.direction;
-                self.last_search_target = super::outline_search::SearchTarget::Page;
+                self.last_search_target = SearchTarget::Page;
                 self.ensure_page_search();
                 self.search.pending_move = Some(0);
                 self.search.initial_position = Some((
@@ -464,10 +154,10 @@ impl App {
             SearchCommand::Next => {
                 let initial = self.search.is_editing()
                     && (self.search.draft != self.search.query
-                        || self.search.options != self.search.confirmed_options
+                        || self.search.has_changed_draft()
                         || self.search.confirmed_target.is_none());
                 self.search.confirm_navigation();
-                self.last_search_target = super::outline_search::SearchTarget::Page;
+                self.last_search_target = SearchTarget::Page;
                 if initial {
                     self.ensure_page_search();
                     self.search.initial_direction = self.search.direction;
@@ -490,10 +180,10 @@ impl App {
             SearchCommand::Previous => {
                 let initial = self.search.is_editing()
                     && (self.search.draft != self.search.query
-                        || self.search.options != self.search.confirmed_options
+                        || self.search.has_changed_draft()
                         || self.search.confirmed_target.is_none());
                 self.search.confirm_navigation();
-                self.last_search_target = super::outline_search::SearchTarget::Page;
+                self.last_search_target = SearchTarget::Page;
                 if initial {
                     self.ensure_page_search();
                     self.search.initial_direction = -self.search.direction;
@@ -516,7 +206,7 @@ impl App {
         }
     }
 
-    pub(super) fn refresh_search(&mut self, width: u16) {
+    pub(in crate::app) fn refresh_search(&mut self, width: u16) {
         self.search.restart_needed = false;
         self.search.repaint = SearchRepaint::default();
         let query = self.search.effective_query().to_owned();
@@ -595,7 +285,7 @@ impl App {
     /// The current width is shared with the viewport. At most one other scope
     /// rendering is retained; non-current snapshots are prepared lazily once per
     /// visit, not on each keystroke. Width changes retire all stale cell results.
-    pub(super) fn advance_page_search(&mut self, now: Instant) -> bool {
+    pub(in crate::app) fn advance_page_search(&mut self, now: Instant) -> bool {
         if self.search.deadline.is_none_or(|deadline| deadline > now) {
             return false;
         }
@@ -695,7 +385,7 @@ impl App {
     }
 
     fn fulfill_page_search_move(&mut self) {
-        if self.overlay != super::Overlay::None {
+        if self.overlay != crate::app::Overlay::None {
             self.search.pending_move = None;
             return;
         }
@@ -763,7 +453,7 @@ impl App {
         }
     }
 
-    pub(super) fn select_search_relative(&mut self, delta: isize) {
+    pub(in crate::app) fn select_search_relative(&mut self, delta: isize) {
         self.notice = None;
         self.ensure_page_search();
         self.sync_current_search_matches();
@@ -859,15 +549,15 @@ impl App {
                 return;
             };
             self.navigation
-                .commit(super::HistoryDirection::New, current);
-            self.replace_document(bundle, super::DocumentChangeReason::SearchResult);
+                .commit(crate::app::HistoryDirection::New, current);
+            self.replace_document(bundle, crate::app::DocumentChangeReason::SearchResult);
         }
         self.sync_current_search_matches();
         self.session.content_scroll = search_match.rendered.row;
         self.select_section_at_row(search_match.rendered.row);
     }
 
-    pub(super) fn active_rendered_search_match(&self) -> Option<usize> {
+    pub(in crate::app) fn active_rendered_search_match(&self) -> Option<usize> {
         let active = self.search.scope_matches.get(self.search.active_match)?;
         if !self.is_current_search_document(active.document_index) {
             return None;
@@ -902,40 +592,11 @@ impl App {
             .is_some_and(|bundle| Arc::ptr_eq(bundle, &self.session.current_bundle))
     }
 
-    pub(super) fn move_search_cursor_to(&mut self, column: u16) {
+    pub(in crate::app) fn move_search_cursor_to(&mut self, column: u16) {
         let prefix_width = u16::try_from(self.search_prompt().width()).unwrap_or(u16::MAX);
         let text_column =
             usize::from(column.saturating_sub(self.geometry.status.x.saturating_add(prefix_width)));
         self.active_search_input_mut()
             .move_cursor_to_column(text_column);
     }
-}
-
-fn previous_char_boundary(value: &str, cursor: usize) -> Option<usize> {
-    value[..cursor]
-        .char_indices()
-        .next_back()
-        .map(|(index, _)| index)
-}
-
-fn next_char_boundary(value: &str, cursor: usize) -> Option<usize> {
-    value[cursor..]
-        .chars()
-        .next()
-        .map(|character| cursor + character.len_utf8())
-}
-
-fn cursor_byte_at_column(value: &str, column: usize) -> usize {
-    let mut used = 0;
-    for (index, character) in value.char_indices() {
-        let next = used + character.width().unwrap_or(0);
-        if column < next {
-            return index;
-        }
-        if column == next {
-            return index + character.len_utf8();
-        }
-        used = next;
-    }
-    value.len()
 }

@@ -7,7 +7,7 @@ fn page(text: &str) -> ResolvedContent {
 
 fn type_query(app: &mut App, query: &str) {
     if !app.search_is_open() {
-        if app.search_target == super::super::outline_search::SearchTarget::Outline {
+        if app.search_target == super::super::search::SearchTarget::Outline {
             app.open_outline_search();
         } else {
             app.open_search();

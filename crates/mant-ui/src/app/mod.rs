@@ -11,7 +11,6 @@ mod menu;
 mod navigation;
 mod navigation_state;
 use navigation_state::{HistoryDirection, HistoryLocation, LocalTarget, NavigationState};
-mod outline_search;
 mod references;
 mod render;
 mod search;
@@ -32,7 +31,7 @@ use mant_protocol::{
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
-use self::outline_search::{OutlineSearchState, SearchTarget};
+use self::search::{OutlineSearchState, SearchTarget};
 use self::{finder::FinderState, menu::MenuId, search::SearchState};
 
 use crate::{

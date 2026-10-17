@@ -1,5 +1,5 @@
 //! Outline matching is independent of folds, visual rows and host effects.
-use super::super::outline_search::SearchTarget;
+use super::super::search::SearchTarget;
 use super::*;
 
 fn key(app: &mut App, code: KeyCode) {

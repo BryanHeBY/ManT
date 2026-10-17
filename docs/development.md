@@ -647,6 +647,19 @@ docs/manuals/manifest.txt     Exact self-hosted manual set shipped in releases
 docs/assets/                 README screenshots and documentation assets
 ```
 
+### Reader module boundaries
+
+`mant-ui/src/app/search` owns the application search surfaces. Its facade
+selects the active editor; `input` owns editing and confirmation, `repaint`
+owns shared scheduling constants and redraw throttling, and `page`/`outline`
+retain their distinct scan jobs, result identities and navigation lifetimes.
+The bounded pattern engine remains in `document`, independently of app state.
+
+`app/render` composes the frame and delegates content, navigation, status/search
+bars and finder drawing to panel modules. Each panel retains its final input
+geometry; splitting drawing code must not change reflow, cache retention,
+pointer cancellation or the order in which geometry becomes visible to input.
+
 ## Documentation ownership
 
 Each topic has one authoritative home so examples and compatibility promises

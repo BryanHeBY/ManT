@@ -3,14 +3,11 @@
 use crossterm::event::KeyEvent;
 use std::{borrow::Cow, collections::HashSet, time::Instant};
 
-use super::{
-    App,
-    search::{SearchCommand, SearchInput, SearchMode, SearchOptions},
-};
+use super::{App, SearchCommand, SearchInput, SearchMode, SearchOptions};
 use crate::{document::OutlineRecord, navigation::search::OutlineHit};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SearchTarget {
+pub(in crate::app) enum SearchTarget {
     Page,
     Outline,
 }
@@ -25,17 +22,17 @@ enum ScanStatus {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct OutlineSearchState {
-    pub(super) input: SearchInput,
-    pub(super) records: Vec<OutlineRecord>,
-    pub(super) matches: Vec<OutlineHit>,
-    pub(super) active_match: usize,
-    pub(super) limited: bool,
+pub(in crate::app) struct OutlineSearchState {
+    pub(in crate::app) input: SearchInput,
+    pub(in crate::app) records: Vec<OutlineRecord>,
+    pub(in crate::app) matches: Vec<OutlineHit>,
+    pub(in crate::app) active_match: usize,
+    pub(in crate::app) limited: bool,
     index_limited: bool,
     indexed: bool,
-    pub(super) revealed: HashSet<String>,
-    pub(super) deadline: Option<Instant>,
-    pub(super) job: Option<crate::navigation::search::OutlineScan>,
+    pub(in crate::app) revealed: HashSet<String>,
+    pub(in crate::app) deadline: Option<Instant>,
+    pub(in crate::app) job: Option<crate::navigation::search::OutlineScan>,
     pending_move: Option<isize>,
     matching_query: String,
     matching_options: SearchOptions,
@@ -44,77 +41,11 @@ pub(super) struct OutlineSearchState {
     status: ScanStatus,
     confirmed_target: Option<(String, SearchOptions, usize)>,
     restart_target: Option<usize>,
-    repaint: super::search::SearchRepaint,
+    repaint: super::repaint::SearchRepaint,
 }
 
 impl App {
-    pub(super) fn active_search_input(&self) -> &SearchInput {
-        match self.search_target {
-            SearchTarget::Page => &self.search,
-            SearchTarget::Outline => &self.outline_search.input,
-        }
-    }
-    pub(super) fn active_search_input_mut(&mut self) -> &mut SearchInput {
-        match self.search_target {
-            SearchTarget::Page => &mut self.search,
-            SearchTarget::Outline => &mut self.outline_search.input,
-        }
-    }
-    pub(super) fn search_is_open(&self) -> bool {
-        self.active_search_input().is_open()
-    }
-    pub(super) fn search_prompt(&self) -> String {
-        self.search_prompt_for_width(self.geometry.status.width)
-    }
-    pub(super) fn search_prompt_for_width(&self, width: u16) -> String {
-        let input = self.active_search_input();
-        let direction = if input.direction > 0 { '/' } else { '?' };
-        if width <= 20 {
-            return format!("{direction} ");
-        }
-        if width < 70 {
-            return format!(
-                "{}{direction} [{} {}{}]: ",
-                if self.search_target == SearchTarget::Page {
-                    'P'
-                } else {
-                    'O'
-                },
-                if input.options.syntax == mant_protocol::SearchSyntax::Regex {
-                    'R'
-                } else {
-                    'L'
-                },
-                match input.options.case {
-                    mant_protocol::SearchCase::Sensitive => "Aa",
-                    mant_protocol::SearchCase::Insensitive => "aa",
-                    mant_protocol::SearchCase::Smart => "S",
-                },
-                if input.wrap { " W" } else { "" }
-            );
-        }
-        format!(
-            " Find {} {} [{} · {}{}]: ",
-            if self.search_target == SearchTarget::Page {
-                "Page"
-            } else {
-                "Outline"
-            },
-            direction,
-            if input.options.syntax == mant_protocol::SearchSyntax::Regex {
-                "Regex"
-            } else {
-                "Literal"
-            },
-            match input.options.case {
-                mant_protocol::SearchCase::Sensitive => "Case",
-                mant_protocol::SearchCase::Insensitive => "Ignore case",
-                mant_protocol::SearchCase::Smart => "Smart case",
-            },
-            if input.wrap { " · Wrap" } else { "" }
-        )
-    }
-    pub(super) fn open_outline_search(&mut self) {
+    pub(in crate::app) fn open_outline_search(&mut self) {
         if self.search_target == SearchTarget::Outline && self.outline_search.input.is_open() {
             return;
         }
@@ -137,14 +68,14 @@ impl App {
             || self.outline_search.matching_options != self.outline_search.input.effective_options()
             || self.outline_search.status != ScanStatus::Complete
         {
-            self.start_outline_search(&value, Instant::now() + super::search::SEARCH_DEBOUNCE);
+            self.start_outline_search(&value, Instant::now() + super::repaint::SEARCH_DEBOUNCE);
         }
     }
-    pub(super) fn close_outline_search(&mut self) {
+    pub(in crate::app) fn close_outline_search(&mut self) {
         self.finish_outline_search(false);
     }
 
-    pub(super) fn finish_outline_search(&mut self, suspend: bool) {
+    pub(in crate::app) fn finish_outline_search(&mut self, suspend: bool) {
         if self.outline_search.input.is_open() || self.outline_search.input.highlighted {
             // Only the current selection's path becomes a lasting expansion.
             // User-owned folds were never overwritten by search exploration.
@@ -167,18 +98,19 @@ impl App {
             {
                 self.outline_search.matches.clear();
             }
-            self.navigation_viewport_request = Some(super::NavigationViewportRequest::Reveal {
-                node_index: self.selected,
-            });
+            self.navigation_viewport_request =
+                Some(crate::app::NavigationViewportRequest::Reveal {
+                    node_index: self.selected,
+                });
         }
     }
-    pub(super) fn handle_outline_search_key(&mut self, key: KeyEvent) {
+    pub(in crate::app) fn handle_outline_search_key(&mut self, key: KeyEvent) {
         let has_matches = !self.outline_search.matches.is_empty();
         match self.outline_search.input.handle_key(key, has_matches) {
             SearchCommand::None => {}
             SearchCommand::Changed => {
                 let query = self.outline_search.input.draft.clone();
-                self.start_outline_search(&query, Instant::now() + super::search::SEARCH_DEBOUNCE);
+                self.start_outline_search(&query, Instant::now() + super::repaint::SEARCH_DEBOUNCE);
             }
             SearchCommand::Close => self.close_outline_search(),
             SearchCommand::Confirm => {
@@ -236,7 +168,7 @@ impl App {
             }
         }
     }
-    pub(super) fn select_last_search_relative(&mut self, delta: isize) {
+    pub(in crate::app) fn select_last_search_relative(&mut self, delta: isize) {
         if self.search_is_open() && self.search_target == self.last_search_target {
             self.handle_search_key(crossterm::event::KeyEvent::new(
                 if delta > 0 {
@@ -367,7 +299,7 @@ impl App {
             }
         }
     }
-    pub(super) fn effective_expanded(&self) -> Cow<'_, HashSet<String>> {
+    pub(in crate::app) fn effective_expanded(&self) -> Cow<'_, HashSet<String>> {
         if self.outline_search.input.is_open() && !self.outline_search.revealed.is_empty() {
             let mut expanded = self.expanded.clone();
             expanded.extend(self.outline_search.revealed.iter().cloned());
@@ -378,7 +310,7 @@ impl App {
     }
 
     fn start_outline_search(&mut self, query: &str, deadline: Instant) {
-        self.outline_search.repaint = super::search::SearchRepaint::default();
+        self.outline_search.repaint = super::repaint::SearchRepaint::default();
         self.outline_search.restart_target = self
             .outline_search
             .confirmed_target
@@ -420,7 +352,7 @@ impl App {
         self.outline_search.deadline = self.outline_search.job.as_ref().map(|_| deadline);
     }
 
-    pub(super) fn advance_outline_search(&mut self, now: Instant) -> bool {
+    pub(in crate::app) fn advance_outline_search(&mut self, now: Instant) -> bool {
         if self
             .outline_search
             .deadline
@@ -436,7 +368,7 @@ impl App {
         let (done, limited) = job.advance(
             &self.outline_search.records,
             &mut self.outline_search.matches,
-            super::search::SEARCH_BYTES_PER_SLICE,
+            super::repaint::SEARCH_BYTES_PER_SLICE,
         );
         self.outline_search.limited |= limited;
         if let Some(node) = self.outline_search.restart_target
@@ -454,7 +386,7 @@ impl App {
             self.outline_search.deadline = None;
         } else {
             self.outline_search.job = Some(job);
-            self.outline_search.deadline = Some(now + super::search::SEARCH_SLICE_DELAY);
+            self.outline_search.deadline = Some(now + super::repaint::SEARCH_SLICE_DELAY);
         }
         self.fulfill_outline_search_move();
         self.outline_search.repaint.update(
@@ -466,7 +398,7 @@ impl App {
     }
 
     fn fulfill_outline_search_move(&mut self) {
-        if self.overlay != super::Overlay::None {
+        if self.overlay != crate::app::Overlay::None {
             self.outline_search.pending_move = None;
             return;
         }
@@ -532,7 +464,7 @@ impl App {
             }
         }
     }
-    pub(super) fn navigation_is_expanded(&self, id: &str) -> bool {
+    pub(in crate::app) fn navigation_is_expanded(&self, id: &str) -> bool {
         self.expanded.contains(id)
             || (self.outline_search.input.is_open() && self.outline_search.revealed.contains(id))
     }
