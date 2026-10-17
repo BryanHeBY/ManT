@@ -1,2 +1,5 @@
 reference_kind,reference_id,corpus,path,section,source_sha256,scan_status,review_status,note
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/archlinux/awk.1p.gz,1p,a725342f71304157498e8bc276d67e5847113b100f299e692737634e939b0c2a,review,false-positive,Six n-grams cross terminal table cells: native output places BEGIN/break and atan2/close/cos/exp before the next column while responsive ManT rows wrap the same first-cell payload. Source cells and all words remain present; this is not a phrase-order contract across columns.
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/archlinux/scanf.3.gz,3,07cbc46be4fd3150bcc3322d3cf1d1db217935e7406b44237880c5f54176a09d,clean,not-required,
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/archlinux/sort.1p.gz,1p,32493b693fb79c6637150b465eb262dad4e09e827810b897641d7c2bc7007e5c,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/literal-definition-gap.1,1,003a34d49eb1d8f6e5f5943c04157d2239db1fd46b101c3236ab5203757efae3,clean,not-required,
