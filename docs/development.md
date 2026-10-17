@@ -459,6 +459,12 @@ whitespace assertions. Shared helpers may handle reference invocation, real
 JSON decoding or reader actions; margin removal, empty-row handling and allowed
 native recovery remain explicit in the suite that owns the assertion.
 
+Large inline test modules can move beside their owner (`table/tests.rs`,
+`entry/content/tests.rs`, `navigation/tests.rs`) without splitting cohesive
+production logic. Codec table tests are grouped by fonts, columns, equations,
+source recovery, layout and placement; standalone equation assertions belong
+with equation contracts rather than acquiring table-specific dependencies.
+
 Before writing or changing a roff behavior assertion, read its pinned CVS
 execution path and run the exact complete input with the registered pristine
 reference. Restore and preflight it with `scripts/rebuild_reference_mandoc.sh`

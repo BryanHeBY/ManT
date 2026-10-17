@@ -7,6 +7,82 @@ fn equation_from_native(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Equa
         .or_else(|| node.children.iter().find_map(equation_from_native))
 }
 
+#[test]
+fn inline_equation_stays_between_prose_siblings() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("inline-equation.1"),
+        b".TH INLINE 1\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nleft $x sub i$ right\n",
+    )
+    .unwrap();
+    let paragraph = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(children),
+            _ => None,
+        })
+        .expect("prose paragraph");
+    let kinds = paragraph
+        .iter()
+        .filter_map(|part| match part {
+            Inline::Text { value } if value.contains("left") => Some("left"),
+            Inline::Equation { value, expression } => {
+                assert_eq!(value, &expression.readable_text());
+                Some("equation")
+            }
+            Inline::Text { value } if value.contains("right") => Some("right"),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(kinds, ["left", "equation", "right"]);
+}
+
+#[test]
+fn native_equation_depth_loss_marks_both_document_coverage_flags() {
+    let source = format!(
+        ".TH DEEP 1\n.SH BODY\n.EQ\n{}x{}\n.EN\n",
+        "sqrt { ".repeat(260),
+        " }".repeat(260),
+    );
+    let document =
+        parse_manual_bytes(std::path::Path::new("deep-equation.1"), source.as_bytes()).unwrap();
+    // The exact input was run with the pinned -Ttree oracle before this
+    // assertion. Its eqn boxes continue beyond the owned 256-level limit.
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.impact == mant_ir::DiagnosticImpact::ContentCoverage)
+    );
+    assert!(!mant_ir::content_complete(&document.diagnostics));
+    assert!(!mant_ir::semantics_complete(&document.diagnostics));
+}
+
+#[test]
+fn display_equations_preserve_native_eqn_decorators() {
+    let document = parse_manual_bytes(
+        std::path::Path::new("eqn-decorators.1"),
+        b".TH EQUATION 1\n.SH DESCRIPTION\n.EQ\nx dot = f(t) bar\ny dotdot bar ~=~ n under\nx vec ~=~ y dyad\n.EN\n",
+    )
+    .expect("lower decorated equations");
+    let values = document.sections[0]
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Equation { value, .. } => Some(value.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // CVS eqn_term.c emits the resolved top/bottom decorations after each
+    // base expression. The semantic IR must retain those relations rather
+    // than silently reducing every decorated equation to its bare operands.
+    for fragment in ["x˙", "‾", "y¨", "n_", "x→", "y↔"] {
+        assert!(values.contains(fragment), "{fragment}: {values}");
+    }
+}
+
 fn equation_node_mut(node: &mut libmandoc_rs::Node) -> Option<&mut libmandoc_rs::Node> {
     if node.equation.is_some() {
         return Some(node);
