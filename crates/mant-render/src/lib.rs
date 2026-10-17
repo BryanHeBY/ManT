@@ -4,6 +4,7 @@
 pub mod cells;
 mod output;
 mod presentation;
+pub mod table_border;
 mod tldr;
 
 pub use output::*;

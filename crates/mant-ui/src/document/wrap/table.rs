@@ -54,7 +54,7 @@ fn resolve_rows(indent: usize, tables: &[&LogicalTableRow], width: usize) -> Vec
     let mut rendered = Vec::with_capacity(tables.len());
     if !stacked {
         for table in tables {
-            let rows = if table.rules.is_some() {
+            let rows = if table.kind.rules().is_some() {
                 Some(Vec::new())
             } else if table.cells.is_empty() {
                 Some(vec![empty_row()])
@@ -80,7 +80,7 @@ fn resolve_rows(indent: usize, tables: &[&LogicalTableRow], width: usize) -> Vec
         rendered = tables
             .iter()
             .map(|table| {
-                if table.rules.is_some() {
+                if table.kind.rules().is_some() {
                     Vec::new()
                 } else if table.cells.is_empty() {
                     vec![empty_row()]
@@ -105,10 +105,10 @@ fn resolve_rows(indent: usize, tables: &[&LogicalTableRow], width: usize) -> Vec
         .then_some(widths.as_deref())
         .flatten();
     for (table, rows) in tables.iter().zip(&mut rendered) {
-        if let Some(kinds) = &table.rules {
+        if let Some(kinds) = &table.kind.rules() {
             *rows = rules::render_rules(
                 cell_indent,
-                table.whole_rule,
+                table.kind.whole_rule(),
                 kinds,
                 grid_widths,
                 gap,

@@ -660,6 +660,15 @@ bars and finder drawing to panel modules. Each panel retains its final input
 geometry; splitting drawing code must not change reflow, cache retention,
 pointer cancellation or the order in which geometry becomes visible to input.
 
+Table measurement borrows logical cell owners; it must not clone styled cell
+trees solely to ignore a soft width hint in declared-field mode. CLI and TUI
+share `mant-render::table_border` for terminal stroke characters, while keeping
+viewport policy, theme and source-coordinate maps in their own consumers.
+Whole-table frame width is projection metadata, not a synthetic content row;
+data, whole-rule and per-column-rule states remain explicit. Column allocation
+shares the IR geometry core; existing intrinsic CLI and preferred-span TUI
+measurement policies are separate and must not be silently unified by a move.
+
 Personal `man.conf` parsing lives in `mant-loader/src/manual_paths/personal_config`
 on every platform. Host-native dialects remain in `bsd`, `man_db` and `macos`;
 `path_rules` adapts the shared settings path identities for discovery and

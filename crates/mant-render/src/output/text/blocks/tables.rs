@@ -85,7 +85,7 @@ impl BlockRenderer<'_> {
         };
         let physical_rows = super::super::super::table::projected_table_rows(
             rows,
-            super::super::super::table::TableProjection {
+            super::super::super::table::TableOptions {
                 gap: preferences.gap_columns,
                 origin,
                 viewport: self.width,
@@ -97,23 +97,24 @@ impl BlockRenderer<'_> {
                 let flow = cell_renderer.cell_block_flow(&cell.blocks, 0);
                 let physical = flow.has_physical_rows();
                 let (text, completed) = flow.finish_cell();
-                (text, completed, physical)
+                super::super::super::table::RenderedCell {
+                    text,
+                    completed,
+                    has_physical_rows: physical,
+                }
             },
         );
         let logical = mant_ir::TableGrid::with_column_count(rows, column_count).column_count;
         let mut output = Flow::default();
-        let mut frame_width = 0;
+        let frame_width = physical_rows.frame_width;
         let mut stacked = logical > mant_ir::MAX_DENSE_TABLE_COLUMNS;
-        for row in physical_rows {
+        for row in physical_rows.rows {
             match row {
-                super::super::super::table::ProjectedTableRow::FrameWidth(width) => {
-                    frame_width = frame_width.max(width);
-                }
-                super::super::super::table::ProjectedTableRow::Content(
-                    rows,
+                super::super::super::table::ProjectedTableRow::Content {
+                    lines: rows,
                     completed,
-                    fallback,
-                ) => {
+                    stacked: fallback,
+                } => {
                     stacked |= fallback;
                     if rows.is_empty() {
                         continue;

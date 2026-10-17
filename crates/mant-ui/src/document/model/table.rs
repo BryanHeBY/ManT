@@ -45,11 +45,35 @@ pub(in crate::document) struct LogicalTableCell {
     pub(in crate::document) preferred_width: Option<usize>,
 }
 
+/// A physical data row, a whole-width stroke or authored column strokes.
+#[derive(Debug, Clone)]
+pub(in crate::document) enum LogicalTableRowKind {
+    Data,
+    WholeRule(mant_ir::TableBorderStyle),
+    ColumnRules(Vec<TableRuleCellKind>),
+}
+
+impl LogicalTableRowKind {
+    pub(in crate::document) fn rules(&self) -> Option<&[TableRuleCellKind]> {
+        match self {
+            Self::Data => None,
+            Self::WholeRule(_) => Some(&[]),
+            Self::ColumnRules(cells) => Some(cells),
+        }
+    }
+
+    pub(in crate::document) fn whole_rule(&self) -> Option<mant_ir::TableBorderStyle> {
+        match self {
+            Self::WholeRule(style) => Some(*style),
+            Self::Data | Self::ColumnRules(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(in crate::document) struct LogicalTableRow {
     pub(in crate::document) cells: Vec<LogicalTableCell>,
-    pub(in crate::document) rules: Option<Vec<TableRuleCellKind>>,
-    pub(in crate::document) whole_rule: Option<bool>,
+    pub(in crate::document) kind: LogicalTableRowKind,
     pub(in crate::document) completed_tail: bool,
     pub(in crate::document) open_tail: bool,
     pub(in crate::document) layout: Arc<LogicalTableLayout>,
@@ -74,23 +98,28 @@ pub(in crate::document) struct LogicalTableLayout {
 impl LogicalTableLayout {
     #[cfg(test)]
     pub(in crate::document) fn for_rows(rows: &[Vec<LogicalTableCell>]) -> Self {
-        Self::for_rows_with_gap(rows, 2)
+        Self::for_rows_with_gap(rows.iter().map(|row| row.iter()), 2, false)
     }
 
-    pub(in crate::document) fn for_rows_with_gap(
-        rows: &[Vec<LogicalTableCell>],
+    /// Measure borrowed owners; declared fields ignore soft per-cell widths.
+    pub(in crate::document) fn for_rows_with_gap<'a, R, C>(
+        rows: R,
         gap: usize,
-    ) -> Self {
+        declared: bool,
+    ) -> Self
+    where
+        R: Iterator<Item = C> + Clone,
+        C: ExactSizeIterator<Item = &'a LogicalTableCell>,
+    {
         let column_count = rows
-            .iter()
-            .map(Vec::len)
+            .clone()
+            .map(|row| row.len())
             .max()
             .unwrap_or(0)
             .min(mant_ir::MAX_DENSE_TABLE_COLUMNS);
         let mut preferred_widths = vec![1; column_count];
         for row in rows {
             for (column, cell) in row
-                .iter()
                 .enumerate()
                 .filter(|(_, cell)| cell.occupancy == TableCellOccupancy::Content)
             {
@@ -98,7 +127,8 @@ impl LogicalTableLayout {
                     .column_span
                     .min(column_count.saturating_sub(column))
                     .max(1);
-                let target = cell.preferred_width.map_or_else(
+                let preferred = if declared { None } else { cell.preferred_width };
+                let target = preferred.map_or_else(
                     || cell.preferred_width(),
                     |preferred| preferred.max(cell.longest_word_width()),
                 );

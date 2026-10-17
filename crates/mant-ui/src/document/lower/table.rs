@@ -1,5 +1,5 @@
 //! Cell-local columns and origin-preserving table fallback.
-use super::super::model::TableCellOccupancy;
+use super::super::model::{LogicalTableRowKind, TableCellOccupancy};
 use super::super::{Arc, LogicalLine, LogicalTableCell, LogicalTableLayout};
 use super::DocumentBuilder;
 use mant_ir::geometry::padding;
@@ -8,16 +8,6 @@ use mant_ir::{TableRow, TableRowKind};
 struct PreparedCell {
     cell: LogicalTableCell,
     gap_only: bool,
-}
-
-impl PreparedCell {
-    fn for_measurement(&self, declared: bool) -> LogicalTableCell {
-        let mut cell = self.cell.clone();
-        if declared {
-            cell.preferred_width = None;
-        }
-        cell
-    }
 }
 
 fn fill_horizontal_owners(cells: &mut [PreparedCell]) {
@@ -98,16 +88,6 @@ impl DocumentBuilder<'_> {
         let outer_origin = if origin_stack { 0 } else { indent };
         let rendered_rows =
             self.prepare_table_rows(rows, &grid, cell_origin, origin_stack, force_stack);
-        let layout_rows = rendered_rows
-            .iter()
-            .filter_map(Option::as_ref)
-            .map(|cells| {
-                cells
-                    .iter()
-                    .map(|cell| cell.for_measurement(!preferences.widths.is_empty()))
-                    .collect()
-            })
-            .collect::<Vec<_>>();
         let rails = table_rails(
             rows,
             borders,
@@ -115,8 +95,12 @@ impl DocumentBuilder<'_> {
             !preferences.widths.is_empty(),
         );
         let mut table_layout = LogicalTableLayout::for_rows_with_gap(
-            &layout_rows,
+            rendered_rows
+                .iter()
+                .filter_map(Option::as_ref)
+                .map(|cells| cells.iter().map(|prepared| &prepared.cell)),
             usize::from(preferences.gap_columns) + usize::from(rails.columns),
+            !preferences.widths.is_empty(),
         );
         table_layout.borders = borders.clone();
         table_layout.rails = rails;
@@ -196,7 +180,12 @@ impl DocumentBuilder<'_> {
         layout: &Arc<LogicalTableLayout>,
     ) -> LogicalLine {
         let mut line = LogicalLine::table_rule(indent, Vec::new(), Arc::clone(layout));
-        line.table_row.as_mut().expect("table row").whole_rule = Some(double);
+        line.table_row.as_mut().expect("table row").kind =
+            LogicalTableRowKind::WholeRule(if double {
+                mant_ir::TableBorderStyle::Double
+            } else {
+                mant_ir::TableBorderStyle::Single
+            });
         line
     }
 

@@ -7,7 +7,8 @@ use ratatui::{style::Style, text::Span};
 
 mod table;
 pub(super) use table::{
-    LogicalTableCell, LogicalTableLayout, LogicalTableRow, TableCellOccupancy, TableRails,
+    LogicalTableCell, LogicalTableLayout, LogicalTableRow, LogicalTableRowKind, TableCellOccupancy,
+    TableRails,
 };
 
 /// External URI that passed `ManT`'s host-activation policy.
@@ -291,8 +292,7 @@ impl LogicalLine {
                 cells,
                 completed_tail,
                 open_tail,
-                rules: None,
-                whole_rule: None,
+                kind: LogicalTableRowKind::Data,
                 layout,
                 column_borders: Vec::new(),
             }),
@@ -322,8 +322,7 @@ impl LogicalLine {
                 cells: Vec::new(),
                 completed_tail: false,
                 open_tail: false,
-                rules: Some(rules),
-                whole_rule: None,
+                kind: LogicalTableRowKind::ColumnRules(rules),
                 layout,
                 column_borders: Vec::new(),
             }),

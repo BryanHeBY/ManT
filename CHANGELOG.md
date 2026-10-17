@@ -19,6 +19,10 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
+- Share terminal table stroke selection through `mant_render::table_border`
+  without moving glyphs or themes into IR. TUI table measurement now borrows
+  existing cell owners rather than copying styled content and link maps;
+  existing column measurement, wrapping and fallback policies are unchanged.
 - Omit exactly one empty initial row from a complete roff code block with
   nonblank body, as an explicit reading policy shared by JSON, CLI, TUI and
   Markdown export. Preserve two or more initial rows, entirely blank blocks,

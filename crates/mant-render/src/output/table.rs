@@ -83,14 +83,38 @@ enum TableMode {
 /// A rendered data row or a rule awaiting the final table extent. Rules do
 /// not establish a second viewport or choose a separate fallback policy.
 pub(super) enum ProjectedTableRow<T> {
-    /// Chosen geometry can exceed the final glyph without generating text.
-    FrameWidth(usize),
-    Content(Vec<T>, bool, bool),
+    Content {
+        lines: Vec<T>,
+        completed: bool,
+        stacked: bool,
+    },
     Rule(Vec<TableRuleCellKind>, Option<Vec<usize>>),
 }
 
+/// A cell's original physical receipt, independently of its visible text.
+pub(super) struct RenderedCell<T> {
+    pub(super) text: T,
+    pub(super) completed: bool,
+    pub(super) has_physical_rows: bool,
+}
+
+/// Whole-table geometry is metadata, never a synthetic content row.
+pub(super) struct ProjectedTable<T> {
+    pub(super) frame_width: usize,
+    pub(super) rows: Vec<ProjectedTableRow<T>>,
+}
+
+impl<T> ProjectedTable<T> {
+    fn from_rows(rows: Vec<ProjectedTableRow<T>>) -> Self {
+        Self {
+            frame_width: 0,
+            rows,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
-pub(super) struct TableProjection {
+pub(super) struct TableOptions {
     pub(super) gap: u16,
     pub(super) origin: i32,
     pub(super) viewport: Option<usize>,
@@ -103,10 +127,10 @@ pub(super) struct TableProjection {
 /// a failed projection reuses prepared cells in source order.
 pub(super) fn projected_table_rows<T: TableText>(
     rows: &[TableRow],
-    projection: TableProjection,
+    projection: TableOptions,
     borders: &mant_ir::TableBorders,
-    mut render_cell: impl FnMut(&TableCell) -> (T, bool, bool),
-) -> Vec<ProjectedTableRow<T>> {
+    mut render_cell: impl FnMut(&TableCell) -> RenderedCell<T>,
+) -> ProjectedTable<T> {
     if responsive_geometry(rows, projection, borders) {
         return responsive::project(rows, projection, borders, &mut render_cell);
     }
@@ -162,7 +186,7 @@ pub(super) fn projected_table_rows<T: TableText>(
                 .saturating_sub(mant_ir::geometry::padding(projection.origin)),
         )
     });
-    prepared
+    let rows = prepared
         .into_iter()
         .map(|row| {
             let (lines, closed, stacked) = match row {
@@ -196,15 +220,20 @@ pub(super) fn projected_table_rows<T: TableText>(
                     sparse_physical_rows(cells, projection.origin, stack_width)
                 }
             };
-            ProjectedTableRow::Content(lines, closed, stacked)
+            ProjectedTableRow::Content {
+                lines,
+                completed: closed,
+                stacked,
+            }
         })
-        .collect()
+        .collect();
+    ProjectedTable::from_rows(rows)
 }
 
 fn prepare_table_rows<T: TableText>(
     rows: &[TableRow],
     column_count: Option<u32>,
-    render_cell: &mut impl FnMut(&TableCell) -> (T, bool, bool),
+    render_cell: &mut impl FnMut(&TableCell) -> RenderedCell<T>,
 ) -> Vec<PreparedRow<T>> {
     let mut prepared = Vec::new();
     for (plan, row) in bounded_table_rows_with_column_count(rows, column_count)
@@ -271,7 +300,7 @@ fn measured_alignment_slots<T: TableText>(
 
 fn responsive_geometry(
     rows: &[TableRow],
-    projection: TableProjection,
+    projection: TableOptions,
     borders: &mant_ir::TableBorders,
 ) -> bool {
     !borders.is_empty()

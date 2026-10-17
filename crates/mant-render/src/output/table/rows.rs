@@ -65,15 +65,27 @@ fn separator(gap: usize) -> String {
 
 pub(super) fn render_table_cell<T: TableText>(
     cell: &TableCell,
-    render_cell: &mut impl FnMut(&TableCell) -> (T, bool, bool),
+    render_cell: &mut impl FnMut(&TableCell) -> super::RenderedCell<T>,
 ) -> CellText<T> {
-    let (value, completed, physical) = match cell.kind {
+    let super::RenderedCell {
+        text: value,
+        completed,
+        has_physical_rows: physical,
+    } = match cell.kind {
         TableCellKind::Text => render_cell(cell),
         TableCellKind::HorizontalRule | TableCellKind::IsolatedHorizontalRule => {
-            (T::plain("---"), false, true)
+            super::RenderedCell {
+                text: T::plain("---"),
+                completed: false,
+                has_physical_rows: true,
+            }
         }
         TableCellKind::DoubleHorizontalRule | TableCellKind::IsolatedDoubleHorizontalRule => {
-            (T::plain("==="), false, true)
+            super::RenderedCell {
+                text: T::plain("==="),
+                completed: false,
+                has_physical_rows: true,
+            }
         }
     };
     let empty = value.is_empty();

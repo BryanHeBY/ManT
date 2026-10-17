@@ -1,6 +1,5 @@
 //! One bounded set of rail slots shared by rules, data and fallback boxes.
-mod glyphs;
-use glyphs::{crossing, frame_corner, horizontal_glyph, junction, vertical_glyph};
+use crate::table_border::{crossing, frame_corner, horizontal_glyph, junction, vertical_glyph};
 use mant_ir::{
     TableBorderStyle as Stroke, TableBorders, TableRow, TableRowKind, TableRuleCellKind,
 };

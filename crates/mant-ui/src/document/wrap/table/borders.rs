@@ -1,6 +1,9 @@
 //! Paint authored edges around one prepared table region, outside body maps.
 use super::super::{Line, LogicalTableRow, RowCopyMap, Span, WrappedLine};
 use mant_ir::{TableBorderStyle as Stroke, TableRuleCellKind};
+use mant_render::table_border::{
+    frame_corner, horizontal_glyph as horizontal, junction, vertical_glyph as vertical_character,
+};
 
 pub(super) fn column_style(
     table: &LogicalTableRow,
@@ -61,112 +64,6 @@ fn decoration(spans: Vec<Span<'static>>) -> WrappedLine {
             skip_row: true,
             ..RowCopyMap::default()
         },
-    }
-}
-
-fn horizontal(stroke: Stroke) -> char {
-    match stroke {
-        Stroke::Single => '─',
-        Stroke::Double => '═',
-    }
-}
-
-fn crossing(horizontal: Stroke, vertical: Stroke, top: bool, bottom: bool) -> char {
-    match (horizontal, vertical, top, bottom) {
-        (Stroke::Single, Stroke::Single, true, _) => '┬',
-        (Stroke::Single, Stroke::Single, _, true) => '┴',
-        (Stroke::Single, Stroke::Single, _, _) => '┼',
-        (Stroke::Double, Stroke::Double, true, _) => '╦',
-        (Stroke::Double, Stroke::Double, _, true) => '╩',
-        (Stroke::Double, Stroke::Double, _, _) => '╬',
-        (Stroke::Single, Stroke::Double, true, _) => '╥',
-        (Stroke::Single, Stroke::Double, _, true) => '╨',
-        (Stroke::Single, Stroke::Double, _, _) => '╫',
-        (Stroke::Double, Stroke::Single, true, _) => '╤',
-        (Stroke::Double, Stroke::Single, _, true) => '╧',
-        (Stroke::Double, Stroke::Single, _, _) => '╪',
-    }
-}
-
-fn vertical_character(style: Stroke) -> char {
-    match style {
-        Stroke::Single => '│',
-        Stroke::Double => '║',
-    }
-}
-
-fn junction(
-    left: Option<Stroke>,
-    right: Option<Stroke>,
-    vertical: Option<Stroke>,
-    top: bool,
-    bottom: bool,
-) -> char {
-    let horizontal = match (left, right) {
-        (Some(left), Some(right)) => Some(left.stronger(right)),
-        (left, right) => left.or(right),
-    };
-    let Some(vertical) = vertical else {
-        return horizontal.map_or(' ', self::horizontal);
-    };
-    let Some(horizontal) = horizontal else {
-        return vertical_character(vertical);
-    };
-    if left.is_some() && right.is_some() {
-        return crossing(horizontal, vertical, top, bottom);
-    }
-    match (horizontal, vertical, right.is_some()) {
-        (Stroke::Single, Stroke::Single, true) => '├',
-        (Stroke::Single, Stroke::Single, false) => '┤',
-        (Stroke::Double, Stroke::Double, true) => '╠',
-        (Stroke::Double, Stroke::Double, false) => '╣',
-        (Stroke::Single, Stroke::Double, true) => '╟',
-        (Stroke::Single, Stroke::Double, false) => '╢',
-        (Stroke::Double, Stroke::Single, true) => '╞',
-        (Stroke::Double, Stroke::Single, false) => '╡',
-    }
-}
-
-fn corner(stroke: Stroke, left: bool, top: bool, bottom: bool) -> char {
-    match (stroke, left, top, bottom) {
-        (Stroke::Single, true, true, _) => '┌',
-        (Stroke::Single, false, true, _) => '┐',
-        (Stroke::Single, true, _, true) => '└',
-        (Stroke::Single, false, _, true) => '┘',
-        (Stroke::Single, true, _, _) => '├',
-        (Stroke::Single, false, _, _) => '┤',
-        (Stroke::Double, true, true, _) => '╔',
-        (Stroke::Double, false, true, _) => '╗',
-        (Stroke::Double, true, _, true) => '╚',
-        (Stroke::Double, false, _, true) => '╝',
-        (Stroke::Double, true, _, _) => '╠',
-        (Stroke::Double, false, _, _) => '╣',
-    }
-}
-
-fn frame_corner(horizontal: Stroke, vertical: Stroke, left: bool, top: bool, bottom: bool) -> char {
-    if !top && !bottom {
-        return junction(
-            (!left).then_some(horizontal),
-            left.then_some(horizontal),
-            Some(vertical),
-            false,
-            false,
-        );
-    }
-    if horizontal == vertical {
-        return corner(vertical, left, top, bottom);
-    }
-    match (horizontal, vertical, left, top) {
-        (Stroke::Single, Stroke::Double, true, true) => '╓',
-        (Stroke::Single, Stroke::Double, false, true) => '╖',
-        (Stroke::Single, Stroke::Double, true, false) => '╙',
-        (Stroke::Single, Stroke::Double, false, false) => '╜',
-        (Stroke::Double, Stroke::Single, true, true) => '╒',
-        (Stroke::Double, Stroke::Single, false, true) => '╕',
-        (Stroke::Double, Stroke::Single, true, false) => '╘',
-        (Stroke::Double, Stroke::Single, false, false) => '╛',
-        _ => unreachable!("matching strengths returned above"),
     }
 }
 
@@ -348,7 +245,7 @@ pub(super) fn decorate(
         outer: show_outer,
     };
     for (index, (table, output)) in tables.iter().zip(rows.iter_mut()).enumerate() {
-        if table.rules.is_some() && widths.is_none() && table.whole_rule.is_none() {
+        if table.kind.rules().is_some() && widths.is_none() && table.kind.whole_rule().is_none() {
             // The bounded fallback already retained every authored strength in
             // source order. Outside paint must not replace those segments with
             // a synthesized single-stroke rectangular rule.
@@ -359,21 +256,22 @@ pub(super) fn decorate(
                 row.copy_map.skip_row = true;
                 row.copy_map.end = Some(0);
             }
-        } else if table.rules.is_some() && (show_outer || layout.rails.columns) {
-            let stroke = if table.whole_rule == Some(true) {
+        } else if table.kind.rules().is_some() && (show_outer || layout.rails.columns) {
+            let stroke = if table.kind.whole_rule() == Some(Stroke::Double) {
                 Stroke::Double
             } else {
                 Stroke::Single
             };
             let styles = table
-                .whole_rule
+                .kind
+                .whole_rule()
                 .is_none()
-                .then_some(table.rules.as_deref())
+                .then_some(table.kind.rules())
                 .flatten();
             let next = tables
                 .get(index + 1)
                 .copied()
-                .filter(|row| row.rules.is_none());
+                .filter(|row| row.kind.rules().is_none());
             *output = vec![rule_row(table, stroke, styles, next, &area(false, false))];
         } else if show_outer {
             for row in output.iter_mut() {
@@ -381,8 +279,8 @@ pub(super) fn decorate(
             }
         }
         if index > 0
-            && table.rules.is_none()
-            && tables[index - 1].rules.is_none()
+            && table.kind.rules().is_none()
+            && tables[index - 1].kind.rules().is_none()
             && let Some(stroke) = layout.borders.inner_rows
             && table.cells.iter().any(|cell| !cell.occupancy.covered())
         {

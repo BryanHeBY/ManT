@@ -1,13 +1,22 @@
-//! Unicode stroke selection; no source or viewport state.
+//! Terminal table stroke selection shared by CLI and TUI.
+//!
+//! These glyphs are presentation choices, not document IR or native formatter
+//! execution. Callers retain layout, style and source-coordinate ownership.
+//! Top/bottom flags select outside boundaries; top takes precedence if both
+//! are set. With neither flag, intersections remain interior/side tees.
 use mant_ir::TableBorderStyle as Stroke;
-pub(super) fn horizontal_glyph(stroke: Stroke) -> char {
+/// A complete horizontal stroke.
+#[must_use]
+pub fn horizontal_glyph(stroke: Stroke) -> char {
     match stroke {
         Stroke::Single => '─',
         Stroke::Double => '═',
     }
 }
 
-pub(super) fn crossing(horizontal: Stroke, vertical: Stroke, top: bool, bottom: bool) -> char {
+/// A full crossing or top/bottom tee of the requested strengths.
+#[must_use]
+pub fn crossing(horizontal: Stroke, vertical: Stroke, top: bool, bottom: bool) -> char {
     match (horizontal, vertical, top, bottom) {
         (Stroke::Single, Stroke::Single, true, _) => '┬',
         (Stroke::Single, Stroke::Single, _, true) => '┴',
@@ -24,14 +33,18 @@ pub(super) fn crossing(horizontal: Stroke, vertical: Stroke, top: bool, bottom: 
     }
 }
 
-pub(super) fn vertical_glyph(style: Stroke) -> char {
+/// A complete vertical stroke.
+#[must_use]
+pub fn vertical_glyph(style: Stroke) -> char {
     match style {
         Stroke::Single => '│',
         Stroke::Double => '║',
     }
 }
 
-pub(super) fn junction(
+/// A partial horizontal/vertical intersection; absent strokes remain blank.
+#[must_use]
+pub fn junction(
     left: Option<Stroke>,
     right: Option<Stroke>,
     vertical: Option<Stroke>,
@@ -80,7 +93,9 @@ fn corner(stroke: Stroke, left: bool, top: bool, bottom: bool) -> char {
     }
 }
 
-pub(super) fn frame_corner(
+/// An outside corner or side tee with independent stroke strengths.
+#[must_use]
+pub fn frame_corner(
     horizontal: Stroke,
     vertical: Stroke,
     left: bool,
@@ -109,5 +124,61 @@ pub(super) fn frame_corner(
         (Stroke::Double, Stroke::Single, true, false) => '╘',
         (Stroke::Double, Stroke::Single, false, false) => '╛',
         _ => unreachable!("matching strengths returned above"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mixed_strokes_keep_the_shared_terminal_character_contract() {
+        use Stroke::{Double, Single};
+        let cases = [
+            (Single, Single, ['┬', '┼', '┴'], ['┌', '┐', '└', '┘']),
+            (Single, Double, ['╥', '╫', '╨'], ['╓', '╖', '╙', '╜']),
+            (Double, Single, ['╤', '╪', '╧'], ['╒', '╕', '╘', '╛']),
+            (Double, Double, ['╦', '╬', '╩'], ['╔', '╗', '╚', '╝']),
+        ];
+        for (horizontal, vertical, crosses, corners) in cases {
+            for ((top, bottom), expected) in [(true, false), (false, false), (false, true)]
+                .into_iter()
+                .zip(crosses)
+            {
+                assert_eq!(crossing(horizontal, vertical, top, bottom), expected);
+                assert_eq!(
+                    junction(
+                        Some(horizontal),
+                        Some(horizontal),
+                        Some(vertical),
+                        top,
+                        bottom
+                    ),
+                    expected
+                );
+            }
+            for ((left, top, bottom), expected) in [
+                (true, true, false),
+                (false, true, false),
+                (true, false, true),
+                (false, false, true),
+            ]
+            .into_iter()
+            .zip(corners)
+            {
+                assert_eq!(
+                    frame_corner(horizontal, vertical, left, top, bottom),
+                    expected
+                );
+            }
+        }
+        assert_eq!(junction(None, None, None, false, false), ' ');
+        assert_eq!(
+            junction(Some(Single), Some(Double), None, false, false),
+            '═'
+        );
+        assert_eq!(junction(None, None, Some(Single), false, false), '│');
+        assert_eq!(frame_corner(Single, Double, true, false, false), '╟');
+        assert_eq!(frame_corner(Double, Single, false, false, false), '╡');
     }
 }

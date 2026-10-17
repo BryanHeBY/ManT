@@ -3,7 +3,9 @@
 //! CVS `out.c::tblcalc_literal()` fills T{} paragraphs under a measured width,
 //! while `tbl_term.c::tbl_literal()` gives spanning owners the complete region.
 //! Portable consumers use resolved preferences and their own viewport here.
-use super::{CellText, ProjectedTableRow, TableProjection, TableText, rows::render_table_cell};
+use super::{
+    CellText, ProjectedTable, ProjectedTableRow, TableOptions, TableText, rows::render_table_cell,
+};
 use mant_ir::{
     Block, TableAlignment, TableBorders, TableCell, TableGrid, TableRow, TableRowKind, geometry,
 };
@@ -39,15 +41,15 @@ struct Row<'a, T> {
 
 pub(super) fn project<T: TableText>(
     rows: &[TableRow],
-    projection: TableProjection,
+    projection: TableOptions,
     borders: &TableBorders,
-    render_cell: &mut impl FnMut(&TableCell) -> (T, bool, bool),
-) -> Vec<ProjectedTableRow<T>> {
+    render_cell: &mut impl FnMut(&TableCell) -> super::RenderedCell<T>,
+) -> ProjectedTable<T> {
     let grid = TableGrid::with_column_count(rows, projection.column_count);
     let count = grid.column_count;
     let mut prepared = prepare(rows, grid.rows, render_cell);
     if prepared.is_empty() {
-        return Vec::new();
+        return ProjectedTable::from_rows(Vec::new());
     }
     let frame = Frame::new(rows, borders, count, usize::from(projection.gap));
     let available = projection

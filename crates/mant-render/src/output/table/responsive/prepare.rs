@@ -3,7 +3,7 @@ use super::{Block, CellText, Owner, Row, TableCell, TableRow, TableText, render_
 pub(super) fn prepare<'a, T: TableText>(
     rows: &'a [TableRow],
     positioned: Vec<Vec<mant_ir::PositionedTableCell<'a>>>,
-    render_cell: &mut impl FnMut(&TableCell) -> (T, bool, bool),
+    render_cell: &mut impl FnMut(&TableCell) -> super::super::RenderedCell<T>,
 ) -> Vec<Row<'a, T>> {
     rows.iter()
         .zip(positioned)

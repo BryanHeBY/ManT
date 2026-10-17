@@ -3,15 +3,18 @@ use super::super::{Line, RowCopyMap, Span, WrappedLine};
 
 pub(super) fn render_rules(
     indent: usize,
-    whole: Option<bool>,
+    whole: Option<mant_ir::TableBorderStyle>,
     rules: &[mant_ir::TableRuleCellKind],
     widths: Option<&[usize]>,
     gap: usize,
     extent: usize,
 ) -> Vec<WrappedLine> {
     let mut spans = vec![Span::raw(" ".repeat(indent))];
-    if let Some(double) = whole {
-        spans.push(rule_span(if double { '═' } else { '─' }, extent));
+    if let Some(style) = whole {
+        spans.push(rule_span(
+            mant_render::table_border::horizontal_glyph(style),
+            extent,
+        ));
     } else if let Some(widths) = widths.filter(|widths| !widths.is_empty()) {
         for (index, width) in widths.iter().enumerate() {
             if index != 0 {

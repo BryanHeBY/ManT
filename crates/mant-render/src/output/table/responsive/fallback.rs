@@ -1,15 +1,15 @@
 //! Source-order reuse of prepared owners after a table-wide fallback.
 use super::{
-    ProjectedTableRow, Row, TableProjection, TableRowKind, TableText, frame::Frame, geometry,
-    prepare::wrap,
+    ProjectedTable, ProjectedTableRow, Row, TableOptions, TableRow, TableRowKind, TableText,
+    frame::Frame, geometry, prepare::wrap,
 };
 pub(super) fn stack<T: TableText>(
     rows: Vec<Row<'_, T>>,
-    projection: TableProjection,
+    projection: TableOptions,
     frame: Frame<'_>,
     available: Option<usize>,
     sparse: bool,
-) -> Vec<ProjectedTableRow<T>> {
+) -> ProjectedTable<T> {
     let width = available.map(|width| {
         width
             .saturating_sub(frame.outside())
@@ -51,16 +51,30 @@ pub(super) fn stack<T: TableText>(
         };
         projected.push((
             Some(row.source),
-            ProjectedTableRow::Content(content, completed, true),
+            ProjectedTableRow::Content {
+                lines: content,
+                completed,
+                stacked: true,
+            },
         ));
     }
+    frame_rows(projected, projection, frame, available)
+}
+
+/// Decorate only after every source-order row has its final physical receipt.
+fn frame_rows<T: TableText>(
+    projected: Vec<(Option<&TableRow>, ProjectedTableRow<T>)>,
+    projection: TableOptions,
+    frame: Frame<'_>,
+    available: Option<usize>,
+) -> ProjectedTable<T> {
     if !frame.has_outer() {
-        return projected.into_iter().map(|(_, row)| row).collect();
+        return ProjectedTable::from_rows(projected.into_iter().map(|(_, row)| row).collect());
     }
     let max = projected
         .iter()
         .filter_map(|(_, row)| {
-            if let ProjectedTableRow::Content(rows, _, _) = row {
+            if let ProjectedTableRow::Content { lines: rows, .. } = row {
                 Some(rows.iter().map(TableText::width).max().unwrap_or(0))
             } else {
                 None
@@ -74,7 +88,7 @@ pub(super) fn stack<T: TableText>(
         > geometry::MAX_COLUMN_PADDING
         || available.is_some_and(|available| max.saturating_add(frame.outside()) > available)
     {
-        return projected.into_iter().map(|(_, row)| row).collect();
+        return ProjectedTable::from_rows(projected.into_iter().map(|(_, row)| row).collect());
     }
     let mut boxed = Vec::new();
     if let Some(top) = frame.horizontal(&[max], None, true, false, None) {
@@ -82,7 +96,7 @@ pub(super) fn stack<T: TableText>(
     }
     for (source, row) in projected {
         match row {
-            ProjectedTableRow::Content(rows, _, _) => {
+            ProjectedTableRow::Content { lines: rows, .. } => {
                 for mut value in rows {
                     let used = value.width();
                     value = value.prefixed(&frame.stack_left(source));
@@ -94,7 +108,6 @@ pub(super) fn stack<T: TableText>(
                     boxed.push(value);
                 }
             }
-            ProjectedTableRow::FrameWidth(_) => {}
             ProjectedTableRow::Rule(cells, _) => {
                 // One source rule contributes once; it must not become a
                 // complete table-width row for each logical rule column.
@@ -107,5 +120,9 @@ pub(super) fn stack<T: TableText>(
     if let Some(bottom) = frame.horizontal(&[max], None, false, true, None) {
         boxed.push(T::plain(&bottom));
     }
-    vec![ProjectedTableRow::Content(boxed, false, true)]
+    ProjectedTable::from_rows(vec![ProjectedTableRow::Content {
+        lines: boxed,
+        completed: false,
+        stacked: true,
+    }])
 }

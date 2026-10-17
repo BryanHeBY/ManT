@@ -5,7 +5,7 @@ use mant_ir::TableCellKind;
 fn table_rows(rows: &[TableRow], mut render_cell: impl FnMut(&TableCell) -> String) -> Vec<String> {
     let prepared = projected_table_rows(
         rows,
-        TableProjection {
+        TableOptions {
             gap: 2,
             origin: 0,
             viewport: None,
@@ -13,13 +13,17 @@ fn table_rows(rows: &[TableRow], mut render_cell: impl FnMut(&TableCell) -> Stri
             column_count: None,
         },
         &mant_ir::TableBorders::default(),
-        |cell| (render_cell(cell), false, true),
+        |cell| RenderedCell {
+            text: render_cell(cell),
+            completed: false,
+            has_physical_rows: true,
+        },
     );
     prepared
+        .rows
         .into_iter()
         .flat_map(|row| match row {
-            ProjectedTableRow::FrameWidth(_) => Vec::new(),
-            ProjectedTableRow::Content(rows, _, _) => rows,
+            ProjectedTableRow::Content { lines: rows, .. } => rows,
             ProjectedTableRow::Rule(cells, _) => vec![
                 cells
                     .iter()

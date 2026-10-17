@@ -1,6 +1,6 @@
 //! Place prepared owners in the selected bounded grid.
 use super::{
-    ProjectedTableRow, Row, TableProjection, TableRowKind, TableText,
+    ProjectedTable, ProjectedTableRow, Row, TableOptions, TableRowKind, TableText,
     frame::Frame,
     measurement::{alignment_padding, column_start, owner_area, owner_width},
     spans,
@@ -9,9 +9,9 @@ pub(super) fn dense<T: TableText>(
     prepared: &[Row<'_, T>],
     columns: &[usize],
     frame: Frame<'_>,
-    projection: TableProjection,
+    projection: TableOptions,
     available: Option<usize>,
-) -> Vec<ProjectedTableRow<T>> {
+) -> ProjectedTable<T> {
     let count = columns.len();
     let content_width = columns.iter().sum::<usize>() + frame.gap * count.saturating_sub(1);
     let local = if projection.bounded_frame || frame.has_edges() {
@@ -40,10 +40,14 @@ pub(super) fn dense<T: TableText>(
         output.push(T::plain(&bottom));
     }
     let completed = output.last().is_some_and(TableText::is_empty);
-    vec![
-        ProjectedTableRow::FrameWidth(content_width.saturating_add(frame.outside())),
-        ProjectedTableRow::Content(output, completed, false),
-    ]
+    ProjectedTable {
+        frame_width: content_width.saturating_add(frame.outside()),
+        rows: vec![ProjectedTableRow::Content {
+            lines: output,
+            completed,
+            stacked: false,
+        }],
+    }
 }
 
 fn render_row<T: TableText>(
