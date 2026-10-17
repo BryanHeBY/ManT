@@ -660,6 +660,12 @@ bars and finder drawing to panel modules. Each panel retains its final input
 geometry; splitting drawing code must not change reflow, cache retention,
 pointer cancellation or the order in which geometry becomes visible to input.
 
+Personal `man.conf` parsing lives in `mant-loader/src/manual_paths/personal_config`
+on every platform. Host-native dialects remain in `bsd`, `man_db` and `macos`;
+`path_rules` adapts the shared settings path identities for discovery and
+personal path mappings. File/include limits belong to the personal loader,
+not to the Windows path policy.
+
 ## Documentation ownership
 
 Each topic has one authoritative home so examples and compatibility promises

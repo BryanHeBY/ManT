@@ -23,7 +23,8 @@ use man_db::unmapped_man_db_roots;
 #[cfg(test)]
 use man_db::{ManDbConfig, expand_man_db_systems, man_db_manual_roots, parse_man_db_config};
 mod expansion;
-mod windows_config;
+mod path_rules;
+mod personal_config;
 use config_file::read_text as read_config_text;
 #[cfg(test)]
 use expansion::wildcard_matches;
@@ -291,7 +292,7 @@ fn deduplicate_manual_paths(
 ) -> Vec<PathBuf> {
     let paths = paths.into_iter().collect::<Vec<_>>();
     if platform == ManualPathPlatform::Windows {
-        windows_config::deduplicate_windows_paths(paths)
+        path_rules::deduplicate_windows_paths(paths)
     } else {
         deduplicate_paths(paths)
     }
@@ -333,7 +334,7 @@ fn supplemental_manual_roots_for(
     let mut roots = Vec::new();
     let absolute = |path: &PathBuf| {
         if platform == ManualPathPlatform::Windows {
-            windows_config::is_absolute_windows_path(path.as_os_str())
+            path_rules::is_absolute_windows_path(path.as_os_str())
         } else {
             path.is_absolute()
         }
@@ -390,7 +391,7 @@ fn mant_configured_manual_roots(context: &DiscoveryContext<'_>) -> ManualRootDis
                 environment_value_for(context.environment, "PATH", context.platform)
                     .map(|value| env::split_paths(value).collect::<Vec<_>>())
                     .unwrap_or_default();
-            windows_config::load_personal(
+            personal_config::load_personal(
                 path,
                 context.environment,
                 &executable_paths,
