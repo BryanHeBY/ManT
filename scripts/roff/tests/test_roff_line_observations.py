@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import unittest
 
-from scripts.roff.audit.audit_roff_fidelity import layout_comparison, layout_lines, no_fill_source_layout
+from scripts.roff.lib.fidelity.layout import layout_comparison, layout_lines, no_fill_source_layout
 from scripts.roff.lib.roff_line_observations import LineLimits, SourceRow, observe_hard_lines
 from scripts.roff.lib import roff_line_observations
 
