@@ -49,6 +49,12 @@ sequential declared fields. Declared-field tables retain their outside frame
 but may simplify interior grid lines. Horizontal spans receive their full covered area;
 frame/rule/grid glyphs are generated presentation and never replace cell text.
 
+`table_border` supplies the terminal stroke glyphs shared by CLI and TUI:
+`horizontal_glyph`, `vertical_glyph`, `crossing`, `junction` and `frame_corner`.
+Single/double stroke strengths come from IR, but glyph selection stays in this
+presentation layer. These helpers neither allocate columns nor choose colors;
+adapters retain their own layout, theme and source-coordinate maps.
+
 `cells` borrows complete grapheme clusters and preserves byte boundaries. Its input contract is already-sanitized single-line text. It does not replace source-neutral IR geometry or a frontend's wrapping policy.
 
 Scope report functions consume `ScopeQueryResponse` directly. They preserve the supplied evidence page, document order, failures and coverage; they do not execute a scope query or invent per-document pagination. CLI adapters supply ANSI decoration or terminal-safe Markdown identities. MCP uses the same plain/Markdown reports, then applies its own redaction, hints and character paging without depending on CLI format or error types.

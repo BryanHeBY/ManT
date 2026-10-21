@@ -982,12 +982,20 @@ cargo build --locked --release -p mant --bin mant -p mant-engine \
   --example roff_target_profile --example roff_semantic_profile
 python3 -m scripts.roff.audit.audit_roff_all --manifest /path/to/source-manifest.jsonl \
   --output target/all-roff-audits --mant target/release/mant \
-  --mandoc /path/to/fixed-cvs/mandoc --groff /usr/bin/groff \
+  --mandoc target/mandoc-migration/reference/mandoc \
+  --reference-id cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible \
+  --oracle-attestation crates/libmandoc-rs/upstream/oracle/attestations/cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible.json \
+  --oracle-archive target/mandoc-migration/freeze-cvs-20261013T025419Z/upstream-cvs-20261013T025419Z.tar.gz \
+  --groff /usr/bin/groff \
   --profiler-dir target/release/examples
 ```
 
-Use `--plan` to check the inputs without executing audits. Each of the eight
-dimensions retains its existing candidate rules, and records execution errors,
+Restore the reference with `scripts/rebuild_reference_mandoc.sh` first. The
+identity, attestation and archive above belong to the active registered Linux
+oracle; use a matching registered identity and evidence on other hosts, never
+relabel another build. Use `--plan` to check the inputs without executing audits.
+Each of the eight dimensions retains its existing candidate rules, and records
+execution errors,
 resource limits and external-context coverage separately. The output directory
 must be new; historical CSV acceptance is not rewritten. Results bind the
 manifest, actual source bytes, binaries and rules, but do not attest a binary's

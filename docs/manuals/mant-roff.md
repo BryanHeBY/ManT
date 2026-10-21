@@ -1010,25 +1010,30 @@ excluding the gap between columns. Roff escapes affect this measurement; a
 numeric-looking declaration such as `8n` remains a width sample, not a scale
 expression. The codec records the upstream 4/3/1-cell gap for fewer than, exactly,
 or more than five declarations as `gapColumns`, along with
-`advanceLimitColumns:256` and `extraWidthColumns:10`. Generic terminal consumers
-use these explicit preferences rather than interpreting a source macro or
-choosing a native gap from the number of declarations. Additional cells start
+`maxAlignmentPaddingColumns:256` and `extraWidthColumns:10`. Generic terminal
+consumers use these explicit preferences rather than interpreting a source macro
+or choosing a native gap from the number of declarations. Additional cells start
 after all declared fields, rather than adding an invented default stride. Their
 ten-cell content capacity excludes any added gap. The last field keeps its
 complete content.
 
 These are preferred origins, not a promise of fixed viewport columns. Tables
 without source constraints use the source-neutral default: empty widths, gap 2,
-and no advance limit or extra-field width. Empty widths use content-derived
-layout, consuming the gap while retaining any supplied advance/extra-field
-constraints for declared-field layout only. Explicit zero constraints remain
-distinct from absence in IR and JSON. The retired `columnWidths` wire field is
-rejected in v0.13 rather than silently discarded.
+and no alignment-padding limit or extra-field width. Empty widths use
+content-derived layout, consuming the gap while retaining any supplied
+alignment/extra-field constraints for declared-field layout only. Explicit zero constraints remain
+distinct from absence in IR and JSON. The retired `columnWidths` and
+`advanceLimitColumns` wire fields are rejected in v0.13 rather than silently
+discarded.
 Plain and ANSI output use the same measurement before decoration. Successive
 cells continue after the preceding cell's last physical row; they are never
 zipped by local line number. A full field moves the following cell to a new
-row. The native `advanceLimitColumns:256` bounds one positioning advance;
-hand-built or decoded preferences without that constraint do not inherit it.
+row. The native mapping supplies `maxAlignmentPaddingColumns:256`, a resolved
+maximum alignment region after the preceding field's content extent, not a
+formatter instruction or consumer work budget. Preserved trailing spaces
+occupy that region and are never clipped; the next origin cannot precede the
+complete output end. Hand-built or decoded preferences without that constraint
+do not inherit it.
 An independent 4096-cell generated-padding budget uses source-order fallback
 when exceeded and preserves every prepared and later cell. More than 256
 columns, span/rule combinations, and origins that require preserving signed
@@ -1127,7 +1132,14 @@ owned native payload; a root file's matching line number is not source identity.
 
 ## Equations
 
-Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an `equation` block with libmandoc's parsed box structure and a checked readable text projection. Delimiter-selected equations inside prose remain inline equation nodes between the surrounding words. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common complete, unquoted GNU `ldots` macro is projected as `...`; quoted `"ldots"` remains literal text.
+Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an
+`equation` block with source-neutral mathematical structure and a checked
+readable text projection. The producer resolves native boxes into text,
+operations, sequences, groups, piles and matrices; parser argument counters
+and execution state do not enter IR. Delimiter-selected equations inside prose
+remain inline equation nodes between the surrounding words. Configuration-only
+`EQ`/`EN` blocks emit no empty equation. The common complete, unquoted GNU
+`ldots` macro is projected as `...`; quoted `"ldots"` remains literal text.
 
 Native `tbl(7)` keeps delimiter-like cell text opaque. ManT decodes that native
 word with the ordinary roff escape and font state, preserving its delimiters

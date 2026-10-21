@@ -174,7 +174,9 @@ labels, while keeping name colors, original text and source emphasis intact.
 The mouse can select and fold outline nodes, follow underlined in-page,
 cross-document, and web/email links, scroll both panes, drag scrollbars, and
 resize the Outline sidebar. Markdown links stay inside their registered source; man
-and mdoc references select an exact manual section.
+and mdoc references prefer the exact manual category, then allow an alphabetic
+extension of an absent single-digit category (for example, `ed(1)` can open
+`ed(1p)`). Explicit suffixed categories and catalog addresses stay exact.
 The Edit menu can copy a complete selected Outline node as deterministic text
 or structurally complete Markdown; arbitrary visual selections deliberately
 remain plain text so wrapping cannot produce a truncated Markdown fragment.

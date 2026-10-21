@@ -17,6 +17,13 @@ The pending product release is `mant 0.13.0`. The ten native/IR/reader crates
 publish at `0.13.0`; independently versioned `mant-sources` publishes at
 `0.10.2`. Release dates remain unset until the release is frozen.
 
+The compatibility changes below accompany Content-first keyboard reading,
+less-style live regex search, complete native code blocks with retained syntax
+colors, and responsive tables with authored borders. Existing storage defaults
+and `mant.toml` behavior are unchanged from 0.12.1. Native process clients must
+migrate together to the `v0.13` contract family; this is not a wire-compatible
+0.12 patch.
+
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.13.0
 
 - Share terminal table stroke selection through `mant_render::table_border`
@@ -147,6 +154,10 @@ publish at `0.13.0`; independently versioned `mant-sources` publishes at
 
 ### Dependency maintenance
 
+- Lock `rustls-webpki 0.103.16` and `webpki-roots 1.0.10` to reject distrusted
+  emSign certificate paths (RUSTSEC-2026-0382 and RUSTSEC-2026-0381), without
+  changing the TLS feature set or configuration paths. Regenerate the
+  distributable Rust dependency notices for the corrected graph.
 - Upgrade the exactly paired MCP SDK and generated macros to `3.5.1`, retaining
   the Rust `1.88` floor and existing feature selection. Update the locked native
   build dependency `cc` to `1.8.0` in both workspace and fuzz graphs, and regenerate
