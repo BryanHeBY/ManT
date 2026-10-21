@@ -13,9 +13,10 @@ that crate was not published for that change.
 
 ## Unreleased
 
-The pending product release is `mant 0.13.0`. The ten native/IR/reader crates
-publish at `0.13.0`; independently versioned `mant-sources` publishes at
-`0.10.2`. Release dates remain unset until the release is frozen.
+## 0.13.0 - 2026-10-21
+
+This release publishes the ten native/IR/reader crates at `0.13.0` and the
+independently versioned `mant-sources` at `0.10.2`.
 
 The compatibility changes below accompany Content-first keyboard reading,
 less-style live regex search, complete native code blocks with retained syntax
@@ -46,7 +47,7 @@ migrate together to the `v0.13` contract family; this is not a wire-compatible
   Centering and rules use the final frame, and spanning cells align in their
   complete region without internal dividers. Widen cell spans to positive u32
   to prevent silent truncation at 65,535; reject aggregate logical-column
-  overflow. Update Rust table/row/cell literals and unreleased v0.13 clients;
+  overflow. Update Rust table/row/cell literals and v0.13 clients;
   the published v0.12 family stays frozen. Frame glyphs and alignment padding
   stay outside body search, links and selection.
 - Preserve whole-table placement and the declared logical column range with
@@ -58,7 +59,7 @@ migrate together to the `v0.13` contract family; this is not a wire-compatible
   rules follow that frame and its bounded source-order fallback, while CLI
   also honors cell alignment. Navigation and source coordinates stay attached
   to original content. Update Rust table literals with the two optional fields
-  and regenerate unreleased v0.13 clients; frozen v0.12 remains unchanged.
+  and regenerate v0.13 clients; frozen v0.12 remains unchanged.
 - Unify native manual queries across CLI, interactive citations and linked
   document traversal. Prefer an exact main category, then allow alphabetic
   extensions when it is absent: `mant 1 ed` and an `ed(1)` citation can open
@@ -69,7 +70,7 @@ migrate together to the `v0.13` contract family; this is not a wire-compatible
   `ManualRequest::new` and `ManualIndex::find` retain exact lookup; opt into
   query selection with `ManualRequest::query` or `ManualIndex::find_query`.
   Update Rust `ManualRequest` literals with the new `lookup_mode` field.
-  Unreleased v0.13 navigation requests with `kind: "manual"` now retain query
+  v0.13 navigation requests with `kind: "manual"` now retain query
   intent even with a section; use `kind: "address"` for precise reopening.
   Pure reference/outline projections retain unresolved manual intent rather
   than claiming a selected destination. No document IR fields or wire shapes
@@ -80,7 +81,7 @@ migrate together to the `v0.13` contract family; this is not a wire-compatible
   names; serialize equation enums as kebab-case. Remove parser argument counters
   and replace `summarizedOperandGroup` with mathematical `operandScope`.
   Producers retain grouping and complete readable text, including opaque/deep
-  operands; update Rust constructors and regenerate unreleased v0.13 clients.
+  operands; update Rust constructors and regenerate v0.13 clients.
   Retired fields/enum spellings are rejected; frozen v0.12 contracts are unchanged.
 - Replace table `advance_limit_columns`/`advanceLimitColumns` with
   `max_alignment_padding_columns`/`maxAlignmentPaddingColumns`, a declarative

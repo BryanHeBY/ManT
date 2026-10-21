@@ -246,7 +246,7 @@ from those rows. Large counts must not cause dense allocations:
 `TableGrid::with_column_count` keeps storage proportional to original cells,
 and `bounded_table_rows_with_column_count` uses sparse plans beyond 256 columns.
 Neither fact duplicates empty cell owners. These optional fields join the
-unreleased v0.13 contract; published v0.12 remains unchanged.
+v0.13 contract; published v0.12 remains unchanged.
 
 `Table.borders: TableBorders` records author-specified outside and grid edges.
 Its optional `outer`, `inner_rows` and `inner_columns` strokes are `single` or
@@ -274,7 +274,7 @@ Whole-table alignment places the final frame after this responsive allocation.
 standalone rule rows and navigation-only carriers do not consume the span.
 The owner remains top-aligned
 with one content tree, and covered rows suppress intersecting grid segments.
-Both `TableCell` spans use positive u32 ranges in unreleased v0.13, preserving
+Both `TableCell` spans use positive u32 ranges in v0.13, preserving
 topology beyond 65535 without saturating later cell positions. A row's complete
 logical column range must also fit u32; serde and document validation reject
 overflow before platform-sized position arithmetic can hide it. Sparse plans
@@ -288,7 +288,7 @@ readers never replay parser rules. `operator` names fractions, roots, scripts
 and limits, while `operand_scope` preserves an opaque compound operand's scope
 independently from diagnostic provenance. The shared readable projection is not
 a second editable body or a substitute for structured math-capable output.
-In unreleased 0.13, equation enums use kebab-case, `EquationOperator` replaces
+In 0.13, equation enums use kebab-case, `EquationOperator` replaces
 `EquationPosition`, and parser counters/`summarizedOperandGroup` are retired.
 
 Literal rows are content: an explicit empty text row in `Preformatted` is

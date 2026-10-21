@@ -1,4 +1,4 @@
-//! Source-neutral table preferences in the unreleased v0.13 wire contract.
+//! Source-neutral table preferences in the v0.13 wire contract.
 
 use crate::{DocumentResponse, QueryBundle, inline_contract_tests::query_fixture};
 use mant_ir::{Block, ColumnPreferences, Inline, TableRow};

@@ -35,7 +35,7 @@ measurement, signed origin composition/reparenting and bounded gap composition.
 terminal viewport state. Cell coordinates remain distinct from the byte/scalar
 positions used by semantic bindings and explanation evidence.
 
-The unreleased v0.13 document model contains resolved mathematical sequences,
+The v0.13 document model contains resolved mathematical sequences,
 groups and operators, not equation parser counters. Equation enums use
 kebab-case; migrate `position` to `operator` and opaque grouping to
 `operandScope`. Table alignment regions use `maxAlignmentPaddingColumns`,

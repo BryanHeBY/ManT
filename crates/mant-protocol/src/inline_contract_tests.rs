@@ -1,4 +1,4 @@
-//! One accepted inline body in the unreleased v0.13 contract.
+//! One accepted inline body in the v0.13 contract.
 
 use crate::QueryBundle;
 use mant_ir::Inline;

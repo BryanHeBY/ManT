@@ -6349,7 +6349,7 @@
         "description": "Exact marker for the independent explanation result contract.",
         "oneOf": [
           {
-            "description": "Unreleased v0.13 explanation family.",
+            "description": "v0.13 explanation family.",
             "type": "string",
             "const": "mant.explanation/v0.13"
           }

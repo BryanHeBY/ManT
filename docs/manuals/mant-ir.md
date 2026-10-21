@@ -227,7 +227,7 @@ unusual remaining structure still exceeds it. These reductions leave
 already truncated, its separate `content-coverage` diagnostic still reports
 missing source content.
 
-In the unreleased `0.13.0` API, migrate `EquationPosition`/`position` to
+In the `0.13.0` API, migrate `EquationPosition`/`position` to
 `EquationOperator`/`operator`, `Subexpression` to `Operation`, and parser `List`
 to producer-resolved `Sequence` or `Group`. Operator names are `Fraction`,
 `SquareRoot`, `UpperLimit`, `LowerLimit`, `LowerUpperLimits`, and the existing
@@ -321,7 +321,7 @@ or right alignment applies to the resulting frame, not its unwrapped width.
 standalone rule rows and navigation-only carriers do not consume the span.
 The owner remains top-aligned
 with one content tree, and covered rows suppress intersecting grid segments.
-`columnSpan` and `rowSpan` are positive u32 values in unreleased v0.13; the
+`columnSpan` and `rowSpan` are positive u32 values in v0.13; the
 published v0.12 u16 family stays frozen. Aggregate logical columns must fit
 u32 even when `columnCount` is absent. Decoding and validation reject overflow
 rather than silently saturating subsequent cell positions, including on

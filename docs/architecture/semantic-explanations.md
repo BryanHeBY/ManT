@@ -261,7 +261,7 @@ External IR producers receive the same complete checks as built-in parsers.
 
 ## Explanation match positions
 
-The unreleased v0.13 migration uses the following closed fields. Matching
+The v0.13 migration uses the following closed fields. Matching
 decisions remain in collection; materialization projects recorded source
 bindings, and renderers consume only the response. Ordinary name coloring and
 actual query matches are independent dimensions.

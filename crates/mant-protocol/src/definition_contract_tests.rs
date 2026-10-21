@@ -1,4 +1,4 @@
-//! Source-neutral definition row and word relationships in unreleased v0.13.
+//! Source-neutral definition row and word relationships in v0.13.
 
 use mant_ir::{Block, DefinitionBodyAlignment, DefinitionItem, DefinitionLayout, HeadBodyRelation};
 use serde_json::json;

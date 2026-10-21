@@ -1018,7 +1018,7 @@ budget become readable text leaves and report
 `operandScope: "compound"` retains an opaque operand's mathematical scope,
 independently of why its structure is unavailable; default `"atomic"` is omitted.
 The retired `expectedArgs`, `actualArgs`, `summarizedOperandGroup` and `position`
-fields are rejected by the current unreleased v0.13 family. Published v0.12
+fields are rejected by the v0.13 family. Published v0.12
 snapshots stay frozen. Deep surrounding lists, definitions, tables, or inline
 wrappers can themselves be reduced to readable text with
 `manual.document-structure-depth-summarized`, even without an equation. A final

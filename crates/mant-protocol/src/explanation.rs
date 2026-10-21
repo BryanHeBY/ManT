@@ -78,7 +78,7 @@ pub struct ExplanationQuery {
 /// Exact marker for the independent explanation result contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExplanationSchema {
-    /// Unreleased v0.13 explanation family.
+    /// v0.13 explanation family.
     #[serde(rename = "mant.explanation/v0.13")]
     V0Dot13,
 }
