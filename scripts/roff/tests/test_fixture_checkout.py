@@ -26,13 +26,13 @@ class FixtureCheckoutTests(unittest.TestCase):
                      "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"):
             environment.pop(name, None)
 
-        def git(*arguments):
+        def git(*arguments, timeout=30):
             subprocess.run(
                 ["git", "-c", f"core.autocrlf={str(autocrlf).lower()}",
                  "-c", f"core.eol={eol}",
                  "-c", "core.safecrlf=false", "-c", f"core.attributesFile={os.devnull}",
                  *arguments], cwd=repository, env=environment,
-                capture_output=True, check=True, timeout=30,
+                capture_output=True, check=True, timeout=timeout,
             )
 
         git("init", "--quiet")
@@ -41,8 +41,11 @@ class FixtureCheckoutTests(unittest.TestCase):
             target = repository / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
-        git("add", ".")
-        git("checkout-index", "--all", f"--prefix={destination.as_posix()}/")
+        # Stage and check out the complete matrix in every configuration. The
+        # thousand-plus tiny files can exceed 30 seconds on Windows runners;
+        # give these bulk I/O operations a bounded integration-test budget.
+        git("add", ".", timeout=120)
+        git("checkout-index", "--all", f"--prefix={destination.as_posix()}/", timeout=120)
         return destination
 
     def test_checkout_keeps_sources_and_sealed_rows_byte_identical(self):
