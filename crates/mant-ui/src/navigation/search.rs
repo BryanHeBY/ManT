@@ -69,14 +69,6 @@ impl OutlineScan {
                 continue;
             }
             let field = &record.fields[self.field];
-            if !field.target
-                && field.text != record.label
-                && record.label.contains(field.text.as_ref())
-            {
-                self.next_field();
-                budget = budget.saturating_sub(field.text.len().max(1));
-                continue;
-            }
             let ranges = self.stream.advance(&field.text, &mut budget);
             for range in ranges {
                 if matches.len() == MAX_RESULTS || self.remaining == 0 {
@@ -140,12 +132,6 @@ pub(crate) fn find(records: &[OutlineRecord], query: &str) -> (Vec<OutlineHit>, 
     for record in records {
         let mut fields = Vec::new();
         for field in &record.fields {
-            if !field.target
-                && field.text != record.label
-                && record.label.contains(field.text.as_ref())
-            {
-                continue;
-            }
             let mut ranges = search.ranges(&field.text, remaining.saturating_add(1));
             if ranges.is_empty() {
                 continue;
@@ -355,7 +341,7 @@ fn complete_labels(
     ));
     let mut runs = vec![main];
     for field in &hit.fields {
-        if field.field.text == hit.label {
+        if field.field.text == hit.label || covered_by_label(field, &hit.label, label_ranges) {
             continue;
         }
         let mut run = vec![(
@@ -373,6 +359,25 @@ fn complete_labels(
         runs.push(run);
     }
     runs
+}
+
+/// Matching sees each complete field, including its own regex assertions.
+/// Presentation alone can omit a field whose hits are already painted at the
+/// same positions in the full label; an anchored field-only hit stays visible.
+fn covered_by_label(field: &FieldHit, label: &str, ranges: &[Range<usize>]) -> bool {
+    !field.field.target
+        && !ranges.is_empty()
+        && label
+            .match_indices(field.field.text.as_ref())
+            .any(|(offset, _)| {
+                field.ranges.iter().all(|hit| {
+                    let start = offset + hit.start;
+                    let index = ranges.partition_point(|range| range.end <= start);
+                    ranges
+                        .get(index)
+                        .is_some_and(|range| range.start <= start && offset + hit.end <= range.end)
+                })
+            })
 }
 
 fn compact_context(
@@ -642,5 +647,147 @@ mod tests {
         let (hits, limited) = find(&[source], "cde");
         assert!(!limited);
         assert!(hits.is_empty());
+    }
+
+    #[test]
+    fn complete_fields_match_independently_at_every_scan_budget() {
+        use mant_protocol::{SearchCase, SearchSyntax};
+
+        let mut heading = record(0, "cmd extra");
+        let mut entry = record(1, "--help <ARG>");
+        let mut embedded = record(2, "xcmdx");
+        for (record, text, target) in [
+            (&mut heading, "cmd", false),
+            (&mut entry, "--help", false),
+            (&mut embedded, "cmd", false),
+        ] {
+            record.fields.push(OutlineField {
+                text: Arc::from(text),
+                target,
+                anchor: format!("field-{}", record.node_index),
+            });
+        }
+        heading.fields.push(OutlineField {
+            text: Arc::from("target.md"),
+            target: true,
+            anchor: "reference".into(),
+        });
+        let records = [heading, entry, embedded];
+        for (pattern, syntax, expected) in [
+            (
+                "^cmd$",
+                SearchSyntax::Regex,
+                vec![(0, vec!["cmd"]), (2, vec!["cmd"])],
+            ),
+            (
+                "^cmd extra$",
+                SearchSyntax::Regex,
+                vec![(0, vec!["cmd extra"])],
+            ),
+            (
+                "\\bcmd\\b",
+                SearchSyntax::Regex,
+                vec![(0, vec!["cmd extra", "cmd"]), (2, vec!["cmd"])],
+            ),
+            (
+                "cmd",
+                SearchSyntax::Literal,
+                vec![(0, vec!["cmd extra", "cmd"]), (2, vec!["xcmdx", "cmd"])],
+            ),
+            ("^--help$", SearchSyntax::Regex, vec![(1, vec!["--help"])]),
+            (
+                "^--help <ARG>$",
+                SearchSyntax::Regex,
+                vec![(1, vec!["--help <ARG>"])],
+            ),
+            (
+                "^target\\.md$",
+                SearchSyntax::Regex,
+                vec![(0, vec!["target.md"])],
+            ),
+            ("cmdtarget", SearchSyntax::Literal, vec![]),
+        ] {
+            for budget in [1, 2, 7, 4096] {
+                let stream =
+                    crate::document::PatternStream::compile(pattern, syntax, SearchCase::Sensitive)
+                        .unwrap();
+                let mut scan = OutlineScan::with_stream(stream);
+                let mut hits = Vec::new();
+                let mut finished = false;
+                for _ in 0..10_000 {
+                    let (done, limited) = scan.advance(&records, &mut hits, budget);
+                    assert!(!limited);
+                    if done {
+                        finished = true;
+                        break;
+                    }
+                }
+                assert!(finished, "{pattern}/{budget}");
+                let actual = hits
+                    .iter()
+                    .map(|hit| {
+                        (
+                            hit.node_index,
+                            hit.fields
+                                .iter()
+                                .map(|field| field.field.text.as_ref())
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(actual, expected, "{pattern}/{budget}");
+                for hit in &hits {
+                    for field in &hit.fields {
+                        for range in &field.ranges {
+                            assert_ne!(&field.field.text[range.clone()], "");
+                            if field.field.text.as_ref() == "cmd" {
+                                assert_eq!(range, &(0..3));
+                                assert_eq!(field.field.anchor, format!("field-{}", hit.node_index));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn display_deduplication_requires_the_same_matched_label_range() {
+        let field = FieldHit {
+            field: OutlineField {
+                text: Arc::from("cmd"),
+                target: false,
+                anchor: "reference".into(),
+            },
+            ranges: std::iter::once(0..3).collect(),
+        };
+        assert!(covered_by_label(
+            &field,
+            "cmd extra",
+            std::slice::from_ref(&(0..3))
+        ));
+        assert!(!covered_by_label(&field, "cmd extra", &[]));
+        assert!(!covered_by_label(
+            &field,
+            "cmd extra",
+            std::slice::from_ref(&(4..9))
+        ));
+        assert!(covered_by_label(
+            &field,
+            "cmd cmd",
+            std::slice::from_ref(&(4..7))
+        ));
+        let target = FieldHit {
+            field: OutlineField {
+                target: true,
+                ..field.field.clone()
+            },
+            ..field
+        };
+        assert!(!covered_by_label(
+            &target,
+            "cmd extra",
+            std::slice::from_ref(&(0..3))
+        ));
     }
 }

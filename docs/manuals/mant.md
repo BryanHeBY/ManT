@@ -891,6 +891,10 @@ Narrow fields use `P`/`O` for Page/Outline, `R`/`L` for Regex/Literal,
 `Aa`/`aa`/`S` for Sensitive/Ignore/Smart case and `W` for opt-in wrap.
 These TUI defaults do not change CLI or protocol search defaults.
 
+Search-menu case, syntax and wrap settings apply to the currently open Page or
+Outline field, preserving its draft and cursor. While reading, they reopen the
+last confirmed search surface with its retained query.
+
 Useful regexes include `--(git-dir|work-tree)=`, `\bneedle\b`, and `^--help`.
 Anchors refer to logical records (paragraphs, hard rows or table cells), not
 terminal-width-dependent wrapped rows. Matches do not cross separate records
@@ -948,6 +952,11 @@ Associated heading/entry references match their existing owner node; ordinary
 reference occurrences remain distinct. Selecting a result reveals its source,
 never opens a referenced document or URI. Explicit reference activation is
 still required after leaving search.
+
+Each field is matched as complete text: `^cmd$` can match a reference label
+`cmd` within the heading `cmd extra`, and `^cmd extra$` can match the full
+heading. Matching fields retain their own ranges; overlapping highlights are
+deduplicated only for presentation.
 
 Like page search, typing previews matches in cancellable slices without moving
 the selection or revealing new ancestors. Only explicit result navigation

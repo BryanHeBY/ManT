@@ -33,7 +33,9 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Live page/Outline search defaults to case-sensitive Rust regexes. `/` and `?`
   select forward/backward page search; `n` repeats and `N` reverses the direction.
   `Ctrl+R` toggles Literal, `Alt+C` cycles case modes, and `Alt+W` toggles wrapping
-  (default off); menus expose the same choices. Query edits are debounced and
+  (default off); menus expose the same choices. Settings use the current search
+  surface while its field is open, preserving its draft and cursor. From reading
+  mode they reopen the last confirmed surface and query. Query edits are debounced and
   retire obsolete work. Previewing does not navigate. Enter confirms relative
   to the current position and returns to reading with highlights retained;
   empty Enter repeats the last pattern. F1 opens keyboard help. Unfinished scans
@@ -43,6 +45,9 @@ catalog, search, and cross-document interactions without serializing the IR.
   Complete labels, entry names/forms and inventoried reference labels/targets
   match independently of folding and truncation; synthetic groups are context,
   not results. Hits retain node and field ranges through grapheme-safe wrapping.
+  Regex anchors and word boundaries apply to each complete field, even when a
+  reference label or entry name is also a substring of the full title. Results
+  count nodes once; coincident display highlights are merged after matching.
   Shared page/outline input editing keeps separate drafts, queries and cursors;
   visited ancestor paths are temporary and only the exit position stays revealed.
   Search results never imply a document-open capability request. Bounded indexes

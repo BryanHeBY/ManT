@@ -13,6 +13,15 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-ui
+
+- Match complete outline titles, entry names and reference fields independently,
+  including anchored regexes on fields contained in a longer title. Deduplicate
+  nodes and coincident display highlights after matching.
+- Keep Search-menu case, syntax and wrap settings on the open search surface,
+  retaining its draft and cursor. From reading mode, restore the last confirmed
+  surface and query, matching the corresponding keyboard controls.
+
 ## 0.13.0 - 2026-10-21
 
 This release publishes the ten native/IR/reader crates at `0.13.0` and the

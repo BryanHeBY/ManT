@@ -78,7 +78,7 @@ pub(super) struct MenuEntry {
     pub(super) action: MenuAction,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MenuAction {
     Quit,
     OpenDocument,
@@ -527,13 +527,12 @@ impl App {
                 self.search.direction = -1;
             }
             MenuAction::SearchCase | MenuAction::SearchSyntax | MenuAction::SearchWrap => {
-                let editing = self.search_is_open();
-                if self.last_search_target == super::search::SearchTarget::Outline {
-                    self.open_outline_search();
-                } else {
-                    self.open_search();
-                }
-                if !editing {
+                if !self.search_is_open() {
+                    if self.last_search_target == super::search::SearchTarget::Outline {
+                        self.open_outline_search();
+                    } else {
+                        self.open_search();
+                    }
                     let input = self.active_search_input_mut();
                     input.draft.clone_from(&input.query);
                     input.cursor = input.draft.len();
