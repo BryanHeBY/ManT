@@ -46,6 +46,25 @@ impl<'a> Frame<'a> {
     pub(super) fn has_outer(&self) -> bool {
         self.outer
     }
+    pub(super) fn stacked_spans(&self) -> Option<super::spans::Spans> {
+        // Wide sparse tables deliberately simplify covered-column geometry;
+        // never allocate a slot for every declared column during fallback.
+        (self.count <= mant_ir::MAX_DENSE_TABLE_COLUMNS)
+            .then(|| super::spans::Spans::new(self.count))
+    }
+    pub(super) fn stacked_boundary(
+        &self,
+        spans: Option<&super::spans::Spans>,
+        next: &TableRow,
+    ) -> Option<TableRuleCellKind> {
+        if !next.cells.is_empty() && spans.is_some_and(super::spans::Spans::fully_continued) {
+            return None;
+        }
+        self.borders.inner_rows.map(|stroke| match stroke {
+            Stroke::Single => TableRuleCellKind::Horizontal,
+            Stroke::Double => TableRuleCellKind::DoubleHorizontal,
+        })
+    }
     pub(super) fn outside(&self) -> usize {
         if self.outer { 4 } else { 0 }
     }
@@ -193,12 +212,18 @@ impl<'a> Frame<'a> {
         columns: &[usize],
         spans: &super::spans::Spans,
         source: &TableRow,
+        next: &TableRow,
     ) -> Option<String> {
-        if spans.rules().iter().all(|covered| *covered) {
+        if !next.cells.is_empty() && spans.fully_continued() {
             return None;
         }
         let stroke = self.borders.inner_rows?;
         let value = self.horizontal(columns, Some(stroke), false, false, Some(source))?;
+        // An empty data row is an authored physical row. Vertical
+        // continuation instead uses explicit empty cells in the next row.
+        if next.cells.is_empty() {
+            return Some(value);
+        }
         Some(self.mask_rule(&value, columns, &spans.rules(), spans, Some(source)))
     }
     pub(super) fn mask_rule(

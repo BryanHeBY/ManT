@@ -31,7 +31,7 @@ pub(super) fn dense<T: TableText>(
         if let Some(next) = prepared.get(index + 1)
             && matches!(row.source.kind, TableRowKind::Data)
             && matches!(next.source.kind, TableRowKind::Data)
-            && let Some(rule) = frame.between(columns, &spans, row.source)
+            && let Some(rule) = frame.between(columns, &spans, row.source, next.source)
         {
             output.push(T::plain(&rule));
         }

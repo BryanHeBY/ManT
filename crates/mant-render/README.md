@@ -30,7 +30,10 @@ assert_eq!(plain, render_query_text_with(&content, |_, text| text.to_owned()));
 within a caller-supplied content width, bounded at 4096 cells. They preserve the
 accepted hard rows; ordinary document rows do not acquire terminal soft wrapping.
 Table prose may wrap inside responsive column slots before a table falls back
-to source order. Unbounded text
+to source order. A soft seam consumes its internal breakable separator without
+adding an empty visual row or charging that separator to cell alignment.
+Authored edge whitespace, hard rows and nonbreaking spaces remain distinct;
+ANSI and OSC wrappers close and reopen around each painted slice. Unbounded text
 and report functions use left alignment while retaining resolved row origins;
 no rendering API queries terminal dimensions or changes authoritative text.
 
@@ -48,6 +51,11 @@ not the unwrapped intrinsic width. Soft cell widths remain separate from
 sequential declared fields. Declared-field tables retain their outside frame
 but may simplify interior grid lines. Horizontal spans receive their full covered area;
 frame/rule/grid glyphs are generated presentation and never replace cell text.
+Source-order stacking keeps automatic horizontal grids at original data-row
+boundaries, including tables without an outside frame. Explicit rules supply
+their boundary once; a fully continuing row span suppresses the automatic line
+within the bounded column plan. Sparse over-budget spans retain the simplified
+stacked geometry rather than allocating a slot per declared column.
 
 `table_border` supplies the terminal stroke glyphs shared by CLI and TUI:
 `horizontal_glyph`, `vertical_glyph`, `crossing`, `junction` and `frame_corner`.

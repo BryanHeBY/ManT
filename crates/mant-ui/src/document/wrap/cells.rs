@@ -71,7 +71,11 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
         } else {
             source_width
         };
-        let whitespace = grapheme.text().chars().all(char::is_whitespace);
+        // Fixed nonbreaking spaces remain source cells even when a narrow
+        // viewport forces a character split inside their containing word.
+        let whitespace = grapheme.text().chars().all(|character| {
+            character.is_whitespace() && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
+        });
         for (index, character) in grapheme.text().chars().enumerate() {
             let character = if character.is_control() {
                 '\u{fffd}'

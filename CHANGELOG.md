@@ -13,6 +13,17 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-render and mant-ui
+
+- Consume internal soft-wrap separators once in CLI table cells, avoiding
+  spurious blank rows and center/right alignment drift while retaining authored
+  hard rows, edge whitespace, nonbreaking spaces and complete ANSI/OSC wrappers.
+  TUI forced character wrapping also retains nonbreaking-space cells and their
+  original search identity at narrow viewports.
+- Preserve automatic table grid lines between original data rows after stacked
+  fallback, with or without an outside frame. Do not repeat explicit rules or
+  split fully continuing row spans; retain grid boundaries around empty data rows.
+
 ### mant-ui
 
 - Match complete outline titles, entry names and reference fields independently,

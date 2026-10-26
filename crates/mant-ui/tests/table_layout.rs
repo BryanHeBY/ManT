@@ -4,9 +4,11 @@
 mod table_matrix;
 
 mod table_layout {
+    mod fallback;
     mod geometry;
     mod native;
     mod navigation;
     mod real;
     mod rows;
+    mod wrapping;
 }

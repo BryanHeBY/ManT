@@ -3,6 +3,10 @@
 use super::{LayoutText, RowAlignment};
 use std::ops::Range;
 
+pub(super) fn soft_separator(character: char) -> bool {
+    character.is_whitespace() && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct PaintedRun {
     pub(super) range: Range<usize>,
@@ -147,36 +151,70 @@ impl LayoutText {
         if start == self.visible.len() {
             return Some(vec![self.clone()]);
         }
+        // Only internal breakable separators can belong to a soft seam.
+        // Authored leading/trailing spaces and whitespace-only hard rows
+        // remain source text, independently of generated layout padding.
+        let content_end = self.visible.trim_end_matches(soft_separator).len();
         while start < self.visible.len() {
             let mut used = 0_usize;
             let mut end = start;
-            let mut word = None;
+            let mut separator: Option<Range<usize>> = None;
+            let mut in_separator = false;
+            let mut has_content = false;
             for glyph in crate::cells::graphemes(&self.visible[start..]) {
                 if used.saturating_add(glyph.columns()) > available && end > start {
                     break;
                 }
                 used = used.saturating_add(glyph.columns());
                 end = start + glyph.bytes().end;
-                if self.visible[start + glyph.bytes().start..end]
-                    .chars()
-                    .all(char::is_whitespace)
-                {
-                    word = Some(end);
+                if glyph.text().chars().all(soft_separator) {
+                    if has_content && end <= content_end {
+                        if in_separator {
+                            if let Some(separator) = &mut separator {
+                                separator.end = end;
+                            }
+                        } else {
+                            separator = Some(start + glyph.bytes().start..end);
+                        }
+                    }
+                    in_separator = true;
+                } else {
+                    has_content = true;
+                    in_separator = false;
                 }
                 if used >= available {
                     break;
                 }
             }
-            if end < self.visible.len()
-                && let Some(word) = word
-            {
-                end = word;
+            let mut next = end;
+            if end < self.visible.len() {
+                // A word can fill the slot exactly, leaving the separator
+                // outside the measured prefix. Consume the whole seam once,
+                // without painting it on either visual row.
+                if has_content
+                    && end < content_end
+                    && self.visible[end..].starts_with(soft_separator)
+                {
+                    let after = self.visible[end..]
+                        .find(|character| !soft_separator(character))
+                        .map_or(self.visible.len(), |offset| end + offset);
+                    let from = if in_separator {
+                        separator.as_ref().map_or(end, |separator| separator.start)
+                    } else {
+                        end
+                    };
+                    separator = Some(from..after);
+                }
+                if let Some(separator) = separator {
+                    end = separator.start;
+                    next = separator.end;
+                }
             }
             let value = self
                 .painted_slice(start..end)?
                 .prefixed(&self.visible[..prefix]);
             output.push(value);
-            start = end;
+            start = next;
         }
         Some(output)
     }
@@ -251,5 +289,89 @@ mod tests {
         let text = LayoutText::decorated("long authored body", "<long authored body>".into());
         assert!(text.soft_wrapped(4).is_none());
         assert_eq!(text.rendered, "<long authored body>");
+    }
+
+    #[test]
+    fn soft_seams_consume_only_internal_breakable_separators() {
+        for (text, width, expected) in [
+            (
+                "long word here",
+                3,
+                vec!["lon", "g", "wor", "d", "her", "e"],
+            ),
+            ("long word here", 4, vec!["long", "word", "here"]),
+            ("long word here", 5, vec!["long", "word", "here"]),
+            ("long word here", 9, vec!["long word", "here"]),
+            ("long word here", 14, vec!["long word here"]),
+            ("long    word  here", 6, vec!["long", "word", "here"]),
+            ("one  two  xx", 8, vec!["one  two", "xx"]),
+            ("long\tword\there", 4, vec!["long", "word", "here"]),
+            (" long ", 8, vec![" long "]),
+            (" long ", 4, vec![" lon", "g "]),
+            ("long ", 4, vec!["long", " "]),
+            ("    ", 2, vec!["  ", "  "]),
+            ("", 4, vec![""]),
+            (
+                "e\u{301}e\u{301} e\u{301}e\u{301}",
+                2,
+                vec!["e\u{301}e\u{301}", "e\u{301}e\u{301}"],
+            ),
+            ("界界 界界", 4, vec!["界界", "界界"]),
+        ] {
+            for (open, close) in [
+                ("", ""),
+                ("\x1b[1m", "\x1b[0m"),
+                ("\x1b]8;;https://example.test\x1b\\", "\x1b]8;;\x1b\\"),
+            ] {
+                let value = LayoutText::decorated(text, format!("{open}{text}{close}"));
+                let rows = value.soft_wrapped(width).unwrap();
+                assert_eq!(
+                    rows.iter()
+                        .map(|row| row.visible.as_str())
+                        .collect::<Vec<_>>(),
+                    expected,
+                    "{text:?}/{width}"
+                );
+                for row in rows {
+                    assert_eq!(row.rendered, format!("{open}{}{close}", row.visible));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn nonbreaking_spaces_never_become_consumed_soft_seams() {
+        for space in ['\u{a0}', '\u{2007}', '\u{202f}'] {
+            let text = format!("aaa{space}bbbb");
+            for width in [3, 4, 5, 8] {
+                let value = LayoutText::decorated(&text, text.clone());
+                let rows = value.soft_wrapped(width).unwrap();
+                assert_eq!(
+                    rows.iter()
+                        .map(|row| row.visible.as_str())
+                        .collect::<String>(),
+                    text
+                );
+                assert_eq!(super::super::TableText::longest_word_width(&value), 8);
+            }
+        }
+    }
+
+    #[test]
+    fn soft_seams_cross_style_and_link_receipts_without_losing_wrappers() {
+        let mut text = LayoutText::decorated("long ", "\x1b[1mlong \x1b[0m".into());
+        text.append(&LayoutText::decorated(
+            " word",
+            "\x1b]8;;uri\x1b\\ word\x1b]8;;\x1b\\".into(),
+        ));
+        let rows = text.soft_wrapped(4).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.visible.as_str())
+                .collect::<Vec<_>>(),
+            ["long", "word"]
+        );
+        assert_eq!(rows[0].rendered, "\x1b[1mlong\x1b[0m");
+        assert_eq!(rows[1].rendered, "\x1b]8;;uri\x1b\\word\x1b]8;;\x1b\\");
     }
 }

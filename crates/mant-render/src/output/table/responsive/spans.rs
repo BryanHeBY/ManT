@@ -47,4 +47,7 @@ impl Spans {
     pub(super) fn rules(&self) -> Vec<bool> {
         self.slots.iter().map(|slot| slot.rows > 1).collect()
     }
+    pub(super) fn fully_continued(&self) -> bool {
+        !self.slots.is_empty() && self.slots.iter().all(|slot| slot.rows > 1)
+    }
 }

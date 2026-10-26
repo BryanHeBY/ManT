@@ -103,7 +103,7 @@ fn rule_row(
             })
         }
     };
-    if let Some(widths) = area.widths {
+    if let Some(widths) = area.widths.filter(|widths| !widths.is_empty()) {
         let mut at = rails;
         for (column, width) in widths.iter().enumerate() {
             let style = style_at(column);
@@ -282,7 +282,7 @@ pub(super) fn decorate(
             && table.kind.rules().is_none()
             && tables[index - 1].kind.rules().is_none()
             && let Some(stroke) = layout.borders.inner_rows
-            && table.cells.iter().any(|cell| !cell.occupancy.covered())
+            && (table.cells.is_empty() || table.cells.iter().any(|cell| !cell.occupancy.covered()))
         {
             output.insert(
                 0,

@@ -235,10 +235,7 @@ impl From<&str> for LayoutText {
 impl TableText for LayoutText {
     fn longest_word_width(&self) -> usize {
         self.visible
-            .split(|character: char| {
-                character.is_whitespace()
-                    && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
-            })
+            .split(wrapping::soft_separator)
             .map(mant_ir::geometry::text_width)
             .max()
             .unwrap_or(0)

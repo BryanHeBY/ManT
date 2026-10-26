@@ -200,6 +200,17 @@ unification must not be mistaken for a native dependency of the renderer.
 UI integration tests separately assert real terminal cells, because unchanged
 concatenated text alone cannot prove correct grapheme rendering or hit maps.
 
+`crates/mant-ui/tests/table_layout/{wrapping,fallback}.rs` exercises authored
+IR through real JSON roundtrips, CLI text and TUI layout. Its exact assertions
+cross word/slot boundaries, alignment, text/style/link owners, ANSI/OSC paint,
+hard rows, original data-row grids, explicit rules, navigation carriers, empty
+rows and continuing spans at wide and narrow viewports. Soft separators and
+generated frame glyphs must not create source text or searchable rows.
+`app/tests/outline_fields.rs` checks complete-field regexes through Markdown
+loading and the real application; `navigation/search.rs` tests resumable scans
+at tiny budgets. `app/tests/search_options.rs` compares actual Search-menu
+events with shortcuts across both current and confirmed search surfaces.
+
 `scripts/checks/check-ui-consumer.sh` embeds the reader with authored IR and explicit
 host services. Its independent normal/build graph rejects loaders, queries,
 native parsers, source updates and the static pager. Crossterm's own transitive
