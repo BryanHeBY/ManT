@@ -13,6 +13,14 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### Dependency maintenance
+
+- Require zstd 0.14.3 and refresh the workspace/fuzz locks to zstd-safe 8.2.0
+  and zstd-sys 2.1.2, resolving RUSTSEC-2026-0391, RUSTSEC-2026-0398,
+  RUSTSEC-2026-0403 and RUSTSEC-2026-0410. Replace the withdrawn Windows
+  clipboard dependency with clipboard-win 5.4.3 and refresh distributable
+  dependency notices. Compression limits and supported formats are unchanged.
+
 ### mant-render and mant-ui
 
 - Consume internal soft-wrap separators once in CLI table cells, avoiding
