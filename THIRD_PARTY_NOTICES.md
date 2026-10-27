@@ -12,6 +12,10 @@ Every native release archive carries this file as
 `LICENSES/RUST_DEPENDENCIES.html`; CI rejects it when it no longer matches the
 locked multi-platform graph.
 
+This generated report does not replace the bundled native-source notices.
+Their complete original terms remain in the separate parser license bundle
+described below, independently of cargo-about's SPDX text grouping.
+
 ## Bundled pager
 
 `crates/mant/src/delivery/pager/vendor/` contains minus 5.7.2, privately adapted for

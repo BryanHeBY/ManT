@@ -206,7 +206,7 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
     }
 
     let generator = include_str!("../../../scripts/release/generate-rust-licenses.sh");
-    assert!(generator.contains(r#"about_version == "cargo-about 0.9.2""#));
+    assert!(generator.contains(r#"about_version == "cargo-about 0.9.3""#));
     assert!(generator.contains("--frozen"));
     assert!(generator.contains("--manifest-path crates/mant/Cargo.toml"));
     assert!(generator.contains("--all-features"));

@@ -113,7 +113,7 @@ class SourceToolPathTests(unittest.TestCase):
             cargo.write_text("""#!/usr/bin/env bash
 set -eu
 if [[ $* == 'about --version' ]]; then
-    printf 'cargo-about 0.9.2\\n'
+    printf 'cargo-about 0.9.3\\n'
     exit
 fi
 [[ $1 == about && $2 == generate ]]

@@ -565,8 +565,16 @@ installed, run the same audit locally:
 cargo deny check
 ```
 
+When refreshing dependencies, update the root, `fuzz/`, and all five
+`tests/consumers/*` lockfiles. Select the highest releases compatible with
+Rust 1.88 and upstream dependency constraints; do not silently raise the MSRV.
+Keep the rmcp SDK and macros on the same exact release, and retain the frozen
+schema generator pin unless a separate protocol migration is intended. Verify
+GitHub Actions release tags against their full commit pins as part of the same
+maintenance pass.
+
 Native distribution notices are generated from the same locked, multi-target
-graph with cargo-about 0.9.2. After changing dependencies, regenerate the
+graph with cargo-about 0.9.3. After changing dependencies, regenerate the
 checked-in report and review its package and license mapping:
 
 ```sh

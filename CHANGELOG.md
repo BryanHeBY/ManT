@@ -15,6 +15,15 @@ that crate was not published for that change.
 
 ### Dependency maintenance
 
+- Refresh all seven Rust lockfiles to current Rust 1.88-compatible releases,
+  including the paired rmcp SDK/macros 3.8.0, arboard 3.7.0, pulldown-cmark
+  0.13.5, ureq 3.5.0, zip 9.1.2, tokio 1.54.1 and cc 1.10.0. Keep the frozen
+  document/query protocols and MSRV unchanged; newer parking_lot and uuid
+  releases requiring a newer compiler remain outside the supported graph.
+  Remove the obsolete hashbrown 0.16 duplicate exception.
+- Refresh GitHub Actions using verified release commit pins. Upgrade the
+  reproducible notice generator to cargo-about 0.9.3 and explicitly select
+  cargo-llvm-cov 0.9.1 for coverage.
 - Require zstd 0.14.3 and refresh the workspace/fuzz locks to zstd-safe 8.2.0
   and zstd-sys 2.1.2, resolving RUSTSEC-2026-0391, RUSTSEC-2026-0398,
   RUSTSEC-2026-0403 and RUSTSEC-2026-0410. Replace the withdrawn Windows

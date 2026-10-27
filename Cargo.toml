@@ -44,7 +44,7 @@ pedantic = "warn"
 [workspace.dependencies]
 anstream = "1.0.0"
 anstyle = "1.0.14"
-arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
+arboard = { version = "3.7.0", default-features = false, features = ["wayland-data-control"] }
 base64 = "0.23.1"
 clap = { version = "4.6.7", default-features = false, features = ["color", "derive", "error-context", "help", "std", "suggestions", "usage"] }
 crossterm = "0.29.0"
@@ -52,14 +52,14 @@ crossterm_winapi = "0.9.1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
-libc = "0.2.190"
+libc = "0.2.191"
 regex-syntax = "0.8.11"
 regex-automata = { version = "0.4.18", default-features = false, features = ["std", "syntax", "nfa-thompson", "unicode"] }
-pulldown-cmark = { version = "0.13.4", default-features = false }
+pulldown-cmark = { version = "0.13.5", default-features = false }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 # Keep the SDK and its generated glue on the same upstream release.
-rmcp = { version = "=3.5.1", default-features = false, features = ["macros", "server", "transport-io"] }
-rmcp-macros = "=3.5.1"
+rmcp = { version = "=3.8.0", default-features = false, features = ["macros", "server", "transport-io"] }
+rmcp-macros = "=3.8.0"
 schemars = "=1.2.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -70,9 +70,9 @@ toml = "1.1"
 tokio = { version = "1", default-features = false, features = ["io-std", "io-util", "macros", "rt", "sync"] }
 unicode-segmentation = "^1.12"
 unicode-width = "0.2.2"
-ureq = { version = "3.4.2", default-features = false, features = ["rustls"] }
+ureq = { version = "3.5.0", default-features = false, features = ["rustls"] }
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
-zip = { version = "9.0.3", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "9.1.2", default-features = false, features = ["deflate-flate2"] }
 zstd = { version = "0.14.3", default-features = false }
 
 [profile.release]
