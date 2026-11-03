@@ -35,6 +35,13 @@ that crate was not published for that change.
   clipboard dependency with clipboard-win 5.4.3 and refresh distributable
   dependency notices. Compression limits and supported formats are unchanged.
 
+### libmandoc-rs
+
+- Reserve cumulative owned-transfer bytes before copying enclosure strings,
+  source spellings, tags, metadata, diagnostics and table storage. Charge each
+  actual owned copy while retaining shared-layout and separate equation limits;
+  reject over-budget transfers without leaving a live native session.
+
 ### mant-render and mant-ui
 
 - Consume internal soft-wrap separators once in CLI table cells, avoiding

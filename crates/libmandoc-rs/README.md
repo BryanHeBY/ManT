@@ -288,6 +288,17 @@ rejects syntax or equation trees beyond 256 levels before entering a formatter;
 its output byte budget is independent of this stack budget. Syntax and equation
 cleanup use iterative traversal, including rejected and truncated inputs.
 
+Successful ownership transfer reserves its cumulative budget before copying
+native strings. The 250,000-item and 128 MiB limits include syntax nodes,
+column storage, each actual enclosure copy, retained native/visible text,
+metadata and successful diagnostics. Shared table layouts are charged once
+when their Rust storage is actually shared. Strings do not consume extra
+syntax items. Equations retain their independent node/byte truncation limits.
+A rejected transfer returns an error and releases the native session; it does
+not return an apparently complete, silently shortened syntax tree. These are
+Rust transfer limits, not a native allocation or process-RSS bound: libmandoc
+may already have accumulated its diagnostic buffer before transfer starts.
+
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
 

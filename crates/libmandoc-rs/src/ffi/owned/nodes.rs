@@ -4,9 +4,7 @@ use super::super::raw::{self, CDocument, CNode, CNodeView};
 use super::{
     budget::{EquationBudget, TransferBudget},
     equations::copy_equation,
-    strings::{
-        checked_macro, checked_string, copy_column_strings, split_visible_text, visible_string,
-    },
+    strings::{checked_macro, checked_string, copy_column_strings, copy_text, visible_string},
     tables::{
         TableLayouts, border_style, copy_table_cells, copy_table_rule_cells, table_options,
         table_row_kind,
@@ -258,10 +256,12 @@ unsafe fn copy_node_shallow(
         return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
     }
     let view = unsafe { view.assume_init() };
-    let (text, native_text) = split_visible_text(unsafe { checked_string(view.text) }?);
+    transfer_budget.reserve_items(1)?;
+    transfer_budget.reserve_bytes(std::mem::size_of::<Node>())?;
+    let (text, native_text) = unsafe { copy_text(view.text, transfer_budget) }?;
     let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
-    let enclosure_open = unsafe { checked_string(view.enclosure_open) }?;
-    let enclosure_close = unsafe { checked_string(view.enclosure_close) }?;
+    let enclosure_open = unsafe { checked_string(view.enclosure_open, transfer_budget) }?;
+    let enclosure_close = unsafe { checked_string(view.enclosure_close, transfer_budget) }?;
     let kind = node_kind(view.kind)?;
     let (table_alignment, table_column_count) =
         table_options(view.table_alignment, view.table_column_count)?;
@@ -282,10 +282,10 @@ unsafe fn copy_node_shallow(
             1 => true,
             _ => return Err("libmandoc returned an invalid reference quote flag".to_owned()),
         },
-        macro_token: unsafe { checked_macro(view.macro_name) }?,
+        macro_token: unsafe { checked_macro(view.macro_name, transfer_budget) }?,
         text,
         native_text,
-        tag: unsafe { visible_string(view.tag) }?,
+        tag: unsafe { visible_string(view.tag, transfer_budget) }?,
         line: view.line.try_into().unwrap_or_default(),
         column: view.column.try_into().unwrap_or_default(),
         flow_epoch: view.flow_epoch,
@@ -317,35 +317,13 @@ unsafe fn copy_node_shallow(
             closing: enclosure_close,
         }),
         compact: view.compact != 0,
-        offset: unsafe { checked_string(view.offset) }?,
-        width: unsafe { checked_string(view.width) }?,
+        offset: unsafe { checked_string(view.offset, transfer_budget) }?,
+        width: unsafe { checked_string(view.width, transfer_budget) }?,
         columns: unsafe { copy_column_strings(view.cols, view.ncols, transfer_budget) }?,
         table_cells: unsafe { copy_table_cells(document, view.table_cells, transfer_budget) }?,
         equation: unsafe { copy_equation(document, view.equation, 0, equation_budget) }?,
         children: Vec::new(),
     };
-
-    let string_bytes = [
-        node.text.as_ref(),
-        node.native_text.as_ref(),
-        node.tag.as_ref(),
-        node.offset.as_ref(),
-        node.width.as_ref(),
-    ]
-    .into_iter()
-    .flatten()
-    .fold(0usize, |total, value| total.saturating_add(value.len()));
-    // Preserve the logical transfer charge for macro spelling bytes even
-    // though known identities no longer allocate a String.
-    let macro_bytes = node
-        .macro_token
-        .as_ref()
-        .map_or(0, |token| token.as_str().len());
-    transfer_budget.charge(
-        std::mem::size_of::<Node>()
-            .saturating_add(string_bytes)
-            .saturating_add(macro_bytes),
-    )?;
 
     Ok((node, view.child, view.next))
 }

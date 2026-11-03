@@ -8,7 +8,7 @@ use super::{
         EquationBudget, MAX_OWNED_EQUATION_BYTES, MAX_OWNED_EQUATION_DEPTH,
         MAX_OWNED_EQUATION_NODES,
     },
-    strings::checked_string,
+    strings::borrowed_string,
 };
 use crate::{EquationBox, EquationFont, EquationKind, EquationPosition};
 #[cfg(test)]
@@ -110,16 +110,16 @@ unsafe fn copy_equation_shallow(
         8 => EquationPosition::Sqrt,
         _ => return Err("libmandoc returned an unknown equation position".to_owned()),
     };
-    let text = unsafe { checked_string(view.text) }?;
-    let left = unsafe { checked_string(view.left) }?;
-    let right = unsafe { checked_string(view.right) }?;
-    let top = unsafe { checked_string(view.top) }?;
-    let bottom = unsafe { checked_string(view.bottom) }?;
+    let text = unsafe { borrowed_string(view.text) }?;
+    let left = unsafe { borrowed_string(view.left) }?;
+    let right = unsafe { borrowed_string(view.right) }?;
+    let top = unsafe { borrowed_string(view.top) }?;
+    let bottom = unsafe { borrowed_string(view.bottom) }?;
     let required_bytes = std::mem::size_of::<EquationBox>()
         + [&text, &left, &right, &top, &bottom]
             .into_iter()
             .filter_map(|part| part.as_ref())
-            .map(String::len)
+            .map(|part| part.len())
             .sum::<usize>();
     budget.nodes += 1;
     budget.bytes = budget.bytes.saturating_add(required_bytes);
@@ -135,16 +135,16 @@ unsafe fn copy_equation_shallow(
             size: view.size,
             expected_args: view.expected_args,
             actual_args: view.actual_args,
-            text,
+            text: text.map(str::to_owned),
             gnu_ldots: match view.gnu_ldots {
                 0 => false,
                 1 => true,
                 _ => return Err("libmandoc returned an invalid GNU ldots flag".to_owned()),
             },
-            left,
-            right,
-            top,
-            bottom,
+            left: left.map(str::to_owned),
+            right: right.map(str::to_owned),
+            top: top.map(str::to_owned),
+            bottom: bottom.map(str::to_owned),
             children: Vec::new(),
         },
         view.first,

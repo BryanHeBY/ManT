@@ -4,6 +4,8 @@ mod equations;
 mod nodes;
 mod strings;
 mod tables;
+#[cfg(test)]
+mod tests;
 
 use super::{
     raw::{self, CDocument},
@@ -53,22 +55,62 @@ pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, Stri
         document: Document {
             macro_set: macro_set(unsafe { raw::mant_mandoc_document_macroset(document) })?,
             metadata: Metadata {
-                title: unsafe { checked_string(raw::mant_mandoc_document_title(document)) }?,
-                section: unsafe { checked_string(raw::mant_mandoc_document_section(document)) }?,
-                volume: unsafe { checked_string(raw::mant_mandoc_document_volume(document)) }?,
-                os: unsafe { checked_string(raw::mant_mandoc_document_os(document)) }?,
-                arch: unsafe { checked_string(raw::mant_mandoc_document_arch(document)) }?,
-                name: unsafe { checked_string(raw::mant_mandoc_document_name(document)) }?,
-                date: unsafe { checked_string(raw::mant_mandoc_document_date(document)) }?,
+                title: unsafe {
+                    checked_string(
+                        raw::mant_mandoc_document_title(document),
+                        &mut transfer_budget,
+                    )
+                }?,
+                section: unsafe {
+                    checked_string(
+                        raw::mant_mandoc_document_section(document),
+                        &mut transfer_budget,
+                    )
+                }?,
+                volume: unsafe {
+                    checked_string(
+                        raw::mant_mandoc_document_volume(document),
+                        &mut transfer_budget,
+                    )
+                }?,
+                os: unsafe {
+                    checked_string(raw::mant_mandoc_document_os(document), &mut transfer_budget)
+                }?,
+                arch: unsafe {
+                    checked_string(
+                        raw::mant_mandoc_document_arch(document),
+                        &mut transfer_budget,
+                    )
+                }?,
+                name: unsafe {
+                    checked_string(
+                        raw::mant_mandoc_document_name(document),
+                        &mut transfer_budget,
+                    )
+                }?,
+                date: unsafe {
+                    checked_string(
+                        raw::mant_mandoc_document_date(document),
+                        &mut transfer_budget,
+                    )
+                }?,
                 alias_target: unsafe {
-                    checked_string(raw::mant_mandoc_document_alias_target(document))
+                    checked_string(
+                        raw::mant_mandoc_document_alias_target(document),
+                        &mut transfer_budget,
+                    )
                 }?,
                 has_body: unsafe { raw::mant_mandoc_document_has_body(document) } != 0,
             },
             root,
         },
-        diagnostics: unsafe { checked_string(raw::mant_mandoc_document_diagnostics(document)) }?
-            .unwrap_or_default(),
+        diagnostics: unsafe {
+            checked_string(
+                raw::mant_mandoc_document_diagnostics(document),
+                &mut transfer_budget,
+            )
+        }?
+        .unwrap_or_default(),
         node_truncated,
         equation_truncated: equation_budget.truncated,
         escape_truncated: unsafe { raw::mant_mandoc_document_escape_depth_truncated(document) }

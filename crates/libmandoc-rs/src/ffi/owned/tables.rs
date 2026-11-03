@@ -4,10 +4,7 @@ use super::super::raw::{
     self, CDocument, CTableCell, CTableCellView, CTableLayoutCell, CTableLayoutCellView,
     CTableRuleCell, CTableRuleCellView,
 };
-use super::{
-    budget::TransferBudget,
-    strings::{checked_string, split_visible_text},
-};
+use super::{budget::TransferBudget, strings::copy_text};
 use crate::{
     TableAlignment, TableBorderStyle, TableCell, TableCellKind, TableFont, TableLayout,
     TableLayoutCell, TableRowKind, TableRuleCellKind,
@@ -40,7 +37,8 @@ impl TableLayouts {
         if let Some(layout) = self.0.get(&first) {
             return Ok(Some(Arc::clone(layout)));
         }
-        budget.charge(std::mem::size_of::<TableLayout>())?;
+        budget.reserve_items(1)?;
+        budget.reserve_bytes(std::mem::size_of::<TableLayout>())?;
         let mut cells = Vec::new();
         let mut pointer = first;
         while !pointer.is_null() {
@@ -52,7 +50,8 @@ impl TableLayouts {
                 return Err("libmandoc returned an invalid borrowed table layout".to_owned());
             }
             let view = unsafe { view.assume_init() };
-            budget.charge(std::mem::size_of::<TableLayoutCell>())?;
+            budget.reserve_items(1)?;
+            budget.reserve_bytes(std::mem::size_of::<TableLayoutCell>())?;
             cells.push(TableLayoutCell {
                 column: view.column,
                 minimum_width_basic_units: view.minimum_width.try_into().unwrap_or(u64::MAX),
@@ -119,7 +118,9 @@ pub(super) unsafe fn copy_table_cells(
             return Err("libmandoc returned an invalid borrowed table cell".to_owned());
         }
         let view = unsafe { view.assume_init() };
-        let (text, native_text) = split_visible_text(unsafe { checked_string(view.text) }?);
+        transfer_budget.reserve_items(1)?;
+        transfer_budget.reserve_bytes(std::mem::size_of::<TableCell>())?;
+        let (text, native_text) = unsafe { copy_text(view.text, transfer_budget) }?;
         let cell = TableCell {
             column: view.column,
             kind: match view.kind {
@@ -154,11 +155,6 @@ pub(super) unsafe fn copy_table_cells(
                 _ => TableAlignment::Left,
             },
         };
-        transfer_budget.charge(
-            std::mem::size_of::<TableCell>()
-                .saturating_add(cell.text.as_ref().map_or(0, String::len))
-                .saturating_add(cell.native_text.as_ref().map_or(0, String::len)),
-        )?;
         cells.push(cell);
         pointer = view.next;
     }
@@ -180,7 +176,8 @@ pub(super) unsafe fn copy_table_rule_cells(
             return Err("libmandoc returned an invalid borrowed table rule cell".to_owned());
         }
         let view = unsafe { view.assume_init() };
-        transfer_budget.charge(std::mem::size_of::<TableRuleCellKind>())?;
+        transfer_budget.reserve_items(1)?;
+        transfer_budget.reserve_bytes(std::mem::size_of::<TableRuleCellKind>())?;
         cells.push(match view.kind {
             1 => TableRuleCellKind::Horizontal,
             2 => TableRuleCellKind::DoubleHorizontal,
