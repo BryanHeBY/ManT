@@ -264,6 +264,13 @@ impl<'ir> Visit<'ir> for InvariantCollector {
                 "ir.invalid-email-address",
                 format!("email link target '{address}' is not a valid mailbox"),
             )),
+            Inline::Link {
+                target: target @ LinkTarget::Manual { .. },
+                ..
+            } if target.to_uri().is_none() => self.diagnostics.push(invariant(
+                "ir.invalid-manual-reference",
+                "manual link target does not follow the manual reference grammar".to_owned(),
+            )),
             _ => {}
         }
         visit::walk_inline(self, inline);

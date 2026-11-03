@@ -2,6 +2,71 @@
 use super::*;
 
 #[test]
+fn manual_link_validation_uses_the_reusable_target_grammar() {
+    for (name, manual_section, valid) in [
+        ("printf", None, true),
+        ("printf", Some("3p"), true),
+        ("α", Some("3"), true),
+        ("", Some("3"), false),
+        ("printf ", Some("3"), false),
+        ("part/name", Some("3"), false),
+        ("part\\name", Some("3"), false),
+        ("bad\nname", None, false),
+        ("printf", Some(""), false),
+        ("printf", Some("3 "), false),
+        ("printf", Some("3\u{200b}"), false),
+        ("printf", Some("qgroup"), false),
+    ] {
+        let target = LinkTarget::Manual {
+            name: name.into(),
+            manual_section: manual_section.map(str::to_owned),
+        };
+        let original = document(
+            Vec::new(),
+            vec![Block::Paragraph {
+                children: vec![Inline::Link {
+                    target: target.clone(),
+                    title: None,
+                    children: vec![Inline::Text {
+                        value: "readable label".into(),
+                    }],
+                }],
+                inline_layout: crate::InlineLayout::default(),
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+        );
+        let diagnostics = validate_document(&original);
+        assert_eq!(target.to_uri().is_some(), valid, "{target:?}");
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|diagnostic| {
+                    diagnostic.code.as_deref() == Some("ir.invalid-manual-reference")
+                })
+                .count(),
+            usize::from(!valid),
+            "{target:?}"
+        );
+        let [Block::Paragraph { children, .. }] = original.blocks.as_slice() else {
+            unreachable!()
+        };
+        let [
+            Inline::Link {
+                target: retained,
+                children,
+                ..
+            },
+        ] = children.as_slice()
+        else {
+            unreachable!()
+        };
+        assert_eq!(retained, &target);
+        assert_eq!(crate::inline_plain_text(children), "readable label");
+    }
+}
+
+#[test]
 fn reports_duplicate_and_empty_section_identities() {
     let diagnostics = validate_document(&document(
         vec![section(""), section("duplicate"), section("duplicate")],

@@ -35,6 +35,15 @@ that crate was not published for that change.
   clipboard dependency with clipboard-win 5.4.3 and refresh distributable
   dependency notices. Compression limits and supported formats are unchanged.
 
+### mant-codec, mant-ir and mant-ui
+
+- Decode manual-reference identities independently of visible labels and
+  formatter registers. Keep per-operand escape rules separate from HTML URL
+  template execution; preserve invalid operands for diagnostics without
+  manufacturing clickable targets. Retain terminal macro font transitions,
+  suffixes and late pending-glyph link ownership. Apply the same identity
+  decoder to adjacent roff reference families.
+
 ### mant-query
 
 - Validate and count search occurrences before fine range construction. Build

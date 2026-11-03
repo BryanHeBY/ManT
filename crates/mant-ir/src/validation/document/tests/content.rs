@@ -243,6 +243,7 @@ fn classifies_only_semantic_invariant_diagnostics_as_incomplete() {
         "ir.invalid-table-span",
         "ir.invalid-source-position",
         "ir.invalid-external-uri",
+        "ir.invalid-manual-reference",
     ] {
         assert!(!is_semantic_completeness_diagnostic(code), "{code}");
     }

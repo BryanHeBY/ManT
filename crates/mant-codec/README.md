@@ -58,6 +58,7 @@ literal displays, lists and table recovery:
 | Formatter state | `FormatterState` carries font, spacing, deferred vertical-space debt, and bare zero-advance execution explicitly between consumers. A normal font-scope exit restores current font but retains previous-font effects; native tables reset cell-local backtracking at their documented boundary. |
 | Container routing | `containers.rs` streams borrowed children and scope boundaries; structural payloads remain tables/lists. Logical punctuation adjacency is a separate, non-executing classification in `adjacency.rs`. |
 | Inline and physical lines | `InlineBuilder` executes word/control events; `source_cursor.rs` places source-visible events on physical lines. No-fill changes layout, not macro interpretation. |
+| Link identities | `inline/links/identity.rs` applies HTML attribute glyph rules independently to each source operand; it never consumes the visible formatter's state. `Xr`/`MR` share this path with `UR`/`MT`/`Lk`/`Mt`/`%U`. |
 | Structural layout | Block drivers own pending paragraphs and list state; section, synopsis, man no-fill and dialect-specific list consumers remain separate. Shared definition helpers do not own formatter state. |
 | Speculative recovery | Table-cell candidates retain output, final formatter state and diagnostics until ownership acceptance. Rejection rolls back all three, unlike a normal font-scope exit. |
 
@@ -68,6 +69,16 @@ composes each parent once. It keeps resolved gap requests separate from literal
 newlines through nested flow composition, sharing cell/marker/gap rules with
 the UI through `mant-ir::geometry`. Zero block spacing is tight, not a
 frontend default; each source request has one consumption point.
+
+Manual link names and sections are separate identities. Each operand starts
+with fresh skip state; an explicit empty section remains empty and invalid,
+while an omitted section remains unspecified. This contract does not emulate
+the bytes of arbitrary CVS HTML link templates: `print_href()` shares
+`HTML_SKIPCHAR` across template expansion, so name `printf\z`, section `3`
+and template `%N.%S` produce HTML href `printf3`. The typed target keeps name
+`printf` and section `3`. `Sh`/`Ss` heading identities and `Sx` destinations
+instead use their shared authored `deroff` phrase namespace. Visible labels
+execute once in the surrounding formatter, independently of both namespaces.
 
 An execution drain is not a document boundary. Private literal-owner ranges
 survive formatting, link resolution and transparent relative-indent scopes;

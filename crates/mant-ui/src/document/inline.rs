@@ -311,10 +311,11 @@ pub(super) fn local_link_target(
         mant_ir::LinkTarget::Manual {
             name,
             manual_section,
-        } => Some(LinkTarget::Manual {
+        } if target.to_uri().is_some() => Some(LinkTarget::Manual {
             name: name.clone(),
             manual_section: manual_section.clone(),
         }),
+        mant_ir::LinkTarget::Manual { .. } => None,
         mant_ir::LinkTarget::Section { id } => Some(LinkTarget::Section(id.to_string())),
     }
 }

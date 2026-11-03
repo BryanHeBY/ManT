@@ -320,6 +320,17 @@ pub(super) struct DecodedText {
 
 /// Parsing evidence accompanies events; safety loss is not a displayed glyph.
 pub(super) fn decode_with_status(source: &str) -> DecodedText {
+    decode_with_motion_spacing(source, true)
+}
+
+/// Decode an identity operand without synthesizing reading-layout spaces.
+/// CVS `html.c::print_encode()` ignores horizontal motion in attributes; the
+/// terminal reading approximation belongs only to the visible text stream.
+pub(in crate::mandoc) fn decode_link_operand(source: &str) -> Vec<RoffInlineEvent> {
+    decode_with_motion_spacing(source, false).events
+}
+
+fn decode_with_motion_spacing(source: &str, reading_motion_spacing: bool) -> DecodedText {
     // term.c::term_word() copies ordinary runs before interpreting escapes.
     // Sentinel and unsafe control bytes still need the full classifier; the
     // fast path must not bypass their masking or native-cell evidence.
@@ -337,7 +348,9 @@ pub(super) fn decode_with_status(source: &str) -> DecodedText {
             budget_exhausted: false,
         };
     }
-    Decoder::new(source).decode_with_status()
+    let mut decoder = Decoder::new(source);
+    decoder.reading_motion_spacing = reading_motion_spacing;
+    decoder.decode_with_status()
 }
 
 /// Device measurement of an unevaluated width sample. This follows
@@ -469,6 +482,7 @@ enum DelimitedArgument {
 
 struct Decoder {
     measurement: bool,
+    reading_motion_spacing: bool,
     budget_exhausted: bool,
     argument_completion: ArgumentCompletion,
     argument_kind: grammar::EscapeKind,
@@ -482,6 +496,7 @@ impl Decoder {
     fn new(source: &str) -> Self {
         Self {
             measurement: false,
+            reading_motion_spacing: true,
             budget_exhausted: false,
             argument_completion: ArgumentCompletion::Complete,
             argument_kind: grammar::EscapeKind::Undefined,
@@ -789,7 +804,10 @@ impl Decoder {
         // A positive literal advance only exists for a closed argument with
         // a kept payload: unclosed and rejected motion renders nothing.
         let argument = self.take_presentation_argument('h');
-        if !self.measurement && argument.as_deref().is_some_and(is_positive_literal_motion) {
+        if self.reading_motion_spacing
+            && !self.measurement
+            && argument.as_deref().is_some_and(is_positive_literal_motion)
+        {
             // ManT does not reproduce formatter geometry, but an explicit
             // positive advance is still a semantic word boundary. Retaining
             // one space matters when `\c` suppresses the input-line break.

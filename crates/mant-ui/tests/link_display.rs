@@ -374,3 +374,154 @@ fn invalid_decoded_man_targets_keep_labels_visible_without_host_activation() {
         }
     }
 }
+
+fn assert_manual_pointer_ranges(
+    query: &ResolvedContent,
+    label: &str,
+    outside: &str,
+    expected: &mant_protocol::DocumentOpenTarget,
+    valid: bool,
+    source: &str,
+) {
+    for width in [80, 128] {
+        let mut app = App::new(query);
+        let mut terminal = Terminal::new(TestBackend::new(width, 32)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let (column, row) = body_position(terminal.backend().buffer(), label);
+        let (outside_column, outside_row) = body_position(terminal.backend().buffer(), outside);
+        let mut opened = Vec::new();
+        let mut open = |target: &mant_protocol::DocumentOpenTarget| {
+            opened.push(target.clone());
+            Err("test host keeps the source page open".to_owned())
+        };
+        // The first and last linked glyphs must use the exact target;
+        // the suffix/previous operand/following source stays outside.
+        for (x, y) in [
+            (column, row),
+            (column + u16::try_from(label.len()).unwrap() - 1, row),
+            (outside_column, outside_row),
+        ] {
+            pointer(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
+            pointer(&mut app, MouseEventKind::Up(MouseButton::Left), x, y);
+            app.service_pending(&mut ReaderServices {
+                open_document: Some(&mut open),
+                ..ReaderServices::default()
+            });
+        }
+        let expected = if valid {
+            vec![expected.clone(), expected.clone()]
+        } else {
+            Vec::new()
+        };
+        assert_eq!(opened, expected, "width={width}: {source}");
+        assert!(
+            mant_render::render_query_man(query).contains(label),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn manual_reference_pointer_ranges_use_the_decoded_identity_after_json() {
+    // These exact sources ran pinned pristine HTML/UTF-8/ASCII first.
+    // mdoc_xr_pre/man_MR_pre decode attributes with print_encode(norecurse=1),
+    // while termp_xr_pre/pre_MR execute labels, cached z glyphs and suffixes.
+    // Pairwise consumer coverage checks both operands, both dialects, missing
+    // sections, prior cached glyphs and invalid identities at real cells.
+    const MDOC: &str = ".Dd November 3, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n";
+    const MAN: &str = ".TH TEST 1\n.SH DESCRIPTION\n";
+    for macro_name in ["Xr", "MR"] {
+        for (prefix, operands, label, section, outside, valid) in [
+            (
+                "",
+                r#""printf\zX" "3\zX" ,"#,
+                "printf(3)",
+                Some("3"),
+                ",",
+                true,
+            ),
+            (
+                r"PRE\zQ",
+                r#""printf\zX" 3"#,
+                "printf(3)",
+                Some("3"),
+                "PREQ",
+                true,
+            ),
+            (
+                "",
+                "printf",
+                if macro_name == "MR" {
+                    "printf()"
+                } else {
+                    "printf"
+                },
+                None,
+                "AFTER",
+                true,
+            ),
+            (
+                "",
+                r#""printf\o'BC '" "3""#,
+                "printfC(3)",
+                Some("3"),
+                "AFTER",
+                false,
+            ),
+            (
+                "",
+                r#""printf" "3\o'BC '""#,
+                "printf(3C)",
+                Some("3 "),
+                "AFTER",
+                false,
+            ),
+            (
+                "",
+                r#""printf" "\zX""#,
+                "printf()",
+                Some(""),
+                "AFTER",
+                false,
+            ),
+            (
+                "",
+                r#""printf\z" "3""#,
+                "printf3)",
+                Some("3"),
+                "AFTER",
+                true,
+            ),
+            (
+                "",
+                r#""printf" "3\z""#,
+                "printf(3)",
+                Some("3"),
+                "AFTER",
+                true,
+            ),
+        ] {
+            let source = if macro_name == "Xr" {
+                let prefix = if prefix.is_empty() {
+                    String::new()
+                } else {
+                    format!(".No {prefix}\n")
+                };
+                format!("{MDOC}{prefix}.Xr {operands}\n.No AFTER\n.Sh NEXT\n.No END\n")
+            } else {
+                let prefix = if prefix.is_empty() {
+                    String::new()
+                } else {
+                    format!("{prefix}\n")
+                };
+                format!("{MAN}{prefix}.MR {operands}\nAFTER\n.SH NEXT\nEND\n")
+            };
+            let query = roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+            let expected = mant_protocol::DocumentOpenTarget::Manual {
+                name: "printf".into(),
+                manual_section: section.map(str::to_owned),
+            };
+            assert_manual_pointer_ranges(&query, label, outside, &expected, valid, &source);
+        }
+    }
+}

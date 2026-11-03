@@ -21,6 +21,9 @@ mod contracts;
 #[path = "accepted_spelling_contracts.rs"]
 mod accepted_spelling;
 
+#[path = "manual_reference_contracts.rs"]
+mod manual_reference;
+
 // These two filled paragraphs have no authored row requests. Their native
 // width=78 breaks are device wrapping, covered separately below rather than
 // being mistaken for source hard breaks. All other fixtures keep exact rows.

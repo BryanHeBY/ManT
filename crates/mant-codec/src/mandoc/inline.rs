@@ -45,7 +45,7 @@ pub(super) use source::roff_macro_arguments;
 use super::{
     first_part_children,
     roff_escape::{
-        RoffFont as Font, RoffInlineEvent, decode, is_formatter_word_blank, visible_text,
+        RoffFont as Font, RoffInlineEvent, decode, is_formatter_word_blank,
     },
 };
 

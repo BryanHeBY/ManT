@@ -1,11 +1,14 @@
 //! Dialect-specific link execution, separate from pure target construction.
 use super::{
-    Font, Inline, InlineBuilder, Node, NodeKind, RoffInlineEvent, append_inline_node,
-    append_inline_nodes, decode, first_part_children, inline_children,
+    Font, Inline, InlineBuilder, Node, NodeKind, append_inline_node, append_inline_nodes,
+    first_part_children, inline_children,
 };
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
+pub(in crate::mandoc::inline) mod identity;
 pub(in crate::mandoc::inline) mod presentation;
+
+use identity::link_identity_text;
 
 /// Execute mdoc `.Lk` in the caller's formatter stream, then wrap the visible
 /// label in a typed link. The address is identity data, so it must not force
@@ -160,14 +163,14 @@ pub(super) fn append_reference_field_link(
     } else {
         // Identity conversion is pure; the source still executes once in
         // append_inline_nodes below. html.c::print_encode(norecurse=1)
-        // strips fonts/zero-width controls when building the href.
+        // strips fonts/zero-width controls when building the href. Like
+        // mdoc__x_pre(), read only the first TEXT and retain attribute
+        // whitespace: trimming it could repair an invalid authored target.
         children
-            .iter()
-            .map(|child| link_identity_text(child.text.as_deref().unwrap_or_default()))
-            .collect::<Vec<_>>()
-            .join(" ")
-            .trim()
-            .to_owned()
+            .first()
+            .and_then(|child| child.text.as_deref())
+            .map(link_identity_text)
+            .unwrap_or_default()
     };
     if address.is_empty() {
         append_inline_nodes(builder, children, default_name);
@@ -425,87 +428,6 @@ fn split_boundary_text(
     }
 }
 
-/// Extract a link destination from the source spelling without borrowing its
-/// rendered glyph stream.  A `\z` glyph participates in terminal overstrike
-/// layout but is not part of mdoc's destination: CVS `mdoc_html.c` builds the
-/// `Lk`/`Mt` href from the logical operand while terminal rendering consumes
-/// the zero-advance glyph in the surrounding output flow.  Keeping this
-/// separate from [`visible_text`](super::visible_text) prevents a later sibling from changing a
-/// typed destination and lets the label retain its own formatter state.
-fn link_identity_text(source: &str) -> String {
-    let mut identity = String::new();
-    let mut skip_next_glyph = false;
-    for event in decode(source) {
-        match event {
-            RoffInlineEvent::Text(value) => {
-                for character in value.chars() {
-                    if skip_next_glyph {
-                        skip_next_glyph = false;
-                    } else {
-                        identity.push(character);
-                    }
-                }
-            }
-            RoffInlineEvent::Glyph(value) => {
-                if skip_next_glyph {
-                    skip_next_glyph = false;
-                } else {
-                    identity.push_str(&value);
-                }
-            }
-            RoffInlineEvent::BreakableHyphen => {
-                if skip_next_glyph {
-                    skip_next_glyph = false;
-                } else {
-                    identity.push('-');
-                }
-            }
-            RoffInlineEvent::FallbackGlyph(_) => {
-                // Unknown and out-of-range glyphs have no HTML codepoint.
-                // They remain readable in terminal prose but are omitted by
-                // CVS `print_encode(..., norecurse=1)` when building hrefs.
-                skip_next_glyph = false;
-            }
-            RoffInlineEvent::DeviceName => {
-                if skip_next_glyph {
-                    skip_next_glyph = false;
-                } else {
-                    identity.push_str("html");
-                }
-            }
-            RoffInlineEvent::Overstrike { source, .. } => {
-                if skip_next_glyph {
-                    skip_next_glyph = false;
-                } else if let Some(character) = source.chars().next_back() {
-                    identity.push(character);
-                }
-            }
-            RoffInlineEvent::ZeroAdvance => skip_next_glyph = true,
-            RoffInlineEvent::Breakpoint => {
-                // html.c::print_encode() uses chars.c's positive U+200B for
-                // direct \:, while term_word() buffers ASCII_BREAK. Keep
-                // the HTML destination independent of visible terminal text.
-                if !skip_next_glyph {
-                    identity.push('\u{200b}');
-                }
-                skip_next_glyph = false;
-            }
-            // CVS HTML_SKIPCHAR survives font changes, but every other
-            // formatter escape consumes the pending skip before a later
-            // address glyph. In particular, `\\z\\c` must not delete the
-            // first character following `\\c` from a typed target.
-            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont => {}
-            RoffInlineEvent::ZeroWidthGlyph
-            | RoffInlineEvent::Link(_)
-            | RoffInlineEvent::EmptyDestination
-            | RoffInlineEvent::LineBreak
-            | RoffInlineEvent::NoSpace
-            | RoffInlineEvent::Presentation { .. } => skip_next_glyph = false,
-        }
-    }
-    identity
-}
-
 /// `man_html.c::man_UR_pre()` supplies the HEAD's first TEXT directly to
 /// `print_otag("ch")`; `html.c::print_encode(norecurse=1)` decodes its href
 /// independently of the terminal word emitted by `post_UR()`. Both document
@@ -675,8 +597,7 @@ fn append_man_link_body(
 
 #[cfg(test)]
 mod tests {
-    use super::{Inline, link_identity_text, split_boundary_prefix};
-    use crate::mandoc::roff_escape::visible_text;
+    use super::{Inline, split_boundary_prefix};
 
     #[test]
     fn semantic_boundary_prefixes_remain_outside_link_labels() {
@@ -709,38 +630,6 @@ mod tests {
         assert!(
             matches!(before.as_slice(), [Inline::Anchor { .. }, Inline::Emphasis { children }]
             if matches!(children.as_slice(), [Inline::LineBreak { .. }]))
-        );
-    }
-
-    #[test]
-    fn overstrike_terminal_projection_and_html_identity_remain_independent() {
-        // CVS term.c trims the trailing backspace/blank pair and leaves C in
-        // its one-cell projection. html.c deliberately uses the final source
-        // byte for the href instead; neither representation can substitute
-        // for the other.
-        assert_eq!(visible_text(r"\o'BC '"), "C");
-        assert_eq!(link_identity_text(r"\o'BC '"), " ");
-
-        // The fixed-CVS overstrike loop exposes the spelling after a nested
-        // reverse-solidus while HTML chooses the same final source byte.
-        assert_eq!(visible_text(r"\o'BC\fI'"), "I");
-        assert_eq!(link_identity_text(r"\o'BC\fI'"), "I");
-
-        // The delimiter belonging to a nested escape is part of the outer
-        // source argument.  Only the final quote closes `\o`, so both the
-        // terminal and identity projections see the complete operand.
-        for source in [r"\o'BC\N'8''", r"\o'BC\h'1n''", r"\o'BC\C'x''"] {
-            assert_eq!(visible_text(source), "'", "{source}");
-            assert_eq!(link_identity_text(source), "'", "{source}");
-        }
-    }
-
-    #[test]
-    fn numbered_link_identity_uses_the_same_terminal_codepoint_contract() {
-        assert_eq!(link_identity_text(r"prefix\N'0'suffix"), "prefix�suffix");
-        assert_eq!(
-            link_identity_text(r"prefix\N'160'suffix"),
-            "prefix\u{a0}suffix"
         );
     }
 }
