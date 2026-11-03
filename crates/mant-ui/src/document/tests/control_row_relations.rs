@@ -5,8 +5,9 @@ use super::*;
 fn tab_head_word_seams_survive_real_json_ui_resize_and_native_readback() {
     // Exact sources are pristine F core1159/1160/1191 and widths0093/94/95.
     // term.c:113-116/374-444 computes accepted device padding; HEAD post runs
-    // after Xo restores offset (mdoc_term.c:437-439,946-955). Literal tabs
-    // stay literal in IR, so responsive glyph widths cannot reinsert a gap.
+    // after Xo restores offset (mdoc_term.c:437-439,946-955). Native TAB
+    // advances resolve at field consumption; responsive glyph widths must
+    // not redefine the executed HEAD/BODY word seam.
     let head =
         ".Dd October 2, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
     for (width, word, controls, seam) in [

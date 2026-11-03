@@ -301,6 +301,84 @@ fn nested_item_post_clears_flags_before_the_next_item() {
     }
 }
 
+fn assert_consumed_tail_tab_owner(
+    source: &str,
+    content: &mant_ir::ResolvedContent,
+    expected_term: &str,
+) {
+    let tail_line = u32::try_from(
+        source
+            .lines()
+            .position(|line| line == ".No \"X\t\"")
+            .unwrap()
+            + 1,
+    )
+    .unwrap();
+    let report = Parser::default()
+        .parse_bytes("head-column.1", source.as_bytes())
+        .unwrap();
+    let item = find(&report.document.root, |node| {
+        node.kind == NodeKind::Block
+            && node.macro_token.as_deref() == Some("It")
+            && node.line == 9
+            && node.column == 2
+    })
+    .unwrap();
+    let head = item
+        .children
+        .iter()
+        .find(|node| node.kind == NodeKind::Head)
+        .unwrap();
+    let original = find(head, |node| {
+        node.kind == NodeKind::Text && node.line == tail_line && node.column == 5
+    })
+    .unwrap();
+    assert_eq!(original.text.as_deref(), Some("X\t"), "{source}");
+    let document = content.document.as_ref().unwrap();
+    let [
+        mant_ir::Block::DefinitionList {
+            items,
+            source: span,
+            ..
+        },
+    ] = document.sections[1].blocks.as_slice()
+    else {
+        panic!("original outer definition-list owner: {source}");
+    };
+    assert_eq!(
+        span.as_ref().map(|span| (span.line, span.column)),
+        Some((8, 2))
+    );
+    let [item] = items.as_slice() else {
+        panic!("one original outer definition item: {source}");
+    };
+    assert_eq!(
+        item.source.as_ref().map(|span| (span.line, span.column)),
+        Some((9, 2))
+    );
+    assert_eq!(item.terms.len(), 1, "{source}");
+    assert_eq!(
+        mant_ir::inline_plain_text(&item.terms[0]),
+        expected_term,
+        "{source}"
+    );
+    let [
+        mant_ir::Block::Paragraph {
+            children,
+            source: span,
+            ..
+        },
+    ] = item.description.as_slice()
+    else {
+        panic!("original BODY paragraph owner: {source}");
+    };
+    assert_eq!(mant_ir::inline_plain_text(children), "BodyWord", "{source}");
+    assert_eq!(
+        span.as_ref().map(|span| (span.line, span.column)),
+        Some((tail_line + 2, 2))
+    );
+}
+
 #[test]
 fn body_fixed_words_replace_only_the_interval_they_actually_represent() {
     // These five complete inputs ran pristine: ASCII/UTF-8/HTML/tree pass;
@@ -311,6 +389,12 @@ fn body_fixed_words_replace_only_the_interval_they_actually_represent() {
     // so those cells alone represent the interval without a second pad.
     // The responsive HANG field retains its one-cell word separator; its
     // pristine three-cell BRIND positioning remains recorded independently.
+    // All five exact sources were rerun in all five pristine profiles before
+    // changing the tail expectation: nested It post clears list flags
+    // (mdoc_term.c:961-963), and outer HEAD post calls term_newln(). A trailing
+    // TAB has no following graph to print its deferred advance
+    // (term.c:389-427); the real flush consumes it (233-237). The authored
+    // AST scalar and original HEAD/BODY owners remain independently pinned.
     let cases = [
         ("hang -width 4n", "", false, "one two"),
         ("hang -width 4n", ".br\n", false, "one two"),
@@ -357,7 +441,8 @@ fn body_fixed_words_replace_only_the_interval_they_actually_represent() {
             "word identity merged: {source}"
         );
         let restored: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
-        let output = mant_render::render_query_man(&restored.into());
+        let content = restored.into();
+        let output = mant_render::render_query_man(&content);
         let (_, rows) = output.split_once("DESCRIPTION\n").unwrap();
         let leading = if repeated { "" } else { "\n" };
         let later = if repeated { "three four\n" } else { "" };
@@ -365,8 +450,13 @@ fn body_fixed_words_replace_only_the_interval_they_actually_represent() {
             rows,
             // render_query_man omits the final presentation delimiter;
             // every internal row and its horizontal cells remain exact.
-            format!("{leading}{expected}\n{later}X\t\n      BodyWord"),
+            format!("{leading}{expected}\n{later}X\n      BodyWord"),
             "{source}"
+        );
+        assert_consumed_tail_tab_owner(
+            &source,
+            &content,
+            &format!("{leading}{expected}\n{later}X"),
         );
         for word in ["one", "two", "BodyWord"] {
             assert_eq!(output.matches(word).count(), 1, "{word}: {source}");
