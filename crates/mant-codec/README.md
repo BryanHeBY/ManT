@@ -139,3 +139,13 @@ and its `presentation/field.rs` helper adapt `roff_term.c` temporary offsets
 and `term.c`/`term_ascii.c` field placement and line retirement. Their headers
 retain the applicable ISC notices; their public projection is source-neutral IR.
 The remaining `ManT` codec code uses the repository license.
+## Private lowering boundaries
+
+Definition HEAD lowering returns named output and execution outcomes rather
+than positional boolean tuples. Native list measurement shares one pure
+unit/sample helper; its reading-width approximation remains separate from the
+native `term_strlen` contract. Display paths share explicit BODY font/fill
+ledger stages, while their source-node entry, sink routing, post-once claim
+and final geometry restoration remain ordered by their existing drivers.
+No helper return or destructor implicitly executes a native scope post.
+

@@ -56,6 +56,22 @@ struct RunInExecution {
     generated_word: bool,
 }
 
+struct DefinitionHeadOutcome {
+    line: crate::mandoc::formatter::FinishedInlineLine,
+    run_in_execution: Option<RunInExecution>,
+}
+
+impl DefinitionHeadOutcome {
+    fn into_parts(
+        self,
+    ) -> (
+        crate::mandoc::formatter::FinishedInlineLine,
+        Option<RunInExecution>,
+    ) {
+        (self.line, self.run_in_execution)
+    }
+}
+
 impl DefinitionHeadFlow {
     fn generated_cells(self) -> Option<u8> {
         match self {
@@ -113,21 +129,15 @@ pub(super) fn definition_item(
         super::super::reset_man_macro_offset(formatter, indent_columns);
     }
     let head_offset_shift = formatter.row_presentation.offset_shift;
-    let (
-        term,
-        run_in_execution,
-        definition_field_exited,
-        definition_body_gap_consumed,
-        _author_restarted,
-        term_breaks,
-    ) = lower_definition_head(
+    let (finished, run_in_execution) = lower_definition_head(
         head,
         &displaced_equations,
         context,
         flow,
         geometry.native_head_field_units,
         formatter,
-    );
+    )
+    .into_parts();
     let completed_head_rows = formatter.definition_head_completed_empty_rows();
     if !man_node {
         // print_mdoc_node() restores HEAD offset after It post. It does not
@@ -145,17 +155,22 @@ pub(super) fn definition_item(
         formatter.row_presentation.offset_shift = 0;
         formatter.enter_man_definition_body();
     }
-    if definition_field_exited && !man_node {
+    if finished.definition_field_exited && !man_node {
         // man tag width fitting remains responsive IR geometry. The actual
         // HEAD post's device close controls formatter registers below, but
         // a width-only overrun does not author a hard layout boundary.
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }
-    if definition_body_gap_consumed {
+    if finished.definition_body_gap_consumed {
         geometry.gap = 0;
     }
-    let (mut terms, closed_head_row) =
-        normalize_executed_definition_head(term, &term_breaks, node, flow, &mut geometry);
+    let (mut terms, closed_head_row) = normalize_executed_definition_head(
+        finished.output,
+        &finished.definition_term_breaks,
+        node,
+        flow,
+        &mut geometry,
+    );
     let empty_head_rows = transfer_completed_empty_head_rows(&mut terms, completed_head_rows);
     let body_origin = geometry.body_origin(context, node, indent_columns);
     enter_definition_body(
@@ -164,7 +179,7 @@ pub(super) fn definition_item(
         flow,
         context.macro_set,
         &terms,
-        !closed_head_row && !definition_field_exited,
+        !closed_head_row && !finished.definition_field_exited,
     );
     let deferred_head_layout = run_in_execution
         .as_ref()
@@ -209,7 +224,7 @@ pub(super) fn definition_item(
         &mut geometry,
         flow,
         closed_head_row,
-        definition_field_exited,
+        finished.definition_field_exited,
         observed,
         head_source_continues,
         &description,
@@ -590,14 +605,7 @@ fn lower_definition_head(
     flow: DefinitionFlow,
     native_head_field_units: Option<usize>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> (
-    Vec<Inline>,
-    Option<RunInExecution>,
-    bool,
-    bool,
-    bool,
-    Vec<usize>,
-) {
+) -> DefinitionHeadOutcome {
     let groups = std::iter::once(head).chain(
         displaced_equations
             .iter()
@@ -629,32 +637,33 @@ fn lower_definition_head(
             }
             _ => crate::mandoc::inline::AuthorBreakEffect::Line,
         };
-        let (term, mut execution, term_breaks, surviving_cells, generated_word) = context
-            .lower_run_in_definition_head(
-                groups,
-                flow.spacing_enabled,
-                formatter,
-                flow.head.strong_scope(),
-                generated_cells,
-                run_in_field,
-            );
-        execution.last_executed_source_line = head
+        let mut finished = context.lower_run_in_definition_head(
+            groups,
+            flow.spacing_enabled,
+            formatter,
+            flow.head.strong_scope(),
+            generated_cells,
+            run_in_field,
+        );
+        finished.execution.last_executed_source_line = head
             .iter()
             .chain(displaced_equations.iter().copied())
             .filter_map(latest_source_line)
             .max();
-        return (
-            term,
-            Some(RunInExecution {
-                state: execution,
-                surviving_cells,
-                generated_word,
+        return DefinitionHeadOutcome {
+            line: crate::mandoc::formatter::FinishedInlineLine {
+                output: finished.output,
+                definition_term_breaks: finished.term_breaks,
+                definition_field_exited: false,
+                definition_body_gap_consumed: false,
+                definition_author_restarted: false,
+            },
+            run_in_execution: Some(RunInExecution {
+                state: finished.execution,
+                surviving_cells: finished.surviving_cells,
+                generated_word: finished.generated_word,
             }),
-            false,
-            false,
-            false,
-            term_breaks,
-        );
+        };
     }
 
     let mut term_builder = InlineBuilder::with_spacing(flow.spacing_enabled);
@@ -663,32 +672,33 @@ fn lower_definition_head(
     let mut definition_author_restarted = false;
     let mut term_breaks = Vec::new();
     for (index, group) in groups.enumerate() {
-        let (lowered, field_exited, body_gap_consumed, author_restarted, breaks) = context
-            .lower_inline_with_author_break_preserving_rows(
-                group,
-                flow.spacing_enabled,
-                formatter,
-                flow.head.author_break_effect(),
-                native_head_field_units,
-            );
+        let finished = context.lower_inline_with_author_break_preserving_rows(
+            group,
+            flow.spacing_enabled,
+            formatter,
+            flow.head.author_break_effect(),
+            native_head_field_units,
+        );
         // Only the original HEAD can contain .Pp alternatives. Equations
         // displaced from it are later source operands, not term separators.
         if index == 0 {
-            term_breaks = breaks;
+            term_breaks = finished.definition_term_breaks;
         }
-        term_builder.append(lowered);
-        definition_field_exited |= field_exited;
-        definition_body_gap_consumed |= body_gap_consumed;
-        definition_author_restarted |= author_restarted;
+        term_builder.append(finished.output);
+        definition_field_exited |= finished.definition_field_exited;
+        definition_body_gap_consumed |= finished.definition_body_gap_consumed;
+        definition_author_restarted |= finished.definition_author_restarted;
     }
-    (
-        term_builder.finish_preserving_rows(),
-        None,
-        definition_field_exited,
-        definition_body_gap_consumed,
-        definition_author_restarted,
-        term_breaks,
-    )
+    DefinitionHeadOutcome {
+        line: crate::mandoc::formatter::FinishedInlineLine {
+            output: term_builder.finish_preserving_rows(),
+            definition_field_exited,
+            definition_body_gap_consumed,
+            definition_author_restarted,
+            definition_term_breaks: term_breaks,
+        },
+        run_in_execution: None,
+    }
 }
 
 fn latest_source_line(node: &Node) -> Option<u32> {

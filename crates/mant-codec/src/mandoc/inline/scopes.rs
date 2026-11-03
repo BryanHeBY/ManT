@@ -282,25 +282,10 @@ fn append_column_list(builder: &mut InlineBuilder, node: &Node, name: Option<&st
 }
 
 fn nested_list_distance(text: &str) -> crate::mandoc::layout::Distance {
-    use crate::mandoc::layout::Distance;
     // a2width() treats an unscaled token as a printed width sample, not
     // as an implicit EN distance (mdoc_term.c:566-577). This reads a layout
     // fact; it never executes these sample escapes in the live formatter.
-    if let Some((number, unit)) = text
-        .trim()
-        .split_at_checked(text.trim().len().saturating_sub(1))
-        && matches!(
-            unit,
-            "n" | "m" | "u" | "c" | "f" | "i" | "M" | "P" | "v" | "p"
-        )
-        && number.parse::<f64>().is_ok()
-    {
-        return Distance::parse(text).unwrap_or_default();
-    }
-    let visible = super::plain_text(&super::parse_roff_text(text));
-    Distance::cells(mant_ir::geometry::coordinate(
-        mant_ir::geometry::text_width(&visible),
-    ))
+    crate::mandoc::layout::mdoc_distance(text).unwrap_or_default()
 }
 
 struct NestedListGeometry {
@@ -511,16 +496,15 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
         return;
     };
     let posts = builder.scope_posts.clone();
-    posts.enter_body(body.id, builder.font.checkpoint());
-    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
-        posts.enter_display_fill(body.id, node.flags.no_fill);
-    }
+    posts.enter_display_body(
+        body.id,
+        &builder.font,
+        (node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))).then_some(node.flags.no_fill),
+    );
     builder.begin_executed_node(body);
     super::display_tabs::enter_pre(&mut builder.execution, body);
     append_inline_nodes(builder, &body.children, name);
-    if let Some(saved) = posts.exit_body(body.id) {
-        builder.font.pop_scope(saved);
-    }
+    posts.restore_body_font(body.id, &mut builder.font);
     if !posts.ended(body.id) {
         // Bd BODY post and D1/Dl BLOCK post call term_newln(), exactly
         // once for the original scope (mdoc_term.c:1131,1482).

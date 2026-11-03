@@ -47,14 +47,11 @@ impl BlockLowerer<'_, '_> {
                 &mut self.state.formatter.execution,
                 body,
             );
-            self.context
-                .scope_posts
-                .enter_body(body.id, self.state.formatter.font.checkpoint());
-            if is_bd {
-                self.context
-                    .scope_posts
-                    .enter_display_fill(body.id, inbound_fill);
-            }
+            self.context.scope_posts.enter_display_body(
+                body.id,
+                &self.state.formatter.font,
+                is_bd.then_some(inbound_fill),
+            );
             self.push_nodes(&body.children);
             for child in node.children[index + 1..]
                 .iter()
@@ -62,9 +59,9 @@ impl BlockLowerer<'_, '_> {
             {
                 self.push_nodes(std::slice::from_ref(child));
             }
-            if let Some(saved) = self.context.scope_posts.exit_body(body.id) {
-                self.state.formatter.font.pop_scope(saved);
-            }
+            self.context
+                .scope_posts
+                .restore_body_font(body.id, &mut self.state.formatter.font);
             if is_bd {
                 if let Some(fill) = self.context.scope_posts.exit_display_fill(body.id) {
                     self.state.formatter.no_fill = fill;
@@ -143,14 +140,11 @@ pub(super) fn preformatted_blocks(
             &mut lowerer.state.formatter.execution,
             body,
         );
-        context
-            .scope_posts
-            .enter_body(body.id, lowerer.state.formatter.font.checkpoint());
-        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
-            context
-                .scope_posts
-                .enter_display_fill(body.id, inbound_no_fill);
-        }
+        context.scope_posts.enter_display_body(
+            body.id,
+            &lowerer.state.formatter.font,
+            (node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))).then_some(inbound_no_fill),
+        );
         lowerer.push_nodes(&body.children);
         // Native validation can retain delimiter-close children after BODY.
         // They are source nodes and must use the same driver as BODY content.
@@ -160,9 +154,9 @@ pub(super) fn preformatted_blocks(
         {
             lowerer.push_nodes(std::slice::from_ref(child));
         }
-        if let Some(saved) = context.scope_posts.exit_body(body.id) {
-            lowerer.state.formatter.font.pop_scope(saved);
-        }
+        context
+            .scope_posts
+            .restore_body_font(body.id, &mut lowerer.state.formatter.font);
     } else {
         lowerer.push_nodes(&node.children);
     }

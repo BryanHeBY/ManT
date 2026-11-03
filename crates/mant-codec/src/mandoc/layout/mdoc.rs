@@ -2,7 +2,7 @@
 use libmandoc_rs::Node;
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
-use super::Distance;
+use super::{Distance, mdoc_distance};
 
 impl crate::mandoc::LoweringContext<'_> {
     pub(in crate::mandoc) fn measured_mdoc_distance(
@@ -11,7 +11,7 @@ impl crate::mandoc::LoweringContext<'_> {
         text: &str,
         fallback: Distance,
     ) -> Distance {
-        measured_distance(text).unwrap_or_else(|| self.distance_or(node, text, fallback))
+        mdoc_distance(text).unwrap_or_else(|| self.distance_or(node, text, fallback))
     }
 
     pub(in crate::mandoc) fn display_offset(&self, node: &Node) -> Distance {
@@ -37,25 +37,6 @@ pub(in crate::mandoc) fn display_offset_distance(node: &Node) -> Option<Distance
         None | Some("left") => Some(Distance::default()),
         Some("indent") => Some(Distance::cells(6)),
         Some("indent-two") => Some(Distance::cells(12)),
-        Some(offset) => measured_distance(offset),
+        Some(offset) => mdoc_distance(offset),
     }
-}
-
-fn measured_distance(text: &str) -> Option<Distance> {
-    // mdoc requires a unit: a bare number is a printable width sample.
-    if let Some((number, unit)) = text
-        .trim()
-        .split_at_checked(text.trim().len().saturating_sub(1))
-        && matches!(
-            unit,
-            "n" | "m" | "u" | "c" | "f" | "i" | "M" | "P" | "v" | "p"
-        )
-        && number.parse::<f64>().is_ok()
-    {
-        return Distance::parse(text);
-    }
-    let visible = crate::mandoc::inline::plain_text(&crate::mandoc::inline::parse_roff_text(text));
-    Some(Distance::cells(mant_ir::geometry::coordinate(
-        mant_ir::geometry::text_width(&visible),
-    )))
 }

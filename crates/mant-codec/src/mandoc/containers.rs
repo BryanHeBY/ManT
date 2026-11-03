@@ -12,7 +12,7 @@ use std::{
     rc::Rc,
 };
 
-use super::inline::FontScope;
+use super::inline::{FontScope, FontState};
 use super::{first_part_children, inline::enclosure_marks, roff_escape::RoffFont};
 
 pub(super) enum Event<'a> {
@@ -213,6 +213,30 @@ impl ScopePostState {
         self.0.borrow_mut().fonts.exit_body(body_id)
     }
 
+    /// Register one display BODY at the caller's existing pre stage. Bd
+    /// retains its inbound fill checkpoint; D1/Dl do not own that checkpoint.
+    /// Source entry, tab pre and output routing stay with the caller.
+    pub(super) fn enter_display_body(
+        &self,
+        body_id: u32,
+        font: &FontState,
+        inbound_fill: Option<bool>,
+    ) {
+        self.enter_body(body_id, font.checkpoint());
+        if let Some(fill) = inbound_fill {
+            self.enter_display_fill(body_id, fill);
+        }
+    }
+
+    /// `print_mdoc_node()` restores the original BODY font before its native
+    /// post. Explicit end markers may already have consumed this checkpoint.
+    /// The caller still executes post, fill restoration and geometry stages.
+    pub(super) fn restore_body_font(&self, body_id: u32, font: &mut FontState) {
+        if let Some(saved) = self.exit_body(body_id) {
+            font.pop_scope(saved);
+        }
+    }
+
     pub(super) fn enter_display_fill(&self, body_id: u32, inbound: bool) {
         self.0.borrow_mut().display_fill.insert(body_id, inbound);
     }
@@ -273,9 +297,7 @@ pub(super) fn drive<'a>(
             }
         }
         Event::RestoreBody(body_id) => {
-            if let Some(saved) = posts.exit_body(body_id) {
-                sink.font().pop_scope(saved);
-            }
+            posts.restore_body_font(body_id, sink.font());
         }
         Event::RestoreFill(body_id, marker) => {
             if let Some(fill) = posts.exit_display_fill(body_id) {

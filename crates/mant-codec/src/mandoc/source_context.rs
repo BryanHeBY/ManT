@@ -43,6 +43,15 @@ pub(super) struct TableTextBlock {
     pub(super) escape: Option<u8>,
 }
 
+/// Output and explicit execution carried from a run-in HEAD to its BODY.
+pub(super) struct RunInDefinitionHead {
+    pub(super) output: Vec<mant_ir::Inline>,
+    pub(super) execution: inline::PreservedInlineState,
+    pub(super) term_breaks: Vec<usize>,
+    pub(super) surviving_cells: usize,
+    pub(super) generated_word: bool,
+}
+
 /// Apply the lexical comment rule that roff executes before handing text to
 /// tbl.
 ///
@@ -176,7 +185,7 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
         native_head_field_units: Option<usize>,
-    ) -> (Vec<mant_ir::Inline>, bool, bool, bool, Vec<usize>) {
+    ) -> formatter::FinishedInlineLine {
         self.lower_inline_with_author_break_rows(
             nodes,
             spacing,
@@ -195,7 +204,7 @@ impl<'a> LoweringContext<'a> {
         author_break_effect: inline::AuthorBreakEffect,
         preserve_rows: bool,
         native_head_field_units: Option<usize>,
-    ) -> (Vec<mant_ir::Inline>, bool, bool, bool, Vec<usize>) {
+    ) -> formatter::FinishedInlineLine {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
@@ -227,13 +236,7 @@ impl<'a> LoweringContext<'a> {
             // node lifecycle separate from generic output-helper returns.
             formatter.execution.clear_native_list_part_flags();
         }
-        (
-            finished.output,
-            finished.definition_field_exited,
-            finished.definition_body_gap_consumed,
-            finished.definition_author_restarted,
-            finished.definition_term_breaks,
-        )
+        finished
     }
 
     /// Lower a definition head without executing a formatter line boundary.
@@ -250,13 +253,7 @@ impl<'a> LoweringContext<'a> {
         strong_scope: bool,
         generated_cells: usize,
         author_break_effect: inline::AuthorBreakEffect,
-    ) -> (
-        Vec<mant_ir::Inline>,
-        inline::PreservedInlineState,
-        Vec<usize>,
-        usize,
-        bool,
-    ) {
+    ) -> RunInDefinitionHead {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
@@ -302,13 +299,13 @@ impl<'a> LoweringContext<'a> {
                 .borrow_mut()
                 .capture_operands(key, operand_capture.borrow_mut().take());
         }
-        (
+        RunInDefinitionHead {
             output,
             execution,
-            breaks,
+            term_breaks: breaks,
             surviving_cells,
-            generated_cells > 0,
-        )
+            generated_word: generated_cells > 0,
+        }
     }
 
     /// Execute a section heading in the surrounding formatter stream.
