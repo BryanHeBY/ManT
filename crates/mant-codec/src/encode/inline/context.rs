@@ -51,22 +51,6 @@ impl<'source> InlinePiece<'source> {
             code: Some(Cow::Borrowed(value)),
         }
     }
-
-    fn first_output_character(&self) -> Option<char> {
-        if self.styled && !self.rendered.starts_with([' ', '\t', '\n']) {
-            Some('*')
-        } else {
-            self.rendered.chars().next()
-        }
-    }
-
-    fn last_output_character(&self) -> Option<char> {
-        if self.styled && !self.rendered.ends_with([' ', '\t', '\n']) {
-            Some('*')
-        } else {
-            self.rendered.chars().next_back()
-        }
-    }
 }
 
 pub(super) fn render_inline_raw(
@@ -75,6 +59,14 @@ pub(super) fn render_inline_raw(
     manual_links: bool,
 ) -> String {
     render_inline_raw_segments(&[nodes], options, manual_links)
+}
+
+pub(super) fn render_inline_raw_unstyled(
+    nodes: &[Inline],
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
+    render_unstyled(nodes.iter(), options, manual_links)
 }
 
 pub(super) fn render_inline_raw_segments(
@@ -90,23 +82,43 @@ pub(super) fn render_inline_raw_segments(
 }
 
 pub(super) fn render_inline_raw_nodes<'source>(
-    nodes: impl Iterator<Item = &'source Inline>,
+    nodes: impl Iterator<Item = &'source Inline> + Clone,
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
     render_inline_pieces(&mut coalesce_code_pieces(inline_pieces(
+        nodes.clone(),
+        options,
+        manual_links,
+        false,
+    )))
+    .unwrap_or_else(|| render_unstyled(nodes, options, manual_links))
+}
+
+fn render_unstyled<'source>(
+    nodes: impl Iterator<Item = &'source Inline>,
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> String {
+    // Revisit the original borrowed nodes, preserving code coalescing and
+    // typed links. Stripping bytes from a rejected Markdown candidate could
+    // delete authored marker characters or change destination identities.
+    render_inline_pieces(&mut coalesce_code_pieces(inline_pieces(
         nodes,
         options,
         manual_links,
+        true,
     )))
+    .expect("unstyled phrasing has no generated style delimiters")
 }
 
 fn inline_pieces<'source>(
     nodes: impl Iterator<Item = &'source Inline>,
     options: MarkdownOptions,
     manual_links: bool,
+    omit_styles: bool,
 ) -> Vec<InlinePiece<'source>> {
-    let mut nodes = phrasing_nodes(nodes, options, manual_links).peekable();
+    let mut nodes = phrasing_nodes(nodes, options, manual_links, omit_styles).peekable();
     let mut pieces = Vec::new();
     while let Some(child) = nodes.next() {
         match child {
@@ -119,7 +131,15 @@ fn inline_pieces<'source>(
                     text.to_mut().push_str(value);
                     nodes.next();
                 }
-                pieces.push(InlinePiece::plain(escape_text(&text)));
+                let mut rendered = escape_text(&text);
+                // The content-preserving fallback must not turn a literal
+                // bang followed by a retained link into image syntax.
+                // Only the exposed final bang can join that next wrapper;
+                // never insert an escape inside an existing autolink URI.
+                if omit_styles && rendered.ends_with('!') {
+                    rendered.insert(rendered.len() - 1, '\\');
+                }
+                pieces.push(InlinePiece::plain(rendered));
             }
             PhrasingNode::Node(Inline::Strong { children }) => {
                 let mut segments = vec![children.as_slice()];
@@ -150,6 +170,7 @@ fn inline_pieces<'source>(
                 children,
                 options,
                 manual_links,
+                omit_styles,
             ))),
             PhrasingNode::Node(Inline::Anchor {
                 id,
@@ -240,4 +261,74 @@ fn code_rows(value: &str) -> String {
         }
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pulldown_cmark::{Event, Parser, Tag};
+
+    #[test]
+    fn unstyled_fallback_reencodes_authored_markers_code_and_link_identities() {
+        let link = |label: &str| Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: "https://example.test/中(a)".into(),
+            },
+            title: Some("original owner".into()),
+            children: vec![Inline::Text {
+                value: label.into(),
+            }],
+        };
+        let nodes = [
+            Inline::Strong {
+                children: vec![Inline::Text { value: "**".into() }],
+            },
+            Inline::Emphasis {
+                children: vec![
+                    Inline::Code {
+                        value: "a``".into(),
+                    },
+                    link("x_y"),
+                ],
+            },
+            Inline::Text { value: "!".into() },
+            link("NEXT"),
+        ];
+        let markdown = render_unstyled(nodes.iter(), MarkdownOptions::default(), false);
+        let events = Parser::new(&markdown).collect::<Vec<_>>();
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            Event::Start(Tag::Strong | Tag::Emphasis | Tag::Image { .. })
+        )));
+        let visible = events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Text(value) | Event::Code(value) => Some(value.as_ref()),
+                _ => None,
+            })
+            .collect::<String>();
+        assert_eq!(visible, "**a``x_y!NEXT");
+        let owners = events
+            .iter()
+            .filter_map(|event| {
+                if let Event::Start(Tag::Link {
+                    dest_url, title, ..
+                }) = event
+                {
+                    Some((dest_url.as_ref(), title.as_ref()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            owners,
+            [("https://example.test/中(a)", "original owner"); 2]
+        );
+        let parsed = crate::parse_markdown(&markdown, None).unwrap();
+        let [mant_ir::Block::Paragraph { children, .. }] = parsed.document.blocks.as_slice() else {
+            panic!("one fallback phrasing owner")
+        };
+        assert_eq!(mant_ir::inline_plain_text(children), "**a``x_y!NEXT");
+    }
 }

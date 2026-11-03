@@ -1,5 +1,7 @@
 use super::*;
 
+mod sequences;
+
 #[test]
 fn underscore_escaping_is_independent_of_text_segmentation_but_respects_styles() {
     let text = |value: &str| Inline::Text {

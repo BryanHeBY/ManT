@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use mant_ir::{Inline, LinkTarget};
 
-use super::context::render_inline_raw;
+use super::context::{render_inline_raw, render_inline_raw_unstyled};
 use super::{MarkdownOptions, flatten_inline};
 
 pub(super) enum PhrasingNode<'source> {
@@ -23,6 +23,7 @@ pub(super) fn phrasing_nodes<'source>(
     mut roots: impl Iterator<Item = &'source Inline>,
     options: MarkdownOptions,
     manual_links: bool,
+    omit_styles: bool,
 ) -> impl Iterator<Item = PhrasingNode<'source>> {
     let mut labels: Vec<std::slice::Iter<'source, Inline>> = Vec::new();
     std::iter::from_fn(move || {
@@ -36,7 +37,10 @@ pub(super) fn phrasing_nodes<'source>(
             } else {
                 roots.next()?
             };
-            if let Inline::Link {
+            if omit_styles && let Inline::Strong { children } | Inline::Emphasis { children } = node
+            {
+                labels.push(children.iter());
+            } else if let Inline::Link {
                 target,
                 title,
                 children,
@@ -63,6 +67,7 @@ pub(super) fn render_link(
     children: &[Inline],
     options: MarkdownOptions,
     manual_links: bool,
+    omit_styles: bool,
 ) -> String {
     if title.is_none()
         && children
@@ -75,7 +80,11 @@ pub(super) fn render_link(
     {
         return format!("<{target}>");
     }
-    let label = render_inline_raw(children, options, manual_links);
+    let label = if omit_styles {
+        render_inline_raw_unstyled(children, options, manual_links)
+    } else {
+        render_inline_raw(children, options, manual_links)
+    };
     let mut output = String::with_capacity(label.len() + target.len() + 4);
     output.push('[');
     output.push_str(&label);
@@ -133,6 +142,7 @@ mod tests {
             &children,
             super::MarkdownOptions::default(),
             true,
+            false,
         );
         assert_eq!(
             markdown,

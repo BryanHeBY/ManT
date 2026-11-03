@@ -1,229 +1,307 @@
-//! Choose legal emphasis delimiters across the complete accepted phrasing stream.
+//! Choose delimiters over the complete phrasing sequence, including both seams.
 
-use std::collections::VecDeque;
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use super::InlinePiece;
 
-pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> String {
+mod projection;
+
+// A piece has three choices: its body alone, asterisk, or underscore. A
+// transition knows the preceding and following choices, so delimiter runs
+// cannot silently merge after a locally valid choice was emitted.
+const CHOICES: usize = 3;
+const STATES: usize = CHOICES * CHOICES;
+
+#[derive(Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
+struct Score {
+    styles: usize,
+    preferred: usize,
+}
+
+pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> Option<String> {
     if !pieces.iter().any(|piece| piece.styled) {
         if let [piece] = pieces {
-            return std::mem::take(&mut piece.rendered);
+            return Some(std::mem::take(&mut piece.rendered));
         }
         let mut output =
             String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
         for piece in pieces {
             output.push_str(&piece.rendered);
         }
-        return output;
+        return Some(output);
     }
-    let (preceding, following) = nonempty_neighbors(pieces);
-    let mut pending = pieces
-        .iter()
-        .enumerate()
-        .filter_map(|(index, piece)| {
-            (piece.styled && !style_is_valid(pieces, index, &preceding, &following))
-                .then_some(index)
-        })
-        .collect::<VecDeque<_>>();
-    while let Some(index) = pending.pop_front() {
-        if !pieces[index].styled || style_is_valid(pieces, index, &preceding, &following) {
-            continue;
-        }
-        pieces[index].styled = false;
-        for neighbor in [preceding[index], following[index]].into_iter().flatten() {
-            if pieces[neighbor].styled {
-                pending.push_back(neighbor);
-            }
-        }
-    }
-
-    let following = following_characters(pieces);
+    let choices = choose_sequence(pieces);
     let mut output = String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
-    for (index, piece) in pieces.iter().enumerate() {
-        if let Some(markers) = piece.markers.filter(|_| piece.styled) {
-            append_styled(
-                &mut output,
-                &piece.rendered,
-                markers.primary,
-                markers.alternate,
-                following[index],
-            );
-        } else {
+    let mut spans = Vec::with_capacity(pieces.len());
+    for (piece, choice) in pieces.iter().zip(choices) {
+        let beginning = output.len();
+        let Some(marker) = marker(piece, choice) else {
             output.push_str(&piece.rendered);
-        }
-    }
-    output
-}
-
-fn nonempty_neighbors(pieces: &[InlinePiece<'_>]) -> (Vec<Option<usize>>, Vec<Option<usize>>) {
-    let mut preceding = vec![None; pieces.len()];
-    let mut current = None;
-    for (index, piece) in pieces.iter().enumerate() {
-        preceding[index] = current;
-        if !piece.rendered.is_empty() {
-            current = Some(index);
-        }
-    }
-    let mut following = vec![None; pieces.len()];
-    current = None;
-    for (index, piece) in pieces.iter().enumerate().rev() {
-        following[index] = current;
-        if !piece.rendered.is_empty() {
-            current = Some(index);
-        }
-    }
-    (preceding, following)
-}
-
-fn style_is_valid(
-    pieces: &[InlinePiece<'_>],
-    index: usize,
-    preceding: &[Option<usize>],
-    following: &[Option<usize>],
-) -> bool {
-    let piece = &pieces[index];
-    let core = piece.rendered.trim_matches([' ', '\t', '\n']);
-    let before = piece
-        .rendered
-        .starts_with([' ', '\t', '\n'])
-        .then_some(' ')
-        .or_else(|| preceding[index].and_then(|index| pieces[index].last_output_character()));
-    let after = piece
-        .rendered
-        .ends_with([' ', '\t', '\n'])
-        .then_some(' ')
-        .or_else(|| following[index].and_then(|index| pieces[index].first_output_character()));
-    let markers = piece.markers.expect("styled pieces carry markers");
-    [markers.primary, markers.alternate]
-        .into_iter()
-        .any(|marker| {
-            style_marker_is_available(core, marker)
-                && can_delimit_style(core, marker, before, after)
-        })
-}
-
-fn following_characters(pieces: &[InlinePiece<'_>]) -> Vec<Option<char>> {
-    let mut following = vec![None; pieces.len()];
-    let mut current = None;
-    for (index, piece) in pieces.iter().enumerate().rev() {
-        following[index] = current;
-        current = piece.first_output_character().or(current);
-    }
-    following
-}
-
-/// Render one styled span with the ordinary asterisk marker, switching to the
-/// equivalent underscore marker when adjacent styles would form an ambiguous
-/// run of `*`. This keeps the output pure Markdown while preserving emphasis
-/// within ordinary words, where underscore delimiters are intentionally inert.
-fn append_styled(
-    output: &mut String,
-    rendered: &str,
-    primary_marker: &str,
-    alternate_marker: &str,
-    following: Option<char>,
-) {
-    let core = rendered.trim_matches([' ', '\t', '\n']);
-    if core.is_empty() {
-        output.push_str(rendered);
-        return;
-    }
-    let leading_width = rendered.len() - rendered.trim_start_matches([' ', '\t', '\n']).len();
-    let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t', '\n']).len();
-    let leading = &rendered[..leading_width];
-    let trailing = &rendered[rendered.len() - trailing_width..];
-    let prefer_alternate = output.ends_with('*') || core.contains(primary_marker);
-    let markers = if prefer_alternate {
-        [alternate_marker, primary_marker]
-    } else {
-        [primary_marker, alternate_marker]
-    };
-    let preceding = output.chars().next_back();
-    let marker = markers.into_iter().find(|marker| {
-        style_marker_is_available(core, marker)
-            && can_delimit_style(core, marker, preceding, following)
-    });
-    if let Some(marker) = marker {
-        output.push_str(leading);
+            spans.push(beginning..output.len());
+            continue;
+        };
+        let core = core(piece);
+        let start =
+            piece.rendered.len() - piece.rendered.trim_start_matches([' ', '\t', '\n']).len();
+        let end = start + core.len();
+        output.push_str(&piece.rendered[..start]);
         output.push_str(marker);
         output.push_str(core);
         output.push_str(marker);
-        output.push_str(trailing);
-    } else {
-        output.push_str(rendered);
+        output.push_str(&piece.rendered[end..]);
+        spans.push(beginning..output.len());
+    }
+    // Delimiter pairing is global: local flank checks alone cannot prove
+    // that a distant run did not steal a close. Compare the complete parse
+    // with the independently accepted pieces before committing its bytes.
+    projection::equivalent(spans.iter().map(|span| &output[span.clone()]), &output)
+        .then_some(output)
+}
+
+fn choose_sequence(pieces: &[InlinePiece<'_>]) -> Vec<usize> {
+    let mut scores = [None; STATES];
+    for score in scores.iter_mut().take(choice_count(&pieces[0])) {
+        *score = Some(Score::default());
+    }
+    let mut history = Vec::with_capacity(pieces.len());
+    for (index, piece) in pieces.iter().enumerate() {
+        let previous = index.checked_sub(1).map(|index| &pieces[index]);
+        let following = pieces.get(index + 1);
+        let mut next_scores = [None; STATES];
+        let mut predecessors = [0; STATES];
+        // At most 2 * 3 * 3 parsings of this piece, independent of the
+        // accumulated output. There are only nine live sequence states.
+        let mut valid = [[[None; CHOICES]; CHOICES]; CHOICES];
+        for (state, score) in scores.into_iter().enumerate() {
+            let Some(score) = score else { continue };
+            let before = state / CHOICES;
+            let current = state % CHOICES;
+            for (after, witness) in valid[before][current]
+                .iter_mut()
+                .take(following.map_or(1, choice_count))
+                .enumerate()
+            {
+                let legal = *witness.get_or_insert_with(|| {
+                    choice_is_valid(
+                        piece,
+                        current,
+                        previous.map(|piece| (piece, before)),
+                        following.map(|piece| (piece, after)),
+                    )
+                });
+                if !legal {
+                    continue;
+                }
+                let next = current * CHOICES + after;
+                let candidate = Score {
+                    styles: score.styles + usize::from(current != 0),
+                    preferred: score.preferred + usize::from(is_preferred(piece, current)),
+                };
+                if next_scores[next].is_none_or(|best| candidate > best) {
+                    next_scores[next] = Some(candidate);
+                    predecessors[next] = state;
+                }
+            }
+        }
+        history.push(predecessors);
+        scores = next_scores;
+    }
+    let mut state = scores
+        .iter()
+        .enumerate()
+        .filter_map(|(state, score)| score.map(|score| (score, state)))
+        .max()
+        .expect("unstyled sequence is always available")
+        .1;
+    let mut choices = vec![0; pieces.len()];
+    for index in (0..pieces.len()).rev() {
+        choices[index] = state / CHOICES;
+        state = history[index][state];
+    }
+    choices
+}
+
+fn choice_count(piece: &InlinePiece<'_>) -> usize {
+    if piece.styled { CHOICES } else { 1 }
+}
+
+fn marker(piece: &InlinePiece<'_>, choice: usize) -> Option<&'static str> {
+    let markers = piece.markers?;
+    match choice {
+        1 => Some(markers.primary),
+        2 => Some(markers.alternate),
+        _ => None,
     }
 }
 
-fn can_delimit_style(
-    core: &str,
-    marker: &str,
-    preceding: Option<char>,
-    following: Option<char>,
-) -> bool {
-    // CommonMark classifies an entire delimiter run using the characters
-    // outside that run. A generated inner style with the same marker joins
-    // the outer run; its marker is not the next content character.
-    let marker_character = char::from(marker.as_bytes()[0]);
-    let Some(first) = core.trim_start_matches(marker_character).chars().next() else {
-        return false;
-    };
-    let Some(last) = core.trim_end_matches(marker_character).chars().next_back() else {
-        return false;
-    };
-    can_open_delimiter(marker, preceding, Some(first))
-        && can_close_delimiter(marker, Some(last), following)
+fn core<'a>(piece: &'a InlinePiece<'_>) -> &'a str {
+    piece.rendered.trim_matches([' ', '\t', '\n'])
 }
 
-fn style_marker_is_available(core: &str, marker: &str) -> bool {
-    if !core.contains(marker) {
+fn is_preferred(piece: &InlinePiece<'_>, choice: usize) -> bool {
+    let Some(markers) = piece.markers else {
+        return false;
+    };
+    choice
+        == if core(piece).contains(markers.primary) {
+            2
+        } else {
+            1
+        }
+}
+
+fn edge(piece: &InlinePiece<'_>, choice: usize, first: bool) -> Option<char> {
+    let character = if first {
+        piece.rendered.chars().next()
+    } else {
+        piece.rendered.chars().next_back()
+    };
+    if !character.is_some_and(|character| matches!(character, ' ' | '\t' | '\n'))
+        && let Some(marker) = marker(piece, choice)
+    {
+        marker.chars().next()
+    } else {
+        character
+    }
+}
+
+fn choice_is_valid(
+    piece: &InlinePiece<'_>,
+    choice: usize,
+    preceding: Option<(&InlinePiece<'_>, usize)>,
+    following: Option<(&InlinePiece<'_>, usize)>,
+) -> bool {
+    let Some(marker) = marker(piece, choice) else {
+        return true;
+    };
+    let before = if piece.rendered.starts_with([' ', '\t', '\n']) {
+        None
+    } else {
+        preceding.and_then(|(piece, choice)| edge(piece, choice, false))
+    };
+    let after = if piece.rendered.ends_with([' ', '\t', '\n']) {
+        None
+    } else {
+        following.and_then(|(piece, choice)| edge(piece, choice, true))
+    };
+    let delimiter = marker.chars().next();
+    if before == delimiter
+        && preceding.is_some_and(|(piece, choice)| active_edge(piece, choice, false))
+        || after == delimiter
+            && following.is_some_and(|(piece, choice)| active_edge(piece, choice, true))
+    {
+        // Adjacent generated runs are one CommonMark delimiter run. Select
+        // another marker or omit this style; never add a source separator.
+        return false;
+    }
+    // Use the actual CommonMark parser for inner runs, escapes and Unicode
+    // punctuation. An inert underscore in reuse_level does not conflict.
+    // Outside characters carry the complete accepted sequence's flanks.
+    let mut probe = String::new();
+    append_boundary(&mut probe, before);
+    let start = probe.len();
+    probe.push_str(marker);
+    projection::append_phrasing_rows(&mut probe, core(piece));
+    probe.push_str(marker);
+    let end = probe.len();
+    append_boundary(&mut probe, after);
+    #[cfg(test)]
+    PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + probe.len()));
+    let mut full_span = false;
+    let mut strong = 0;
+    let mut emphasis = 0;
+    for (event, range) in Parser::new(&probe).into_offset_iter() {
+        full_span |=
+            range == (start..end) && matches!(&event, Event::Start(Tag::Strong | Tag::Emphasis));
+        match event {
+            Event::Start(Tag::Strong) => strong += 1,
+            Event::End(TagEnd::Strong) => strong -= 1,
+            Event::Start(Tag::Emphasis) => emphasis += 1,
+            Event::End(TagEnd::Emphasis) => emphasis -= 1,
+            // ***word*** may reverse Strong/Emphasis nesting while
+            // retaining both styles on exactly the original scalars.
+            Event::Text(_) | Event::Code(_)
+                if range.start < end - marker.len()
+                    && range.end > start + marker.len()
+                    && if marker.len() == 2 {
+                        strong == 0
+                    } else {
+                        emphasis == 0
+                    } =>
+            {
+                return false;
+            }
+            _ => {}
+        }
+    }
+    full_span
+}
+
+fn active_edge(piece: &InlinePiece<'_>, choice: usize, first: bool) -> bool {
+    if choice != 0 || first {
         return true;
     }
-    // A single emphasis marker can enclose generated strong runs. Keep odd
-    // inner runs on the alternate marker: two nested single runs would be
-    // parsed as strong instead of preserving emphasis.
-    if marker.len() != 1 {
-        return false;
+    // A literal escaped final star/underscore cannot join the next run.
+    piece.rendered[..piece.rendered.len() - 1]
+        .bytes()
+        .rev()
+        .take_while(|byte| *byte == b'\\')
+        .count()
+        .is_multiple_of(2)
+}
+
+fn append_boundary(output: &mut String, boundary: Option<char>) {
+    let character = boundary.unwrap_or(' ');
+    if character.is_whitespace() {
+        // Only the flanking class belongs to this witness. A literal TAB
+        // at its artificial block origin would incorrectly open code.
+        output.push(' ');
+        return;
     }
-    let marker_character = char::from(marker.as_bytes()[0]);
-    core.split(|character| character != marker_character)
-        .filter(|run| !run.is_empty())
-        .all(|run| run.len().is_multiple_of(2))
-}
-
-fn can_open_delimiter(marker: &str, preceding: Option<char>, following: Option<char>) -> bool {
-    let (left_flanking, right_flanking) = delimiter_flanking(preceding, following);
-    if marker.starts_with('*') {
-        left_flanking
-    } else {
-        left_flanking && (!right_flanking || preceding.is_some_and(is_commonmark_punctuation))
+    if character.is_ascii_punctuation() {
+        output.push('\\');
     }
+    output.push(character);
 }
 
-fn can_close_delimiter(marker: &str, preceding: Option<char>, following: Option<char>) -> bool {
-    let (left_flanking, right_flanking) = delimiter_flanking(preceding, following);
-    if marker.starts_with('*') {
-        right_flanking
-    } else {
-        right_flanking && (!left_flanking || following.is_some_and(is_commonmark_punctuation))
+#[cfg(test)]
+std::thread_local! {
+    static PARSED_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static WHOLE_PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn actual_parser_work_is_bounded_by_piece_bytes_not_output_history() {
+        let mut previous = None;
+        for count in [64, 256, 1024] {
+            let mut pieces = (0..count)
+                .map(|index| {
+                    InlinePiece::styled(
+                        if index % 2 == 0 {
+                            "--arg=".into()
+                        } else {
+                            "reuse_level".into()
+                        },
+                        if index % 2 == 0 { "**" } else { "*" },
+                        if index % 2 == 0 { "__" } else { "_" },
+                    )
+                })
+                .collect::<Vec<_>>();
+            let bytes: usize = pieces.iter().map(|piece| piece.rendered.len()).sum();
+            PARSED_BYTES.with(|work| work.set(0));
+            WHOLE_PARSES.with(|work| work.set(0));
+            let output = render_inline_pieces(&mut pieces).unwrap();
+            let work = PARSED_BYTES.with(std::cell::Cell::get);
+            assert!(work <= 20 * (bytes + 12 * count) + 4 * output.len());
+            assert_eq!(WHOLE_PARSES.with(std::cell::Cell::get), 1);
+            if let Some(previous) = previous {
+                assert!(work <= previous * 5);
+            }
+            previous = Some(work);
+        }
     }
-}
-
-fn delimiter_flanking(preceding: Option<char>, following: Option<char>) -> (bool, bool) {
-    let preceding_whitespace = preceding.is_none_or(char::is_whitespace);
-    let following_whitespace = following.is_none_or(char::is_whitespace);
-    let preceding_punctuation = preceding.is_some_and(is_commonmark_punctuation);
-    let following_punctuation = following.is_some_and(is_commonmark_punctuation);
-    let left_flanking = !following_whitespace
-        && (!following_punctuation || preceding_whitespace || preceding_punctuation);
-    let right_flanking = !preceding_whitespace
-        && (!preceding_punctuation || following_whitespace || following_punctuation);
-    (left_flanking, right_flanking)
-}
-
-fn is_commonmark_punctuation(character: char) -> bool {
-    // CommonMark uses Unicode punctuation and symbol categories. Treating the
-    // remaining non-alphanumeric, non-whitespace scalars as punctuation is a
-    // conservative superset: an unusual combining mark can lose styling, but
-    // it cannot make delimiter bytes visible in the projected text.
-    !character.is_alphanumeric() && !character.is_whitespace()
 }

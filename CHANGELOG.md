@@ -37,6 +37,11 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Validate complete Markdown phrasing when choosing adjacent emphasis
+  delimiters. Preserve alternating styles, code, links and hard rows without
+  leaking delimiter characters into visible text; bound encoding work by the
+  input pieces rather than repeatedly scanning an accumulated prefix.
+
 - Decode manual-reference identities independently of visible labels and
   formatter registers. Keep per-operand escape rules separate from HTML URL
   template execution; preserve invalid operands for diagnostics without
