@@ -15,6 +15,11 @@ that crate was not published for that change.
 
 ### Dependency maintenance
 
+- Update zip to 9.3.0 and install-action to its verified 2.88.0 release
+  commit, superseding the pending dependency PRs. Regenerate the locked
+  multi-platform license report without changing archive extraction policy.
+- Require pulldown-cmark 0.13.6 and refresh all seven Rust lockfiles to
+  resolve RUSTSEC-2026-0433, a nested image-wikilink parsing complexity issue.
 - Refresh all seven Rust lockfiles to current Rust 1.88-compatible releases,
   including the paired rmcp SDK/macros 3.8.0, arboard 3.7.0, pulldown-cmark
   0.13.5, ureq 3.5.0, zip 9.1.2, tokio 1.54.1 and cc 1.10.0. Keep the frozen
