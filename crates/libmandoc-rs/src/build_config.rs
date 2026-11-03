@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn diagnostic_capture_never_falls_back_to_process_stderr() {
-        let shim = include_str!("../shim/mant_mandoc_shim.c");
+        let shim = include_str!("../shim/mant_mandoc_shim/session.inc");
 
         assert!(!shim.contains("messages == NULL ? stderr : messages"));
         assert!(shim.contains("could not create private diagnostic capture file"));
