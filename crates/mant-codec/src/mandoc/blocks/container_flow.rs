@@ -134,6 +134,19 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
         &mut self.lowerer.state.formatter.font
     }
 
+    fn finish_node(&mut self, node: &Node) {
+        self.lowerer
+            .state
+            .formatter
+            .execution
+            .finish_no_fill_source_line_entry(node.id);
+        self.lowerer
+            .state
+            .formatter
+            .execution
+            .finish_executed_node(node);
+    }
+
     fn geometry_checkpoint(
         &self,
         node: &Node,
@@ -191,7 +204,19 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 .no_fill_inline
                 .continues_source_line()
         {
-            self.lowerer.settle_no_fill_inline();
+            let entered = self
+                .lowerer
+                .state
+                .formatter
+                .execution
+                .take_no_fill_source_line_entered(source.id);
+            if !entered && self.lowerer.settle_no_fill_inline() {
+                self.lowerer
+                    .state
+                    .formatter
+                    .execution
+                    .note_no_fill_source_line_entered(source.id);
+            }
             self.lowerer.state.begin_no_fill_source_line();
         }
     }

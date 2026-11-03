@@ -80,6 +80,9 @@ pub(in crate::mandoc) struct TextExecution {
     /// Native writes in decode order; semantic wrappers never supply cells.
     pub(in crate::mandoc) native_writes: Vec<super::super::flow::field_buffer::FieldWrite>,
     pub(in crate::mandoc) joins_preceding_node: bool,
+    /// Automatic separator cells already placed after a cached glyph by
+    /// the marker-blank path, rather than before this complete word.
+    pub(in crate::mandoc) projected_word_separator: usize,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
     pub(in crate::mandoc) trailing_output: TrailingOutput,
@@ -120,6 +123,7 @@ struct TextEventState {
     wiped: bool,
     /// A zero-width graph class cell (NBRZW) armed `graph` this word.
     zero_graph_seen: bool,
+    projected_word_separator: usize,
 }
 
 impl TextEventState {
@@ -161,6 +165,7 @@ impl TextEventState {
             graph_count: 0,
             wiped: false,
             zero_graph_seen: false,
+            projected_word_separator: 0,
         }
     }
 }
@@ -216,9 +221,10 @@ fn append_text_event(
                 zero_advance.flush(output, buffer, font, link);
                 let held = zero_advance.take_held();
                 buffer.push_str(&held);
-                if zero_advance.take_marker_blank_separator() {
-                    buffer.push(' ');
-                }
+                let cells = zero_advance.take_marker_blank_separator();
+                buffer.extend(std::iter::repeat_n(' ', cells));
+                state.projected_word_separator =
+                    state.projected_word_separator.saturating_add(cells);
                 state.suppress_break_whitespace = true;
                 continue;
             }
@@ -640,6 +646,7 @@ fn finish_text_execution(
         output,
         native_writes,
         joins_preceding_node: zero_advance.take_preceding_join(),
+        projected_word_separator: text_state.projected_word_separator,
         source_continuation,
         pending_word_end_break: text_state.pending_word_end_break,
         pending_word_end_break_separated: text_state.pending_word_end_break

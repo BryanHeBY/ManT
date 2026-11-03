@@ -41,6 +41,7 @@ pub(super) fn append_column_list(builder: &mut InlineBuilder, node: &Node, name:
         {
             builder.begin_executed_node(head);
             builder.enter_nested_column_part(true);
+            builder.execution.finish_executed_node(head);
         }
         let parts: Vec<_> = item
             .children
@@ -57,8 +58,11 @@ pub(super) fn append_column_list(builder: &mut InlineBuilder, node: &Node, name:
                 builder.font.pop_scope(font);
             }
             builder.finish_nested_column_part();
+            builder.execution.finish_executed_node(part);
         }
+        builder.execution.finish_executed_node(item);
     }
+    builder.execution.finish_executed_node(body);
     // Bl BLOCK post calls term_newln() before resetting the default stops.
     builder.no_fill_source_line();
     super::super::display_tabs::exit_post(&mut builder.execution, node);
@@ -210,6 +214,14 @@ pub(super) fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name:
             .filter(|part| part.kind == NodeKind::Body)
             .collect();
         let body_empty = parts.iter().all(|part| part.children.is_empty());
+        // blk_full() allocates direct DELIMO before HEAD. Execute those
+        // siblings before HEAD pre selects NOSPACE, margin or diag font.
+        let prefix_end = item
+            .children
+            .iter()
+            .position(|part| part.kind == NodeKind::Head)
+            .unwrap_or_default();
+        append_inline_nodes(builder, &item.children[..prefix_end], name);
         if let Some(head) = head {
             builder.begin_executed_node(head);
             builder.enter_nested_list_head(
@@ -221,6 +233,7 @@ pub(super) fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name:
             );
             append_nested_list_head(builder, head, &geometry, item_count, name);
             builder.finish_nested_list_head(geometry.flush_head);
+            builder.execution.finish_executed_node(head);
             builder.restore_nested_list_geometry(saved);
         }
         for part in parts {
@@ -247,10 +260,13 @@ pub(super) fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name:
                 builder.font.pop_scope(font);
             }
             builder.no_fill_source_line();
+            builder.execution.finish_executed_node(part);
             builder.restore_nested_list_geometry(saved);
         }
+        builder.execution.finish_executed_node(item);
         previous_body_empty = body_empty;
     }
+    builder.execution.finish_executed_node(body);
     builder.no_fill_source_line();
     super::super::display_tabs::exit_post(&mut builder.execution, node);
     builder.exit_nested_list_scope(saved, item_count > 0);

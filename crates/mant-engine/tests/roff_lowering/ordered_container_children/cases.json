@@ -1,0 +1,2893 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "count": 285,
+  "cases": [
+    {
+      "id": "enclosure-Dq-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (“zeroconf”) AFTER"
+    },
+    {
+      "id": "enclosure-Dq-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Dq ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (“zeroconf”) AFTER"
+    },
+    {
+      "id": "enclosure-Dq-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Dq ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (“zeroconf”) AFTER"
+    },
+    {
+      "id": "enclosure-Dq-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dq ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n(“zeroconf”)\nAFTER"
+    },
+    {
+      "id": "enclosure-Dq-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “!” , AFTER"
+    },
+    {
+      "id": "enclosure-Dq-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Dq Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “!” , AFTER"
+    },
+    {
+      "id": "enclosure-Dq-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Dq Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “!” , AFTER"
+    },
+    {
+      "id": "enclosure-Dq-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dq Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n“!” ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Dq-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE “!” .  AFTER"
+    },
+    {
+      "id": "enclosure-Dq-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Dq Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE “!” .  AFTER"
+    },
+    {
+      "id": "enclosure-Dq-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Dq Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE “!” .  AFTER"
+    },
+    {
+      "id": "enclosure-Dq-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dq Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n“!” .\nAFTER"
+    },
+    {
+      "id": "enclosure-Dq-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE “!” : AFTER"
+    },
+    {
+      "id": "enclosure-Dq-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Dq Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE “!” : AFTER"
+    },
+    {
+      "id": "enclosure-Dq-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Dq Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE “!” : AFTER"
+    },
+    {
+      "id": "enclosure-Dq-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dq Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n“!” :\nAFTER"
+    },
+    {
+      "id": "enclosure-Dq-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE “!” ) AFTER"
+    },
+    {
+      "id": "enclosure-Dq-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Dq Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE “!” ) AFTER"
+    },
+    {
+      "id": "enclosure-Dq-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Dq Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE “!” ) AFTER"
+    },
+    {
+      "id": "enclosure-Dq-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dq Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n“!” )\nAFTER"
+    },
+    {
+      "id": "enclosure-Dq-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “word”, AFTER"
+    },
+    {
+      "id": "enclosure-Dq-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Dq Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “word”, AFTER"
+    },
+    {
+      "id": "enclosure-Dq-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Dq Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “word”, AFTER"
+    },
+    {
+      "id": "enclosure-Dq-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dq Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n“word”,\nAFTER"
+    },
+    {
+      "id": "enclosure-Dq-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “word”, AFTER"
+    },
+    {
+      "id": "enclosure-Dq-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Dq word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “word”, AFTER"
+    },
+    {
+      "id": "enclosure-Dq-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Dq word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “word”, AFTER"
+    },
+    {
+      "id": "enclosure-Dq-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dq word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n“word”,\nAFTER"
+    },
+    {
+      "id": "enclosure-Sq-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sq ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (‘zeroconf’) AFTER"
+    },
+    {
+      "id": "enclosure-Sq-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Sq ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (‘zeroconf’) AFTER"
+    },
+    {
+      "id": "enclosure-Sq-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Sq ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (‘zeroconf’) AFTER"
+    },
+    {
+      "id": "enclosure-Sq-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Sq ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n(‘zeroconf’)\nAFTER"
+    },
+    {
+      "id": "enclosure-Sq-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sq Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘!’ , AFTER"
+    },
+    {
+      "id": "enclosure-Sq-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Sq Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘!’ , AFTER"
+    },
+    {
+      "id": "enclosure-Sq-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Sq Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘!’ , AFTER"
+    },
+    {
+      "id": "enclosure-Sq-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Sq Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n‘!’ ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Sq-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sq Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ‘!’ .  AFTER"
+    },
+    {
+      "id": "enclosure-Sq-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Sq Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ‘!’ .  AFTER"
+    },
+    {
+      "id": "enclosure-Sq-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Sq Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ‘!’ .  AFTER"
+    },
+    {
+      "id": "enclosure-Sq-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Sq Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n‘!’ .\nAFTER"
+    },
+    {
+      "id": "enclosure-Sq-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sq Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ‘!’ : AFTER"
+    },
+    {
+      "id": "enclosure-Sq-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Sq Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ‘!’ : AFTER"
+    },
+    {
+      "id": "enclosure-Sq-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Sq Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ‘!’ : AFTER"
+    },
+    {
+      "id": "enclosure-Sq-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Sq Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n‘!’ :\nAFTER"
+    },
+    {
+      "id": "enclosure-Sq-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sq Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ‘!’ ) AFTER"
+    },
+    {
+      "id": "enclosure-Sq-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Sq Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ‘!’ ) AFTER"
+    },
+    {
+      "id": "enclosure-Sq-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Sq Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ‘!’ ) AFTER"
+    },
+    {
+      "id": "enclosure-Sq-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Sq Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n‘!’ )\nAFTER"
+    },
+    {
+      "id": "enclosure-Sq-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sq Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Sq-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Sq Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Sq-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Sq Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Sq-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Sq Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n‘word’,\nAFTER"
+    },
+    {
+      "id": "enclosure-Sq-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sq word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Sq-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Sq word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Sq-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Sq word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Sq-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Sq word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Sq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n‘word’,\nAFTER"
+    },
+    {
+      "id": "enclosure-Pq-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Pq ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ((zeroconf)) AFTER"
+    },
+    {
+      "id": "enclosure-Pq-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Pq ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ((zeroconf)) AFTER"
+    },
+    {
+      "id": "enclosure-Pq-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Pq ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ((zeroconf)) AFTER"
+    },
+    {
+      "id": "enclosure-Pq-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Pq ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n((zeroconf))\nAFTER"
+    },
+    {
+      "id": "enclosure-Pq-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Pq Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (!) , AFTER"
+    },
+    {
+      "id": "enclosure-Pq-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Pq Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (!) , AFTER"
+    },
+    {
+      "id": "enclosure-Pq-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Pq Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (!) , AFTER"
+    },
+    {
+      "id": "enclosure-Pq-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Pq Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n(!) ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Pq-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Pq Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE (!) .  AFTER"
+    },
+    {
+      "id": "enclosure-Pq-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Pq Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE (!) .  AFTER"
+    },
+    {
+      "id": "enclosure-Pq-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Pq Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE (!) .  AFTER"
+    },
+    {
+      "id": "enclosure-Pq-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Pq Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n(!) .\nAFTER"
+    },
+    {
+      "id": "enclosure-Pq-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Pq Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE (!) : AFTER"
+    },
+    {
+      "id": "enclosure-Pq-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Pq Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE (!) : AFTER"
+    },
+    {
+      "id": "enclosure-Pq-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Pq Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE (!) : AFTER"
+    },
+    {
+      "id": "enclosure-Pq-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Pq Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n(!) :\nAFTER"
+    },
+    {
+      "id": "enclosure-Pq-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Pq Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE (!) ) AFTER"
+    },
+    {
+      "id": "enclosure-Pq-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Pq Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE (!) ) AFTER"
+    },
+    {
+      "id": "enclosure-Pq-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Pq Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE (!) ) AFTER"
+    },
+    {
+      "id": "enclosure-Pq-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Pq Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n(!) )\nAFTER"
+    },
+    {
+      "id": "enclosure-Pq-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Pq Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (word), AFTER"
+    },
+    {
+      "id": "enclosure-Pq-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Pq Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (word), AFTER"
+    },
+    {
+      "id": "enclosure-Pq-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Pq Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (word), AFTER"
+    },
+    {
+      "id": "enclosure-Pq-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Pq Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n(word),\nAFTER"
+    },
+    {
+      "id": "enclosure-Pq-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Pq word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (word), AFTER"
+    },
+    {
+      "id": "enclosure-Pq-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Pq word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (word), AFTER"
+    },
+    {
+      "id": "enclosure-Pq-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Pq word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE (word), AFTER"
+    },
+    {
+      "id": "enclosure-Pq-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Pq word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Pq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n(word),\nAFTER"
+    },
+    {
+      "id": "enclosure-Aq-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Aq ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (⟨zeroconf⟩) AFTER"
+    },
+    {
+      "id": "enclosure-Aq-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Aq ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (⟨zeroconf⟩) AFTER"
+    },
+    {
+      "id": "enclosure-Aq-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Aq ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (⟨zeroconf⟩) AFTER"
+    },
+    {
+      "id": "enclosure-Aq-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Aq ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n(⟨zeroconf⟩)\nAFTER"
+    },
+    {
+      "id": "enclosure-Aq-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Aq Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨!⟩ , AFTER"
+    },
+    {
+      "id": "enclosure-Aq-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Aq Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨!⟩ , AFTER"
+    },
+    {
+      "id": "enclosure-Aq-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Aq Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨!⟩ , AFTER"
+    },
+    {
+      "id": "enclosure-Aq-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Aq Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n⟨!⟩ ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Aq-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Aq Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ⟨!⟩ .  AFTER"
+    },
+    {
+      "id": "enclosure-Aq-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Aq Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ⟨!⟩ .  AFTER"
+    },
+    {
+      "id": "enclosure-Aq-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Aq Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ⟨!⟩ .  AFTER"
+    },
+    {
+      "id": "enclosure-Aq-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Aq Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n⟨!⟩ .\nAFTER"
+    },
+    {
+      "id": "enclosure-Aq-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Aq Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ⟨!⟩ : AFTER"
+    },
+    {
+      "id": "enclosure-Aq-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Aq Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ⟨!⟩ : AFTER"
+    },
+    {
+      "id": "enclosure-Aq-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Aq Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ⟨!⟩ : AFTER"
+    },
+    {
+      "id": "enclosure-Aq-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Aq Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n⟨!⟩ :\nAFTER"
+    },
+    {
+      "id": "enclosure-Aq-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Aq Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ⟨!⟩ ) AFTER"
+    },
+    {
+      "id": "enclosure-Aq-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Aq Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ⟨!⟩ ) AFTER"
+    },
+    {
+      "id": "enclosure-Aq-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Aq Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ⟨!⟩ ) AFTER"
+    },
+    {
+      "id": "enclosure-Aq-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Aq Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n⟨!⟩ )\nAFTER"
+    },
+    {
+      "id": "enclosure-Aq-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Aq Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨word⟩, AFTER"
+    },
+    {
+      "id": "enclosure-Aq-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Aq Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨word⟩, AFTER"
+    },
+    {
+      "id": "enclosure-Aq-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Aq Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨word⟩, AFTER"
+    },
+    {
+      "id": "enclosure-Aq-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Aq Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n⟨word⟩,\nAFTER"
+    },
+    {
+      "id": "enclosure-Aq-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Aq word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨word⟩, AFTER"
+    },
+    {
+      "id": "enclosure-Aq-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Aq word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨word⟩, AFTER"
+    },
+    {
+      "id": "enclosure-Aq-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Aq word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ⟨word⟩, AFTER"
+    },
+    {
+      "id": "enclosure-Aq-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Aq word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Aq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n⟨word⟩,\nAFTER"
+    },
+    {
+      "id": "enclosure-Bq-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bq ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ([zeroconf]) AFTER"
+    },
+    {
+      "id": "enclosure-Bq-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Bq ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ([zeroconf]) AFTER"
+    },
+    {
+      "id": "enclosure-Bq-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Bq ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ([zeroconf]) AFTER"
+    },
+    {
+      "id": "enclosure-Bq-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Bq ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n([zeroconf])\nAFTER"
+    },
+    {
+      "id": "enclosure-Bq-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bq Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [!] , AFTER"
+    },
+    {
+      "id": "enclosure-Bq-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Bq Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [!] , AFTER"
+    },
+    {
+      "id": "enclosure-Bq-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Bq Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [!] , AFTER"
+    },
+    {
+      "id": "enclosure-Bq-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Bq Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n[!] ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Bq-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bq Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE [!] .  AFTER"
+    },
+    {
+      "id": "enclosure-Bq-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Bq Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE [!] .  AFTER"
+    },
+    {
+      "id": "enclosure-Bq-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Bq Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE [!] .  AFTER"
+    },
+    {
+      "id": "enclosure-Bq-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Bq Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n[!] .\nAFTER"
+    },
+    {
+      "id": "enclosure-Bq-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bq Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE [!] : AFTER"
+    },
+    {
+      "id": "enclosure-Bq-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Bq Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE [!] : AFTER"
+    },
+    {
+      "id": "enclosure-Bq-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Bq Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE [!] : AFTER"
+    },
+    {
+      "id": "enclosure-Bq-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Bq Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n[!] :\nAFTER"
+    },
+    {
+      "id": "enclosure-Bq-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bq Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE [!] ) AFTER"
+    },
+    {
+      "id": "enclosure-Bq-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Bq Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE [!] ) AFTER"
+    },
+    {
+      "id": "enclosure-Bq-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Bq Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE [!] ) AFTER"
+    },
+    {
+      "id": "enclosure-Bq-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Bq Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n[!] )\nAFTER"
+    },
+    {
+      "id": "enclosure-Bq-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bq Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Bq-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Bq Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Bq-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Bq Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Bq-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Bq Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n[word],\nAFTER"
+    },
+    {
+      "id": "enclosure-Bq-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bq word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Bq-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Bq word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Bq-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Bq word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Bq-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Bq word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Bq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n[word],\nAFTER"
+    },
+    {
+      "id": "enclosure-Qq-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Qq ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (\"zeroconf\") AFTER"
+    },
+    {
+      "id": "enclosure-Qq-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Qq ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (\"zeroconf\") AFTER"
+    },
+    {
+      "id": "enclosure-Qq-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Qq ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (\"zeroconf\") AFTER"
+    },
+    {
+      "id": "enclosure-Qq-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Qq ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n(\"zeroconf\")\nAFTER"
+    },
+    {
+      "id": "enclosure-Qq-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Qq Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"!\" , AFTER"
+    },
+    {
+      "id": "enclosure-Qq-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Qq Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"!\" , AFTER"
+    },
+    {
+      "id": "enclosure-Qq-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Qq Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"!\" , AFTER"
+    },
+    {
+      "id": "enclosure-Qq-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Qq Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n\"!\" ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Qq-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Qq Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE \"!\" .  AFTER"
+    },
+    {
+      "id": "enclosure-Qq-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Qq Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE \"!\" .  AFTER"
+    },
+    {
+      "id": "enclosure-Qq-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Qq Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE \"!\" .  AFTER"
+    },
+    {
+      "id": "enclosure-Qq-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Qq Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n\"!\" .\nAFTER"
+    },
+    {
+      "id": "enclosure-Qq-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Qq Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE \"!\" : AFTER"
+    },
+    {
+      "id": "enclosure-Qq-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Qq Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE \"!\" : AFTER"
+    },
+    {
+      "id": "enclosure-Qq-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Qq Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE \"!\" : AFTER"
+    },
+    {
+      "id": "enclosure-Qq-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Qq Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n\"!\" :\nAFTER"
+    },
+    {
+      "id": "enclosure-Qq-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Qq Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE \"!\" ) AFTER"
+    },
+    {
+      "id": "enclosure-Qq-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Qq Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE \"!\" ) AFTER"
+    },
+    {
+      "id": "enclosure-Qq-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Qq Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE \"!\" ) AFTER"
+    },
+    {
+      "id": "enclosure-Qq-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Qq Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n\"!\" )\nAFTER"
+    },
+    {
+      "id": "enclosure-Qq-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Qq Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"word\", AFTER"
+    },
+    {
+      "id": "enclosure-Qq-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Qq Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"word\", AFTER"
+    },
+    {
+      "id": "enclosure-Qq-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Qq Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"word\", AFTER"
+    },
+    {
+      "id": "enclosure-Qq-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Qq Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n\"word\",\nAFTER"
+    },
+    {
+      "id": "enclosure-Qq-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Qq word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"word\", AFTER"
+    },
+    {
+      "id": "enclosure-Qq-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Qq word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"word\", AFTER"
+    },
+    {
+      "id": "enclosure-Qq-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Qq word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE \"word\", AFTER"
+    },
+    {
+      "id": "enclosure-Qq-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Qq word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Qq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n\"word\",\nAFTER"
+    },
+    {
+      "id": "enclosure-Op-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Op ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ([zeroconf]) AFTER"
+    },
+    {
+      "id": "enclosure-Op-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Op ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ([zeroconf]) AFTER"
+    },
+    {
+      "id": "enclosure-Op-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Op ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ([zeroconf]) AFTER"
+    },
+    {
+      "id": "enclosure-Op-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Op ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n([zeroconf])\nAFTER"
+    },
+    {
+      "id": "enclosure-Op-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Op Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [!] , AFTER"
+    },
+    {
+      "id": "enclosure-Op-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Op Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [!] , AFTER"
+    },
+    {
+      "id": "enclosure-Op-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Op Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [!] , AFTER"
+    },
+    {
+      "id": "enclosure-Op-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Op Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n[!] ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Op-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Op Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE [!] .  AFTER"
+    },
+    {
+      "id": "enclosure-Op-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Op Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE [!] .  AFTER"
+    },
+    {
+      "id": "enclosure-Op-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Op Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE [!] .  AFTER"
+    },
+    {
+      "id": "enclosure-Op-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Op Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n[!] .\nAFTER"
+    },
+    {
+      "id": "enclosure-Op-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Op Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE [!] : AFTER"
+    },
+    {
+      "id": "enclosure-Op-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Op Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE [!] : AFTER"
+    },
+    {
+      "id": "enclosure-Op-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Op Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE [!] : AFTER"
+    },
+    {
+      "id": "enclosure-Op-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Op Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n[!] :\nAFTER"
+    },
+    {
+      "id": "enclosure-Op-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Op Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE [!] ) AFTER"
+    },
+    {
+      "id": "enclosure-Op-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Op Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE [!] ) AFTER"
+    },
+    {
+      "id": "enclosure-Op-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Op Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE [!] ) AFTER"
+    },
+    {
+      "id": "enclosure-Op-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Op Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n[!] )\nAFTER"
+    },
+    {
+      "id": "enclosure-Op-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Op Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Op-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Op Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Op-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Op Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Op-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Op Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n[word],\nAFTER"
+    },
+    {
+      "id": "enclosure-Op-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Op word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Op-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Op word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Op-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Op word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE [word], AFTER"
+    },
+    {
+      "id": "enclosure-Op-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Op word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Op",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n[word],\nAFTER"
+    },
+    {
+      "id": "enclosure-Brq-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Brq ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ({zeroconf}) AFTER"
+    },
+    {
+      "id": "enclosure-Brq-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Brq ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ({zeroconf}) AFTER"
+    },
+    {
+      "id": "enclosure-Brq-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Brq ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE ({zeroconf}) AFTER"
+    },
+    {
+      "id": "enclosure-Brq-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Brq ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n({zeroconf})\nAFTER"
+    },
+    {
+      "id": "enclosure-Brq-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Brq Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {!} , AFTER"
+    },
+    {
+      "id": "enclosure-Brq-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Brq Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {!} , AFTER"
+    },
+    {
+      "id": "enclosure-Brq-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Brq Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {!} , AFTER"
+    },
+    {
+      "id": "enclosure-Brq-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Brq Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n{!} ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Brq-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Brq Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE {!} .  AFTER"
+    },
+    {
+      "id": "enclosure-Brq-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Brq Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE {!} .  AFTER"
+    },
+    {
+      "id": "enclosure-Brq-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Brq Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE {!} .  AFTER"
+    },
+    {
+      "id": "enclosure-Brq-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Brq Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n{!} .\nAFTER"
+    },
+    {
+      "id": "enclosure-Brq-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Brq Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE {!} : AFTER"
+    },
+    {
+      "id": "enclosure-Brq-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Brq Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE {!} : AFTER"
+    },
+    {
+      "id": "enclosure-Brq-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Brq Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE {!} : AFTER"
+    },
+    {
+      "id": "enclosure-Brq-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Brq Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n{!} :\nAFTER"
+    },
+    {
+      "id": "enclosure-Brq-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Brq Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE {!} ) AFTER"
+    },
+    {
+      "id": "enclosure-Brq-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Brq Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE {!} ) AFTER"
+    },
+    {
+      "id": "enclosure-Brq-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Brq Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE {!} ) AFTER"
+    },
+    {
+      "id": "enclosure-Brq-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Brq Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n{!} )\nAFTER"
+    },
+    {
+      "id": "enclosure-Brq-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Brq Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {word}, AFTER"
+    },
+    {
+      "id": "enclosure-Brq-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Brq Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {word}, AFTER"
+    },
+    {
+      "id": "enclosure-Brq-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Brq Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {word}, AFTER"
+    },
+    {
+      "id": "enclosure-Brq-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Brq Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n{word},\nAFTER"
+    },
+    {
+      "id": "enclosure-Brq-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Brq word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {word}, AFTER"
+    },
+    {
+      "id": "enclosure-Brq-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Brq word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {word}, AFTER"
+    },
+    {
+      "id": "enclosure-Brq-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Brq word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE {word}, AFTER"
+    },
+    {
+      "id": "enclosure-Brq-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Brq word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Brq",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n{word},\nAFTER"
+    },
+    {
+      "id": "enclosure-Ql-0-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Ql ( zeroconf )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (‘zeroconf’) AFTER"
+    },
+    {
+      "id": "enclosure-Ql-0-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Ql ( zeroconf )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "tag",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (‘zeroconf’) AFTER"
+    },
+    {
+      "id": "enclosure-Ql-0-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Ql ( zeroconf )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "column",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (‘zeroconf’) AFTER"
+    },
+    {
+      "id": "enclosure-Ql-0-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Ql ( zeroconf )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE\n(‘zeroconf’)\nAFTER"
+    },
+    {
+      "id": "enclosure-Ql-1-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Ql Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘!’ , AFTER"
+    },
+    {
+      "id": "enclosure-Ql-1-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Ql Li \"!\" ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘!’ , AFTER"
+    },
+    {
+      "id": "enclosure-Ql-1-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Ql Li \"!\" ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘!’ , AFTER"
+    },
+    {
+      "id": "enclosure-Ql-1-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Ql Li \"!\" ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n‘!’ ,\nAFTER"
+    },
+    {
+      "id": "enclosure-Ql-2-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Ql Li \"!\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "prose",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ‘!’ .  AFTER"
+    },
+    {
+      "id": "enclosure-Ql-2-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Ql Li \"!\" .\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "tag",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ‘!’ .  AFTER"
+    },
+    {
+      "id": "enclosure-Ql-2-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Ql Li \"!\" .\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "column",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE ‘!’ .  AFTER"
+    },
+    {
+      "id": "enclosure-Ql-2-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Ql Li \"!\" .\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "literal",
+      "direct_text": [
+        "."
+      ],
+      "expected": "BEFORE\n‘!’ .\nAFTER"
+    },
+    {
+      "id": "enclosure-Ql-3-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Ql Li \"!\" :\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "prose",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ‘!’ : AFTER"
+    },
+    {
+      "id": "enclosure-Ql-3-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Ql Li \"!\" :\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "tag",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ‘!’ : AFTER"
+    },
+    {
+      "id": "enclosure-Ql-3-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Ql Li \"!\" :\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "column",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE ‘!’ : AFTER"
+    },
+    {
+      "id": "enclosure-Ql-3-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Ql Li \"!\" :\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "literal",
+      "direct_text": [
+        ":"
+      ],
+      "expected": "BEFORE\n‘!’ :\nAFTER"
+    },
+    {
+      "id": "enclosure-Ql-4-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Ql Li \"!\" )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "prose",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ‘!’ ) AFTER"
+    },
+    {
+      "id": "enclosure-Ql-4-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Ql Li \"!\" )\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "tag",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ‘!’ ) AFTER"
+    },
+    {
+      "id": "enclosure-Ql-4-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Ql Li \"!\" )\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "column",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE ‘!’ ) AFTER"
+    },
+    {
+      "id": "enclosure-Ql-4-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Ql Li \"!\" )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "literal",
+      "direct_text": [
+        ")"
+      ],
+      "expected": "BEFORE\n‘!’ )\nAFTER"
+    },
+    {
+      "id": "enclosure-Ql-5-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Ql Li word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Ql-5-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Ql Li word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Ql-5-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Ql Li word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Ql-5-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Ql Li word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n‘word’,\nAFTER"
+    },
+    {
+      "id": "enclosure-Ql-6-prose",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Ql word ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Ql-6-tag",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 20n\n.It LABEL\n.No BEFORE\n.Ql word ,\n.No AFTER\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "tag",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Ql-6-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.No BEFORE\n.Ql word ,\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "column",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE ‘word’, AFTER"
+    },
+    {
+      "id": "enclosure-Ql-6-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Ql word ,\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Ql",
+      "context": "literal",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE\n‘word’,\nAFTER"
+    },
+    {
+      "id": "xo-inline",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\nGiven twice\n.Xo ( Fl CC ) Xc\ndisables echo.\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "Given twice (-CC) disables echo."
+    },
+    {
+      "id": "xo-multiline",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Xo (\n.Fl CC\n.Xc )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (-CC) AFTER"
+    },
+    {
+      "id": "xo-literal",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Xo ( Fl CC ) Xc\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "literal",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE\n(-CC)\nAFTER"
+    },
+    {
+      "id": "xo-column",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo ( Fl CC ) Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "column",
+      "direct_text": [
+        "("
+      ],
+      "expected": "(-CC)"
+    },
+    {
+      "id": "xo-font",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.ft B\n.No BEFORE\n.Xo ( Ar VALUE ) Xc\n.No AFTER\n.ft R\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (VALUE) AFTER"
+    },
+    {
+      "id": "xo-empty",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Xo\n.Xc\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "prose",
+      "direct_text": [],
+      "expected": "BEFORE AFTER"
+    },
+    {
+      "id": "xo-link",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Xo ( Xr printf 3 ) Xc\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (printf(3)) AFTER"
+    },
+    {
+      "id": "xo-crossed",
+      "source": ".Dd November 3, 2026\n.Dt CHILDREN 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Xo ( Bo inner\n.Xc )\n.No AFTER\n.Bc\n.No ENDWORD\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE ([inner) AFTER] ENDWORD"
+    },
+    {
+      "id": "bf-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bf ( -emphasis\n.No BODY\n.Ef\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bf",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (BODY AFTER"
+    },
+    {
+      "id": "bk-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bk ( -words\n.No BODY\n.Ek\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bk",
+      "context": "prose",
+      "direct_text": [],
+      "expected": "BEFORE BODY AFTER"
+    },
+    {
+      "id": "fo-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Fo ( function\n.Fa arg\n.Fc )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Fo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (function(arg)) AFTER"
+    },
+    {
+      "id": "bf-normal",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bf -emphasis\nBODY\n.Ef\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bf",
+      "context": "prose",
+      "direct_text": [],
+      "expected": "BEFORE BODY AFTER"
+    },
+    {
+      "id": "bk-normal",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Bk -words\n.No BODY\n.Ek\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Bk",
+      "context": "prose",
+      "direct_text": [],
+      "expected": "BEFORE BODY AFTER"
+    },
+    {
+      "id": "eo-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Eo (\n.No BODY\n.Ec )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Eo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (BODY) AFTER"
+    },
+    {
+      "id": "en-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Es BEGIN END\n.No BEFORE\n.En ( word )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "En",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (BEGINwordEND) AFTER"
+    },
+    {
+      "id": "en-tail",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Es BEGIN END\n.No BEFORE\n.En Li \"!\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "En",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE BEGIN!END , AFTER"
+    },
+    {
+      "id": "quote-font",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.ft B\n.Do (\n.Ar VALUE\n.Dc )\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.No END\n",
+      "macro": "Do",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "(“VALUE”) OUTER PREVIOUS"
+    },
+    {
+      "id": "quote-link",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq ( Xr printf 3 )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (“printf(3)”) AFTER"
+    },
+    {
+      "id": "xo-no-fill-c",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\\c\n.Xo ( Fl CC ) Xc\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "literal",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE(-CC)\nAFTER"
+    },
+    {
+      "id": "quote-no-fill-c",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\\c\n.Dq ( Fl CC )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "literal",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE(“-CC”)\nAFTER"
+    },
+    {
+      "id": "quote-crossed",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Do ( Bo inner\n.Dc )\n.No AFTER\n.Bc\n.No ENDWORD\n.Sh NEXT\n.No END\n",
+      "macro": "Do",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (“[inner”) AFTER] ENDWORD"
+    },
+    {
+      "id": "quote-nested",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq ( Pq Em VALUE )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (“(VALUE)”) AFTER"
+    },
+    {
+      "id": "quote-sm",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Sm off\n.No BEFORE\n.Dq ( Em VALUE )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE(“VALUE”)AFTER"
+    },
+    {
+      "id": "quote-empty",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq ( )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (“”) AFTER"
+    },
+    {
+      "id": "quote-direct-empty",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq Li \"\" ,\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        ","
+      ],
+      "expected": "BEFORE “”, AFTER"
+    },
+    {
+      "id": "quote-target",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Do (\n.Tg anchor\n.Xr printf 3\n.Dc )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Do",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE (“printf(3)”) AFTER"
+    },
+    {
+      "id": "bf-font",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.ft I\n.Bf ( -symbolic\nBODY\n.Ef\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.No END\n",
+      "macro": "Bf",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "(BODY OUTER PREVIOUS"
+    },
+    {
+      "id": "fo-font",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.ft I\n.Fo ( function\n.Fa arg\n.Fc )\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.No END\n",
+      "macro": "Fo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "(function(arg)) OUTER PREVIOUS"
+    },
+    {
+      "id": "bf-scoped-font",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.ft I\n.Bf ( Sy\nBODY\n.Ef\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.No END\n",
+      "macro": "Bf",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "(BODY OUTER PREVIOUS"
+    },
+    {
+      "id": "quote-pending-z",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.No \\zX\n.Dq ( word )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE X(“word”) AFTER"
+    },
+    {
+      "id": "xo-pending-z",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.No \\zX\n.Xo ( Fl CC ) Xc\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Xo",
+      "context": "prose",
+      "direct_text": [
+        "("
+      ],
+      "expected": "BEFORE X(-CC) AFTER"
+    },
+    {
+      "id": "quote-prefix-c",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\c\n.Dq ( word )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE(“word”) AFTER"
+    },
+    {
+      "id": "quote-body-z",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dq ( No \\zX )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "macro": "Dq",
+      "context": "prose",
+      "direct_text": [
+        "(",
+        ")"
+      ],
+      "expected": "BEFORE (“”) AFTER"
+    }
+  ]
+}

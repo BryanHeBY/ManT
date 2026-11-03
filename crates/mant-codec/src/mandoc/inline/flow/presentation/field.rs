@@ -32,14 +32,14 @@ impl FieldPlacement {
         mut self,
         alignment: mant_ir::TextAlignment,
         width: usize,
-        margin: usize,
+        margin: i64,
         parent: i32,
         occupied: bool,
     ) -> Self {
         if alignment == mant_ir::TextAlignment::Left {
             return self;
         }
-        let screen = usize::try_from((78 * 24 - parent).max(0)).unwrap_or_default();
+        let screen = i64::from((78 * 24 - parent).max(0));
         let available = self.capacity(margin.min(screen));
         let remaining = available.saturating_sub(width);
         let extra = match alignment {
@@ -71,11 +71,8 @@ impl FieldPlacement {
         self
     }
 
-    pub(in crate::mandoc) fn capacity(self, margin: usize) -> usize {
-        let remaining = i64::try_from(margin)
-            .unwrap_or(i64::MAX)
-            .saturating_sub(self.target_consumption)
-            .max(0);
+    pub(in crate::mandoc) fn capacity(self, margin: i64) -> usize {
+        let remaining = margin.saturating_sub(self.target_consumption).max(0);
         usize::try_from(remaining).unwrap_or(usize::MAX)
     }
 }

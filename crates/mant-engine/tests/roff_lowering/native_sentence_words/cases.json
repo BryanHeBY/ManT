@@ -1,0 +1,1127 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "plain-line",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\nNext\n.Sh NEXT\n.No END\n",
+      "source_sha256": "9e7c838881994ffd706d59be11a7edd75b3415da2e342ebcc99764057b0cb6a5",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "same-line",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst. Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "15faec31834a1a756b4dd59ce85c91a60810656ef4a70bb97120a5bf64dde20e",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "escaped-end",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\\&\nNext\n.Sh NEXT\n.No END\n",
+      "source_sha256": "1ea09d7c5ecdd9b2c16494c998feba5e403c89f47080cb0e89973d66924c5382",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "macro-period",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e9d55c69d182b4cb2fe97e8c90a46989de531347cc9e5a13a475377594c476aa",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "macro-bang",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First!\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "a03adf4877d662ebbc078f02626552bace7fa340faac8411b643d106478fde77",
+      "rows": [
+        "First! Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "macro-question",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First?\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b111630b453e02c3b7080843431b6aa25f200136fb8330ca7097dc0e2e762bd6",
+      "rows": [
+        "First? Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "macro-colon",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First:\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e77b33dc9a37c55fd9726ea2d67dff87ea48749c642227cef70bd90b0088c8f2",
+      "rows": [
+        "First: Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "empty-word",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.No \"\"\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "61e7ae803ab55dca88188c39a0ad6a7a553862577cbcdcbbe9d23b3513634e22",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "control-word",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.No \\&\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "de414847e946ddcc2d6f4c4a977a4483abab633cbdf77c23a57f0c66ceb252e9",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "font-control-word",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.No \\fB\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f86dba3ad26014ab0720dd1494ece42eab6d0a40530e5103b4791f968c165b06",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "no-word-ns",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Ns\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "5b9edadc858098709f4911d5ea846389108759343b07d50d0edd703827176542",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "no-word-ft",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.ft B\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "7018c3389ba22900579d7105b6606809469fc0bdcdcf9e8ac3e9f332c07c38a7",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "no-word-target",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Tg anchor\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b992d559ed95abeab3fb1877b56469ec94390fddafe84e499e83bf05f3a29dfc",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "sm-off-before",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Sm off\n.No First.\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2669b3beaf368a4da0407e2c9db1aed016a7f8a123e5326116f6881b7959caef",
+      "rows": [
+        "First.Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "sm-off-after",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Sm off\n.No Next\n.No Tail\n.Sh NEXT\n.No END\n",
+      "source_sha256": "dc15a39031e9c75578ed81a53f0a7e3f802c7d17b77e9931587cd15adc86b620",
+      "rows": [
+        "First. NextTail"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "sm-off-on",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Sm off\n.Sm on\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "695a985c820af1f6e67a718acac70fb16ce743ddee0c98dbe57fac598c157b09",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "quote-generated-close",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Dq First.\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "9fc7b92939732023c9d4640642d32c64677caa575b059c72ae89d7a0860788e1",
+      "rows": [
+        "“First.” Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "quote-direct-tail",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Dq Li \"!\" .\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2ddae7ac1f82d316dbb20bcc0091e6a550c184e6bd4de11a62d941876a49e6f1",
+      "rows": [
+        "“!” .  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          12
+        ]
+      ]
+    },
+    {
+      "id": "quote-empty-after",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Dq\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "02d5ed0a433957eb9ca4e9e1e9a1f9938f95c086d174b930045273a50fd9a20b",
+      "rows": [
+        "First. “” Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "explicit-close",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Do\n.No First.\n.Dc\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "08402c0d59b9f869931753e7391411a1b727f7a6a55fa8d795d4dda4de3bf037",
+      "rows": [
+        "“First.” Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "xr-after",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Xr printf 3\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6698e055b0d5c5d523c5dc83b06ab1dbb0387565c59413460b1513e63082e3b5",
+      "rows": [
+        "First. printf(3) Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "lk-after",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Lk https://example.test label\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "7f61508d27ae18050830863675c17ba7c2412109950960a7b8ac95fa9376b6b0",
+      "rows": [
+        "First. label: https://example.test Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "lk-label-eos",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.test First.\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "2497f3fcfd0cc4dd049ef4a59109028a928cc17c6aead5dc1ec5445e6491f8de",
+      "rows": [
+        "First.: https://example.test Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "lk-uri-eos",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.test.\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "619e9bc10ee1ddc43d7fbc91e75a35c6bb371d9be425dd2dac86434ab80bb6dd",
+      "rows": [
+        "https://example.test. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "nofill-physical",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No First.\n.No Next\n.Ed\n.Sh NEXT\n.No END\n",
+      "source_sha256": "3972813347bd4054ed2329a8fb4fa15d315195746cb9aac6f578790d8a7f898d",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "nofill-same-line",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No First. No Next\n.Ed\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d3251c13fdeea8535410fb277a9d853f65c97445ed185b1db9927726c0fadd42",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "nofill-c",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No First.\\c\n.No Next\n.Ed\n.Sh NEXT\n.No END\n",
+      "source_sha256": "9b7774c85c0531697f00802cd703c28fdd2e89578d47f7bba72ccc173cb7b999",
+      "rows": [
+        "First.Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "keep",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No First.\n.No Next\n.Ek\n.Sh NEXT\n.No END\n",
+      "source_sha256": "ee941379e76e5fcbb07f63cb3e270d69ae19618ae3ea02cfef46ce50e8083e3a",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "keep-same-line",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No First. No Next\n.Ek\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b0f9e0ed8eaa8005188337a8bbf0c2ceb58c2561abdaefa46245f0ec55fc4554",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "break",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.br\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "4c1bc95a2122f718ba779a1a5b232b6ef92a6efc5e7ae82bc7efd0cad4f2e7b1",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "empty-enclosure",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.Eo\n.Ec\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "3b046e899b71c0d35e85335c2c0628b8fea828a7323b0b76208a122813620696",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "closing-only",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.No First.\n.No )\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8b89c0e9dbbf21f721b08329de2ef37b37aadff8bb1be46201fdf093f2ddbb9b",
+      "rows": [
+        "First. ) Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "eos-empty",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No \"\"\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "81b18298aa03b9bdd30dfcf008ec8e4744f6c1555c081a8ba32e111925b83346",
+      "rows": [
+        "First.   Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-control",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No \\&\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "864b5269355d8c82e91c43223f617a6aabb41663a621d35bc1d4c20421473928",
+      "rows": [
+        "First.   Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-fontword",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No \\fB\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "c1df3b71852695745b830a61b11e80028350ae7e7c16c722cc5d0f6d3b87de0f",
+      "rows": [
+        "First.   Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-ns",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Ns\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "dc274a10af64a1aa7479cd59e0668a803429f7687491c32a168280ceb73fa498",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-ft",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.ft B\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "ba9017937ee91a343bb4e0b986b7893d75457937e8f45a8add5a6c8fcccdda6d",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-target",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Tg anchor\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e1e754cead7ccbed6e8242ad4fe470423d6fbf112aa49dad1878753603be54e7",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-smoff",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Sm off\n.No Next\n.No Tail\n.Sh NEXT\n.No END\n",
+      "source_sha256": "5e422ca30df0d43f38a74e63e0ddf30ae79290d08953574706d8aa471d4e9b2f",
+      "rows": [
+        "First.  NextTail"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-smoff-first",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Sm off\nFirst.\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "15280bd7ae2797e579c0ed86fe662fe3d8b2b0013c64e346629729cd6497c915",
+      "rows": [
+        "First.Next"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-smoff-on",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Sm off\n.Sm on\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "24bcbc58237267368d3a16ce265edc1519a968e5729680261a7d969741cfe70d",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-quote",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Dq word\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "52bc7566c76fc318040e5b0e65e9f19222414e470770f9285b2f8f2f96ef13a1",
+      "rows": [
+        "First.  “word” Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-emptyquote",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Dq\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d63c60d5e83c1d01fe0f70d9fe09e8d32621758d179f8f747f1b57e17f867df8",
+      "rows": [
+        "First.  “” Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-emptyenclosure",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Eo\n.Ec\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6038ed7475fff64d95562ccb5e8ffb0fa809503f34e60de27d8520c06a0376d9",
+      "rows": [
+        "First.   Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-xr",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Xr printf 3\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f007d7eecfe5df86ddb8858095c6fe6a105a468d5bd3ed7fdf4af384c60d0e07",
+      "rows": [
+        "First.  printf(3) Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-lk",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Lk https://example.test label\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6bed384d94f9d2c7233ae7eb0813e6b4da04ef9c31c92bf46cf20d2936d5a4f8",
+      "rows": [
+        "First.  label: https://example.test Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-bk",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Bk -words\n.No Next\n.No Tail\n.Ek\n.Sh NEXT\n.No END\n",
+      "source_sha256": "280b71cad0d5f82a2210e94e89a21f9a6210e056a6441acc245d71971fd0a2b8",
+      "rows": [
+        "First.  Next Tail"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-bk-same",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\nFirst.\n.No Next\n.No Tail\n.Ek\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e31935aaaba6c92120a44e6ba645e4c4d0b1b251af9949406b7c6862f62a247a",
+      "rows": [
+        "First.  Next Tail"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-bk-current",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bk -words\n.No Before No First . No Next\n.Ek\n.Sh NEXT\n.No END\n",
+      "source_sha256": "5d57de31011139966953ff24cc63397e8f99466e70d3ee176702e1f6173f72b2",
+      "rows": [
+        "Before First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "eos-nofill-enter",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Bd -literal -compact\n.No Next\n.Ed\n.No Tail\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e8c6f9294850b74d4b0195bcfcd5aa21953e3075d4e67bc9461402d4c8314581",
+      "rows": [
+        "First.",
+        "Next",
+        "Tail"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-nofill-punctuation",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Dq Li \"!\" . No Next\n.Ed\n.Sh NEXT\n.No END\n",
+      "source_sha256": "43f4189bcff32c5dd0cd66b415b03b7f2bc02873c97bf7f76b6a3f62348df93c",
+      "rows": [
+        "“!. Next”"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "eos-nofill-tail",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.Dq Li \"!\" .\n.No Next\n.Ed\n.Sh NEXT\n.No END\n",
+      "source_sha256": "511e7bde663da0370d0f7564de7e9e8df226580f1f6aa6fefa6004d73c984a79",
+      "rows": [
+        "“!” .",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          12
+        ]
+      ]
+    },
+    {
+      "id": "eos-quote-body",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Do\nFirst.\n.Dc\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "c34c8a510fc95c93d5133857834df2d650590685af3e8e43c72734de2b50b2d9",
+      "rows": [
+        "“First.” Next"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-quote-body-c",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Do\nFirst.\\c\n.Dc\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "ac8671400e6fe75a88863cf29266dbb2a182526cae8f97dbdfc0319ac82e8991",
+      "rows": [
+        "“First.” Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "eos-backbefore",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No \\zX\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "922ee5af000cc2a4b1baac8bf648c552d4093a5b2fe93838078499841a7c1d31",
+      "rows": [
+        "First.  XNext"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-bare-z",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No \\z\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "97e90f30ff60207c3b37dad01acfb8f829c61a18ebff5a174684e6f7da483abf",
+      "rows": [
+        "First.   ext"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-marker",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No \\p Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "fb65930cd4294c977c9139282cd9e05dae9513b2fcce6eb83b431c90b84ca71f",
+      "rows": [
+        "First."
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-closing-text",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No )\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "255f0818cf249d72eddcc6669af1bc68261c1502d9b672bedc2e8181c30272ae",
+      "rows": [
+        "First.  ) Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-paragraph",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Pp\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8792585f886470e3522df757e602ccf0b4a37810964452d187145fff145c10b4",
+      "rows": [
+        "First.",
+        "",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-no-print",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Tg name\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "396a5522ef0b3554ad727ba0a4291ebfc7ad63d3fc789291448f1e36639c2707",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-sm-tight",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.Sm off\n.No \"\"\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "9059cfb14c48ca81bea058a9b8e6526fe8da4db770a6f27f7fd73276adb51837",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "eos-generated-colon",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.test No word .\n.No Next\n.Sh NEXT\n.No END\n",
+      "source_sha256": "89ed1ce581e197ff7de70ca03eec31af62d5dd973217eaaa297002650d8eaf34",
+      "rows": [
+        "https://example.test word.  Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          34
+        ]
+      ]
+    },
+    {
+      "id": "man-plain",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\nFirst.\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "fc6ea87a70168aa4c8b72e01c5b5274d9e6639312f761cb3c71b2e5d8ff9c876",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "man-same-line",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\nFirst. Next\n.SH NEXT\nEND\n",
+      "source_sha256": "3c846754a5ba3859ea7264273cdf29ddc01c24e2b00eb4bf3a061a6ce4c6ae90",
+      "rows": [
+        "First. Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "man-bold",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\n.B First.\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "2c01100cb072991aa224ab4dac537b784238b605f364d3214b19d4963a471296",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          4
+        ]
+      ]
+    },
+    {
+      "id": "man-alternate",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\n.BI First .\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "1227028baf459e7d15d033a813ed15b26edc034154297aec3a9ed85266521cbd",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          11
+        ]
+      ]
+    },
+    {
+      "id": "man-roman-bold",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\n.RB First .\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "53d9d6777448a57ab42fb4106a94b79aab11a6b6631fbb95bc67f1fead06d1c7",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          11
+        ]
+      ]
+    },
+    {
+      "id": "man-empty",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\nFirst.\n.B \"\"\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "17ff6f1930bc6fb4ef8095efd978ccaed62bfbb5dd20a4bc8abb360b67a59ece",
+      "rows": [
+        "First.",
+        "",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "man-fontword",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\nFirst.\n.B \\fB\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "79eedb2f35fe2822bea27603322d6b03d580fb51a86f45c2dd451782dfb0d650",
+      "rows": [
+        "First.   Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "man-fontrequest",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\nFirst.\n.ft B\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "be7afbb00fbe099821de409cdd002ab849e9248683a88a7aebf86db4b5a33c3a",
+      "rows": [
+        "First.  Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "man-break",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\nFirst.\n.br\nNext\n.SH NEXT\nEND\n",
+      "source_sha256": "99183949810ebc3def6ca3309f8ad4b04ec18c8a9aa1c555dd345265f55c2613",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "man-nofill",
+      "source": ".TH SENTENCES 1 \"November 3, 2026\"\n.SH DESCRIPTION\n.nf\nFirst.\nNext\n.fi\n.SH NEXT\nEND\n",
+      "source_sha256": "b43b61c3e3e534b401c0996e25d51398fec6965a014f7d7f911c63c72145b90f",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": []
+    },
+    {
+      "id": "field-tag",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Xo\nFirst.\n.No Next\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "0e561857b507309af9cbedf0fdb1140146529e4430c4d1c6e36b2121f7c3c4a6",
+      "rows": [
+        "First.  Next  BODY"
+      ],
+      "sentence_sites": [
+        [
+          7,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "field-tag-empty",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Xo\nFirst.\n.No \"\"\n.No Next\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8574e2c5cb3a4823b7f735c1c5ae74cef0f786e48e295d8ade62e4585620c2e8",
+      "rows": [
+        "First.   Next",
+        "BODY"
+      ],
+      "sentence_sites": [
+        [
+          7,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "field-hang",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bl -hang -width 12n\n.It Xo\nFirst.\n.No Next\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f7abfea79f03869b0001810dfc8ed11df7b7c5cff79dff30318c26dfd186dcfe",
+      "rows": [
+        "First.  Next  BODY"
+      ],
+      "sentence_sites": [
+        [
+          7,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "field-hang-empty",
+      "source": ".Dd November 3, 2026\n.Dt SENTENCES 1\n.Os\n.Sh DESCRIPTION\n.Bl -hang -width 12n\n.It Xo\nFirst.\n.No \"\"\n.No Next\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "db4c3225b64c64b889fcad39052fa6875064fa4228d736d994959dd137d8ac88",
+      "rows": [
+        "First.   Next BODY"
+      ],
+      "sentence_sites": [
+        [
+          7,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "direct-lk-punct",
+      "source": ".Dd November 3, 2026\n.Dt POST 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.test label .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "source_sha256": "b9eaf1c9d02faabb8ef7f7b23374c1f026ae25254af9bb5f634e579ffda34b2d",
+      "rows": [
+        "label: https://example.test. AFTER"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          32
+        ]
+      ]
+    },
+    {
+      "id": "direct-lk-empty-punct",
+      "source": ".Dd November 3, 2026\n.Dt POST 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.test \"\" .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "source_sha256": "faef24682f14ef2fc4ab04ea4a13e0991640e36433405e1d939f60a9be77d11b",
+      "rows": [
+        ": https://example.test. AFTER"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          29
+        ]
+      ]
+    },
+    {
+      "id": "direct-lk-uri-punct",
+      "source": ".Dd November 3, 2026\n.Dt POST 1\n.Os\n.Sh DESCRIPTION\n.Lk https://example.test .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "source_sha256": "6e521db389d036bbbee59b10146dfa2c02adee5cd4df9ee371d173fc9a9fcc28",
+      "rows": [
+        "https://example.test. AFTER"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          26
+        ]
+      ]
+    },
+    {
+      "id": "direct-fa-punct",
+      "source": ".Dd November 3, 2026\n.Dt POST 1\n.Os\n.Sh DESCRIPTION\n.Fo function\n.Fa arg .\n.Fc\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "source_sha256": "f7c4ea6c65e43b9f47f96496e54cad9c40231324a1914d8e0058f7c6354c2b1b",
+      "rows": [
+        "function(arg.) AFTER"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          9
+        ]
+      ]
+    },
+    {
+      "id": "direct-fn-punct",
+      "source": ".Dd November 3, 2026\n.Dt POST 1\n.Os\n.Sh DESCRIPTION\n.Fn function arg .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "source_sha256": "46eabe0064192e71b7ab4323f5191b6f360a844c603ca7c6a4bb0098ca27bb61",
+      "rows": [
+        "function(arg).  AFTER"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          18
+        ]
+      ]
+    },
+    {
+      "id": "direct-xr-punct",
+      "source": ".Dd November 3, 2026\n.Dt POST 1\n.Os\n.Sh DESCRIPTION\n.Xr printf 3 .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "source_sha256": "55c37865120ec64e87f9082387b37ad768564af47fd8ecff6c8f79797cf29065",
+      "rows": [
+        "printf(3).  AFTER"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          14
+        ]
+      ]
+    },
+    {
+      "id": "direct-in-punct",
+      "source": ".Dd November 3, 2026\n.Dt POST 1\n.Os\n.Sh DESCRIPTION\n.In stdio.h .\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "source_sha256": "76b0de815cc3bc9569cc755c44cb32eefe216ac92a551b5c971822123edc14fe",
+      "rows": [
+        "<stdio.h>.  AFTER"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          13
+        ]
+      ]
+    },
+    {
+      "id": "direct-man-op",
+      "source": ".TH POST 1\n.SH DESCRIPTION\n.OP word .\nAFTER\n.SH NEXT\nEND\n",
+      "source_sha256": "6164d50c97a096b141904cffd1f30279bbb44e20db7ca102fda60108c7f68944",
+      "rows": [
+        "[word .] AFTER"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          10
+        ]
+      ]
+    },
+    {
+      "id": "direct-man-alt",
+      "source": ".TH POST 1\n.SH DESCRIPTION\n.BI word .\nAFTER\n.SH NEXT\nEND\n",
+      "source_sha256": "a263dd3a0b5ea0454ed6ca2ff09067c6b95d1a2e347c5ffc86eb2d3c802f4611",
+      "rows": [
+        "word.  AFTER"
+      ],
+      "sentence_sites": [
+        [
+          3,
+          10
+        ]
+      ]
+    },
+    {
+      "id": "grouped-mdoc-ce",
+      "source": ".Dd November 3, 2026\n.Dt EOS 1\n.Os\n.Sh DESCRIPTION\n.ce 1\nFirst.\nNext\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "grouped-mdoc-rj",
+      "source": ".Dd November 3, 2026\n.Dt EOS 1\n.Os\n.Sh DESCRIPTION\n.rj 1\nFirst.\nNext\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "grouped-man-ce",
+      "source": ".TH EOS 1\n.SH DESCRIPTION\n.ce 1\nFirst.\nNext\n.SH NEXT\nEND\n",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          4,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "grouped-man-rj",
+      "source": ".TH EOS 1\n.SH DESCRIPTION\n.rj 1\nFirst.\nNext\n.SH NEXT\nEND\n",
+      "rows": [
+        "First.",
+        "Next"
+      ],
+      "sentence_sites": [
+        [
+          4,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "sentence-cached-dot",
+      "source": ".Dd November 3, 2026\n.Dt EOS 1\n.Os\n.Sh DESCRIPTION\n\\z.\n.No Next\n.Sh NEXT\n.No END\n",
+      "rows": [
+        ". Next"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "sentence-cached-dot-prefix",
+      "source": ".Dd November 3, 2026\n.Dt EOS 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n\\z.\n.No Next\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "BEFORE . Next"
+      ],
+      "sentence_sites": [
+        [
+          6,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "sentence-bare-z",
+      "source": ".Dd November 3, 2026\n.Dt EOS 1\n.Os\n.Sh DESCRIPTION\nFirst.\n.No \\z\n.No Next\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "First.   ext"
+      ],
+      "sentence_sites": [
+        [
+          5,
+          1
+        ]
+      ]
+    }
+  ]
+}

@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 pub(super) struct WordPassProjection {
     pub(super) closes_before: usize,
     pub(super) leading_cells: usize,
-    pub(super) native_separator: bool,
+    pub(super) native_separator: usize,
+    pub(super) retreated_sentence_separator: bool,
     pub(super) prints_padding: bool,
     pub(super) split_word: Option<Vec<Inline>>,
 }
@@ -26,12 +27,13 @@ impl InlineBuilder {
             .native_word_boundary
             .take()
             .unwrap_or(boundary);
+        let sentence = std::mem::take(&mut self.execution.native_word_sentence);
         if self.execution.definition.is_none() || self.execution.author_execution.is_none() {
             // Plain flow shares the field's ordered cell consumer: the
             // paragraph is a degenerate flush unit (term.c runs one
             // term_fill() over `tcol->buf` regardless of authorship), so
             // its words take the same marker/pass/rejection arithmetic.
-            return self.record_plain_unit_word(incoming, native_boundary, native_writes);
+            return self.record_plain_unit_word(incoming, native_boundary, native_writes, sentence);
         }
         let materialized_field_padding = self.projected_native_field_padding();
         let Some(definition) = &mut self.execution.definition else {
@@ -40,12 +42,12 @@ impl InlineBuilder {
         // term_word() buffers its separator and glyph in the native field.
         // Generated IR padding is excluded from that field.
         let native_word_start = definition.field_buffer.cells().len();
-        let native_word_space = definition.field_buffer.begin_word(
+        let separator = definition.field_buffer.begin_word_with_spacing(
             native_boundary.is_native_tight(),
             self.execution.spacing.enabled() || native_boundary == PendingBoundary::Preserved,
             native_boundary == PendingBoundary::Kept,
-        ) > 0;
-        let separator = usize::from(native_word_space);
+            1 + usize::from(sentence),
+        );
         // The text executor supplied native writes before IR projection.
         // A stable owner marker follows wrappers and compact presentation;
         // it never contributes a native cell.
@@ -109,10 +111,11 @@ impl InlineBuilder {
         }
         let native_separator = definition
             .field_buffer
-            .word_separator_survives(native_word_start, separator);
+            .surviving_word_separator(native_word_start, separator);
         let mut projection =
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
         projection.native_separator = native_separator;
+        projection.retreated_sentence_separator = separator == 2 && native_separator == 1;
         projection.prints_padding = receipt.prints_padding;
         projection
     }
@@ -125,6 +128,7 @@ impl InlineBuilder {
         incoming: &[Inline],
         native_boundary: PendingBoundary,
         native_writes: Option<Vec<super::super::field_buffer::FieldWrite>>,
+        sentence: bool,
     ) -> WordPassProjection {
         // term_flushln() retired the old native unit before this word.
         // The IR destination may since have changed (D1/Dl, heading, link
@@ -134,10 +138,11 @@ impl InlineBuilder {
             self.execution.flush_unit_output_start = self.nodes.len();
         }
         let native_word_start = self.execution.flush_unit.cells().len();
-        let separator = self.execution.flush_unit.begin_word(
+        let separator = self.execution.flush_unit.begin_word_with_spacing(
             native_boundary.is_native_tight(),
             self.execution.spacing.enabled() || native_boundary == PendingBoundary::Preserved,
             native_boundary == PendingBoundary::Kept,
+            1 + usize::from(sentence),
         );
         let anchor_ir_start = self
             .execution
@@ -170,7 +175,7 @@ impl InlineBuilder {
         let native_separator = self
             .execution
             .flush_unit
-            .word_separator_survives(native_word_start, separator);
+            .surviving_word_separator(native_word_start, separator);
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
         // at authored markers and never at a device-width guess.
@@ -189,6 +194,7 @@ impl InlineBuilder {
             receipt.first_content_cell,
         );
         result.native_separator = native_separator;
+        result.retreated_sentence_separator = separator == 2 && native_separator == 1;
         result.prints_padding = receipt.prints_padding;
         self.execution.flush_unit = buffer;
         self.execution.flush_unit_anchors = anchors;
@@ -359,7 +365,8 @@ impl InlineBuilder {
             closes_before,
             leading_cells,
             split_word,
-            native_separator: false,
+            native_separator: 0,
+            retreated_sentence_separator: false,
             prints_padding: false,
         }
     }

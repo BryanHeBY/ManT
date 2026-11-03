@@ -56,6 +56,8 @@ impl InlineExecutionState {
             row_zero_graph: false,
             native_word_writes: None,
             native_word_boundary: None,
+            sentence_pending: false,
+            native_word_sentence: false,
             native_word_owner: None,
             native_owner_serial: 0,
             flush_unit: field_buffer::FieldBuffer::default(),

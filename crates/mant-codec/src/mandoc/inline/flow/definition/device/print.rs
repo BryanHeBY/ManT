@@ -39,13 +39,13 @@ impl InlineBuilder {
         &self,
         start: usize,
         end: usize,
-        row_origin_units: usize,
+        row_origin_units: i64,
     ) -> Option<(String, usize, i32, bool)> {
         use super::super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
         let declared_origin = state
             .column_origin_units
-            .or(state.declared_body_origin_units)
+            .or(state.declared_body_origin.map(|origin| origin.units))
             .unwrap_or(0);
         let graph = (start..end).find(|cell| {
             matches!(
@@ -84,8 +84,7 @@ impl InlineBuilder {
             // difference is signed (mdoc_term.c:1449-1455). Subtract in
             // basic units before rounding the relative character position;
             // Euclidean division preserves a half-cell outdent's floor.
-            let units = i128::try_from(row_origin_units)
-                .unwrap_or(i128::MAX)
+            let units = i128::from(row_origin_units)
                 .saturating_sub(i128::try_from(declared_origin).unwrap_or(i128::MAX))
                 .saturating_add(i128::from(
                     state
@@ -101,9 +100,9 @@ impl InlineBuilder {
             // Preserve the established non-column HEAD/BODY projection.
             i32::try_from(
                 row_origin_units
-                    .saturating_sub(declared_origin)
+                    .saturating_sub(i64::try_from(declared_origin).unwrap_or(i64::MAX))
                     .saturating_add(11)
-                    / 24,
+                    .div_euclid(24),
             )
             .unwrap_or(i32::MAX)
         };
@@ -146,8 +145,11 @@ impl InlineBuilder {
             .checked_sub(1)
             .and_then(|index| state.field_word_anchors.get(index))?;
         let declared_padding = state
-            .declared_body_origin_units
-            .map_or(0, |origin| state.hang_row.padding_units(origin));
+            .declared_body_origin
+            .filter(|origin| {
+                origin.padding == super::super::state::BodyPaddingPlacement::Structural
+            })
+            .map_or(0, |origin| state.hang_row.padding_units(origin.units));
         let cells = padding_units
             .saturating_sub(declared_padding)
             .saturating_add(11)
@@ -170,13 +172,13 @@ impl InlineBuilder {
         resumed: Option<NoBreakField>,
         start: usize,
         end: usize,
-        origin_units: usize,
+        origin_units: i64,
     ) -> Option<usize> {
         use super::super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
         state.no_break.or(resumed)?;
         let declared_origin = state.column_origin_units?;
-        if origin_units < declared_origin {
+        if origin_units < i64::try_from(declared_origin).unwrap_or(i64::MAX) {
             return None;
         }
         let graph = (start..end).find(|cell| {

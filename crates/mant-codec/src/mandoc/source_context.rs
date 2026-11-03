@@ -52,6 +52,14 @@ pub(super) struct RunInDefinitionHead {
     pub(super) generated_word: bool,
 }
 
+/// Borrowed source order at one structural HEAD entry. Direct siblings run
+/// before HEAD pre, while accepted output keeps the same content owner.
+#[derive(Clone, Copy)]
+pub(super) struct HeadNodes<'a> {
+    pub(super) before: &'a [Node],
+    pub(super) content: &'a [Node],
+}
+
 /// Apply the lexical comment rule that roff executes before handing text to
 /// tbl.
 ///
@@ -180,7 +188,7 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn lower_inline_with_author_break_preserving_rows(
         &self,
-        nodes: &[Node],
+        nodes: HeadNodes<'_>,
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
@@ -198,7 +206,7 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_inline_with_author_break_rows(
         &self,
-        nodes: &[Node],
+        nodes: HeadNodes<'_>,
         spacing: bool,
         formatter: &mut formatter::FormatterState,
         author_break_effect: inline::AuthorBreakEffect,
@@ -208,27 +216,39 @@ impl<'a> LoweringContext<'a> {
         let mut builder = formatter.begin_inline_session(
             spacing,
             self.active_mdoc_section() == MdocSectionContext::Authors,
-            author_break_effect,
+            if nodes.before.is_empty() {
+                author_break_effect
+            } else {
+                inline::AuthorBreakEffect::Line
+            },
         );
         let operand_capture = std::rc::Rc::new(RefCell::new(inline::HeadOperandCapture::default()));
         builder.head_operand_capture = Some(operand_capture.clone());
         if preserve_rows {
             builder.begin_definition_head_consumption();
-            if let Some(units) = native_head_field_units {
-                builder.set_definition_native_margin(units);
-            }
         }
         builder.scope_posts = self.scope_posts.clone();
         // The HEAD can execute .nf after this session begins. Each entered
         // NODE_LINE/NODE_NOFILL pair, not the inbound fill-mode snapshot,
         // decides whether to end the current formatter row.
         builder.observe_no_fill_source_lines(true);
-        inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+        if !nodes.before.is_empty() {
+            // blk_full() can emit direct TEXT before allocating It HEAD.
+            // print_mdoc_node() visits it before termp_it_pre(HEAD) selects
+            // NOSPACE, the field flags, margin, or diagnostic font.
+            inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
+            builder.enter_definition_head_effect(author_break_effect);
+        }
+        if preserve_rows && let Some(units) = native_head_field_units {
+            builder.set_definition_native_margin(units);
+        }
+        inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
         builder.observe_no_fill_source_lines(false);
         let finished = formatter.finish_inline_line_with_rows(builder, preserve_rows);
-        self.native_heads
-            .borrow_mut()
-            .capture_operands(nodes.as_ptr() as usize, operand_capture.borrow_mut().take());
+        self.native_heads.borrow_mut().capture_operands(
+            nodes.content.as_ptr() as usize,
+            operand_capture.borrow_mut().take(),
+        );
         if preserve_rows && self.macro_set == MacroSet::Mdoc {
             // This path is the actual detached It HEAD post, whose native
             // flush above precedes clearing NOBREAK/BRTRSP/BRIND/HANG and
@@ -247,7 +267,7 @@ impl<'a> LoweringContext<'a> {
     /// first body word execute.
     pub(super) fn lower_run_in_definition_head<'n>(
         &self,
-        groups: impl IntoIterator<Item = &'n [Node]>,
+        groups: impl IntoIterator<Item = HeadNodes<'n>>,
         spacing: bool,
         formatter: &mut crate::mandoc::formatter::FormatterState,
         strong_scope: bool,
@@ -265,16 +285,26 @@ impl<'a> LoweringContext<'a> {
         builder.begin_definition_head_consumption();
         builder.scope_posts = self.scope_posts.clone();
         builder.observe_no_fill_source_lines(true);
-        let saved_font = strong_scope.then(|| {
-            builder
-                .font
-                .push_scope(super::roff_escape::RoffFont::Strong)
-        });
+        let mut saved_font = None;
         for nodes in groups {
-            if !nodes.is_empty() {
-                operand_key.get_or_insert(nodes.as_ptr() as usize);
+            if !nodes.content.is_empty() {
+                operand_key.get_or_insert(nodes.content.as_ptr() as usize);
             }
-            inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+            if !nodes.before.is_empty() {
+                // Direct It siblings are outside the diagnostic HEAD font
+                // and NOBREAK field, but remain in its live input buffer.
+                builder.enter_definition_head_effect(inline::AuthorBreakEffect::Line);
+                inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
+                builder.enter_definition_head_effect(author_break_effect);
+            }
+            if strong_scope && saved_font.is_none() {
+                saved_font = Some(
+                    builder
+                        .font
+                        .push_scope(super::roff_escape::RoffFont::Strong),
+                );
+            }
+            inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
         }
         builder.observe_no_fill_source_lines(false);
         // The generated cells execute FIRST (append_run_in_cells routes
@@ -316,7 +346,7 @@ impl<'a> LoweringContext<'a> {
     /// spacing and zero-advance execution remain document-global.
     pub(super) fn lower_section_heading(
         &self,
-        nodes: &[Node],
+        nodes: HeadNodes<'_>,
         formatter: &mut formatter::FormatterState,
         authors_section: bool,
     ) -> Vec<mant_ir::Inline> {
@@ -326,15 +356,16 @@ impl<'a> LoweringContext<'a> {
             inline::AuthorBreakEffect::Line,
         );
         builder.scope_posts = self.scope_posts.clone();
+        inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
         match self.macro_set {
             MacroSet::Man | MacroSet::None => {
                 builder.font.begin_man_heading();
-                inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+                inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
                 builder.font.end_man_heading();
             }
             MacroSet::Mdoc => {
                 let heading_font = builder.font.push_heading_scope();
-                inline::append_inline_nodes(&mut builder, nodes, self.default_name);
+                inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
                 builder.font.pop_heading_scope(heading_font);
             }
         }

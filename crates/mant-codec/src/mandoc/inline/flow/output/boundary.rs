@@ -28,13 +28,13 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, false, true, false);
+        self.append_at_boundary(&mut incoming, false, true, false, 0);
     }
 
     /// A native text node is a word event even if decoding yields no glyphs.
     /// Unlike a target/control-only append, it consumes the pending boundary.
     pub(in crate::mandoc) fn append_word(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, true, true, false);
+        self.append_at_boundary(&mut incoming, true, true, false, 0);
     }
 
     /// A decoded empty word can be a real literal row, an empty macro
@@ -45,6 +45,7 @@ impl InlineBuilder {
         mut incoming: Vec<Inline>,
         occupies_row: bool,
         trailing_output: TrailingOutput,
+        projected_separator: usize,
     ) {
         self.note_produced_formatter_cell(occupies_row);
         self.append_at_boundary(
@@ -52,6 +53,7 @@ impl InlineBuilder {
             true,
             occupies_row,
             trailing_output == TrailingOutput::FixedBlank,
+            projected_separator,
         );
         if trailing_output != TrailingOutput::None {
             self.execution.trailing_output = trailing_output;
@@ -66,6 +68,7 @@ impl InlineBuilder {
         word: bool,
         occupies_row: bool,
         incoming_starts_with_fixed_blank: bool,
+        projected_separator: usize,
     ) {
         if incoming.is_empty() && !word {
             return;
@@ -127,12 +130,24 @@ impl InlineBuilder {
         } else {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
-        let projection = if word {
+        let mut projection = if word {
             self.record_hang_word(incoming, boundary)
         } else {
             super::record::WordPassProjection::default()
         };
-        self.append_recorded_word_boundary(boundary, word, empty_word, add_space, &projection);
+        // A marker-blank retreat already emitted these native cells after
+        // the cached glyph. Only the remaining write receipt can add cells
+        // before the new payload; never replay them before that old glyph.
+        projection.native_separator = projection
+            .native_separator
+            .saturating_sub(projected_separator);
+        self.append_recorded_word_boundary(
+            boundary,
+            word,
+            empty_word,
+            add_space && projected_separator == 0,
+            &projection,
+        );
         // The native word boundary belongs to its surrounding flow. Only
         // the operand itself belongs to an optional semantic annotation;
         // authored leading blanks therefore stay inside that owner.
@@ -273,7 +288,7 @@ impl InlineBuilder {
         // following word then obeys its own NOSPACE/NONOSPACE registers
         // (roff_term.c:147-150; term.c:573-589), including .Sm off.
         let transferred_automatic = empty_word
-            && native_separator
+            && native_separator > 0
             && self.execution.pending_field_gap_origin
                 == super::super::definition::PendingFieldGapOrigin::AutomaticWord
             && self.execution.pending_field_spaces > 0;
@@ -329,40 +344,8 @@ impl InlineBuilder {
             // do not replace term_word()'s separate automatic separator.
             let (spacing_boundary, add_space) = if transferred_automatic {
                 (boundary, false)
-            } else if word
-                && self.execution.no_fill_word_active
-                && boundary == PendingBoundary::CommittedField
-            {
-                // The committed field already represents its positioning
-                // and the following ordinary word blank. term_word() must
-                // still buffer that blank after MC cleared NOSPACE, but
-                // no-fill cannot project the same cell a second time
-                // (roff_term.c:147-150; term.c:573-589,389-427).
-                (boundary, false)
-            } else if word && self.execution.no_fill_word_active {
-                (
-                    if native_separator {
-                        PendingBoundary::Preserved
-                    } else {
-                        PendingBoundary::Tight
-                    },
-                    native_separator,
-                )
-            } else if empty_word && self.execution.pending_field_spaces > 0 && native_separator {
-                // A graphless word cannot print deferred vbl, but its
-                // term_word() automatic blank is a distinct native cell
-                // (term.c:573-589,389-427). Preserve it until a later graph
-                // prints the field; pending positioning cannot consume it.
-                (PendingBoundary::Preserved, true)
-            } else if word && native_separator && !boundary.is_tight() {
-                // term_word()573-589 buffers this separator independently
-                // of projected glyphs and authored leading/trailing blanks.
-                // Its write receipt, rather than the last visible IR scalar,
-                // proves the cell survived BACKBEFORE. Projection-only tight
-                // joins already represent that boundary's zero-advance effect.
-                (PendingBoundary::Preserved, true)
             } else {
-                (boundary, add_space)
+                self.recorded_spacing_boundary(boundary, word, empty_word, add_space, projection)
             };
             // term.c::term_field() skips NBRZW, markers and tab/blank
             // positioning before it writes vbl at an actual Graph. An
@@ -376,7 +359,13 @@ impl InlineBuilder {
             {
                 self.mark_native_field_prefix(marker);
             }
-            self.append_boundary_spacing(spacing_boundary, add_space, empty_word, field_padding);
+            self.append_boundary_spacing(
+                spacing_boundary,
+                add_space,
+                empty_word,
+                field_padding,
+                native_separator.max(1),
+            );
             if word
                 && field_padding
                 && let Some(marker) = native_anchor_marker
@@ -385,6 +374,58 @@ impl InlineBuilder {
                 // The word's accepted scalar interval begins after that pad.
                 self.nodes.push(Inline::anchor(marker));
             }
+        }
+    }
+
+    fn recorded_spacing_boundary(
+        &self,
+        boundary: PendingBoundary,
+        word: bool,
+        empty_word: bool,
+        add_space: bool,
+        projection: &super::record::WordPassProjection,
+    ) -> (PendingBoundary, bool) {
+        let native_separator = projection.native_separator;
+        if word && self.execution.no_fill_word_active && boundary == PendingBoundary::CommittedField
+        {
+            // The committed field already represents its positioning
+            // and the following ordinary word blank. term_word() must
+            // still buffer that blank after MC cleared NOSPACE, but
+            // no-fill cannot project the same cell a second time
+            // (roff_term.c:147-150; term.c:573-589,389-427).
+            (boundary, false)
+        } else if word && self.execution.no_fill_word_active {
+            (
+                if native_separator > 0 {
+                    PendingBoundary::Preserved
+                } else {
+                    PendingBoundary::Tight
+                },
+                native_separator > 0,
+            )
+        } else if empty_word && self.execution.pending_field_spaces > 0 && native_separator > 0 {
+            // A graphless word cannot print deferred vbl, but its
+            // term_word() automatic blank is a distinct native cell
+            // (term.c:573-589,389-427). Preserve it until a later graph
+            // prints the field; pending positioning cannot consume it.
+            (PendingBoundary::Preserved, true)
+        } else if word
+            && native_separator > 0
+            && (!boundary.is_tight()
+                || self.execution.zero_advance_joined
+                || projection.retreated_sentence_separator)
+        {
+            // term_word()573-589 buffers this separator independently
+            // of projected glyphs and authored leading/trailing blanks.
+            // Its write receipt, rather than the last visible IR scalar,
+            // proves the cell survived BACKBEFORE. Marker-blank projection
+            // has already subtracted its own cells. Only the actual 2→1
+            // write/retreat receipt additionally proves that a virtual
+            // boundary kept one SENTENCE cell after the cached glyph;
+            // other tight presentation joins retain their existing policy.
+            (PendingBoundary::Preserved, true)
+        } else {
+            (boundary, add_space)
         }
     }
 
@@ -415,6 +456,7 @@ impl InlineBuilder {
         add_space: bool,
         empty_word: bool,
         materialized_field_separator: bool,
+        automatic_spaces: usize,
     ) {
         if !empty_word && self.execution.pending_breakable_spaces > 0 {
             let spaces = " ".repeat(self.execution.pending_breakable_spaces);
@@ -460,18 +502,20 @@ impl InlineBuilder {
             // authored term content. Materialize it at the next glyph. CVS
             // term_word() has already buffered this cell, so a line request
             // must still close the otherwise invisible physical row.
-            self.execution.pending_breakable_spaces =
-                self.execution.pending_breakable_spaces.saturating_add(1);
+            self.execution.pending_breakable_spaces = self
+                .execution
+                .pending_breakable_spaces
+                .saturating_add(automatic_spaces);
             self.execution.formatter_column = FormatterColumn::Advanced;
             self.note_produced_formatter_cell(true);
         } else {
-            self.push_field_owned_breakable_space(" ".to_owned());
+            self.push_field_owned_breakable_space(" ".repeat(automatic_spaces));
             let prior = match self.execution.trailing_output {
                 TrailingOutput::BreakableBlank(count) => count,
                 _ => 0,
             };
             self.execution.trailing_output =
-                TrailingOutput::BreakableBlank(prior.saturating_add(1));
+                TrailingOutput::BreakableBlank(prior.saturating_add(automatic_spaces));
             self.execution.last_visible_character = Some(' ');
             self.execution.has_printable_content = true;
             self.execution.formatter_column = FormatterColumn::Advanced;

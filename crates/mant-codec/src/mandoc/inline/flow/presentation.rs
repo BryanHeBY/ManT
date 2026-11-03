@@ -147,8 +147,29 @@ impl RowPresentation {
         minbl: usize,
         occupied: bool,
     ) -> FieldPlacement {
-        let offset = i64::try_from(offset)
+        self.field_placement_signed(
+            i64::try_from(offset).unwrap_or(i64::MAX),
+            viscol,
+            minbl,
+            occupied,
+        )
+    }
+
+    pub(in crate::mandoc) fn source_offset_units(self, offset: usize) -> i64 {
+        i64::try_from(offset)
             .unwrap_or(i64::MAX)
+            .saturating_add(i64::from(self.offset_shift))
+            .max(-i64::from(self.parent))
+    }
+
+    pub(in crate::mandoc) fn field_placement_signed(
+        self,
+        offset: i64,
+        viscol: usize,
+        minbl: usize,
+        occupied: bool,
+    ) -> FieldPlacement {
+        let offset = offset
             .saturating_add(i64::from(self.offset_shift))
             .max(-i64::from(self.parent));
         let column = self.device_column(viscol);
@@ -225,6 +246,14 @@ impl RowPresentation {
         self,
         alignment: mant_ir::TextAlignment,
         native_offset: usize,
+    ) -> mant_ir::RowLayoutHint {
+        self.hint_at_signed(alignment, i64::try_from(native_offset).unwrap_or(i64::MAX))
+    }
+
+    pub(in crate::mandoc) fn hint_at_signed(
+        self,
+        alignment: mant_ir::TextAlignment,
+        native_offset: i64,
     ) -> mant_ir::RowLayoutHint {
         let base = self
             .parent

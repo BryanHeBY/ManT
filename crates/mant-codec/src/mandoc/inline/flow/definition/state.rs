@@ -1,6 +1,30 @@
 use super::super::InlineBuilder;
 use super::head_row::HeadRowState;
 
+/// Reading placement of a structural BODY, independent of native geometry.
+/// A fresh row always uses this coordinate base. When HEAD's printed row
+/// remains open, one combined paragraph must carry its actual padding too.
+#[derive(Clone, Copy)]
+pub(in crate::mandoc::inline::flow) struct BodyOriginProjection {
+    pub(super) units: usize,
+    pub(super) padding: BodyPaddingPlacement,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(in crate::mandoc::inline::flow) enum BodyPaddingPlacement {
+    Structural,
+    Inline,
+}
+
+impl BodyOriginProjection {
+    pub(super) const fn structural(units: usize) -> Self {
+        Self {
+            units,
+            padding: BodyPaddingPlacement::Structural,
+        }
+    }
+}
+
 /// Current reading geometry of one column BODY. The native buffer keeps its
 /// existing relative coordinates; only an accepted print projects the signed
 /// source offset that those coordinates cannot represent below zero. Every
@@ -44,16 +68,16 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// A roff break moves rmargin to the responsive page margin until a
     /// document node restores its saved geometry (mdoc_term.c:329,437-439).
     pub(in crate::mandoc::inline::flow) margin_override: Option<usize>,
-    pub(in crate::mandoc::inline::flow) native_margin_units: Option<usize>,
+    pub(in crate::mandoc::inline::flow) native_margin_units: Option<i64>,
     pub(in crate::mandoc::inline::flow) field_offset_units: usize,
     /// The current declared column origin. Its normal device padding is
     /// already represented by table placement; temporary node origins are
     /// not. This geometry is set at BODY pre, independently of IR owners.
     pub(in crate::mandoc::inline::flow) column_origin_units: Option<usize>,
     pub(in crate::mandoc::inline::flow) column_reading_origin: Option<ColumnReadingOrigin>,
-    /// The normal BODY origin is already expressed by list/definition IR
-    /// placement. Only later temporary geometry can add inline positioning.
-    pub(in crate::mandoc::inline::flow) declared_body_origin_units: Option<usize>,
+    /// The normal BODY origin is already expressed by its block placement.
+    /// Same-row padding can instead belong to an inline HEAD/BODY owner.
+    pub(in crate::mandoc::inline::flow) declared_body_origin: Option<BodyOriginProjection>,
     pub(in crate::mandoc::inline::flow) projected_passes: usize,
     pub(in crate::mandoc::inline::flow) pending_indent: Option<usize>,
     /// True only for a NOBREAK field carried across the HEAD/BODY ownership

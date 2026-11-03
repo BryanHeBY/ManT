@@ -12,7 +12,7 @@ use super::super::{
     layout::{block_indent, layout, layout_with_spacing, paragraph_distance_lines},
     source_span, targets,
 };
-use super::{ScopeFlow, is_inline_equation, is_inline_equation_quote_artifact, lower_scope};
+use super::{ScopeFlow, is_inline_equation, is_inline_equation_quote_artifact};
 
 mod definition;
 mod evidence;

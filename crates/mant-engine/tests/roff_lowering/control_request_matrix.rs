@@ -306,6 +306,9 @@ fn authored_fixed_blanks_survive_run_in_scope_and_output_row_boundaries() {
     // Xo as a literal HEAD and \0 inside It BODY. mdoc_term.c:760-774 adds
     // separate BODY cells, while term_field():389-427 prints the authored
     // Unicode fixed blank as an encoded graph, including at physical row end.
+    // In 02212, It HEAD post already cleared its field flags and trailspace
+    // (mdoc_term.c:939-963). The nf output-owner drain cannot revive those
+    // flags: the following accepted NBRZW buffer ends its own empty row.
     #[derive(Deserialize)]
     struct FixedBlankFixture {
         header: Header,

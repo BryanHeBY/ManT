@@ -145,6 +145,7 @@ pub(in crate::mandoc) fn function_argument(
             builder.append_text(",");
         }
     }
+    builder.execution.finish_executed_node(argument);
     builder.restore_definition_geometry(geometry);
 }
 

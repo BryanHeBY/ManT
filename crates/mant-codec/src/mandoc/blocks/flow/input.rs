@@ -212,8 +212,30 @@ impl BlockState {
         }
     }
 
-    pub(in crate::mandoc::blocks) fn settle_no_fill_row(&mut self) {
+    pub(in crate::mandoc::blocks) fn settle_no_fill_row(&mut self) -> bool {
+        let executed_native_newline = self.formatter.execution.has_native_definition_field()
+            && self
+                .formatter
+                .no_fill_inline
+                .has_pending_formatter_cell(&self.formatter.execution);
+        if executed_native_newline {
+            // NODE_LINE calls term_newln on the shared tcol buffer. Nm's
+            // BODY retains a definition field after HEAD post; the plain
+            // no-fill retire path intentionally cannot consume that buffer.
+            // Only an active literal fragment owns this buffer. A detached
+            // HEAD or a filled paragraph can keep the same field alive, but
+            // must never be consumed against an empty literal destination.
+            self.literal.with_inline_builder(
+                &mut self.formatter,
+                InlineBuilder::execute_native_literal_newline,
+            );
+            // The native print receipt already delivered every completed
+            // row to this literal owner. Retire the old cell classification
+            // even if a buffered zero-advance glyph only printed at flush.
+            self.formatter.no_fill_inline.retire_consumed_cell();
+        }
         self.literal.settle_native_row(&mut self.formatter);
+        executed_native_newline
     }
 
     pub(in crate::mandoc::blocks) fn push_preformatted(

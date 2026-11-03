@@ -11,6 +11,16 @@ use libmandoc_rs::{
 };
 
 impl InlineBuilder {
+    /// A pre-handler's direct `term_word` operands do not run the native node
+    /// exit. `pre_alternate` explicitly forwards its child EOS separately.
+    pub(in crate::mandoc) fn finish_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        if !self.direct_word_operands
+            && self.execution.observe_no_fill_source_lines != SourceLineObservation::Grouped
+        {
+            self.execution.finish_executed_node(node);
+        }
+    }
+
     /// `roff_term_pre_ce()` directly visits words and roff requests. Source
     /// coordinates remain provenance; its child `NODE_LINE` flags are not
     /// additional `print_man_node/print_mdoc_node` entry events.
@@ -58,6 +68,19 @@ impl InlineBuilder {
             break_effect,
             field_output_start: self.nodes.len(),
         });
+    }
+
+    /// It HEAD pre changes field flags and NOSPACE after any direct BLOCK
+    /// prefix has executed. Those pending cells keep their original owners
+    /// and buffer start: installing HEAD geometry does not flush or drain.
+    pub(in crate::mandoc) fn enter_definition_head_effect(&mut self, effect: AuthorBreakEffect) {
+        if matches!(effect, AuthorBreakEffect::Field { .. }) {
+            self.definition_state_mut();
+        }
+        if let Some(author) = &mut self.execution.author_execution {
+            author.break_effect = effect;
+        }
+        self.tighten_next_boundary();
     }
 
     pub(in crate::mandoc) fn execute_author(&mut self, mode: Option<libmandoc_rs::AuthorMode>) {
@@ -189,8 +212,10 @@ impl InlineBuilder {
             self.execution.execute_tab_configuration(node);
             return;
         }
+        let line_entered = self.execution.take_no_fill_source_line_entered(node.id);
         self.execution.enter_tab_source_node(node);
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::NoFill
+            && !line_entered
             && node.flags.no_fill
             && node.flags.line_start
             && !self.final_source_continuation_or(false)
@@ -221,11 +246,14 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn observe_no_fill_source_lines(&mut self, enabled: bool) {
-        self.execution.observe_no_fill_source_lines = if enabled {
-            SourceLineObservation::NoFill
-        } else {
-            SourceLineObservation::Disabled
-        };
+        use SourceLineObservation::{Disabled, DisabledEntered, NoFill, NoFillEntered};
+        self.execution.observe_no_fill_source_lines =
+            match (enabled, self.execution.observe_no_fill_source_lines) {
+                (true, DisabledEntered(id) | NoFillEntered(id)) => NoFillEntered(id),
+                (false, DisabledEntered(id) | NoFillEntered(id)) => DisabledEntered(id),
+                (true, _) => NoFill,
+                (false, _) => Disabled,
+            };
     }
 
     pub(in crate::mandoc) fn final_word_join_or(&self, fallback: bool) -> bool {
@@ -525,6 +553,64 @@ impl super::InlineExecutionState {
 }
 
 impl InlineExecutionState {
+    /// One outer source-line settle already executed the native gate for
+    /// this exact node. Preserve the observation mode; source coordinates
+    /// can repeat during macro expansion and never identify this receipt.
+    pub(in crate::mandoc) fn note_no_fill_source_line_entered(&mut self, node: u32) {
+        use SourceLineObservation::{Disabled, DisabledEntered, Grouped, NoFill, NoFillEntered};
+        self.observe_no_fill_source_lines = match self.observe_no_fill_source_lines {
+            Grouped => Grouped,
+            Disabled | DisabledEntered(_) => DisabledEntered(node),
+            NoFill | NoFillEntered(_) => NoFillEntered(node),
+        };
+    }
+
+    /// Consume at the first actual node dispatcher. A different child is a
+    /// fresh source event and retains its original observation policy.
+    pub(in crate::mandoc) fn take_no_fill_source_line_entered(&mut self, node: u32) -> bool {
+        use SourceLineObservation::{Disabled, DisabledEntered, NoFill, NoFillEntered};
+        match self.observe_no_fill_source_lines {
+            DisabledEntered(id) => {
+                self.observe_no_fill_source_lines = Disabled;
+                id == node
+            }
+            NoFillEntered(id) => {
+                self.observe_no_fill_source_lines = NoFill;
+                id == node
+            }
+            _ => false,
+        }
+    }
+
+    /// Structural handlers need not enter the root through an inline sink.
+    /// Their unused receipt expires when that source node returns.
+    pub(in crate::mandoc) fn finish_no_fill_source_line_entry(&mut self, node: u32) {
+        if matches!(
+            self.observe_no_fill_source_lines,
+            SourceLineObservation::DisabledEntered(id) | SourceLineObservation::NoFillEntered(id)
+                if id == node
+        ) {
+            let _ = self.take_no_fill_source_line_entered(node);
+        }
+    }
+
+    pub(in crate::mandoc) fn has_native_definition_field(&self) -> bool {
+        self.definition.is_some() && self.author_execution.is_some()
+    }
+    /// Native EOS is supplied by the parser, never inferred from rendered
+    /// spelling. Both native node walkers arm it after font/post execution.
+    pub(in crate::mandoc) fn finish_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        if node.flags.sentence_end {
+            self.arm_sentence_end();
+        }
+    }
+
+    /// Explicit native generated-word posts (the final bibliography period)
+    /// set `TERMP_SENTENCE` independently of any authored `NODE_EOS` flag.
+    pub(in crate::mandoc) fn arm_sentence_end(&mut self) {
+        self.sentence_pending = true;
+    }
+
     pub(in crate::mandoc) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
         if rows < 0 {
             let debt = u16::try_from(rows.unsigned_abs()).unwrap_or(u16::MAX);

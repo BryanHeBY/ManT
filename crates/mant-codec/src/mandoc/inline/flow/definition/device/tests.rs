@@ -38,7 +38,10 @@ fn consumed_tab_receipts_survive_row_reset_without_word_time_owner_scans() {
             let captured = device.tab_projection.get().unwrap();
             assert_eq!(captured.len(), 1);
             let original_receipt = captured.as_ptr();
-            builder.hard_break_after_field_projection(Some(&device));
+            builder.hard_break_after_field_projection_with_origin(
+                Some(&device),
+                super::super::super::output::CompletedRowOrigin::Layout,
+            );
             assert!(builder.definition.as_ref().unwrap().field_buffer.is_empty());
             builder.retire_native_field_with_device(Some(&device));
             assert_eq!(

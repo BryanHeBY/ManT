@@ -28,7 +28,7 @@ struct PresentedPass {
     print: NativeFieldPrint,
     placement: super::super::super::presentation::FieldPlacement,
     width: usize,
-    margin: usize,
+    margin: i64,
 }
 
 impl InlineBuilder {
@@ -42,7 +42,7 @@ impl InlineBuilder {
         receipt: &FlushReceipt,
         flags: FieldFlags,
         no_break: bool,
-        rmargin: usize,
+        rmargin: i64,
         resumed: Option<NoBreakField>,
     ) -> NativePassSweep {
         use super::super::super::field_buffer::FieldCell;
@@ -67,8 +67,8 @@ impl InlineBuilder {
             loop_row_end: LoopRowEnd::Open,
             loop_rows: Vec::new(),
         };
-        let mut row_origin_units = state.field_offset_units;
-        let mut placement = sweep.presentation.field_placement(
+        let mut row_origin_units = i64::try_from(state.field_offset_units).unwrap_or(i64::MAX);
+        let mut placement = sweep.presentation.field_placement_signed(
             row_origin_units,
             sweep.viscol,
             row.minbl,
@@ -102,7 +102,7 @@ impl InlineBuilder {
                     },
                     placement,
                     width: width_units,
-                    margin: if no_break { usize::MAX / 2 } else { rmargin },
+                    margin: if no_break { i64::MAX / 2 } else { rmargin },
                 },
                 resumed,
             );
@@ -120,9 +120,10 @@ impl InlineBuilder {
             }
             if index + 1 < passes.len() || rejected {
                 row_origin_units = end_native_loop_pass(&mut sweep, pass, state, flags, rmargin);
-                placement = sweep
-                    .presentation
-                    .field_placement(row_origin_units, 0, 0, false);
+                placement =
+                    sweep
+                        .presentation
+                        .field_placement_signed(row_origin_units, 0, 0, false);
             }
         }
         if rejected {
@@ -155,7 +156,7 @@ impl InlineBuilder {
                 pass.print.end,
                 sweep
                     .presentation
-                    .hint_at(self.execution.text_alignment, pass.print.origin_units),
+                    .hint_at_signed(self.execution.text_alignment, pass.print.origin_units),
             )
         {
             sweep.row_presentations.push(receipt);
@@ -195,8 +196,8 @@ fn end_native_loop_pass(
     pass: &super::super::super::field_buffer::FillPass,
     state: &DefinitionFieldState,
     flags: FieldFlags,
-    rmargin: usize,
-) -> usize {
+    rmargin: i64,
+) -> i64 {
     sweep.loop_rows.push(NativeLoopRow {
         end_cell: pass.end,
         printed: sweep.printed_row.is_some(),
@@ -212,8 +213,8 @@ fn end_native_loop_pass(
     sweep.unprojected_origin_units = 0;
     sweep.presentation.endline_at(state.field_offset_units);
     if flags.contains(FieldFlag::Brind) {
-        rmargin
+        rmargin.saturating_sub(i64::from(sweep.presentation.offset_shift))
     } else {
-        state.field_offset_units
+        i64::try_from(state.field_offset_units).unwrap_or(i64::MAX)
     }
 }

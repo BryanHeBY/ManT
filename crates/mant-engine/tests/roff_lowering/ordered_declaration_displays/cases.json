@@ -1,0 +1,781 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "vt-synopsis",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.In zip.h\n.Vt zip_t *archive ;\n",
+      "source_sha256": "f487073d83e27dfc6386ca6465af9f98ec959dcccd278b0fca7598e98601a2ac",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ";",
+          "column": 20
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "#include <zip.h>",
+        "",
+        "zip_t *archive;"
+      ]
+    },
+    {
+      "id": "vt-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.Vt ( int value ) ;\n.No AFTER\n",
+      "source_sha256": "aa609c52c8047f48d2e175ff712d7a3849fd7ec269d30c6be3ac27bff025b9e2",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 5,
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        },
+        {
+          "text": ")",
+          "column": 17
+        },
+        {
+          "text": ";",
+          "column": 19
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "(int value); AFTER"
+      ]
+    },
+    {
+      "id": "vt-strong",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.ft B\n.Vt int value ;\n.No AFTER\n",
+      "source_sha256": "6c6a3bd310eebcf5919c8eeb852efbcae1051e5539d57af7a81fd5a6e1f035e6",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ";",
+          "column": 15
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "int value; AFTER"
+      ]
+    },
+    {
+      "id": "vt-xr",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.Vt Xr printf 3 ;\n.No AFTER\n",
+      "source_sha256": "0326b73a6439fac0975b92699d10379ef7f833b2194d55844c2b8ead4d29d713",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 5,
+      "direct_text": [
+        {
+          "text": ";",
+          "column": 17
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "printf(3); AFTER"
+      ]
+    },
+    {
+      "id": "vt-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Vt int value ;\n.No AFTER\n.fi\n",
+      "source_sha256": "f4a9142251b61687979c1be0a196d95c561266afa6e7a3b273d677283523f180",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ";",
+          "column": 15
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "int value;",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "vt-sm-off",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.Sm off\n.Vt int value ;\n.Sm on\n.No AFTER\n",
+      "source_sha256": "d174ebc4d9075d02a4d70ab0efd1428e4f3ba51acc2cbd240207e8d3b7e0baf1",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ";",
+          "column": 15
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "intvalue; AFTER"
+      ]
+    },
+    {
+      "id": "vt-prose",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Vt int value ;\n.No AFTER\n",
+      "source_sha256": "20f9a106dbecc9b395327d9ebc1db68993943a8867641da815fc488fac9419a1",
+      "macro": "Vt",
+      "kind": "elem",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "int",
+          "column": 5
+        },
+        {
+          "text": "value",
+          "column": 9
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE int value; AFTER"
+      ]
+    },
+    {
+      "id": "vt-declarations",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.Ft int\n.Fn before void\n.Vt int value ;\n.Ft long\n.Fn after void\n",
+      "source_sha256": "3916ca191d96cbb78fb325517df71a9fb397667106cd38f38bade6f1e7c72cdd",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": ";",
+          "column": 15
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "int",
+        "before(void);",
+        "",
+        "int value;",
+        "",
+        "long",
+        "after(void);"
+      ]
+    },
+    {
+      "id": "vt-head",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Xo\n.Vt int value ;\n.Xc\n.No BODY\n.El\n",
+      "source_sha256": "9a69f9b6bfc128fbba873b6c8129270821fb9946613a50be49d90459139823f8",
+      "macro": "Vt",
+      "kind": "elem",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "int",
+          "column": 5
+        },
+        {
+          "text": "value",
+          "column": 9
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "int value; BODY"
+      ]
+    },
+    {
+      "id": "d1-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.D1 [ Ns Ar number ] Ar flag status command\n.No AFTER\n",
+      "source_sha256": "f2d0ae74e17e2a62956f3b6d7041dcc2ff1eff1d2dc76f047f80a1c96250e862",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] flag status command",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-multi-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.D1 ( [ Ns Ar number ] ) tail\n.No AFTER\n",
+      "source_sha256": "e54cc53aa8c87685c7445b6df72a1c51aca49a1a683375a480ba13b67df2a502",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        },
+        {
+          "text": "[",
+          "column": 7
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "([number]) tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-tail",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.D1 Li \"!\" ,\n.No AFTER\n",
+      "source_sha256": "1ef93e784e841edd87b50dc7c9ea7d10c38cde8b3ca6acf28eabdef7549ebc88",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ",",
+          "column": 12
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "! ,",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-plain",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.D1 plain words .\n.No AFTER\n",
+      "source_sha256": "7fd059abc2a267dad53cfd52abcc6b37796c988a439695177e4684d2104921c0",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ".",
+          "column": 17
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "plain words.",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-escaped",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.D1 \\&[ Ns Ar number ]\n.No AFTER\n",
+      "source_sha256": "81fa6eb065d6d16e9238632096f02ae7cb3b141968313702b33b4bcfc44e0046",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "]",
+          "column": 22
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number]",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-empty",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.D1 \n.No AFTER\n",
+      "source_sha256": "391f826c6c6a387f91c8a9ba13f920d929293593818cd798204c43d043b3d32b",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.nf\n.D1 [ Ns Ar number ] tail\n.fi\n.No AFTER\n",
+      "source_sha256": "cd70c4b7d89a7ae45d3711e2799dc10f9ccb80103d65021e5964b03751527108",
+      "macro": "D1",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-strong",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.ft B\n.D1 [ Ns Ar number ] tail\n.No AFTER\n",
+      "source_sha256": "7e1d17330068044ab590f63e713282578911d02ffe47c9790b0f228f99a9e720",
+      "macro": "D1",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-sm-off",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sm off\n.D1 [ Ns Ar number ] tail\n.Sm on\n.No AFTER\n",
+      "source_sha256": "2041fc9c8e43ed4239db5ced7dbc9281ab54d18b4a33bc90e2cdbd6c00444fe6",
+      "macro": "D1",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number]tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-head",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Xo\n.No HEAD\n.D1 [ Ns Ar number ] tail\n.No ENDHEAD\n.Xc\n.No BODY\n.El\n",
+      "source_sha256": "82730c020fbc38a77ab2645cb27fa27eb1bc03209778608579d69ae8fc8b597c",
+      "macro": "D1",
+      "kind": "block",
+      "line": 8,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "HEAD [number] tail",
+        "ENDHEAD BODY"
+      ]
+    },
+    {
+      "id": "d1-column",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxx\" \"xxxxxxxx\"\n.It Xo\n.No BEFORE\n.D1 [ Ns Ar number ] tail\n.No AFTER\n.Xc Ta RIGHT\n.El\n",
+      "source_sha256": "62fcd262ce0ea3eaa317a7165ae262f524a7b53b2890d4b2b62ded1a479ad11d",
+      "macro": "D1",
+      "kind": "block",
+      "line": 8,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE [number] tail AFTER",
+        "RIGHT"
+      ]
+    },
+    {
+      "id": "d1-display",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.D1 [ Ns Ar number ] tail\n.No AFTER\n.Ed\n",
+      "source_sha256": "9991827b15450ac9fa0feeca45c09177e204f9fbb76d98f7efa558b3b5b79e90",
+      "macro": "D1",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dl [ Ns Ar number ] Ar flag status command\n.No AFTER\n",
+      "source_sha256": "1ae8065d0a46f61c57aa024f485f629bda5fc801bb18d709ba183dcce1e3be04",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] flag status command",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-multi-prefix",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dl ( [ Ns Ar number ] ) tail\n.No AFTER\n",
+      "source_sha256": "c0f86ea68e155d97c8a174f7d7c66177b4085930ff8fe7349a3ccaf6023d08ba",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        },
+        {
+          "text": "[",
+          "column": 7
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "([number]) tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-tail",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dl Li \"!\" ,\n.No AFTER\n",
+      "source_sha256": "34a18fb6bdc4fdf17bde7c84d14e4d4bf8fe8a102725faf8b9d40ebeac43ab18",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ",",
+          "column": 12
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "! ,",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-plain",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dl plain words .\n.No AFTER\n",
+      "source_sha256": "8d179882951d294eddfee2a6f7150a31f4174f9716780605e803ce631e58cb17",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": ".",
+          "column": 17
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "plain words.",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-escaped",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dl \\&[ Ns Ar number ]\n.No AFTER\n",
+      "source_sha256": "70ede668f1ab0cc233bfecf92e175595a67f761f45b1875ef8372926ac0e3beb",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "]",
+          "column": 22
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number]",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-empty",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dl \n.No AFTER\n",
+      "source_sha256": "f387ffe908645e2ad5623a5fb19e3a58662f7de168e40c03aa2adf30d918a894",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.nf\n.Dl [ Ns Ar number ] tail\n.fi\n.No AFTER\n",
+      "source_sha256": "3d5bdb93680fd67e9ca0142569d2569bd606e90a1d4c3d43b086866cc7469b76",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-strong",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.ft B\n.Dl [ Ns Ar number ] tail\n.No AFTER\n",
+      "source_sha256": "daf12aef049421cf372c60fcb8a9f90b3579e1448c290a7f85fe46aac9c28124",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-sm-off",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Sm off\n.Dl [ Ns Ar number ] tail\n.Sm on\n.No AFTER\n",
+      "source_sha256": "a7e34ad8a07bd23487fab7685dce55a0fa0ecf416a15a84ea97551a897233477",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number]tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-head",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Xo\n.No HEAD\n.Dl [ Ns Ar number ] tail\n.No ENDHEAD\n.Xc\n.No BODY\n.El\n",
+      "source_sha256": "841b629bf7e8702b98f5f04d955aec96a5cb686e7b0efff3c76b6ddaa6e0b7a5",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 8,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "HEAD [number] tail",
+        "ENDHEAD BODY"
+      ]
+    },
+    {
+      "id": "dl-column",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxx\" \"xxxxxxxx\"\n.It Xo\n.No BEFORE\n.Dl [ Ns Ar number ] tail\n.No AFTER\n.Xc Ta RIGHT\n.El\n",
+      "source_sha256": "b4c61b392e259cc4703040dfe03101dd5595ef893271974be07d1237992d1bec",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 8,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE [number] tail AFTER",
+        "RIGHT"
+      ]
+    },
+    {
+      "id": "dl-display",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal -compact\n.No BEFORE\n.Dl [ Ns Ar number ] tail\n.No AFTER\n.Ed\n",
+      "source_sha256": "1d4c6f19c85a87c12ea832000c2da569391c2efcaa706c793ab2ca7af0856ec3",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 7,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number] tail",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "d1-xr",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.D1 [ Ns Xr printf 3 ] ;\n.No AFTER\n",
+      "source_sha256": "c9fe9e5f6a4dff7672c8f7f6399559db227e3eca7531c8669ba67752dc7242c8",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        },
+        {
+          "text": "]",
+          "column": 22
+        },
+        {
+          "text": ";",
+          "column": 24
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[printf(3)];",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-xr",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\n.Dl [ Ns Xr printf 3 ] ;\n.No AFTER\n",
+      "source_sha256": "3f0392f14b4ac3081e5bc9c6536fd04b267b772633dc03d93f529d6035ebe96a",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        },
+        {
+          "text": "]",
+          "column": 22
+        },
+        {
+          "text": ";",
+          "column": 24
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[printf(3)];",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "vt-tail-z",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh SYNOPSIS\n.Vt int value \\zX ;\n.No AFTER\n",
+      "source_sha256": "d582efe5aff82632bebcf1479c076677464634e129b0b5864b86154728191e87",
+      "macro": "Vt",
+      "kind": "block",
+      "line": 5,
+      "direct_text": [
+        {
+          "text": ";",
+          "column": 19
+        }
+      ],
+      "heading": "SYNOPSIS",
+      "native_rows": [
+        "int value ; AFTER"
+      ]
+    },
+    {
+      "id": "d1-pending-z",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No \\z\n.D1 [ Ns Ar number ]\n.No AFTER\n",
+      "source_sha256": "d1151c6b67e5093dfeb2df7f85eaf1ea69da7637dcee98fefd12231ba7e74d84",
+      "macro": "D1",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        },
+        {
+          "text": "]",
+          "column": 20
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "number]",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "dl-post-c",
+      "source": ".Dd November 3, 2026\n.Dt ORDERED 1\n.Os\n.Sh DESCRIPTION\n.No BEFORE\\c\n.Dl [ Ns Ar number ] \\c\n.No AFTER\n",
+      "source_sha256": "189ca28b9b87fa8fcf2b2adf939a64c4555605db3062c342be2d82d341236fbb",
+      "macro": "Dl",
+      "kind": "block",
+      "line": 6,
+      "direct_text": [
+        {
+          "text": "[",
+          "column": 5
+        }
+      ],
+      "heading": "DESCRIPTION",
+      "native_rows": [
+        "BEFORE",
+        "[number]",
+        "AFTER"
+      ]
+    }
+  ]
+}

@@ -23,6 +23,7 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) man_list_state: &'state mut ManListState,
     pub(super) ip_run: Option<super::lists::man::IpRun>,
     pub(super) spacing_enabled: bool,
+    pub(super) synopsis_previous: Option<super::synopsis::SynopsisToken>,
     pub(super) formatter: &'state mut crate::mandoc::formatter::FormatterState,
 }
 
@@ -195,9 +196,12 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.output,
                 node,
                 self.context,
-                self.indent_columns,
+                super::synopsis::SynopsisFlow {
+                    origin: self.indent_columns,
+                    spacing_enabled: self.spacing_enabled,
+                    previous: self.synopsis_previous,
+                },
                 self.paragraph_distance,
-                self.spacing_enabled,
                 self.formatter,
             ),
             _ if node.kind == NodeKind::Table => append_table_row(

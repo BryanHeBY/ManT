@@ -31,6 +31,30 @@ fn styles(nodes: &[Inline], mask: u8) -> Vec<(char, u8)> {
     output
 }
 
+fn assert_visible_search(content: &ResolvedContent, text: &str) {
+    let response = mant_query::search_query(
+        content,
+        &mant_protocol::SearchQuery {
+            pattern: text.into(),
+            syntax: mant_protocol::SearchSyntax::Literal,
+            case: mant_protocol::SearchCase::Sensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap();
+    let occurrences = response
+        .matches
+        .iter()
+        .flat_map(|hit| &hit.occurrences)
+        .collect::<Vec<_>>();
+    assert_eq!(occurrences.len(), 1, "{text}: {response:#?}");
+    assert_eq!(occurrences[0].matched_text, text);
+}
+
 fn options(content: &ResolvedContent) -> &[Block] {
     &content
         .document
@@ -87,6 +111,9 @@ fn native_bi_and_ib_keep_exact_visible_scalars_and_alternating_fonts_after_markd
             panic!("same readback paragraph owner: {markdown}")
         };
         assert_eq!(styles(children, 0), expected, "{source}: {markdown}");
+        for query in [&content, &decoded] {
+            assert_visible_search(query, &format!("{left}{right}"));
+        }
     }
 }
 

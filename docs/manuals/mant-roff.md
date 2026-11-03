@@ -750,6 +750,38 @@ Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 
 The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter. `Eo` and `Ec` retain their literal, author-supplied delimiters. The obsolete `Es` macro changes parser state but emits no text; libmandoc resolves that state onto each `En` invocation before ManT lowers it.
 
+Structural parts are views of a macro, not its complete visible content.
+Direct children before HEAD or after BODY execute in their original sibling
+order. Opening and closing delimiter flags control spacing; unflagged text is
+still content. Enclosure punctuation belongs to BODY/ELEM pre/post, while
+`Xo`/`Xc` remain transparent without adding paragraph boundaries. `Bf` and
+`Fo` retain direct prefixes outside their HEAD/BODY font scopes.
+
+The same rule applies to declarations and displays: a `Vt` tail such as an
+authored semicolon executes after the BODY font is restored; `D1` and `Dl`
+retain direct display prefixes and suffixes. An `It` prefix executes before
+HEAD selects its font and field geometry, then belongs to the same definition
+term. It does not become a separate paragraph, entry, or part of an adjacent
+link label. Option bindings continue to address their accepted selectors;
+literal term names retain the complete declaration spelling. Ordinary list
+HEAD arguments that mandoc deliberately skips stay unexecuted, while their
+direct authored siblings remain in the original item. Responsive list marker
+placement is structural and does not reproduce a prefix's device column.
+
+Section display text follows the same ordered traversal without changing the
+HEAD-derived section identity used by `Sx`. SYNOPSIS name prefixes remain
+outside the name's font scope. Native sentence-end flags take effect on real
+node exits and subsequent word writes, including generated bibliography
+punctuation; they are not inferred from the final visible period. Kept words,
+no-space state and actual empty words retain their distinct separator effects.
+
+Markdown export selects emphasis delimiters in a shared phrasing context and
+checks the complete result with the Markdown parser. Adjacent styles must not
+turn their delimiters into visible text, including across omitted link
+wrappers. When Markdown cannot represent a style without changing that text,
+the style may be simplified while code, navigation and authored hard rows
+remain intact.
+
 An empty `Eo`/`Ec` scope is a zero-width word event. If an authored enclosure has no closing delimiter, its closing boundary still releases an internal no-space request. Empty strings and zero-width text can consume word boundaries; invisible targets and hidden nodes cannot.
 
 Inline spacing follows output order across prose, definition heads, literal displays, and supported tbl source recovery. `Ap` attaches on both sides, including across styled siblings (`.No x Ap y` becomes `x'y`). A generated closing bracket or quote consumes an internal `Ns`/`Pf` boundary; it does not carry that boundary outside the enclosure. An explicitly external `Ns` can still join the following text. Styles and zero-width targets do not consume pending boundaries; real line and paragraph breaks terminate them.

@@ -37,6 +37,14 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Preserve authored direct siblings around native HEAD/BODY views: transparent
+  `Xo`, enclosures, function declarations, one-line displays, definitions,
+  headings and synopsis names execute in source order with their original
+  content owners. Keep generated punctuation, font scopes and pending words
+  in the shared execution flow; skipped native arguments remain skipped.
+- Carry native sentence-end flags through node exits and actual word writes,
+  including bibliography punctuation, rather than guessing spacing from final
+  text. Preserve ordinary and kept-word separator cells in field consumption.
 - Validate complete Markdown phrasing when choosing adjacent emphasis
   delimiters. Preserve alternating styles, code, links and hard rows without
   leaking delimiter characters into visible text; bound encoding work by the

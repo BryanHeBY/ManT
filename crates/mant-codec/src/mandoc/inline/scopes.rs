@@ -3,8 +3,7 @@ use super::font::coalesce_font_runs;
 use super::links::{append_bsd_reference, append_link, append_mail_addresses};
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_include, append_inline_nodes,
-    authored_section_phrase, first_part_children, inline_children, lower_equation_node,
-    navigation_anchor,
+    authored_section_phrase, inline_children, lower_equation_node, navigation_anchor,
 };
 mod nested;
 use nested::{append_column_list, append_nested_list};
@@ -49,6 +48,13 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
 }
 
 fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -> bool {
+    if node.kind == NodeKind::Block && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Rs)) {
+        if let Some(anchor) = navigation_anchor(node) {
+            builder.append(vec![anchor]);
+        }
+        append_bibliography(builder, node, name);
+        return true;
+    }
     if node.kind == NodeKind::Block
         && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
         && node.list_kind.is_some()
@@ -77,6 +83,51 @@ fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Optio
     false
 }
 
+fn append_bibliography(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
+    // Rs has no terminal post or BODY font pre. Its actual field children
+    // still own conjunctions and punctuation, even inside a detached HEAD.
+    // Reuse the block walker's logical sibling rules and the same builder.
+    for part in &node.children {
+        builder.begin_executed_node(part);
+        let geometry = builder.definition_geometry_checkpoint(part);
+        let font = builder.font.checkpoint();
+        if part.kind == NodeKind::Body {
+            let posts = builder.scope_posts.clone();
+            posts.enter_body(part.id, font);
+            append_reference_body(builder, &part.children, name);
+            if let Some(saved) = posts.exit_body(part.id) {
+                builder.font.pop_scope(saved);
+            }
+        } else {
+            append_inline_nodes(builder, &part.children, name);
+            builder.font.pop_scope(font);
+        }
+        builder.execution.finish_executed_node(part);
+        builder.restore_definition_geometry(geometry);
+    }
+}
+
+fn append_reference_body(builder: &mut InlineBuilder, nodes: &[Node], name: Option<&str>) {
+    use crate::mandoc::blocks::mdoc_macros::{reference_author_conjunction, reference_field_post};
+
+    for (index, node) in nodes.iter().enumerate() {
+        if reference_author_conjunction(nodes, index) {
+            builder.append_text("and");
+        }
+        super::append_inline_node_with_next(builder, node, nodes.get(index + 1), name);
+        if let Some(punctuation) = reference_field_post(nodes, index) {
+            builder.tighten_next_boundary();
+            builder.append_text(punctuation.glyph());
+            builder.release_next_boundary();
+            // termp____post() explicitly arms SENTENCE after the final
+            // generated period. This is not inferred from its glyph.
+            if punctuation.ends_sentence() {
+                builder.execution.arm_sentence_end();
+            }
+        }
+    }
+}
+
 fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let children = inline_children(node);
     match node.macro_token.as_ref() {
@@ -87,10 +138,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             super::generated::manual_reference(builder, node, name);
         }
         Some(Mdoc(MdocMacro::Nm)) if node.kind == NodeKind::Block => {
-            builder.with_font_scope(Font::Strong, |builder| {
-                append_name(builder, first_part_children(node, NodeKind::Head), name);
-            });
-            append_inline_nodes(builder, first_part_children(node, NodeKind::Body), name);
+            super::names::append_block(builder, node, None, name);
         }
         Some(Mdoc(MdocMacro::Nm)) => {
             builder.with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
@@ -238,6 +286,17 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
         builder.native_vertical_space(1);
     }
     super::display_tabs::enter_pre(&mut builder.execution, node);
+    if matches!(
+        node.macro_token.as_ref(),
+        Some(Mdoc(MdocMacro::D1 | MdocMacro::Dl))
+    ) {
+        // termp_d1_pre changes state only at BLOCK; the complete native
+        // child stream still executes every HEAD/BODY/TAIL and direct TEXT
+        // in order. Each part restores its font before its next sibling.
+        append_inline_nodes(builder, &node.children, name);
+        builder.no_fill_source_line();
+        return;
+    }
     let Some(body) = node
         .children
         .iter()
@@ -279,6 +338,14 @@ struct InlineContainerSink<'a> {
 impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerSink<'_> {
     fn font(&mut self) -> &mut super::FontState {
         &mut self.builder.font
+    }
+
+    fn finish_node(&mut self, node: &Node) {
+        // The caller finishes the root after its handler returns. Parts
+        // entered directly by the walker finish after their own post here.
+        if node.id != self.root_id {
+            self.builder.execution.finish_executed_node(node);
+        }
     }
 
     fn geometry_checkpoint(&self, node: &Node) -> Option<super::DefinitionGeometryCheckpoint> {
@@ -368,7 +435,9 @@ fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -
             if let Some(anchor) = navigation_anchor(node) {
                 builder.append(vec![anchor]);
             }
-            append_link(builder, node, name);
+            // termp_lk_pre() calls term_word directly, then returns0: its
+            // operand NODE_EOS flags never execute print_mdoc_node's exit.
+            builder.with_direct_word_operands(|builder| append_link(builder, node, name));
         }
         Some(Mdoc(MdocMacro::Mt)) => {
             if let Some(anchor) = navigation_anchor(node) {

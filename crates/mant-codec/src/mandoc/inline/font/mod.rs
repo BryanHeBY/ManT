@@ -66,6 +66,9 @@ pub(super) fn lower_man_font_scope(
                     );
                 });
             });
+            // Unlike most direct term_word pre-handlers, pre_alternate()
+            // explicitly forwards each operand's NODE_EOS (man_term.c:307).
+            output.execution.finish_executed_node(child);
         }
         output.font.select(Font::Regular);
         return;

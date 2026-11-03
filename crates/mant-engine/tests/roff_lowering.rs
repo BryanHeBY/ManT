@@ -60,6 +60,33 @@ mod table_definitions;
 #[path = "roff_lowering/oracle_migrations.rs"]
 mod oracle_migrations;
 
+#[path = "roff_lowering/ordered_definition_heads.rs"]
+mod ordered_definition_heads;
+
+#[path = "roff_lowering/ordered_declaration_displays.rs"]
+mod ordered_declaration_displays;
+
+#[path = "roff_lowering/ordered_container_children.rs"]
+mod ordered_container_children;
+
+#[path = "roff_lowering/ordered_nested_definition_heads.rs"]
+mod ordered_nested_definition_heads;
+
+#[path = "roff_lowering/ordered_section_heads.rs"]
+mod ordered_section_heads;
+
+#[path = "roff_lowering/ordered_plain_list_children.rs"]
+mod ordered_plain_list_children;
+
+#[path = "roff_lowering/ordered_name_phases.rs"]
+mod ordered_name_phases;
+
+#[path = "roff_lowering/name_phase_matrix.rs"]
+mod name_phase_matrix;
+
+#[path = "roff_lowering/reference_scope_children.rs"]
+mod reference_scope_children;
+
 #[path = "roff_lowering/native_execution/mod.rs"]
 mod native_execution;
 
@@ -75,16 +102,19 @@ mod native_nested_list_tabs;
 mod native_tab_fields;
 #[path = "roff_lowering/native_text_cells.rs"]
 mod native_text_cells;
+
+#[path = "roff_lowering/native_sentence_words.rs"]
+mod native_sentence_words;
 #[path = "roff_lowering/tab_display_lifecycle.rs"]
 mod tab_display_lifecycle;
 
 #[path = "roff_lowering/macro_consumer_matrix/mod.rs"]
 mod macro_consumer_matrix;
-#[path = "roff_lowering/markdown_style_sequences.rs"]
-mod markdown_style_sequences;
-
 #[path = "roff_lowering/markdown_hard_rows.rs"]
 mod markdown_hard_rows;
+
+#[path = "roff_lowering/markdown_style_sequences.rs"]
+mod markdown_style_sequences;
 #[path = "roff_lowering/shared_execution_matrix.rs"]
 mod shared_execution_matrix;
 #[path = "roff_lowering/upstream_inline.rs"]

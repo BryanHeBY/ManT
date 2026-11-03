@@ -6,7 +6,7 @@ use mant_ir::{first_visible_character, has_printable_character, last_visible_cha
 
 mod builder;
 mod definition;
-pub(in crate::mandoc) use definition::DefinitionGeometryCheckpoint;
+pub(in crate::mandoc) use definition::{DefinitionGeometryCheckpoint, NamePartGeometry};
 mod execution;
 pub(in crate::mandoc) mod field_buffer;
 use definition::DefinitionFieldState;
@@ -85,7 +85,12 @@ enum SourceLineObservation {
     Grouped,
     Disabled,
     NoFill,
+    DisabledEntered(u32),
+    NoFillEntered(u32),
 }
+
+#[cfg(test)]
+mod source_line_tests;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum CellProduction {
@@ -181,6 +186,10 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// (`roff_term.c:78`).
     pub(in crate::mandoc) native_word_writes: Option<Vec<field_buffer::FieldWrite>>,
     pub(in crate::mandoc) native_word_boundary: Option<PendingBoundary>,
+    /// `NODE_EOS` arms `TERMP_SENTENCE` at source-node exit; the next actual
+    /// `term_word` consumes it even when that word has no visible glyph.
+    sentence_pending: bool,
+    native_word_sentence: bool,
     pub(in crate::mandoc) native_word_owner: Option<String>,
     native_owner_serial: u64,
     pub(in crate::mandoc) concat_next_word: bool,

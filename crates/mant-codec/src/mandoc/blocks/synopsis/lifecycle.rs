@@ -6,14 +6,14 @@ use crate::mandoc::inline::{AuthorBreakEffect, FieldFlag, FieldFlags};
 use crate::mandoc::layout::{Distance, SourceIndent};
 use crate::mandoc::{LoweringContext, first_part_children};
 
-pub(super) fn flushes_head(node: &Node) -> bool {
+pub(in crate::mandoc) fn flushes_head(node: &Node) -> bool {
     node.macro_token.as_ref() == Some(&Man(ManMacro::Sy))
         || !first_part_children(node, NodeKind::Body).is_empty()
 }
 
 /// `pre_SY` and `termp_nm_pre` measure the name without executing its words.
 /// `width_sample` is the shared `term_strlen` escape/character-width reader.
-pub(in crate::mandoc::blocks) fn head_width(node: &Node) -> usize {
+pub(in crate::mandoc) fn head_width(node: &Node) -> usize {
     first_part_children(node, NodeKind::Head)
         .first()
         .map_or(1, |name| {
@@ -23,7 +23,7 @@ pub(in crate::mandoc::blocks) fn head_width(node: &Node) -> usize {
         })
 }
 
-pub(super) fn head_effect(node: &Node) -> AuthorBreakEffect {
+pub(in crate::mandoc) fn head_effect(node: &Node) -> AuthorBreakEffect {
     if !flushes_head(node) {
         return AuthorBreakEffect::Line;
     }
@@ -61,6 +61,13 @@ pub(in crate::mandoc::blocks) fn body_origin(
     context.offset_indent(
         node,
         origin,
-        Distance::cells(i32::try_from(head_width(node)).unwrap_or(i32::MAX)),
+        Distance::cells(
+            i32::try_from(if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
+                head_width(node)
+            } else {
+                crate::mandoc::inline::names::body_width(node, context.default_name)
+            })
+            .unwrap_or(i32::MAX),
+        ),
     )
 }

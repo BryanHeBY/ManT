@@ -1,0 +1,72 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "nm-synopsis",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.Nm ( probe )\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "(probe) AFTER"
+      ]
+    },
+    {
+      "id": "nm-args",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.Nm ( probe\n.Fl a\n.Ar file\n.No AFTER\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "(probe",
+        "-a file AFTER"
+      ]
+    },
+    {
+      "id": "nm-in-head",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe )\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "(probe) BODY"
+      ]
+    },
+    {
+      "id": "nm-literal",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.Bd -literal -compact\n.Nm ( probe )\n.No AFTER\n.Ed\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "(probe)",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "nm-head-args",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Fl a\n.Ar file\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "(probe",
+        "-a file",
+        "BODY"
+      ]
+    },
+    {
+      "id": "nm-head-args-nofill",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Fl a\n.Ar file\n.Xc\n.No BODY\n.El\n.fi\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "",
+        "(probe",
+        "-a",
+        "file",
+        "BODY"
+      ]
+    },
+    {
+      "id": "nm-head-args-font",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.ft I\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Fl a\n.Ar file\n.Xc\n.No BODY\n.El\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "(probe",
+        "-a file",
+        "BODY",
+        "OUTER PREVIOUS"
+      ]
+    },
+    {
+      "id": "nm-head-empty",
+      "source": ".Dd November 3, 2026\n.Dt PARTS 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm (\n.Xc\n.No BODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "( BODY"
+      ]
+    }
+  ]
+}

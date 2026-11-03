@@ -5,6 +5,7 @@ use super::{
     first_part_children, is_inline_equation, is_inline_equation_quote_artifact, source_span,
     targets,
 };
+use crate::mandoc::source_context::HeadNodes;
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 #[derive(Clone, Copy)]
@@ -120,6 +121,7 @@ pub(super) fn definition_item(
 ) -> DefinitionItem {
     close_pending_definition_prefix(formatter);
     let head = visible_definition_head(node);
+    let head_nodes = definition_head_nodes(node, head, context.macro_set);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
     let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;
@@ -130,7 +132,7 @@ pub(super) fn definition_item(
     }
     let head_offset_shift = formatter.row_presentation.offset_shift;
     let (finished, run_in_execution) = lower_definition_head(
-        head,
+        head_nodes,
         &displaced_equations,
         context,
         flow,
@@ -229,6 +231,22 @@ pub(super) fn definition_item(
         formatter.row_presentation.offset_shift = head_offset_shift;
     }
     item
+}
+
+fn definition_head_nodes<'a>(
+    node: &'a Node,
+    content: &'a [Node],
+    macro_set: libmandoc_rs::MacroSet,
+) -> HeadNodes<'a> {
+    let before = if macro_set == libmandoc_rs::MacroSet::Mdoc {
+        node.children
+            .iter()
+            .position(|child| child.kind == NodeKind::Head && child.scope_end.is_none())
+            .map_or(&[][..], |index| &node.children[..index])
+    } else {
+        &[]
+    };
+    HeadNodes { before, content }
 }
 
 fn capture_deferred_operands(
@@ -620,18 +638,19 @@ fn carry_completed_head_rows(
 }
 
 fn lower_definition_head(
-    head: &[Node],
+    head_nodes: HeadNodes<'_>,
     displaced_equations: &[&Node],
     context: &LoweringContext<'_>,
     flow: DefinitionFlow,
     native_head_field_units: Option<usize>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionHeadOutcome {
-    let groups = std::iter::once(head).chain(
-        displaced_equations
-            .iter()
-            .map(|equation| std::slice::from_ref(*equation)),
-    );
+    let head = head_nodes.content;
+    let groups =
+        std::iter::once(head_nodes).chain(displaced_equations.iter().map(|equation| HeadNodes {
+            before: &[],
+            content: std::slice::from_ref(*equation),
+        }));
     if flow.head.generated_cells().is_some() {
         let generated_cells = usize::from(flow.head.generated_cells().unwrap_or_default());
         // mdoc_term.c::termp_it_pre() configures the NOBREAK field before
@@ -668,6 +687,7 @@ fn lower_definition_head(
         );
         finished.execution.last_executed_source_line = head
             .iter()
+            .chain(head_nodes.before)
             .chain(displaced_equations.iter().copied())
             .filter_map(latest_source_line)
             .max();

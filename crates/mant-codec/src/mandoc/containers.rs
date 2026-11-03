@@ -53,6 +53,7 @@ pub(super) enum Event<'a> {
 pub(super) trait ContainerSink<'a> {
     fn font(&mut self) -> &mut super::inline::FontState;
     fn source_node(&mut self, node: &'a Node, starts_line: bool);
+    fn finish_node(&mut self, node: &Node);
     fn event(&mut self, event: Event<'a>);
     fn restore_fill(&mut self, _fill: bool, _marker: &Node) {}
     fn geometry_checkpoint(
@@ -92,6 +93,7 @@ pub(super) fn drive<'a>(
             }
         }
         Event::EndNode(source) => {
+            sink.finish_node(source);
             if let Some(index) = geometry.iter().rposition(|(id, _)| *id == source.id) {
                 let (_, checkpoint) = geometry.remove(index);
                 sink.restore_geometry(checkpoint);
@@ -212,26 +214,33 @@ fn transparent_scope<'a>(node: &'a Node, posts: &ScopePostState, emit: &mut impl
 }
 
 fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
-    let body = node
-        .children
-        .iter()
-        .find(|part| part.kind == NodeKind::Body);
-    let body_id = body.map(|part| part.id);
-    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bk)) {
-        emit(Event::EnterKeep);
-    } else if let Some(font) = node.font {
-        emit(Event::EnterFont(font.into(), body_id));
-    }
-    if let Some(body) = body {
-        emit(Event::At(body, false));
-        emit(Event::Children(&body.children));
-        emit(Event::RestoreBody(body.id));
-        emit(Event::EndNode(body));
-    }
-    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bk)) {
-        emit(Event::ExitKeep);
-    } else if node.font.is_some() {
-        emit(Event::ExitFont(body_id));
+    // termp_bf_pre/termp_bk_pre skip HEAD and select font/keep only at
+    // BODY. blk_full() may leave direct punctuation before HEAD; it runs
+    // in the enclosing font before that BODY pre, in the same buffer.
+    for child in &node.children {
+        match child.kind {
+            NodeKind::Head => {
+                emit(Event::At(child, true));
+                emit(Event::EndNode(child));
+            }
+            NodeKind::Body => {
+                emit(Event::At(child, true));
+                if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bk)) {
+                    emit(Event::EnterKeep);
+                } else if let Some(font) = node.font {
+                    emit(Event::EnterFont(font.into(), Some(child.id)));
+                }
+                emit(Event::Children(&child.children));
+                emit(Event::RestoreBody(child.id));
+                if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bk)) {
+                    emit(Event::ExitKeep);
+                } else if node.font.is_some() {
+                    emit(Event::ExitFont(Some(child.id)));
+                }
+                emit(Event::EndNode(child));
+            }
+            _ => emit(Event::Children(std::slice::from_ref(child))),
+        }
     }
 }
 
@@ -240,6 +249,13 @@ fn emit_enclosure<'a>(
     posts: &ScopePostState,
     emit: &mut impl FnMut(Event<'a>),
 ) -> bool {
+    // CVS termp_quote_pre/post act on BODY/ELEM only. The BLOCK's direct
+    // children are a complete source-ordered stream: punctuation may sit
+    // before its HEAD or after its BODY without DELIMO/DELIMC flags.
+    if !matches!(node.kind, NodeKind::Body | NodeKind::Element) {
+        emit(Event::Children(&node.children));
+        return true;
+    }
     let Some((open, close)) = resolved_enclosure_marks(node) else {
         return false;
     };
@@ -251,30 +267,11 @@ fn emit_enclosure<'a>(
         }
         emit(Event::Tight);
     }
-    let body = node
-        .children
-        .iter()
-        .find(|child| child.kind == NodeKind::Body);
-    if let Some(body) = body {
-        emit(Event::At(body, false));
-        emit(Event::Children(&body.children));
-        let original_body_id = body.scope_end.is_none().then_some(body.id);
-        if original_body_id.is_none_or(|id| !posts.ended(id)) {
-            if let Some(body_id) = original_body_id {
-                emit(Event::RestoreBody(body_id));
-            }
-            emit_enclosure_post(close.as_deref(), emit);
+    emit(Event::Children(&node.children));
+    if !posts.ended(node.id) {
+        if node.kind == NodeKind::Body {
+            emit(Event::RestoreBody(node.id));
         }
-        emit(Event::EndNode(body));
-        for child in node
-            .children
-            .iter()
-            .filter(|child| child.flags.delimiter_close)
-        {
-            emit(Event::Children(std::slice::from_ref(child)));
-        }
-    } else {
-        emit(Event::Children(&node.children));
         emit_enclosure_post(close.as_deref(), emit);
     }
     true
@@ -345,49 +342,37 @@ fn emit_structural_function<'a>(
     posts: &ScopePostState,
     emit: &mut impl FnMut(Event<'a>),
 ) {
-    // CVS mdoc_html.c::mdoc_fo_pre/post render HEAD, opening BODY mark,
-    // children, and closing BODY mark in that order.
-    let head_part = node
-        .children
-        .iter()
-        .find(|child| child.kind == NodeKind::Head);
-    let body_part = node
-        .children
-        .iter()
-        .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none());
-    let synopsis =
-        node.flags.synopsis_pretty || body_part.is_some_and(|part| part.flags.synopsis_pretty);
-    if let Some(part) = body_part {
-        posts.register_function(part.id, synopsis);
-    }
-    if let Some(part) = head_part {
-        emit(Event::BeginNode(part));
-        if let Some(target) = super::targets::raw_target(part) {
-            emit(Event::Anchor(target, super::source_span(part)));
+    // termp_fo_pre/post attach bold to HEAD and punctuation to BODY.
+    // Direct BLOCK children execute around those parts in source order.
+    for part in &node.children {
+        match part.kind {
+            NodeKind::Head => {
+                emit(Event::BeginNode(part));
+                if let Some(target) = super::targets::raw_target(part) {
+                    emit(Event::Anchor(target, super::source_span(part)));
+                }
+                emit(Event::EnterFont(RoffFont::Strong, None));
+                emit(Event::Children(&part.children));
+                emit(Event::ExitFont(None));
+                emit(Event::EndNode(part));
+            }
+            NodeKind::Body if part.scope_end.is_none() => {
+                let synopsis = node.flags.synopsis_pretty || part.flags.synopsis_pretty;
+                posts.register_function(part.id, synopsis);
+                emit(Event::At(part, true));
+                emit(Event::Tight);
+                emit(Event::Glyph("(".to_owned()));
+                emit(Event::Tight);
+                emit_function_body(&part.children, emit);
+                if !posts.ended(part.id) {
+                    emit(Event::RestoreBody(part.id));
+                    emit(Event::Tight);
+                    emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
+                }
+                emit(Event::EndNode(part));
+            }
+            _ => emit(Event::Children(std::slice::from_ref(part))),
         }
-        emit(Event::EnterFont(RoffFont::Strong, None));
-        emit(Event::Children(&part.children));
-        emit(Event::ExitFont(None));
-        emit(Event::EndNode(part));
-    }
-    if let Some(part) = body_part {
-        emit(Event::At(part, false));
-    }
-    emit(Event::Tight);
-    emit(Event::Glyph("(".to_owned()));
-    emit(Event::Tight);
-    if let Some(part) = body_part {
-        emit_function_body(&part.children, emit);
-    }
-    if body_part.is_none_or(|part| !posts.ended(part.id)) {
-        if let Some(part) = body_part {
-            emit(Event::RestoreBody(part.id));
-        }
-        emit(Event::Tight);
-        emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
-    }
-    if let Some(part) = body_part {
-        emit(Event::EndNode(part));
     }
 }
 

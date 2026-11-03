@@ -18,7 +18,7 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     /// The word began with a `\p` marker whose blank the pending glyph's
     /// retreat consumes: the cross-word separator survives in the native
     /// buffer (term.c:573-576 with 901-908) and must print after the glyph.
-    marker_blank_separator: bool,
+    marker_blank_separator: usize,
     /// Non-graph bytes (' ' and '\t') that passed the pending glyph and
     /// stay buffered upstream until the next graph's retreat decides, by
     /// the last-byte rule (term.c:901-908), which single one dies. Order
@@ -86,7 +86,7 @@ pub(in crate::mandoc) struct PendingPrefix {
 impl ZeroAdvanceState {
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
-            marker_blank_separator: false,
+            marker_blank_separator: 0,
             held: Vec::new(),
             machine: ZeroAdvanceMachine::new(),
             native_word_owner: None,
@@ -222,16 +222,16 @@ impl ZeroAdvanceState {
     /// Record that this word's entry boundary carried a separator the
     /// marker-blank retreat keeps alive (`ph` shape, term.c:901-908:
     /// the retreat eats the marker's own blank, not the word separator).
-    pub(in crate::mandoc) fn note_marker_blank_separator(&mut self) {
-        self.marker_blank_separator = true;
+    pub(in crate::mandoc) fn note_marker_blank_separator(&mut self, cells: usize) {
+        self.marker_blank_separator = cells;
     }
 
-    pub(super) fn take_marker_blank_separator(&mut self) -> bool {
+    pub(super) fn take_marker_blank_separator(&mut self) -> usize {
         std::mem::take(&mut self.marker_blank_separator)
     }
 
     pub(in crate::mandoc) fn clear_marker_blank_separator(&mut self) {
-        self.marker_blank_separator = false;
+        self.marker_blank_separator = 0;
     }
 
     /// Blanks buffered behind the pending glyph when a `\p` marker

@@ -75,7 +75,7 @@ fn previous_reference_sibling(nodes: &[Node], index: usize) -> Option<usize> {
 }
 
 /// CVS `mdoc_term.c::termp__a_pre()` adds `and` before the final author.
-pub(super) fn reference_author_conjunction(nodes: &[Node], index: usize) -> bool {
+pub(in crate::mandoc) fn reference_author_conjunction(nodes: &[Node], index: usize) -> bool {
     nodes[index].macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
         && previous_reference_sibling(nodes, index).is_some_and(|previous| {
             nodes[previous].macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
@@ -86,7 +86,10 @@ pub(super) fn reference_author_conjunction(nodes: &[Node], index: usize) -> bool
 
 /// CVS `mdoc_term.c::termp____post()` omits the first comma for exactly two
 /// adjacent authors, then uses a period only after the final Rs field.
-pub(super) fn reference_field_post(nodes: &[Node], index: usize) -> Option<&'static str> {
+pub(in crate::mandoc) fn reference_field_post(
+    nodes: &[Node],
+    index: usize,
+) -> Option<ReferenceFieldPost> {
     let node = &nodes[index];
     if !is_reference_field(node) {
         return None;
@@ -107,5 +110,27 @@ pub(super) fn reference_field_post(nodes: &[Node], index: usize) -> Option<&'sta
     {
         return None;
     }
-    Some(if next.is_none() { "." } else { "," })
+    Some(if next.is_none() {
+        ReferenceFieldPost::Sentence
+    } else {
+        ReferenceFieldPost::Comma
+    })
+}
+
+pub(in crate::mandoc) enum ReferenceFieldPost {
+    Comma,
+    Sentence,
+}
+
+impl ReferenceFieldPost {
+    pub(in crate::mandoc) const fn glyph(&self) -> &'static str {
+        match self {
+            Self::Comma => ",",
+            Self::Sentence => ".",
+        }
+    }
+
+    pub(in crate::mandoc) const fn ends_sentence(&self) -> bool {
+        matches!(self, Self::Sentence)
+    }
 }

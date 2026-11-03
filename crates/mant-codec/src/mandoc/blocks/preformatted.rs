@@ -7,6 +7,31 @@ use mant_ir::{Block, Inline};
 use super::{BlockLowerer, DisplayFillMode, FormatterRowBoundary, LoweringContext};
 
 impl BlockLowerer<'_, '_> {
+    /// D1/Dl pre/post belong to BLOCK; each part keeps its own source/font
+    /// checkpoint. Unlike Bd HEAD, their HEAD pre permits its children.
+    fn push_single_line_display_children(&mut self, node: &Node) {
+        for child in &node.children {
+            if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
+                let geometry = self
+                    .state
+                    .formatter
+                    .execution
+                    .definition_geometry_checkpoint(child);
+                self.state.enter_column_node(child);
+                let saved_font = self.state.formatter.font.checkpoint();
+                self.push_nodes(&child.children);
+                self.state.formatter.font.pop_scope(saved_font);
+                self.state.formatter.execution.finish_executed_node(child);
+                self.state
+                    .formatter
+                    .execution
+                    .restore_definition_geometry(geometry);
+            } else {
+                self.push_nodes(std::slice::from_ref(child));
+            }
+        }
+    }
+
     /// Column displays execute in the same active stream as their siblings.
     /// The pre/post handlers really flush native cells, but an IR destination
     /// return does not close a device row retained by NOBREAK (term.c:250).
@@ -41,7 +66,9 @@ impl BlockLowerer<'_, '_> {
             .iter()
             .position(|child| child.kind == NodeKind::Body);
         let mut close_at_source_marker = false;
-        if let Some(index) = body_index {
+        if !is_bd {
+            self.push_single_line_display_children(node);
+        } else if let Some(index) = body_index {
             let body = &node.children[index];
             crate::mandoc::inline::display_tabs::enter_pre(
                 &mut self.state.formatter.execution,
@@ -134,7 +161,12 @@ pub(super) fn preformatted_blocks(
         .children
         .iter()
         .position(|child| child.kind == NodeKind::Body);
-    if let Some(index) = body_index {
+    if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Bd)) {
+        // termp_d1_pre(BLOCK) already selected the display origin/stops.
+        // The generic native traversal includes leading and trailing direct
+        // children, not merely BODY plus delimiter-close TEXT.
+        lowerer.push_single_line_display_children(node);
+    } else if let Some(index) = body_index {
         let body = &node.children[index];
         crate::mandoc::inline::display_tabs::enter_pre(
             &mut lowerer.state.formatter.execution,

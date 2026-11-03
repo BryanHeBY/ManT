@@ -2,6 +2,46 @@
 use super::{BlockState, InlineBuilder};
 
 impl BlockState {
+    pub(in crate::mandoc::blocks) fn enter_name_body_node(
+        &mut self,
+        node: &libmandoc_rs::Node,
+        width: usize,
+    ) -> crate::mandoc::inline::names::NameBodyScope {
+        self.formatter.no_fill = node.flags.no_fill;
+        self.paragraph
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder.observe_no_fill_source_lines(true);
+                let saved = crate::mandoc::inline::names::enter_body(builder, node, width);
+                // BlockLowerer settles its preceding literal fragment and
+                // owns the IR row boundary. Ordinary inline node entry is
+                // the actual NODE_LINE native gate, including a first BODY
+                // child when only the detached HEAD's printed row is open.
+                // Always retain the structural BODY coordinate base. Its
+                // real open-row receipt independently decides whether the
+                // combined HEAD/BODY paragraph owns same-row padding.
+                builder.execution.declare_name_body_origin();
+                saved
+            })
+    }
+
+    pub(in crate::mandoc::blocks) fn finish_name_body_node(
+        &mut self,
+        node: &libmandoc_rs::Node,
+        saved: crate::mandoc::inline::names::NameBodyScope,
+    ) {
+        let finish = |builder: &mut InlineBuilder| {
+            crate::mandoc::inline::names::finish_body(builder, node, saved);
+        };
+        if self.column_uses_literal_output() || self.formatter.no_fill {
+            self.literal
+                .with_inline_builder(&mut self.formatter, finish);
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, finish);
+        }
+        self.formatter.no_fill_inline.retire_consumed_cell();
+    }
+
     /// A display changes the active IR destination, not its native field.
     /// Keep the exact vector/anchor coordinate system until its real post.
     pub(in crate::mandoc::blocks) fn enter_column_display_output(&mut self) {

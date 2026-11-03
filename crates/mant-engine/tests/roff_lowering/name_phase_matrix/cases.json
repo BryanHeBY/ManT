@@ -1,0 +1,4039 @@
+{
+  "reference_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "h0-b0-p0-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm\n.Sh NEXT\n.No END\n",
+      "source_sha256": "683a47ecd739c0212ff76cab0a6b62b99d44c7f750358a494ee0d59b0be9c49a",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        ""
+      ],
+      "rows": [
+        ""
+      ],
+      "font_cells": [],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p0-n0-f0",
+        "metadata_name": null,
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        ""
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b0-p0-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "13bb6af11f51f988cfa6b34ec1c4f56a9f0983ada19c5c7328ae65bad3c76c86",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        ""
+      ],
+      "rows": [
+        ""
+      ],
+      "font_cells": [],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p0-n0-f1",
+        "metadata_name": null,
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        ""
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h0-b0-p0-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d04c9ae6735347a0ca89a79cab8888c7a821f48ecb0fa3851740143b771d9c6b",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p0-n1-f0",
+        "metadata_name": null,
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b0-p0-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "9b99beca81b1f585f6c916e91021a9c8109d30c8125e4e8aa6fe1a557ef53287",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p0-n1-f1",
+        "metadata_name": null,
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h0-b0-p1-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm (\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d6443c7ddc146366371e6838ea4851da548757343a825d85f1ba40275f6e8b9e",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     ("
+      ],
+      "rows": [
+        "("
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p1-n0-f0",
+        "metadata_name": "(",
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "("
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b0-p1-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm (\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "385a14e2235cfd875956702032272f4f27f6aa8506bfb2d4a8b1013df25e0fd3",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     ("
+      ],
+      "rows": [
+        "("
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p1-n0-f1",
+        "metadata_name": "(",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "("
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h0-b0-p1-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm (\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "8f95c1fb67d731892a08a8f0621a2963a9f2d7b195b2a74762438795f968a71b",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (                                                             OUTERBODY"
+      ],
+      "rows": [
+        "(                                                             OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p1-n1-f0",
+        "metadata_name": "(",
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "( OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b0-p1-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm (\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "811f806c996d8865a8f098ebaaadde4ae224198881e3642ecf1d17038aa13c23",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     (",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "(",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b0-p1-n1-f1",
+        "metadata_name": "(",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "",
+        "(",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h0-b1-p0-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm\n.Fl a\n.Ar file\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d123876ca245ad0c192571feb3f2ff13df6e92836b951bddd9f96ab7cd90720e",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "            -a file"
+      ],
+      "rows": [
+        "",
+        "       -a file"
+      ],
+      "font_cells": [
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          6,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p0-n0-f0",
+        "metadata_name": "a file",
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "",
+        "-a file"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b1-p0-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm\n.Fl a\n.Ar file\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "51a2213eaec5c9115636e762366a84340dfbf1ede05ffdea590e393657057b58",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "            -a",
+        "            file"
+      ],
+      "rows": [
+        "",
+        "       -a",
+        "       file"
+      ],
+      "font_cells": [
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          7,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p0-n0-f1",
+        "metadata_name": "a file",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "",
+        "-a",
+        "file"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h0-b1-p0-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "10ec81f805ba1c12e442aefff1e2726301fe68a5e9a8586509a6b8dfc029f830",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "            -a file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "       -a file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          8,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p0-n1-f0",
+        "metadata_name": "a file",
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "-a file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b1-p0-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "74954f28dceed9b0bddf8a31b5a0700e5c0d0b42cddfab78e282731c3bbdfc8b",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "            -a",
+        "            file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "       -a",
+        "       file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          9,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p0-n1-f1",
+        "metadata_name": "a file",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "",
+        "-a",
+        "file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h0-b1-p1-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm (\n.Fl a\n.Ar file\n.Sh NEXT\n.No END\n",
+      "source_sha256": "383c85cdd9b33891855fd897a64b5a3ccd1ae5ca8dc60b45bcfeff0b07f9a3e3",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (",
+        "            -a file"
+      ],
+      "rows": [
+        "(",
+        "       -a file"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          6,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p1-n0-f0",
+        "metadata_name": "a file",
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(",
+        "-a file"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b1-p1-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm (\n.Fl a\n.Ar file\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "a01433e8e463c6319eee613251d9372b9163477a0cd1dd14cc5fddcb4541c0f1",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (",
+        "            -a",
+        "            file"
+      ],
+      "rows": [
+        "(",
+        "       -a",
+        "       file"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          7,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p1-n0-f1",
+        "metadata_name": "a file",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(",
+        "-a",
+        "file"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h0-b1-p1-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm (\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "291f6eab57be698952f02958d2aea2b1005b2be1e7dece66aca7b4f0947e1d82",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (      -a file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "(      -a file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          8,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p1-n1-f0",
+        "metadata_name": "a file",
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(      -a file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h0-b1-p1-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm (\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "d9b15571573f9130473225892d3ab5aef5f9cb7082b14205409395aaa69655ba",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     (",
+        "            -a",
+        "            file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "(",
+        "       -a",
+        "       file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          9,
+          2
+        ],
+        "head_nonempty": false,
+        "head_source": null,
+        "id": "h0-b1-p1-n1-f1",
+        "metadata_name": "a file",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "",
+        "(",
+        "-a",
+        "file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "empty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b0-p0-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm probe\n.Sh NEXT\n.No END\n",
+      "source_sha256": "60771addc1c2d4788cc724a03f38681569772a53e32446b86ad5536a5fcd406e",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     probe"
+      ],
+      "rows": [
+        "probe"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          5,
+          5
+        ],
+        "id": "h1-b0-p0-n0-f0",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "probe"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b0-p0-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm probe\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "49c769a06db718a2637bad662ca71ed01587c0ca09cc6e0e96355daddfacf424",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     probe"
+      ],
+      "rows": [
+        "probe"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          6,
+          5
+        ],
+        "id": "h1-b0-p0-n0-f1",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "probe"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b0-p0-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm probe\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "a911d1ff7d6f54e76e8a0142b7e5c6a6853b87f72739ce93b37728bd9f783cce",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     probe                                                         OUTERBODY"
+      ],
+      "rows": [
+        "probe                                                         OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          7,
+          5
+        ],
+        "id": "h1-b0-p0-n1-f0",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "probe OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b0-p0-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm probe\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "b187d232bf37ffd28177470c04a0bc7957d44b193e8bbb0735a7eb8b7ed1a196",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     probe",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "probe",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          5
+        ],
+        "id": "h1-b0-p0-n1-f1",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "",
+        "probe",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b0-p1-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm ( probe\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d3e27ceadcbd3475eb2203c4be7dc5474999a38d146ac593d4057a70b82fb2f3",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (probe"
+      ],
+      "rows": [
+        "(probe"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          5,
+          7
+        ],
+        "id": "h1-b0-p1-n0-f0",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(probe"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b0-p1-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm ( probe\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "169c5c1552c1ba19248c6274a4dc1b054b685195bc63ad453c0b6c1821048d2c",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (",
+        "     probe"
+      ],
+      "rows": [
+        "(",
+        "probe"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          6,
+          7
+        ],
+        "id": "h1-b0-p1-n0-f1",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(",
+        "probe"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b0-p1-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "930781a27224340a158c693df979cbb69a455f7637acfbd08f9d60df70cddee6",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (probe                                                        OUTERBODY"
+      ],
+      "rows": [
+        "(probe                                                        OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          7,
+          7
+        ],
+        "id": "h1-b0-p1-n1-f0",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(probe OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b0-p1-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "b5e7e94fe455a62408209a56bfd8147c10e1814b38049378371e5cd4630e8127",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     (probe",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "(probe",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          7
+        ],
+        "id": "h1-b0-p1-n1-f1",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "",
+        "(probe",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b1-p0-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm probe\n.Fl a\n.Ar file\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d9ed82079c1c53c6d6c2a041857910d060fcedbf5c01be48fa25a8395399a8d6",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     probe -a file"
+      ],
+      "rows": [
+        "probe -a file"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          6,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          5,
+          5
+        ],
+        "id": "h1-b1-p0-n0-f0",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "probe -a file"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b1-p0-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm probe\n.Fl a\n.Ar file\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "c3233384690495a4ecc27c124ddbf10e028307e0c652e5c7e758baa5d796b00b",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     probe",
+        "           -a",
+        "           file"
+      ],
+      "rows": [
+        "probe",
+        "      -a",
+        "      file"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          7,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          6,
+          5
+        ],
+        "id": "h1-b1-p0-n0-f1",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "probe",
+        "-a",
+        "file"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b1-p0-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm probe\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "82614af4e64b077c2aef46b0e9ee1140b4955ef4cc3476e0b79057cf6ebb6eeb",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     probe -a file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "probe -a file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          8,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          7,
+          5
+        ],
+        "id": "h1-b1-p0-n1-f0",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "probe -a file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b1-p0-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm probe\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "ece94867780f1cecf225343ef6d48a6517fd1f89b4adda388dc8268d68b32cab",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     probe",
+        "           -a",
+        "           file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "probe",
+        "      -a",
+        "      file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          9,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          5
+        ],
+        "id": "h1-b1-p0-n1-f1",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "",
+        "probe",
+        "-a",
+        "file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b1-p1-n0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Nm ( probe\n.Fl a\n.Ar file\n.Sh NEXT\n.No END\n",
+      "source_sha256": "0c4e1cd4dafc7b69438517996d140808dc916063ff11352ca64c2ae5ca80a1db",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (probe",
+        "           -a file"
+      ],
+      "rows": [
+        "(probe",
+        "      -a file"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          6,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          5,
+          7
+        ],
+        "id": "h1-b1-p1-n0-f0",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          5,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(probe",
+        "-a file"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b1-p1-n0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Nm ( probe\n.Fl a\n.Ar file\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "09154d9ddb1be46793dde27bf26767d53e8d719e4255857da1c35c14f0fe5397",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (",
+        "     probe",
+        "           -a",
+        "           file"
+      ],
+      "rows": [
+        "(",
+        "probe",
+        "      -a",
+        "      file"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          7,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          6,
+          7
+        ],
+        "id": "h1-b1-p1-n0-f1",
+        "metadata_name": "probe",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": null,
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(",
+        "probe",
+        "-a",
+        "file"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "top",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "h1-b1-p1-n1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "710709d6f2d80bbcbe311feeb314fed54a931260686494e8e9daab880daedfdb",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (probe",
+        "           -a file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "(probe",
+        "      -a file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          8,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          7,
+          7
+        ],
+        "id": "h1-b1-p1-n1-f0",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          7,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(probe",
+        "-a file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "h1-b1-p1-n1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "684a346fbd191bec67d14989468ffa563fce62937e1b797bef1be9149935f57a",
+      "font_control": false,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     (probe",
+        "           -a",
+        "           file",
+        "                                                                   OUTERBODY"
+      ],
+      "rows": [
+        "",
+        "(probe",
+        "      -a",
+        "      file",
+        "                                                              OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "(",
+          0
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          9,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          7
+        ],
+        "id": "h1-b1-p1-n1-f1",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "",
+        "(probe",
+        "-a",
+        "file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "font-b0-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.ft I\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Xc\n.No OUTERBODY\n.El\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.No END\n",
+      "source_sha256": "9b00de044c48784d5bda1228683dddf68e0b1db2693420d42a81b28b58306d9d",
+      "font_control": true,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (probe                                                        OUTERBODY",
+        "     OUTER PREVIOUS"
+      ],
+      "rows": [
+        "(probe                                                        OUTERBODY",
+        "OUTER PREVIOUS"
+      ],
+      "font_cells": [
+        [
+          "(",
+          2
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "T",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "P",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "V",
+          2
+        ],
+        [
+          "I",
+          2
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "S",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          7
+        ],
+        "id": "font-b0-f0",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(probe OUTERBODY",
+        "OUTER PREVIOUS"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "font-b0-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.ft I\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Xc\n.No OUTERBODY\n.El\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "bd1802d8d63a82142f5aa116fe474a6c1fc9a19932689b7596f130070b21c955",
+      "font_control": true,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     (probe",
+        "                                                                   OUTERBODY",
+        "     OUTER",
+        "     PREVIOUS"
+      ],
+      "rows": [
+        "",
+        "(probe",
+        "                                                              OUTERBODY",
+        "OUTER",
+        "PREVIOUS"
+      ],
+      "font_cells": [
+        [
+          "(",
+          2
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "T",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "P",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "V",
+          2
+        ],
+        [
+          "I",
+          2
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "S",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": false,
+        "body_source": null,
+        "head_nonempty": true,
+        "head_source": [
+          9,
+          7
+        ],
+        "id": "font-b0-f1",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          9,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          8,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "",
+        "(probe",
+        "OUTERBODY",
+        "OUTER",
+        "PREVIOUS"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "empty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "font-b1-f0",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.ft I\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.No END\n",
+      "source_sha256": "e3f07f8487d95c42ed5fcbd9fe0f38e8fd6360f88c0db7ccd99396628b4b355d",
+      "font_control": true,
+      "temporary_indent": null,
+      "native_rows": [
+        "     (probe",
+        "           -a file",
+        "                                                                   OUTERBODY",
+        "     OUTER PREVIOUS"
+      ],
+      "rows": [
+        "(probe",
+        "      -a file",
+        "                                                              OUTERBODY",
+        "OUTER PREVIOUS"
+      ],
+      "font_cells": [
+        [
+          "(",
+          2
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "T",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "P",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "V",
+          2
+        ],
+        [
+          "I",
+          2
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "S",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          9,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          7
+        ],
+        "id": "font-b1-f0",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          7,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "(probe",
+        "-a file",
+        "OUTERBODY",
+        "OUTER PREVIOUS"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "font-b1-f1",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.ft I\n.nf\n.Bl -tag -width 60n\n.It Xo\n.Nm ( probe\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\nOUTER\n.ft P\nPREVIOUS\n.Sh NEXT\n.fi\n.No END\n",
+      "source_sha256": "cc8b85423edd4e07a46c95efabc3223f0bf819504c88a2c3d5272dc3e90a5337",
+      "font_control": true,
+      "temporary_indent": null,
+      "native_rows": [
+        "",
+        "     (probe",
+        "           -a",
+        "           file",
+        "                                                                   OUTERBODY",
+        "     OUTER",
+        "     PREVIOUS"
+      ],
+      "rows": [
+        "",
+        "(probe",
+        "      -a",
+        "      file",
+        "                                                              OUTERBODY",
+        "OUTER",
+        "PREVIOUS"
+      ],
+      "font_cells": [
+        [
+          "(",
+          2
+        ],
+        [
+          "p",
+          1
+        ],
+        [
+          "r",
+          1
+        ],
+        [
+          "o",
+          1
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "e",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "T",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "P",
+          2
+        ],
+        [
+          "R",
+          2
+        ],
+        [
+          "E",
+          2
+        ],
+        [
+          "V",
+          2
+        ],
+        [
+          "I",
+          2
+        ],
+        [
+          "O",
+          2
+        ],
+        [
+          "U",
+          2
+        ],
+        [
+          "S",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          10,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          9,
+          7
+        ],
+        "id": "font-b1-f1",
+        "metadata_name": "probe",
+        "nested": true,
+        "nm_source": [
+          9,
+          2
+        ],
+        "no_fill": true,
+        "outer_source": [
+          8,
+          2
+        ],
+        "prefix": "("
+      },
+      "portable_rows": [
+        "",
+        "(probe",
+        "-a",
+        "file",
+        "OUTERBODY",
+        "OUTER",
+        "PREVIOUS"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "present",
+        "owner": "head",
+        "fill": "nofill"
+      }
+    },
+    {
+      "id": "ti-n0-+4",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.ti +4n\n.Nm x\n.Fl a\n.Ar file\n.Sh NEXT\n.No END\n",
+      "source_sha256": "02ee55cfe859a2664c4f198090b4b0b9aed54b5a61614a28828ea437c107838f",
+      "font_control": false,
+      "temporary_indent": "+4",
+      "native_rows": [
+        "         x -a file"
+      ],
+      "rows": [
+        "    x -a file"
+      ],
+      "font_cells": [
+        [
+          "x",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          7,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          6,
+          5
+        ],
+        "id": "ti-n0-+4",
+        "metadata_name": "x",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "x -a file"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "ti-n0--5",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.ti -5n\n.Nm x\n.Fl a\n.Ar file\n.Sh NEXT\n.No END\n",
+      "source_sha256": "d588bc9ceee4c2aeb7bdf60cd79f8fbbe5f6ccf5e9f1200660abddc6396f206c",
+      "font_control": false,
+      "temporary_indent": "-5",
+      "native_rows": [
+        "x -a file"
+      ],
+      "rows": [
+        "x -a file"
+      ],
+      "font_cells": [
+        [
+          "x",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          7,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          6,
+          5
+        ],
+        "id": "ti-n0--5",
+        "metadata_name": "x",
+        "nested": false,
+        "nm_source": [
+          6,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": null,
+        "prefix": ""
+      },
+      "portable_rows": [
+        "x -a file"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "top",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "ti-n1-+4",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 30n\n.It Xo\n.ti +4n\n.Nm x\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "fc02c5ccb6d599d6348cc2503bf67e354421cca61fc759611f494222492bccf5",
+      "font_control": false,
+      "temporary_indent": "+4",
+      "native_rows": [
+        "                                         x -a file",
+        "                                     OUTERBODY"
+      ],
+      "rows": [
+        "                                    x -a file",
+        "                                OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "x",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          9,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          5
+        ],
+        "id": "ti-n1-+4",
+        "metadata_name": "x",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "x -a file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "filled"
+      }
+    },
+    {
+      "id": "ti-n1--5",
+      "source": ".Dd November 3, 2026\n.Dt NMPHASES 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width 30n\n.It Xo\n.ti -5n\n.Nm x\n.Fl a\n.Ar file\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "source_sha256": "de316357df8a7b0fe7c1070d59709f1673161eb2e501822000546ca2d7c42316",
+      "font_control": false,
+      "temporary_indent": "-5",
+      "native_rows": [
+        "                                x -a file",
+        "                                     OUTERBODY"
+      ],
+      "rows": [
+        "                           x -a file",
+        "                                OUTERBODY"
+      ],
+      "font_cells": [
+        [
+          "x",
+          1
+        ],
+        [
+          "-",
+          1
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "f",
+          2
+        ],
+        [
+          "i",
+          2
+        ],
+        [
+          "l",
+          2
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "U",
+          0
+        ],
+        [
+          "T",
+          0
+        ],
+        [
+          "E",
+          0
+        ],
+        [
+          "R",
+          0
+        ],
+        [
+          "B",
+          0
+        ],
+        [
+          "O",
+          0
+        ],
+        [
+          "D",
+          0
+        ],
+        [
+          "Y",
+          0
+        ]
+      ],
+      "ast": {
+        "body_nonempty": true,
+        "body_source": [
+          9,
+          2
+        ],
+        "head_nonempty": true,
+        "head_source": [
+          8,
+          5
+        ],
+        "id": "ti-n1--5",
+        "metadata_name": "x",
+        "nested": true,
+        "nm_source": [
+          8,
+          2
+        ],
+        "no_fill": false,
+        "outer_source": [
+          6,
+          2
+        ],
+        "prefix": ""
+      },
+      "portable_rows": [
+        "x -a file",
+        "OUTERBODY"
+      ],
+      "shape": {
+        "head": "nonempty",
+        "body": "nonempty",
+        "prefix": "absent",
+        "owner": "head",
+        "fill": "filled"
+      }
+    }
+  ]
+}

@@ -70,7 +70,20 @@ impl InlineBuilder {
     pub(super) fn flush_captured_definition_field(
         &mut self,
         field: FieldFlush,
+        native: Option<NativeFieldDevice>,
+    ) -> bool {
+        self.flush_captured_definition_field_with_origin(
+            field,
+            native,
+            super::super::CompletedRowOrigin::Layout,
+        )
+    }
+
+    pub(super) fn flush_captured_definition_field_with_origin(
+        &mut self,
+        field: FieldFlush,
         mut native: Option<NativeFieldDevice>,
+        origin: super::super::CompletedRowOrigin,
     ) -> bool {
         let FieldFlush {
             start: mut field_output_start,
@@ -124,6 +137,18 @@ impl InlineBuilder {
         if !self.has_formatter_cell() {
             if had_open_device_row {
                 self.settle_empty_device_field(native.as_ref(), boundary);
+            } else if origin == super::super::CompletedRowOrigin::LiteralText
+                && native
+                    .as_ref()
+                    .is_some_and(NativeFieldDevice::closes_unprinted_row)
+            {
+                // This exact tail endline has no graph owner. Authored
+                // loop rows were projected above from their own receipts;
+                // this is only the final term.c:250-253 row, not another
+                // consumption of those passes or a stale Invisible flag.
+                self.record_completed_rows(1, origin);
+                self.execution.zero_advance.discard_at_row_end();
+                self.retire_native_field_with_device_at(native.as_ref(), boundary);
             }
             // `roff_term_pre_br()` applies BRIND even when `term_newln()` had
             // no tcol bytes or device row to flush.  It moves the next word
@@ -156,7 +181,7 @@ impl InlineBuilder {
         // fitting TAG field (term.c:250-253); overrun alone is insufficient.
         let ends_row = native.as_ref().map_or(overruns, |field| field.ends_row);
         if ends_row {
-            self.hard_break_after_field_projection(native.as_ref());
+            self.hard_break_after_field_projection_with_origin(native.as_ref(), origin);
         } else if field_is_printable {
             if !exit_field {
                 // term_flushln() retains trailspace as minbl. A following
@@ -388,6 +413,7 @@ impl InlineBuilder {
     pub(super) fn flush_native_hang_field(&mut self, gap: u8, body_width: u16, exit_field: bool) {
         let had_cell = self.has_formatter_cell();
         let pending_glyph_width = self.pending_hang_glyph_width();
+        let mut next_origin = None;
         if let Some(definition) = &mut self.execution.definition {
             if let Some(width) = pending_glyph_width {
                 definition.hang_row.pending_glyph(width);
@@ -399,11 +425,15 @@ impl InlineBuilder {
                 definition.hang_row.flush(usize::from(gap));
             }
             if exit_field {
-                definition.hang_row.field_offset = usize::from(body_width);
-                definition.field_offset_units = definition
-                    .native_margin_units
-                    .unwrap_or_else(|| usize::from(body_width).saturating_mul(24));
+                next_origin = Some(
+                    definition
+                        .native_margin_units
+                        .unwrap_or_else(|| i64::from(body_width).saturating_mul(24)),
+                );
             }
+        }
+        if let Some(origin) = next_origin {
+            self.set_definition_source_origin(origin);
         }
     }
 }

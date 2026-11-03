@@ -119,7 +119,17 @@ fn lower_section(
     formatter.row_presentation.offset_shift = 0;
     formatter.row_presentation.parent = 0;
     let mut heading = context.lower_section_heading(
-        head,
+        crate::mandoc::source_context::HeadNodes {
+            // blk_full() emits leading delimiter TEXT before allocating
+            // Sh/Ss HEAD. It executes before the HEAD's bold pre, remains
+            // in this heading owner, and is not part of its deroff identity.
+            before: node
+                .children
+                .iter()
+                .position(|child| child.kind == NodeKind::Head)
+                .map_or(&[], |head| &node.children[..head]),
+            content: head,
+        },
         formatter,
         section_context == crate::mandoc::source_context::MdocSectionContext::Authors,
     );

@@ -284,7 +284,15 @@ impl InlineBuilder {
             // second \\z has armed BACKAFTER. Both flags coexist upstream:
             // the marker's author blank, rather than this automatic blank,
             // is what the next encode1() retreats over (term.c:901-927).
-            self.execution.zero_advance.note_marker_blank_separator();
+            let native_boundary = self
+                .execution
+                .native_word_boundary
+                .unwrap_or(self.execution.boundary);
+            let cells = usize::from(!native_boundary.is_native_tight())
+                * (1 + usize::from(self.execution.native_word_sentence));
+            self.execution
+                .zero_advance
+                .note_marker_blank_separator(cells);
             return;
         }
         if !next_is_visible
@@ -319,7 +327,7 @@ impl InlineBuilder {
                     self.append_projected(glyph);
                 } else {
                     self.append_projected(vec![Inline::Text {
-                        value: " ".to_owned(),
+                        value: " ".repeat(1 + usize::from(self.execution.native_word_sentence)),
                     }]);
                     self.execution.formatter_column = FormatterColumn::Advanced;
                 }
@@ -410,6 +418,9 @@ impl InlineBuilder {
     }
 
     fn begin_native_word_registers(&mut self, next_is_visible: bool) -> bool {
+        // term_word() consumes SENTENCE before interpreting its payload;
+        // empty/control-only/generated words are still real word events.
+        self.execution.native_word_sentence = std::mem::take(&mut self.execution.sentence_pending);
         if next_is_visible {
             // term_word() clears skipvsp before consuming the word itself.
             self.execution.vertical_space_debt = 0;

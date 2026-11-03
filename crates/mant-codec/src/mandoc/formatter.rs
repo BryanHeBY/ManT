@@ -385,8 +385,19 @@ impl FormatterState {
         &mut self,
         builder: InlineBuilder,
     ) -> (Vec<mant_ir::Inline>, PreservedInlineState) {
+        let occupied = builder.definition_head_row_occupied();
+        self.finish_inline_scope_with_occupied(builder, occupied)
+    }
+
+    /// A real Nm HEAD post has already consumed its field. Its receipt,
+    /// rather than another flush under the now-cleared flags, owns occupancy.
+    pub(super) fn finish_inline_scope_with_occupied(
+        &mut self,
+        builder: InlineBuilder,
+        occupied: bool,
+    ) -> (Vec<mant_ir::Inline>, PreservedInlineState) {
         self.definition_head_rows = DefinitionHeadRows {
-            occupied: builder.definition_head_row_occupied(),
+            occupied,
             completed_empty_rows: builder.completed_empty_rows(),
         };
         let (output, preserved, mut execution) = builder.finish_preserving_execution();

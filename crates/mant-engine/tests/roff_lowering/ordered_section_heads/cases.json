@@ -1,0 +1,255 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "sh-single",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Sh ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "sh-multi",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Sh ( [ HEADING ] )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "([HEADING])",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        },
+        {
+          "text": "[",
+          "column": 7
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "sh-escaped",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Sh \\&( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "( HEADING)",
+      "direct_text": [],
+      "italic_prefix": false
+    },
+    {
+      "id": "sh-empty-head",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Sh (\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "(",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "sh-italic",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.ft I\n.Sh ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": true
+    },
+    {
+      "id": "sh-sm-off",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Sm off\n.Sh ( HEADING )\n.No BODY\n.Sm on\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "sh-pending-z",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.No \\z\n.Sh ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "sh-post-c",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.No PREVIOUS\\c\n.Sh ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "sh-link",
+      "macro": "Sh",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Sh ( Xr printf 3 )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "(printf(3))",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-single",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Ss ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-multi",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Ss ( [ HEADING ] )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "([HEADING])",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        },
+        {
+          "text": "[",
+          "column": 7
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-escaped",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Ss \\&( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "( HEADING)",
+      "direct_text": [],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-empty-head",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Ss (\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "(",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-italic",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.ft I\n.Ss ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": true
+    },
+    {
+      "id": "ss-sm-off",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Sm off\n.Ss ( HEADING )\n.No BODY\n.Sm on\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-pending-z",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.No \\z\n.Ss ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-post-c",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.No PREVIOUS\\c\n.Ss ( HEADING )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 7,
+      "heading": "(HEADING)",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    },
+    {
+      "id": "ss-link",
+      "macro": "Ss",
+      "source": ".Dd November 3, 2026\n.Dt HEADINGS 1\n.Os\n.Sh BASE\n.No BEFORE\n.Ss ( Xr printf 3 )\n.No BODY\n.Sh NEXT\n.No END\n",
+      "line": 6,
+      "heading": "(printf(3))",
+      "direct_text": [
+        {
+          "text": "(",
+          "column": 5
+        }
+      ],
+      "italic_prefix": false
+    }
+  ]
+}

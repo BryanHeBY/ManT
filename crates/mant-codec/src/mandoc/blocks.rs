@@ -40,7 +40,7 @@ use sections::is_section;
 pub(super) use sections::lower_document_structure;
 mod structural;
 use structural::StructuralLowerer;
-mod synopsis;
+pub(in crate::mandoc) mod synopsis;
 use synopsis::lower_synopsis_head;
 mod flow;
 mod man_links;
@@ -48,7 +48,7 @@ mod man_nofill;
 use flow::BlockState;
 mod lists;
 mod man_macros;
-mod mdoc_macros;
+pub(in crate::mandoc) mod mdoc_macros;
 mod preformatted;
 mod tables;
 mod walker;
@@ -340,8 +340,8 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         self.push_nodes_with_reference_posts(nodes, false);
     }
 
-    fn settle_no_fill_inline(&mut self) {
-        self.state.settle_no_fill_row();
+    fn settle_no_fill_inline(&mut self) -> bool {
+        self.state.settle_no_fill_row()
     }
 
     fn finish_into(

@@ -36,7 +36,8 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn set_definition_native_margin(&mut self, units: usize) {
-        self.definition_state_mut().native_margin_units = Some(units);
+        self.definition_state_mut().native_margin_units =
+            Some(i64::try_from(units).unwrap_or(i64::MAX));
     }
 
     pub(in crate::mandoc) fn has_definition_head(&self) -> bool {
@@ -120,6 +121,20 @@ impl InlineBuilder {
     /// Return the consumed native tail to callers with a real post effect.
     /// This is the same execution, never another IR-width observation.
     pub(in crate::mandoc::inline::flow) fn execute_native_newline_with_tail(&mut self) -> bool {
+        self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::Layout)
+    }
+
+    /// The literal owner receives the same consumed tail as content rows.
+    /// Its old `Invisible` classification cannot distinguish a buffered
+    /// zero-advance glyph from an accepted NBRZW cell after this flush.
+    pub(in crate::mandoc) fn execute_native_literal_newline(&mut self) {
+        self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::LiteralText);
+    }
+
+    fn execute_native_newline_with_origin(
+        &mut self,
+        origin: super::super::CompletedRowOrigin,
+    ) -> bool {
         let _ = self.commit_definition_row_origin();
         self.execution.boundary = PendingBoundary::Tight;
         if self.execution.definition.as_ref().is_some_and(|state| {
@@ -158,7 +173,7 @@ impl InlineBuilder {
             ends_row = native
                 .as_ref()
                 .is_some_and(super::NativeFieldDevice::ends_row);
-            self.flush_captured_definition_field(
+            self.flush_captured_definition_field_with_origin(
                 super::flush::FieldFlush {
                     start,
                     gap,
@@ -168,6 +183,7 @@ impl InlineBuilder {
                     boundary: super::flush::FieldFlushBoundary::Continue,
                 },
                 native,
+                origin,
             );
             if self.execution.pending_field_spaces > 0 {
                 self.execution.pending_field_gap_origin = PendingFieldGapOrigin::CommittedFlush;
@@ -191,7 +207,7 @@ impl InlineBuilder {
                 .is_some_and(super::NativeFieldDevice::ends_row);
             if let Some(native) = &native {
                 self.project_captured_definition_field(native);
-                self.hard_break_after_field_projection(Some(native));
+                self.hard_break_after_field_projection_with_origin(Some(native), origin);
             } else {
                 self.hard_break();
             }
@@ -334,11 +350,24 @@ impl InlineBuilder {
     /// then `pre_br` moves offset to rmargin without printing a cell
     /// (roff_term.c:69-78,195-214). That origin stays scoped to this node.
     pub(super) fn move_definition_field_origin_to_body(&mut self, body: u16) {
-        let definition = self.definition_state_mut();
-        definition.hang_row.field_offset = usize::from(body);
-        definition.field_offset_units = definition
+        let origin = self
+            .definition_state_mut()
             .native_margin_units
-            .unwrap_or_else(|| usize::from(body).saturating_mul(24));
+            .unwrap_or_else(|| i64::from(body).saturating_mul(24));
+        self.set_definition_source_origin(origin);
+    }
+
+    /// Keep the source coordinate signed until returning to the native
+    /// nonnegative offset ledger. Its negative reading-relative remainder
+    /// is the existing presentation shift, with the same page-zero floor.
+    pub(super) fn set_definition_source_origin(&mut self, origin: i64) {
+        let origin = origin.max(-i64::from(self.execution.row_presentation.parent));
+        let stored = usize::try_from(origin.max(0)).unwrap_or(usize::MAX);
+        self.execution.row_presentation.offset_shift =
+            i32::try_from(origin.min(0)).unwrap_or(i32::MIN);
+        let definition = self.definition_state_mut();
+        definition.field_offset_units = stored;
+        definition.hang_row.field_offset = stored.saturating_add(11) / 24;
     }
 
     /// Whether the next word already has a request-armed concatenation
@@ -394,6 +423,18 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn note_definition_head_flags_cleared(&mut self) {
         if let Some(state) = &mut self.execution.definition {
             state.head_flags_cleared = true;
+        }
+        if let Some(author) = &mut self.execution.author_execution
+            && let AuthorBreakEffect::Field {
+                gap_cells, flags, ..
+            } = &mut author.break_effect
+        {
+            // It HEAD post clears these native registers even when the
+            // run-in buffer stays live (mdoc_term.c:939-963). Its cached
+            // field configuration must carry that post across later IR
+            // owner drains, which may retire DefinitionFieldState itself.
+            *gap_cells = 0;
+            *flags = super::super::native_field::FieldFlags::inset();
         }
     }
 

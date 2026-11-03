@@ -15,6 +15,7 @@ mod geometry;
 pub(in crate::mandoc::inline::flow) mod head_presentation;
 mod head_row;
 mod list_scope;
+mod name_scope;
 mod no_break;
 mod retirement;
 mod state;
@@ -25,3 +26,4 @@ pub(in crate::mandoc) use state::PreservedDefinitionField;
 pub(super) use state::{DefinitionFieldState, PendingFieldGapOrigin};
 
 pub(in crate::mandoc) use head_row::DefinitionGeometryCheckpoint;
+pub(in crate::mandoc) use name_scope::NamePartGeometry;

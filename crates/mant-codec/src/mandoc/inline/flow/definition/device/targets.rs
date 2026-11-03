@@ -87,13 +87,15 @@ impl InlineBuilder {
                 && self.execution.author_execution.as_ref().is_some_and(|author| matches!(author.break_effect, AuthorBreakEffect::Field { .. }))
     }
 
-    pub(super) fn native_margin_units(&self, fallback_columns: usize) -> usize {
+    pub(super) fn native_margin_units(&self, fallback_columns: usize) -> i64 {
         let state = self.execution.definition.as_ref().expect("field session");
         state
             .margin_override
-            .map(|columns| columns.saturating_mul(24))
+            .map(|columns| i64::try_from(columns.saturating_mul(24)).unwrap_or(i64::MAX))
             .or(state.native_margin_units)
-            .unwrap_or_else(|| fallback_columns.saturating_mul(24))
+            .unwrap_or_else(|| {
+                i64::try_from(fallback_columns.saturating_mul(24)).unwrap_or(i64::MAX)
+            })
     }
 
     pub(in crate::mandoc::inline::flow) fn native_field_targets(
@@ -124,15 +126,17 @@ impl InlineBuilder {
             rest: if no_break {
                 usize::MAX / 2
             } else {
-                let origin = if flags.contains(FieldFlag::Brind) {
-                    rmargin
-                } else {
-                    state.field_offset_units
-                };
                 let mut presentation = self.execution.row_presentation;
                 presentation.endline_at(state.field_offset_units);
+                let origin = if flags.contains(FieldFlag::Brind) {
+                    // rmargin is already the resolved source coordinate;
+                    // field_placement adds the current offset shift once.
+                    rmargin.saturating_sub(i64::from(presentation.offset_shift))
+                } else {
+                    i64::try_from(state.field_offset_units).unwrap_or(i64::MAX)
+                };
                 presentation
-                    .field_placement(origin, 0, 0, false)
+                    .field_placement_signed(origin, 0, 0, false)
                     .capacity(rmargin)
             },
             // The frozen reading contract keeps source words after an

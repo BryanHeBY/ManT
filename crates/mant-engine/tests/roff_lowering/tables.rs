@@ -822,9 +822,14 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
         panic!("expected description cell");
     };
     assert_eq!(inline_text(left), "sip addr[/mask]");
+    // This source-backed cell admits the isolated inline semantic parse,
+    // not native tbl's single raw operand. Fresh pristine runs of the exact
+    // cell fragment give NODE_EOS to '.Ar addr .' and two following blanks
+    // (mdoc_macro.c::append_delims, term.c::term_word). The complete table's
+    // native payload stays opaque; recovery intentionally restores Ar/Ns/Op.
     assert_eq!(
         inline_text(right),
-        "bitwise and of the address with mask equals addr. addr can be an IPv4 or IPv6 address."
+        "bitwise and of the address with mask equals addr.  addr can be an IPv4 or IPv6 address."
     );
     assert!(
         left.iter()
@@ -835,6 +840,99 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
             .iter()
             .any(|inline| matches!(inline, Inline::Emphasis { .. }))
     );
+}
+
+fn table_sentence_sites(node: &libmandoc_rs::Node) -> Vec<(u32, u32, String)> {
+    let mut sites = Vec::new();
+    if node.flags.sentence_end {
+        sites.push((node.line, node.column, node.text.clone().unwrap()));
+    }
+    for child in &node.children {
+        sites.extend(table_sentence_sites(child));
+    }
+    sites
+}
+
+#[test]
+fn table_inline_recovery_uses_only_admitted_source_sentence_flags() {
+    // All three complete tables and corresponding isolated fragments ran
+    // pristine ASCII/UTF-8(width120)/HTML/tree/lint before assertions. Native
+    // tbl_word(dp->string) has no inner mdoc node exits. Closed inline recovery
+    // deliberately executes the admitted source language; a plain raw cell
+    // is not admitted, even when a hypothetical mdoc parse would mark EOS.
+    const HEADER: &str = ".Dd November 3, 2026\n.Dt TABLE-SENTENCE 1\n.Os\n.Sh DESCRIPTION\n";
+    // Match source_fragment::fragment_input's independent mdoc context.
+    // Exact source coordinates below also prove its header supplies no EOS.
+    const ISOLATED_HEADER: &str = ".Dd January 1, 2000\n.Dt MANT-TABLE 1\n.Os\n.Sh NAME\n.Nm \"table-fragment\"\n.Nd table fragment\n.Sh DESCRIPTION\n";
+    for (label, fragment, site, native, expected, recovered) in [
+        (
+            "admitted-eos",
+            ".Ar First .\n.Ar Next",
+            Some((8, 11, ".")),
+            "First . Next",
+            "First.  Next",
+            true,
+        ),
+        (
+            "admitted-no-eos",
+            ".Ar First.\n.Ar Next",
+            None,
+            "First. Next",
+            "First. Next",
+            true,
+        ),
+        (
+            "raw-plain",
+            "First.\nNext",
+            Some((8, 1, "First.")),
+            "First. Next",
+            "First. Next",
+            false,
+        ),
+    ] {
+        let source = format!("{HEADER}.TS\nl.\nT{{\n{fragment}\nT}}\n.TE\n");
+        let parsed = libmandoc_rs::Parser::default()
+            .parse_bytes(label, source.as_bytes())
+            .unwrap();
+        assert_eq!(table_sentence_sites(&parsed.document.root), []);
+        let section = &parsed.document.root.children[3];
+        let table = &section.children[1].children[0];
+        assert_eq!(table.kind, libmandoc_rs::NodeKind::Table);
+        assert_eq!(table.table_cells[0].text.as_deref(), Some(native));
+        let isolated = format!("{ISOLATED_HEADER}{fragment}\n");
+        let isolated = libmandoc_rs::Parser::default()
+            .parse_bytes(label, isolated.as_bytes())
+            .unwrap();
+        assert_eq!(
+            table_sentence_sites(&isolated.document.root),
+            site.map(|(line, column, value)| (line, column, value.to_owned()))
+                .into_iter()
+                .collect::<Vec<_>>(),
+            "{label}: only original fragment text supplies EOS"
+        );
+        let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&content)).unwrap();
+        let restored: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let restored = ResolvedContent::from(restored);
+        assert_eq!(restored, content);
+        let [Block::Table { rows, .. }] = restored.document.as_ref().unwrap().sections[0]
+            .blocks
+            .as_slice()
+        else {
+            panic!("{label}: original table owner")
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("{label}: original cell paragraph")
+        };
+        assert_eq!(inline_text(children), expected, "{label}");
+        assert_eq!(
+            children
+                .iter()
+                .any(|node| matches!(node, Inline::Emphasis { .. })),
+            recovered,
+            "{label}: actual Ar recovery, not merely an equal display string"
+        );
+    }
 }
 
 #[test]

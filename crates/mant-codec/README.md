@@ -74,6 +74,17 @@ ledger stages, while their source-node entry, sink routing, post-once claim
 and final geometry restoration remain ordered by their existing drivers.
 No helper return or destructor implicitly executes a native scope post.
 
+HEAD/BODY selectors borrow structural views, not an exhaustive content stream.
+Macro drivers execute their direct siblings in order and apply fonts, field
+flags and posts at the original parts. Definition prefixes stay with their
+term owner; section display prefixes do not alter HEAD-derived navigation
+identities. Native sentence flags are consumed by actual word writes, including
+generated words, rather than inferred from visible punctuation or output drains.
+Native posts update the live field configuration before an owner drains;
+rebuilding an output destination cannot restore cleared HEAD flags. A source
+line gate is consumed once for its actual AST node, while completed literal
+rows retain their origin through output assembly.
+
 Source geometry retains bounded basic-unit positions independently of the IR
 parent and man macro base. Conversion produces signed relative offsets;
 ownership normalization rebases only transferred roots. Text presentation
@@ -145,8 +156,11 @@ carry the original ISC copyright and permission notice.
 stop-list rules with direct periodic lookup and retains its ISC notice.
 The shared display Tab phases and nested list phases in
 `src/mandoc/inline/display_tabs.rs` and
-`src/mandoc/inline/flow/definition/list_scope.rs` adapt the pinned
+`src/mandoc/inline/flow/definition/list_scope.rs` and
+`src/mandoc/inline/flow/definition/name_scope.rs` adapt the pinned
 `mdoc_term.c`/`man_term.c` handlers and retain their ISC notices.
+The shared `Nm` handler in `src/mandoc/inline/names.rs` also adapts
+`mdoc_term.c` and retains its ISC notice.
 The private row presentation kernel in `src/mandoc/inline/flow/presentation.rs`
 and its `presentation/field.rs` helper adapt `roff_term.c` temporary offsets
 and `term.c`/`term_ascii.c` field placement and line retirement. Their headers

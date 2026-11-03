@@ -286,7 +286,7 @@ impl InlineBuilder {
             // is a HEAD already drained into a different IR container.
             self.project_captured_definition_field(&native);
             self.project_consumed_row_layout(&native);
-            self.hard_break_using_field(Some(&native), true);
+            self.hard_break_using_field(Some(&native), true, CompletedRowOrigin::Layout);
             // This standalone term_newln() has no later field-retirement
             // caller. Its row reset already consumed the live buffer, so
             // deliver the captured text receipt without re-running the tail
@@ -302,24 +302,26 @@ impl InlineBuilder {
                 receiver.accept_tabs(tabs);
             }
         } else {
-            self.hard_break_using_field(None, false);
+            self.hard_break_using_field(None, false, CompletedRowOrigin::Layout);
         }
         self.execution.boundary = PendingBoundary::Tight;
     }
 
     /// The field's real flush already applied acceptance. Project its tail
     /// without re-querying the old buffer or rejecting it a second time.
-    pub(in crate::mandoc::inline::flow) fn hard_break_after_field_projection(
+    pub(in crate::mandoc::inline::flow) fn hard_break_after_field_projection_with_origin(
         &mut self,
         native: Option<&super::definition::NativeFieldDevice>,
+        origin: CompletedRowOrigin,
     ) {
-        self.hard_break_using_field(native, true);
+        self.hard_break_using_field(native, true, origin);
     }
 
     fn hard_break_using_field(
         &mut self,
         captured: Option<&super::definition::NativeFieldDevice>,
         projected: bool,
+        origin: CompletedRowOrigin,
     ) {
         let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
@@ -405,7 +407,7 @@ impl InlineBuilder {
             // This real term_newln() finished a rejected nbr=0 pass. Its
             // row is complete now, even if another native unit starts before
             // the paragraph owner drains (term.c:143-146,250-253).
-            self.record_completed_vertical_rows(1);
+            self.record_completed_rows(1, origin);
         } else if unprinted_field_tail
             || !self.in_definition_field()
                 && self.execution.completed_vertical_rows > 0
@@ -421,7 +423,7 @@ impl InlineBuilder {
             // though term_fill() prints no glyphs. When a later empty TEXT
             // requests another term_vspace(), that committed row must remain
             // in the completed-row count after formatter_column resets.
-            self.record_completed_vertical_rows(1);
+            self.record_completed_rows(1, origin);
         }
         let current_row_has_printable = self
             .nodes
@@ -665,7 +667,7 @@ impl InlineBuilder {
             FilledBoundary::SameLine => self.append(incoming),
             FilledBoundary::Word => {
                 let mut incoming = incoming;
-                self.append_at_boundary(&mut incoming, false, true, false);
+                self.append_at_boundary(&mut incoming, false, true, false, 0);
             }
             FilledBoundary::LineBreak => {
                 self.hard_break();

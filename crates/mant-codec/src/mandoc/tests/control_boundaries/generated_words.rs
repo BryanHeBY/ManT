@@ -207,14 +207,17 @@ fn bibliography_field_posts_emit_native_punctuation_and_author_conjunction() {
     // These exact inputs were checked with fixed CVS -Tascii before writing
     // the assertions. mdoc_term.c::termp__a_pre()/termp____post() emit `and`,
     // commas and a final period at the field's own execution point;
-    // termp_under_pre() styles %J and an unquoted %T.
+    // termp_under_pre() styles %J and an unquoted %T. Both complete old
+    // sources were re-run on pinned ASCII/UTF-8/HTML/tree: the final
+    // generated period explicitly arms TERMP_SENTENCE, and term_word()
+    // buffers two spaces before Y (mdoc_term.c:1867-1868; term.c:573-589).
     let authors = b".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd state probe\n.Sh SEE ALSO\n.Rs\n.%A Ada\n.%A Babbage\n.%T Title\n.Re\nY\n";
     let document = parse_manual_bytes(std::path::Path::new("mdoc-rs-authors.1"), authors)
         .expect("parse author reference fixture");
     let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
         panic!("unexpected reference output: {:#?}", document.sections);
     };
-    assert_eq!(inline_text(children), "Ada and Babbage, Title. Y");
+    assert_eq!(inline_text(children), "Ada and Babbage, Title.  Y");
     assert!(children.iter().any(|inline| {
         matches!(inline, Inline::Emphasis { children } if inline_text(children) == "Title")
     }));
@@ -225,7 +228,7 @@ fn bibliography_field_posts_emit_native_punctuation_and_author_conjunction() {
     let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
         panic!("unexpected journal output: {:#?}", document.sections);
     };
-    assert!(inline_text(children).contains("Ada, “Title”, Journal. Y"));
+    assert_eq!(inline_text(children), "Ada, “Title”, Journal.  Y");
     assert!(children.iter().any(|inline| {
         matches!(inline, Inline::Emphasis { children } if inline_text(children) == "Journal")
     }));

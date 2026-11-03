@@ -73,16 +73,23 @@ impl BlockLowerer<'_, '_> {
                 },
             );
             self.finish_node_execution(node);
+            self.state
+                .formatter
+                .execution
+                .finish_no_fill_source_line_entry(node.id);
             if reference_body && let Some(punctuation) = reference_field_post(nodes, index) {
                 self.push_generated_container_event(node, crate::mandoc::containers::Event::Tight);
                 self.push_generated_container_event(
                     node,
-                    crate::mandoc::containers::Event::Glyph(punctuation.to_owned()),
+                    crate::mandoc::containers::Event::Glyph(punctuation.glyph().to_owned()),
                 );
                 self.push_generated_container_event(
                     node,
                     crate::mandoc::containers::Event::Release,
                 );
+                if punctuation.ends_sentence() {
+                    self.state.formatter.execution.arm_sentence_end();
+                }
             }
             // Source execution, not visible output, owns the predecessor fact.
             if self.context.macro_set == libmandoc_rs::MacroSet::Mdoc
@@ -182,14 +189,8 @@ impl BlockLowerer<'_, '_> {
         if self.push_mdoc_synopsis_declaration(node, synopsis_previous) {
             return;
         }
-        if node.flags.delimiter_close
-            && participates_in_inline_flow(node)
-            && self.state.paragraph_is_empty()
-        {
-            let tail = lower_inline_nodes(std::slice::from_ref(node), self.context.default_name);
-            if append_to_last_inline_block(&mut self.state.output, &tail) {
-                return;
-            }
+        if self.append_delimiter_to_prior_owner(node) {
+            return;
         }
         if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Br)) {
             // roff_term_pre_br consumes the live native field before its
@@ -220,6 +221,7 @@ impl BlockLowerer<'_, '_> {
                 man_list_state: &mut self.man_list_state,
                 ip_run,
                 spacing_enabled,
+                synopsis_previous: synopsis_previous.map(synopsis::SynopsisToken::from_node),
                 formatter: &mut self.state.formatter,
             }
             .push(node, next, table_embedding);
@@ -233,6 +235,17 @@ impl BlockLowerer<'_, '_> {
                 .finish_structural_output(output_start, accepted_before);
             self.state.attach_pending_to_structural_output(output_start);
         }
+    }
+
+    fn append_delimiter_to_prior_owner(&mut self, node: &Node) -> bool {
+        if !node.flags.delimiter_close
+            || !participates_in_inline_flow(node)
+            || !self.state.paragraph_is_empty()
+        {
+            return false;
+        }
+        let tail = lower_inline_nodes(std::slice::from_ref(node), self.context.default_name);
+        append_to_last_inline_block(&mut self.state.output, &tail)
     }
 
     fn push_node_pre_handlers(
@@ -420,7 +433,12 @@ impl BlockLowerer<'_, '_> {
         }
         self.resume_no_fill_row();
         if !self.state.formatter.no_fill_inline.continues_source_line() {
-            self.settle_no_fill_inline();
+            if self.settle_no_fill_inline() {
+                self.state
+                    .formatter
+                    .execution
+                    .note_no_fill_source_line_entered(node.id);
+            }
             self.state.begin_no_fill_source_line();
         }
         true

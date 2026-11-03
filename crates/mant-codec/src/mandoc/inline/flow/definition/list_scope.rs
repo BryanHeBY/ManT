@@ -30,13 +30,13 @@ use super::state::DefinitionOutcome;
 #[derive(Clone, Copy)]
 pub(in crate::mandoc) struct NestedListScope {
     author_effect: Option<AuthorBreakEffect>,
-    margin: Option<usize>,
+    margin: Option<i64>,
     margin_override: Option<usize>,
     offset_units: usize,
     offset_columns: usize,
     column_origin_units: Option<usize>,
     column_reading_origin: Option<super::state::ColumnReadingOrigin>,
-    declared_body_origin_units: Option<usize>,
+    declared_body_origin: Option<super::state::BodyOriginProjection>,
     indent_columns: u16,
     outcome: DefinitionOutcome,
     head_flags_cleared: bool,
@@ -63,7 +63,7 @@ impl InlineBuilder {
             offset_columns: definition.hang_row.field_offset,
             column_origin_units: definition.column_origin_units,
             column_reading_origin: definition.column_reading_origin,
-            declared_body_origin_units: definition.declared_body_origin_units,
+            declared_body_origin: definition.declared_body_origin,
             indent_columns: definition.row.indent_columns,
             outcome: definition.outcome,
             head_flags_cleared: definition.head_flags_cleared,
@@ -152,8 +152,10 @@ impl InlineBuilder {
             .saturating_add_signed(isize::try_from(offset_units).unwrap_or_default());
         definition.hang_row.field_offset = definition.field_offset_units.saturating_add(11) / 24;
         if sized_head {
-            definition.native_margin_units =
-                Some(definition.field_offset_units.saturating_add(width_units));
+            definition.native_margin_units = Some(
+                i64::try_from(definition.field_offset_units.saturating_add(width_units))
+                    .unwrap_or(i64::MAX),
+            );
             definition.margin_override = None;
         }
         if let Some(author) = &mut self.execution.author_execution {
@@ -195,7 +197,9 @@ impl InlineBuilder {
             .saturating_add_signed(isize::try_from(offset_units).unwrap_or_default())
             .saturating_add(width_units);
         definition.hang_row.field_offset = definition.field_offset_units.saturating_add(11) / 24;
-        definition.declared_body_origin_units = Some(definition.field_offset_units);
+        definition.declared_body_origin = Some(super::state::BodyOriginProjection::structural(
+            definition.field_offset_units,
+        ));
         // HEAD post cleared trailspace, not the minbl from its actual flush.
         // Responsive BODY text does not acquire another field interpreter.
         if let Some(author) = &mut self.execution.author_execution {
@@ -263,8 +267,10 @@ impl InlineBuilder {
             state.field_offset_units,
         ));
         state.hang_row.field_offset = origin;
-        state.native_margin_units =
-            Some(origin.saturating_add(usize::from(width)).saturating_mul(24));
+        state.native_margin_units = Some(
+            i64::try_from(origin.saturating_add(usize::from(width)).saturating_mul(24))
+                .unwrap_or(i64::MAX),
+        );
         state.hang_row.minbl = 0;
         // Column BODY pre clears minbl, independently of the incoming
         // term_word NOSPACE register (mdoc_term.c:916-921).
@@ -386,7 +392,7 @@ impl InlineBuilder {
         definition.hang_row.field_offset = saved.offset_columns;
         definition.column_origin_units = saved.column_origin_units;
         definition.column_reading_origin = saved.column_reading_origin;
-        definition.declared_body_origin_units = saved.declared_body_origin_units;
+        definition.declared_body_origin = saved.declared_body_origin;
         definition.row.indent_columns = saved.indent_columns;
     }
 
@@ -418,7 +424,9 @@ impl super::super::InlineExecutionState {
     /// into its text (`termp_it_pre()` BODY offset, term.c:113-116).
     pub(in crate::mandoc) fn declare_list_body_origin(&mut self) {
         if let Some(state) = &mut self.definition {
-            state.declared_body_origin_units = Some(state.field_offset_units);
+            state.declared_body_origin = Some(super::state::BodyOriginProjection::structural(
+                state.field_offset_units,
+            ));
         }
     }
 

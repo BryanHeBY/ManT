@@ -471,7 +471,8 @@ fn ip_does_not_absorb_unproven_definition_heads() {
 fn exports_the_accepted_bsd_lifecycle_spelling() {
     // Exact source rerun with pristine CVS before changing this assertion.
     // mdoc_validate.c::post_bx() adds BSD after the authored operand; native
-    // reading and Markdown both retain that accepted spelling.
+    // reading and Markdown both retain that accepted spelling. NODE_EOS
+    // arms two ordinary cells at the next actual term_word() (term.c:573-589).
     let source = b".Dd August 19, 2026\n.Dt BSD-LIFECYCLE 7\n.Os\n.Sh DESCRIPTION\n.Bx\n.Bx -alpha\n.Bx -beta\n.Bx -devel .\n.Bx 4.3 .\n.Bx 4.3 Net/2 .\n.Bx 386 0.1 .\n";
     let document = parse_manual_bytes(std::path::Path::new("bsd-lifecycle.7"), source)
         .expect("lower mdoc BSD lifecycle forms");
@@ -481,7 +482,7 @@ fn exports_the_accepted_bsd_lifecycle_spelling() {
     };
     assert_eq!(
         inline_text(children),
-        "BSD -alphaBSD -betaBSD -develBSD. 4.3BSD. 4.3BSD-Net/2. 386BSD-0.1."
+        "BSD -alphaBSD -betaBSD -develBSD.  4.3BSD.  4.3BSD-Net/2.  386BSD-0.1."
     );
     let query = mant_ir::ResolvedContent {
         address: None,
@@ -494,6 +495,17 @@ fn exports_the_accepted_bsd_lifecycle_spelling() {
         assert!(portable.contains(operand), "{portable}");
     }
     assert!(!portable.contains("currently"), "{portable}");
+    let readback = mant_loader::load_markdown_text(&portable, None).unwrap();
+    let [Block::Paragraph { children, .. }] = readback.document.as_ref().unwrap().sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!("accepted BSD spelling must keep its paragraph owner");
+    };
+    assert_eq!(
+        inline_text(children),
+        "BSD -alphaBSD -betaBSD -develBSD.  4.3BSD.  4.3BSD-Net/2.  386BSD-0.1."
+    );
 }
 
 #[test]

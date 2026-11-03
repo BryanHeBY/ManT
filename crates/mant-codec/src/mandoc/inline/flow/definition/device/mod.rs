@@ -88,7 +88,7 @@ struct NativeFieldPrint {
     end: usize,
     first: bool,
     padding_units: usize,
-    origin_units: usize,
+    origin_units: i64,
     tab_offset: i64,
 }
 

@@ -1,0 +1,106 @@
+{
+  "count": 10,
+  "cases": [
+    {
+      "id": "nested-tag",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -tag -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "PREFIX (arg)",
+        "BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-hang",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -hang -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "PREFIX (arg) BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-diag",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -diag -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "PREFIX (Ar arg) BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-inset",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -inset -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "PREFIX (arg) BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-ohang",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -ohang -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "PREFIX (arg) BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-tag-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -tag -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.fi\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "",
+        "PREFIX (arg)",
+        "BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-hang-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -hang -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.fi\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "",
+        "PREFIX (arg)",
+        "BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-diag-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -diag -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.fi\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "",
+        "PREFIX (Ar arg)",
+        "BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-inset-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -inset -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.fi\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "",
+        "PREFIX (arg)",
+        "BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    },
+    {
+      "id": "nested-ohang-nofill",
+      "source": ".Dd November 3, 2026\n.Dt ADJACENT 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Bl -tag -width 40n\n.It Xo\n.No PREFIX\n.Bl -ohang -width 10n -compact\n.It ( Ar arg )\n.No BODY\n.El\n.No SUFFIX\n.Xc\n.No OUTERBODY\n.El\n.fi\n.Sh NEXT\n.No END\n",
+      "rows": [
+        "",
+        "PREFIX (arg)",
+        "BODY",
+        "SUFFIX",
+        "OUTERBODY"
+      ]
+    }
+  ]
+}

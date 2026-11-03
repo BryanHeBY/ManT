@@ -21,6 +21,11 @@ use super::{
     FieldBuffer, FieldCell, FieldWrite, PassStop, TabStops, WordScanPolicy, WordWriteReceipt,
 };
 
+#[cfg(test)]
+std::thread_local! {
+    static SEPARATOR_CELLS_VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl FieldBuffer {
     fn push_cell(&mut self, cell: FieldCell) {
         if self.word_first_content.is_none() {
@@ -58,19 +63,34 @@ impl FieldBuffer {
         self.cells.push(cell);
     }
 
+    #[cfg(test)]
     pub(in crate::mandoc::inline::flow) fn begin_word(
         &mut self,
         tight: bool,
         spacing: bool,
         kept: bool,
     ) -> usize {
-        let separator = usize::from(self.word_space_ready && !tight && spacing);
+        self.begin_word_with_spacing(tight, spacing, kept, 1)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn begin_word_with_spacing(
+        &mut self,
+        tight: bool,
+        spacing: bool,
+        kept: bool,
+        ordinary_spaces: usize,
+    ) -> usize {
+        debug_assert!((1..=2).contains(&ordinary_spaces));
+        let separator = usize::from(self.word_space_ready && !tight && spacing)
+            * if kept { 1 } else { ordinary_spaces };
         self.word_space_ready = true;
         if separator > 0 {
             if kept {
                 self.push_non_breaking_blank();
             } else {
-                self.push_separator_blank();
+                for _ in 0..separator {
+                    self.push_separator_blank();
+                }
             }
         }
         separator
@@ -97,12 +117,29 @@ impl FieldBuffer {
         start: usize,
         separator: usize,
     ) -> bool {
-        separator > 0
-            && matches!(
-                self.cells.get(start),
-                Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank)
-            )
-            && !matches!(self.cells.get(start + 1), Some(FieldCell::Backline))
+        self.surviving_word_separator(start, separator) > 0
+    }
+
+    /// At most the two automatic SENTENCE cells can survive encode1's
+    /// BACKBEFORE retreat; a KEEP boundary contributes one nonbreaking cell.
+    pub(in crate::mandoc::inline::flow) fn surviving_word_separator(
+        &self,
+        start: usize,
+        separator: usize,
+    ) -> usize {
+        (0..separator)
+            .take_while(|offset| {
+                #[cfg(test)]
+                SEPARATOR_CELLS_VISITED.with(|count| count.set(count.get() + 1));
+                matches!(
+                    self.cells.get(start + *offset),
+                    Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank)
+                ) && !matches!(
+                    self.cells.get(start + *offset + 1),
+                    Some(FieldCell::Backline)
+                )
+            })
+            .count()
     }
 
     pub(in crate::mandoc::inline::flow) fn has_pending_break_markers(&self) -> bool {
@@ -393,5 +430,62 @@ impl FieldBuffer {
     /// (term.c:235-237).
     pub(in crate::mandoc::inline::flow) fn clear_backtracking(&mut self) {
         self.backbefore_armed = false;
+    }
+}
+
+#[cfg(test)]
+mod sentence_tests {
+    use super::*;
+
+    #[test]
+    fn sentence_separators_are_real_cells_and_backbefore_consumes_only_one() {
+        // Exact plain-line/KEEP/Sm/\z sources ran pinned profiles before
+        // these assertions. term_word():573-589 inserts the cells before
+        // encode1():901-908 can retreat over the final ordinary blank.
+        for (tight, spacing, kept, sentence, expected) in [
+            (false, true, false, false, 1),
+            (false, true, false, true, 2),
+            (false, true, true, true, 1),
+            (true, true, false, true, 0),
+            (false, false, false, true, 0),
+        ] {
+            let mut buffer = FieldBuffer::default();
+            buffer.begin_word(true, true, false);
+            buffer.push_graph('F', 1);
+            let start = buffer.cells().len();
+            let separator =
+                buffer.begin_word_with_spacing(tight, spacing, kept, 1 + usize::from(sentence));
+            assert_eq!(separator, expected);
+            assert_eq!(buffer.cells().len(), start + expected);
+            buffer.push_graph('N', 1);
+            assert_eq!(buffer.surviving_word_separator(start, separator), expected);
+        }
+        let mut buffer = FieldBuffer::default();
+        buffer.begin_word(true, true, false);
+        buffer.push_graph('F', 1);
+        let separator = buffer.begin_word_with_spacing(false, true, false, 2);
+        buffer.arm_backbefore();
+        buffer.push_graph('N', 1);
+        assert_eq!(buffer.surviving_word_separator(1, separator), 1);
+        assert_eq!(buffer.cells().len(), 3);
+    }
+
+    #[test]
+    fn sentence_separator_work_never_revisits_the_buffer_prefix() {
+        for words in [128, 4096] {
+            let mut buffer = FieldBuffer::default();
+            SEPARATOR_CELLS_VISITED.with(|count| count.set(0));
+            for _ in 0..words {
+                let start = buffer.cells().len();
+                let separator = buffer.begin_word_with_spacing(false, true, false, 2);
+                buffer.push_graph('X', 1);
+                assert_eq!(buffer.surviving_word_separator(start, separator), separator);
+            }
+            assert_eq!(buffer.cells().len(), 3 * words - 2);
+            assert_eq!(
+                SEPARATOR_CELLS_VISITED.with(std::cell::Cell::get),
+                2 * (words - 1)
+            );
+        }
     }
 }

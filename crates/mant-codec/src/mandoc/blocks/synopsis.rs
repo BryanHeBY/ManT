@@ -8,8 +8,15 @@ use libmandoc_rs::{
     ManMacro, MdocMacro, RoffMacro,
 };
 
-mod lifecycle;
+pub(in crate::mandoc) mod lifecycle;
 pub(super) use lifecycle::body_origin;
+
+#[derive(Clone, Copy)]
+pub(super) struct SynopsisFlow {
+    pub(super) origin: crate::mandoc::layout::SourceIndent,
+    pub(super) spacing_enabled: bool,
+    pub(super) previous: Option<SynopsisToken>,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SynopsisDeclarationRole {
@@ -20,13 +27,13 @@ enum SynopsisDeclarationRole {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum SynopsisBoundary {
+pub(in crate::mandoc) enum SynopsisBoundary {
     Newline,
     VerticalSpace,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum SynopsisToken {
+pub(in crate::mandoc) enum SynopsisToken {
     Nm,
     Vt,
     Cd,
@@ -39,7 +46,7 @@ pub(super) enum SynopsisToken {
 }
 
 impl SynopsisToken {
-    pub(super) fn from_node(node: &Node) -> Self {
+    pub(in crate::mandoc) fn from_node(node: &Node) -> Self {
         match node.macro_token.as_ref() {
             Some(Mdoc(MdocMacro::Nm)) => Self::Nm,
             Some(Mdoc(MdocMacro::Vt)) => Self::Vt,
@@ -84,7 +91,7 @@ pub(super) fn transparent_synopsis_predecessor(node: &Node) -> bool {
 /// Mirror CVS `mdoc_term.c::synopsis_pre()` without guessing from rendered
 /// text.  The caller decides whether the native newline is already represented
 /// by its paragraph boundary; only vertical space needs an additional IR row.
-pub(super) fn synopsis_boundary(
+pub(in crate::mandoc) fn synopsis_boundary(
     previous: SynopsisToken,
     current: SynopsisToken,
 ) -> SynopsisBoundary {
@@ -145,13 +152,22 @@ pub(super) fn lower_synopsis_head(
     output: &mut Vec<Block>,
     node: &Node,
     context: &LoweringContext<'_>,
-    indent_columns: crate::mandoc::layout::SourceIndent,
+    flow: SynopsisFlow,
     paragraph_distance: &mut u16,
-    spacing_enabled: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
+    let SynopsisFlow {
+        origin: indent_columns,
+        spacing_enabled,
+        previous,
+    } = flow;
     let saved_offset_shift = formatter.row_presentation.offset_shift;
-    let mut head = execute_synopsis_head(node, context, indent_columns, spacing_enabled, formatter);
+    let mut head = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Nm)) {
+        execute_name_head(node, context, spacing_enabled, previous, formatter)
+    } else {
+        execute_synopsis_head(node, context, indent_columns, spacing_enabled, formatter)
+    };
+    let head_row_open = formatter.execution.has_open_native_device_row();
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // The HEAD post already selected Roman; BODY entry is another
         // print_man_node() pre transition, even if its font is Roman too.
@@ -161,13 +177,23 @@ pub(super) fn lower_synopsis_head(
     }
     let body_origin = lifecycle::body_origin(node, context, indent_columns);
     formatter.begin_definition_body(formatter.definition_head_row_occupied());
-    let mut nested = lower_scope(
-        first_part_children(node, NodeKind::Body),
-        context,
-        paragraph_distance,
-        formatter,
-        ScopeFlow::filled(body_origin, spacing_enabled),
-    );
+    let mut nested = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Nm)) {
+        lower_name_body(
+            node,
+            context,
+            paragraph_distance,
+            formatter,
+            &ScopeFlow::filled(body_origin, spacing_enabled),
+        )
+    } else {
+        lower_scope(
+            first_part_children(node, NodeKind::Body),
+            context,
+            paragraph_distance,
+            formatter,
+            ScopeFlow::filled(body_origin, spacing_enabled),
+        )
+    };
     let body_execution = formatter.finish_definition_body();
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // BODY post and BLOCK post both execute the man(7) font reset.
@@ -210,17 +236,16 @@ pub(super) fn lower_synopsis_head(
         synopsis.append(head);
         synopsis.append(body);
         *children = synopsis.finish();
-        let mut hints = std::collections::BTreeMap::new();
-        for hint in head_layout.row_hints.iter().chain(&inline_layout.row_hints) {
-            hints.insert(hint.row, *hint);
-        }
-        inline_layout.row_hints = hints
-            .into_iter()
-            .map(|(row, hint)| mant_ir::RowLayoutHint { row, ..hint })
-            .collect();
         // The first row shares the HEAD origin; later hard/wrapped rows
         // retain pre_SY/termp_nm_pre(BODY)'s name-derived origin.
         let body_delta = body_origin.offset_from(indent_columns);
+        inline_layout.row_hints = merged_synopsis_rows(
+            &head_layout,
+            inline_layout,
+            row_offset,
+            body_delta,
+            head_row_open,
+        );
         layout.indent_columns = indent_columns.relative_columns();
         layout.continuation_indent_columns = layout
             .continuation_indent_columns
@@ -237,6 +262,132 @@ pub(super) fn lower_synopsis_head(
         source: source_span(node),
     });
     output.extend(nested);
+}
+
+fn merged_synopsis_rows(
+    head: &mant_ir::InlineLayout,
+    body: &mant_ir::InlineLayout,
+    head_last_row: u32,
+    body_delta: i32,
+    head_row_open: bool,
+) -> Vec<mant_ir::RowLayoutHint> {
+    let mut hints = body
+        .row_hints
+        .iter()
+        .map(|hint| (hint.row, *hint))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    for row in 0..=head_last_row {
+        if row > 0 && row == head_last_row && !head_row_open {
+            // The real HEAD post closed its last device row. The delimiter's
+            // empty logical tail is the BODY's first row, not another
+            // already printed HEAD origin.
+            continue;
+        }
+        let mut hint = head.row_layout(usize::try_from(row).unwrap_or(usize::MAX));
+        hint.row = row;
+        if row > 0 {
+            // BODY continuation applies to later soft wraps, not to the
+            // already executed first origin of a HEAD hard row. Preserve
+            // even a native default-zero origin relative to that new base.
+            hint.first_line_indent_columns =
+                hint.first_line_indent_columns.saturating_sub(body_delta);
+        }
+        hints.remove(&row);
+        if !hint.is_empty() {
+            hints.insert(row, hint);
+        }
+    }
+    hints.into_values().collect()
+}
+
+fn execute_name_head(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    spacing_enabled: bool,
+    previous: Option<SynopsisToken>,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> Vec<Inline> {
+    let mut builder = formatter.begin_inline_session(
+        spacing_enabled,
+        context.active_mdoc_section() == crate::mandoc::source_context::MdocSectionContext::Authors,
+        crate::mandoc::inline::AuthorBreakEffect::Line,
+    );
+    builder.scope_posts = context.scope_posts.clone();
+    builder.observe_no_fill_source_lines(true);
+    builder.begin_definition_head_consumption();
+    builder.enter_keep_words();
+    let head_index = node
+        .children
+        .iter()
+        .position(|part| part.kind == NodeKind::Head);
+    let occupied = if let Some(index) = head_index {
+        crate::mandoc::inline::append_inline_nodes(
+            &mut builder,
+            &node.children[..index],
+            context.default_name,
+        );
+        crate::mandoc::inline::names::append_head(
+            &mut builder,
+            node,
+            &node.children[index],
+            previous,
+            context.default_name,
+        )
+    } else {
+        false
+    };
+    builder.observe_no_fill_source_lines(false);
+    let (head, preserved) = formatter.finish_inline_scope_with_occupied(builder, occupied);
+    let mut no_output = Vec::new();
+    formatter.with_output_builder(&mut no_output, |builder| {
+        builder.inherit_preserved_execution(preserved);
+    });
+    assert_eq!(no_output.len(), 0);
+    head
+}
+
+fn lower_name_body(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    flow: &ScopeFlow<'_>,
+) -> Vec<Block> {
+    let mut lowerer = super::BlockLowerer::new(
+        context,
+        flow.indent_columns,
+        paragraph_distance,
+        flow.spacing_enabled,
+        Vec::new(),
+        std::mem::take(formatter),
+    );
+    let width = crate::mandoc::inline::names::body_width(node, context.default_name);
+    let head_index = node
+        .children
+        .iter()
+        .position(|part| part.kind == NodeKind::Head);
+    for part in &node.children[head_index.map_or(0, |index| index + 1)..] {
+        if part.kind == NodeKind::Body {
+            let saved = lowerer.state.enter_name_body_node(part, width);
+            lowerer.push_nodes(&part.children);
+            lowerer.state.finish_name_body_node(part, saved);
+        } else {
+            lowerer.push_nodes(std::slice::from_ref(part));
+        }
+    }
+    lowerer.state.formatter.execution.exit_name_block();
+    lowerer.finish_into(formatter, super::FormatterRowBoundary::Preserve)
+}
+
+fn terminal_empty_name_body(node: &Node) -> Option<&Node> {
+    let head = node
+        .children
+        .iter()
+        .position(|part| part.kind == NodeKind::Head)?;
+    match &node.children[head + 1..] {
+        [body] if body.kind == NodeKind::Body && body.children.is_empty() => Some(body),
+        _ => None,
+    }
 }
 
 pub(super) fn execute_synopsis_head(
@@ -320,6 +471,36 @@ pub(super) fn execute_synopsis_head(
 }
 
 impl super::BlockLowerer<'_, '_> {
+    /// An empty Nm BODY has no offset/flush post. Keep its unflushed HEAD
+    /// in the current paragraph so the next real native boundary consumes
+    /// the same owner, rather than interpreting it in an empty BODY scope.
+    fn push_unflushed_name(&mut self, node: &Node, previous: Option<&Node>) -> bool {
+        if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Nm))
+            || terminal_empty_name_body(node).is_none()
+        {
+            return false;
+        }
+        let default_name = self.context.default_name;
+        self.state.push_source_inline_with(
+            source_span(node),
+            super::inline_flow::starts_indented_filled_line(node),
+            super::ends_with_line_continuation(node),
+            false,
+            |builder| {
+                builder.observe_no_fill_source_lines(true);
+                crate::mandoc::inline::append_inline_node_with_siblings(
+                    builder,
+                    node,
+                    previous,
+                    None,
+                    default_name,
+                );
+                builder.observe_no_fill_source_lines(false);
+            },
+        );
+        true
+    }
+
     /// Preserve declaration boundaries selected by mdoc's SYNOPSIS grammar.
     ///
     /// libmandoc marks the declaration-oriented `Fd`, `In`, `Ft`, `Fn`,
@@ -336,8 +517,12 @@ impl super::BlockLowerer<'_, '_> {
         node: &Node,
         previous: Option<&Node>,
     ) -> bool {
+        if self.push_unflushed_name(node, previous) {
+            return true;
+        }
         let mut newline_boundary = false;
-        if invokes_synopsis_pre(node)
+        if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Nm))
+            && invokes_synopsis_pre(node)
             && let Some(previous) = previous
         {
             let boundary = synopsis_boundary(

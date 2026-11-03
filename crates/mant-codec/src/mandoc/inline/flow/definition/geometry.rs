@@ -61,9 +61,9 @@ impl InlineBuilder {
         // BODY origin after a .ta or an internal wrap (term.c:113-253).
         // An explicitly measured Some(0) origin is valid (width=-2n plus
         // termp_it_pre's two cells), not a missing-field sentinel.
-        let body_origin = state.native_margin_units.unwrap_or_else(|| {
-            usize::from(state.cleared_field_capacity_columns).saturating_mul(24)
-        });
+        let body_origin = state
+            .native_margin_units
+            .unwrap_or_else(|| i64::from(state.cleared_field_capacity_columns).saturating_mul(24));
         native.is_some_and(|field| {
             let column = field.device_column_units();
             // ascii_advance() prints a cell only beyond half an EN from
@@ -71,7 +71,7 @@ impl InlineBuilder {
             // basic-unit remainder can therefore still mean no word gap.
             field.has_occupied_row()
                 && field.next_field_gap_cells == 0
-                && column.saturating_add(12) >= i64::try_from(body_origin).unwrap_or(i64::MAX)
+                && column.saturating_add(12) >= body_origin
         })
     }
 

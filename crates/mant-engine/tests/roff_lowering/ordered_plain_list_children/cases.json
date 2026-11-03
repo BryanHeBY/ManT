@@ -1,0 +1,162 @@
+[
+  {
+    "id": "item-filled-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -item -compact\n.It ( PREFIX )\n.No BODY\n.El\n",
+    "style": "item",
+    "nofill": false,
+    "direct": true,
+    "expected": "(BODY"
+  },
+  {
+    "id": "item-filled-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -item -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n",
+    "style": "item",
+    "nofill": false,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "item-nofill-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -item -compact\n.It ( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "item",
+    "nofill": true,
+    "direct": true,
+    "expected": "(\nBODY"
+  },
+  {
+    "id": "item-nofill-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -item -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "item",
+    "nofill": true,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "bullet-filled-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -bullet -compact\n.It ( PREFIX )\n.No BODY\n.El\n",
+    "style": "bullet",
+    "nofill": false,
+    "direct": true,
+    "expected": "(BODY"
+  },
+  {
+    "id": "bullet-filled-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -bullet -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n",
+    "style": "bullet",
+    "nofill": false,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "bullet-nofill-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -compact\n.It ( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "bullet",
+    "nofill": true,
+    "direct": true,
+    "expected": "(\nBODY"
+  },
+  {
+    "id": "bullet-nofill-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -bullet -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "bullet",
+    "nofill": true,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "dash-filled-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -dash -compact\n.It ( PREFIX )\n.No BODY\n.El\n",
+    "style": "dash",
+    "nofill": false,
+    "direct": true,
+    "expected": "(BODY"
+  },
+  {
+    "id": "dash-filled-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -dash -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n",
+    "style": "dash",
+    "nofill": false,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "dash-nofill-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -dash -compact\n.It ( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "dash",
+    "nofill": true,
+    "direct": true,
+    "expected": "(\nBODY"
+  },
+  {
+    "id": "dash-nofill-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -dash -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "dash",
+    "nofill": true,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "hyphen-filled-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -hyphen -compact\n.It ( PREFIX )\n.No BODY\n.El\n",
+    "style": "hyphen",
+    "nofill": false,
+    "direct": true,
+    "expected": "(BODY"
+  },
+  {
+    "id": "hyphen-filled-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -hyphen -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n",
+    "style": "hyphen",
+    "nofill": false,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "hyphen-nofill-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -hyphen -compact\n.It ( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "hyphen",
+    "nofill": true,
+    "direct": true,
+    "expected": "(\nBODY"
+  },
+  {
+    "id": "hyphen-nofill-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -hyphen -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "hyphen",
+    "nofill": true,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "enum-filled-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -enum -compact\n.It ( PREFIX )\n.No BODY\n.El\n",
+    "style": "enum",
+    "nofill": false,
+    "direct": true,
+    "expected": "(BODY"
+  },
+  {
+    "id": "enum-filled-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.Bl -enum -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n",
+    "style": "enum",
+    "nofill": false,
+    "direct": false,
+    "expected": "BODY"
+  },
+  {
+    "id": "enum-nofill-direct",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -enum -compact\n.It ( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "enum",
+    "nofill": true,
+    "direct": true,
+    "expected": "(\nBODY"
+  },
+  {
+    "id": "enum-nofill-escaped",
+    "source": ".Dd November 3, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd list audit\n.Sh DESCRIPTION\n.nf\n.Bl -enum -compact\n.It \\&( PREFIX )\n.No BODY\n.El\n.fi\n",
+    "style": "enum",
+    "nofill": true,
+    "direct": false,
+    "expected": "BODY"
+  }
+]

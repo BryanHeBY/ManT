@@ -15,12 +15,13 @@ mod font;
 mod generated;
 pub(in crate::mandoc) use generated::function_argument;
 mod links;
+pub(in crate::mandoc) mod names;
 pub(super) use links::{append_man_link, man_link_identity_text};
 mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) use flow::{
     AuthorBreakEffect, CompletedRowOrigin, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags,
-    HeadOperandCapture, InlineExecutionState, NoFillInlineState, OutputRowEnd,
+    HeadOperandCapture, InlineExecutionState, NamePartGeometry, NoFillInlineState, OutputRowEnd,
     PreservedInlineState, consume_one_row_ending, ends_with_executed_line_break,
     has_rendered_formatter_glyph, lower_no_fill_fragment_with_formatter, native_row_origin,
     prepare_inline_output, retain_inline_identities, split_row_origin,
@@ -146,6 +147,16 @@ pub(super) fn append_inline_node_with_next(
     next: Option<&Node>,
     default_name: Option<&str>,
 ) {
+    append_inline_node_with_siblings(builder, node, None, next, default_name);
+}
+
+pub(in crate::mandoc) fn append_inline_node_with_siblings(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    previous: Option<&Node>,
+    next: Option<&Node>,
+    default_name: Option<&str>,
+) {
     if node.flags.no_print || node.kind == NodeKind::Comment {
         // Tg can recover an authored target even when native output is hidden.
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
@@ -155,6 +166,7 @@ pub(super) fn append_inline_node_with_next(
     }
     if node.kind == NodeKind::Text && !node.flags.no_print {
         append_text_node(builder, node);
+        builder.finish_executed_node(node);
         return;
     }
     let final_word_join_before = builder.final_word_join_state();
@@ -169,7 +181,17 @@ pub(super) fn append_inline_node_with_next(
     }
     builder.begin_executed_node(node);
     let geometry = builder.definition_geometry_checkpoint(node);
+    if node.kind == NodeKind::Block
+        && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Rs))
+        && node.section == libmandoc_rs::NormalizedSection::SeeAlso
+        && previous.is_some()
+    {
+        // termp_rs_pre() tests this BLOCK's own roff_node_prev, after
+        // NODE_LINE, not a document-global paragraph predecessor.
+        builder.native_vertical_space(1);
+    }
     if execute_author_pre(builder, node) {
+        builder.finish_executed_node(node);
         builder.restore_definition_geometry(geometry);
         return;
     }
@@ -188,28 +210,74 @@ pub(super) fn append_inline_node_with_next(
         // it to its original owner instead of letting the wrapper's
         // annotation capture it.
         let checkpoint = builder.begin_semantic_owner_checkpoint();
-        execute_inline_macro_handler(builder, node, next, default_name);
+        execute_inline_macro_handler(builder, node, previous, next, default_name);
         builder.finish_semantic_owner_checkpoint(checkpoint);
         finish_inline_node_execution(builder, node, next, final_word_join_before);
         execute_inline_macro_post(builder, node);
+        builder.finish_executed_node(node);
         builder.restore_definition_geometry(geometry);
         return;
     }
     if node.flags.delimiter_close {
         builder.tighten_next_boundary();
     }
-    execute_inline_macro_handler(builder, node, next, default_name);
+    execute_inline_macro_handler(builder, node, previous, next, default_name);
     finish_inline_node_execution(builder, node, next, final_word_join_before);
     execute_inline_macro_post(builder, node);
+    builder.finish_executed_node(node);
     builder.restore_definition_geometry(geometry);
+}
+
+fn append_ordered_declaration_or_display_part(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    previous: Option<&Node>,
+    default_name: Option<&str>,
+) -> bool {
+    match node.macro_token.as_ref() {
+        Some(Mdoc(MdocMacro::Nm)) if node.kind == NodeKind::Block => {
+            names::append_block(builder, node, previous, default_name);
+        }
+        Some(Mdoc(MdocMacro::Vt)) if node.kind == NodeKind::Block => {
+            // termp_vt_pre(BLOCK) changes no font. Its complete ordered
+            // stream includes direct TEXT before/after BODY; only BODY's
+            // own under-pre scope ends before those trailing siblings.
+            append_inline_nodes(builder, &node.children, default_name);
+        }
+        Some(Mdoc(MdocMacro::Vt)) if node.kind == NodeKind::Head => {
+            // The shared node entry still executes; termp_vt_pre(HEAD)
+            // returns zero, including for a present empty HEAD.
+        }
+        Some(Mdoc(MdocMacro::D1 | MdocMacro::Dl))
+            if matches!(node.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) =>
+        {
+            let saved_font = builder.font.checkpoint();
+            let posts = builder.scope_posts.clone();
+            if node.kind == NodeKind::Body {
+                posts.enter_display_body(node.id, &builder.font, None);
+            }
+            append_inline_nodes(builder, &node.children, default_name);
+            if node.kind == NodeKind::Body {
+                posts.restore_body_font(node.id, &mut builder.font);
+            } else {
+                builder.font.pop_scope(saved_font);
+            }
+        }
+        _ => return false,
+    }
+    true
 }
 
 fn execute_inline_macro_handler(
     builder: &mut InlineBuilder,
     node: &Node,
+    previous: Option<&Node>,
     next: Option<&Node>,
     default_name: Option<&str>,
 ) {
+    if append_ordered_declaration_or_display_part(builder, node, previous, default_name) {
+        return;
+    }
     match node.macro_token.as_ref() {
         Some(Man(
             ManMacro::B
@@ -481,6 +549,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         execution.output,
         occupies_literal_row,
         execution.trailing_output,
+        execution.projected_word_separator,
     );
     if execution.definitive_reject {
         builder.note_definitive_word_rejection();
@@ -543,6 +612,7 @@ pub(super) fn append_inline_nodes(
     nodes: &[Node],
     default_name: Option<&str>,
 ) {
+    let mut previous = None;
     for (index, node) in nodes.iter().enumerate() {
         // mandoc joins the final pair in a contiguous mdoc bibliography
         // author run with "and". The conjunction is formatter-generated, so
@@ -557,7 +627,16 @@ pub(super) fn append_inline_nodes(
         {
             builder.append_text("and");
         }
-        append_inline_node_with_next(builder, node, nodes.get(index + 1), default_name);
+        append_inline_node_with_siblings(
+            builder,
+            node,
+            previous,
+            nodes.get(index + 1),
+            default_name,
+        );
+        if super::adjacency::is_logical_sibling(node) {
+            previous = Some(node);
+        }
     }
 }
 

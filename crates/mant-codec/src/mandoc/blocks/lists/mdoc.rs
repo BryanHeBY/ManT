@@ -4,7 +4,7 @@ use super::{
     AstTableAlignment, AstTableCell, Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem,
     DefinitionListStyle, Inline, ListItem, ListKind, LoweringContext, Node, NodeKind,
     NormalizedListKind, RunInHeadStyle, ScopeFlow, TableRow, definition_item, first_part_children,
-    layout, lower_scope, ordinal_sequence, source_span, targets,
+    layout, ordinal_sequence, source_span, targets,
 };
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
@@ -173,34 +173,21 @@ fn lower_mdoc_plain_list(
                     formatter.spacing_enabled(),
                     formatter,
                 );
-                if kind != ListKind::Plain {
-                    formatter.execute_visible_generated_word();
-                }
-                // termp_it_pre() returns 0 for the HEAD of item/bullet/
-                // dash/enum lists (mdoc_term.c:916-927). Their generated
-                // marker above executes, but even a parser-recovered HEAD
-                // subtree has no child execution or text side effects.
-                // termp_it_post() clears the shared pad/break flags on every
-                // HEAD, including LIST_item whose HEAD has no row flush.
-                // Nested structural output must not resurrect its enclosing
-                // column's NOBREAK merely because the HEAD emitted no IR.
-                formatter.execution.clear_native_list_part_flags();
-                formatter.execution.declare_list_body_origin();
-                let spacing_enabled = formatter.spacing_enabled();
-                let mut blocks = lower_scope(
-                    first_part_children(item.node, NodeKind::Body),
+                let mut blocks = lower_plain_item_body(
+                    item.node,
                     context,
                     paragraph_distance,
                     formatter,
-                    ScopeFlow::body_post_row_end(
+                    &ScopeFlow::body_post_row_end(
                         body_origin,
-                        spacing_enabled,
+                        formatter.spacing_enabled(),
                         item_body_predecessor(
                             kind == ListKind::Plain,
                             index,
                             paragraph_predecessor,
                         ),
                     ),
+                    kind,
                 );
                 // BODY post already executed its term_newln() in the scope
                 // driver. Its following generic It flag clear precedes Bl
@@ -219,6 +206,48 @@ fn lower_mdoc_plain_list(
         layout: layout(list_indent),
         source: source_span(node),
     }
+}
+
+/// `blk_full()` may leave authored delimiters before HEAD. Execute them in
+/// this item's normal block driver before the generated marker and skipped
+/// HEAD, retaining the same pending glyphs, source rows and output owner.
+fn lower_plain_item_body(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    flow: &ScopeFlow<'_>,
+    kind: ListKind,
+) -> Vec<Block> {
+    let mut lowerer = super::super::BlockLowerer::new(
+        context,
+        flow.indent_columns,
+        paragraph_distance,
+        flow.spacing_enabled,
+        Vec::new(),
+        std::mem::take(formatter),
+    );
+    lowerer.paragraph_predecessor = flow.paragraph_predecessor;
+    if let Some(head) = node
+        .children
+        .iter()
+        .position(|part| part.kind == NodeKind::Head)
+    {
+        lowerer.push_nodes(&node.children[..head]);
+    }
+    // mdoc_term.c::termp_it_pre() emits the marker but returns 0 for
+    // ordinary list HEAD children. Do not resurrect recovered HEAD text.
+    if kind != ListKind::Plain {
+        lowerer.state.formatter.execute_visible_generated_word();
+    }
+    lowerer
+        .state
+        .formatter
+        .execution
+        .clear_native_list_part_flags();
+    lowerer.state.formatter.execution.declare_list_body_origin();
+    lowerer.push_nodes(first_part_children(node, NodeKind::Body));
+    lowerer.finish_into(formatter, flow.row_boundary)
 }
 
 fn lower_mdoc_definition_list(

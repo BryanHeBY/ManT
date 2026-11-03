@@ -174,13 +174,15 @@ pub(in crate::mandoc) fn ends_with_line_continuation(node: &Node) -> bool {
 ///
 /// AST block shape is not itself a paragraph boundary. Fo is an inline
 /// function scope in prose; the earlier synopsis declaration policy owns its
-/// structural breaks. Nm retains its separate head/body handling.
+/// structural breaks. Xo/Xc have no macro pre/post in `mdoc_term.c` and keep
+/// their complete child stream in the caller's paragraph. Nm retains its
+/// separate head/body handling.
 pub(super) fn participates_in_inline_flow(node: &Node) -> bool {
     matches!(node.kind, NodeKind::Text | NodeKind::Element)
         || is_inline_equation(node)
         || is_enclosure_macro(node.macro_token.as_ref())
         || matches!(
             node.macro_token.as_ref(),
-            Some(Mdoc(MdocMacro::Nd | MdocMacro::Fo))
+            Some(Mdoc(MdocMacro::Nd | MdocMacro::Fo | MdocMacro::Xo))
         )
 }
