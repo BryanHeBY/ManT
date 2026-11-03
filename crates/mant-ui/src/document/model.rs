@@ -17,7 +17,7 @@ pub(super) use table::{
 /// and mailto targets, at most 4096 bytes. Keeping the activation allowlist in
 /// this type while reusing the IR validator prevents producers and consumers
 /// from drifting apart.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ExternalUri(String);
 
 impl ExternalUri {
@@ -49,7 +49,7 @@ impl ExternalUri {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum LinkTarget {
     Section(String),
     Document {

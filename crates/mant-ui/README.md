@@ -119,6 +119,13 @@ A single-page reader's search follows each newly opened snapshot. An explicit
 multi-page scope retains host order and includes at most one additional current
 snapshot; opening many documents does not accumulate an unbounded search scope.
 
+Inline preparation advances one scalar cursor instead of rescanning the
+accumulated row after every styled fragment. Whole-grapheme link decisions use
+ordered interval events, retaining same-target overlaps and rejecting competing
+targets on a shared glyph. Wrapping consumes a suffix by index rather than
+repeatedly moving it. Work-count tests cover these three paths independently;
+link indexing still includes its necessary sorting and ordered-set costs.
+
 Live search reuses the current viewport's shared immutable rendering instead of
 rebuilding a view for every query. Search records preserve logical phrases across
 soft wraps and retain cell boundaries and generated-padding exclusions. The

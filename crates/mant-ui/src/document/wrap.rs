@@ -19,7 +19,10 @@ use crate::theme;
 
 mod alignment;
 mod cells;
+mod links;
 mod table;
+#[cfg(test)]
+mod workload;
 use cells::{
     StyledCell, fitting_prefix, styled_cells, tldr_decoration_width, trim_trailing_whitespace,
     wrapped_cells_to_line,
@@ -205,7 +208,8 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     let mut result = Vec::new();
     let mut first_row = true;
     let mut join_with_space = false;
-    while !cells.is_empty() {
+    let mut consumed = 0;
+    while consumed < cells.len() {
         let indent = if first_row {
             first_indent
         } else {
@@ -220,15 +224,16 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             .saturating_sub(indent)
             .saturating_sub(decoration_width)
             .max(1);
-        bound_first_grapheme(&mut cells, available);
-        let fit = fitting_prefix(&cells, available);
-        if fit == cells.len() {
+        let remaining = &mut cells[consumed..];
+        bound_first_grapheme(remaining, available);
+        let fit = fitting_prefix(remaining, available);
+        if fit == remaining.len() {
             result.push(wrapped_cells_to_line(
                 line,
                 width,
                 indent,
                 layout_padding,
-                &cells,
+                remaining,
                 join_with_space,
             ));
             break;
@@ -240,21 +245,23 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 width,
                 indent,
                 layout_padding,
-                &cells[..fit],
+                &remaining[..fit],
                 join_with_space,
             ));
-            cells.drain(..fit);
+            consumed += fit;
             join_with_space = false;
         } else {
-            join_with_space = wrap_word_row(
+            let (advance, join) = wrap_word_row(
                 line,
                 width,
                 (indent, layout_padding),
-                &mut cells,
+                remaining,
                 fit,
                 join_with_space,
                 &mut result,
             );
+            consumed += advance;
+            join_with_space = join;
         }
         first_row = false;
     }
@@ -358,27 +365,30 @@ fn wrap_word_row(
     line: &LogicalLine,
     width: usize,
     origin: (usize, usize),
-    cells: &mut Vec<StyledCell>,
+    cells: &[StyledCell],
     fit: usize,
     join_with_space: bool,
     result: &mut Vec<WrappedLine>,
-) -> bool {
+) -> (usize, bool) {
     let (indent, layout_padding) = origin;
     let split = cells[..fit]
         .iter()
-        .rposition(|cell| cell.grapheme_start && cell.whitespace)
+        .rposition(|cell| {
+            #[cfg(test)]
+            workload::visit(1);
+            cell.grapheme_start && cell.whitespace
+        })
         .filter(|position| *position > 0)
         .unwrap_or(fit);
     let row_end = trim_trailing_whitespace(cells, split);
     let emitted_row = row_end != 0;
-    let mut removed_separator = if row_end == 0 {
+    let (mut consumed, mut removed_separator) = if row_end == 0 {
         // A fitted prefix can contain both indentation and the next word.
         // Dropping an empty whitespace row consumes only its separator, not
         // the visible cells following it (term.c::term_fill keeps graph cells
         // after a break opportunity for the next accepted segment).
         let consumed = if split < fit { split + 1 } else { fit };
-        cells.drain(..consumed.max(1));
-        true
+        (consumed.max(1), true)
     } else {
         result.push(wrapped_cells_to_line(
             line,
@@ -390,17 +400,18 @@ fn wrap_word_row(
         ));
         let removed_separator = split < fit;
         let consumed = if removed_separator { split + 1 } else { split };
-        cells.drain(..consumed.max(1));
-        removed_separator
+        (consumed.max(1), removed_separator)
     };
-    while cells.first().is_some_and(|cell| cell.whitespace) {
-        cells.remove(0);
+    while cells.get(consumed).is_some_and(|cell| cell.whitespace) {
+        #[cfg(test)]
+        workload::visit(1);
+        consumed += 1;
         removed_separator = true;
     }
     if emitted_row {
-        removed_separator
+        (consumed, removed_separator)
     } else {
-        join_with_space || removed_separator
+        (consumed, join_with_space || removed_separator)
     }
 }
 

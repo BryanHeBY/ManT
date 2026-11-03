@@ -62,6 +62,11 @@ that crate was not published for that change.
 
 ### mant-ui
 
+- Advance inline scalar and link-interval cursors and consume wrapping suffixes
+  by index. Avoid accumulated-prefix scans, per-glyph full link scans and
+  repeated vector-head moves while preserving grapheme conflict rules and
+  original navigation positions. Add deterministic workload regressions.
+
 - Match complete outline titles, entry names and reference fields independently,
   including anchored regexes on fields contained in a longer title. Deduplicate
   nodes and coincident display highlights after matching.

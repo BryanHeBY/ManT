@@ -21,6 +21,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
     let mut cells = Vec::new();
     let mut column = line.indent;
     let mut source_index = 0;
+    let mut links = super::links::LinkCursor::new(&line.links);
     // A grapheme can cross source-style boundaries. Segment the whole logical
     // row, then give each indivisible terminal glyph its first scalar's style.
     // Keep scalar source cells for search/reference coordinates, charging its
@@ -43,7 +44,7 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
         }
         let style = span.map_or_else(Style::default, |span| span.style);
         let source_width = grapheme.columns();
-        let link_index = grapheme_link(line, source_index, grapheme.text().chars().count());
+        let link_index = links.grapheme(source_index, grapheme.text().chars().count());
         if grapheme.text() == "\t" {
             let spaces = TAB_STOP - column % TAB_STOP;
             cells.extend((0..spaces).map(|_| {
@@ -104,25 +105,11 @@ pub(super) fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
     cells
 }
 
-/// A terminal glyph is indivisible. A unique target covering any source scalar
-/// owns the whole glyph. Distinct targets sharing it are deliberately not
-/// directly clickable: document-reference selectors remain available,
-/// rather than silently choosing the first target in traversal order.
-fn grapheme_link(line: &LogicalLine, start: usize, scalars: usize) -> Option<usize> {
-    let mut matches = line
-        .links
-        .iter()
-        .enumerate()
-        .filter(|(_, link)| link.start_scalar < start + scalars && link.end_scalar > start);
-    let (index, first) = matches.next()?;
-    matches
-        .all(|(_, link)| link.target == first.target)
-        .then_some(index)
-}
-
 pub(super) fn fitting_prefix(cells: &[StyledCell], available: usize) -> usize {
     let mut width = 0;
     for (index, cell) in cells.iter().enumerate() {
+        #[cfg(test)]
+        super::workload::visit(1);
         if width + cell.width > available {
             return index.max(1);
         }
@@ -134,6 +121,8 @@ pub(super) fn fitting_prefix(cells: &[StyledCell], available: usize) -> usize {
 pub(super) fn trim_trailing_whitespace(cells: &[StyledCell], end: usize) -> usize {
     let mut result = end;
     while result > 0 && cells[result - 1].whitespace {
+        #[cfg(test)]
+        super::workload::visit(1);
         result -= 1;
     }
     result

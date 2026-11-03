@@ -254,9 +254,10 @@ fn append_inline(
         None
     };
     let mut entry = crate::entry::AccentCursor::new(decorations.accents);
+    let mut scalar_cursor = 0;
     mant_render::visit_inline_text(nodes, decorations.names, |source, target, text| {
         let first_line = lines.len() - 1;
-        let first_scalar = spans_scalars(&lines[first_line].spans);
+        let first_scalar = scalar_cursor;
         if let Some(code) = &mut code {
             // Fonts supply fallback appearance before lexical colors. The
             // theme then preserves their modifiers, links and validated names
@@ -268,7 +269,12 @@ fn append_inline(
                     theme::DEFAULT_THEME.code_inline_style(span.style, source),
                     &theme::DEFAULT_THEME,
                 ) {
-                    append_text(&decorated.content, decorated.style, lines);
+                    append_text(
+                        &decorated.content,
+                        decorated.style,
+                        lines,
+                        &mut scalar_cursor,
+                    );
                 }
             }
         } else {
@@ -277,11 +283,11 @@ fn append_inline(
                 theme::inline_style(style, source),
                 &theme::DEFAULT_THEME,
             ) {
-                append_text(&span.content, span.style, lines);
+                append_text(&span.content, span.style, lines, &mut scalar_cursor);
             }
         }
         if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
-            record_link(lines, first_line, first_scalar, &target);
+            record_link(lines, first_line, first_scalar, scalar_cursor, &target);
         }
     });
 }
@@ -324,6 +330,7 @@ fn record_link(
     lines: &mut [StyledInlineLine],
     first_line: usize,
     first_scalar: usize,
+    last_scalar: usize,
     target: &LinkTarget,
 ) {
     let last_line = lines.len() - 1;
@@ -338,7 +345,13 @@ fn record_link(
         } else {
             0
         };
-        let end_scalar = spans_scalars(&line.spans);
+        // Completed hard rows are measured once. The active row's cursor is
+        // already known, so adjacent fragments never rescan its full prefix.
+        let end_scalar = if line_index == last_line {
+            last_scalar
+        } else {
+            spans_scalars(&line.spans)
+        };
         if end_scalar > start_scalar {
             line.links.push(LogicalLinkRange {
                 target: target.clone(),
@@ -350,13 +363,30 @@ fn record_link(
 }
 
 pub(super) fn spans_scalars(spans: &[Span<'_>]) -> usize {
-    spans.iter().map(|span| span.content.chars().count()).sum()
+    spans.iter().map(|span| scalar_count(&span.content)).sum()
 }
 
-fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {
+fn scalar_count(value: &str) -> usize {
+    #[cfg(test)]
+    SCALAR_WORK.with(|work| work.set(work.get() + value.len()));
+    value.chars().count()
+}
+
+#[cfg(test)]
+thread_local! {
+    static SCALAR_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn append_text(
+    value: &str,
+    style: Style,
+    lines: &mut Vec<StyledInlineLine>,
+    scalar_cursor: &mut usize,
+) {
     for (index, part) in value.split('\n').enumerate() {
         if index > 0 {
             lines.push(StyledInlineLine::default());
+            *scalar_cursor = 0;
         }
         if !part.is_empty() {
             lines
@@ -364,6 +394,7 @@ fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {
                 .expect("inline builder always owns one line")
                 .spans
                 .push(Span::styled(part.to_owned(), style));
+            *scalar_cursor += scalar_count(part);
         }
     }
 }
@@ -372,6 +403,70 @@ fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {
 /// text. The resulting logical rows feed rendering, search and selection.
 pub(super) fn styled_plain_text_lines(value: &str, style: Style) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
-    append_text(value, style, &mut lines);
+    append_text(value, style, &mut lines, &mut 0);
     lines
+}
+
+#[cfg(test)]
+mod workload {
+    use super::*;
+
+    #[test]
+    fn fragmented_inlines_advance_one_scalar_cursor_instead_of_rescanning_prefixes() {
+        for count in [256, 1024, 4096] {
+            for hard_rows in [false, true] {
+                let mut expected = String::new();
+                let nodes: Vec<_> = (0..count)
+                    .map(|index| {
+                        let value = if hard_rows && index % 16 == 0 {
+                            "e\u{301}\n界"
+                        } else {
+                            "e\u{301}界"
+                        };
+                        expected.push_str(value);
+                        let children = vec![Inline::Text {
+                            value: value.into(),
+                        }];
+                        match index % 3 {
+                            0 => Inline::Strong { children },
+                            1 => Inline::Emphasis { children },
+                            _ => Inline::Link {
+                                target: mant_ir::LinkTarget::External {
+                                    uri: format!("https://example.test/{index}"),
+                                },
+                                title: None,
+                                children,
+                            },
+                        }
+                    })
+                    .collect();
+                SCALAR_WORK.with(|work| work.set(0));
+                let lines = styled_inline_lines(&nodes, Style::default(), None);
+                let work = SCALAR_WORK.with(std::cell::Cell::get);
+                assert!(work <= 3 * expected.len(), "{count}, {hard_rows}: {work}");
+                let actual = lines
+                    .iter()
+                    .map(|line| {
+                        line.spans
+                            .iter()
+                            .map(|span| span.content.as_ref())
+                            .collect::<String>()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                assert_eq!(actual, expected);
+                for line in lines {
+                    let count = line
+                        .spans
+                        .iter()
+                        .map(|span| span.content.chars().count())
+                        .sum();
+                    for link in line.links {
+                        assert!(link.start_scalar < link.end_scalar);
+                        assert!(link.end_scalar <= count);
+                    }
+                }
+            }
+        }
+    }
 }
