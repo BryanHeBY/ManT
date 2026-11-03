@@ -26,6 +26,27 @@ impl FormatterLineBoundary {
 }
 
 impl InlineBuilder {
+    /// Retire an already flushed field's IR owner without resetting TABREF.
+    /// `term_flushln()` retains `taboff` even when it ended the device row;
+    /// only `term_newln()` resets it (term.c:169-172,475-481). Transfer that
+    /// actual register without retaining the drained HEAD's field geometry.
+    pub(in crate::mandoc) fn take_flushed_field_segment(
+        &mut self,
+    ) -> (Vec<Inline>, bool, u16, super::OutputRowEnd) {
+        let tab_offset = self
+            .execution
+            .definition
+            .as_ref()
+            .map(|state| state.field_buffer.tab_offset());
+        let output = self.take_paragraph_segment(false);
+        if let Some(tab_offset) = tab_offset {
+            self.definition_state_mut()
+                .field_buffer
+                .set_tab_offset(tab_offset);
+        }
+        output
+    }
+
     pub(in crate::mandoc) fn finish(mut self) -> Vec<Inline> {
         self.flush_zero_advance();
         self.finish_nodes()

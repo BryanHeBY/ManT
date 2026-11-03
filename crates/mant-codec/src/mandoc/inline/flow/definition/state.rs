@@ -1,4 +1,4 @@
-use super::super::InlineBuilder;
+use super::super::{InlineBuilder, InlineExecutionState};
 use super::head_row::HeadRowState;
 
 /// Reading placement of a structural BODY, independent of native geometry.
@@ -310,21 +310,7 @@ impl InlineBuilder {
     pub(in crate::mandoc::inline::flow) fn definition_state_mut(
         &mut self,
     ) -> &mut DefinitionFieldState {
-        let tabs = self.execution.tab_stops.clone();
-        let detached_row = self.execution.detached_device_row.take();
-        let state = self
-            .execution
-            .definition
-            .get_or_insert_with(DefinitionFieldState::default);
-        if let Some(row) = detached_row {
-            state.hang_row.viscol = row.viscol;
-            state.hang_row.minbl = row.minbl;
-            state.hang_row.page_origin_printed = row.page_origin_printed;
-        }
-        if state.field_buffer.configure_tabs(&tabs) {
-            state.projected_passes = 0;
-        }
-        state
+        self.execution.ensure_definition_state()
     }
 
     pub(in crate::mandoc::inline::flow) fn pending_definition_indent(&self) -> Option<usize> {
@@ -338,6 +324,27 @@ impl InlineBuilder {
         indent: Option<usize>,
     ) {
         self.definition_state_mut().pending_indent = indent;
+    }
+}
+
+impl InlineExecutionState {
+    pub(in crate::mandoc::inline::flow) fn ensure_definition_state(
+        &mut self,
+    ) -> &mut DefinitionFieldState {
+        let tabs = self.tab_stops.clone();
+        let detached_row = self.detached_device_row.take();
+        let state = self
+            .definition
+            .get_or_insert_with(DefinitionFieldState::default);
+        if let Some(row) = detached_row {
+            state.hang_row.viscol = row.viscol;
+            state.hang_row.minbl = row.minbl;
+            state.hang_row.page_origin_printed = row.page_origin_printed;
+        }
+        if state.field_buffer.configure_tabs(&tabs) {
+            state.projected_passes = 0;
+        }
+        state
     }
 }
 impl DefinitionOutcome {

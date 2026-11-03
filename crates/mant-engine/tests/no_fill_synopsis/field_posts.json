@@ -1,0 +1,365 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "empty-empty",
+      "head": "empty",
+      "body": "empty",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "9815ebaf740bbc9bd800bd031e198dd3c959b8babd15477043cc7bcfaadfe3b4",
+      "expected_rows": [],
+      "first_body_no_fill": null
+    },
+    {
+      "id": "empty-controls",
+      "head": "empty",
+      "body": "controls",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\n.nf\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "d3b45c2c59067b9aaab5b4f98c2b9390cde7a0291aa14c0121f42afaef1e2e15",
+      "expected_rows": [],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "empty-local",
+      "head": "empty",
+      "body": "local",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\nALPHA\n.B \\&\nBETA\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "c5f47d37f2b906409430d1b0b8dc45f6209d3d14c2a2b612847256e505bdf29d",
+      "expected_rows": [
+        "ALPHA  BETA"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "empty-inherited",
+      "head": "empty",
+      "body": "inherited",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.nf\n.SY\nALPHA\n.B \\&\nBETA\n.YS\n.fi\n.SH NEXT\nAFTER\n",
+      "source_sha256": "1afe94a16c92bc2c76d3befd70f1d11513eb30d471a3c3d9c3563e8d5eac40f3",
+      "expected_rows": [
+        "",
+        "",
+        "ALPHA",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": true
+    },
+    {
+      "id": "empty-drain",
+      "head": "empty",
+      "body": "drain",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\n.nf\nALPHA\n.fi\n.nf\n.B \\&\nBETA\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "087e05ca44912fc407fe35222c560a60801a7dfa967ab6df7d4cf1fc34c1fd2c",
+      "expected_rows": [
+        "ALPHA",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": false,
+      "reading_rows": [
+        "ALPHA",
+        "BETA"
+      ],
+      "reading_owner_line": 8
+    },
+    {
+      "id": "empty-mixed",
+      "head": "empty",
+      "body": "mixed",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\n.nf\nALPHA\n.fi\nMIDDLE\n.nf\n.B \\&\nBETA\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "799d9513ebcc8522d6850f2a1ea6104dce28ed630fd1241cd1d736fb85cfce7c",
+      "expected_rows": [
+        "ALPHA",
+        "MIDDLE",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": false,
+      "reading_rows": [
+        "ALPHA",
+        "MIDDLE",
+        "BETA"
+      ],
+      "reading_owner_line": 9
+    },
+    {
+      "id": "empty-filled",
+      "head": "empty",
+      "body": "filled",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\nALPHA BRAVO CHARLIE DELTA\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "94373209fa01e9741764721d1944e257a1438401789381131700e728ba4fc241",
+      "expected_rows": [
+        "ALPHA BRAVO CHARLIE DELTA"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "empty-word-break",
+      "head": "empty",
+      "body": "word-break",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\nALPHA\\pBRAVO CHARLIE\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "aad587c9126368cface24f5e92738205ff9d14bd5ce7c0edb23a479f9f2323ca",
+      "expected_rows": [
+        "ALPHABRAVO",
+        "CHARLIE"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "empty-no-fill",
+      "head": "empty",
+      "body": "no-fill",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY\n.nf\nALPHA BRAVO CHARLIE DELTA\n.B \\&\nBETA\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "e8cf09bcfce5458d2551b2589130dee7d7984dabd20c87ad16de26342388e47b",
+      "expected_rows": [
+        "ALPHA BRAVO CHARLIE DELTA",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "named-empty",
+      "head": "named",
+      "body": "empty",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "4e567fd6ebe34e6cf8659d41a19bd077cc9cbef8977e3217dae00c005660d253",
+      "expected_rows": [
+        "probe"
+      ],
+      "first_body_no_fill": null
+    },
+    {
+      "id": "named-controls",
+      "head": "named",
+      "body": "controls",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\n.nf\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "f8ddbfabc63a6775c86cee5efd4299d9d98922c9740483e308a1e9f1e2545624",
+      "expected_rows": [
+        "probe"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "named-local",
+      "head": "named",
+      "body": "local",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\nALPHA\n.B \\&\nBETA\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "a27db4c03c48f0ec5dafa0d3c3ad63db493b4a8b3445b49766cd357806ac1f97",
+      "expected_rows": [
+        "probe ALPHA  BETA"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "named-inherited",
+      "head": "named",
+      "body": "inherited",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.nf\n.SY probe\nALPHA\n.B \\&\nBETA\n.YS\n.fi\n.SH NEXT\nAFTER\n",
+      "source_sha256": "c87e8ec8b64e0c96fdf367f3104d062cef5c7c05d4ecbf00c68d2d69e42372c0",
+      "expected_rows": [
+        "",
+        "probe",
+        "ALPHA",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": true
+    },
+    {
+      "id": "named-drain",
+      "head": "named",
+      "body": "drain",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\n.nf\nALPHA\n.fi\n.nf\n.B \\&\nBETA\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "c43f2b85ed2b70690aba6b0178f0b5e8715bd4cb29177ff71b5b16361d809973",
+      "expected_rows": [
+        "probe",
+        "ALPHA",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": false,
+      "reading_rows": [
+        "probe",
+        "ALPHA",
+        "BETA"
+      ],
+      "reading_owner_line": 8
+    },
+    {
+      "id": "named-mixed",
+      "head": "named",
+      "body": "mixed",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\n.nf\nALPHA\n.fi\nMIDDLE\n.nf\n.B \\&\nBETA\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "bacf52c053044aaabb91551df1c49540dc0888f45cc55c3dc6c6df560e7c9a1b",
+      "expected_rows": [
+        "probe",
+        "ALPHA",
+        "MIDDLE",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": false,
+      "reading_rows": [
+        "probe",
+        "ALPHA",
+        "MIDDLE",
+        "BETA"
+      ],
+      "reading_owner_line": 9
+    },
+    {
+      "id": "named-filled",
+      "head": "named",
+      "body": "filled",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\nALPHA BRAVO CHARLIE DELTA\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "6b8981524cccd192a4345267398d307c7ef917f4e5d97a9b3504af1cac05bd35",
+      "expected_rows": [
+        "probe ALPHA BRAVO CHARLIE DELTA"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "named-word-break",
+      "head": "named",
+      "body": "word-break",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\nALPHA\\pBRAVO CHARLIE\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "7314a695f4ddd4fc06452ec752d4d3bf1034f9e1b352d959a5766507810030af",
+      "expected_rows": [
+        "probe ALPHABRAVO",
+        "CHARLIE"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "named-no-fill",
+      "head": "named",
+      "body": "no-fill",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\n.nf\nALPHA BRAVO CHARLIE DELTA\n.B \\&\nBETA\n.fi\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "9cd8eb4618ff97630b7f80bc5c4c677bea45f9e4bebfbe0ebcb96ecbb8b09a66",
+      "expected_rows": [
+        "probe",
+        "ALPHA BRAVO CHARLIE DELTA",
+        "",
+        "BETA"
+      ],
+      "first_body_no_fill": false
+    },
+    {
+      "id": "named-tab-filled",
+      "head": "named",
+      "body": "tab-filled",
+      "first_body_no_fill": false,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY \"A\tB\"\nC\tD\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "279d3d53babac265f3c1c927b51944f4f1155cebc33845148c83baeee60c5959",
+      "expected_rows": [
+        "A    B",
+        "C  D"
+      ]
+    },
+    {
+      "id": "named-tab-inherited",
+      "head": "named",
+      "body": "tab-inherited",
+      "first_body_no_fill": true,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.nf\n.SY \"A\tB\"\nC\tD\n.YS\n.fi\n.SH NEXT\nAFTER\n",
+      "source_sha256": "4bf7e9b1357717a272001c86bec47b58bef6c29ae7d5a79b6e07e0add5119779",
+      "expected_rows": [
+        "",
+        "A    B",
+        "C    D"
+      ]
+    },
+    {
+      "id": "named-armed-filled",
+      "head": "named",
+      "body": "armed-filled",
+      "first_body_no_fill": false,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY \"\\z\"\nALPHA\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "69499dade3121c64b6c6f141feee77002d82a0731323f5053ddd1be4a861d35e",
+      "expected_rows": [
+        "ALPHA"
+      ]
+    },
+    {
+      "id": "named-armed-inherited",
+      "head": "named",
+      "body": "armed-inherited",
+      "first_body_no_fill": true,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.nf\n.SY \"\\z\"\nALPHA\n.YS\n.fi\n.SH NEXT\nAFTER\n",
+      "source_sha256": "fc89fc34f434852ac3c84681db03cc0086a39b8b7e047fb93e7f8ca5108e4b95",
+      "expected_rows": [
+        "",
+        "",
+        "ALPHA"
+      ]
+    },
+    {
+      "id": "named-cached-filled",
+      "head": "named",
+      "body": "cached-filled",
+      "first_body_no_fill": false,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY \"\\zX\"\nALPHA\n.YS\n.SH NEXT\nAFTER\n",
+      "source_sha256": "001b56f0e55f8cbbe6405c42b1d736ca7ede9141e21fa37688f6d59874a9eddf",
+      "expected_rows": [
+        "XALPHA"
+      ]
+    },
+    {
+      "id": "named-cached-inherited",
+      "head": "named",
+      "body": "cached-inherited",
+      "first_body_no_fill": true,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.nf\n.SY \"\\zX\"\nALPHA\n.YS\n.fi\n.SH NEXT\nAFTER\n",
+      "source_sha256": "3de3580bdeeba71bb7920ebdb8ffb058c2c5b9812e0dd1195f73d7df693a1d01",
+      "expected_rows": [
+        "",
+        "X",
+        "ALPHA"
+      ]
+    },
+    {
+      "id": "rs-filled",
+      "head": "named",
+      "body": "relative-indent-filled",
+      "first_body_no_fill": false,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.RS 4n\n.SY probe\nARG\n.YS\nAFTER\n.RE\nOUT\n.SH NEXT\nSENTINEL\n",
+      "source_sha256": "131c51ef0270f9fb5d0e772f8180fc00ac34fc089ffe0c5173a2ec77b29339d5",
+      "expected_rows": [
+        "probe ARG",
+        "AFTER",
+        "OUT"
+      ]
+    },
+    {
+      "id": "rs-in-filled",
+      "head": "named",
+      "body": "relative-indent-filled",
+      "first_body_no_fill": false,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.RS 4n\n.in 14n\n.SY probe\nARG\n.YS\nAFTER\n.RE\nOUT\n.SH NEXT\nSENTINEL\n",
+      "source_sha256": "0912dca02d92c7af9af89a184d3ec5fd357d48c07f97734ab8c1cc84981673cb",
+      "expected_rows": [
+        "",
+        "probe ARG",
+        "AFTER",
+        "OUT"
+      ]
+    },
+    {
+      "id": "rs-inherited-fill-tab",
+      "head": "named",
+      "body": "inherited-to-filled-tab",
+      "first_body_no_fill": true,
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.RS 4n\n.nf\n.SY probe\n.fi\nC\tD\n.YS\nAFTER\n.RE\nOUT\n.SH NEXT\nSENTINEL\n",
+      "source_sha256": "3dffb5dba40db43005a5986f19a21f7ae79f38b6c4c55473034c85405fab5e79",
+      "expected_rows": [
+        "",
+        "probe",
+        "C    D",
+        "AFTER",
+        "OUT"
+      ]
+    }
+  ]
+}

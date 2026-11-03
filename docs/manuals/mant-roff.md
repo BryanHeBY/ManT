@@ -128,6 +128,14 @@ separate operands, including diagnostic BODY text and suppressed separators.
 
 An empty macro parameter is not automatically a physical blank line: ManT follows mandoc's macro-set-specific word behavior, preserving zero-width row glyphs such as `\&` separately from pure font state. A groff `\z` operand is an overstrike glyph with no advance: ManT consumes its complete control spelling and retains a final literal glyph when no later glyph can cover it. Executed `fi`/`nf` inside `SY` or a display switch the actual content mode; a filled run resumes ordinary source-word and indented-line handling. Explicit argument and enclosure wrapper boundaries remain observable even when their child text shares one macro call-site line number.
 
+Man synopsis `SY` uses the actual first BODY node's fill mode when closing
+its HEAD; a later `nf` does not retroactively separate an initially shared
+row. The HEAD performs an unconditional field flush, including an empty
+field, and retains its TAB reference. Changing the IR content owner does not
+execute another physical newline or discard an already completed empty row.
+The `fi`/`nf` line request consumes the preceding content before switching
+fill mode, including when the old native buffer is empty but TAB state remains.
+
 An empty native TEXT node follows the pinned CVS text visitor: man uses
 `term_vspace()` for every visited empty TEXT, while mdoc does so only for a
 `NODE_LINE` text node. This consumes negative `.sp` debt as vertical space in

@@ -141,7 +141,7 @@ pub(in crate::mandoc) fn finish_body(
 ) {
     builder.font.pop_scope(saved.font);
     if !body.children.is_empty() {
-        builder.flush_name_field();
+        builder.flush_native_field();
     }
     builder.finish_executed_node(body);
     builder.restore_name_part_geometry(saved.geometry);

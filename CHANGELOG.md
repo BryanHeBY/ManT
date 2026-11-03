@@ -42,6 +42,11 @@ that crate was not published for that change.
   headings and synopsis names execute in source order with their original
   content owners. Keep generated punctuation, font scopes and pending words
   in the shared execution flow; skipped native arguments remain skipped.
+  Preserve cleared HEAD flags across output drains, including invisible
+  no-fill words inside man synopsis bodies. Execute synopsis field posts
+  before draining output owners, retaining TAB references and consuming
+  temporary indentation at the actual BODY boundary. Apply `fi`/`nf` line
+  requests to the content preceding the fill-mode change.
 - Carry native sentence-end flags through node exits and actual word writes,
   including bibliography punctuation, rather than guessing spacing from final
   text. Preserve ordinary and kept-word separator cells in field consumption.

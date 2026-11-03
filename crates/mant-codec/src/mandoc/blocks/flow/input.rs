@@ -288,8 +288,14 @@ impl BlockState {
     /// `ti` uses exactly this entry with or without numeric operands; source
     /// `NODE_LINE` and the request are separate `term_newln` events.
     pub(in crate::mandoc::blocks) fn pre_break_request(&mut self) {
+        self.pre_break_request_in_source_mode(self.formatter.no_fill);
+    }
+
+    /// fi/nf have selected the next output mode in the block driver, but
+    /// their `pre_br` still consumes the request node's original source owner.
+    pub(in crate::mandoc::blocks) fn pre_break_request_in_source_mode(&mut self, no_fill: bool) {
         self.formatter.note_definition_boundary();
-        if self.formatter.no_fill || self.column_uses_literal_output() {
+        if no_fill || self.column_uses_literal_output() {
             self.literal
                 .with_inline_builder(&mut self.formatter, |builder| {
                     builder.control_line_break();
@@ -310,6 +316,23 @@ impl BlockState {
         } else {
             self.paragraph.no_break_flush(&mut self.formatter);
         }
+    }
+
+    /// Execute a real BODY post's `term_newln` while its output owner is live.
+    pub(in crate::mandoc::blocks) fn finish_native_body_line(&mut self) {
+        if self.formatter.no_fill || self.column_uses_literal_output() {
+            self.literal.with_inline_builder(
+                &mut self.formatter,
+                InlineBuilder::execute_native_literal_newline,
+            );
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
+        }
+        // fi can leave historical no-fill bookkeeping while the live native
+        // buffer already belongs to ParagraphFlow. The real post selected
+        // that current owner above; retire the old classification either way.
+        self.formatter.no_fill_inline.retire_consumed_cell();
     }
 
     pub(in crate::mandoc::blocks) fn has_formatter_cell(&self) -> bool {

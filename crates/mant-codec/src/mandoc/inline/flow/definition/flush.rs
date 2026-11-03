@@ -137,18 +137,8 @@ impl InlineBuilder {
         if !self.has_formatter_cell() {
             if had_open_device_row {
                 self.settle_empty_device_field(native.as_ref(), boundary);
-            } else if origin == super::super::CompletedRowOrigin::LiteralText
-                && native
-                    .as_ref()
-                    .is_some_and(NativeFieldDevice::closes_unprinted_row)
-            {
-                // This exact tail endline has no graph owner. Authored
-                // loop rows were projected above from their own receipts;
-                // this is only the final term.c:250-253 row, not another
-                // consumption of those passes or a stale Invisible flag.
-                self.record_completed_rows(1, origin);
-                self.execution.zero_advance.discard_at_row_end();
-                self.retire_native_field_with_device_at(native.as_ref(), boundary);
+            } else {
+                self.retire_unoccupied_definition_field(native.as_ref(), boundary, origin);
             }
             // `roff_term_pre_br()` applies BRIND even when `term_newln()` had
             // no tcol bytes or device row to flush.  It moves the next word
@@ -209,6 +199,27 @@ impl InlineBuilder {
         );
         self.finish_definition_field_flush(native.as_ref(), boundary);
         overruns
+    }
+
+    fn retire_unoccupied_definition_field(
+        &mut self,
+        native: Option<&NativeFieldDevice>,
+        boundary: FieldFlushBoundary,
+        origin: super::super::CompletedRowOrigin,
+    ) {
+        if origin == super::super::CompletedRowOrigin::LiteralText
+            && native.is_some_and(NativeFieldDevice::closes_unprinted_row)
+        {
+            // This exact tail endline has no graph owner. Authored loop
+            // rows were projected from their own receipts; this is only
+            // the final term.c:250-253 row, not a stale Invisible flag.
+            self.record_completed_rows(1, origin);
+        }
+        // A real unconditional empty flush still resets BACKAFTER and
+        // BACKBEFORE (term.c:233-237). Conditional empty term_newln returns
+        // before reaching this consumer.
+        self.execution.zero_advance.discard_at_row_end();
+        self.retire_native_field_with_device_at(native, boundary);
     }
 
     fn exit_unprinted_definition_field(&mut self, had_marker_passes: bool, flags: FieldFlags) {

@@ -379,6 +379,36 @@ impl FormatterState {
         }
     }
 
+    /// Consume one unconditional field post, then retire its output owner.
+    /// The post retains native Tab state; this drain performs no new line call.
+    pub(super) fn finish_inline_field_flush(
+        &mut self,
+        mut builder: InlineBuilder,
+    ) -> Vec<mant_ir::Inline> {
+        let occupied = builder.flush_native_field();
+        let (mut output, _, completed_empty_rows, _) = builder.take_flushed_field_segment();
+        self.definition_head_rows = DefinitionHeadRows {
+            occupied,
+            completed_empty_rows,
+        };
+        // These exact completed tails have already executed. Transfer their
+        // physical rows to the HEAD owner before its structural representation
+        // is chosen; no visible-text width or empty-Vec execution decision.
+        let has_rows = mant_ir::geometry::has_literal_rows(&output);
+        for row in 0..completed_empty_rows {
+            if has_rows || row > 0 {
+                output.push(mant_ir::Inline::line_break());
+            }
+            output.push(mant_ir::Inline::Text {
+                value: String::new(),
+            });
+        }
+        let (_, mut execution) = builder.into_parts();
+        std::mem::swap(&mut execution, &mut self.execution);
+        self.spare_execution = Some(execution);
+        output
+    }
+
     /// Commit persistent registers while leaving the local inline execution
     /// state available to a run-in continuation in the surrounding stream.
     pub(super) fn finish_inline_scope(

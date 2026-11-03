@@ -18,8 +18,57 @@
 use super::super::native_field::FieldFlag;
 #[cfg(test)]
 use super::super::native_field::FieldFlags;
-use super::super::{AuthorBreakEffect, Inline, InlineBuilder, PendingBoundary};
+use super::super::{
+    AuthorBreakEffect, Inline, InlineBuilder, InlineExecutionState, PendingBoundary,
+};
 use super::state::PendingFieldGapOrigin;
+
+impl InlineExecutionState {
+    /// `pre_SY(BODY)` assigns mt->offset + len, rather than adding len to
+    /// the previous offset. The two output paths can have different parents;
+    /// retain one absolute native target and declare its IR placement once.
+    pub(in crate::mandoc) fn begin_man_synopsis_body(&mut self, absolute_origin: usize) {
+        self.enter_native_field_scope();
+        self.boundary = PendingBoundary::Tight;
+        let relative_origin = i64::try_from(absolute_origin)
+            .unwrap_or(i64::MAX)
+            .saturating_sub(i64::from(self.row_presentation.parent));
+        let state = self.ensure_definition_state();
+        state.field_offset_units = usize::try_from(relative_origin).unwrap_or_default();
+        state.hang_row.field_offset = state.field_offset_units.saturating_add(11) / 24;
+        self.declare_name_body_origin();
+    }
+
+    /// The actual BODY post already consumed its field, and the caller has
+    /// assigned mt->offset as the parent again (man_term.c:884-885).
+    pub(in crate::mandoc) fn finish_man_synopsis_body(&mut self) {
+        if let Some(state) = &mut self.definition {
+            state.field_offset_units = 0;
+            state.hang_row.field_offset = 0;
+            state.declared_body_origin = None;
+        }
+        self.exit_native_field_scope();
+        self.retire_definition_output_owner();
+    }
+
+    /// `post_SY(HEAD)` clears only NOBREAK after its real field flush
+    /// (man_term.c:878-881). Keep the cached configuration in that state
+    /// when a later IR output owner retires the live field ledger.
+    pub(in crate::mandoc) fn clear_man_synopsis_head_no_break(&mut self) {
+        if let Some(author) = &mut self.author_execution
+            && let AuthorBreakEffect::Field { flags, .. } = &mut author.break_effect
+        {
+            *flags = flags.without(FieldFlag::NoBreak);
+        }
+        if let Some(field) = self
+            .definition
+            .as_mut()
+            .and_then(|state| state.no_break.as_mut())
+        {
+            field.flags = field.flags.without(FieldFlag::NoBreak);
+        }
+    }
+}
 
 impl InlineBuilder {
     /// Every definition HEAD eventually reaches `term_fill()`, including
@@ -279,11 +328,19 @@ impl InlineBuilder {
         }
         #[cfg(test)]
         {
-            let state = self.execution.definition.as_ref().expect("field session");
+            let (cells, viscol) = self.execution.definition.as_ref().map_or(
+                (
+                    self.execution.flush_unit.cells().len(),
+                    self.execution
+                        .detached_device_row
+                        .map_or(0, |row| row.viscol),
+                ),
+                |state| (state.field_buffer.cells().len(), state.hang_row.viscol),
+            );
             super::control_trace::begin(
                 field.flags,
-                state.field_buffer.cells().len(),
-                state.hang_row.viscol,
+                cells,
+                viscol,
                 self.execution.boundary == PendingBoundary::Tight,
             );
         }

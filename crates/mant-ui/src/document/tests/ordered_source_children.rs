@@ -133,3 +133,75 @@ fn complete_native_children_survive_json_buffer_resize_and_markdown_readback() {
         );
     }
 }
+
+#[test]
+fn man_synopsis_posts_keep_physical_rows_and_word_seams_in_final_cells() {
+    // These exact inputs ran pristine ASCII/UTF-8/tree/lint before the
+    // assertions. man_term.c::post_SY flushes HEAD unconditionally, retains
+    // TABREF, and executes BODY's term_newln before restoring its offset.
+    // Buffer/selection must consume those results without executing them again.
+    let cases = [
+        (
+            ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.nf\n.SY probe\nALPHA\n.B \\&\nBETA\n.YS\n.fi\n.SH NEXT\nAFTER\n",
+            "ALPHA",
+            "BETA",
+            2,
+        ),
+        (
+            ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY \"A\tB\"\nC\tD\n.YS\n.SH NEXT\nAFTER\n",
+            "A    B",
+            "C  D",
+            1,
+        ),
+        (
+            ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY \"\\zX\"\nALPHA\n.YS\n.SH NEXT\nAFTER\n",
+            "XALPHA",
+            "ALPHA",
+            0,
+        ),
+        (
+            ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.SY probe\nALPHA BRAVO CHARLIE DELTA\n.YS\n.SH NEXT\nAFTER\n",
+            "probe ALPHA BRAVO CHARLIE DELTA",
+            "ALPHA BRAVO CHARLIE DELTA",
+            0,
+        ),
+        (
+            ".TH PROBE 1 \"November 4, 2026\"\n.SH TEST\n.RS 4n\n.nf\n.SY probe\n.fi\nC\tD\n.YS\nAFTER\n.RE\nOUT\n.SH NEXT\nSENTINEL\n",
+            "C    D",
+            "AFTER",
+            1,
+        ),
+    ];
+    for (source, first, second, row_distance) in cases {
+        let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let wire = serde_json::to_string(&mant_protocol::QueryBundle::from(&content)).unwrap();
+        let restored: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
+        let restored: ResolvedContent = restored.into();
+        for content in [&content, &restored] {
+            let view = DocumentView::new(content);
+            for width in [78, 40, 78] {
+                let rendered = view.render(width);
+                check_buffer(&rendered, width, first, false);
+                check_buffer(&rendered, width, second, false);
+                let first_hit = &rendered.search(first)[0];
+                let second_hit = &rendered.search(second)[0];
+                assert_eq!(second_hit.row - first_hit.row, row_distance);
+                if row_distance == 2 {
+                    let area = Rect::new(0, 0, width, rendered.row_count.try_into().unwrap());
+                    let mut buffer = Buffer::empty(area);
+                    Paragraph::new(rendered.text.clone()).render(area, &mut buffer);
+                    for column in 0..width {
+                        assert_eq!(
+                            buffer[(column, (first_hit.row + 1).try_into().unwrap())].symbol(),
+                            " "
+                        );
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            serde_json::to_string(&mant_protocol::QueryBundle::from(&restored)).unwrap(),
+            wire
+        );
+    }
+}

@@ -94,7 +94,7 @@ impl InlineBuilder {
     /// The actual HEAD post clears exactly NOBREAK/BRIND/HANG and trailspace,
     /// after consuming the old field. Unlike It post it does not clear BRTRSP.
     pub(in crate::mandoc) fn finish_name_head(&mut self) -> bool {
-        let occupied = self.flush_name_field();
+        let occupied = self.flush_native_field();
         let flags = self
             .native_field_parameters(false, None)
             .map_or(FieldFlags::inset(), |parameters| parameters.0)
@@ -126,9 +126,9 @@ impl InlineBuilder {
         state.hang_row.field_offset = state.field_offset_units.saturating_add(11) / 24;
     }
 
-    /// Both Nm part posts call `term_flushln`, not `term_newln`: consume one
-    /// captured old-state receipt and retain its Tab reference for the BODY.
-    pub(in crate::mandoc) fn flush_name_field(&mut self) -> bool {
+    /// Unconditional `term_flushln`, shared by name and synopsis posts:
+    /// consume one old-state receipt and retain its Tab reference for BODY.
+    pub(in crate::mandoc) fn flush_native_field(&mut self) -> bool {
         let (start, gap, body, width, flags) = self
             .execution
             .author_execution
@@ -152,10 +152,10 @@ impl InlineBuilder {
         let occupied = native
             .as_ref()
             .is_some_and(super::NativeFieldDevice::has_occupied_row);
-        let empty = !self.has_formatter_cell();
-        let empty_closes_row = native
-            .as_ref()
-            .is_some_and(super::NativeFieldDevice::ends_row);
+        let empty_closes_row = !self.has_formatter_cell()
+            && native
+                .as_ref()
+                .is_some_and(super::NativeFieldDevice::closes_unprinted_row);
         self.flush_captured_definition_field(
             super::flush::FieldFlush {
                 start,
@@ -167,10 +167,7 @@ impl InlineBuilder {
             },
             native,
         );
-        if empty
-            && empty_closes_row
-            && !super::super::output::ends_with_executed_line_break(&self.nodes)
-        {
+        if empty_closes_row {
             // An unconditional empty flush still reaches term.c:250-253.
             // Preserve the physical row; an owner drain cannot invent it.
             self.retain_line_breaks(1);

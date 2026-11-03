@@ -69,11 +69,12 @@ impl InlineExecutionState {
             flush_consumed_for_body: false,
             scope_posts: crate::mandoc::containers::ScopePostState::default(),
             column_output_depth: 0,
+            native_field_scope_depth: 0,
         }
     }
 
     pub(super) fn reset_paragraph_segment(&mut self, armed_zero_advance: bool) {
-        if self.has_column_output_scope() {
+        if self.has_persistent_native_field_scope() {
             // term_flushln() already settled the native buffer at the real
             // pre/post. Retiring its IR owner must retain NOSPACE/NONEWLINE,
             // the occupied device row and the next field's native minbl.
@@ -141,11 +142,26 @@ impl InlineExecutionState {
         self.column_output_depth > 0
     }
 
+    pub(super) fn enter_native_field_scope(&mut self) {
+        self.native_field_scope_depth = self.native_field_scope_depth.saturating_add(1);
+    }
+
+    pub(super) fn exit_native_field_scope(&mut self) {
+        self.native_field_scope_depth = self.native_field_scope_depth.saturating_sub(1);
+    }
+
+    fn has_persistent_native_field_scope(&self) -> bool {
+        self.has_column_output_scope() || self.native_field_scope_depth > 0
+    }
+
     pub(super) fn retire_definition_output_owner(&mut self) {
-        if self.has_column_output_scope() {
+        if self.has_persistent_native_field_scope() {
             // print_mdoc_node() restores node geometry after post, but never
             // clears viscol/minbl or the surrounding column flags because an
             // IR destination returned (mdoc_term.c:409-439, term.c:233-253).
+            // A live native BODY also survives fi/nf's output-owner drain:
+            // pre_SY established its offset until the actual BODY post, not
+            // until literal_mode_boundary returned (man_term.c:861-885).
             if let Some(field) = &mut self.definition {
                 field.field_word_anchors.clear();
                 field.field_buffer.detach_projection_owner();

@@ -74,6 +74,11 @@ ledger stages, while their source-node entry, sink routing, post-once claim
 and final geometry restoration remain ordered by their existing drivers.
 No helper return or destructor implicitly executes a native scope post.
 
+A native field scope can span multiple paragraph and literal content owners.
+Its explicit source pre/post boundaries protect the live word, separator and
+field registers while an IR drain releases only output indices. Resolved BODY
+placement remains a layout fact; it does not establish an execution lifetime.
+
 HEAD/BODY selectors borrow structural views, not an exhaustive content stream.
 Macro drivers execute their direct siblings in order and apply fonts, field
 flags and posts at the original parts. Definition prefixes stay with their

@@ -162,6 +162,15 @@ fn execute_block_control(
     match request {
         BlockControl::ParagraphDistance => update_paragraph_distance(node, paragraph_distance),
         BlockControl::LiteralBoundary => {
+            if matches!(
+                node.macro_token.as_ref(),
+                Some(Roff(RoffMacro::Fi | RoffMacro::Nf))
+            ) {
+                // roff_term_pre_acts dispatches fi/nf to pre_br, including
+                // an empty term_newln's TAB reset. The owner drain below
+                // cannot replace that actual request (term.c:475-481).
+                state.pre_break_request_in_source_mode(node.flags.no_fill);
+            }
             // roff_term_pre_br and man pre_literal end the current line and
             // switch HP from its temporary first-line origin to its permanent
             // body origin, including when no text preceded the request.

@@ -96,10 +96,13 @@ impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_no_fill_synopsis(&mut self, node: &Node) -> bool {
         let body = first_part_children(node, NodeKind::Body);
         if node.macro_token.as_ref() != Some(&Man(ManMacro::Sy))
-            || !body.iter().any(|child| child.flags.no_fill)
+            || !body.first().is_some_and(|child| child.flags.no_fill)
         {
             return false;
         }
+        // pre_SY(HEAD) reads this same first BODY node. A later nf cannot
+        // move an initially filled HEAD/BODY row into a separate literal
+        // owner; the ordinary synopsis driver executes those later modes.
         self.state.flush_paragraph();
         self.state.flush_preformatted();
         self.state
@@ -128,17 +131,31 @@ impl super::BlockLowerer<'_, '_> {
         let original_origin = self.state.source_indent().macro_origin();
         let body_origin = super::synopsis::body_origin(node, self.context, original_origin);
         self.state.set_source_indent(body_origin);
+        // The filled BODY enters a fresh BlockLowerer and inherits ordinary
+        // execution there. This in-place no-fill BODY needs the same entry:
+        // pre_SY(BODY) uses maxrmargin, not the HEAD's name-width field.
+        let flow = self.state.formatter.author_flow();
+        self.state.inherit_author_execution(
+            flow,
+            self.context.active_mdoc_section()
+                == crate::mandoc::source_context::MdocSectionContext::Authors,
+        );
+        self.state
+            .formatter
+            .execution
+            .begin_man_synopsis_body(body_origin.physical_basic_units());
         // SY is a scope, not a promise that its whole body is no-fill.
         // Execute each child through normal block dispatch so fi/nf, spacing
         // and structural children cannot become flattened pseudo-text.
         self.push_nodes(body);
         // man_term.c::post_SY() calls term_newln() for the BODY at .YS.
-        // Settle its active no-fill row inside the synopsis output owner.
-        self.settle_no_fill_inline();
+        // fi may have handed the live buffer to the filled paragraph owner.
+        self.state.finish_native_body_line();
         self.state.flush_paragraph();
         self.state.flush_preformatted();
         self.state.literal_assembly.end(self.state.output.len());
         self.state.set_source_indent(original_origin);
+        self.state.formatter.execution.finish_man_synopsis_body();
         self.state
             .formatter
             .font

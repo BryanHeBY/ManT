@@ -1,7 +1,7 @@
 //! Declaration geometry selected by the native SYNOPSIS flags.
 use super::{
-    Block, Inline, InlineBuilder, LoweringContext, Node, NodeKind, ScopeFlow, first_part_children,
-    layout, lower_scope, source_span,
+    Block, Inline, LoweringContext, Node, NodeKind, ScopeFlow, first_part_children, layout,
+    source_span,
 };
 use libmandoc_rs::{
     MacroToken::{Man, Mdoc, Roff},
@@ -168,14 +168,17 @@ pub(super) fn lower_synopsis_head(
         execute_synopsis_head(node, context, indent_columns, spacing_enabled, formatter)
     };
     let head_row_open = formatter.execution.has_open_native_device_row();
+    let body_origin = lifecycle::body_origin(node, context, indent_columns);
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
         // The HEAD post already selected Roman; BODY entry is another
         // print_man_node() pre transition, even if its font is Roman too.
         formatter
+            .execution
+            .begin_man_synopsis_body(body_origin.physical_basic_units());
+        formatter
             .font
             .select(crate::mandoc::roff_escape::RoffFont::Regular);
     }
-    let body_origin = lifecycle::body_origin(node, context, indent_columns);
     formatter.begin_definition_body(formatter.definition_head_row_occupied());
     let mut nested = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Nm)) {
         lower_name_body(
@@ -186,12 +189,12 @@ pub(super) fn lower_synopsis_head(
             &ScopeFlow::filled(body_origin, spacing_enabled),
         )
     } else {
-        lower_scope(
-            first_part_children(node, NodeKind::Body),
+        lower_man_synopsis_body(
+            node,
             context,
             paragraph_distance,
             formatter,
-            ScopeFlow::filled(body_origin, spacing_enabled),
+            &ScopeFlow::filled(body_origin, spacing_enabled),
         )
     };
     let body_execution = formatter.finish_definition_body();
@@ -205,6 +208,7 @@ pub(super) fn lower_synopsis_head(
             .font
             .select(crate::mandoc::roff_escape::RoffFont::Regular);
         super::reset_man_macro_offset(formatter, indent_columns);
+        formatter.execution.finish_man_synopsis_body();
     } else {
         // print_mdoc_node() restores Nm BODY/BLOCK's saved source offset;
         // unlike offset, ti is never restored by a scope return.
@@ -217,7 +221,8 @@ pub(super) fn lower_synopsis_head(
         return;
     }
 
-    if !body_execution.placement_breaks()
+    if (head_row_open || node.macro_token.as_ref() != Some(&Man(ManMacro::Sy)))
+        && !body_execution.placement_breaks()
         && let Some(Block::Paragraph {
             children,
             source,
@@ -231,11 +236,11 @@ pub(super) fn lower_synopsis_head(
         for hint in &mut inline_layout.row_hints {
             hint.row = hint.row.saturating_add(row_offset);
         }
-        let body = std::mem::take(children);
-        let mut synopsis = InlineBuilder::with_spacing(spacing_enabled);
-        synopsis.append(head);
-        synopsis.append(body);
-        *children = synopsis.finish();
+        // Both destinations have already executed. Their native print
+        // receipts own the seam's padding; an append-word boundary here
+        // would invent a separator after pre_SY(BODY)'s NOSPACE.
+        head.append(children);
+        *children = head;
         // The first row shares the HEAD origin; later hard/wrapped rows
         // retain pre_SY/termp_nm_pre(BODY)'s name-derived origin.
         let body_delta = body_origin.offset_from(indent_columns);
@@ -379,6 +384,29 @@ fn lower_name_body(
     lowerer.finish_into(formatter, super::FormatterRowBoundary::Preserve)
 }
 
+fn lower_man_synopsis_body(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    flow: &ScopeFlow<'_>,
+) -> Vec<Block> {
+    let mut lowerer = super::BlockLowerer::new(
+        context,
+        flow.indent_columns,
+        paragraph_distance,
+        flow.spacing_enabled,
+        Vec::new(),
+        std::mem::take(formatter),
+    );
+    lowerer.push_nodes(first_part_children(node, NodeKind::Body));
+    // man_term.c::post_SY(BODY) consumes the shared native buffer before
+    // its destination drains and before the caller restores mt->offset.
+    // The current output owner, not historical no-fill bookkeeping, owns it.
+    lowerer.state.finish_native_body_line();
+    lowerer.finish_into(formatter, super::FormatterRowBoundary::Preserve)
+}
+
 fn terminal_empty_name_body(node: &Node) -> Option<&Node> {
     let head = node
         .children
@@ -428,12 +456,11 @@ pub(super) fn execute_synopsis_head(
         context.default_name,
     );
     head_builder.font.pop_scope(saved_font);
-    let head = if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy))
-        || !first_part_children(node, NodeKind::Body).is_empty()
-    {
-        // man_term.c::post_SY(HEAD) always flushes; mdoc_term.c's
-        // termp_nm_post(HEAD) flushes when BODY is present. Settle pending
-        // zero-width glyphs here before output ownership moves to BODY.
+    let head = if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
+        formatter.finish_inline_field_flush(head_builder)
+    } else if !first_part_children(node, NodeKind::Body).is_empty() {
+        // mdoc_term.c's termp_nm_post(HEAD) flushes when BODY is present.
+        // Settle pending zero-width glyphs before ownership moves to BODY.
         formatter
             .finish_inline_line_with_rows(head_builder, true)
             .output
@@ -447,6 +474,7 @@ pub(super) fn execute_synopsis_head(
         head
     };
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Sy)) {
+        formatter.execution.clear_man_synopsis_head_no_break();
         // man_term.c::print_man_node() replaces the current font at HEAD
         // post and again at BODY entry. Both transitions update fontlast,
         // which a BODY-leading \fP reads before any visible argument.

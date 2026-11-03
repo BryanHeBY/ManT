@@ -278,12 +278,16 @@ fn column_gap_and_single_initial_literal_row_have_separate_owners() {
     // Exact source ran pristine ASCII/UTF-8/tree/lint first. Bd pre executes
     // print_bvspace; its independent row and the enclosing Bl leading distance
     // are separate. Reading must never erase the table's external distance.
+    // Rechecked the complete source on pinned CVS: the final empty fi runs
+    // pre_br without a native buffer/row, so it adds no empty content owner
+    // (term.c:475-481). Test-only observation must not require creating one.
     let source = ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No \"\\p D\"\n.Bd -literal\nMarker\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.fi\n.Sh NEXT\n.No END\n";
     let native = crate::mandoc::parse_native_manual(
         std::path::Path::new("column-owner.1"),
         source.as_bytes(),
     )
     .unwrap();
+    assert_eq!(native.sections[1].blocks.len(), 1, "fi adds no row owner");
     let reading = crate::mandoc::parse_plain_manual(
         std::path::Path::new("column-owner.1"),
         source.as_bytes(),

@@ -229,6 +229,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// A column list's native device state outlives its cell/display IR
     /// owners. Only Bl return retires this scope, not a paragraph drain.
     column_output_depth: usize,
+    /// Actual native field scopes can span several paragraph/literal owners.
+    /// Their paired pre/post controls retirement independently of layout hints.
+    native_field_scope_depth: usize,
 }
 
 impl std::ops::Deref for InlineBuilder {

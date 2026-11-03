@@ -58,6 +58,177 @@ fn man_empty_font_macro_operands_and_invisible_glyphs_occupy_a_row() {
     }
 }
 
+#[derive(serde::Deserialize)]
+struct SynopsisFieldFixture {
+    oracle_sha256: String,
+    cases: Vec<SynopsisFieldCase>,
+}
+
+#[derive(serde::Deserialize)]
+struct SynopsisFieldCase {
+    id: String,
+    head: String,
+    body: String,
+    first_body_no_fill: Option<bool>,
+    source: String,
+    expected_rows: Vec<String>,
+    #[serde(default)]
+    reading_rows: Option<Vec<String>>,
+    #[serde(default)]
+    reading_owner_line: Option<u32>,
+}
+
+fn assert_synopsis_parts(case: &SynopsisFieldCase) {
+    fn synopsis(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+        if node.kind == libmandoc_rs::NodeKind::Block && node.macro_token.as_deref() == Some("SY") {
+            Some(node)
+        } else {
+            node.children.iter().find_map(synopsis)
+        }
+    }
+    let parsed = libmandoc_rs::Parser::default()
+        .parse_bytes("synopsis-field.1", case.source.as_bytes())
+        .unwrap();
+    let block = synopsis(&parsed.document.root).expect("native SY BLOCK");
+    let part = |kind| {
+        block
+            .children
+            .iter()
+            .find(|node| node.kind == kind)
+            .unwrap()
+    };
+    let head = part(libmandoc_rs::NodeKind::Head);
+    let body = part(libmandoc_rs::NodeKind::Body);
+    assert_eq!(
+        head.children.is_empty(),
+        case.head == "empty",
+        "{}",
+        case.id
+    );
+    assert_eq!(
+        body.children.is_empty(),
+        case.body == "empty",
+        "{}",
+        case.id
+    );
+    assert_eq!(
+        body.children.first().map(|node| node.flags.no_fill),
+        case.first_body_no_fill,
+        "{}: pre_SY reads the actual first BODY node",
+        case.id
+    );
+}
+
+fn assert_initial_code_row_policy(case: &SynopsisFieldCase, document: &mant_ir::Document) {
+    let Some(owner_line) = case.reading_owner_line else {
+        assert_eq!(case.reading_rows, None, "{}", case.id);
+        return;
+    };
+    assert!(case.reading_rows.is_some(), "{}", case.id);
+    // The four fi/nf drains create a second complete literal owner whose
+    // raw executed rows are [empty, BETA]. The documented Code-block Initial
+    // Rows policy removes its one initial LF once, after complete assembly.
+    // It does not remove the native row expectation or an internal blank.
+    let section = document
+        .sections
+        .iter()
+        .find(|section| section.id.as_str() == "test")
+        .unwrap();
+    let owners: Vec<_> = section
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Preformatted {
+                children, source, ..
+            } => Some((children, source)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(owners.len(), 2, "{}", case.id);
+    let (children, source) = owners[1];
+    let source = source.expect("complete second literal owner keeps its source");
+    assert_eq!((source.line, source.column), (owner_line, 2), "{}", case.id);
+    assert_eq!(
+        children,
+        &[
+            Inline::Text {
+                value: String::new()
+            },
+            Inline::Text {
+                value: "BETA".to_owned()
+            },
+        ],
+        "{}",
+        case.id
+    );
+}
+
+#[test]
+fn synopsis_field_posts_keep_empty_rows_and_restore_the_body_budget() {
+    // All 27 complete sources ran five pristine profiles first.
+    // man_term.c:878-881 flushes HEAD before clearing only NOBREAK;
+    // pre_SY(BODY):861-864 restores maxrmargin while retaining name origin.
+    // The real HEAD/BODY shape below proves both branches of pre_SY(HEAD),
+    // including empty BODY and fill-mode drains. No hard rows or word seams
+    // are folded when comparing the rendered regions. Four complete second
+    // literal owners separately select the established initial-row reading
+    // policy; their full native rows remain in the fixture unchanged.
+    // Six adjacent sources also preserve HEAD-to-BODY Tab references and
+    // retire bare/cached BACKAFTER at the unconditional HEAD flush.
+    // Three nonzero RS bases prove pre_SY assigns mt->offset + len, even
+    // after in, and the initially no-fill BODY still posts after fi.
+    let fixture: SynopsisFieldFixture =
+        serde_json::from_str(include_str!("no_fill_synopsis/field_posts.json")).unwrap();
+    assert_eq!(
+        fixture.oracle_sha256,
+        "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e"
+    );
+    assert_eq!(fixture.cases.len(), 27);
+    let mut failures = Vec::new();
+    for case in fixture.cases {
+        assert_synopsis_parts(&case);
+        let content = load_roff_bytes(case.source.as_bytes()).unwrap();
+        let document = content.document.as_ref().unwrap();
+        assert_initial_code_row_policy(&case, document);
+        let encoded = serde_json::to_string(document).unwrap();
+        let decoded: mant_ir::Document = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(
+            *document, decoded,
+            "{}: JSON retains the same owners",
+            case.id
+        );
+        let text = without_line_origins(&render_query_text(&content));
+        if case.expected_rows.is_empty() {
+            let section = document
+                .sections
+                .iter()
+                .find(|section| section.id.as_str() == "test")
+                .expect("original empty TEST section remains addressable");
+            assert_eq!(section.blocks.len(), 0, "{}", case.id);
+            assert_eq!(section.children.len(), 0, "{}", case.id);
+            let before_next = text.split_once("\nNEXT\n").unwrap().0;
+            assert!(before_next.ends_with("\nTEST"), "{}: {text}", case.id);
+            continue;
+        }
+        let region = text
+            .split_once("\nTEST\n")
+            .unwrap()
+            .1
+            .split_once("\nNEXT\n")
+            .unwrap()
+            .0;
+        let rows: Vec<_> = region.lines().map(str::to_owned).collect();
+        let reading_rows = case.reading_rows.as_ref().unwrap_or(&case.expected_rows);
+        if rows != *reading_rows {
+            failures.push(format!(
+                "{}\nnative {:?}\nreading {reading_rows:?}\nproduct {rows:?}",
+                case.id, case.expected_rows,
+            ));
+        }
+    }
+    assert_eq!(failures.len(), 0, "{}", failures.join("\n"));
+}
+
 #[test]
 fn empty_mdoc_or_alternating_font_parameters_are_not_literal_blank_rows() {
     // CVS mdoc_term.c::print_mdoc_node() treats an empty TEXT as a blank row
