@@ -1,6 +1,6 @@
 //! Sparse prepared-row alignment; final table slots consume these receipts.
-use super::LayoutText;
-use mant_ir::{TextAlignment, geometry::text_width};
+use super::{LayoutText, display_columns};
+use mant_ir::TextAlignment;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowAlignment {
@@ -21,7 +21,7 @@ impl LayoutText {
             .map_or(0, |(receipt, width)| {
                 receipt.placement.padding(
                     width.saturating_sub(receipt.prefix),
-                    text_width(&self.visible).saturating_sub(receipt.prefix),
+                    display_columns(&self.visible).saturating_sub(receipt.prefix),
                 )
             })
     }
@@ -43,7 +43,7 @@ impl LayoutText {
 
     pub(super) fn prefix_alignments(&mut self, prefix: &str, remove: bool) {
         let rows = prefix.bytes().filter(|byte| *byte == b'\n').count();
-        let width = text_width(prefix.rsplit('\n').next().unwrap_or_default());
+        let width = display_columns(prefix.rsplit('\n').next().unwrap_or_default());
         self.alignments.retain_mut(|receipt| {
             if remove {
                 if receipt.row < rows {
@@ -79,7 +79,7 @@ impl LayoutText {
             let receipt = row.alignments.first().copied();
             row.alignments.clear();
             let Some(receipt) = receipt else { continue };
-            let used = text_width(&row.visible).saturating_sub(receipt.prefix);
+            let used = display_columns(&row.visible).saturating_sub(receipt.prefix);
             let padding = receipt
                 .placement
                 .padding(width.saturating_sub(receipt.prefix), used);

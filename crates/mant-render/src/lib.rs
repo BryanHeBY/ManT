@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 pub mod cells;
+pub mod line_layout;
 mod output;
 mod presentation;
 pub mod table_border;

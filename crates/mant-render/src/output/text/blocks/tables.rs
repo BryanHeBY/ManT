@@ -19,7 +19,11 @@ impl PreparedCell {
         let has_physical_rows = flow.has_physical_rows();
         let (text, completed) = flow.finish_cell();
         Self {
-            lines: text.split(completed),
+            lines: text
+                .split(completed)
+                .into_iter()
+                .map(|row| row.expanded_tabs().unwrap_or(row))
+                .collect(),
             has_physical_rows,
             completed,
             break_after,
@@ -32,7 +36,7 @@ impl PreparedCell {
         let mut widths = self
             .lines
             .iter()
-            .map(|line| mant_ir::geometry::ColumnFieldWidth::from_text(&line.visible))
+            .map(LayoutText::field_width)
             .collect::<Vec<_>>();
         if let Some(last) = widths.last_mut() {
             last.completed = self.completed || self.break_after;

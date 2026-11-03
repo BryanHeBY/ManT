@@ -6,6 +6,13 @@ mod wrapping;
 use alignment::RowAlignment;
 use wrapping::PaintedRun;
 
+pub(in crate::output::text) fn display_columns(text: &str) -> usize {
+    text.split('\n')
+        .map(|row| crate::line_layout::PreparedLine::new(row, 0).columns())
+        .max()
+        .unwrap_or(0)
+}
+
 /// Both representations come from the same inline visit and share all layout
 /// operations. The visible side is local measurement material, not a second
 /// renderer or a copy of the document model. Keeping complete rows also lets
@@ -20,6 +27,23 @@ pub(in crate::output) struct LayoutText {
 }
 
 impl LayoutText {
+    /// ASCII trailing separators remain pending in declared fields, while a
+    /// TAB's display spaces retain the original TAB's significant extent.
+    pub(in crate::output::text) fn field_width(&self) -> mant_ir::geometry::ColumnFieldWidth {
+        let end = self.visible.trim_end_matches(' ').len().max(
+            self.painted
+                .iter()
+                .map(PaintedRun::fixed_space_end)
+                .max()
+                .unwrap_or(0),
+        );
+        mant_ir::geometry::ColumnFieldWidth {
+            content: display_columns(&self.visible[..end]),
+            output: display_columns(&self.visible),
+            completed: false,
+        }
+    }
+
     pub(super) fn decorated(visible: &str, rendered: String) -> Self {
         // The public decorator contract preserves newlines. An invalid
         // callback must not make the row zipper silently discard source text.
@@ -29,7 +53,7 @@ impl LayoutText {
         } else {
             visible.to_owned()
         };
-        let painted = vec![PaintedRun::new(visible, &rendered)];
+        let painted = PaintedRun::rows(visible, &rendered);
         Self {
             rendered,
             visible: visible.to_owned(),
@@ -235,8 +259,8 @@ impl From<&str> for LayoutText {
 impl TableText for LayoutText {
     fn longest_word_width(&self) -> usize {
         self.visible
-            .split(wrapping::soft_separator)
-            .map(mant_ir::geometry::text_width)
+            .split('\n')
+            .map(|row| crate::line_layout::PreparedLine::new(row, 0).longest_word_columns())
             .max()
             .unwrap_or(0)
     }
@@ -267,7 +291,7 @@ impl TableText for LayoutText {
     }
 
     fn width(&self) -> usize {
-        mant_ir::geometry::text_width(&self.visible)
+        display_columns(&self.visible)
     }
 
     fn physical_lines(&self) -> Vec<Self> {
@@ -275,6 +299,9 @@ impl TableText for LayoutText {
             vec![self.clone()]
         } else {
             self.split(true)
+                .into_iter()
+                .map(|row| row.expanded_tabs().unwrap_or(row))
+                .collect()
         }
     }
 

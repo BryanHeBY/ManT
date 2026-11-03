@@ -1,11 +1,8 @@
 //! Prepared decoration receipts permit soft wrapping without a second source
 //! visit. Their byte ranges index the local visible result, never document IR.
 use super::{LayoutText, RowAlignment};
+use crate::line_layout::{PreparedLine, UnitKind, WrapMode};
 use std::ops::Range;
-
-pub(super) fn soft_separator(character: char) -> bool {
-    character.is_whitespace() && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
-}
 
 #[derive(Clone, Debug)]
 pub(super) struct PaintedRun {
@@ -14,9 +11,58 @@ pub(super) struct PaintedRun {
     suffix: String,
     sliceable: bool,
     generated: bool,
+    fixed_space: bool,
 }
 
 impl PaintedRun {
+    pub(super) fn rows(visible: &str, rendered: &str) -> Vec<Self> {
+        let mut result = Vec::new();
+        let mut offset = 0;
+        for (source, paint) in visible.split('\n').zip(rendered.split('\n')) {
+            let run = Self::new(source, paint);
+            if run.sliceable {
+                result.push(Self {
+                    range: offset..offset + source.len(),
+                    ..run
+                });
+            } else {
+                // Production decoration leaves authored edge whitespace
+                // outside terminal wrappers. Retain those exact three runs
+                // rather than treating the complete callback as opaque.
+                let core = source.trim();
+                let start = source.len() - source.trim_start().len();
+                let end = start + core.len();
+                let retained = paint
+                    .strip_prefix(&source[..start])
+                    .and_then(|paint| paint.strip_suffix(&source[end..]));
+                let core_run = retained.map(|paint| Self::new(core, paint));
+                if let Some(core_run) = core_run.filter(|run| run.sliceable) {
+                    for range in [0..start, end..source.len()] {
+                        if !range.is_empty() {
+                            result.push(Self {
+                                range: offset + range.start..offset + range.end,
+                                generated: false,
+                                ..Self::plain(0..0)
+                            });
+                        }
+                    }
+                    result.push(Self {
+                        range: offset + start..offset + end,
+                        ..core_run
+                    });
+                } else {
+                    result.push(Self {
+                        range: offset..offset + source.len(),
+                        ..run
+                    });
+                }
+            }
+            offset += source.len() + 1;
+        }
+        result.sort_by_key(|run| run.range.start);
+        result
+    }
+
     pub(super) fn plain(range: Range<usize>) -> Self {
         Self {
             range,
@@ -24,6 +70,7 @@ impl PaintedRun {
             suffix: String::new(),
             sliceable: true,
             generated: true,
+            fixed_space: false,
         }
     }
 
@@ -46,8 +93,36 @@ impl PaintedRun {
             suffix: rendered[start + visible.len()..].into(),
             sliceable: true,
             generated: false,
+            fixed_space: false,
         }
     }
+
+    pub(super) fn fixed_space_end(&self) -> usize {
+        if self.fixed_space { self.range.end } else { 0 }
+    }
+}
+
+fn push_painted_span(
+    run: &PaintedRun,
+    text: &str,
+    fixed_space: bool,
+    visible: &mut String,
+    rendered: &mut String,
+    painted: &mut Vec<PaintedRun>,
+) {
+    if text.is_empty() {
+        return;
+    }
+    let start = visible.len();
+    visible.push_str(text);
+    rendered.push_str(&run.prefix);
+    rendered.push_str(text);
+    rendered.push_str(&run.suffix);
+    painted.push(PaintedRun {
+        range: start..visible.len(),
+        fixed_space,
+        ..run.clone()
+    });
 }
 
 impl LayoutText {
@@ -85,45 +160,89 @@ impl LayoutText {
         }
     }
 
-    fn painted_slice(&self, range: Range<usize>) -> Option<Self> {
+    fn painted_units(
+        &self,
+        prepared: &PreparedLine<'_>,
+        range: Range<usize>,
+        offset: usize,
+    ) -> Option<Self> {
+        let units = &prepared.units()[range];
+        let Some(first_unit) = units.first() else {
+            return Some(Self::default());
+        };
+        let start = offset + first_unit.bytes.start;
+        let end = offset + units.last().expect("nonempty units").bytes.end;
+        let mut visible = String::new();
         let mut rendered = String::new();
-        let first = self
-            .painted
-            .partition_point(|run| run.range.end <= range.start);
+        let mut painted = Vec::new();
+        let first = self.painted.partition_point(|run| run.range.end <= start);
         let selected = &self.painted[first..];
-        for run in selected
-            .iter()
-            .take_while(|run| run.range.start < range.end)
-        {
-            let from = run.range.start.max(range.start);
-            let to = run.range.end.min(range.end);
+        for run in selected.iter().take_while(|run| run.range.start < end) {
+            let from = run.range.start.max(start);
+            let to = run.range.end.min(end);
             if from >= to {
                 continue;
             }
             if !run.sliceable {
                 return None;
             }
-            rendered.push_str(&run.prefix);
-            rendered.push_str(&self.visible[from..to]);
-            rendered.push_str(&run.suffix);
+            let mut span = String::new();
+            let mut fixed_space = run.fixed_space;
+            let first_unit = units.partition_point(|unit| offset + unit.bytes.end <= from);
+            for unit in units[first_unit..]
+                .iter()
+                .take_while(|unit| offset + unit.bytes.start < to)
+            {
+                let tab = matches!(unit.kind, UnitKind::Tab { .. });
+                let fixed = tab || run.fixed_space;
+                if fixed != fixed_space {
+                    push_painted_span(
+                        run,
+                        &span,
+                        fixed_space,
+                        &mut visible,
+                        &mut rendered,
+                        &mut painted,
+                    );
+                    span.clear();
+                    fixed_space = fixed;
+                }
+                if tab {
+                    span.push(' ');
+                } else {
+                    let fragment = &self.visible
+                        [(offset + unit.bytes.start).max(from)..(offset + unit.bytes.end).min(to)];
+                    span.push_str(fragment);
+                }
+            }
+            push_painted_span(
+                run,
+                &span,
+                fixed_space,
+                &mut visible,
+                &mut rendered,
+                &mut painted,
+            );
         }
-        let mut value = Self::decorated(&self.visible[range.clone()], rendered);
-        value.painted = self.painted[first..]
-            .iter()
-            .take_while(|run| run.range.start < range.end)
-            .filter_map(|run| {
-                let start = run.range.start.max(range.start);
-                let end = run.range.end.min(range.end);
-                (start < end).then(|| PaintedRun {
-                    range: start - range.start..end - range.start,
-                    ..run.clone()
-                })
-            })
-            .collect();
+        let mut value = Self {
+            rendered,
+            visible,
+            painted,
+            ..Self::default()
+        };
         if let Some(receipt) = self.alignments.first() {
             value.alignments.push(RowAlignment { row: 0, ..*receipt });
         }
         Some(value)
+    }
+
+    /// Resolve TABs inside a prepared cell before outer rails or placement.
+    pub(in crate::output::text) fn expanded_tabs(&self) -> Option<Self> {
+        if !self.visible.contains('\t') {
+            return Some(self.clone());
+        }
+        let prepared = PreparedLine::new(&self.visible, 0);
+        self.painted_units(&prepared, 0..prepared.units().len(), 0)
     }
 
     pub(in crate::output::text) fn leading_layout_padding(&self) -> usize {
@@ -144,79 +263,20 @@ impl LayoutText {
             return Some(vec![self.clone()]);
         }
         let prefix = self.leading_layout_padding();
-        let prefix_width = mant_ir::geometry::text_width(&self.visible[..prefix]);
-        let available = width.checked_sub(prefix_width).filter(|width| *width > 0)?;
-        let mut output = Vec::new();
-        let mut start = prefix;
-        if start == self.visible.len() {
+        let prefix_width = super::display_columns(&self.visible[..prefix]);
+        width.checked_sub(prefix_width).filter(|width| *width > 0)?;
+        if prefix == self.visible.len() {
             return Some(vec![self.clone()]);
         }
-        // Only internal breakable separators can belong to a soft seam.
-        // Authored leading/trailing spaces and whitespace-only hard rows
-        // remain source text, independently of generated layout padding.
-        let content_end = self.visible.trim_end_matches(soft_separator).len();
-        while start < self.visible.len() {
-            let mut used = 0_usize;
-            let mut end = start;
-            let mut separator: Option<Range<usize>> = None;
-            let mut in_separator = false;
-            let mut has_content = false;
-            for glyph in crate::cells::graphemes(&self.visible[start..]) {
-                if used.saturating_add(glyph.columns()) > available && end > start {
-                    break;
-                }
-                used = used.saturating_add(glyph.columns());
-                end = start + glyph.bytes().end;
-                if glyph.text().chars().all(soft_separator) {
-                    if has_content && end <= content_end {
-                        if in_separator {
-                            if let Some(separator) = &mut separator {
-                                separator.end = end;
-                            }
-                        } else {
-                            separator = Some(start + glyph.bytes().start..end);
-                        }
-                    }
-                    in_separator = true;
-                } else {
-                    has_content = true;
-                    in_separator = false;
-                }
-                if used >= available {
-                    break;
-                }
-            }
-            let mut next = end;
-            if end < self.visible.len() {
-                // A word can fill the slot exactly, leaving the separator
-                // outside the measured prefix. Consume the whole seam once,
-                // without painting it on either visual row.
-                if has_content
-                    && end < content_end
-                    && self.visible[end..].starts_with(soft_separator)
-                {
-                    let after = self.visible[end..]
-                        .find(|character| !soft_separator(character))
-                        .map_or(self.visible.len(), |offset| end + offset);
-                    let from = if in_separator {
-                        separator.as_ref().map_or(end, |separator| separator.start)
-                    } else {
-                        end
-                    };
-                    separator = Some(from..after);
-                }
-                if let Some(separator) = separator {
-                    end = separator.start;
-                    next = separator.end;
-                }
-            }
-            let value = self
-                .painted_slice(start..end)?
-                .prefixed(&self.visible[..prefix]);
-            output.push(value);
-            start = next;
-        }
-        Some(output)
+        let prepared = PreparedLine::new(&self.visible[prefix..], prefix_width);
+        prepared
+            .wrap(width, prefix_width, prefix_width, WrapMode::Word)
+            .into_iter()
+            .map(|row| {
+                self.painted_units(&prepared, row.units, prefix)
+                    .map(|value| value.prefixed(&self.visible[..prefix]))
+            })
+            .collect()
     }
 }
 
@@ -373,5 +433,132 @@ mod tests {
         );
         assert_eq!(rows[0].rendered, "\x1b[1mlong\x1b[0m");
         assert_eq!(rows[1].rendered, "\x1b]8;;uri\x1b\\word\x1b]8;;\x1b\\");
+    }
+
+    #[test]
+    fn tab_expansion_uses_shared_columns_inside_terminal_receipts_and_authored_edges() {
+        use super::super::TableText;
+        for (source, expected) in [
+            ("abc\tdef", "abc     def"),
+            ("\tabc", "        abc"),
+            ("abc\t", "abc     "),
+            ("a\t\tb", "a               b"),
+            ("中e\u{301}\t界", "中e\u{301}     界"),
+            (" \tabc\t ", "        abc      "),
+        ] {
+            for (open, close) in [
+                ("", ""),
+                ("\x1b[1m", "\x1b[0m"),
+                ("\x1b]8;;https://example.test\x1b\\", "\x1b]8;;\x1b\\"),
+            ] {
+                for edges_outside in [false, true] {
+                    let rendered = if edges_outside {
+                        let core = source.trim();
+                        let start = source.len() - source.trim_start().len();
+                        format!(
+                            "{}{open}{core}{close}{}",
+                            &source[..start],
+                            &source[start + core.len()..]
+                        )
+                    } else {
+                        format!("{open}{source}{close}")
+                    };
+                    let value = LayoutText::decorated(source, rendered);
+                    let expanded = value.expanded_tabs().unwrap();
+                    assert_eq!(expanded.visible, expected, "{source:?}/{edges_outside}");
+                    assert_eq!(
+                        expanded.rendered.replace(open, "").replace(close, ""),
+                        expected
+                    );
+                    assert!(!expanded.rendered.contains('\t'));
+                    assert_eq!(
+                        expanded.width(),
+                        crate::line_layout::PreparedLine::new(source, 0).columns()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn split_tab_parts_keep_balanced_decoration_and_significant_edge_space() {
+        for width in [1, 4, 7, 8, 9] {
+            let source = "\tX\t";
+            let value = LayoutText::decorated(source, format!("\x1b[1m{source}\x1b[0m"));
+            let rows = value.soft_wrapped(width).unwrap();
+            assert_eq!(
+                rows.iter()
+                    .map(|row| row.visible.as_str())
+                    .collect::<String>(),
+                "        X       "
+            );
+            for row in rows {
+                assert!(row.visible.len() <= width);
+                assert_eq!(
+                    row.rendered.matches("\x1b[1m").count(),
+                    row.rendered.matches("\x1b[0m").count()
+                );
+                assert_eq!(
+                    row.rendered.replace("\x1b[1m", "").replace("\x1b[0m", ""),
+                    row.visible
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cross_style_tabs_share_one_hard_row_phase_and_fixed_tail_extent() {
+        let mut text = LayoutText::decorated("a", "a".into());
+        text.append(&LayoutText::decorated("\t", "\x1b[1m\t\x1b[0m".into()));
+        text.append(&LayoutText::decorated(
+            "中e\u{301}",
+            "\x1b]8;;uri\x1b\\中e\u{301}\x1b]8;;\x1b\\".into(),
+        ));
+        text.append(&LayoutText::decorated("\tZ", "\x1b[3m\tZ\x1b[0m".into()));
+        assert_eq!(
+            text.expanded_tabs().unwrap().visible,
+            "a       中e\u{301}     Z"
+        );
+        assert_eq!(
+            text.soft_wrapped(8)
+                .unwrap()
+                .iter()
+                .map(|row| row.visible.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "中e\u{301}", "Z"]
+        );
+        let tail = LayoutText::decorated("A\t ", "A\t ".into())
+            .expanded_tabs()
+            .unwrap();
+        assert_eq!(tail.field_width().content, 8);
+        assert_eq!(tail.field_width().output, 9);
+        let mut nested = LayoutText::from("  ");
+        nested.append(&tail);
+        assert_eq!(nested.field_width().content, 10);
+        assert_eq!(nested.field_width().output, 11);
+    }
+
+    #[test]
+    fn hard_row_splits_keep_production_edge_wrappers_and_restart_tab_phase() {
+        use super::super::TableText;
+        let source = " a\tb \n\tc ";
+        let rendered = " \x1b[1ma\tb\x1b[0m \n\t\x1b[1mc\x1b[0m ";
+        let rows = LayoutText::decorated(source, rendered.into()).physical_lines();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.visible.as_str())
+                .collect::<Vec<_>>(),
+            [" a      b ", "        c "]
+        );
+        for row in rows {
+            assert_eq!(
+                row.rendered.replace("\x1b[1m", "").replace("\x1b[0m", ""),
+                row.visible
+            );
+            assert_eq!(
+                row.rendered.matches("\x1b[1m").count(),
+                row.rendered.matches("\x1b[0m").count()
+            );
+        }
     }
 }

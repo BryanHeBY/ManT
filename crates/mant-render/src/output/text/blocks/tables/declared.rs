@@ -11,7 +11,7 @@ fn align_declared_cell(
     }
     let spare = area
         .unwrap_or(0)
-        .saturating_sub(mant_ir::geometry::text_width(&text.visible));
+        .saturating_sub(crate::output::text::layout::display_columns(&text.visible));
     let extra = match alignment {
         Some(mant_ir::TableAlignment::Center) => spare / 2,
         Some(mant_ir::TableAlignment::Right) => spare,
@@ -169,7 +169,8 @@ impl PreparedDeclaredRow {
                             .saturating_sub(piece.column)
                     });
                     let spare = cell_area.unwrap_or(0).saturating_sub(
-                        mant_ir::geometry::text_width(&text.visible).saturating_add(owner),
+                        crate::output::text::layout::display_columns(&text.visible)
+                            .saturating_add(owner),
                     );
                     let extra = owner
                         + match if text.has_row_alignment() {
@@ -370,9 +371,12 @@ impl BlockRenderer<'_> {
                         cells[piece.cell].alignment
                     },
                 );
-                visible = piece
-                    .column
-                    .saturating_add(mant_ir::geometry::text_width(&content.visible));
+                visible =
+                    piece
+                        .column
+                        .saturating_add(crate::output::text::layout::display_columns(
+                            &content.visible,
+                        ));
                 line.append(&content);
             }
             lines.push(line);

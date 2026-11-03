@@ -63,6 +63,18 @@ Single/double stroke strengths come from IR, but glyph selection stays in this
 presentation layer. These helpers neither allocate columns nor choose colors;
 adapters retain their own layout, theme and source-coordinate maps.
 
+`line_layout::PreparedLine` is the shared, theme-free hard-row geometry used
+by CLI table wrapping and the TUI. It retains UTF-8/scalar ranges, complete
+graphemes and exact unpainted soft separators. TAB stops are eight columns
+apart in the original block/cell-local hard row, including its structural
+origin. TABs expand once before wrapping; frame rails, final alignment and
+continuation placement do not rephase them. A TAB split at a narrow viewport
+retains one source scalar and multiple display-space parts. Consumers keep
+their own decoration, navigation, search and visual-selection receipts.
+Word wrapping retains a complete final word that exactly fills the available
+slot. Authored hard-row edges and whitespace-only rows never become seams.
+This is reading geometry after source execution, not native roff tab state.
+
 `cells` borrows complete grapheme clusters and preserves byte boundaries. Its input contract is already-sanitized single-line text. It does not replace source-neutral IR geometry or a frontend's wrapping policy.
 
 Scope report functions consume `ScopeQueryResponse` directly. They preserve the supplied evidence page, document order, failures and coverage; they do not execute a scope query or invent per-document pagination. CLI adapters supply ANSI decoration or terminal-safe Markdown identities. MCP uses the same plain/Markdown reports, then applies its own redaction, hints and character paging without depending on CLI format or error types.

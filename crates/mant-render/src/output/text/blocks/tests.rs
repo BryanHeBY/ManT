@@ -15,6 +15,7 @@ mod owner_layout;
 mod physical_rows;
 mod presentation;
 mod responsive_tables;
+mod tab_geometry;
 mod table_frames;
 mod table_gaps;
 mod table_geometry;

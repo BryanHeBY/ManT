@@ -60,6 +60,11 @@ that crate was not published for that change.
 
 ### mant-render and mant-ui
 
+- Share source-preserving hard-row geometry and TAB expansion. CLI table
+  measurement, soft wrapping, alignment and decorated slices now agree on
+  terminal columns; retain a TAB's significant extent in declared fields.
+  Keep the frozen document protocols unchanged.
+
 - Consume internal soft-wrap separators once in CLI table cells, avoiding
   spurious blank rows and center/right alignment drift while retaining authored
   hard rows, edge whitespace, nonbreaking spaces and complete ANSI/OSC wrappers.
