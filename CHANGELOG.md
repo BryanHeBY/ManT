@@ -80,6 +80,8 @@ that crate was not published for that change.
   Keep logical searches stable for TABs, multiple spaces and styled text;
   retain separate source groups in nested tables and propagate TAB tail extent
   through declared-field placement, alignment and copy/link coordinates.
+  Preserve sanitized control glyphs as display cells at every width instead
+  of reclassifying them as unpainted soft separators.
 
 - Advance inline scalar and link-interval cursors and consume wrapping suffixes
   by index. Avoid accumulated-prefix scans, per-glyph full link scans and

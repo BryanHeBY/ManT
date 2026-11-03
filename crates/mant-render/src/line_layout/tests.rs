@@ -193,3 +193,17 @@ fn long_authored_edges_and_internal_seams_do_not_rescan_unconsumed_suffixes() {
         }
     }
 }
+
+#[test]
+fn unsafe_control_glyphs_are_not_word_wrap_separators() {
+    for control in ['\u{b}', '\u{c}', '\r', '\u{85}'] {
+        let source = format!("ab{control}cd");
+        let line = PreparedLine::new(&source, 0);
+        assert_eq!(line.columns(), 5);
+        assert_eq!(line.longest_word_columns(), 5);
+        for width in [1, 2, 3, 80] {
+            let rows = line.wrap(width, 0, 0, WrapMode::Word);
+            assert!(rows.iter().all(|row| row.seam_after.is_empty()));
+        }
+    }
+}

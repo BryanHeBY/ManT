@@ -680,6 +680,13 @@ owns shared scheduling constants and redraw throttling, and `page`/`outline`
 retain their distinct scan jobs, result identities and navigation lifetimes.
 The bounded pattern engine remains in `document`, independently of app state.
 
+`navigation/search` keeps result identities at its facade. Its `scan` module
+owns resumable matching and budgets; `presentation` owns context, complete
+labels and grapheme-safe highlights. `app/menu` similarly separates fixed
+model data, action dispatch and presentation. Menu mouse routing uses the
+same width/left helpers as painting; a split cannot change hit geometry or
+which active search editor an action operates on.
+
 `app/render` composes the frame and delegates content, navigation, status/search
 bars and finder drawing to panel modules. Each panel retains its final input
 geometry; splitting drawing code must not change reflow, cache retention,
@@ -687,8 +694,10 @@ pointer cancellation or the order in which geometry becomes visible to input.
 
 Table measurement borrows logical cell owners; it must not clone styled cell
 trees solely to ignore a soft width hint in declared-field mode. CLI and TUI
-share `mant-render::table_border` for terminal stroke characters, while keeping
-viewport policy, theme and source-coordinate maps in their own consumers.
+share `mant-render::table_border` for terminal stroke characters and
+`mant-render::line_layout` for source ranges, exact soft seams and local TAB
+advances, while keeping viewport origins, theme and source-coordinate adapters
+in their own consumers.
 Whole-table frame width is projection metadata, not a synthetic content row;
 data, whole-rule and per-column-rule states remain explicit. Column allocation
 shares the IR geometry core; existing intrinsic CLI and preferred-span TUI
@@ -746,6 +755,29 @@ memory instrumentation.
 The file `docs/manuals/mant.md` is executable documentation. Tests parse it
 through the supported Markdown subset, require its embedded quick reference
 and semantic entries, and reject lossy fallback diagnostics.
+
+### Cross-module regression boundaries
+
+Keep exact source and owner assertions separate from presentation and resource
+assertions. These permanent matrices cover different contracts; a passing
+whitespace-folded snapshot does not substitute for any of them.
+
+| Contract | Permanent tests and independent expectations |
+| --- | --- |
+| Native ownership budgets | `libmandoc-rs/src/ffi/owned/tests.rs`, `strings.rs` and `equations.rs`: small exact/one-byte/item boundaries, every actual enclosure copy, entry points and failure recovery; pinned source/oracle evidence precedes roff assertions. |
+| Reference identity and display | `mant-engine/tests/roff_lowering/macro_consumer_matrix/manual_reference_contracts.rs`, codec identity unit tests and UI `tests/link_display.rs`: separate targets, safe labels, fonts, pending glyphs, JSON and actual pointer ranges. |
+| Query work and frozen results | `mant-query/src/search/tests/compatibility.*` and `workload.rs`: complete baseline responses, pagination/counting and bounded retained mappings, including Unicode and skipped results. |
+| Prepared hard-row geometry | `mant-render/src/line_layout/tests.rs` and `output/text/blocks/tests/tab_geometry.rs`: exact byte/scalar seams, local TAB phase, significant tails, frames, decoration and actual visit counts. |
+| Reader source projection | `mant-ui/src/document/tests/wrap_sources.rs`: owners/styles/widths after JSON, exact logical search, significant visual spaces, nested groups, declared-field parity, terminal Buffer and selection/link coordinates. |
+| Reader preparation work | `mant-ui/src/document/inline.rs` workload tests and `wrap/{links,workload}.rs`: scalar cursor visits, interval events and suffix consumption. Preparation sorting/tree costs remain distinct from linear scan counts. |
+
+These matrices explicitly enumerate their boundary combinations. They do not
+claim all macros or all table layouts are equivalent across consumers. Ordinary
+responsive tables still have adapter-specific placement and mixed row-border
+junction policies; a mechanical module move must preserve those choices.
+Use deterministic work counts for complexity assertions. Optional short timing
+probes must state debug/release and operation/process scope; do not add fragile
+absolute-latency test thresholds or repeat long benchmark panels for coverage.
 
 ### Fuzzing
 

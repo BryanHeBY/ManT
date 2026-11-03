@@ -249,3 +249,79 @@ fn declared_tab_extent_and_pending_ascii_spaces_choose_the_same_rows_as_cli() {
         }
     }
 }
+
+#[test]
+fn expanded_source_cells_reach_the_final_buffer_and_visual_selection() {
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+    let view = DocumentView::new(&content(source_block("  A\tB  ", 2, 1)));
+    // Local TAB stops advance column 3 to 8, independent of later wrapping.
+    let expanded = "  A     B  ";
+    for width in [1_u16, 2, 3, 4, 8, 20, 2, 20] {
+        let rendered = view.render(width);
+        let expected = expanded
+            .as_bytes()
+            .chunks(usize::from(width))
+            .map(|row| std::str::from_utf8(row).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(rendered.row_count, expected.len());
+        let area = Rect::new(0, 0, width, u16::try_from(expected.len()).unwrap());
+        let mut buffer = Buffer::empty(area);
+        Paragraph::new(rendered.text.clone()).render(area, &mut buffer);
+        for (row, text) in expected.iter().enumerate() {
+            for (column, character) in text.chars().enumerate() {
+                assert_eq!(
+                    buffer[(u16::try_from(column).unwrap(), u16::try_from(row).unwrap())].symbol(),
+                    character.to_string()
+                );
+                assert_eq!(
+                    rendered.link_target_at(row, column),
+                    Some(&LinkTarget::External(
+                        ExternalUri::parse("https://example.test").unwrap()
+                    )),
+                    "authored TAB/edge cell lost its original target"
+                );
+            }
+            for column in text.len()..usize::from(width) {
+                assert!(
+                    rendered.link_target_at(row, column).is_none(),
+                    "surface paint must not extend the target"
+                );
+                assert_eq!(
+                    buffer[(u16::try_from(column).unwrap(), u16::try_from(row).unwrap())].symbol(),
+                    " "
+                );
+            }
+        }
+        let copied = rendered.selected_text(RenderedSelection {
+            anchor: TextPosition { row: 0, column: 0 },
+            focus: TextPosition {
+                row: expected.len() - 1,
+                column: usize::MAX - 1,
+            },
+        });
+        assert_eq!(copied, expected.join("\n"));
+        assert_eq!(rendered.search("  A\tB  ").len(), 1);
+    }
+}
+
+#[test]
+fn sanitized_control_glyphs_do_not_turn_into_soft_separators_after_resize() {
+    for control in ['\u{b}', '\u{c}', '\r', '\u{85}'] {
+        let source = format!("ab{control}cd");
+        let view = DocumentView::new(&content(source_block(&source, 0, 0)));
+        for width in [80, 1, 2, 3, 4, 8, 80] {
+            let rendered = view.render(width);
+            assert_eq!(
+                rendered.search("ab�cd").len(),
+                1,
+                "{control:?} width={width}: {:?}",
+                rendered.search_records
+            );
+            assert_eq!(rendered.search(&source).len(), 0);
+        }
+    }
+}

@@ -312,7 +312,8 @@ impl<'text> PreparedLine<'text> {
 /// Unicode whitespace that permits a word-wrap seam.
 #[must_use]
 pub fn soft_separator(character: char) -> bool {
-    character.is_whitespace() && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
+    (character == '\t' || (character.is_whitespace() && !character.is_control()))
+        && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
 }
 
 #[cfg(test)]
