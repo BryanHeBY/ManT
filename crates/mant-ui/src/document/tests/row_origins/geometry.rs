@@ -228,7 +228,9 @@ fn first_and_soft_origins_keep_hanging_increment_through_resize() {
         );
         assert_eq!(rendered.search("Delta")[0].start_column, 5);
         if width == 12 {
-            assert_eq!(rendered.search("Beta")[0].start_column, 6);
+            // The shared word plan retains a complete word that exactly
+            // fills the first row: 2 origin + 5 + 1 + 4 = 12 columns.
+            assert_eq!(rendered.search("Beta")[0].start_column, 8);
             assert_eq!(rendered.search("Gamma")[0].start_column, 6);
             assert_eq!(rendered.search("Epsilon")[0].start_column, 5);
         }

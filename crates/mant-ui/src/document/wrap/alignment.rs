@@ -56,6 +56,9 @@ impl WrappedLine {
         self.copy_map
             .omitted
             .insert(index, receipt.prefix..receipt.prefix + padding);
+        if self.copy_map.tab_end > receipt.prefix {
+            self.copy_map.tab_end += padding;
+        }
         if let Some(end) = &mut self.copy_map.end {
             *end += padding;
         }

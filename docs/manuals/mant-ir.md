@@ -517,6 +517,12 @@ entities, decoding to the original characters rather than non-breaking spaces.
 Layout metadata cannot authorize trimming authored whitespace. The former
 hint-driven multi-Link formatting split is retired; a retained multiline label
 keeps one complete wrapper and its original owner.
+Terminal readers share hard-row grapheme and TAB geometry before viewport
+wrapping. A soft break retains its exact authored separator for logical search;
+it does not authorize removing hard-row edge whitespace. Display TAB parts
+refer to one original scalar, and generated alignment or table rails do not
+become source text. Visual selection copies displayed cells, including expanded
+TAB spaces, while document export retains the original logical content.
 
 ### Migration from 0.12
 

@@ -145,7 +145,7 @@ fn append_cell(output: &mut WrappedLine, row: &WrappedLine, column: usize) {
         .search_cells
         .extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
             group: cell.group,
-            join_before: cell.join_before,
+            source_index: cell.source_index,
             character: cell.character,
             start_column: column + cell.start_column,
             end_column: column + cell.end_column,

@@ -20,13 +20,13 @@ use crate::theme;
 mod alignment;
 mod cells;
 mod links;
+mod prepared;
 mod table;
 #[cfg(test)]
 mod workload;
-use cells::{
-    StyledCell, fitting_prefix, styled_cells, tldr_decoration_width, trim_trailing_whitespace,
-    wrapped_cells_to_line,
-};
+use cells::{StyledCell, tldr_decoration_width, wrapped_cells_to_line};
+use mant_render::line_layout::{PreparedLine, WrapMode as PlanMode};
+use prepared::styled_units;
 use table::render_table_row_with_links;
 
 /// Keep a useful reading area without changing the logical source origins.
@@ -65,6 +65,9 @@ pub(super) struct RowCopyMap {
     alignment: Option<alignment::PreparedAlignment>,
     pub(super) omitted: Vec<std::ops::Range<usize>>,
     pub(super) end: Option<usize>,
+    /// Original TAB expansion has significant width in declared fields;
+    /// ordinary trailing ASCII separators remain pending instead.
+    pub(super) tab_end: usize,
     /// A visual decoration row contributes no selection newline.
     pub(super) skip_row: bool,
 }
@@ -84,6 +87,9 @@ impl RowCopyMap {
                 .iter()
                 .map(|range| offset.saturating_add(range.start)..offset.saturating_add(range.end)),
         );
+        if other.tab_end != 0 {
+            self.tab_end = self.tab_end.max(offset.saturating_add(other.tab_end));
+        }
         let content_end = other.end.unwrap_or(width);
         if content_end == 0 {
             // An empty hard row cannot acquire copyable content from its
@@ -99,7 +105,7 @@ impl RowCopyMap {
 #[derive(Clone, Copy)]
 pub(super) struct WrappedSearchCell {
     pub(super) group: usize,
-    pub(super) join_before: bool,
+    pub(super) source_index: usize,
     pub(super) character: char,
     pub(super) start_column: usize,
     pub(super) end_column: usize,
@@ -192,80 +198,83 @@ fn wrap_logical_line(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
         line.continuation_indent,
         width.saturating_sub(decoration_width),
     );
-    let mut cells = styled_cells(line);
-
-    if cells.is_empty() {
-        return vec![wrapped_cells_to_line(
-            line,
-            width,
-            first_indent,
-            line.layout_padding,
-            &[],
-            false,
-        )];
-    }
-
-    let mut result = Vec::new();
-    let mut first_row = true;
-    let mut join_with_space = false;
-    let mut consumed = 0;
-    while consumed < cells.len() {
-        let indent = if first_row {
-            first_indent
-        } else {
-            continuation_indent
-        };
-        let layout_padding = if first_row {
+    let text = line
+        .spans
+        .iter()
+        .map(|span| span.content.as_ref())
+        .collect::<String>();
+    let prepared = PreparedLine::new(&text, line.indent);
+    let mut styled = styled_units(line, &prepared);
+    let mode = match line.wrap_mode {
+        WrapMode::Word => PlanMode::Word,
+        WrapMode::Character => PlanMode::Character,
+    };
+    let plans = prepared.wrap(
+        width.saturating_sub(decoration_width),
+        first_indent,
+        continuation_indent,
+        mode,
+    );
+    let mut result = Vec::with_capacity(plans.len());
+    for (index, plan) in plans.iter().enumerate() {
+        let cells =
+            &mut styled.cells[styled.offsets[plan.units.start]..styled.offsets[plan.units.end]];
+        let available = width
+            .saturating_sub(decoration_width)
+            .saturating_sub(plan.origin)
+            .max(1);
+        bound_first_grapheme(cells, available);
+        let layout_padding = if index == 0 {
             line.layout_padding
         } else {
             line.continuation_layout_padding
         };
-        let available = width
-            .saturating_sub(indent)
-            .saturating_sub(decoration_width)
-            .max(1);
-        let remaining = &mut cells[consumed..];
-        bound_first_grapheme(remaining, available);
-        let fit = fitting_prefix(remaining, available);
-        if fit == remaining.len() {
-            result.push(wrapped_cells_to_line(
-                line,
-                width,
-                indent,
-                layout_padding,
-                remaining,
-                join_with_space,
-            ));
-            break;
-        }
-
-        if line.wrap_mode == WrapMode::Character {
-            result.push(wrapped_cells_to_line(
-                line,
-                width,
-                indent,
-                layout_padding,
-                &remaining[..fit],
-                join_with_space,
-            ));
-            consumed += fit;
-            join_with_space = false;
-        } else {
-            let (advance, join) = wrap_word_row(
-                line,
-                width,
-                (indent, layout_padding),
-                remaining,
-                fit,
-                join_with_space,
-                &mut result,
-            );
-            consumed += advance;
-            join_with_space = join;
-        }
-        first_row = false;
+        let mut row = wrapped_cells_to_line(line, width, plan.origin, layout_padding, cells);
+        append_seam(&mut row, line, &prepared, plan.seam_after.clone());
+        result.push(row);
     }
     result
+}
+
+/// Soft separators retain their exact source identity for logical search,
+/// even when no terminal cell paints them. Their zero-width range belongs to
+/// the preceding visual row; generated padding never enters this stream.
+fn append_seam(
+    row: &mut WrappedLine,
+    line: &LogicalLine,
+    prepared: &PreparedLine<'_>,
+    seam: std::ops::Range<usize>,
+) {
+    if seam.is_empty() {
+        return;
+    }
+    let start = prepared
+        .units()
+        .partition_point(|unit| unit.bytes.end <= seam.start);
+    let Some(unit) = prepared.units().get(start) else {
+        return;
+    };
+    let column = row.copy_map.end.unwrap_or(0);
+    for (index, character) in prepared.source()[seam.clone()].chars().enumerate() {
+        #[cfg(test)]
+        workload::visit(1);
+        let source_index = unit.scalars.start + index;
+        if !line
+            .layout_scalars
+            .iter()
+            .any(|range| range.contains(&source_index))
+        {
+            row.search_cells.push(WrappedSearchCell {
+                group: 0,
+                source_index,
+                character,
+                start_column: column,
+                end_column: column,
+            });
+        }
+    }
+    // Reference anchors in an omitted separator still belong to this row.
+    row.source_end = Some(unit.scalars.start + prepared.source()[seam].chars().count());
 }
 
 fn surface_row(line: &LogicalLine, width: usize) -> Option<WrappedLine> {
@@ -358,60 +367,6 @@ fn bound_first_grapheme(cells: &mut [StyledCell], available: usize) {
         {
             cell.display_character = None;
         }
-    }
-}
-
-fn wrap_word_row(
-    line: &LogicalLine,
-    width: usize,
-    origin: (usize, usize),
-    cells: &[StyledCell],
-    fit: usize,
-    join_with_space: bool,
-    result: &mut Vec<WrappedLine>,
-) -> (usize, bool) {
-    let (indent, layout_padding) = origin;
-    let split = cells[..fit]
-        .iter()
-        .rposition(|cell| {
-            #[cfg(test)]
-            workload::visit(1);
-            cell.grapheme_start && cell.whitespace
-        })
-        .filter(|position| *position > 0)
-        .unwrap_or(fit);
-    let row_end = trim_trailing_whitespace(cells, split);
-    let emitted_row = row_end != 0;
-    let (mut consumed, mut removed_separator) = if row_end == 0 {
-        // A fitted prefix can contain both indentation and the next word.
-        // Dropping an empty whitespace row consumes only its separator, not
-        // the visible cells following it (term.c::term_fill keeps graph cells
-        // after a break opportunity for the next accepted segment).
-        let consumed = if split < fit { split + 1 } else { fit };
-        (consumed.max(1), true)
-    } else {
-        result.push(wrapped_cells_to_line(
-            line,
-            width,
-            indent,
-            layout_padding,
-            &cells[..row_end],
-            join_with_space,
-        ));
-        let removed_separator = split < fit;
-        let consumed = if removed_separator { split + 1 } else { split };
-        (consumed.max(1), removed_separator)
-    };
-    while cells.get(consumed).is_some_and(|cell| cell.whitespace) {
-        #[cfg(test)]
-        workload::visit(1);
-        consumed += 1;
-        removed_separator = true;
-    }
-    if emitted_row {
-        (consumed, removed_separator)
-    } else {
-        (consumed, join_with_space || removed_separator)
     }
 }
 

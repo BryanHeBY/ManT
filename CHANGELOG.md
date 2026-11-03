@@ -76,6 +76,11 @@ that crate was not published for that change.
 
 ### mant-ui
 
+- Preserve authored edge whitespace and exact soft separators through resize.
+  Keep logical searches stable for TABs, multiple spaces and styled text;
+  retain separate source groups in nested tables and propagate TAB tail extent
+  through declared-field placement, alignment and copy/link coordinates.
+
 - Advance inline scalar and link-interval cursors and consume wrapping suffixes
   by index. Avoid accumulated-prefix scans, per-glyph full link scans and
   repeated vector-head moves while preserving grapheme conflict rules and

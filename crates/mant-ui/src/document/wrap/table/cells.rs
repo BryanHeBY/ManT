@@ -135,6 +135,7 @@ pub(super) fn wrap_table_cell(
                 row.line.spans.pop();
             }
         }
+        let mut child_groups = std::collections::BTreeMap::new();
         for row in &mut wrapped {
             if row.source_end.is_none() && row.copy_map.end == Some(0) {
                 // The cell cursor already proves an empty hard row. Retire
@@ -143,10 +144,16 @@ pub(super) fn wrap_table_cell(
                 row.line.spans.clear();
             }
             for search_cell in &mut row.search_cells {
-                search_cell.group = *next_group;
+                // Nested columns have independent source scalar origins.
+                // Rebase each existing child group, never merge its owners
+                // merely because their display rows share a parent cell.
+                search_cell.group = *child_groups.entry(search_cell.group).or_insert_with(|| {
+                    let group = *next_group;
+                    *next_group += 1;
+                    group
+                });
             }
         }
-        *next_group += 1;
         rendered.extend(wrapped);
     }
     if rendered.is_empty() {

@@ -57,7 +57,8 @@ pub(super) fn render_declared_columns(
             rows.iter()
                 .enumerate()
                 .map(|(index, row)| mant_ir::geometry::ColumnFieldWidth {
-                    content: mant_ir::geometry::declared_field_width(&row.line.to_string()),
+                    content: mant_ir::geometry::declared_field_width(&row.line.to_string())
+                        .max(row.copy_map.tab_end),
                     output: super::super::super::inline::spans_width(&row.line.spans),
                     completed: cell.completed_tail && index + 1 == rows.len(),
                 })
@@ -215,7 +216,7 @@ fn placed_column_row(
         }));
         search_cells.extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
             group: cell.group,
-            join_before: cell.join_before,
+            source_index: cell.source_index,
             character: cell.character,
             start_column: offset.saturating_add(cell.start_column),
             end_column: offset.saturating_add(cell.end_column),

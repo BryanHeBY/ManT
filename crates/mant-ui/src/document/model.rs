@@ -349,7 +349,14 @@ impl LogicalLine {
 
     fn preferred_width(&self) -> usize {
         let content = self.table_row.as_ref().map_or_else(
-            || super::inline::spans_width(&self.spans),
+            || {
+                let text = self
+                    .spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>();
+                mant_render::line_layout::PreparedLine::new(&text, self.indent).columns()
+            },
             |table| table.layout.preferred_width(),
         );
         self.indent.saturating_add(content)

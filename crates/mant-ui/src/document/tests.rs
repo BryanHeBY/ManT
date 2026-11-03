@@ -503,3 +503,5 @@ mod table_gaps;
 mod tables;
 mod unsupported_hard_lines;
 mod zero_width;
+
+mod wrap_sources;

@@ -203,24 +203,30 @@ pub(super) fn search_records_for_lines(
     struct RecordBuilder {
         text: String,
         cells: Vec<RenderedSearchSourceCell>,
-        last_line: Option<usize>,
+        last_source: Option<(usize, usize, usize)>,
     }
 
     let mut records: BTreeMap<usize, RecordBuilder> = BTreeMap::new();
     for (line_index, line) in lines.iter().enumerate() {
         for cell in &line.search_cells {
             let record = records.entry(cell.group).or_default();
-            if record.last_line != Some(line_index) {
-                if record.last_line.is_some() && cell.join_before {
-                    record.text.push(' ');
+            let (source_start, source_end) = match record.last_source {
+                Some((index, start, end))
+                    if cell.character == '\t' && index == cell.source_index =>
+                {
+                    (start, end)
                 }
-                record.last_line = Some(line_index);
-            }
-            let source_start = record.text.len();
-            record.text.push(cell.character);
+                _ => {
+                    let start = record.text.len();
+                    record.text.push(cell.character);
+                    let end = record.text.len();
+                    record.last_source = Some((cell.source_index, start, end));
+                    (start, end)
+                }
+            };
             record.cells.push(RenderedSearchSourceCell {
                 source_start,
-                source_end: record.text.len(),
+                source_end,
                 fragment: RenderedSearchFragment {
                     row: first_row + line_index,
                     start_column: cell.start_column,

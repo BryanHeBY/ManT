@@ -53,8 +53,9 @@ fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
         .map(ToString::to_string)
         .collect::<Vec<_>>();
 
-    assert_eq!(rows[1].trim_end(), "   alpha       right", "{rows:#?}");
-    assert_eq!(rows[2].trim_end(), "   beta gamma  hand", "{rows:#?}");
+    // Ten content columns fit the complete "alpha beta" word pair.
+    assert_eq!(rows[1].trim_end(), "   alpha beta  right", "{rows:#?}");
+    assert_eq!(rows[2].trim_end(), "   gamma       hand", "{rows:#?}");
     assert_eq!(UnicodeWidthStr::width(rows[1].as_str()), 24);
     let left_match = rendered.search("alpha beta gamma");
     assert_eq!(left_match.len(), 1);

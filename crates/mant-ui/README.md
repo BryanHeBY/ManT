@@ -126,6 +126,14 @@ targets on a shared glyph. Wrapping consumes a suffix by index rather than
 repeatedly moving it. Work-count tests cover these three paths independently;
 link indexing still includes its necessary sorting and ordered-set costs.
 
+Wrapping consumes the same `mant-render::line_layout` hard-row plan as CLI
+tables. Authored leading/trailing whitespace and whitespace-only hard rows
+remain paintable and selectable. Logical search retains exact internal soft
+separators and each original TAB once, including TABs divided over visual rows;
+generated alignment, surfaces and table rails are excluded. Nested table
+owners keep independent source groups instead of aliasing scalar offsets.
+A complete last word can occupy the exact remaining width of a row.
+
 Live search reuses the current viewport's shared immutable rendering instead of
 rebuilding a view for every query. Search records preserve logical phrases across
 soft wraps and retain cell boundaries and generated-padding exclusions. The
@@ -425,7 +433,9 @@ retained selection again.
 Selection copies visual cells, including visual line breaks and continuation
 padding; it is not a source-format export. Use document export to retain source
 logical lines independently of viewport width. Literal text is never rewritten
-in IR by a resize, and its significant spaces remain selectable.
+in IR by a resize, and its significant spaces remain selectable. TABs copy
+as their displayed space cells under this visual-selection policy; logical
+search still uses the authored TAB, rather than a guessed run of spaces.
 
 ## Platform behavior
 

@@ -232,13 +232,8 @@ impl LogicalTableCell {
                     .iter()
                     .map(|span| span.content.as_ref())
                     .collect::<String>();
-                text.split(|character: char| {
-                    character.is_whitespace()
-                        && !matches!(character, '\u{a0}' | '\u{2007}' | '\u{202f}')
-                })
-                .map(mant_ir::geometry::text_width)
-                .max()
-                .unwrap_or(0)
+                mant_render::line_layout::PreparedLine::new(&text, line.indent)
+                    .longest_word_columns()
             })
             .max()
             .unwrap_or(0)
