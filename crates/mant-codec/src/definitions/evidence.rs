@@ -41,7 +41,7 @@ pub(crate) struct NativeOperand {
     pub(crate) role: NativeOperandRole,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 #[cfg(feature = "roff")]
 pub(crate) struct CapturedHeadOperands {
     pub(crate) text: String,

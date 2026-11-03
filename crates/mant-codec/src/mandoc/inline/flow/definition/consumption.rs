@@ -67,7 +67,28 @@ impl InlineBuilder {
     ) -> bool {
         #[cfg(test)]
         super::control_trace::projected();
+        // This is an actual flush, unlike owner-prefix or word-time views.
+        // Its row close can clear the buffer before retirement projects text.
+        let _ = self.capture_consumed_native_tabs(native);
         self.project_definition_field_receipt_using(false, false, Some(native))
+    }
+
+    pub(in crate::mandoc::inline::flow) fn capture_consumed_native_tabs<'a>(
+        &self,
+        device: &'a NativeFieldDevice,
+    ) -> &'a [super::super::output::tab_projection::TabExpansion] {
+        device.tab_projection.get_or_init(|| {
+            self.execution
+                .definition
+                .as_ref()
+                .map_or_else(Vec::new, |state| {
+                    super::super::output::tab_projection::capture(
+                        &state.field_buffer,
+                        &state.field_word_anchors,
+                        &device.tab_spaces,
+                    )
+                })
+        })
     }
 
     fn project_definition_field_receipt_using(
@@ -407,7 +428,7 @@ impl InlineBuilder {
             .execution
             .definition
             .as_ref()
-            .and_then(|state| state.deferred_head_layout.as_ref())
+            .and_then(|state| state.deferred_head_projection.as_ref())
         {
             receiver.accept(&device.row_presentations);
             if let Some(receipt) = &device.cleared_alignment {
@@ -445,6 +466,7 @@ impl InlineBuilder {
         #[cfg(test)]
         super::control_trace::retired();
         if let Some(device) = device {
+            let tabs = self.capture_consumed_native_tabs(device);
             self.project_consumed_row_layout(device);
             let mut output_start = device.output_start;
             self.retire_unprinted_no_break_separator(
@@ -453,10 +475,11 @@ impl InlineBuilder {
                 device.separator_field,
                 &mut output_start,
             );
-            let edit = super::super::output::row_origins::project_native_positions(
+            let edit = super::super::output::row_origins::project_native_positions_with_tabs(
                 &mut self.nodes,
                 &device.row_origins,
                 &device.field_padding,
+                tabs,
                 output_start,
                 self.execution
                     .definition
@@ -465,6 +488,14 @@ impl InlineBuilder {
             );
             if let Some(edit) = edit {
                 self.remap_output_positions(edit);
+            }
+            // All native acceptance and layout receipts still address the
+            // original scalar stream. Resolve TAB text only after those
+            // receipts have been consumed, at this real field retirement.
+            if let Some(state) = &self.execution.definition
+                && let Some(receiver) = &state.deferred_head_projection
+            {
+                receiver.accept_tabs(tabs);
             }
             if let Some(author) = &mut self.execution.author_execution {
                 author.field_output_start = self.nodes.len();

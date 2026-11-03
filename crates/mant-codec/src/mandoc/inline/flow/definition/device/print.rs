@@ -226,11 +226,12 @@ impl InlineBuilder {
             // a later row cannot revive that earlier deferred padding.
             sweep.separator_retention = Some(0);
         }
-        let Some(printed) = state.field_buffer.printed_columns(
+        let Some(printed) = state.field_buffer.printed_columns_with_tabs(
             print.start,
             print.end,
             print.tab_offset,
             print.padding_units,
+            Some(&mut sweep.tab_spaces),
         ) else {
             return false;
         };

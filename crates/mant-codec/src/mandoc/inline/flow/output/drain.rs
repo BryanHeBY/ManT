@@ -336,11 +336,19 @@ impl InlineBuilder {
         let deferred_head = self
             .execution
             .row_presentation
-            .has_pending_layout(self.execution.text_alignment);
+            .has_pending_layout(self.execution.text_alignment)
+            || self.execution.definition.as_ref().is_some_and(|state| {
+                state
+                    .field_buffer
+                    .cells()
+                    .iter()
+                    .any(|cell| matches!(cell, super::super::field_buffer::FieldCell::Tab))
+            });
         if deferred_head && let Some(definition) = &mut self.execution.definition {
-            definition.deferred_head_layout = Some(
-                super::super::definition::head_presentation::DeferredHeadLayout::new(
+            definition.deferred_head_projection = Some(
+                super::super::definition::head_presentation::DeferredHeadProjection::new(
                     &definition.field_word_anchors,
+                    self.head_operand_capture.clone(),
                 ),
             );
         }

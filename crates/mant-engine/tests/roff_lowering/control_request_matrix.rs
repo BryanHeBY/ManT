@@ -5,6 +5,9 @@ use std::io::Read as _;
 use libmandoc_rs::{Node, NodeKind};
 use serde::Deserialize;
 
+#[path = "control_request_matrix/projection.rs"]
+mod projection;
+
 #[derive(Deserialize)]
 struct Header {
     count: usize,
@@ -18,12 +21,23 @@ struct Case {
     id: String,
     family: String,
     source: String,
+    source_sha256: String,
     oracle_class: String,
     native_owner: Owner,
     expected_rows: Vec<String>,
     projection: serde_json::Value,
     #[serde(default)]
+    native_region: Option<NativeRegion>,
+    #[serde(default)]
+    profiles: serde_json::Value,
+    #[serde(default)]
     authored_fixed_blank: Option<Position>,
+}
+
+#[derive(Deserialize)]
+struct NativeRegion {
+    status: String,
+    rows: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -123,6 +137,14 @@ fn assert_owned_ast(case: &Case) {
         let actual = at_position(&nodes, expected);
         assert_eq!(actual.owner, expected.owner.as_deref(), "{}", case.id);
         assert!(actual.node.text.as_deref().unwrap().contains('\t'));
+        if let Some(literal) = projection::authored_tab_text(case) {
+            assert_eq!(
+                actual.node.text.as_deref(),
+                Some(literal),
+                "{}: original TAB scalar boundary",
+                case.id
+            );
+        }
     }
     let empty = nodes
         .iter()
@@ -164,7 +186,7 @@ fn assert_owned_ast(case: &Case) {
     }
 }
 
-fn product_rows(case: &Case) -> Vec<String> {
+fn product_content(case: &Case) -> mant_ir::ResolvedContent {
     let query = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
     let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
     assert!(
@@ -173,7 +195,16 @@ fn product_rows(case: &Case) -> Vec<String> {
         case.id
     );
     let roundtrip: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
-    let content: mant_ir::ResolvedContent = roundtrip.into();
+    roundtrip.into()
+}
+
+fn product_rows(case: &Case) -> Vec<String> {
+    let content = product_content(case);
+    assert!(
+        projection::resolved_tab_owner_matches(case, &content),
+        "{}: executed TAB retains resolved units in its original source cell",
+        case.id
+    );
     let text = mant_render::render_query_man(&content);
     let region = text
         .split_once("DESCRIPTION\n")
@@ -189,27 +220,10 @@ fn product_rows(case: &Case) -> Vec<String> {
         assert_eq!(rows[row].trim_matches(' '), "INNER | CELL", "{}", case.id);
         rows[row] = "INNER CELL".into();
     }
-    for site in case.projection["literal_tab_sites"]
-        .as_array()
-        .into_iter()
-        .flatten()
-    {
-        let row = usize::try_from(site["row"].as_u64().unwrap()).unwrap();
-        let boundary = usize::try_from(site["scalar_boundary"].as_u64().unwrap()).unwrap();
-        let tab = rows[row]
-            .find('\t')
-            .expect("literal tab remains in public projection");
-        assert_eq!(
-            rows[row][..tab].chars().filter(|ch| *ch != ' ').count(),
-            boundary,
-            "{}",
-            case.id
-        );
-    }
     rows
 }
 
-fn responsive_cells(row: &str) -> String {
+pub(super) fn responsive_cells(row: &str) -> String {
     // Only ordinary device padding and tab expansion are responsive. Authored
     // NBSP, scalars, every hard row and zero/nonzero word seam remain exact.
     let mut output = String::new();
@@ -270,7 +284,7 @@ fn every_pre_br_identity_replays_real_ast_json_and_physical_rows() {
             .iter()
             .map(|row| responsive_cells(row))
             .collect();
-        if actual != expected {
+        if !projection::rows_match(&case, &actual) {
             failures.push(format!(
                 "{}\nnative {expected:?}\nproduct {actual:?}",
                 case.id

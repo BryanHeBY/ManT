@@ -62,6 +62,7 @@ impl InlineBuilder {
             separator_retention: None,
             row_origins: Vec::new(),
             field_padding: Vec::new(),
+            tab_spaces: Vec::new(),
             unprojected_origin_units: row.unprojected_origin_units,
             loop_row_end: LoopRowEnd::Open,
             loop_rows: Vec::new(),

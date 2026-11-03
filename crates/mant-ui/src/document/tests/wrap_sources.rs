@@ -325,3 +325,159 @@ fn sanitized_control_glyphs_do_not_turn_into_soft_separators_after_resize() {
         }
     }
 }
+
+fn assert_resolved_tab_link_row(
+    rendered: &RenderedDocument,
+    row: usize,
+    width: u16,
+    body_origin: usize,
+    expected: &str,
+) {
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+
+    let area = Rect::new(0, 0, width, u16::try_from(rendered.row_count).unwrap());
+    let mut buffer = Buffer::empty(area);
+    Paragraph::new(rendered.text.clone()).render(area, &mut buffer);
+    let target = LinkTarget::External(ExternalUri::parse("https://example.test/tab").unwrap());
+    let visual_row = format!("{}{expected}", " ".repeat(body_origin));
+    for column in 0..usize::from(width) {
+        let character = visual_row.as_bytes().get(column).copied().unwrap_or(b' ');
+        assert_eq!(
+            buffer[(u16::try_from(column).unwrap(), u16::try_from(row).unwrap())].symbol(),
+            char::from(character).to_string(),
+            "width={width}, column={column}"
+        );
+        assert_eq!(
+            rendered.link_target_at(row, column),
+            (body_origin..body_origin + 4)
+                .contains(&column)
+                .then_some(&target),
+            "only the executed description label is clickable"
+        );
+    }
+    assert_eq!(
+        rendered.selected_text(RenderedSelection {
+            anchor: TextPosition {
+                row,
+                column: body_origin
+            },
+            focus: TextPosition {
+                row,
+                column: body_origin + 3
+            },
+        }),
+        "A  B"
+    );
+    // Visual copying retains the structural section origin and inter-cell
+    // placement, but not viewport fill.
+    assert_eq!(
+        rendered.selected_text(RenderedSelection {
+            anchor: TextPosition { row, column: 0 },
+            focus: TextPosition {
+                row,
+                column: usize::MAX - 1,
+            },
+        }),
+        visual_row
+    );
+}
+
+#[test]
+fn executed_tab_links_keep_their_owner_after_json_and_resize() {
+    // This complete source ran fixed CVS ASCII/UTF-8(width78), HTML and tree
+    // before the assertions. mdoc_term.c::termp_lk_pre() executes description,
+    // colon and URI; term.c::term_field() uses the configured 3n stops at the
+    // real .br flush. A at local column 0 makes this TAB exactly two spaces.
+    let source = concat!(
+        ".Dd November 3, 2026\n.Dt TAB-LINK 1\n.Os\n.Sh DESCRIPTION\n",
+        ".Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n",
+        ".It Xo\n.ta T 3n\n.Lk https://example.test/tab \"A\tB\"\n",
+        ".br\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+    );
+    let original = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let wire = mant_render::render_query_json(&original, false).unwrap();
+    let query: ResolvedContent = serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
+        .unwrap()
+        .into();
+    assert_eq!(
+        query, original,
+        "JSON must retain every owner and target fact"
+    );
+    let [
+        Block::Table {
+            rows,
+            column_preferences,
+            ..
+        },
+    ] = query.document.as_ref().unwrap().sections[0]
+        .blocks
+        .as_slice()
+    else {
+        panic!("one original column owner");
+    };
+    assert_eq!(column_preferences.widths, [64, 4]);
+    assert_eq!(column_preferences.gap_columns, 4);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].cells.len(), 2);
+    let [
+        Block::Paragraph {
+            children, source, ..
+        },
+    ] = rows[0].cells[0].blocks.as_slice()
+    else {
+        panic!("the executed link remains in its source paragraph");
+    };
+    assert_eq!(source.as_ref().map(|at| (at.line, at.column)), Some((8, 2)));
+    let owner_text = "A  B: https://example.test/tab AFTER";
+    assert_eq!(mant_ir::inline_plain_text(children), owner_text);
+    let links: Vec<_> = children
+        .iter()
+        .filter_map(|node| match node {
+            Inline::Link {
+                target, children, ..
+            } => Some((target, children)),
+            _ => None,
+        })
+        .collect();
+    let [(target, label)] = links.as_slice() else {
+        panic!("one original link occurrence");
+    };
+    assert_eq!(target.to_uri().as_deref(), Some("https://example.test/tab"));
+    assert_eq!(mant_ir::inline_plain_text(label), "A  B");
+    let expected = format!("{owner_text}{}RIGHT", " ".repeat(68 - owner_text.len()));
+    // DocumentBuilder::section_with_position() gives a top-level section
+    // body a structural origin of three cells; CLI omits that reader margin.
+    let body_origin = 3;
+    let view = DocumentView::new(&query);
+    for width in [78, 120, 78] {
+        let cli = mant_render::render_query_text_at_width(&query, usize::from(width), |_, text| {
+            text.into()
+        });
+        let cli_owner = cli.split_once("DESCRIPTION\n").unwrap().1;
+        assert_eq!(cli_owner.split_once("\n\nNEXT").unwrap().0, expected);
+        let rendered = view.render(width);
+        for needle in ["A  B", "https://example.test/tab", "AFTER", "RIGHT"] {
+            assert_eq!(rendered.search(needle).len(), 1, "{needle}, width={width}");
+        }
+        assert_eq!(rendered.search("A\tB").len(), 0);
+        let hits = rendered.search("A  B");
+        let [hit] = hits.as_slice() else {
+            panic!("one executed description label");
+        };
+        assert_eq!(
+            (hit.start_column, hit.end_column),
+            (body_origin, body_origin + 4)
+        );
+        let right = &rendered.search("RIGHT")[0];
+        assert_eq!((right.row, right.start_column), (hit.row, body_origin + 68));
+        assert_resolved_tab_link_row(&rendered, hit.row, width, body_origin, &expected);
+    }
+    assert_eq!(
+        query, original,
+        "rendering must not mutate the source owners"
+    );
+}

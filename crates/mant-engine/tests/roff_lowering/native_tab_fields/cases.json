@@ -1,0 +1,1995 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "count": 51,
+  "cases": [
+    {
+      "id": "column-3-leading-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"\tA\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\tA",
+      "period": 3,
+      "control": false,
+      "source_sha256": "9215973d4f95bdd457d954bb6a60a6514724aefc3c83e3d29f1f4b05c9da87da",
+      "expected_rows": [
+        "        A AFTER                                                          RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f5aa29309c0245565d5030a976678868258fb4a96385ac60a47e07b36b37573b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f5aa29309c0245565d5030a976678868258fb4a96385ac60a47e07b36b37573b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "eeda231c9458ed961b4bf81f040aed04d69ed5e3cc6106c82efdcaa586fc075c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "4dde896aaa44264ca002cc9e1ed4315655cbf0f3173515bea1c3d6c7560df773",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-leading-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.Em \"\tA\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\tA",
+      "period": 3,
+      "control": false,
+      "source_sha256": "7ee32ed94e2364c071b00e9dec42842dd0586ba2db18694640893231e4732c65",
+      "expected_rows": [
+        "        A AFTER                                                          RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "8feafd95dc7372124fcc8958eb705e30fb7cdddc4db83781956d60c0b8c353d2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "8feafd95dc7372124fcc8958eb705e30fb7cdddc4db83781956d60c0b8c353d2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8422bb869cab8e3748f863bde6dabad4c015994a884e37ab3ced981196edfd1e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "db27b2883663bd08c4c15124adc4f0a649b95b2f3d1c313a8b5802ce23407aa4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-internal-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"A\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 3,
+      "control": false,
+      "source_sha256": "3c39fe9ca4e4f3f948a526e69d655e92dcbe8472befa56a80dba32d538909252",
+      "expected_rows": [
+        "     A  B AFTER                                                          RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "fd64fbecb2422da13a8771ef77a3a7c1ada96b4f4f0d0a9778305d4274dec43d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "30b776a3271fcef6fb8f7c0bdf80c4cfd33d6ac854f4b33c0914a0885cca3697",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-internal-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.Em \"A\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 3,
+      "control": false,
+      "source_sha256": "46ba7441af0dad3441e53ee8d1ed4d0e799750fb5c78299a5b2c45064c012207",
+      "expected_rows": [
+        "     A  B AFTER                                                          RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f76f74776160a6502ab96829d4e4d5ac605dd15841d6192b9cfb8b1913cc2dea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f76f74776160a6502ab96829d4e4d5ac605dd15841d6192b9cfb8b1913cc2dea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "22b6bbb19e19952669187d678ea3052fe175c9c0d07edfc4992da4d64260b6ec",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "49abb344acecad3418c49df9e6baa653d06805bf2a23dcdf31513df0a9cb7a5b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-tail-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"A\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t",
+      "period": 3,
+      "control": false,
+      "source_sha256": "7509ab85680bcc6b45e89f4c973629fb72346cd53a2537a13aa71ae02b086050",
+      "expected_rows": [
+        "     A   AFTER                                                           RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "7c8cd247c1c958206ff3f126b9dff0e2fb327b29b8154ad63deb96891bef56fb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "7c8cd247c1c958206ff3f126b9dff0e2fb327b29b8154ad63deb96891bef56fb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "1b57990648a176d5320ee1663a8250ce8fcf01032e66d77185ce157cdf28bbac",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "82ccaac87b124d4a40d636bfd13f4222a63f129918838aa6bc236f5793cb8bb9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-tail-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.Em \"A\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t",
+      "period": 3,
+      "control": false,
+      "source_sha256": "d45ca46224407543f12d884225505adc0b899c640e478355e4ca2c9446b18e61",
+      "expected_rows": [
+        "     A   AFTER                                                           RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "8012c25b33f0db3eb44651fa847d5333c2baae33ac13c35c7997803b2cf547a6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "8012c25b33f0db3eb44651fa847d5333c2baae33ac13c35c7997803b2cf547a6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "310ad78f34d879f4033d1ec47689f9f6712cad00a69fe850c35020c7c4694f18",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "32008f08ec2761cb714715719aeaacd725f4c91a012532bc13784c0414c5b1c2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-consecutive-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"A\t\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t\tB",
+      "period": 3,
+      "control": false,
+      "source_sha256": "6b0d219e5c4d79ae9cb5de16a35954cc9e50d3a75e9317ac55e51fcd649fc137",
+      "expected_rows": [
+        "     A     B AFTER                                                       RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "4fb978192244cfc5a65b7f606adb57a7455601cb2a44b606c1d467b94980c392",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "4fb978192244cfc5a65b7f606adb57a7455601cb2a44b606c1d467b94980c392",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "6ae308f1b98b6c2a5bdf40ecde5ca9a509de0fb23cd83e9dd64621188e1bb504",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "b982bce5ab1148e838c9ba83844402b0ac61839ad8b0a8997c8e000b8af70f5c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "f9e545c58f01c988406ec8c1805b31fb4fdfb7f5113c68e0ddd036e3f6723bef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-consecutive-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.Em \"A\t\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t\tB",
+      "period": 3,
+      "control": false,
+      "source_sha256": "deda55157f27daccadae67e8f75e42c3a8af5d4d3881a1931528d48761c9aaaf",
+      "expected_rows": [
+        "     A     B AFTER                                                       RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "2ee4e2b80938625c452e17588349cb25c2bb5331625a9c7e3bbef88898509f68",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "2ee4e2b80938625c452e17588349cb25c2bb5331625a9c7e3bbef88898509f68",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "e62524c23275eac0f1c2a81bba2fd1dd8881630c6a03b7a767ae2363b8ae53fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "f207f0f00da103ca8c88b1627b99eec5db061fb6e35e003012785968b2127779",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "f9e545c58f01c988406ec8c1805b31fb4fdfb7f5113c68e0ddd036e3f6723bef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-empty-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 3,
+      "control": false,
+      "source_sha256": "50dfcd0033d1a1ec852b327b3b826b51d3809b70ac7e1e3b58d03e2753c73180",
+      "expected_rows": [
+        "         AFTER                                                           RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "5229bc326e6926d20e4e59030a409bd035179f8ac43f370fa34c420b6be12493",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5229bc326e6926d20e4e59030a409bd035179f8ac43f370fa34c420b6be12493",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "18f6707b7fcf0cb1b9510da90a6afd44445bbb16e27413e1231eb2aa9f76c775",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "8deef30c688aee324f1b78dda08f59f6a737145c2a9990011e01cc37baa178e7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-empty-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.Em \"\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 3,
+      "control": false,
+      "source_sha256": "7f9f1062d7ed76cb79f497b2f4a3ee6f3b93d13f051480750f7f19aa88fc7006",
+      "expected_rows": [
+        "         AFTER                                                           RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "5229bc326e6926d20e4e59030a409bd035179f8ac43f370fa34c420b6be12493",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5229bc326e6926d20e4e59030a409bd035179f8ac43f370fa34c420b6be12493",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "66065fb14f05da8d2a03cf17f811e85449a71ca73c2bc93cb1343be28aa1611a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "ae83f3479532124c4e81def6b26bc57156abd33908573afcf08b924c0a29d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-br-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"\t\"\n.br\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 3,
+      "control": true,
+      "source_sha256": "94bef11381e8c7c8b6f3ce0454f462be92b3443e0f1d7df3bb4345cc3505fd11",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "35c29d93051406f2a8da682f27364bbd20b358e16f73b9ffbb49ae1c2c76703b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "8978feec77fae8c8bb256c7ad2f0fe94f58bb3fb1a8a6acfcf632b67ddc8d80c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-br-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"A\tB\"\n.br\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 3,
+      "control": true,
+      "source_sha256": "74e9f97446c26711f7aabe34187cf6a4cf7290dca9de75ece5940fa82747c088",
+      "expected_rows": [
+        "     A  B AFTER                                                          RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "80d8975c729ca27f883d973aac9bbcf1891ef6bdfcf20a6230bd3cd864c80278",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "4024a5033d1b2b2419e20cfbc617ae33dd3997fa7fefa166f8895525f6390014",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-nf-fi-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"\t\"\n.nf\n.fi\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 3,
+      "control": true,
+      "source_sha256": "cbd590a7cb1b978ddbae56319fd6bee071902ccdcfd25a35e28ef1d651fe43c8",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "e7996c4dfb8323e20d35fdc0ac40ab08f154525637de611b8e98d4ae96819ba6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "42680d3eac29d7b6aa5f298ee217de42cf3df40b77d85b1efece8ecebeb1da3b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-nf-fi-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"A\tB\"\n.nf\n.fi\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 3,
+      "control": true,
+      "source_sha256": "64cb249a786d21ed53ac7a24000635d057657afc8e21fb9a39f637b1a2c0b49c",
+      "expected_rows": [
+        "     A  B AFTER                                                          RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "7cf093068242ef29d54e07405d5cafcb74c46c3974e08584d0918be24ebe8782",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "62d02e6b8fa2c94f8202fb781edf2c9ded2bbdd8195647b205030b3f6dbfd7c1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-ti-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"\t\"\n.ti\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 3,
+      "control": true,
+      "source_sha256": "a600a2808f5bb4f0a8c14f911bfcad43265b3ce72f3131e7c3ea42288c4b4fe8",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "18f6707b7fcf0cb1b9510da90a6afd44445bbb16e27413e1231eb2aa9f76c775",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "40e6f0219a8cf3174a9c5a2ea7642317fd5270f648eefb978d09259adf73df40",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-3-ti-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 3n\n.No \"A\tB\"\n.ti\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 3,
+      "control": true,
+      "source_sha256": "bc626a98b41f1ca59dd60e38c355449bdfdeb496a832eeefdcca3f43a9366ef0",
+      "expected_rows": [
+        "     A  B AFTER                                                          RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "bccc901dfbf92a0a09bb3a4962e754e01c9be01ba0c373f27ce6e41f51dd83ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "fd64fbecb2422da13a8771ef77a3a7c1ada96b4f4f0d0a9778305d4274dec43d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "b12ffa1a495df3cc3d55b8752aca693a80ead12a272e356764f19fbf156319f3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "detached-head-3",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -inset\n.It \"A\t\"\n.ta T 3n\n.No B\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "inset",
+      "source_word": "A\t",
+      "period": 3,
+      "control": true,
+      "source_sha256": "cde1dcd5f07816868172c38f2d4e3c1af37f98a601f0bfaa08b8f221c62dc0c3",
+      "expected_rows": [
+        "     A   B"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "94a3462fd8388168afb6a877f6882f176fb7eab3d30580f72b29b09938bea46a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "80b00d41f711f1127880100f577e8bf93278a070218ee905905177f33bdb960b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3fc445fd50706ac95861e4081aa441a8f3c9ce9ea21a1d50691e8832db73b4db",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "20b194529ec3eca8fa3d7649c3b8d6904dea6e194d3dbc24102cbe86c0899395",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "662f6f272def4626057a4dc1bcf2394129b354f1c15a5e2e86a2204d5b16c988",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-leading-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"\tA\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\tA",
+      "period": 5,
+      "control": false,
+      "source_sha256": "50395d6b09a20d48314b26cfda2ae741caad016726ca111c987363cf38e351a0",
+      "expected_rows": [
+        "          A AFTER                                                        RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c6802f3b257c0c5e37b9725ba38e97d41a6604cc9c2698e3d2cf459023986e4f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "c6802f3b257c0c5e37b9725ba38e97d41a6604cc9c2698e3d2cf459023986e4f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "eeda231c9458ed961b4bf81f040aed04d69ed5e3cc6106c82efdcaa586fc075c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "85a5776351d9496e4bbc49796a792fdae049c278b3109ab9050302c49c25ea38",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-leading-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.Em \"\tA\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\tA",
+      "period": 5,
+      "control": false,
+      "source_sha256": "d4568638c36e1ed5d3658bebb6f98799c4f49d41aeafe4872aad6200bec69fbf",
+      "expected_rows": [
+        "          A AFTER                                                        RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "c169d3a18cfce378cdd0f7390ddfc4e275fa9e88acf2f26d83ce9af4824421cf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "c169d3a18cfce378cdd0f7390ddfc4e275fa9e88acf2f26d83ce9af4824421cf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8422bb869cab8e3748f863bde6dabad4c015994a884e37ab3ced981196edfd1e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "c10113eec8f9150722312bed0e0569e082f7fa8b0d87a4cbd5fdf0a8a9a08511",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-internal-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"A\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 5,
+      "control": false,
+      "source_sha256": "e052a6d896f808412a4c8a82ebf63a530aaf1b042ac0c646541ca2f6ede8b3aa",
+      "expected_rows": [
+        "     A    B AFTER                                                        RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "fd64fbecb2422da13a8771ef77a3a7c1ada96b4f4f0d0a9778305d4274dec43d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "c97ec4ac1681f772bb6c2507fbfe9d53c33c9eebaeb7a67d311e48db3bcf6a0c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-internal-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.Em \"A\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 5,
+      "control": false,
+      "source_sha256": "efc5dde1f1db121662961d0b136872e822fa7e272e7fe872665640175fc324f6",
+      "expected_rows": [
+        "     A    B AFTER                                                        RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "92f456a27980710cccec6443e40254932430ebcdac6efba3e46c3447b44b8164",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "92f456a27980710cccec6443e40254932430ebcdac6efba3e46c3447b44b8164",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "22b6bbb19e19952669187d678ea3052fe175c9c0d07edfc4992da4d64260b6ec",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "f722d0527c499e25fa60a30348a4373c9696dfd504d025a8650ebc9057a33fd6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-tail-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"A\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t",
+      "period": 5,
+      "control": false,
+      "source_sha256": "528dd166059b868fea7e837098e94b7cebcea14b1a986bfeac98584d531628bf",
+      "expected_rows": [
+        "     A     AFTER                                                         RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "6686a68665b46caa11bfe719672216bace18ed6ea0670de76f08099649060007",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "6686a68665b46caa11bfe719672216bace18ed6ea0670de76f08099649060007",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "1b57990648a176d5320ee1663a8250ce8fcf01032e66d77185ce157cdf28bbac",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "ee376c575b8f2e2ac5ac51bfc3582667ed6bcf28f1e791ebdbae7635299fc8fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-tail-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.Em \"A\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t",
+      "period": 5,
+      "control": false,
+      "source_sha256": "ba2873f346e3c9879325d303863fb5df074581cb5238ef072c1ff8a9b7ea0b50",
+      "expected_rows": [
+        "     A     AFTER                                                         RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "9db0b3154ebc932e549f44463e2a7f69fc1868bebe243ab82d50952f19468996",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "9db0b3154ebc932e549f44463e2a7f69fc1868bebe243ab82d50952f19468996",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "310ad78f34d879f4033d1ec47689f9f6712cad00a69fe850c35020c7c4694f18",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "9cffd59898e58a4c7a54778297a7558adfda8e439ee4906f881c3634bc19b4a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-consecutive-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"A\t\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t\tB",
+      "period": 5,
+      "control": false,
+      "source_sha256": "1b7f32cbaad787d8b300f9abebe6bf9015c569514697f5e0c2a03f79fae8fef9",
+      "expected_rows": [
+        "     A         B AFTER                                                   RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "5d73e5c47a6227bdb5b2dbdf831b911c2c169d26c077638d0a663be556801162",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "5d73e5c47a6227bdb5b2dbdf831b911c2c169d26c077638d0a663be556801162",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "6ae308f1b98b6c2a5bdf40ecde5ca9a509de0fb23cd83e9dd64621188e1bb504",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "c1883b9b1edcb0655af5d6eb9f1fc49f0b9eb6a119a6c54e23d656eb5d3cb0ab",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "f9e545c58f01c988406ec8c1805b31fb4fdfb7f5113c68e0ddd036e3f6723bef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-consecutive-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.Em \"A\t\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t\tB",
+      "period": 5,
+      "control": false,
+      "source_sha256": "843b5ec0fdcea4c89e4e1f919f992f14a026da52a7a992a1041d8fafc8b89b98",
+      "expected_rows": [
+        "     A         B AFTER                                                   RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "9e81c684dc3771e639e8fd1864b7136e013541de83df376a0910fef2b35f3258",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "9e81c684dc3771e639e8fd1864b7136e013541de83df376a0910fef2b35f3258",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "e62524c23275eac0f1c2a81bba2fd1dd8881630c6a03b7a767ae2363b8ae53fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "17656b5510564e0917c927dcb089a4a7bfe26285aaf4a9b2031cfee0a4cdaea7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "f9e545c58f01c988406ec8c1805b31fb4fdfb7f5113c68e0ddd036e3f6723bef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-empty-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 5,
+      "control": false,
+      "source_sha256": "c85f44ac583acf0c78789252c57e1f0cec157255efde2c4f1764596420fe48a4",
+      "expected_rows": [
+        "           AFTER                                                         RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "d028914cb3de97abeca97bdbc014c484287ff8b27448074c9c8f43fa12dbfc85",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "d028914cb3de97abeca97bdbc014c484287ff8b27448074c9c8f43fa12dbfc85",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "18f6707b7fcf0cb1b9510da90a6afd44445bbb16e27413e1231eb2aa9f76c775",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "46fd4725fba875897f45a5b6e227e67a9c4b2e45cf48379f1ab2d122c20fd774",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-empty-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.Em \"\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 5,
+      "control": false,
+      "source_sha256": "fd8bc961bfaa72c868fb2c510d0b097011b63f3bbf4fb5dccac997c578472ff2",
+      "expected_rows": [
+        "           AFTER                                                         RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "d028914cb3de97abeca97bdbc014c484287ff8b27448074c9c8f43fa12dbfc85",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "d028914cb3de97abeca97bdbc014c484287ff8b27448074c9c8f43fa12dbfc85",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "66065fb14f05da8d2a03cf17f811e85449a71ca73c2bc93cb1343be28aa1611a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "a26e82072a05c6476411013f0035d5890ea8ea87f848a7cac234b4e87f6802d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-br-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"\t\"\n.br\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 5,
+      "control": true,
+      "source_sha256": "a3a27d31708a25f75b608f2426bde83c142ae65247042b266069a480ec235331",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "35c29d93051406f2a8da682f27364bbd20b358e16f73b9ffbb49ae1c2c76703b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "965781049a078665b6177b98f44f32bdeeff8ebdeb5e05d0324dd5da85098e4a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-br-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"A\tB\"\n.br\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 5,
+      "control": true,
+      "source_sha256": "a9165c09b41bfa3a6d4a3463392a7420ffb3d8f59365bbc1b18e93895249ffa6",
+      "expected_rows": [
+        "     A    B AFTER                                                        RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "80d8975c729ca27f883d973aac9bbcf1891ef6bdfcf20a6230bd3cd864c80278",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "c3a4da676182ad467d0b02836cb10c4b7aea2640233fd22213dc57b7643a6029",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-nf-fi-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"\t\"\n.nf\n.fi\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 5,
+      "control": true,
+      "source_sha256": "fb486a1b7e84697385913665494cd0e4ee6225197ab57746c035f7469609e358",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "e7996c4dfb8323e20d35fdc0ac40ab08f154525637de611b8e98d4ae96819ba6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "6531daada4f0abfb702f5a791ec15c78c473ade6f75e342bbb63893a8713aab4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-nf-fi-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"A\tB\"\n.nf\n.fi\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 5,
+      "control": true,
+      "source_sha256": "c461034cf00f9911054c0d9ac31e4be049732f09021933db83c2b8d29864018a",
+      "expected_rows": [
+        "     A    B AFTER                                                        RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "7cf093068242ef29d54e07405d5cafcb74c46c3974e08584d0918be24ebe8782",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "b4696c07d5f35f383e0f1cff64d76a06bdbf204bead2d4649b33e74fe2b8c900",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-ti-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"\t\"\n.ti\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 5,
+      "control": true,
+      "source_sha256": "d4696ce45107bf7b236e0b338640d0a23f279384b3360e339d37419162c44f84",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "18f6707b7fcf0cb1b9510da90a6afd44445bbb16e27413e1231eb2aa9f76c775",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "6291b9bb98249294cc616f170125e48e82af2549a6f04a48cc00793009a3ee9b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-5-ti-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 5n\n.No \"A\tB\"\n.ti\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 5,
+      "control": true,
+      "source_sha256": "638548c82213449725ddcd82b5f63dcd78f445c92f32c292450067df39959ac0",
+      "expected_rows": [
+        "     A    B AFTER                                                        RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "02239e2098375c5a3944e3619067ebd663ec3225a73a3771698a102ef009ed55",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "fd64fbecb2422da13a8771ef77a3a7c1ada96b4f4f0d0a9778305d4274dec43d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "603f8f2efeb6da3ea8563cb619f7c3b7fb4a75c6a8428f4f1cb3a3948a168511",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "detached-head-5",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -inset\n.It \"A\t\"\n.ta T 5n\n.No B\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "inset",
+      "source_word": "A\t",
+      "period": 5,
+      "control": true,
+      "source_sha256": "63b299c7b78739c474c20cd31f0574d2a902b462fc206617563704cb294615ea",
+      "expected_rows": [
+        "     A     B"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "afa032378764167d7e64908e02e51153a38fc3e04467b676c70280b2758490cc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "3b15ccd8914410ddee747bbb719a407b4b23b156217ad204caa37a429c13d87a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3fc445fd50706ac95861e4081aa441a8f3c9ce9ea21a1d50691e8832db73b4db",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "97c0a1708b1f883d13b949bd7585185412b1021d73c07958ae0601c3a9b18f03",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "662f6f272def4626057a4dc1bcf2394129b354f1c15a5e2e86a2204d5b16c988",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-leading-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"\tA\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\tA",
+      "period": 8,
+      "control": false,
+      "source_sha256": "49ce2cd7107215c7015df9a65f6750bad0d6bc370e8f3420e5876472e8f95431",
+      "expected_rows": [
+        "             A AFTER                                                     RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "3d0d08d1d17bce068cb94d5972dccc8c745227d06d5654cfd1f8c63ad1353af2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "3d0d08d1d17bce068cb94d5972dccc8c745227d06d5654cfd1f8c63ad1353af2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "eeda231c9458ed961b4bf81f040aed04d69ed5e3cc6106c82efdcaa586fc075c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "269c70e5d036a63c82017828bb3752d3363065c49dcb4b633a9785444ed25561",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-leading-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.Em \"\tA\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\tA",
+      "period": 8,
+      "control": false,
+      "source_sha256": "9bcef3347d173caebdcddfb863e5ed29e36afcb647d743a9567b5ffed458041b",
+      "expected_rows": [
+        "             A AFTER                                                     RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "433fddfd70e9c5948f4013ef1b91a7e70edc100f4791c1dcc6f722928e07cd13",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "433fddfd70e9c5948f4013ef1b91a7e70edc100f4791c1dcc6f722928e07cd13",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "8422bb869cab8e3748f863bde6dabad4c015994a884e37ab3ced981196edfd1e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "5d4065d521b4e2a492e80cda98953541feed06d2a09b222d3a4e0302d4294be1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-internal-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"A\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 8,
+      "control": false,
+      "source_sha256": "f2dae1eee0f29040186be3b9f8521e92e7bde22ef8024c364ffe22cc59578e5b",
+      "expected_rows": [
+        "     A       B AFTER                                                     RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "fd64fbecb2422da13a8771ef77a3a7c1ada96b4f4f0d0a9778305d4274dec43d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "131185cec50adcd563a24b28edcaf0cc4f29a62b82e615bba7d2eec9a545fd8d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-internal-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.Em \"A\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 8,
+      "control": false,
+      "source_sha256": "97cd289a963f28095779563329b423965d7eea51e05b92e0594cabf50a25b36f",
+      "expected_rows": [
+        "     A       B AFTER                                                     RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "398bb4a3f3f346d66c0c348e5138d107be5b1e23f359d9418b49c28e24c33ea3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "398bb4a3f3f346d66c0c348e5138d107be5b1e23f359d9418b49c28e24c33ea3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "22b6bbb19e19952669187d678ea3052fe175c9c0d07edfc4992da4d64260b6ec",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "4a66b8a14ff89e638a3572522dae8e1f03e5598b7609699adbd58d327b3de14e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-tail-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"A\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t",
+      "period": 8,
+      "control": false,
+      "source_sha256": "42e81fa968275de1e810b9891413f51ca92489ef150c92e8de397c729ca1edd9",
+      "expected_rows": [
+        "     A        AFTER                                                      RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "9811a29b12819aed4b8bd9da07b07d95c95274af195528133fc4bac5e561fa66",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "9811a29b12819aed4b8bd9da07b07d95c95274af195528133fc4bac5e561fa66",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "1b57990648a176d5320ee1663a8250ce8fcf01032e66d77185ce157cdf28bbac",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "9694655557d6faa514d30e882bd4f6d715a3d7c036aded63a351452fb54d1813",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-tail-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.Em \"A\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t",
+      "period": 8,
+      "control": false,
+      "source_sha256": "b31298ea14b0229e406b5c9b0d29144b573b9bfdffac2bbbda34f86479ea4c1c",
+      "expected_rows": [
+        "     A        AFTER                                                      RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "4fd62d04ccae45181eb41afb9b8c0a085891e93957e916d5f5853564ef6d904c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "4fd62d04ccae45181eb41afb9b8c0a085891e93957e916d5f5853564ef6d904c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "310ad78f34d879f4033d1ec47689f9f6712cad00a69fe850c35020c7c4694f18",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "4573eafa78dc763f57c8eb79ac0927669079efcaca5d27df381aba7a1046c889",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-consecutive-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"A\t\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t\tB",
+      "period": 8,
+      "control": false,
+      "source_sha256": "63c5f0812ee9252e5cf230e090ea7c5e3e4ba9146d2697aaaafcd00ddceaa59f",
+      "expected_rows": [
+        "     A               B AFTER                                             RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "d23a2b02fc9ec8b3a351f2266b927724297e9a2b415156fb0955711d18337adf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "d23a2b02fc9ec8b3a351f2266b927724297e9a2b415156fb0955711d18337adf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "6ae308f1b98b6c2a5bdf40ecde5ca9a509de0fb23cd83e9dd64621188e1bb504",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "0a1561df577b9b7855280052538f78978ac394c113d0358031ab00c4e9c34e14",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "f9e545c58f01c988406ec8c1805b31fb4fdfb7f5113c68e0ddd036e3f6723bef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-consecutive-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.Em \"A\t\tB\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\t\tB",
+      "period": 8,
+      "control": false,
+      "source_sha256": "529bd3e7b89f72619c168790d4c0aa615fd9f26b799781b38776e4bb2da0d848",
+      "expected_rows": [
+        "     A               B AFTER                                             RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c557c9874ef0d4a1701c27b9a8b57e9b5fc7ed768d887e779beeeb4c3765c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c557c9874ef0d4a1701c27b9a8b57e9b5fc7ed768d887e779beeeb4c3765c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "e62524c23275eac0f1c2a81bba2fd1dd8881630c6a03b7a767ae2363b8ae53fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "72f53b1c80c6dca6caacbc6558f27f7ea6456f511b86cc9a2a434ca333c02aaf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "f9e545c58f01c988406ec8c1805b31fb4fdfb7f5113c68e0ddd036e3f6723bef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-empty-No",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 8,
+      "control": false,
+      "source_sha256": "c76a549f4ee37e6e10ee62205110fef23a570d4ebd46f5d330ce6b3ee2e0d924",
+      "expected_rows": [
+        "              AFTER                                                      RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "e24d910c4a1f35807e1fe2133709e1929ee76f326a878c924180483f9fe7dac6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "e24d910c4a1f35807e1fe2133709e1929ee76f326a878c924180483f9fe7dac6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "18f6707b7fcf0cb1b9510da90a6afd44445bbb16e27413e1231eb2aa9f76c775",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "29a8e94e63127ea805c4ba756296a3f2a982a6d7c30896c4ab0b20c4399a9e9b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-empty-Em",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.Em \"\t\"\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 8,
+      "control": false,
+      "source_sha256": "5a888f3b5e1deb70b69f0ad1dac2eb78f2cf7ad3e396814901c715779662763f",
+      "expected_rows": [
+        "              AFTER                                                      RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "e24d910c4a1f35807e1fe2133709e1929ee76f326a878c924180483f9fe7dac6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "e24d910c4a1f35807e1fe2133709e1929ee76f326a878c924180483f9fe7dac6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "66065fb14f05da8d2a03cf17f811e85449a71ca73c2bc93cb1343be28aa1611a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "3026339709c6db42c4a60cca1479c4f6ddfbe00ce85360bb1fc76aaa8d11d81b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-br-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"\t\"\n.br\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 8,
+      "control": true,
+      "source_sha256": "9281733dbcf9fa4d017905471397e8f6a00c3bc57b2e002168c0d2618c1703f9",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "35c29d93051406f2a8da682f27364bbd20b358e16f73b9ffbb49ae1c2c76703b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "9ed6298fd59317b2e9d6e2afeb5b098f058a075d0677d3b659e3772b986bcbd9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-br-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"A\tB\"\n.br\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 8,
+      "control": true,
+      "source_sha256": "13ec11f01bbc9a041bce7a754b1aa64d63c0f6219aa60a293dedd20457cfdd03",
+      "expected_rows": [
+        "     A       B AFTER                                                     RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "80d8975c729ca27f883d973aac9bbcf1891ef6bdfcf20a6230bd3cd864c80278",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "f69c94cf0def62fc3dc96e9d0428590359993f53b04c278e1e1039adee3b079e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-nf-fi-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"\t\"\n.nf\n.fi\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 8,
+      "control": true,
+      "source_sha256": "12440dc99dfd7198bcec8144aaba3c1a3b039468f1a7f76c37fbb9c60e42df3e",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "e7996c4dfb8323e20d35fdc0ac40ab08f154525637de611b8e98d4ae96819ba6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "3dc6cb5e2b22849a4181acdb2b9a560d080d860604a5a79b5fa6d73ef1365895",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-nf-fi-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"A\tB\"\n.nf\n.fi\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 8,
+      "control": true,
+      "source_sha256": "4065fa9ced2d9744986b782003ca178c82d33ff3d22b2536d62ff944df9dd090",
+      "expected_rows": [
+        "     A       B AFTER                                                     RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "7cf093068242ef29d54e07405d5cafcb74c46c3974e08584d0918be24ebe8782",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "43ac4c9db70c5b8172a686ac421a04b86e5b19ba7300efb34ad3f6a956818a4c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-ti-empty",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"\t\"\n.ti\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "\t",
+      "period": 8,
+      "control": true,
+      "source_sha256": "e46a64e8428e6bd944d656e27c57a12a2e39047c85338cb01a92afdcb59c3441",
+      "expected_rows": [
+        "     AFTER                                                               RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "f9c3764b520e76f8a37b331c28776848b86a29a211b39722b608c3fe9d2e273c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "18f6707b7fcf0cb1b9510da90a6afd44445bbb16e27413e1231eb2aa9f76c775",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "e775c9eaf5e80e8462e6f41f1e944aa36816e09693fbfde6e9e972a8fbe6e17c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "8cd0c18c61a8d658760c628ef489bb06fcb57b1dbc08bbfb8621cdde8a964500",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "column-8-ti-internal",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\" \"xxxx\"\n.It Xo\n.ta T 8n\n.No \"A\tB\"\n.ti\n.No AFTER\n.Xc Ta RIGHT\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "column",
+      "source_word": "A\tB",
+      "period": 8,
+      "control": true,
+      "source_sha256": "33f9aec7cec9ef6453fef6d946cf71ac894ef26d916f8bf17253fb74b6212a31",
+      "expected_rows": [
+        "     A       B AFTER                                                     RIGHT"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "287b2e0672b7bece5b15036a26aded51504bfd3f6fa61ce4e5d3b18e5d0649fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "fd64fbecb2422da13a8771ef77a3a7c1ada96b4f4f0d0a9778305d4274dec43d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "1fdc1896f7ae8370df447e2e0ee115444b52d2f0cb9ac4cb9f9ffe433798e3c1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "384ba112622420f29fa3f1384e1aa5db37c15ccf9c169fbe2cfd16ac55f0efd0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "detached-head-8",
+      "source": ".Dd November 3, 2026\n.Dt TAB-FIELD 1\n.Os\n.Sh DESCRIPTION\n.Bl -inset\n.It \"A\t\"\n.ta T 8n\n.No B\n.El\n.Sh NEXT\n.No END\n",
+      "kind": "inset",
+      "source_word": "A\t",
+      "period": 8,
+      "control": true,
+      "source_sha256": "5841378f2726baa075aa1470f6a4033068eab86d4576fa932f33829d51fba05f",
+      "expected_rows": [
+        "     A        B"
+      ],
+      "profiles": {
+        "ascii": {
+          "code": 0,
+          "stdout_sha256": "5ec681f852c39bcb98ce5906deab256f1638002091fca805e996067b3e3e889c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "code": 0,
+          "stdout_sha256": "86ad803ea105739b888be70f761936a0bc0e75c0b231632952209163327cdf44",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "code": 0,
+          "stdout_sha256": "3fc445fd50706ac95861e4081aa441a8f3c9ce9ea21a1d50691e8832db73b4db",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "code": 0,
+          "stdout_sha256": "3a708eb914924f7ce2c20c797b081c09f0931f557ed86650fef305ebb96760e9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "code": 2,
+          "stdout_sha256": "662f6f272def4626057a4dc1bcf2394129b354f1c15a5e2e86a2204d5b16c988",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    }
+  ]
+}

@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use super::{INTERNAL_FIELD_PREFIX, INTERNAL_FIELD_WORD, INTERNAL_ROW_ORIGIN, Inline};
+#[cfg(test)]
+use super::INTERNAL_FIELD_WORD;
+use super::{INTERNAL_FIELD_PREFIX, INTERNAL_ROW_ORIGIN, Inline};
 
 pub(super) const NEXT_ROW: &str = "\0mant:row-layout:next:";
 pub(super) const CURRENT_ROW: &str = "\0mant:row-layout:current:";
@@ -32,6 +34,7 @@ pub(in crate::mandoc::inline::flow) fn project_row_presentations(
     }
     let mut cursor = OriginCursor {
         positions: &positions,
+        tabs: None,
         owner: None,
         scalar: 0,
         next: 0,
@@ -179,6 +182,7 @@ pub(in crate::mandoc) fn take_inline_layout(nodes: &mut Vec<Inline>) -> mant_ir:
     super::row_layout::take(nodes)
 }
 
+#[cfg(test)]
 pub(in crate::mandoc::inline::flow) fn project_native_positions(
     nodes: &mut Vec<Inline>,
     origins: &[(String, usize, i32, bool)],
@@ -186,7 +190,25 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions(
     output_start: usize,
     materialize_line_origins: bool,
 ) -> Option<OutputNodeEdit> {
-    if origins.is_empty() && padding.is_empty() {
+    project_native_positions_with_tabs(
+        nodes,
+        origins,
+        padding,
+        &[],
+        output_start,
+        materialize_line_origins,
+    )
+}
+
+pub(in crate::mandoc::inline::flow) fn project_native_positions_with_tabs(
+    nodes: &mut Vec<Inline>,
+    origins: &[(String, usize, i32, bool)],
+    padding: &[(String, usize, usize, bool)],
+    tabs: &[super::tab_projection::TabExpansion],
+    output_start: usize,
+    materialize_line_origins: bool,
+) -> Option<OutputNodeEdit> {
+    if origins.is_empty() && padding.is_empty() && tabs.is_empty() {
         return None;
     }
     let mut positions = BTreeMap::<String, Vec<(usize, NativePosition, bool)>>::new();
@@ -207,8 +229,20 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions(
     for values in positions.values_mut() {
         values.sort_by_key(|(scalar, _, _)| *scalar);
     }
+    let mut tab_positions = BTreeMap::<String, Vec<(usize, usize)>>::new();
+    for tab in tabs {
+        positions.entry(tab.owner.clone()).or_default();
+        tab_positions
+            .entry(tab.owner.clone())
+            .or_default()
+            .push((tab.scalar, tab.spaces));
+    }
+    for values in tab_positions.values_mut() {
+        values.sort_unstable_by_key(|(scalar, _)| *scalar);
+    }
     let mut cursor = OriginCursor {
         positions: &positions,
+        tabs: Some(&tab_positions),
         owner: None,
         scalar: 0,
         next: 0,
@@ -301,6 +335,7 @@ enum NativePosition {
 
 struct OriginCursor<'a> {
     positions: &'a BTreeMap<String, Vec<(usize, NativePosition, bool)>>,
+    tabs: Option<&'a BTreeMap<String, Vec<(usize, usize)>>>,
     owner: Option<String>,
     scalar: usize,
     next: usize,
@@ -329,9 +364,7 @@ impl OriginCursor<'_> {
                 output.push(node);
                 continue;
             }
-            if let Inline::Anchor { id, .. } = &node
-                && id.as_str().starts_with(INTERNAL_FIELD_WORD)
-            {
+            if let Some(marker) = super::native_passes::native_word_marker(&node) {
                 // encode1() can write an accepted graph that the next word
                 // overstrikes before it acquires an IR scalar (term.c:901-
                 // 927). Its term_field() padding nevertheless printed. The
@@ -350,8 +383,8 @@ impl OriginCursor<'_> {
                 // preserve its IR without rebuilding glyph strings.
                 self.owner = self
                     .positions
-                    .contains_key(id.as_str())
-                    .then(|| id.as_str().to_owned());
+                    .contains_key(marker)
+                    .then(|| marker.to_owned());
                 (self.scalar, self.next) = self
                     .owner
                     .as_ref()
@@ -453,7 +486,21 @@ impl OriginCursor<'_> {
                 append_piece(node, &mut piece, output);
                 self.emit_here(output);
             }
-            piece.push(character);
+            let spaces = (character == '\t')
+                .then(|| {
+                    self.tabs.and_then(|tabs| {
+                        let tabs = tabs.get(self.owner.as_ref()?)?;
+                        tabs.binary_search_by_key(&self.scalar, |(scalar, _)| *scalar)
+                            .ok()
+                            .map(|index| tabs[index].1)
+                    })
+                })
+                .flatten();
+            if let Some(spaces) = spaces {
+                piece.extend(std::iter::repeat_n(' ', spaces));
+            } else {
+                piece.push(character);
+            }
             self.scalar += 1;
         }
         append_piece(node, &mut piece, output);

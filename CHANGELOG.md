@@ -43,6 +43,10 @@ that crate was not published for that change.
   manufacturing clickable targets. Retain terminal macro font transitions,
   suffixes and late pending-glyph link ownership. Apply the same identity
   decoder to adjacent roff reference families.
+- Resolve native field TAB advances from the actual accepted print receipt,
+  including changed tab stops and detached run-in heads. Keep unprinted
+  padding out of field-fit decisions while preserving source ownership;
+  generic Markdown and IR TAB layout remains source-neutral.
 
 ### mant-query
 

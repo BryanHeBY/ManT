@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
 use mant_ir::Inline;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(in crate::mandoc) struct HeadOperandCapture {
     roles: HashMap<u64, NativeOperandRole>,
     captured: CapturedHeadOperands,
@@ -29,7 +29,7 @@ impl HeadOperandCapture {
         std::mem::take(&mut self.captured)
     }
 
-    pub(super) fn observe_accepted_output(&mut self, nodes: &[Inline]) {
+    pub(in crate::mandoc) fn observe_accepted_output(&mut self, nodes: &[Inline]) {
         if self.roles.is_empty() {
             return;
         }

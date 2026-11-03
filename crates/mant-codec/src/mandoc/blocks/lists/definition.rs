@@ -181,9 +181,9 @@ pub(super) fn definition_item(
         &terms,
         !closed_head_row && !finished.definition_field_exited,
     );
-    let deferred_head_layout = run_in_execution
+    let deferred_head_projection = run_in_execution
         .as_ref()
-        .and_then(|run_in| run_in.state.deferred_head_layout());
+        .and_then(|run_in| run_in.state.deferred_head_projection());
     let spacing_enabled = formatter.spacing_enabled();
     let mut description = lower_scope(
         body,
@@ -192,8 +192,10 @@ pub(super) fn definition_item(
         formatter,
         definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
     );
-    if let Some(receiver) = deferred_head_layout {
-        receiver.apply(&mut terms);
+    if let Some(receiver) = deferred_head_projection
+        && let Some(captured) = receiver.apply(&mut terms)
+    {
+        capture_deferred_operands(context, head, captured);
     }
     carry_completed_head_rows(
         node,
@@ -209,17 +211,7 @@ pub(super) fn definition_item(
         // new semantic definition.
         terms.retain(|term| !term.is_empty());
     }
-    if man_node {
-        // post_IP/post_TP executes term_newln() even when the BODY emitted
-        // only a bare BACKAFTER and has no local cell. A fitting HEAD's
-        // device row remains occupied until this actual BODY post; it must
-        // close before a following PP or sibling starts another scope.
-        formatter.settle_definition_head_rows();
-    }
-    let observed = formatter.finish_definition_body();
-    if man_node {
-        formatter.font.man_text_boundary(); // BODY post
-    }
+    let observed = finish_definition_body_execution(formatter, man_node);
     apply_executed_definition_body_layout(
         &mut geometry,
         flow,
@@ -237,6 +229,35 @@ pub(super) fn definition_item(
         formatter.row_presentation.offset_shift = head_offset_shift;
     }
     item
+}
+
+fn capture_deferred_operands(
+    context: &LoweringContext<'_>,
+    head: &[Node],
+    captured: crate::definitions::CapturedHeadOperands,
+) {
+    context
+        .native_heads
+        .borrow_mut()
+        .capture_operands(head.as_ptr() as usize, captured);
+}
+
+fn finish_definition_body_execution(
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    man_node: bool,
+) -> crate::mandoc::formatter::DefinitionBodyObservation {
+    if man_node {
+        // post_IP/post_TP executes term_newln() even when the BODY emitted
+        // only a bare BACKAFTER and has no local cell. A fitting HEAD's
+        // device row remains occupied until this actual BODY post; it must
+        // close before a following PP or sibling starts another scope.
+        formatter.settle_definition_head_rows();
+    }
+    let observed = formatter.finish_definition_body();
+    if man_node {
+        formatter.font.man_text_boundary(); // BODY post
+    }
+    observed
 }
 
 /// Enter the original BODY's source event before its pre changes offset.

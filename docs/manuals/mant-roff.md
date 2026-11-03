@@ -695,6 +695,17 @@ An entirely rejected field or a zero-width `\&` cell does not print an origin
 advance. Ordinary declared-column overruns remain table placement and do not
 insert line breaks into semantic cell names.
 
+Literal TABs in ordinary text and code inside these native fields are resolved
+at the actual field consumption boundary, using the active `ta` stops and tab
+reference. Only advances accepted for printing become resolved spaces; a TAB left as
+unprinted trailing padding cannot create another output cell. A run-in HEAD
+remains pending until that same field is consumed, so a later `ta` request
+can still affect its advance. Original source bytes and owned AST operands
+remain available for provenance. This producer execution is distinct from
+an authored TAB already present in Markdown or public IR, which terminal
+readers expand using the shared eight-column hard-row layout rule.
+Structured equations retain their separate mathematical projection.
+
 An empty `Bd` still retains an executed spacing request and its role as a predecessor for the following source block. A non-plain mdoc `It` itself establishes a paragraph boundary for a first-child display; plain `-item` lists instead inherit the preceding sibling or outer context. This applies to definition and column bodies as well as marked lists, without changing their semantic ownership.
 
 Display predecessors are native logical siblings, not emitted text: a font-only input word or retained empty `Bf` scope counts, while comments, suppressed nodes and transparent requests such as `ft`, `Sm` and `Tg` do not. A scope is not its own first child's predecessor. This follows the selected mandoc no-space behavior, which can differ from groff for invisible content immediately after a heading.

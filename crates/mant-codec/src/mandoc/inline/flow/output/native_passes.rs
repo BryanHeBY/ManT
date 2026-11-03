@@ -214,7 +214,7 @@ fn project_owner_tail_events(cursor: &mut NativePassCursor<'_>, output: &mut Vec
     }
 }
 
-fn native_word_marker(node: &Inline) -> Option<&str> {
+pub(in crate::mandoc::inline::flow) fn native_word_marker(node: &Inline) -> Option<&str> {
     let marker = match node {
         Inline::Anchor { id, .. } => id.as_str(),
         Inline::Text { value } => value,

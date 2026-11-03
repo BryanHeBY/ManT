@@ -20,6 +20,39 @@ use super::super::super::field_buffer::{FieldCell, FieldWrite};
 use super::super::DefinitionGeometryCheckpoint;
 
 #[test]
+fn consumed_tab_receipts_survive_row_reset_without_word_time_owner_scans() {
+    // The exact core2100 column source ran all pristine profiles first.
+    // term.c:233-253 clears consumed cells before its overrun endline;
+    // the source-word text receipt must survive that reset independently.
+    for standalone in [false, true] {
+        let mut builder = InlineBuilder::new();
+        builder.begin_column_body(4, 0, false);
+        builder.append_text("\t");
+        builder.append_text("AFTER");
+        let device = builder.native_field_device(false).unwrap();
+        assert!(device.tab_projection.get().is_none());
+        if standalone {
+            builder.hard_break();
+        } else {
+            builder.project_captured_definition_field(&device);
+            let captured = device.tab_projection.get().unwrap();
+            assert_eq!(captured.len(), 1);
+            let original_receipt = captured.as_ptr();
+            builder.hard_break_after_field_projection(Some(&device));
+            assert!(builder.definition.as_ref().unwrap().field_buffer.is_empty());
+            builder.retire_native_field_with_device(Some(&device));
+            assert_eq!(
+                device.tab_projection.get().unwrap().as_ptr(),
+                original_receipt,
+                "retirement reuses the pre-reset owner/scalar receipt"
+            );
+        }
+        assert!(super::super::super::super::plain_text(&builder.nodes).contains("AFTER"));
+        assert!(!super::super::super::super::plain_text(&builder.nodes).contains('\t'));
+    }
+}
+
+#[test]
 fn printed_origin_advances_survive_node_geometry_until_the_real_row_end() {
     // Exact D1/Dl/Bd-offset column sources ran pristine in five profiles
     // first (lint=0). term_field writes the temporary origin advance

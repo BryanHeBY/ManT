@@ -75,6 +75,7 @@ pub(in crate::mandoc) use projection::{
 pub(in crate::mandoc::inline::flow) mod native_passes;
 mod record;
 pub(in crate::mandoc::inline::flow) mod row_origins;
+pub(in crate::mandoc::inline::flow) mod tab_projection;
 pub(in crate::mandoc) use row_origins::{
     push_row_break, split_row_origin, take_definition_term_breaks, take_inline_layout,
 };
@@ -286,6 +287,20 @@ impl InlineBuilder {
             self.project_captured_definition_field(&native);
             self.project_consumed_row_layout(&native);
             self.hard_break_using_field(Some(&native), true);
+            // This standalone term_newln() has no later field-retirement
+            // caller. Its row reset already consumed the live buffer, so
+            // deliver the captured text receipt without re-running the tail
+            // or changing the existing row-origin/padding projection.
+            let tabs = self.capture_consumed_native_tabs(&native);
+            tab_projection::apply_from(&mut self.nodes, native.current_output_start(), tabs);
+            if let Some(receiver) = self
+                .execution
+                .definition
+                .as_ref()
+                .and_then(|state| state.deferred_head_projection.as_ref())
+            {
+                receiver.accept_tabs(tabs);
+            }
         } else {
             self.hard_break_using_field(None, false);
         }

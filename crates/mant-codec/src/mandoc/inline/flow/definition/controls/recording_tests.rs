@@ -144,7 +144,10 @@ fn hang_literal_tabs_use_final_print_receipt_for_body_seam() {
             panic!("missing actual definition owner: {source}")
         };
         let item = &items[0];
-        assert!(mant_ir::inline_plain_text(&item.terms[0]).contains('\t'));
+        // These same six sources reran all five pristine profiles before
+        // this assertion: term_field's consumed TAB is resolved in the IR;
+        // the owned AST/source still retains its authored literal scalar.
+        assert!(!mant_ir::inline_plain_text(&item.terms[0]).contains('\t'));
         assert_eq!(item.layout.min_term_gap_columns, gap, "{source}");
         assert_eq!(
             item.head_body_relation.joins_without_separator(),

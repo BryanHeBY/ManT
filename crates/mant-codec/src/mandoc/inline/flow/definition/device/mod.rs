@@ -24,6 +24,7 @@ mod tests;
 use super::super::InlineBuilder;
 use super::super::field_buffer::{FillBoundary, FlushReceipt};
 use super::super::native_field::FieldFlag;
+use super::super::output::tab_projection::TabExpansion;
 use super::state::NoBreakField;
 
 /// Output of the current `term_field()` sweep, independent of inherited
@@ -47,6 +48,7 @@ struct NativeFieldSweep {
     separator_retention: Option<usize>,
     row_origins: Vec<(String, usize, i32, bool)>,
     field_padding: Vec<(String, usize, usize, bool)>,
+    tab_spaces: Vec<(usize, usize)>,
     unprojected_origin_units: usize,
     /// Outcome of the last pass-loop endline (term.c:217) of this flush.
     loop_row_end: LoopRowEnd,
@@ -149,6 +151,8 @@ impl NativeFieldSweep {
             separator_field,
             row_origins: self.row_origins,
             field_padding: self.field_padding,
+            tab_spaces: self.tab_spaces,
+            tab_projection: std::cell::OnceCell::new(),
             output_start,
         }
     }
@@ -202,6 +206,12 @@ pub(in crate::mandoc) struct NativeFieldDevice {
     /// Only a real accepted print determines these cells, after node geometry
     /// restoration; already materialized field padding is subtracted.
     pub(super) field_padding: Vec<(String, usize, usize, bool)>,
+    /// Native cell index and actual printed spaces, observed in `term_field`.
+    /// Zero denotes a deferred TAB which never reached a printed graph.
+    pub(super) tab_spaces: Vec<(usize, usize)>,
+    /// Filled only when this receipt enters real consumption. A row close
+    /// may clear the live buffer before its text owner receives these edits.
+    pub(in crate::mandoc::inline::flow) tab_projection: std::cell::OnceCell<Vec<TabExpansion>>,
     /// Outcome of the pass loop's last `endline()` (term.c:217). With
     /// [`LoopRowEnd::Authored`], an authored hard row end exists even
     /// though the final tail comparison (250-253) left the fresh row open;
@@ -214,6 +224,10 @@ pub(in crate::mandoc) struct NativeFieldDevice {
 }
 
 impl NativeFieldDevice {
+    pub(in crate::mandoc::inline::flow) const fn current_output_start(&self) -> usize {
+        self.output_start
+    }
+
     pub(in crate::mandoc::inline::flow) fn remap_output_positions(
         &mut self,
         edit: super::super::output::row_origins::OutputNodeEdit,
