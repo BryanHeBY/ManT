@@ -35,6 +35,13 @@ that crate was not published for that change.
   clipboard dependency with clipboard-win 5.4.3 and refresh distributable
   dependency notices. Compression limits and supported formats are unchanged.
 
+### mant-query
+
+- Validate and count search occurrences before fine range construction. Build
+  presented lines and scalar indexes lazily for retained results, avoiding
+  repeated long-line copies for skipped pages and capped occurrences without
+  changing grouping, pagination, context or source positions.
+
 ### libmandoc-rs
 
 - Reserve cumulative owned-transfer bytes before copying enclosure strings,

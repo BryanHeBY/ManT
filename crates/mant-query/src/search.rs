@@ -98,7 +98,7 @@ fn search_with_matcher(
     let searchable = SearchableText::new(markdown, request.scope);
     let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
     let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
-    let mut collector = SearchCollector::new(markdown, &lines, offset, limit);
+    let mut collector = SearchCollector::new(offset, limit);
     collect_occurrences(
         matcher,
         &searchable,
@@ -111,16 +111,7 @@ fn search_with_matcher(
     let (raw_groups, total) = collector.finish();
     let selected = raw_groups
         .iter()
-        .map(|found| {
-            build_match(
-                found,
-                &searchable,
-                markdown,
-                &lines,
-                &owners,
-                request.context_lines,
-            )
-        })
+        .map(|found| build_match(found, &searchable, &lines, &owners, request.context_lines))
         .collect::<Vec<_>>();
     let returned = u32::try_from(selected.len()).unwrap_or(u32::MAX);
     let consumed = request.offset.saturating_add(returned);
@@ -167,9 +158,9 @@ fn collect_occurrences(
     matcher: &grep_regex::RegexMatcher,
     searchable: &SearchableText,
     markdown: &str,
-    lines: &LineIndex,
+    lines: &LineIndex<'_>,
     owners: &OwnerIndex<'_, '_>,
-    collector: &mut SearchCollector<'_>,
+    collector: &mut SearchCollector,
 ) -> Result<(), SearchError> {
     let mut invalid_utf8_match = false;
     let mut invalid_zero_width_match = false;
@@ -200,8 +191,13 @@ fn collect_occurrences(
                 // is intentionally absent rather than invalidating the query.
                 return true;
             }
-            let line_ranges = occurrence_line_ranges(markdown_start..markdown_end, markdown, lines);
-            if line_ranges.is_empty() {
+            let start_line_index = lines.line_index_at_byte(markdown_start);
+            let end_line_index = lines.line_index_at_byte(markdown_end - 1);
+            if !lines.has_presented_bytes(
+                markdown_start..markdown_end,
+                start_line_index,
+                end_line_index,
+            ) {
                 // A Markdown-scope matcher can land wholly inside one of the
                 // zero-width source-map anchors. Such internal matches have
                 // no anchor-free presentation and must not become phantom
@@ -217,9 +213,10 @@ fn collect_occurrences(
                     RawOccurrence {
                         searchable: found.start()..found.end(),
                         markdown: markdown_start..markdown_end,
-                        line_ranges,
                     },
                     owner,
+                    start_line_index,
+                    end_line_index,
                 );
             }
             true
@@ -237,7 +234,6 @@ fn collect_occurrences(
 struct RawOccurrence {
     searchable: Range<usize>,
     markdown: Range<usize>,
-    line_ranges: Vec<SearchLineRange>,
 }
 
 struct RawMatchGroup {
@@ -272,9 +268,7 @@ impl PendingOwner {
     }
 }
 
-struct SearchCollector<'a> {
-    markdown: &'a str,
-    lines: &'a LineIndex,
+struct SearchCollector {
     offset: usize,
     limit: usize,
     total: usize,
@@ -282,11 +276,9 @@ struct SearchCollector<'a> {
     current: Option<PendingRawMatchGroup>,
 }
 
-impl<'a> SearchCollector<'a> {
-    fn new(markdown: &'a str, lines: &'a LineIndex, offset: usize, limit: usize) -> Self {
+impl SearchCollector {
+    fn new(offset: usize, limit: usize) -> Self {
         Self {
-            markdown,
-            lines,
             offset,
             limit,
             total: 0,
@@ -295,14 +287,13 @@ impl<'a> SearchCollector<'a> {
         }
     }
 
-    fn push(&mut self, occurrence: RawOccurrence, owner: &Owner) {
-        let start_line_index = self
-            .lines
-            .position(self.markdown, occurrence.markdown.start)
-            .line_index;
-        let end_line_index = self
-            .lines
-            .line_index_at_byte(occurrence.markdown.end.saturating_sub(1));
+    fn push(
+        &mut self,
+        occurrence: RawOccurrence,
+        owner: &Owner,
+        start_line_index: usize,
+        end_line_index: usize,
+    ) {
         if let Some(group) = self.current.as_mut().filter(|group| {
             group.start_line_index == start_line_index
                 && group.end_line_index == end_line_index
@@ -366,14 +357,13 @@ impl RawMatchGroup {
 fn build_match(
     found: &RawMatchGroup,
     searchable: &SearchableText,
-    markdown: &str,
-    lines: &LineIndex,
+    lines: &LineIndex<'_>,
     owners: &OwnerIndex<'_, '_>,
     context_lines: u16,
 ) -> SearchHit {
     let first = &found.occurrences[0];
-    let start = lines.position(markdown, first.markdown.start);
-    let preview = lines.presented_line(markdown, start.line_index).text;
+    let start = lines.line_index_at_byte(first.markdown.start);
+    let preview = lines.presented_line(start).text.to_string();
     let context_start = found
         .start_line_index
         .saturating_sub(usize::from(context_lines));
@@ -387,7 +377,7 @@ fn build_match(
         (context_start..=context_end)
             .map(|line_index| SearchContextLine {
                 line: u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
-                text: lines.presented_line(markdown, line_index).text,
+                text: lines.presented_line(line_index).text.to_string(),
                 matched: (found.start_line_index..=found.end_line_index).contains(&line_index),
             })
             .collect()
@@ -400,11 +390,12 @@ fn build_match(
             .occurrences
             .iter()
             .map(|occurrence| {
-                let start = lines.position(markdown, occurrence.markdown.start);
-                let end = lines.position(markdown, occurrence.markdown.end);
+                let start = lines.position(occurrence.markdown.start);
+                let end = lines.position(occurrence.markdown.end);
+                let line_ranges = occurrence_line_ranges(occurrence.markdown.clone(), lines);
                 SearchOccurrence {
                     matched_text: if searchable.direct_markdown {
-                        presented_matched_text(occurrence, markdown, lines)
+                        presented_matched_text(&line_ranges, lines)
                     } else {
                         searchable.text[occurrence.searchable.clone()].to_owned()
                     },
@@ -418,7 +409,7 @@ fn build_match(
                             .unwrap_or(u32::MAX),
                         end_column: u32::try_from(end.column).unwrap_or(u32::MAX),
                     },
-                    line_ranges: occurrence.line_ranges.clone(),
+                    line_ranges,
                 }
             })
             .collect(),
@@ -432,20 +423,21 @@ fn build_match(
 
 fn occurrence_line_ranges(
     markdown_range: Range<usize>,
-    markdown: &str,
-    lines: &LineIndex,
+    lines: &LineIndex<'_>,
 ) -> Vec<SearchLineRange> {
-    let start = lines.position(markdown, markdown_range.start).line_index;
+    #[cfg(test)]
+    mapping::work::record(|work| work.range_mappings += 1);
+    let start = lines.line_index_at_byte(markdown_range.start);
     let end = lines.line_index_at_byte(markdown_range.end.saturating_sub(1));
     (start..=end)
         .flat_map(|line_index| {
             let line_start = lines.start(line_index);
-            let line = lines.line(markdown, line_index).trim_end();
+            let line = lines.trimmed_line(line_index);
             let line_end = line_start.saturating_add(line.len());
             let intersection =
                 markdown_range.start.max(line_start)..markdown_range.end.min(line_end);
             (intersection.start < intersection.end)
-                .then(|| lines.presented_line(markdown, line_index))
+                .then(|| lines.presented_line(line_index))
                 .into_iter()
                 .flat_map(move |visible| {
                     visible.map_range(
@@ -462,15 +454,15 @@ fn occurrence_line_ranges(
         .collect()
 }
 
-fn presented_matched_text(occurrence: &RawOccurrence, markdown: &str, lines: &LineIndex) -> String {
+fn presented_matched_text(line_ranges: &[SearchLineRange], lines: &LineIndex<'_>) -> String {
     let mut text = String::new();
     let mut previous_line = None;
-    for range in &occurrence.line_ranges {
+    for range in line_ranges {
         let line_index = usize::try_from(range.line.saturating_sub(1)).unwrap_or(usize::MAX);
         if previous_line.is_some_and(|previous| previous != line_index) {
             text.push('\n');
         }
-        let line = lines.presented_line(markdown, line_index).text;
+        let line = &lines.presented_line(line_index).text;
         let start = usize::try_from(range.start_byte).unwrap_or(usize::MAX);
         let end = usize::try_from(range.end_byte).unwrap_or(usize::MAX);
         if let Some(fragment) = line.get(start..end) {

@@ -46,6 +46,18 @@ a separate evidence query: repeated names produce independent evidence, not a
 first-match selection. Classification, global order, paging and content-copy
 budgets remain explicit in the result, including partial coverage.
 
+## Search work and pagination
+
+Search validates each occurrence against anchors, trimmed visible content and
+its original owner before counting result groups. Fine scalar ranges and
+presented-line copies are built lazily for retained results, with a reusable
+per-line scalar index. Skipped groups and occurrences beyond the existing
+256-per-group cap do not pay that mapping cost. Counting, ordinals, paging,
+preview/context and Markdown/visible scope retain the same protocol semantics.
+Deterministic regression tests compare complete baseline responses and bound
+mapped occurrences and inspected line bytes; they do not impose machine-time
+thresholds or claim every matching backend is universally linear.
+
 ## Collections without a loader dependency
 
 `QueryScopeView::new` validates a borrowed logical graph against its ordered

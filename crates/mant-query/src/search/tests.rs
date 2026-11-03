@@ -10,7 +10,9 @@ use super::{
     occurrence_line_ranges, render_addressable_markdown, search_query, validate_search_query,
 };
 
+mod compatibility;
 mod row_layout;
+mod workload;
 
 fn query() -> ResolvedContent {
     ResolvedContent {
@@ -168,9 +170,9 @@ fn visible_search_maps_inline_formatting_to_markdown_and_option_nodes() {
 fn presented_line_ranges_exclude_trimmed_unicode_trailing_space() {
     let markdown = "zz 日本語   \nnext";
     let lines = LineIndex::new(markdown);
-    let ranges = occurrence_line_ranges(3..15, markdown, &lines);
+    let ranges = occurrence_line_ranges(3..15, &lines);
 
-    assert_eq!(display_markdown_line(lines.line(markdown, 0)), "zz 日本語");
+    assert_eq!(display_markdown_line(lines.line(0)), "zz 日本語");
     assert_eq!(ranges.len(), 1);
     assert_eq!(ranges[0].line, 1);
     assert_eq!(ranges[0].start_byte, 3);
@@ -253,7 +255,7 @@ fn searches_contiguous_text_across_an_unsafe_style_boundary() {
 fn source_map_stripping_uses_codec_supplied_anchor_ranges() {
     let source = "before<a id=\"node\"></a>after";
     let lines = LineIndex::with_anchors(source, std::iter::once(6..23).collect());
-    assert_eq!(lines.presented_line(source, 0).text, "beforeafter");
+    assert_eq!(lines.presented_line(0).text, "beforeafter");
     assert_eq!(
         display_markdown_line("before<a id=\"node\">payload</a>after"),
         "before<a id=\"node\">payload</a>after"
