@@ -44,9 +44,7 @@ pub(super) use source::roff_macro_arguments;
 
 use super::{
     first_part_children,
-    roff_escape::{
-        RoffFont as Font, RoffInlineEvent, decode, is_formatter_word_blank,
-    },
+    roff_escape::{RoffFont as Font, RoffInlineEvent, decode, is_formatter_word_blank},
 };
 
 pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {

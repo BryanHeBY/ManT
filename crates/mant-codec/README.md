@@ -57,10 +57,22 @@ literal displays, lists and table recovery:
 | Source lookup | `source_context.rs`, `ast.rs` and `equations.rs` provide source/AST services and bounded operation-local memoization; diagnostics use their own collector. They do not store a hidden formatter register. |
 | Formatter state | `FormatterState` carries font, spacing, deferred vertical-space debt, and bare zero-advance execution explicitly between consumers. A normal font-scope exit restores current font but retains previous-font effects; native tables reset cell-local backtracking at their documented boundary. |
 | Container routing | `containers.rs` streams borrowed children and scope boundaries; structural payloads remain tables/lists. Logical punctuation adjacency is a separate, non-executing classification in `adjacency.rs`. |
+| Scope posts | `containers/posts.rs` retains the single shared BODY post, font-checkpoint and display-fill record across output destinations. |
 | Inline and physical lines | `InlineBuilder` executes word/control events; `source_cursor.rs` places source-visible events on physical lines. No-fill changes layout, not macro interpretation. |
+| Nested list execution | `inline/scopes/nested.rs` executes nested list and column phases in the caller's existing builder and field state. |
 | Link identities | `inline/links/identity.rs` applies HTML attribute glyph rules independently to each source operand; it never consumes the visible formatter's state. `Xr`/`MR` share this path with `UR`/`MT`/`Lk`/`Mt`/`%U`. |
+| Link annotations | `inline/links/annotation.rs` places typed links around accepted output, keeping preceding glyphs and layout boundaries outside the label without executing another formatter boundary. |
+| Layout measurement | `layout/measurement.rs` shares pure native-list unit/sample measurement; it does not execute sample escapes in the live formatter. |
 | Structural layout | Block drivers own pending paragraphs and list state; section, synopsis, man no-fill and dialect-specific list consumers remain separate. Shared definition helpers do not own formatter state. |
 | Speculative recovery | Table-cell candidates retain output, final formatter state and diagnostics until ownership acceptance. Rejection rolls back all three, unlike a normal font-scope exit. |
+
+Definition HEAD lowering returns named output and execution outcomes rather
+than positional boolean tuples. Native list measurement shares one pure
+unit/sample helper; its reading-width approximation remains separate from the
+native `term_strlen` contract. Display paths share explicit BODY font/fill
+ledger stages, while their source-node entry, sink routing, post-once claim
+and final geometry restoration remain ordered by their existing drivers.
+No helper return or destructor implicitly executes a native scope post.
 
 Source geometry retains bounded basic-unit positions independently of the IR
 parent and man macro base. Conversion produces signed relative offsets;
@@ -124,7 +136,8 @@ a clean target ledger alone does not establish rendering fidelity.
 The authoritative format contracts are [mant-markdown(7)](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-markdown.md), [mant-roff(7)](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-roff.md), and [mant-ir(7)](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-ir.md).
 
 The private roff field buffer in
-`src/mandoc/inline/flow/field_buffer.rs` and the native field device
+`src/mandoc/inline/flow/field_buffer.rs` and its `field_buffer/` helpers,
+and the native field device
 calculation in `src/mandoc/inline/flow/definition/device/` derive from
 the pinned CVS mandoc `term.c`. These translated modules
 carry the original ISC copyright and permission notice.
@@ -139,13 +152,4 @@ and its `presentation/field.rs` helper adapt `roff_term.c` temporary offsets
 and `term.c`/`term_ascii.c` field placement and line retirement. Their headers
 retain the applicable ISC notices; their public projection is source-neutral IR.
 The remaining `ManT` codec code uses the repository license.
-## Private lowering boundaries
-
-Definition HEAD lowering returns named output and execution outcomes rather
-than positional boolean tuples. Native list measurement shares one pure
-unit/sample helper; its reading-width approximation remains separate from the
-native `term_strlen` contract. Display paths share explicit BODY font/fill
-ledger stages, while their source-node entry, sink routing, post-once claim
-and final geometry restoration remain ordered by their existing drivers.
-No helper return or destructor implicitly executes a native scope post.
 
