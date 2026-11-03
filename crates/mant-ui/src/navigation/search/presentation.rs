@@ -1,0 +1,444 @@
+//! Grapheme-safe sidebar rows, context excerpts and match highlighting.
+use mant_render::cells::graphemes;
+use ratatui::{
+    style::Style,
+    text::{Line, Span},
+};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+};
+use unicode_width::UnicodeWidthStr;
+
+use super::super::{NavigationRow, TreePlan, bounded_tree_prefix};
+use super::{FieldHit, OutlineHit};
+use crate::{NavKind, theme};
+
+/// Match lookup is built once per frame, not once per visible row.
+pub(crate) struct OutlinePresentation<'a> {
+    matches: HashMap<usize, &'a OutlineHit>,
+    active: Option<usize>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct OutlineLabels {
+    pub(crate) selected: usize,
+    pub(crate) full: bool,
+}
+
+impl<'a> OutlinePresentation<'a> {
+    pub(crate) fn new(matches: &'a [OutlineHit], active: usize) -> Self {
+        Self {
+            matches: matches.iter().map(|hit| (hit.node_index, hit)).collect(),
+            active: matches.get(active).map(|hit| hit.node_index),
+        }
+    }
+
+    pub(crate) fn rows(
+        &self,
+        plan: &TreePlan<'_>,
+        visible: &[usize],
+        labels: OutlineLabels,
+        expanded: &HashSet<String>,
+        width: usize,
+        badges: &HashMap<String, String>,
+    ) -> Vec<NavigationRow> {
+        let ordinary = super::super::rows_with_references(
+            plan,
+            visible,
+            labels.selected,
+            expanded,
+            labels.full,
+            width,
+            badges,
+        );
+        let mut rows = Vec::new();
+        let mut previous = None;
+        for row in ordinary {
+            if let Some(hit) = self.matches.get(&row.node_index) {
+                if previous != Some(row.node_index) {
+                    rows.extend(self.hit_rows(plan, hit, labels, expanded, width, badges));
+                }
+            } else {
+                rows.push(row);
+            }
+            previous = Some(rows.last().map_or(usize::MAX, |row| row.node_index));
+        }
+        rows
+    }
+
+    fn hit_rows(
+        &self,
+        plan: &TreePlan<'_>,
+        hit: &OutlineHit,
+        labels: OutlineLabels,
+        expanded: &HashSet<String>,
+        width: usize,
+        badges: &HashMap<String, String>,
+    ) -> Vec<NavigationRow> {
+        if width == 0 {
+            return vec![NavigationRow {
+                node_index: hit.node_index,
+                line: Line::default(),
+            }];
+        }
+        let node = &plan.nodes[hit.node_index];
+        let selected = hit.node_index == labels.selected;
+        let full_labels = labels.full;
+        let prefixes = plan.prefixes(hit.node_index, selected, expanded.contains(&node.id), width);
+        let first = bounded_tree_prefix(&prefixes.first, width);
+        let continuation = bounded_tree_prefix(&prefixes.continuation, width);
+        let available = width
+            .saturating_sub(first.width().max(continuation.width()))
+            .max(1);
+        let style = theme::navigation_style(node.kind, selected);
+        let prefix_style = theme::style(if selected {
+            theme::StyleRole::TreeFocus
+        } else {
+            theme::StyleRole::TreeGuide
+        })
+        .patch(Style {
+            bg: style.bg,
+            ..Style::default()
+        });
+        let continuation_style = theme::style(if selected {
+            theme::StyleRole::TreeContinuationFocus
+        } else {
+            theme::StyleRole::TreeGuide
+        })
+        .patch(Style {
+            bg: style.bg,
+            ..Style::default()
+        });
+        let role = if self.active == Some(hit.node_index) {
+            theme::InteractionRole::SearchActive
+        } else {
+            theme::InteractionRole::SearchMatch
+        };
+        let mut runs = Vec::new();
+        let decoration = LabelDecoration {
+            label: plan.label_styles(hit.node_index, &hit.label),
+            kind: node.kind,
+            selected,
+        };
+        if selected || full_labels {
+            runs = complete_labels(
+                hit,
+                node.kind == NavKind::Reference,
+                style,
+                role,
+                decoration,
+            );
+        } else if let Some(field) = hit.fields.first() {
+            runs.push(compact_context(
+                field,
+                node.kind == NavKind::Reference,
+                available,
+                style,
+                role,
+                decoration,
+            ));
+        }
+        if let Some(badge) = badges.get(&node.id)
+            && (selected || full_labels)
+            && let Some(run) = runs.first_mut()
+        {
+            run.push((
+                format!(" {badge}"),
+                theme::navigation_reference_style(node.kind, selected),
+            ));
+        }
+        wrap_runs(
+            &runs,
+            hit.node_index,
+            &first,
+            &continuation,
+            [prefix_style, continuation_style],
+            available,
+            width,
+        )
+    }
+}
+
+fn complete_labels(
+    hit: &OutlineHit,
+    reference: bool,
+    style: Style,
+    role: theme::InteractionRole,
+    decoration: LabelDecoration<'_>,
+) -> Vec<Vec<(String, Style)>> {
+    let label_ranges = hit
+        .fields
+        .iter()
+        .find(|field| field.field.text == hit.label)
+        .map_or(&[][..], |field| field.ranges.as_slice());
+    let mut main = Vec::new();
+    if reference {
+        main.push(("↗ ".to_owned(), style));
+    }
+    main.extend(styled_graphemes(
+        &hit.label,
+        label_ranges,
+        style,
+        role,
+        0..hit.label.len(),
+        decoration,
+    ));
+    let mut runs = vec![main];
+    for field in &hit.fields {
+        if field.field.text == hit.label || covered_by_label(field, &hit.label, label_ranges) {
+            continue;
+        }
+        let mut run = vec![(
+            if field.field.target { "→ " } else { "= " }.to_owned(),
+            style,
+        )];
+        run.extend(styled_graphemes(
+            &field.field.text,
+            &field.ranges,
+            style,
+            role,
+            0..field.field.text.len(),
+            decoration.for_text(&field.field.text),
+        ));
+        runs.push(run);
+    }
+    runs
+}
+
+/// Matching sees each complete field, including its own regex assertions.
+/// Presentation alone can omit a field whose hits are already painted at the
+/// same positions in the full label; an anchored field-only hit stays visible.
+pub(super) fn covered_by_label(field: &FieldHit, label: &str, ranges: &[Range<usize>]) -> bool {
+    !field.field.target
+        && !ranges.is_empty()
+        && label
+            .match_indices(field.field.text.as_ref())
+            .any(|(offset, _)| {
+                field.ranges.iter().all(|hit| {
+                    let start = offset + hit.start;
+                    let index = ranges.partition_point(|range| range.end <= start);
+                    ranges
+                        .get(index)
+                        .is_some_and(|range| range.start <= start && offset + hit.end <= range.end)
+                })
+            })
+}
+
+fn compact_context(
+    field: &FieldHit,
+    reference: bool,
+    available: usize,
+    style: Style,
+    role: theme::InteractionRole,
+    decoration: LabelDecoration<'_>,
+) -> Vec<(String, Style)> {
+    let budget = if field.field.target || reference {
+        available.saturating_sub(2).max(1)
+    } else {
+        available
+    };
+    let range = context_range(&field.field.text, &field.ranges[0], budget);
+    // On very deep/narrow rows, drop decorative context markers before a
+    // real hit. A compact result must not turn into several marker-only rows.
+    let content_width = field.field.text[range.clone()].width().min(available);
+    let mut leading = range.start != 0;
+    let mut trailing = range.end != field.field.text.len();
+    let mut prefix = field.field.target || reference;
+    if content_width + usize::from(leading) + usize::from(trailing) + usize::from(prefix) * 2
+        > available
+    {
+        trailing = false;
+    }
+    if content_width + usize::from(leading) + usize::from(prefix) * 2 > available {
+        leading = false;
+    }
+    if content_width + usize::from(prefix) * 2 > available {
+        prefix = false;
+    }
+    let mut run = Vec::new();
+    if prefix && field.field.target {
+        run.push(("→ ".to_owned(), style));
+    } else if prefix && reference {
+        run.push(("↗ ".to_owned(), style));
+    }
+    if leading {
+        run.push(("…".to_owned(), style));
+    }
+    run.extend(styled_graphemes(
+        &field.field.text,
+        &field.ranges,
+        style,
+        role,
+        range.clone(),
+        decoration.for_text(&field.field.text),
+    ));
+    if trailing {
+        run.push(("…".to_owned(), style));
+    }
+    run
+}
+
+fn context_range(text: &str, hit: &Range<usize>, width: usize) -> Range<usize> {
+    let glyphs = graphemes(text).collect::<Vec<_>>();
+    let mut bytes = 0;
+    let mut start = 0;
+    for (index, glyph) in glyphs.iter().enumerate() {
+        if bytes + glyph.text().len() > hit.start {
+            start = index;
+            break;
+        }
+        bytes += glyph.text().len();
+    }
+    let mut before = width.saturating_sub(2) / 3;
+    while start > 0 && glyphs[start - 1].columns() <= before {
+        start -= 1;
+        before -= glyphs[start].columns();
+    }
+    let start_byte = glyphs[..start].iter().map(|glyph| glyph.text().len()).sum();
+    let mut end = start_byte;
+    let mut columns = 0;
+    for glyph in &glyphs[start..] {
+        if columns + glyph.columns() > width.saturating_sub(2).max(1) {
+            break;
+        }
+        columns += glyph.columns();
+        end += glyph.text().len();
+    }
+    // A too-wide grapheme is replaced as a whole by the row wrapper.
+    if end == start_byte && start < glyphs.len() {
+        end += glyphs[start].text().len();
+    }
+    start_byte..end
+}
+
+fn styled_graphemes(
+    text: &str,
+    ranges: &[Range<usize>],
+    style: Style,
+    role: theme::InteractionRole,
+    slice: Range<usize>,
+    decoration: LabelDecoration<'_>,
+) -> Vec<(String, Style)> {
+    let mut byte = slice.start;
+    let mut range_index = ranges.partition_point(|range| range.end <= byte);
+    graphemes(&text[slice])
+        .map(|glyph| {
+            let end = byte + glyph.text().len();
+            while ranges
+                .get(range_index)
+                .is_some_and(|range| range.end <= byte)
+            {
+                range_index += 1;
+            }
+            let matched = ranges
+                .get(range_index)
+                .is_some_and(|range| range.start < end && range.end > byte);
+            let style = decoration.style_at(byte, style);
+            byte = end;
+            (
+                glyph.text().to_owned(),
+                if matched {
+                    theme::interact(style, role)
+                } else {
+                    style
+                },
+            )
+        })
+        .collect()
+}
+
+#[derive(Clone, Copy)]
+struct LabelDecoration<'a> {
+    label: Option<&'a crate::entry::LabelStyles>,
+    kind: NavKind,
+    selected: bool,
+}
+
+impl LabelDecoration<'_> {
+    fn for_text(self, text: &str) -> Self {
+        Self {
+            label: self.label.filter(|label| label.text == text),
+            ..self
+        }
+    }
+
+    fn style_at(self, byte: usize, base: Style) -> Style {
+        self.label
+            .and_then(|label| label.role_at(byte))
+            .map_or(base, |role| {
+                let style = theme::navigation_style(self.kind, false).patch(theme::style(role));
+                theme::DEFAULT_THEME.navigation_overlay(style, self.kind, self.selected)
+            })
+    }
+}
+
+fn wrap_runs(
+    runs: &[Vec<(String, Style)>],
+    node_index: usize,
+    first: &str,
+    continuation: &str,
+    prefix_styles: [Style; 2],
+    available: usize,
+    width: usize,
+) -> Vec<NavigationRow> {
+    let mut rows = Vec::new();
+    for run in runs {
+        let mut spans = vec![Span::styled(
+            if rows.is_empty() {
+                first.to_owned()
+            } else {
+                continuation.to_owned()
+            },
+            if rows.is_empty() {
+                prefix_styles[0]
+            } else {
+                prefix_styles[1]
+            },
+        )];
+        let mut used = 0;
+        for (text, style) in run {
+            for glyph in graphemes(text) {
+                let columns = glyph.columns().min(available);
+                if used + columns > available && used != 0 {
+                    rows.push(NavigationRow {
+                        node_index,
+                        line: Line::from(std::mem::take(&mut spans)),
+                    });
+                    spans.push(Span::styled(continuation.to_owned(), prefix_styles[1]));
+                    used = 0;
+                }
+                let text = if glyph.columns() > available {
+                    "�"
+                } else {
+                    glyph.text()
+                };
+                // Keep same-style clusters in one span: Ratatui must not
+                // re-segment a combining character independently of its base.
+                let has_text = spans.len() > 1;
+                if let Some(last) = spans.last_mut()
+                    && last.style == *style
+                    && has_text
+                {
+                    last.content.to_mut().push_str(text);
+                } else {
+                    spans.push(Span::styled(text.to_owned(), *style));
+                }
+                used += columns;
+            }
+        }
+        let padding = width.saturating_sub(spans.iter().map(Span::width).sum::<usize>());
+        spans.push(Span::styled(
+            " ".repeat(padding),
+            Style {
+                bg: prefix_styles[0].bg,
+                ..Style::default()
+            },
+        ));
+        rows.push(NavigationRow {
+            node_index,
+            line: Line::from(spans),
+        });
+    }
+    rows
+}
