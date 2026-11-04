@@ -1,0 +1,260 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Four complete, unchanged real manuals selected from the original 1000-page audit; selected fragments only, not whole-page equivalence.",
+  "originalManifestSha256": "d28f392f8b45a2ee80772310ce9f20173c6326585d05073f875d01483c774187",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "file": "arch-tmux.1.gz",
+      "auditNumber": 6,
+      "sourceIdentity": "local-arch-current:man1/tmux.1.gz",
+      "sourceSha256": "573571f995860eb240a6092c7739f5e7c9781c657493097e1beafca6c8a1c64b",
+      "fixtureSha256": "bf2c3b3f4f3dcb04cb43d1035e7b8339093d21352eb7000fd621a72c7ea28804",
+      "sourceBytes": 228058,
+      "fixtureBytes": 61740,
+      "retrievedFromRetainedCorpusOn": "2026-11-04",
+      "originalAuditDate": "2026-11-03",
+      "originUrl": "https://archive.archlinux.org/packages/t/tmux/tmux-3.8-1-x86_64.pkg.tar.zst",
+      "sourceRepository": "https://github.com/tmux/tmux",
+      "revision": "tmux 3.8; embedded OpenBSD tmux.1 revision 1.1173 (2026-09-23)",
+      "archive": "tmux-3.8-1-x86_64.pkg.tar.zst",
+      "archiveMember": "usr/share/man/man1/tmux.1.gz",
+      "archiveSha256": "458fb70e06289bb30e90da74f4724ee87dd92ea7dd6a0bdbf4c7c6adcec75a02",
+      "license": "ISC (complete manual notice retained)",
+      "licenseFile": "../LICENSES/TMUX-MANUAL-ISC.txt",
+      "transformation": "None; original gzip package member.",
+      "selectionReason": "Confirmed old Xo opening-parenthesis loss in the -C description; retains a local link and semantic option owner.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "c00104a2d33b5b88339dd8a9f2c831ec7a97a5e10ebb9c3ef88ec791db4bc5ef",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 296450,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "5f61c65796506111ba1a31d35562abf2a6aee55d8f9b46e68f79c7484fcb6bd9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 298440,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "935892098fe53e0027b4ed4283796515c1edcd4afb1a35de8ef718434d70c8ff",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 460391,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "abb9f5f15647e02d558cf32679a881c2e1cf5e0905120439d1d858d755d8a3b9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1085210,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "b73ef175cbe9838b0fb16bf478ea82e675eb42b1acd99ed7b7da751dc0650a6d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1282,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "openbsd-date.1",
+      "auditNumber": 221,
+      "sourceIdentity": "openbsd-7.9-amd64:man/man1/date.1",
+      "sourceSha256": "da6857fda8a7b1f9b6098f1503085b2c1a9d8800b3c0433bae49a5d2986c80cd",
+      "fixtureSha256": "da6857fda8a7b1f9b6098f1503085b2c1a9d8800b3c0433bae49a5d2986c80cd",
+      "sourceBytes": 6407,
+      "fixtureBytes": 6407,
+      "retrievedFromRetainedCorpusOn": "2026-11-04",
+      "originalAuditDate": "2026-11-03",
+      "originUrl": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/man79.tgz",
+      "sourceRepository": "https://cvsweb.openbsd.org/src/bin/date/date.1",
+      "revision": "OpenBSD 7.9; date.1 revision 1.72 (2021-04-29)",
+      "archive": "man79.tgz",
+      "archiveMember": "./usr/share/man/man1/date.1",
+      "archiveSha256": "7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af",
+      "license": "BSD-3-Clause",
+      "licenseFile": "../LICENSES/BSD-3-Clause.txt",
+      "transformation": "None; exact uncompressed tar member.",
+      "selectionReason": "Affected Sm/Ns and nested enclosure synopsis control; no confirmed old failure for this source.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "e3bc7d59f704d66be6ca0ebf48a8f0b5901074cb511e9c3f25bb2e57781c791a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 5365,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "f78b2e14aed200ce3bee74ac455cf5f509a0278a23fce1be667b4ee12a5d741a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 5422,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "86528efa0ced671eb01d1174b2e7062666f71b59804f2a32f6340c50114bb31e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 12163,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "8a227f9a6e0b4065c5f8acd27f457f4821b26a695271fed93b6d14b8a33eeae9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 20682,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "62d76437885edaf523f1399002640a6b22337c1e65e8bb0375479121814773b3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 493,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "dragonfly-regex.3.gz",
+      "auditNumber": 840,
+      "sourceIdentity": "dragonflybsd-6.4.2-x86_64:man/man3/regex.3.gz",
+      "sourceSha256": "e2a82c06d71a54a27cbd6e125786e8fbcf437d38a9b75a3fdf2417a4d9b4cf06",
+      "fixtureSha256": "6cb82a634932ea0f3d21c83fbe09c7e930eb3582b00becb4b2323ab1ed325e5c",
+      "sourceBytes": 22795,
+      "fixtureBytes": 7808,
+      "retrievedFromRetainedCorpusOn": "2026-11-04",
+      "originalAuditDate": "2026-11-03",
+      "originUrl": "https://avalon.dragonflybsd.org/iso-images/dfly-x86_64-6.4.2_REL.iso.bz2",
+      "sourceRepository": "https://gitweb.dragonflybsd.org/dragonfly.git",
+      "revision": "DragonFly BSD 6.4.2 release; embedded regex.3 date May 5, 2019",
+      "archive": "dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archiveMember": "usr/share/man/man3/regex.3.gz",
+      "archiveSha256": "373150a21eeb7ce0f20c7faf1b8129145bf3bf0463a45d0dc18aad274f7ed661",
+      "license": "BSD-3-Clause",
+      "licenseFile": "../LICENSES/BSD-3-Clause.txt",
+      "transformation": "None; original gzip ISO member.",
+      "selectionReason": "Real Fo/Fa prototype coverage and the old observed enclosure-prefix loss family.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "d86f544b1c514b3a88cf339f5dc637fd8a64ce124b95072d7efd3e2b2916b3b0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 26816,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "563e492367bd5d9fd79bebdbc18e131de2b65714c9b267b10cf813abde023c7e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 27091,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "eb7aacb2510111afb0cf6268d6fe465c61c362ff0ace4b03a93703bb2ce5795f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 40191,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "ce0fefc4798dd7e57541c870b8100dffe0e3cf82ed5d8fba5026b82ec2dfa0cf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 67216,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "448e346999c81590be7b6eb3cc4f72306cc6bd0b7d068c3a68c197a85096aa62",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 178,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "illumos-ksh93.1",
+      "auditNumber": 885,
+      "sourceIdentity": "illumos-gate-e8f5c080:man/man1/ksh93.1",
+      "sourceSha256": "65c02f17ab03acc8d821d917c50ce22c967616d5783dec58bb1fcc28e3184ed8",
+      "fixtureSha256": "65c02f17ab03acc8d821d917c50ce22c967616d5783dec58bb1fcc28e3184ed8",
+      "sourceBytes": 174519,
+      "fixtureBytes": 174519,
+      "retrievedFromRetainedCorpusOn": "2026-11-04",
+      "originalAuditDate": "2026-11-03",
+      "originUrl": "https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man1/ksh93.1",
+      "sourceRepository": "https://github.com/illumos/illumos-gate.git",
+      "revision": "e8f5c080cc0b7997410d860afd787df30ba1cf2d",
+      "archive": null,
+      "archiveMember": "usr/src/man/man1/ksh93.1",
+      "archiveSha256": null,
+      "license": "EPL-1.0",
+      "licenseFile": "../LICENSES/EPL-1.0.txt",
+      "transformation": "None; exact complete repository file.",
+      "selectionReason": "Confirmed old Markdown style delimiters added visible ** around arithmetic substitution.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "b194fd7f692b0e56f515a284a3b0f4c7e5534b48dbabfe84ed697d465b6f06b1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 213750,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "105d3f8c47f7a198ecc1bbeee5a502808f54f56ee83b5a2519acde55dc46dc18",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 213824,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "1b46e4eeaff62e997c824c986e127472b9ca706b29858b99baec491f693b374d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 308148,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "47b5894a0b8da8b1a73c35321cb4d9d4ee7e8ccf565c33154788d7bc2deafafe",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 769938,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "cf7657046f3e9404d83169bf53bde2b769c59cc849e973cf22a3b70275f03e12",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1879,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    }
+  ]
+}

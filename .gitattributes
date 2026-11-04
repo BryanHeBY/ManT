@@ -27,3 +27,4 @@ crates/libmandoc-rs/LICENSES/** text eol=lf
 *.zip binary
 *.png binary
 *.woff2 binary
+tests/fixtures/roff/real/source-adjacency/*.1 text eol=lf

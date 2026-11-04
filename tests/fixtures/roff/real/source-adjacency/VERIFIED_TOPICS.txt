@@ -1,0 +1,15 @@
+# Four complete C-locale manuals from four source snapshots, parsed through
+# ManT's bundled libmandoc on 2026-11-04. Verified means no parser failure;
+# selected semantic regression assertions live in real_source_adjacency.rs.
+# Arch Linux tmux 3.8-1
+# section 1: 1 page
+tmux 1
+# OpenBSD 7.9 base manuals
+# section 1: 1 page
+date 1
+# DragonFly BSD 6.4.2 base manuals
+# section 3: 1 page
+regex 3
+# illumos-gate e8f5c080cc0b7997410d860afd787df30ba1cf2d
+# section 1: 1 page
+ksh93 1

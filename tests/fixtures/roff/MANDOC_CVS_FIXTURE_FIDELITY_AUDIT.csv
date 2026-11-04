@@ -3,3 +3,7 @@ mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/a
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/archlinux/scanf.3.gz,3,07cbc46be4fd3150bcc3322d3cf1d1db217935e7406b44237880c5f54176a09d,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/archlinux/sort.1p.gz,1p,32493b693fb79c6637150b465eb262dad4e09e827810b897641d7c2bc7007e5c,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/literal-definition-gap.1,1,003a34d49eb1d8f6e5f5943c04157d2239db1fd46b101c3236ab5203757efae3,clean,not-required,
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/source-adjacency/arch-tmux.1.gz,1,573571f995860eb240a6092c7739f5e7c9781c657493097e1beafca6c8a1c64b,clean,not-required,
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/source-adjacency/dragonfly-regex.3.gz,3,e2a82c06d71a54a27cbd6e125786e8fbcf437d38a9b75a3fdf2417a4d9b4cf06,clean,not-required,
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/source-adjacency/illumos-ksh93.1,1,65c02f17ab03acc8d821d917c50ce22c967616d5783dec58bb1fcc28e3184ed8,clean,not-required,
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/source-adjacency/openbsd-date.1,1,da6857fda8a7b1f9b6098f1503085b2c1a9d8800b3c0433bae49a5d2986c80cd,clean,not-required,
