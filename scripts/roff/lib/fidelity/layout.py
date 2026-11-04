@@ -24,7 +24,6 @@ class LayoutProfile:
     indent_levels: list[int]
 
 
-
 @dataclass
 class LayoutComparison:
     reference: LayoutProfile

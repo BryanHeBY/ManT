@@ -76,6 +76,8 @@ run "test bounded native dependency mirror fallback" \
 run "test paired measurement scopes and statistics" \
   python3 -m unittest scripts.dev.performance.tests
 run "check roff fidelity audit" python3 -m scripts.roff.audit.audit_roff_fidelity --self-check
+run "test fidelity source-reader orchestration" \
+  python3 -m unittest scripts.roff.tests.test_audit_roff_fidelity
 run "test bidirectional roff content comparison" python3 -m scripts.roff.lib.roff_content_compare
 run "test source-bound presentation explanations" python3 -m scripts.roff.tests.test_roff_content_explanations
 run "test source-bound roff layout geometry" python3 -m scripts.roff.tests.test_roff_layout_geometry

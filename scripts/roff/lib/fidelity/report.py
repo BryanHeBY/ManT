@@ -7,7 +7,8 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Sequence
-from .model import AuditArtifact, AuditSummary, Finding
+from .model import AuditArtifact, AuditRecord, AuditSummary, Finding, SyntaxProfile
+from .sampling import feature_counts
 
 def print_finding(finding: Finding, show: int) -> None:
     badge = {
@@ -139,4 +140,95 @@ def write_review_bundle(
     (directory / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
+    )
+
+
+def write_syntax_report(
+    path: Path,
+    roots: Sequence[Path],
+    corpus: str,
+    all_pages: Sequence[Path],
+    recorded_pages: set[Path],
+    cross_corpus_pages: dict[Path, AuditRecord],
+    selected_pages: Sequence[Path],
+    page_records: dict[Path, tuple[str, str | None]],
+    profiles: dict[Path, SyntaxProfile],
+) -> None:
+    corpus_counts = feature_counts(all_pages, profiles)
+    covered_pages = recorded_pages | set(cross_corpus_pages)
+    recorded_counts = feature_counts(covered_pages, profiles)
+    selected_counts = feature_counts(selected_pages, profiles)
+    examples: dict[str, list[str]] = {}
+    for page in all_pages:
+        label, _ = page_records[page]
+        for feature in profiles[page].features:
+            values = examples.setdefault(feature, [])
+            if len(values) < 3:
+                values.append(label)
+    features = [
+        {
+            "feature": feature,
+            "corpusPages": corpus_counts[feature],
+            "recordedPages": recorded_counts[feature],
+            "selectedPages": selected_counts[feature],
+            "examples": examples.get(feature, []),
+        }
+        for feature in sorted(corpus_counts)
+    ]
+    errors = [
+        {
+            "path": page_records[page][0],
+            "error": profiles[page].error,
+        }
+        for page in all_pages
+        if profiles[page].error is not None
+    ]
+    unique_sources = {
+        digest for _, digest in page_records.values() if digest is not None
+    }
+    payload = {
+        "tool": "mant-roff-syntax-coverage/v2",
+        "corpus": corpus,
+        "roots": [str(root) for root in roots],
+        "summary": {
+            "corpusPages": len(all_pages),
+            "uniqueSources": len(unique_sources),
+            "recordedPages": len(recorded_pages),
+            "reusedCrossCorpusPages": len(cross_corpus_pages),
+            "coveredPages": len(covered_pages),
+            "selectedPages": len(selected_pages),
+            "features": len(corpus_counts),
+            "recordedFeatures": sum(
+                1 for feature in corpus_counts if recorded_counts[feature]
+            ),
+            "selectedNewFeatures": sum(
+                1
+                for feature in corpus_counts
+                if not recorded_counts[feature] and selected_counts[feature]
+            ),
+            "uncoveredFeaturesAfterSelection": sum(
+                1
+                for feature in corpus_counts
+                if not recorded_counts[feature] and not selected_counts[feature]
+            ),
+            "profileErrors": len(errors),
+        },
+        "reusedCrossCorpusSources": [
+            {
+                "path": page_records[page][0],
+                "fromCorpus": record.corpus,
+                "fromPath": record.path,
+            }
+            for page, record in sorted(
+                cross_corpus_pages.items(),
+                key=lambda item: page_records[item[0]][0],
+            )
+        ],
+        "selectedPaths": [page_records[page][0] for page in selected_pages],
+        "features": features,
+        "errors": errors,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )

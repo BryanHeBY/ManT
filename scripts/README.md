@@ -23,9 +23,17 @@ The fidelity command remains `roff/audit/audit_roff_fidelity.py`. Its helpers
 live in `roff/lib/fidelity`: `text` owns source-conditioned token/phrase
 comparison, `layout` owns hard-row observations, `model` owns result records,
 `arguments` owns CLI defaults and validation, and `report` owns explicit report
-and evidence-bundle output. Pure comparison modules do not import the driver
-or execute renderers. Tests import the helper that owns their behavior; report
-schemas, fixture bytes and historical audit ledgers do not change with moves.
+and evidence-bundle output. `sources` owns exact source selection and approved
+manual hierarchies, `syntax` owns profiler transport and versioned caches,
+`sampling` owns seeded coverage selection, and `ledger` owns source-bound review
+records. The driver coordinates these helpers and retains its importable
+helper names for combined audit callers; `self_check` holds deterministic
+helper checks. The page coordinator passes its source reader explicitly to
+reference preparation, so hierarchy selection and redirected reference input
+use the same injected source boundary. Pure comparison modules do not import
+the driver or execute renderers. Tests import the helper that owns their
+behavior; report schemas, fixture bytes and historical audit ledgers do not
+change with moves.
 
 Shell and PowerShell tools keep their platform conventions. Python files use
 importable module names and run through `-m`, without installation or third-party
