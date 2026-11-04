@@ -37,6 +37,8 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Keep Unicode edge whitespace outside Markdown emphasis delimiters without
+  dropping the inner text's representable style or changing its scalars.
 - Validate nested Markdown delimiters against accepted child semantics before
   adding an outer wrapper. Keep text, code, links, hard rows and available
   styles stable through repeated parser readback without self-validating a

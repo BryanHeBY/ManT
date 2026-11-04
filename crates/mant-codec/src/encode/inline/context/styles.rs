@@ -123,7 +123,7 @@ fn append_choice(output: &mut String, piece: &InlinePiece<'_>, choice: usize) {
         return;
     };
     let core = core(piece);
-    let start = piece.rendered.len() - piece.rendered.trim_start_matches([' ', '\t', '\n']).len();
+    let start = piece.rendered.len() - piece.rendered.trim_start_matches(char::is_whitespace).len();
     let end = start + core.len();
     output.push_str(&piece.rendered[..start]);
     output.push_str(marker);
@@ -159,7 +159,7 @@ fn marker(piece: &InlinePiece<'_>, choice: usize) -> Option<&'static str> {
 }
 
 fn core<'a>(piece: &'a InlinePiece<'_>) -> &'a str {
-    piece.rendered.trim_matches([' ', '\t', '\n'])
+    piece.rendered.trim_matches(char::is_whitespace)
 }
 
 fn is_preferred(piece: &InlinePiece<'_>, choice: usize) -> bool {
@@ -180,7 +180,7 @@ fn edge(piece: &InlinePiece<'_>, choice: usize, first: bool) -> Option<char> {
     } else {
         piece.rendered.chars().next_back()
     };
-    if !character.is_some_and(|character| matches!(character, ' ' | '\t' | '\n'))
+    if !character.is_some_and(char::is_whitespace)
         && let Some(marker) = marker(piece, choice)
     {
         marker.chars().next()
@@ -198,12 +198,12 @@ fn choice_is_valid(
     let Some(marker) = marker(piece, choice) else {
         return true;
     };
-    let before = if piece.rendered.starts_with([' ', '\t', '\n']) {
+    let before = if piece.rendered.starts_with(char::is_whitespace) {
         None
     } else {
         preceding.and_then(|(piece, choice)| edge(piece, choice, false))
     };
-    let after = if piece.rendered.ends_with([' ', '\t', '\n']) {
+    let after = if piece.rendered.ends_with(char::is_whitespace) {
         None
     } else {
         following.and_then(|(piece, choice)| edge(piece, choice, true))

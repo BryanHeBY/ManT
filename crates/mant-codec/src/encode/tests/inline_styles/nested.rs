@@ -175,6 +175,46 @@ fn conservative_intraword_style_loss_has_an_explicit_projection() {
 }
 
 #[test]
+fn unicode_edge_whitespace_keeps_exact_scalars_and_the_representable_inner_style() {
+    // pulldown-cmark firstpass::delim_run_can_open/close uses Unicode
+    // is_whitespace, so raw edge NBSP/other Zs cannot be inside an emphasis
+    // delimiter. Only those two outer style bits are unrepresentable: HEAD,
+    // protected code padding, link identity and nested styles remain exact.
+    for whitespace in ['\u{a0}', '\u{2003}', '\u{202f}', '\u{3000}'] {
+        for strong in [false, true] {
+            for adjacent in [false, true] {
+                let edge = whitespace.to_string();
+                let mut nodes = vec![styled(
+                    strong,
+                    vec![
+                        text(&edge),
+                        text("HEAD"),
+                        Inline::Code {
+                            value: format!(" {whitespace}a{whitespace} "),
+                        },
+                        link(vec![styled(!strong, vec![text("label")])], "original label"),
+                        text(&edge),
+                    ],
+                )];
+                if adjacent {
+                    nodes.insert(0, text("LEFT"));
+                    nodes.push(text("RIGHT"));
+                }
+                let mut expected = meaning(&nodes);
+                let first = if adjacent { 4 } else { 0 };
+                let last = expected.scalars.len() - 1 - if adjacent { 5 } else { 0 };
+                let bit = if strong { 1 } else { 2 };
+                assert_eq!(expected.scalars[first].character, whitespace);
+                assert_eq!(expected.scalars[last].character, whitespace);
+                expected.scalars[first].styles &= !bit;
+                expected.scalars[last].styles &= !bit;
+                assert_eq!(two_rounds(&nodes), expected);
+            }
+        }
+    }
+}
+
+#[test]
 fn nested_and_adjacent_source_ir_keeps_scalars_code_and_link_coverage() {
     // 144 bounded cases: outer/inner Strong or Emphasis, three leaf kinds,
     // three paired Unicode/marker spellings, base style depths 3/5 and

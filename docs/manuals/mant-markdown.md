@@ -56,6 +56,10 @@ List tightness follows the parser's direct item structure: a loose nested list d
 
 Strong and emphasis spans may nest to depth 64. Deeper spans remain visible with an unsupported diagnostic.
 
+Export keeps Unicode whitespace at the edges of a styled span outside its
+Markdown delimiters, following CommonMark's whitespace rules. The exact
+whitespace scalars remain; representable inner text retains its style.
+
 Export checks a nested style wrapper against the already accepted child
 meaning before choosing its delimiters, then checks the complete phrasing
 sequence. Text, code identity, individual link targets and coverage, styles

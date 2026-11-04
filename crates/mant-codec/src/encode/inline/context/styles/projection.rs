@@ -75,11 +75,12 @@ impl Projection {
     }
 
     fn with_style(self, source: &str, style: Style) -> Self {
-        // The encoder moves only raw ASCII edge whitespace outside this
-        // wrapper. Its visible byte lengths are unchanged by Markdown; code
-        // padding and escaped whitespace inside the accepted body stay styled.
-        let leading = source.len() - source.trim_start_matches([' ', '\t', '\n']).len();
-        let trailing = source.len() - source.trim_end_matches([' ', '\t', '\n']).len();
+        // CommonMark flanking uses Unicode whitespace. Raw edge whitespace
+        // cannot carry this outer style, but its exact scalars survive outside
+        // the wrapper. Code padding and escaped whitespace inside the accepted
+        // child remain independent and retain their original style/code bits.
+        let leading = source.len() - source.trim_start_matches(char::is_whitespace).len();
+        let trailing = source.len() - source.trim_end_matches(char::is_whitespace).len();
         let end = self.bytes.saturating_sub(trailing);
         let mut output = Self {
             html: self.html,
