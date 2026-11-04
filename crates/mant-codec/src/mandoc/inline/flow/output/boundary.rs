@@ -309,7 +309,7 @@ impl InlineBuilder {
                 .as_ref()
                 .and_then(|state| state.field_word_anchors.last())
         } else {
-            self.execution.flush_unit_anchors.last()
+            self.execution.plain_input.anchors.last()
         }
         .map(|anchor| anchor.owner.clone());
         if word
@@ -443,7 +443,7 @@ impl InlineBuilder {
                 .as_mut()
                 .and_then(|field| field.field_word_anchors.last_mut())
         } else {
-            self.execution.flush_unit_anchors.last_mut()
+            self.execution.plain_input.anchors.last_mut()
         };
         if let Some(anchor) = anchor {
             anchor.projected_field_prefix = true;

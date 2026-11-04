@@ -50,7 +50,7 @@ fn plain_tail_outcomes_distinguish_acceptance_blanks_and_rejection() {
                     page_origin_printed: true,
                 });
             }
-            builder.execution.flush_unit.apply_writes(&writes);
+            builder.execution.plain_input.buffer.apply_writes(&writes);
             let outcome = builder.retire_plain_flush_unit_with_tail();
             assert_eq!(outcome.rejected(), rejected);
             assert_eq!(outcome.closes_unprinted_row(), unprinted && !inherited);
@@ -69,7 +69,8 @@ fn only_a_real_plain_close_commits_its_unprinted_tail_once() {
         let mut projected = InlineBuilder::new();
         projected
             .execution
-            .flush_unit
+            .plain_input
+            .buffer
             .apply_writes(&[FieldWrite::Cell(cell.clone())]);
         let (_, _, rows, _) = projected.take_paragraph_segment(false);
         assert_eq!(rows, 0);
@@ -80,7 +81,8 @@ fn only_a_real_plain_close_commits_its_unprinted_tail_once() {
         let mut requested = InlineBuilder::new();
         requested
             .execution
-            .flush_unit
+            .plain_input
+            .buffer
             .apply_writes(&[FieldWrite::Cell(cell.clone())]);
         let (_, _, rows, _) = requested.take_paragraph_segment(true);
         assert_eq!(rows, 1);
@@ -90,7 +92,8 @@ fn only_a_real_plain_close_commits_its_unprinted_tail_once() {
         let mut consumed = InlineBuilder::new();
         consumed
             .execution
-            .flush_unit
+            .plain_input
+            .buffer
             .apply_writes(&[FieldWrite::Cell(cell)]);
         consumed.execute_native_newline();
         assert_eq!(consumed.execution.completed_vertical_rows, 1);
@@ -115,7 +118,8 @@ fn a_requested_plain_tail_clears_backafter_only_when_it_flushed_cells() {
             if buffered {
                 builder
                     .execution
-                    .flush_unit
+                    .plain_input
+                    .buffer
                     .apply_writes(&[FieldWrite::Cell(FieldCell::ZeroWidthGraph)]);
             }
             let (_, _, rows, _) = builder.take_paragraph_segment(line_request);
@@ -148,7 +152,8 @@ fn represented_plain_tails_notify_the_existing_owner_only_at_a_real_close() {
                 builder.execution.formatter_column = super::super::FormatterColumn::Advanced;
                 builder
                     .execution
-                    .flush_unit
+                    .plain_input
+                    .buffer
                     .apply_writes(&[FieldWrite::Cell(if blank {
                         FieldCell::BreakableBlank
                     } else {

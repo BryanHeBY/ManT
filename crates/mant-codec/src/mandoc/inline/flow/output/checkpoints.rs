@@ -70,7 +70,7 @@ impl InlineBuilder {
                 position.set(index);
             }
         }
-        edit.remap(&mut self.execution.flush_unit_output_start);
+        edit.remap(&mut self.execution.plain_input.output_start);
         if let Some(author) = &mut self.execution.author_execution {
             edit.remap(&mut author.field_output_start);
         }
@@ -151,7 +151,7 @@ impl super::super::InlineExecutionState {
         &mut self,
         edits: &row_origins::OutputNodeEdits,
     ) {
-        edits.remap(&mut self.flush_unit_output_start);
+        edits.remap(&mut self.plain_input.output_start);
         if let Some(author) = &mut self.author_execution {
             edits.remap(&mut author.field_output_start);
         }

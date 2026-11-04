@@ -342,9 +342,10 @@ impl InlineExecutionState {
         // inspects lastcol. Pending BACKBEFORE/BACKAFTER stays in the same
         // execution state until that real flush consumes it.
         if self.definition.is_none() {
+            let (field_buffer, field_word_anchors) = self.plain_input.take_input();
             self.definition = Some(DefinitionFieldState {
-                field_buffer: std::mem::take(&mut self.flush_unit),
-                field_word_anchors: std::mem::take(&mut self.flush_unit_anchors),
+                field_buffer,
+                field_word_anchors,
                 ..DefinitionFieldState::default()
             });
             if !self
@@ -355,7 +356,7 @@ impl InlineExecutionState {
                 .is_empty()
                 && let Some(author) = &mut self.author_execution
             {
-                author.field_output_start = self.flush_unit_output_start;
+                author.field_output_start = self.plain_input.output_start;
             }
             // Authorless sessions retire this same range through
             // take_plain_flush_unit(); keep its cursor until a real owner
@@ -470,15 +471,20 @@ mod buffer_handoff_tests {
     fn buffer_owner(builder: &mut InlineBuilder) {
         builder
             .execution
-            .flush_unit
+            .plain_input
+            .buffer
             .apply_writes(&FieldWrite::literal("LIVE"));
-        builder.execution.flush_unit_anchors.push(NativeWordAnchor {
-            start: 0,
-            content: 0,
-            owner: "source-owner".into(),
-            projected_device_padding: 0,
-            projected_field_prefix: false,
-        });
+        builder
+            .execution
+            .plain_input
+            .anchors
+            .push(NativeWordAnchor {
+                start: 0,
+                content: 0,
+                owner: "source-owner".into(),
+                projected_device_padding: 0,
+                projected_field_prefix: false,
+            });
     }
 
     #[test]
@@ -492,11 +498,12 @@ mod buffer_handoff_tests {
                 .as_mut()
                 .unwrap()
                 .field_output_start = 3;
-            builder.execution.flush_unit_output_start = 2;
+            builder.execution.plain_input.output_start = 2;
             if cells {
                 builder
                     .execution
-                    .flush_unit
+                    .plain_input
+                    .buffer
                     .apply_writes(&[FieldWrite::Cell(FieldCell::TabReference)]);
             }
             builder.begin_definition_head_consumption();
@@ -508,7 +515,7 @@ mod buffer_handoff_tests {
                     .field_output_start,
                 3
             );
-            assert_eq!(builder.execution.flush_unit_output_start, 2);
+            assert_eq!(builder.execution.plain_input.output_start, 2);
         }
         let mut builder = InlineBuilder::new();
         builder.inherit_author_execution(AuthorFlow::Automatic, false);
@@ -518,7 +525,7 @@ mod buffer_handoff_tests {
             .as_mut()
             .unwrap()
             .field_output_start = 3;
-        builder.execution.flush_unit_output_start = 2;
+        builder.execution.plain_input.output_start = 2;
         buffer_owner(&mut builder);
         builder.inherit_zero_advance_armed(true);
         builder.begin_definition_head_consumption();
@@ -533,7 +540,7 @@ mod buffer_handoff_tests {
         let state = builder.execution.definition.as_ref().unwrap();
         assert_eq!(state.field_buffer.cells().len(), 4);
         assert_eq!(state.field_word_anchors[0].owner, "source-owner");
-        assert!(builder.execution.flush_unit.is_empty());
+        assert!(builder.execution.plain_input.buffer.is_empty());
         assert!(builder.take_zero_advance_armed());
     }
 
@@ -546,10 +553,10 @@ mod buffer_handoff_tests {
             };
             4
         ];
-        builder.execution.flush_unit_output_start = 2;
+        builder.execution.plain_input.output_start = 2;
         buffer_owner(&mut builder);
         builder.begin_definition_head_consumption();
-        assert_eq!(builder.execution.flush_unit_output_start, 2);
+        assert_eq!(builder.execution.plain_input.output_start, 2);
         builder.inherit_author_execution(AuthorFlow::Automatic, false);
         assert_eq!(
             builder

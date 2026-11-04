@@ -148,7 +148,7 @@ impl InlineBuilder {
                 .definition
                 .as_ref()
                 .is_some_and(|state| !state.field_buffer.is_empty())
-            || !self.execution.flush_unit.is_empty();
+            || !self.execution.plain_input.buffer.is_empty();
         if occupied {
             self.execute_native_newline_with_origin(origin);
             return;
@@ -340,7 +340,7 @@ impl InlineBuilder {
         {
             let (cells, viscol) = self.execution.definition.as_ref().map_or(
                 (
-                    self.execution.flush_unit.cells().len(),
+                    self.execution.plain_input.buffer.cells().len(),
                     self.execution
                         .detached_device_row
                         .map_or(0, |row| row.viscol),
@@ -518,8 +518,12 @@ impl InlineBuilder {
                 .is_some_and(|state| state.field_buffer.pending_pass_is_graphless());
         }
         !self.execution.no_fill_word_active
-            && !self.execution.flush_unit.is_empty()
-            && self.execution.flush_unit.pending_pass_is_graphless()
+            && !self.execution.plain_input.buffer.is_empty()
+            && self
+                .execution
+                .plain_input
+                .buffer
+                .pending_pass_is_graphless()
     }
 }
 

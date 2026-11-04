@@ -70,7 +70,8 @@ impl InlineBuilder {
         let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
             state.field_buffer.resume_offset() < state.field_buffer.cells().len()
         }) || (self.execution.definition.is_none()
-            && self.execution.flush_unit.resume_offset() < self.execution.flush_unit.cells().len());
+            && self.execution.plain_input.buffer.resume_offset()
+                < self.execution.plain_input.buffer.cells().len());
         let unprinted_field_tail = had_native_buffer
             && if projected {
                 captured
@@ -274,10 +275,7 @@ impl InlineBuilder {
             // term_flushln() resets the plain unit with the same row
             // (term.c:233-237): the next word starts a fresh buffer whose
             // output interval begins after this committed row.
-            self.execution.flush_unit.clear();
-            self.execution.flush_unit.set_tab_offset(0);
-            self.execution.flush_unit_anchors.clear();
-            self.execution.flush_unit_output_start = self.nodes.len();
+            self.execution.plain_input.retire_row_at(self.nodes.len());
         }
         if let Some(author) = &mut self.execution.author_execution {
             // term_flushln() commits its accepted prefix before it starts

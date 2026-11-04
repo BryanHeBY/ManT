@@ -30,7 +30,8 @@ fn unconditional_literal_flush_keeps_its_row_owner_without_a_field() {
         if occupied {
             builder
                 .execution
-                .flush_unit
+                .plain_input
+                .buffer
                 .apply_writes(&[FieldWrite::Cell(FieldCell::ZeroWidthGraph)]);
         }
         builder.flush_literal_execution_line();
@@ -40,7 +41,7 @@ fn unconditional_literal_flush_keeps_its_row_owner_without_a_field() {
             rows.iter()
                 .all(|origin| *origin == CompletedRowOrigin::LiteralText)
         );
-        assert!(builder.execution.flush_unit.is_empty());
+        assert!(builder.execution.plain_input.buffer.is_empty());
     }
 }
 

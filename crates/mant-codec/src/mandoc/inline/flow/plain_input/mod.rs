@@ -27,13 +27,8 @@ use projection::{
 #[cfg(test)]
 mod tests;
 
-/// The one live buffer and its provisional output owners, moved together
-/// into retirement. Its accepted prefix cannot reach earlier output units.
-struct PlainFlushUnit {
-    buffer: super::field_buffer::FieldBuffer,
-    anchors: Vec<super::NativeWordAnchor>,
-    output_start: usize,
-}
+mod unit;
+pub(super) use unit::PlainInputUnit;
 
 /// The exceptional row fact of this consumed plain flush, never history.
 #[derive(Clone, Copy, Default)]
@@ -137,7 +132,7 @@ impl InlineBuilder {
         if execution.definition.is_some() && !authorless_definition {
             return PlainFlushOutcome::Ordinary;
         }
-        let Some(PlainFlushUnit {
+        let Some(PlainInputUnit {
             buffer,
             anchors,
             mut output_start,
@@ -253,7 +248,7 @@ impl InlineBuilder {
         execution: &mut super::InlineExecutionState,
         nodes: &[Inline],
         authorless_definition: bool,
-    ) -> Option<PlainFlushUnit> {
+    ) -> Option<PlainInputUnit> {
         let (buffer, anchors) = if authorless_definition {
             let definition = execution.definition.as_mut().expect("session");
             let buffer = std::mem::take(&mut definition.field_buffer);
@@ -264,18 +259,15 @@ impl InlineBuilder {
             }
             (buffer, anchors)
         } else {
-            if execution.flush_unit.is_empty() {
+            if execution.plain_input.buffer.is_empty() {
                 return None;
             }
-            (
-                std::mem::take(&mut execution.flush_unit),
-                std::mem::take(&mut execution.flush_unit_anchors),
-            )
+            execution.plain_input.take_input()
         };
-        Some(PlainFlushUnit {
+        Some(PlainInputUnit {
             buffer,
             anchors,
-            output_start: execution.flush_unit_output_start.min(nodes.len()),
+            output_start: execution.plain_input.output_start.min(nodes.len()),
         })
     }
 
@@ -292,10 +284,7 @@ impl InlineBuilder {
         nodes: &[Inline],
     ) {
         execution.detached_device_row = None;
-        execution.flush_unit.clear();
-        execution.flush_unit.set_tab_offset(0);
-        execution.flush_unit_anchors.clear();
-        execution.flush_unit_output_start = nodes.len();
+        execution.plain_input.retire_row_at(nodes.len());
     }
 
     /// Drop a borrowed retirement buffer after its receipt was consumed:
@@ -326,8 +315,6 @@ impl InlineBuilder {
             definition.field_buffer.set_tab_offset(0);
             definition.field_word_anchors.clear();
         }
-        execution.flush_unit.clear();
-        execution.flush_unit_anchors.clear();
-        execution.flush_unit_output_start = nodes.len();
+        execution.plain_input.clear_input_at(nodes.len());
     }
 }

@@ -426,8 +426,7 @@ impl InlineBuilder {
         // The plain flush unit carries across the scope return like the
         // preserved field's cells, but its IR anchors and output interval
         // belong to the drained owner and cannot cross it.
-        self.execution.flush_unit_anchors.clear();
-        self.execution.flush_unit_output_start = 0;
+        self.execution.plain_input.detach_output_owner();
         // The output owner ended, but CVS term_word() still sees the same
         // physical row and word separator after an inset/diag HEAD. Keep its
         // registers, retiring only offsets into the drained node vector.
@@ -445,9 +444,7 @@ impl InlineBuilder {
         // empty row precedes whatever the next flow emits.
         let retired_rejected_row = self.retire_plain_flush_unit();
         if self.execution.definition.is_none() {
-            self.execution.flush_unit.clear();
-            self.execution.flush_unit_anchors.clear();
-            self.execution.flush_unit_output_start = 0;
+            self.execution.plain_input.clear_input_at(0);
         }
         if !super::projection::trailing_device_row_end_receipt(&self.nodes).is_closed() {
             trim_output_terminators(&mut self.nodes);

@@ -393,7 +393,7 @@ impl InlineBuilder {
         self.execution
             .author_execution
             .as_ref()
-            .map_or(self.execution.flush_unit_output_start, |author| {
+            .map_or(self.execution.plain_input.output_start, |author| {
                 author.field_output_start
             })
     }

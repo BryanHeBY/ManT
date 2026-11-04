@@ -81,6 +81,11 @@ HEAD execution, BODY handoff and resolved layout in sibling modules.
 
 Entering a native field moves the existing plain input buffer and stable word
 owners; it does not create an empty parallel buffer or settle pending glyphs.
+The private `PlainInputUnit` groups those cells, owners and output cursor.
+Its explicit operations distinguish detaching output coordinates, moving live
+input into a field, clearing consumed input and retiring a physical row with
+its tab origin. Authorless fields retain the ordinary output interval; these
+operations do not reset font, continuation, keep or zero-advance registers.
 `inline/synopsis.rs` applies source-sibling pre rules for prose, literal and
 definition destinations. `Nm` retains its distinct nonempty HEAD entry, while
 `Fn`/`Fo` share the real temporary name-field and argument-flush lifecycle.
@@ -191,6 +196,7 @@ The authoritative format contracts are [mant-markdown(7)](https://github.com/Bry
 
 The private roff field buffer in
 `src/mandoc/inline/flow/field_buffer.rs` and its `field_buffer/` helpers,
+ordinary input retirement in `src/mandoc/inline/flow/plain_input/`,
 and the native field device
 calculation in `src/mandoc/inline/flow/definition/device/` derive from
 the pinned CVS mandoc `term.c`. These translated modules

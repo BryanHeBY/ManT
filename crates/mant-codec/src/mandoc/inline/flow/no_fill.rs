@@ -56,7 +56,7 @@ impl NoFillInlineState {
                 accepted_invisible_row = true;
             }
         }
-        let represented_marker_row = execution.flush_unit.has_projected_rows();
+        let represented_marker_row = execution.plain_input.buffer.has_projected_rows();
         let rejected_row = InlineBuilder::retire_plain_flush_unit_at(
             execution,
             output,

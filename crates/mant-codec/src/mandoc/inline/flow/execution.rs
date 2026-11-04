@@ -69,8 +69,8 @@ impl InlineBuilder {
                     .definition
                     .as_ref()
                     .is_some_and(|state| !state.field_word_anchors.is_empty())
-                    || !self.execution.flush_unit_anchors.is_empty();
-                live.then_some(self.execution.flush_unit_output_start)
+                    || !self.execution.plain_input.anchors.is_empty();
+                live.then_some(self.execution.plain_input.output_start)
             })
             .flatten();
         if matches!(break_effect, AuthorBreakEffect::Field { .. }) {
@@ -485,7 +485,9 @@ impl InlineBuilder {
             .execution
             .definition
             .as_ref()
-            .map_or(&self.execution.flush_unit, |state| &state.field_buffer);
+            .map_or(&self.execution.plain_input.buffer, |state| {
+                &state.field_buffer
+            });
         // CVS mdoc_term.c::termp_sm_pre() clears NOSPACE whenever spacing
         // ends up enabled and the live input buffer is occupied (p->col),
         // even for a repeated `.Sm on`. An empty term_word() releases a
@@ -529,7 +531,7 @@ impl super::InlineExecutionState {
             if let Some(definition) = &mut self.definition {
                 definition.field_buffer.note_tab_reference();
             } else {
-                self.flush_unit.note_tab_reference();
+                self.plain_input.buffer.note_tab_reference();
             }
         }
     }
@@ -547,7 +549,7 @@ impl super::InlineExecutionState {
                 definition.field_buffer.configure_tabs(&self.tab_stops);
                 definition.projected_passes = 0;
             }
-            self.flush_unit.configure_tabs(&self.tab_stops);
+            self.plain_input.buffer.configure_tabs(&self.tab_stops);
         }
     }
 
@@ -557,7 +559,7 @@ impl super::InlineExecutionState {
             definition.field_buffer.configure_tabs(&self.tab_stops);
             definition.projected_passes = 0;
         }
-        self.flush_unit.configure_tabs(&self.tab_stops);
+        self.plain_input.buffer.configure_tabs(&self.tab_stops);
     }
 
     pub(in crate::mandoc) fn set_literal_tabs(&mut self) {
@@ -566,7 +568,7 @@ impl super::InlineExecutionState {
             definition.field_buffer.configure_tabs(&self.tab_stops);
             definition.projected_passes = 0;
         }
-        self.flush_unit.configure_tabs(&self.tab_stops);
+        self.plain_input.buffer.configure_tabs(&self.tab_stops);
     }
 }
 

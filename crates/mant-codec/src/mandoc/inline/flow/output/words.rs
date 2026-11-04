@@ -366,11 +366,16 @@ impl InlineBuilder {
                     PendingBoundary::Preserved | PendingBoundary::Continued
                 ))
             && !self.in_definition_field()
-            && self.execution.flush_unit.has_pending_break_markers()
+            && self
+                .execution
+                .plain_input
+                .buffer
+                .has_pending_break_markers()
             && !self
                 .execution
-                .flush_unit
-                .has_non_ignorable_after(self.execution.flush_unit.resume_offset(), false)
+                .plain_input
+                .buffer
+                .has_non_ignorable_after(self.execution.plain_input.buffer.resume_offset(), false)
             && self.current_row_has_graph()
         {
             // A `.mc` no-break flush resets the native buffer (term.c:233-
@@ -399,9 +404,13 @@ impl InlineBuilder {
                 self.execution.boundary = PendingBoundary::Tight;
             } else if !self.in_definition_field()
                 && (!self.execution.has_printable_content
-                    || (self.execution.flush_unit.has_pending_break_markers()
-                        && !self.execution.flush_unit.has_non_ignorable_after(
-                            self.execution.flush_unit.resume_offset(),
+                    || (self
+                        .execution
+                        .plain_input
+                        .buffer
+                        .has_pending_break_markers()
+                        && !self.execution.plain_input.buffer.has_non_ignorable_after(
+                            self.execution.plain_input.buffer.resume_offset(),
                             false,
                         )))
                 && self.current_row_has_graph()

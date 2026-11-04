@@ -243,7 +243,7 @@ impl InlineBuilder {
         // (roff_term.c:147-150). The next graphless term_word() therefore
         // writes a real automatic blank even on a fresh plain flush unit;
         // its deferred display padding cannot stand in for this input cell.
-        self.execution.flush_unit.release_word_boundary();
+        self.execution.plain_input.buffer.release_word_boundary();
         if let Some(state) = &mut self.execution.definition {
             state.field_buffer.release_word_boundary();
         }

@@ -352,7 +352,7 @@ mod row_origin_tests {
             .as_mut()
             .unwrap()
             .field_output_start = 3;
-        builder.execution.flush_unit_output_start = 2;
+        builder.execution.plain_input.output_start = 2;
         builder.execution.formatter_column = FormatterColumn::Advanced;
         let definition = builder.definition_state_mut();
         definition.row.indent_columns = 6;
@@ -392,7 +392,7 @@ mod row_origin_tests {
                 .field_output_start,
             4
         );
-        assert_eq!(builder.execution.flush_unit_output_start, 3);
+        assert_eq!(builder.execution.plain_input.output_start, 3);
         let definition = builder.execution.definition.as_ref().unwrap();
         assert_eq!(definition.no_break, Some(captured_field));
         assert_eq!(captured_field.output_end_before_separator, 3);

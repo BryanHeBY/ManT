@@ -3,7 +3,7 @@ use super::tab_stops::TabStops;
 use super::{
     AuthorBreakEffect, AuthorExecution, DetachedDeviceRow, FontState, FormatterColumn,
     InlineExecutionState, KeepState, LeadingLineBoundary, PendingBoundary, SourceLineObservation,
-    SpacingMode, TrailingOutput, WordEndBreak, ZeroAdvanceState, definition, field_buffer,
+    SpacingMode, TrailingOutput, WordEndBreak, ZeroAdvanceState, definition,
 };
 use libmandoc_rs::MacroSet;
 use std::sync::Arc;
@@ -60,9 +60,7 @@ impl InlineExecutionState {
             native_word_sentence: false,
             native_word_owner: None,
             native_owner_serial: 0,
-            flush_unit: field_buffer::FieldBuffer::default(),
-            flush_unit_anchors: Vec::new(),
-            flush_unit_output_start: 0,
+            plain_input: super::plain_input::PlainInputUnit::default(),
             concat_next_word: false,
             concat_flush_source: false,
             concat_consumed_for_body: false,
@@ -215,12 +213,10 @@ impl InlineExecutionState {
     }
 
     pub(super) fn current_native_word_is_rejected(&self) -> bool {
-        let (buffer, anchors) = self
-            .definition
-            .as_ref()
-            .map_or((&self.flush_unit, &self.flush_unit_anchors), |field| {
-                (&field.field_buffer, &field.field_word_anchors)
-            });
+        let (buffer, anchors) = self.definition.as_ref().map_or(
+            (&self.plain_input.buffer, &self.plain_input.anchors),
+            |field| (&field.field_buffer, &field.field_word_anchors),
+        );
         buffer.pending_pass_is_definitively_rejected()
             && anchors
                 .last()

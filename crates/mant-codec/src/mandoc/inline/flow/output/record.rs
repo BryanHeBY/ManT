@@ -137,11 +137,9 @@ impl InlineBuilder {
         // The IR destination may since have changed (D1/Dl, heading, link
         // label). Establish its new output interval here, before writing
         // the word; a Vec offset from the former owner is not transferable.
-        if self.execution.flush_unit.is_empty() && self.execution.flush_unit_anchors.is_empty() {
-            self.execution.flush_unit_output_start = self.nodes.len();
-        }
-        let native_word_start = self.execution.flush_unit.cells().len();
-        let separator = self.execution.flush_unit.begin_word_with_spacing(
+        self.execution.plain_input.begin_output_at(self.nodes.len());
+        let native_word_start = self.execution.plain_input.buffer.cells().len();
+        let separator = self.execution.plain_input.buffer.begin_word_with_spacing(
             native_boundary.is_native_tight(),
             self.execution.spacing.enabled() || native_boundary == PendingBoundary::Preserved,
             native_boundary == PendingBoundary::Kept,
@@ -154,16 +152,19 @@ impl InlineBuilder {
             .expect("native word owner");
         let receipt = self
             .execution
-            .flush_unit
+            .plain_input
+            .buffer
             .apply_writes(&native_writes.unwrap_or_default());
         self.execution
-            .flush_unit_anchors
+            .plain_input
+            .anchors
             .push(super::super::NativeWordAnchor {
                 start: native_word_start,
                 owner: anchor_ir_start,
                 content: if self
                     .execution
-                    .flush_unit
+                    .plain_input
+                    .buffer
                     .word_separator_survives(native_word_start, separator)
                     && !native_boundary.is_tight()
                     && (!self.execution.boundary.is_tight() || self.execution.zero_advance_joined)
@@ -177,7 +178,8 @@ impl InlineBuilder {
             });
         let native_separator = self
             .execution
-            .flush_unit
+            .plain_input
+            .buffer
             .surviving_word_separator(native_word_start, separator);
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
@@ -187,20 +189,17 @@ impl InlineBuilder {
             rest: usize::MAX / 2,
             unbounded: true,
         };
-        let mut buffer = std::mem::take(&mut self.execution.flush_unit);
-        let mut anchors = std::mem::take(&mut self.execution.flush_unit_anchors);
+        let unit = &mut self.execution.plain_input;
         let mut result = Self::native_unit_passes(
             incoming,
-            &mut buffer,
-            &mut anchors,
+            &mut unit.buffer,
+            &mut unit.anchors,
             targets,
             receipt.first_content_cell,
         );
         result.native_separator = native_separator;
         result.retreated_sentence_separator = separator == 2 && native_separator == 1;
         result.prints_padding = receipt.prints_padding;
-        self.execution.flush_unit = buffer;
-        self.execution.flush_unit_anchors = anchors;
         result
     }
 
