@@ -117,6 +117,8 @@ mod markdown_hard_rows;
 mod markdown_style_sequences;
 #[path = "roff_lowering/shared_execution_matrix.rs"]
 mod shared_execution_matrix;
+#[path = "roff_lowering/spacing_execution.rs"]
+mod spacing_execution;
 #[path = "roff_lowering/upstream_inline.rs"]
 mod upstream_inline;
 #[path = "roff_lowering/upstream_tables.rs"]

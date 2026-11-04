@@ -854,7 +854,17 @@ scope; `Xr` does not create a font scope.
 
 Inside `Fo`, a generated comma separates adjacent logical `Fa` parameters. Nonprinting controls and targets do not break that adjacency, but intervening prose or a visible container does; an authored closing delimiter is not duplicated. Generated punctuation is emitted before following controls, so `.Fa x`, `.Sm off`, `.Fa y` retains `x, y`.
 
-`Ns` suppresses a boundary only when libmandoc does not mark it as starting a source line. `Pf` retains its prefix but joins the next sibling only when that sibling exists on the same source line. Line-start `Ns` and `Pf` without that successor are recovery cases, not recommended authoring forms; native diagnostics remain observable. Formatter differences remain relevant: groff rejects bare line-start `Ap`, and its handling of ordinary text under `Sm off` differs from mandoc. ManT deliberately preserves ordinary filled source-line word boundaries even under `Sm off`, following the documented distinction between source text and macro auto-spacing. Macro operands still obey `Sm off`, and explicit `\c`, `Ns`, `Pf`, or `Ap` joins take precedence. This is a deliberate difference from mandoc's concatenation of ordinary text lines, not a promise of byte-identical formatter output.
+`Ns` suppresses a boundary only when libmandoc does not mark it as starting a source line. `Pf` retains its prefix but joins the next raw sibling only when that sibling exists on the same source line. `Fl` and synopsis entry instead use mandoc's logical sibling rules. These relationships come from the complete source parent, including when `Fa` arguments are dispatched separately. Line-start `Ns` and `Pf` without that successor are recovery cases, not recommended authoring forms; native diagnostics remain observable. Groff rejects bare line-start `Ap`, and can differ from mandoc on ordinary text under `Sm off`. ManT follows the selected mandoc word-spacing contract for both ordinary source text and macro operands.
+
+`Sm on` also clears the current no-space boundary when the native input buffer
+contains cells, even if automatic spacing was already on. Thus `FIRST Ns`
+followed by `Sm on` and `SECOND` yields `FIRST SECOND`. An empty operand is
+not a buffered zero-width character: `\&` occupies the native buffer while
+an empty word alone does not. Enabling spacing does not end a `\c`-continued
+source line or reset zero-advance and kept-word state. A real line flush retires
+that buffer; earlier output cannot make a new line start with an extra space.
+Repeating `Sm off` leaves the incoming word boundary unchanged, including a
+boundary retained by an earlier on-to-off transition.
 
 `Fn` and `Fo` retain the function name, join their arguments inside parentheses, and preserve the formatter-owned terminating semicolon when libmandoc marks the declaration for synopsis presentation. Each operand of `Fa` inside `Fo` is a separate parameter; quote multi-word parameters (`.Fa "const char *path"`). Spacing controls and zero-width targets retain their effect and position without becoming arguments. Outside `Fo`, `Fa` keeps ordinary spaced operands. The same `Fn` in prose remains an inline function reference without a semicolon. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2);` in `SYNOPSIS` rather than discarding the function name or punctuation.
 

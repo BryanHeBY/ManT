@@ -481,24 +481,35 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn set_spacing(&mut self, setting: &str) {
         let updated = updated_spacing(self.execution.spacing.enabled(), setting);
-        if updated == self.execution.spacing.enabled() {
-            return;
+        let buffer = self
+            .execution
+            .definition
+            .as_ref()
+            .map_or(&self.execution.flush_unit, |state| &state.field_buffer);
+        // CVS mdoc_term.c::termp_sm_pre() clears NOSPACE whenever spacing
+        // ends up enabled and the live input buffer is occupied (p->col),
+        // even for a repeated `.Sm on`. An empty term_word() releases a
+        // word boundary without writing a cell; NBRZW and a pending \z
+        // glyph do write cells. Read the native ledger, not projected IR
+        // or the output device's column. Neither NONEWLINE nor KEEP changes.
+        if updated && !buffer.is_empty() {
+            if !matches!(
+                self.execution.boundary,
+                PendingBoundary::CommittedField | PendingBoundary::Kept
+            ) {
+                self.execution.boundary = PendingBoundary::Ordinary;
+            }
+        } else if !updated
+            && self.execution.spacing.enabled()
+            && buffer.word_boundary_ready()
+            && !self.execution.boundary.is_nonbreaking()
+        {
+            // NONOSPACE changes what the *next* word leaves behind, not
+            // its incoming NOSPACE flag (term.c::term_word(), 573-589).
+            // A repeated `off` changes neither register: an earlier word
+            // already executed under NONOSPACE must not release NOSPACE.
+            self.execution.boundary = PendingBoundary::Preserved;
         }
-        // Changing NONOSPACE does not rewrite the incoming NOSPACE flag.
-        // A previous word may have established an ordinary boundary with
-        // only a marker, NBRZW, or an empty operand. Read that native word
-        // transition, never infer it from visible IR (termp_sm_pre() and
-        // term.c:573-589). The first word retains that boundary; subsequent
-        // words use the new spacing mode.
-        let boundary_ready = self.execution.definition.as_ref().map_or_else(
-            || self.execution.flush_unit.word_boundary_ready(),
-            |state| state.field_buffer.word_boundary_ready(),
-        );
-        self.execution.boundary = match (updated, boundary_ready, self.execution.boundary) {
-            (_, _, boundary) if boundary.is_tight() => boundary,
-            (false, true, _) => PendingBoundary::Preserved,
-            _ => PendingBoundary::Ordinary,
-        };
         self.execution.spacing = SpacingMode::from(updated);
     }
 }

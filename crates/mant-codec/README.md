@@ -101,6 +101,12 @@ lowering pass that edits an earlier completed content owner. Filled source
 line observation likewise cannot override the spacing state used by actual
 macro and text words.
 
+`Sm` executes a native request, not just a Boolean assignment: even an already
+enabled `Sm on` releases NOSPACE when the live input buffer contains cells.
+An empty word's boundary register is distinct from an actual zero-width native
+cell. A retired buffer cannot borrow occupancy from already presented output;
+continuation and KEEP retain their own lifetimes.
+
 A native field scope can span multiple paragraph and literal content owners.
 Its explicit source pre/post boundaries protect the live word, separator and
 field registers while an IR drain releases only output indices. Resolved BODY

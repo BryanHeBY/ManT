@@ -39,6 +39,8 @@ that crate was not published for that change.
 
 - Preserve complete source sibling context while dispatching function arguments,
   including synopsis line flushes and same-line prefix/flag joins.
+- Execute repeated `Sm on` requests against the live native buffer without
+  resetting continuation, zero-advance or keep state.
 - Keep Unicode edge whitespace outside Markdown emphasis delimiters without
   dropping the inner text's representable style or changing its scalars.
 - Preserve one live native input buffer when entering synopsis fields from
