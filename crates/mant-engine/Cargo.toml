@@ -20,6 +20,8 @@ include = [
   "/tests/native_payload_consumers.rs", "/tests/native_payload_consumers/**",
   "/tests/query_report_boundary.rs",
   "/tests/support/semantic_read.rs",
+  "/tests/support/oracle_receipt.rs", "/tests/support/json_roundtrip.rs",
+  "/tests/support/case_failures.rs",
   "/tests/report_composition.rs", "/tests/report_composition/**",
 ]
 

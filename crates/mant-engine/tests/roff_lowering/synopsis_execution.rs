@@ -7,6 +7,9 @@ use mant_ir::{
 };
 use serde::Deserialize;
 
+use super::case_failures::verify_cases;
+use super::json_roundtrip::json_string_roundtrip;
+
 #[path = "synopsis_execution/query.rs"]
 mod query;
 
@@ -135,16 +138,7 @@ fn native_owners(node: &Node, output: &mut Vec<NativeOwner>) {
 
 fn roundtrip(case: &Case) -> ResolvedContent {
     let content = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
-    let bundle = mant_protocol::QueryBundle::from(&content);
-    let json = serde_json::to_string(&bundle).unwrap();
-    let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
-    assert_eq!(
-        serde_json::to_value(&decoded).unwrap(),
-        serde_json::to_value(bundle).unwrap(),
-        "{}: JSON string roundtrip",
-        case.id
-    );
-    let decoded: ResolvedContent = decoded.into();
+    let decoded = json_string_roundtrip(&content);
     assert!(
         mant_ir::validate_document(decoded.document.as_ref().unwrap()).is_empty(),
         "{}: valid owned IR",
@@ -313,25 +307,7 @@ fn assert_portable_owners(content: &ResolvedContent, case: &Case) {
 }
 
 fn verify_all_cases(check: impl Fn(&Case) + std::panic::RefUnwindSafe) {
-    let mut failures = Vec::new();
-    for case in cases() {
-        if let Err(error) = std::panic::catch_unwind(|| check(&case)) {
-            let message = if let Some(message) = error.downcast_ref::<String>() {
-                message.as_str()
-            } else if let Some(message) = error.downcast_ref::<&str>() {
-                message
-            } else {
-                "non-string test panic"
-            };
-            failures.push(format!("{}: {message}", case.id));
-        }
-    }
-    assert!(
-        failures.is_empty(),
-        "{} case failures:\n{}",
-        failures.len(),
-        failures.join("\n\n")
-    );
+    verify_cases(cases(), |case| &case.id, check);
 }
 
 // Canonical Markdown renders a definition as a bullet item. Read that real

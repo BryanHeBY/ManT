@@ -11,6 +11,13 @@ use mant_loader::parse_manual_bytes;
 #[path = "support/semantic_read.rs"]
 mod semantic_test_read;
 
+#[path = "support/case_failures.rs"]
+mod case_failures;
+#[path = "support/json_roundtrip.rs"]
+mod json_roundtrip;
+#[path = "support/oracle_receipt.rs"]
+mod oracle_receipt;
+
 // Integration fixtures are read by the harness; product parsing uses public APIs.
 fn parse_manual_source(
     path: &std::path::Path,

@@ -389,6 +389,20 @@ Architecture and source-resolution details are documented in the
 Compatibility and migration notes are recorded in the
 [crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
+## Regression support
+
+The `roff_lowering` integration harness registers shared helpers once from
+`tests/support/`: recorded oracle receipts, JSON string roundtrips, and
+per-case failure collection. Each source family keeps its own typed cases,
+oracle identity, expected rows, semantic owners, and permitted projection
+differences. The helpers do not derive expected output from product rendering.
+Their source files are explicitly included in the published package so the
+same tests run against packaged sources.
+
+Unpublished UI integration tests reuse the transport and failure helpers.
+`mant-ui/tests/support/terminal_cells.rs` checks authored graphemes and every
+terminal padding cell; reader actions still exercise the actual App service.
+
 ## License
 
 Apache-2.0. Native builds also contain the separately attributed vendored mandoc

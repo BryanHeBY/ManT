@@ -9,6 +9,10 @@ use mant_ir::{
 };
 use serde::Deserialize;
 
+use super::case_failures::verify_cases;
+use super::json_roundtrip::json_string_roundtrip;
+use super::oracle_receipt::{OracleReceipt, assert_receipts};
+
 #[derive(Deserialize)]
 struct Fixture {
     oracle_sha256: String,
@@ -91,16 +95,21 @@ fn cases() -> Vec<Case> {
         );
     }
     for case in &fixture.cases {
-        assert_eq!(case.source_sha256.len(), 64, "{}: source identity", case.id);
-        assert_eq!(case.profiles.len(), 5);
-        for (profile, run) in &case.profiles {
-            assert_eq!(run.sha256.len(), 64);
-            if profile == "lint" {
-                assert!(run.status == 0 || (run.status == 2 && !run.diagnostics.is_empty()));
-            } else {
-                assert_eq!(run.status, 0, "{}: {profile}", case.id);
-            }
-        }
+        assert_receipts(
+            &case.id,
+            &case.source_sha256,
+            case.profiles.iter().map(|(profile, run)| {
+                (
+                    profile.as_str(),
+                    OracleReceipt {
+                        status: run.status,
+                        stdout_sha256: &run.sha256,
+                        stderr_sha256: None,
+                        diagnostics: &run.diagnostics,
+                    },
+                )
+            }),
+        );
     }
     fixture.cases
 }
@@ -140,14 +149,7 @@ fn native_owners(node: &Node, parent: Option<String>, output: &mut Vec<NativeOwn
 
 fn roundtrip(source: &str) -> ResolvedContent {
     let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-    let original = mant_protocol::QueryBundle::from(&content);
-    let encoded = serde_json::to_string(&original).unwrap();
-    let decoded: mant_protocol::QueryBundle = serde_json::from_str(&encoded).unwrap();
-    assert_eq!(
-        serde_json::to_value(original).unwrap(),
-        serde_json::to_value(&decoded).unwrap()
-    );
-    let result: ResolvedContent = decoded.into();
+    let result = json_string_roundtrip(&content);
     assert_eq!(
         mant_ir::validate_document(result.document.as_ref().unwrap()),
         []
@@ -264,23 +266,7 @@ fn reading_rows(case: &Case, content: &ResolvedContent) -> Vec<String> {
 }
 
 fn verify_all(check: impl Fn(&Case) + std::panic::RefUnwindSafe) {
-    let mut failures = Vec::new();
-    for case in cases() {
-        if let Err(error) = std::panic::catch_unwind(|| check(&case)) {
-            let message = error
-                .downcast_ref::<String>()
-                .map(String::as_str)
-                .or_else(|| error.downcast_ref::<&str>().copied())
-                .unwrap_or("non-string failure");
-            failures.push(format!("{}: {message}", case.id));
-        }
-    }
-    assert!(
-        failures.is_empty(),
-        "{} case failures:\n{}",
-        failures.len(),
-        failures.join("\n\n")
-    );
+    verify_cases(cases(), |case| &case.id, check);
 }
 
 #[test]

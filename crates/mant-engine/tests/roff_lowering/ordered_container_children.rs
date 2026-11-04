@@ -7,6 +7,9 @@ use mant_ir::{
 };
 use serde::Deserialize;
 
+use super::case_failures::verify_cases;
+use super::json_roundtrip::json_string_roundtrip;
+
 #[derive(Deserialize)]
 struct Fixture {
     oracle_sha256: String,
@@ -48,14 +51,7 @@ fn original_container<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
 
 fn roundtrip(source: &str) -> ResolvedContent {
     let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-    let original = mant_protocol::QueryBundle::from(&content);
-    let json = serde_json::to_string(&original).unwrap();
-    let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
-    assert_eq!(
-        serde_json::to_value(original).unwrap(),
-        serde_json::to_value(&decoded).unwrap()
-    );
-    decoded.into()
+    json_string_roundtrip(&content)
 }
 
 fn description(content: &ResolvedContent) -> &[Block] {
@@ -118,43 +114,47 @@ fn container_children_match_native_payloads_and_preserve_block_ownership_after_j
     // cover nine macros x seven payloads x prose/tag/column/literal owners.
     // Device origin and inter-field padding are excluded; accepted spaces
     // inside each payload, including EOS double spacing, are exact.
-    for case in cases() {
-        let parsed = Parser::default()
-            .parse_bytes(&case.id, case.source.as_bytes())
-            .unwrap();
-        let owner = original_container(&parsed.document.root, &case.r#macro).unwrap();
-        let direct: Vec<_> = owner
-            .children
-            .iter()
-            .filter(|node| node.kind == NodeKind::Text)
-            .map(|node| node.text.clone().unwrap())
-            .collect();
-        assert_eq!(direct, case.direct_text, "{}: original AST", case.id);
-        if case.source.contains("Li \"!\" ,\n") {
-            let comma = owner
+    verify_cases(
+        cases(),
+        |case| &case.id,
+        |case| {
+            let parsed = Parser::default()
+                .parse_bytes(&case.id, case.source.as_bytes())
+                .unwrap();
+            let owner = original_container(&parsed.document.root, &case.r#macro).unwrap();
+            let direct: Vec<_> = owner
                 .children
                 .iter()
-                .find(|node| node.text.as_deref() == Some(","))
-                .unwrap();
+                .filter(|node| node.kind == NodeKind::Text)
+                .map(|node| node.text.clone().unwrap())
+                .collect();
+            assert_eq!(direct, case.direct_text, "{}: original AST", case.id);
+            if case.source.contains("Li \"!\" ,\n") {
+                let comma = owner
+                    .children
+                    .iter()
+                    .find(|node| node.text.as_deref() == Some(","))
+                    .unwrap();
+                assert!(
+                    !comma.flags.delimiter_close,
+                    "{}: accepted non-DELIMC tail must execute too",
+                    case.id
+                );
+            }
+            let content = roundtrip(&case.source);
             assert!(
-                !comma.flags.delimiter_close,
-                "{}: accepted non-DELIMC tail must execute too",
+                mant_ir::validate_document(content.document.as_ref().unwrap()).is_empty(),
+                "{}",
                 case.id
             );
-        }
-        let content = roundtrip(&case.source);
-        assert!(
-            mant_ir::validate_document(content.document.as_ref().unwrap()).is_empty(),
-            "{}",
-            case.id
-        );
-        assert_eq!(
-            inline_plain_text(owned_payload(&content, &case)),
-            case.expected,
-            "{}: complete accepted payload",
-            case.id
-        );
-    }
+            assert_eq!(
+                inline_plain_text(owned_payload(&content, case)),
+                case.expected,
+                "{}: complete accepted payload",
+                case.id
+            );
+        },
+    );
 }
 
 fn rendered_description(content: &ResolvedContent) -> String {
@@ -172,21 +172,24 @@ fn rendered_description(content: &ResolvedContent) -> String {
 fn container_payloads_reach_native_reading_and_the_actual_markdown_reader() {
     // Same exact oracle sources as the ownership matrix above. This pass
     // checks consumer-visible rows separately from the producer's IR owner.
-    for case in cases()
-        .into_iter()
-        .filter(|case| matches!(case.context.as_str(), "prose" | "literal"))
-    {
-        let content = roundtrip(&case.source);
-        assert_eq!(rendered_description(&content), case.expected, "{}", case.id);
-        let markdown = mant_codec::encode::render_markdown(&content);
-        let read = mant_loader::load_markdown_text(&markdown, None).unwrap();
-        assert_eq!(
-            rendered_description(&read),
-            case.expected,
-            "{}: Markdown readback\n{markdown}",
-            case.id
-        );
-    }
+    verify_cases(
+        cases()
+            .into_iter()
+            .filter(|case| matches!(case.context.as_str(), "prose" | "literal")),
+        |case| &case.id,
+        |case| {
+            let content = roundtrip(&case.source);
+            assert_eq!(rendered_description(&content), case.expected, "{}", case.id);
+            let markdown = mant_codec::encode::render_markdown(&content);
+            let read = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            assert_eq!(
+                rendered_description(&read),
+                case.expected,
+                "{}: Markdown readback\n{markdown}",
+                case.id
+            );
+        },
+    );
 }
 
 #[derive(Default)]
@@ -206,26 +209,29 @@ impl<'ir> Visit<'ir> for Links {
 
 #[test]
 fn container_delimiters_remain_outside_the_single_manual_link_occurrence() {
-    for case in cases()
-        .into_iter()
-        .filter(|case| matches!(case.id.as_str(), "xo-link" | "quote-link" | "quote-target"))
-    {
-        let content = roundtrip(&case.source);
-        let mut links = Links::default();
-        links.visit_document(content.document.as_ref().unwrap());
-        assert_eq!(
-            links.0,
-            [(
-                "printf(3)".into(),
-                LinkTarget::Manual {
-                    name: "printf".into(),
-                    manual_section: Some("3".into()),
-                }
-            )],
-            "{}: wrappers did not capture punctuation or duplicate execution",
-            case.id
-        );
-    }
+    verify_cases(
+        cases()
+            .into_iter()
+            .filter(|case| matches!(case.id.as_str(), "xo-link" | "quote-link" | "quote-target")),
+        |case| &case.id,
+        |case| {
+            let content = roundtrip(&case.source);
+            let mut links = Links::default();
+            links.visit_document(content.document.as_ref().unwrap());
+            assert_eq!(
+                links.0,
+                [(
+                    "printf(3)".into(),
+                    LinkTarget::Manual {
+                        name: "printf".into(),
+                        manual_section: Some("3".into()),
+                    }
+                )],
+                "{}: wrappers did not capture punctuation or duplicate execution",
+                case.id
+            );
+        },
+    );
 }
 
 #[test]
@@ -249,21 +255,24 @@ fn direct_font_and_function_prefixes_precede_their_head_or_body_font_scope() {
     // Exact bf-scoped-font and fo-font UTF-8 probes underline the direct
     // '(' in the enclosing italic font. termp_bf_pre selects bold only at
     // BODY; termp_fo_pre selects it only at HEAD (mdoc_term.c:1750-1817).
-    for case in cases()
-        .into_iter()
-        .filter(|case| matches!(case.id.as_str(), "bf-scoped-font" | "fo-font"))
-    {
-        let content = roundtrip(&case.source);
-        for text in ["(", "OUTER", "PREVIOUS"] {
-            super::font_boundaries::assert_style(&content, text, 2);
-        }
-        let bold = if case.id == "fo-font" {
-            "function"
-        } else {
-            "BODY"
-        };
-        super::font_boundaries::assert_style(&content, bold, 1);
-    }
+    verify_cases(
+        cases()
+            .into_iter()
+            .filter(|case| matches!(case.id.as_str(), "bf-scoped-font" | "fo-font")),
+        |case| &case.id,
+        |case| {
+            let content = roundtrip(&case.source);
+            for text in ["(", "OUTER", "PREVIOUS"] {
+                super::font_boundaries::assert_style(&content, text, 2);
+            }
+            let bold = if case.id == "fo-font" {
+                "function"
+            } else {
+                "BODY"
+            };
+            super::font_boundaries::assert_style(&content, bold, 1);
+        },
+    );
 }
 
 #[test]
