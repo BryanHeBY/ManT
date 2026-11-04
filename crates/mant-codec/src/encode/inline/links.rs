@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use mant_ir::{Inline, LinkTarget};
 
-use super::context::{render_inline_raw, render_inline_raw_unstyled};
+use super::context::{LinkMeaning, link_meaning, matches_link, render_link_label};
 use super::{MarkdownOptions, flatten_inline};
 
 pub(super) enum PhrasingNode<'source> {
@@ -61,6 +61,13 @@ pub(super) fn phrasing_nodes<'source>(
     })
 }
 
+/// Serialized bytes and the independent source-owned meaning accepted before
+/// adding brackets. Final row serialization must check both facts together.
+pub(super) struct EncodedLink {
+    pub(super) source: String,
+    pub(super) meaning: Option<LinkMeaning>,
+}
+
 pub(super) fn render_link(
     target: &str,
     title: Option<&str>,
@@ -68,8 +75,40 @@ pub(super) fn render_link(
     options: MarkdownOptions,
     manual_links: bool,
     omit_styles: bool,
-) -> String {
+) -> EncodedLink {
+    let label = render_link_label(children, options, manual_links, omit_styles);
+    let candidate = encode_link(target, title, &label, children);
+    if candidate
+        .meaning
+        .as_ref()
+        .is_some_and(|meaning| matches_link(meaning, &candidate.source))
+    {
+        return candidate;
+    }
+    // '[' changes CommonMark flanking even when accepted raw phrasing was
+    // sound. Revisit original IR instead of deleting generated delimiters
+    // from the rejected candidate (which may also be authored label text).
+    let label = render_link_label(children, options, manual_links, true);
+    let mut recovered = encode_link(target, title, &label, &[]);
+    if recovered
+        .meaning
+        .as_ref()
+        .is_some_and(|meaning| !matches_link(meaning, &recovered.source))
+    {
+        // This source has no portable representation. Do not let the outer
+        // sequence certify its own bytes as if they were source-owned meaning.
+        recovered.meaning = None;
+    }
+    recovered
+}
+
+fn encode_link(target: &str, title: Option<&str>, label: &str, children: &[Inline]) -> EncodedLink {
+    // Preserve the existing representation policy for invalid source URIs
+    // containing SP. Valid typed destinations retain every original scalar.
+    let destination = target.replace(' ', "%20");
+    let meaning = link_meaning(label, &destination, title);
     if title.is_none()
+        && !children.is_empty()
         && children
             .iter()
             .all(|node| matches!(node, Inline::Text { .. }))
@@ -78,38 +117,45 @@ pub(super) fn render_link(
         && !target.chars().any(char::is_whitespace)
         && !target.contains(['<', '>'])
     {
-        return format!("<{target}>");
+        return EncodedLink {
+            source: format!("<{target}>"),
+            meaning,
+        };
     }
-    let label = if omit_styles {
-        render_inline_raw_unstyled(children, options, manual_links)
-    } else {
-        render_inline_raw(children, options, manual_links)
-    };
-    let mut output = String::with_capacity(label.len() + target.len() + 4);
-    output.push('[');
-    output.push_str(&label);
-    output.push_str("](");
-    for character in target.chars() {
+    let mut source = String::with_capacity(label.len() + destination.len() + 4);
+    source.push('[');
+    source.push_str(label);
+    source.push_str("](");
+    append_metadata(&mut source, &destination, false);
+    if let Some(title) = title {
+        source.push(' ');
+        source.push('"');
+        append_metadata(&mut source, title, true);
+        source.push('"');
+    }
+    source.push(')');
+    EncodedLink { source, meaning }
+}
+
+/// Metadata is parsed by `CommonMark`, but is never a visible hard row. Encode
+/// literal entities once and represent control whitespace with entities, so
+/// the visible-row serializer cannot turn title LF/CR into hard-break syntax.
+fn append_metadata(output: &mut String, source: &str, title: bool) {
+    for character in source.chars() {
         match character {
+            '&' => output.push_str("&amp;"),
             '\\' => output.push_str("\\\\"),
-            '(' => output.push_str("\\("),
-            ')' => output.push_str("\\)"),
-            ' ' => output.push_str("%20"),
+            '"' if title => output.push_str("\\\""),
+            '(' | ')' | '<' | '>' if !title => {
+                output.push('\\');
+                output.push(character);
+            }
+            '\n' => output.push_str("&#10;"),
+            '\r' => output.push_str("&#13;"),
+            '\t' => output.push_str("&#9;"),
             _ => output.push(character),
         }
     }
-    if let Some(title) = title {
-        output.push_str(" \"");
-        for character in title.chars() {
-            if character == '"' {
-                output.push('\\');
-            }
-            output.push(character);
-        }
-        output.push('"');
-    }
-    output.push(')');
-    output
 }
 
 /// Decide wrapper policy once while preserving the typed destination.
@@ -144,6 +190,7 @@ mod tests {
             true,
             false,
         );
+        let markdown = markdown.source;
         assert_eq!(
             markdown,
             r#"[label](https://example.test/中\(a\)%20%25\\tail "say \"中\"")"#

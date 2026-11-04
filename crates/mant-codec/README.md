@@ -21,6 +21,25 @@ final row framing and seam serialization (`serialization`), and an independent
 accepted-child meaning check (`projection`). Validation sees the final bytes;
 one bounded recovery may retain representable child styles without accepting
 the candidate's own reinterpreted delimiters as its expected meaning.
+Retained links carry the accepted label meaning and original destination/title
+through bracket serialization and final framing. Link metadata has its own
+escaping: literal entities and control whitespace never become visible rows.
+Unrepresentable nested link ownership remains outside the portable subset.
+
+Routine tests include 13,729 delimiter-risk configurations and 2,720 Markdown
+link-source configurations, each checked twice against original IR. The full
+252,362-configuration corpus has an explicit release entry:
+
+```sh
+cargo test --locked -p mant-codec --release --all-features --lib \
+  complete_phrasing_link_matrix_has_252362_original_ir_two_round_cases \
+  -- --ignored --nocapture
+```
+
+Its style counters distinguish first-read loss, further second-read loss and
+any loss relative to original IR. These are separate from scalar, code and
+link-ownership failures; a permitted style reduction never permits marker text,
+target/title changes or a shifted link range.
 
 ## Public entry points
 

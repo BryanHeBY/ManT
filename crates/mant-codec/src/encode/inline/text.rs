@@ -80,7 +80,6 @@ fn escape_html_attribute(value: &str) -> String {
     output
 }
 
-#[cfg(test)]
 pub(super) fn escape_plain_text(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     append_plain_text(&mut output, value);

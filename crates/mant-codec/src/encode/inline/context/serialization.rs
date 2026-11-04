@@ -1,7 +1,7 @@
 //! Commit delimiter choices only after checking the final reader bytes.
 
 use super::{InlinePiece, projection, styles};
-use styles::{append_choice, choose_sequence, marker};
+use styles::{append_choice, choose_sequence};
 
 #[derive(Clone, Copy)]
 pub(super) enum Framing {
@@ -34,16 +34,15 @@ pub(super) fn render_inline_pieces(
         for piece in pieces.iter() {
             append_safe_piece(&mut output, &piece.rendered);
         }
-        if matches!(framing, Framing::Raw) {
+        if matches!(framing, Framing::Raw)
+            && !pieces
+                .iter()
+                .any(|piece| matches!(piece.accepted, super::AcceptedMeaning::UnsupportedLink))
+        {
             return Some(output);
         }
         let output = framing.render(&output);
-        return projection::equivalent_framed(
-            pieces.iter().map(|piece| (piece.rendered.as_str(), None)),
-            &output,
-            framing,
-        )
-        .then_some(output);
+        return projection::equivalent_pieces(pieces, None, &output, framing).then_some(output);
     }
     let choices = choose_sequence(pieces);
     let mut output = String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
@@ -54,16 +53,7 @@ pub(super) fn render_inline_pieces(
     // Delimiter pairing is global: local flank checks alone cannot prove
     // that a distant run did not steal a close. Compare the complete parse
     // with the independently accepted pieces before committing its bytes.
-    if projection::equivalent_framed(
-        pieces.iter().zip(choices).map(|(piece, choice)| {
-            (
-                piece.rendered.as_str(),
-                marker(piece, choice).map(projection::Style::from_marker),
-            )
-        }),
-        &output,
-        framing,
-    ) {
+    if projection::equivalent_pieces(pieces, Some(&choices), &output, framing) {
         return Some(output);
     }
     if matches!(framing, Framing::Rows { .. }) {
@@ -76,11 +66,7 @@ pub(super) fn render_inline_pieces(
             append_safe_piece(&mut unwrapped, &piece.rendered);
         }
         let unwrapped = framing.render(&unwrapped);
-        if projection::equivalent_framed(
-            pieces.iter().map(|piece| (piece.rendered.as_str(), None)),
-            &unwrapped,
-            framing,
-        ) {
+        if projection::equivalent_pieces(pieces, None, &unwrapped, framing) {
             return Some(unwrapped);
         }
     }

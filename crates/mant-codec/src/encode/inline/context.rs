@@ -12,6 +12,7 @@ use mant_ir::Inline;
 
 use super::links::{PhrasingNode, phrasing_nodes, render_link};
 use super::{MarkdownOptions, code_span, escape_text, html_anchor};
+pub(super) use projection::{LinkMeaning, link_meaning, matches_link};
 use serialization::{Framing, append_safe_piece, render_inline_pieces};
 
 #[derive(Clone, Copy)]
@@ -20,11 +21,36 @@ struct StyleMarkers {
     alternate: &'static str,
 }
 
+/// Ordinary source prose may recognize angle URLs as a convenience. Link
+/// label Text is literal: creating an autolink there would invent a nested
+/// Link that was absent from the original semantic owner.
+#[derive(Clone, Copy)]
+enum TextContext {
+    Ordinary,
+    LinkLabel,
+}
+
+impl TextContext {
+    fn escape(self, source: &str) -> String {
+        match self {
+            Self::Ordinary => escape_text(source),
+            Self::LinkLabel => super::text::escape_plain_text(source),
+        }
+    }
+}
+
+enum AcceptedMeaning {
+    Phrasing,
+    Link(LinkMeaning),
+    UnsupportedLink,
+}
+
 struct InlinePiece<'source> {
     rendered: String,
     markers: Option<StyleMarkers>,
     styled: bool,
     code: Option<Cow<'source, str>>,
+    accepted: AcceptedMeaning,
 }
 
 impl<'source> InlinePiece<'source> {
@@ -34,6 +60,7 @@ impl<'source> InlinePiece<'source> {
             markers: None,
             styled: false,
             code: None,
+            accepted: AcceptedMeaning::Phrasing,
         }
     }
 
@@ -44,6 +71,17 @@ impl<'source> InlinePiece<'source> {
             markers: Some(StyleMarkers { primary, alternate }),
             styled,
             code: None,
+            accepted: AcceptedMeaning::Phrasing,
+        }
+    }
+
+    fn link(link: super::links::EncodedLink) -> Self {
+        Self {
+            rendered: link.source,
+            accepted: link
+                .meaning
+                .map_or(AcceptedMeaning::UnsupportedLink, AcceptedMeaning::Link),
+            ..Self::plain(String::new())
         }
     }
 
@@ -53,44 +91,20 @@ impl<'source> InlinePiece<'source> {
             markers: None,
             styled: false,
             code: Some(Cow::Borrowed(value)),
+            accepted: AcceptedMeaning::Phrasing,
         }
     }
 }
 
-pub(super) fn render_inline_raw(
-    nodes: &[Inline],
-    options: MarkdownOptions,
-    manual_links: bool,
-) -> String {
-    render_inline_raw_segments(&[nodes], options, manual_links)
-}
-
-pub(super) fn render_inline_raw_unstyled(
-    nodes: &[Inline],
-    options: MarkdownOptions,
-    manual_links: bool,
-) -> String {
-    render_unstyled(nodes.iter(), options, manual_links)
-}
-
-pub(super) fn render_inline_raw_segments(
-    segments: &[&[Inline]],
-    options: MarkdownOptions,
-    manual_links: bool,
-) -> String {
-    render_inline_raw_nodes(
-        segments.iter().flat_map(|nodes| nodes.iter()),
+#[cfg(test)]
+fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: bool) -> String {
+    render_nodes(
+        nodes.iter(),
         options,
         manual_links,
+        Framing::Raw,
+        TextContext::Ordinary,
     )
-}
-
-pub(super) fn render_inline_raw_nodes<'source>(
-    nodes: impl Iterator<Item = &'source Inline> + Clone,
-    options: MarkdownOptions,
-    manual_links: bool,
-) -> String {
-    render_nodes(nodes, options, manual_links, Framing::Raw)
 }
 
 /// Row protection is part of the accepted representation, rather than an
@@ -110,6 +124,7 @@ pub(super) fn render_inline_nodes<'source>(
             manual_links,
             interruptible,
         },
+        TextContext::Ordinary,
     )
 }
 
@@ -118,20 +133,34 @@ fn render_nodes<'source>(
     options: MarkdownOptions,
     manual_links: bool,
     framing: Framing,
+    text_context: TextContext,
 ) -> String {
     render_inline_pieces(
-        &mut coalesce_code_pieces(inline_pieces(nodes.clone(), options, manual_links, false)),
+        &mut coalesce_code_pieces(inline_pieces(
+            nodes.clone(),
+            options,
+            manual_links,
+            false,
+            text_context,
+        )),
         framing,
     )
-    .unwrap_or_else(|| render_unstyled_framed(nodes, options, manual_links, framing))
+    .unwrap_or_else(|| render_unstyled_framed(nodes, options, manual_links, framing, text_context))
 }
 
+#[cfg(test)]
 fn render_unstyled<'source>(
     nodes: impl Iterator<Item = &'source Inline>,
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    render_unstyled_framed(nodes, options, manual_links, Framing::Raw)
+    render_unstyled_framed(
+        nodes,
+        options,
+        manual_links,
+        Framing::Raw,
+        TextContext::Ordinary,
+    )
 }
 
 fn render_unstyled_framed<'source>(
@@ -139,14 +168,24 @@ fn render_unstyled_framed<'source>(
     options: MarkdownOptions,
     manual_links: bool,
     framing: Framing,
+    text_context: TextContext,
 ) -> String {
     // Revisit the original borrowed nodes, preserving code coalescing and
     // typed links. Stripping bytes from a rejected Markdown candidate could
     // delete authored marker characters or change destination identities.
-    let pieces = coalesce_code_pieces(inline_pieces(nodes, options, manual_links, true));
-    // There are no generated style delimiters to recover here. Keep the
-    // independently re-encoded content even if an unsupported child prevents
-    // a semantic witness; recoverable Markdown syntax must never panic.
+    let mut pieces = coalesce_code_pieces(inline_pieces(
+        nodes,
+        options,
+        manual_links,
+        true,
+        text_context,
+    ));
+    if let Some(output) = render_inline_pieces(&mut pieces, framing) {
+        return output;
+    }
+    // Unsupported phrasing (notably nested active Link wrappers, which
+    // CommonMark cannot express) retains the established best-effort source
+    // policy. It is explicitly unproved, never a candidate-derived witness.
     let mut output = String::new();
     for piece in pieces {
         append_safe_piece(&mut output, &piece.rendered);
@@ -154,11 +193,37 @@ fn render_unstyled_framed<'source>(
     framing.render(&output)
 }
 
+pub(super) fn render_link_label(
+    children: &[Inline],
+    options: MarkdownOptions,
+    manual_links: bool,
+    omit_styles: bool,
+) -> String {
+    if omit_styles {
+        render_unstyled_framed(
+            children.iter(),
+            options,
+            manual_links,
+            Framing::Raw,
+            TextContext::LinkLabel,
+        )
+    } else {
+        render_nodes(
+            children.iter(),
+            options,
+            manual_links,
+            Framing::Raw,
+            TextContext::LinkLabel,
+        )
+    }
+}
+
 fn inline_pieces<'source>(
     nodes: impl Iterator<Item = &'source Inline>,
     options: MarkdownOptions,
     manual_links: bool,
     omit_styles: bool,
+    text_context: TextContext,
 ) -> Vec<InlinePiece<'source>> {
     let mut nodes = phrasing_nodes(nodes, options, manual_links, omit_styles).peekable();
     let mut pieces = Vec::new();
@@ -173,7 +238,7 @@ fn inline_pieces<'source>(
                     text.to_mut().push_str(value);
                     nodes.next();
                 }
-                pieces.push(InlinePiece::plain(escape_text(&text)));
+                pieces.push(InlinePiece::plain(text_context.escape(&text)));
             }
             PhrasingNode::Node(Inline::Strong { children }) => {
                 let mut segments = vec![children.as_slice()];
@@ -181,7 +246,13 @@ fn inline_pieces<'source>(
                     segments.push(children.as_slice());
                     nodes.next();
                 }
-                pieces.push(render_style(&segments, options, manual_links, ("**", "__")));
+                pieces.push(render_style(
+                    &segments,
+                    options,
+                    manual_links,
+                    ("**", "__"),
+                    text_context,
+                ));
             }
             PhrasingNode::Node(Inline::Emphasis { children }) => {
                 let mut segments = vec![children.as_slice()];
@@ -189,7 +260,13 @@ fn inline_pieces<'source>(
                     segments.push(children.as_slice());
                     nodes.next();
                 }
-                pieces.push(render_style(&segments, options, manual_links, ("*", "_")));
+                pieces.push(render_style(
+                    &segments,
+                    options,
+                    manual_links,
+                    ("*", "_"),
+                    text_context,
+                ));
             }
             PhrasingNode::Node(Inline::Code { value } | Inline::Equation { value, .. }) => {
                 pieces.push(InlinePiece::code(value));
@@ -198,7 +275,7 @@ fn inline_pieces<'source>(
                 destination,
                 title,
                 children,
-            } => pieces.push(InlinePiece::plain(render_link(
+            } => pieces.push(InlinePiece::link(render_link(
                 &destination,
                 title,
                 children,
@@ -238,8 +315,15 @@ fn render_style<'source>(
     options: MarkdownOptions,
     manual_links: bool,
     markers: (&'static str, &'static str),
+    text_context: TextContext,
 ) -> InlinePiece<'source> {
-    let rendered = render_inline_raw_segments(segments, options, manual_links);
+    let rendered = render_nodes(
+        segments.iter().flat_map(|nodes| nodes.iter()),
+        options,
+        manual_links,
+        Framing::Raw,
+        text_context,
+    );
     // Destination-only annotations emit navigation syntax, never an empty
     // emphasis wrapper that can alter the adjacent phrasing delimiters.
     if segments

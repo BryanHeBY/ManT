@@ -79,3 +79,90 @@ fn final_recovery_keeps_accepted_children_with_at_most_two_whole_parses() {
         assert_eq!(WHOLE_PARSES.with(std::cell::Cell::get), 1);
     }
 }
+
+#[test]
+fn retained_link_witnesses_have_linear_local_and_final_parse_work() {
+    use mant_ir::{Inline, LinkTarget};
+
+    fn measure(count: usize, label: &[Inline], title: &str) -> (usize, usize) {
+        let nodes = (0..count)
+            .map(|index| Inline::Link {
+                target: LinkTarget::External {
+                    uri: format!("https://a.test/{index}/&amp;"),
+                },
+                title: Some(title.into()),
+                children: label.to_vec(),
+            })
+            .collect::<Vec<_>>();
+        PARSED_BYTES.with(|work| work.set(0));
+        WHOLE_PARSES.with(|work| work.set(0));
+        let markdown = super::super::render_inline_nodes(
+            nodes.iter(),
+            crate::encode::MarkdownOptions::default(),
+            false,
+            true,
+        );
+        let work = (
+            PARSED_BYTES.with(std::cell::Cell::get),
+            WHOLE_PARSES.with(std::cell::Cell::get),
+        );
+        // Retained typed Links, not InlinePiece::plain strings: every local
+        // bracket witness, metadata escape and final Rows parse is exercised.
+        let actual = pulldown_cmark::Parser::new(&markdown)
+            .filter_map(|event| match event {
+                pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link {
+                    dest_url, title, ..
+                }) => Some((dest_url.into_string(), title.into_string())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual.len(), count);
+        for (index, (target, restored_title)) in actual.iter().enumerate() {
+            assert_eq!(target, &format!("https://a.test/{index}/&amp;"));
+            assert_eq!(restored_title, title);
+        }
+        work
+    }
+
+    let styled = [Inline::Strong {
+        children: vec![Inline::Text {
+            value: "label".into(),
+        }],
+    }];
+    let recovered = crate::parse_markdown("_! ***a***_&#32;", None)
+        .unwrap()
+        .document
+        .blocks
+        .remove(0);
+    let mant_ir::Block::Paragraph {
+        children: recovered,
+        ..
+    } = recovered
+    else {
+        panic!("one independently parsed recovery label")
+    };
+    for label in [styled.as_slice(), recovered.as_slice()] {
+        let mut previous = None;
+        for count in [16, 64, 256] {
+            let work = measure(count, label, "metadata &amp; \\\nnext");
+            if let Some((bytes, parses)) = previous {
+                // Input grows fourfold. Deterministic work counts allow a
+                // generous fivefold slope (plus fixed overhead), catching an
+                // accumulated-prefix scan without timing or exact call counts.
+                assert!(work.0 <= bytes * 5 + 1024, "{count} Links: {work:?}");
+                assert!(work.1 <= parses * 5 + 4, "{count} Links: {work:?}");
+            }
+            assert!(work.1 <= 8 * count + 4, "bounded local/final passes");
+            previous = Some(work);
+        }
+    }
+    for size in [64, 1024, 16_384] {
+        let label = [Inline::Text {
+            value: "x".repeat(size),
+        }];
+        let title = format!("{}\\&amp;\nend", "t".repeat(size));
+        let work = measure(1, &label, &title);
+        assert!(work.0 <= 64 * (size * 2 + 128), "long Link/title: {work:?}");
+        assert!(work.1 <= 8, "long metadata does not add parsing passes");
+    }
+}

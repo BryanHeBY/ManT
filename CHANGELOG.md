@@ -44,6 +44,10 @@ that crate was not published for that change.
   independent effects of real zero-width cells, continuations and KEEP.
   Keep that register independent of plain/field storage and distinguish direct
   field flushes from real newlines, including empty-buffer line entries.
+- Check retained Markdown links against their original label meaning inside
+  actual brackets, including conservative style recovery. Preserve literal
+  destination/title entities, trailing backslashes and control whitespace
+  without turning metadata into visible hard lines or extra link content.
 - Preserve complete source sibling context while dispatching function arguments,
   including synopsis line flushes and same-line prefix/flag joins.
 - Execute repeated `Sm on` requests against the live native buffer without

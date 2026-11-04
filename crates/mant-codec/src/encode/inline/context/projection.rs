@@ -27,19 +27,53 @@ impl Style {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 struct Run {
     text: String,
     styles: u8,
     link: Option<usize>,
 }
 
-#[derive(Default, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 struct Projection {
     runs: Vec<Run>,
     html: Vec<(usize, String)>,
     links: Vec<(String, String)>,
     bytes: usize,
+}
+
+/// A link retains the accepted label meaning before bracket serialization.
+/// Metadata comes from its typed source, never from reparsing a candidate URL.
+#[derive(Clone)]
+pub(in crate::encode::inline) struct LinkMeaning(Projection);
+
+pub(in crate::encode::inline) fn link_meaning(
+    label: &str,
+    destination: &str,
+    title: Option<&str>,
+) -> Option<LinkMeaning> {
+    let meaning = project(label)?;
+    // CommonMark has no nested Link ownership. The reader's existing wrapper
+    // policy decides transparent links before this encoder is reached.
+    if !meaning.links.is_empty() {
+        return None;
+    }
+    let mut linked = Projection {
+        links: vec![(destination.to_owned(), title.unwrap_or_default().to_owned())],
+        html: meaning.html,
+        ..Projection::default()
+    };
+    for run in meaning.runs {
+        for character in run.text.chars() {
+            let owner = (character != '\n').then_some(0);
+            linked.text(character.encode_utf8(&mut [0; 4]), run.styles, owner);
+        }
+    }
+    Some(LinkMeaning(linked))
+}
+
+pub(in crate::encode::inline) fn matches_link(meaning: &LinkMeaning, source: &str) -> bool {
+    project(source).is_some_and(|actual| actual == meaning.0)
 }
 
 impl Projection {
@@ -121,14 +155,64 @@ pub(super) fn equivalent<'a>(
     equivalent_framed(pieces, whole, Framing::Raw)
 }
 
+#[cfg(test)]
 pub(super) fn equivalent_framed<'a>(
     pieces: impl Iterator<Item = (&'a str, Option<Style>)>,
     whole: &str,
     framing: Framing,
 ) -> bool {
+    equivalent_with_meanings(
+        pieces.map(|(source, style)| (source, style, None)),
+        whole,
+        framing,
+    )
+}
+
+pub(super) fn equivalent_pieces(
+    pieces: &[super::InlinePiece<'_>],
+    choices: Option<&[usize]>,
+    whole: &str,
+    framing: Framing,
+) -> bool {
+    if pieces
+        .iter()
+        .any(|piece| matches!(piece.accepted, super::AcceptedMeaning::UnsupportedLink))
+    {
+        return false;
+    }
+    equivalent_with_meanings(
+        pieces.iter().enumerate().map(|(index, piece)| {
+            (
+                piece.rendered.as_str(),
+                choices
+                    .and_then(|choices| super::styles::marker(piece, choices[index]))
+                    .map(Style::from_marker),
+                match &piece.accepted {
+                    super::AcceptedMeaning::Phrasing => None,
+                    super::AcceptedMeaning::Link(meaning) => Some(meaning),
+                    super::AcceptedMeaning::UnsupportedLink => {
+                        unreachable!("unsupported links were rejected")
+                    }
+                },
+            )
+        }),
+        whole,
+        framing,
+    )
+}
+
+fn equivalent_with_meanings<'a>(
+    pieces: impl Iterator<Item = (&'a str, Option<Style>, Option<&'a LinkMeaning>)>,
+    whole: &str,
+    framing: Framing,
+) -> bool {
     let mut expected = Projection::default();
-    for (source, style) in pieces {
-        let Some(piece) = project(source) else {
+    for (source, style, accepted) in pieces {
+        let piece = if let Some(meaning) = accepted {
+            meaning.0.clone()
+        } else if let Some(piece) = project(source) {
+            piece
+        } else {
             return false;
         };
         expected.append(match style {

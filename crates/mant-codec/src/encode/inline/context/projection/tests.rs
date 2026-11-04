@@ -74,3 +74,22 @@ fn final_bytes_reject_row_entity_flanks_and_unprotected_image_openers() {
         framing,
     ));
 }
+
+#[test]
+fn bracket_witness_retains_original_label_metadata_and_occurrence_extent() {
+    // Accepted child meaning precedes the candidate's actual bracket flanks.
+    let meaning =
+        super::link_meaning("_! ***a***_ ", "https://a.test/&amp;", Some("say \\ \n")).unwrap();
+    for corrupted in [
+        "[_! _**a**__ ](https://a.test/&amp;amp; \"say \\\\ &#10;\")",
+        "[! a ](https://a.test/&amp; \"say \\\\ &#10;\")",
+        "[! a ](https://a.test/&amp;amp; \"say &#10;\")",
+    ] {
+        assert!(!super::matches_link(&meaning, corrupted));
+    }
+    let plain = super::link_meaning("a ", "https://a.test/&amp;", Some("say \\\n")).unwrap();
+    assert!(super::matches_link(
+        &plain,
+        "[a ](https://a.test/&amp;amp; \"say \\\\&#10;\")"
+    ));
+}

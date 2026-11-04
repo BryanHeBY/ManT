@@ -3,6 +3,8 @@
 use super::*;
 
 mod finalization;
+mod link_semantics;
+mod phrasing_matrix;
 
 #[derive(Debug, Eq, PartialEq)]
 struct Scalar {

@@ -490,3 +490,22 @@ fn addressable_anchors_keep_commonmark_targets_and_the_explicit_native_html_poli
         query = parse_content(&markdown, None).unwrap();
     }
 }
+
+#[test]
+fn actual_link_brackets_and_metadata_keep_meaning_in_all_export_roots() {
+    for source in [
+        "[_! ***a***_&#32;](https://a.test)",
+        r#"[a](https://a.test "say \\")"#,
+        r#"[a](https://a.test/&amp;amp; "&amp;amp;")"#,
+        "[a](https://a.test \"one\ntwo\")",
+        "[a](https://a.test \"one\r\ntwo\")",
+        "[a  \nb](https://a.test \"line\nmetadata\")",
+    ] {
+        let nodes = parsed_children(source);
+        for context in CONTEXTS {
+            for options in OPTIONS {
+                final_rounds(&nodes, context, options);
+            }
+        }
+    }
+}

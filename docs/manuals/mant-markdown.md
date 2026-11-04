@@ -78,6 +78,15 @@ Addressable export also emits HTML anchors. ManT's deliberate visible-source
 fallback for unsupported raw HTML remains distinct from ordinary Markdown
 roundtrip semantics.
 
+Retained link labels are checked again inside their actual Markdown brackets,
+using the accepted label meaning and original destination/title as independent
+evidence. If a style cannot survive that context, export retries from the
+original children without that style; authored marker characters are not
+deleted from a rejected string. Literal destination/title entities and trailing
+backslashes retain their values. Title LF, CR and TAB are metadata, encoded
+without passing through visible hard-line framing. Nested link ownership has
+no portable CommonMark representation and remains outside this checked subset.
+
 ## Links
 
 Markdown links are classified before entering the IR:
