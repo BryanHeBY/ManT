@@ -37,6 +37,11 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Validate nested Markdown delimiters against accepted child semantics before
+  adding an outer wrapper. Keep text, code, links, hard rows and available
+  styles stable through repeated parser readback without self-validating a
+  candidate's already reinterpreted delimiter spans.
+
 - Preserve authored direct siblings around native HEAD/BODY views: transparent
   `Xo`, enclosures, function declarations, one-line displays, definitions,
   headings and synopsis names execute in source order with their original

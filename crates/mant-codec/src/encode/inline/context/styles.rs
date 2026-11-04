@@ -32,30 +32,22 @@ pub(super) fn render_inline_pieces(pieces: &mut [InlinePiece<'_>]) -> Option<Str
     }
     let choices = choose_sequence(pieces);
     let mut output = String::with_capacity(pieces.iter().map(|piece| piece.rendered.len()).sum());
-    let mut spans = Vec::with_capacity(pieces.len());
-    for (piece, choice) in pieces.iter().zip(choices) {
-        let beginning = output.len();
-        let Some(marker) = marker(piece, choice) else {
-            output.push_str(&piece.rendered);
-            spans.push(beginning..output.len());
-            continue;
-        };
-        let core = core(piece);
-        let start =
-            piece.rendered.len() - piece.rendered.trim_start_matches([' ', '\t', '\n']).len();
-        let end = start + core.len();
-        output.push_str(&piece.rendered[..start]);
-        output.push_str(marker);
-        output.push_str(core);
-        output.push_str(marker);
-        output.push_str(&piece.rendered[end..]);
-        spans.push(beginning..output.len());
+    for (piece, choice) in pieces.iter().zip(choices.iter().copied()) {
+        append_choice(&mut output, piece, choice);
     }
     // Delimiter pairing is global: local flank checks alone cannot prove
     // that a distant run did not steal a close. Compare the complete parse
     // with the independently accepted pieces before committing its bytes.
-    projection::equivalent(spans.iter().map(|span| &output[span.clone()]), &output)
-        .then_some(output)
+    projection::equivalent(
+        pieces.iter().zip(choices).map(|(piece, choice)| {
+            (
+                piece.rendered.as_str(),
+                marker(piece, choice).map(projection::Style::from_marker),
+            )
+        }),
+        &output,
+    )
+    .then_some(output)
 }
 
 fn choose_sequence(pieces: &[InlinePiece<'_>]) -> Vec<usize> {
@@ -72,6 +64,7 @@ fn choose_sequence(pieces: &[InlinePiece<'_>]) -> Vec<usize> {
         // At most 2 * 3 * 3 parsings of this piece, independent of the
         // accumulated output. There are only nine live sequence states.
         let mut valid = [[[None; CHOICES]; CHOICES]; CHOICES];
+        let mut child_valid = [None; CHOICES];
         for (state, score) in scores.into_iter().enumerate() {
             let Some(score) = score else { continue };
             let before = state / CHOICES;
@@ -82,12 +75,15 @@ fn choose_sequence(pieces: &[InlinePiece<'_>]) -> Vec<usize> {
                 .enumerate()
             {
                 let legal = *witness.get_or_insert_with(|| {
-                    choice_is_valid(
-                        piece,
-                        current,
-                        previous.map(|piece| (piece, before)),
-                        following.map(|piece| (piece, after)),
-                    )
+                    let child_is_valid = *child_valid[current]
+                        .get_or_insert_with(|| choice_preserves_child(piece, current));
+                    child_is_valid
+                        && choice_is_valid(
+                            piece,
+                            current,
+                            previous.map(|piece| (piece, before)),
+                            following.map(|piece| (piece, after)),
+                        )
                 });
                 if !legal {
                     continue;
@@ -119,6 +115,34 @@ fn choose_sequence(pieces: &[InlinePiece<'_>]) -> Vec<usize> {
         state = history[index][state];
     }
     choices
+}
+
+fn append_choice(output: &mut String, piece: &InlinePiece<'_>, choice: usize) {
+    let Some(marker) = marker(piece, choice) else {
+        output.push_str(&piece.rendered);
+        return;
+    };
+    let core = core(piece);
+    let start = piece.rendered.len() - piece.rendered.trim_start_matches([' ', '\t', '\n']).len();
+    let end = start + core.len();
+    output.push_str(&piece.rendered[..start]);
+    output.push_str(marker);
+    output.push_str(core);
+    output.push_str(marker);
+    output.push_str(&piece.rendered[end..]);
+}
+
+fn choice_preserves_child(piece: &InlinePiece<'_>, choice: usize) -> bool {
+    let Some(marker) = marker(piece, choice) else {
+        return true;
+    };
+    let mut candidate = String::with_capacity(piece.rendered.len() + 2 * marker.len());
+    append_choice(&mut candidate, piece, choice);
+    projection::preserves_child(
+        &piece.rendered,
+        projection::Style::from_marker(marker),
+        &candidate,
+    )
 }
 
 fn choice_count(piece: &InlinePiece<'_>) -> usize {
@@ -268,6 +292,7 @@ fn append_boundary(output: &mut String, boundary: Option<char>) {
 std::thread_local! {
     static PARSED_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static WHOLE_PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static PROJECTED_SCALARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -294,14 +319,61 @@ mod tests {
             let bytes: usize = pieces.iter().map(|piece| piece.rendered.len()).sum();
             PARSED_BYTES.with(|work| work.set(0));
             WHOLE_PARSES.with(|work| work.set(0));
+            PROJECTED_SCALARS.with(|work| work.set(0));
             let output = render_inline_pieces(&mut pieces).unwrap();
             let work = PARSED_BYTES.with(std::cell::Cell::get);
-            assert!(work <= 20 * (bytes + 12 * count) + 4 * output.len());
+            // Two cached child checks add at most four piece parsings to
+            // the existing bounded flank witnesses. No historical prefix
+            // is rescanned as the sequence grows.
+            assert!(work <= 24 * (bytes + 12 * count) + 4 * output.len());
             assert_eq!(WHOLE_PARSES.with(std::cell::Cell::get), 1);
+            assert!(PROJECTED_SCALARS.with(std::cell::Cell::get) <= 3 * bytes);
             if let Some(previous) = previous {
                 assert!(work <= previous * 5);
             }
             previous = Some(work);
+        }
+    }
+
+    #[test]
+    fn nested_parser_work_is_bounded_for_separate_length_and_depth_axes() {
+        // Recursive formatting revisits an accepted child at every outer
+        // style. Keep depth separate from flat sequence length: this budget
+        // is O(depth * (text bytes + depth)), not an arbitrary-depth linearity
+        // claim. Both counters observe actual parser/projection loop work.
+        let axes = [
+            (4, 64),
+            (4, 256),
+            (4, 1024),
+            (1, 128),
+            (4, 128),
+            (16, 128),
+            (64, 128),
+        ];
+        for (depth, bytes) in axes {
+            let mut node = mant_ir::Inline::Text {
+                value: "x".repeat(bytes),
+            };
+            for level in 0..depth {
+                node = if level % 2 == 0 {
+                    mant_ir::Inline::Strong {
+                        children: vec![node],
+                    }
+                } else {
+                    mant_ir::Inline::Emphasis {
+                        children: vec![node],
+                    }
+                };
+            }
+            PARSED_BYTES.with(|work| work.set(0));
+            PROJECTED_SCALARS.with(|work| work.set(0));
+            let _ = super::super::render_inline_raw(
+                &[node],
+                crate::encode::MarkdownOptions::default(),
+                false,
+            );
+            assert!(PARSED_BYTES.with(std::cell::Cell::get) <= 8 * depth * (bytes + 8 * depth + 8));
+            assert!(PROJECTED_SCALARS.with(std::cell::Cell::get) <= 3 * depth * bytes);
         }
     }
 }

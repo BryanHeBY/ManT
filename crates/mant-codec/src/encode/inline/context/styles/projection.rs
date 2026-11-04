@@ -2,6 +2,29 @@
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
+#[derive(Clone, Copy)]
+pub(super) enum Style {
+    Strong,
+    Emphasis,
+}
+
+impl Style {
+    pub(super) fn from_marker(marker: &str) -> Self {
+        if marker.len() == 2 {
+            Self::Strong
+        } else {
+            Self::Emphasis
+        }
+    }
+
+    const fn bit(self) -> u8 {
+        match self {
+            Self::Strong => 1,
+            Self::Emphasis => 2,
+        }
+    }
+}
+
 #[derive(Eq, PartialEq)]
 struct Run {
     text: String,
@@ -50,19 +73,69 @@ impl Projection {
             self.text(&run.text, run.styles, run.link.map(|link| link + owners));
         }
     }
+
+    fn with_style(self, source: &str, style: Style) -> Self {
+        // The encoder moves only raw ASCII edge whitespace outside this
+        // wrapper. Its visible byte lengths are unchanged by Markdown; code
+        // padding and escaped whitespace inside the accepted body stay styled.
+        let leading = source.len() - source.trim_start_matches([' ', '\t', '\n']).len();
+        let trailing = source.len() - source.trim_end_matches([' ', '\t', '\n']).len();
+        let end = self.bytes.saturating_sub(trailing);
+        let mut output = Self {
+            html: self.html,
+            links: self.links,
+            ..Self::default()
+        };
+        let mut offset = 0;
+        for run in self.runs {
+            for character in run.text.chars() {
+                #[cfg(test)]
+                super::PROJECTED_SCALARS.with(|visits| visits.set(visits.get() + 1));
+                // Hard rows have no style/link owner in this projection.
+                // Applying an outer style must not turn that boundary into
+                // authored text or change the accepted child code/link bits.
+                let styles = if character != '\n' && (leading..end).contains(&offset) {
+                    run.styles | style.bit()
+                } else {
+                    run.styles
+                };
+                output.text(character.encode_utf8(&mut [0; 4]), styles, run.link);
+                offset += character.len_utf8();
+            }
+        }
+        output
+    }
 }
 
-pub(super) fn equivalent<'a>(pieces: impl Iterator<Item = &'a str>, whole: &str) -> bool {
+/// Expected meaning belongs to the accepted child before its new wrapper.
+/// Parsing a slice of `whole` here would certify that candidate against itself:
+/// outer delimiters can re-pair the child's formerly valid nested delimiters.
+pub(super) fn equivalent<'a>(
+    pieces: impl Iterator<Item = (&'a str, Option<Style>)>,
+    whole: &str,
+) -> bool {
     let mut expected = Projection::default();
-    for piece in pieces {
-        let Some(piece) = project(piece) else {
+    for (source, style) in pieces {
+        let Some(piece) = project(source) else {
             return false;
         };
-        expected.append(piece);
+        expected.append(match style {
+            Some(style) => piece.with_style(source, style),
+            None => piece,
+        });
     }
     #[cfg(test)]
     super::WHOLE_PARSES.with(|count| count.set(count.get() + 1));
     project(whole).is_some_and(|actual| actual == expected)
+}
+
+/// Reject an unsafe wrapper before sequence scoring can discard safe inner
+/// styles. Each of the two marker choices is checked once per source piece.
+pub(super) fn preserves_child(source: &str, style: Style, candidate: &str) -> bool {
+    let Some(expected) = project(source) else {
+        return false;
+    };
+    project(candidate).is_some_and(|actual| actual == expected.with_style(source, style))
 }
 
 fn project(source: &str) -> Option<Projection> {
@@ -141,7 +214,33 @@ pub(super) fn append_phrasing_rows(output: &mut String, source: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::equivalent;
+    fn equivalent<'a>(pieces: impl Iterator<Item = &'a str>, whole: &str) -> bool {
+        super::equivalent(pieces.map(|piece| (piece, None)), whole)
+    }
+
+    #[test]
+    fn outer_style_cannot_certify_reinterpreted_child_delimiters() {
+        for (child, corrupted) in [
+            (r"_`a`_b\*__", r"**_`a`_b\*__**"),
+            (
+                r"_[a](https://a.test)_b\*__",
+                r"**_[a](https://a.test)_b\*__**",
+            ),
+        ] {
+            assert!(!super::equivalent(
+                [(child, Some(super::Style::Strong))].into_iter(),
+                corrupted,
+            ));
+        }
+        assert!(super::equivalent(
+            [(" `a` ", Some(super::Style::Strong))].into_iter(),
+            " **`a`** ",
+        ));
+        assert!(!super::equivalent(
+            [(" `a` ", Some(super::Style::Strong))].into_iter(),
+            "** `a` **",
+        ));
+    }
 
     #[test]
     fn complete_check_rejects_remote_pairing_changed_styles_and_link_occurrences() {

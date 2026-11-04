@@ -56,6 +56,14 @@ List tightness follows the parser's direct item structure: a loose nested list d
 
 Strong and emphasis spans may nest to depth 64. Deeper spans remain visible with an unsupported diagnostic.
 
+Export checks a nested style wrapper against the already accepted child
+meaning before choosing its delimiters, then checks the complete phrasing
+sequence. Text, code identity, individual link targets and coverage, styles
+and hard rows are compared independently; a wrapper cannot validate a
+candidate by reinterpreting that candidate's own inner delimiters. Existing
+conservative style fallback still preserves the original words without
+adding spaces or marker characters.
+
 ## Links
 
 Markdown links are classified before entering the IR:
