@@ -17,8 +17,8 @@
 
 //! Generated punctuation participates in the same flow as authored operands.
 use super::{
-    Font, Inline, InlineBuilder, Node, append_inline_node, inline_children, navigation_anchor,
-    plain_text,
+    Font, Inline, InlineBuilder, Node, append_isolated_inline_node, inline_children,
+    navigation_anchor, plain_text,
 };
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
@@ -32,7 +32,7 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
     let append_name = |builder: &mut InlineBuilder| {
         builder.with_font_scope(Font::Strong, |builder| {
             builder.with_direct_word_operands(|builder| {
-                append_inline_node(builder, head, name);
+                append_isolated_inline_node(builder, head, name);
             });
         });
     };
@@ -48,11 +48,11 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
         builder.with_font_scope(Font::Emphasis, |builder| {
             if node.flags.synopsis_pretty {
                 builder.with_nonbreaking_word_operand(|builder| {
-                    append_inline_node(builder, argument, name);
+                    append_isolated_inline_node(builder, argument, name);
                 });
             } else {
                 builder.with_direct_word_operands(|builder| {
-                    append_inline_node(builder, argument, name);
+                    append_isolated_inline_node(builder, argument, name);
                 });
             }
         });
@@ -88,12 +88,12 @@ pub(in crate::mandoc) fn function_argument(
     let operands = inline_children(argument);
     for (index, operand) in operands.iter().enumerate() {
         if operand.flags.delimiter_close {
-            append_inline_node(builder, operand, name);
+            append_isolated_inline_node(builder, operand, name);
             continue;
         }
         builder.with_font_scope(Font::Emphasis, |builder| {
             builder.with_nonbreaking_word_operand(|builder| {
-                append_inline_node(builder, operand, name);
+                append_isolated_inline_node(builder, operand, name);
             });
         });
         let comma = crate::mandoc::adjacency::next(&operands[index + 1..])
@@ -144,8 +144,9 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
         node.id,
         |builder| {
             if let Some(first) = first {
-                builder
-                    .with_direct_word_operands(|builder| append_inline_node(builder, first, name));
+                builder.with_direct_word_operands(|builder| {
+                    append_isolated_inline_node(builder, first, name);
+                });
             }
             // CVS man_term.c::pre_MR() emits parentheses even without a
             // section operand; mdoc termp_xr_pre() returns after the name.
@@ -157,7 +158,7 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
                 builder.tighten_next_boundary();
                 if let Some(section_node) = children.get(1) {
                     builder.with_direct_word_operands(|builder| {
-                        append_inline_node(builder, section_node, name);
+                        append_isolated_inline_node(builder, section_node, name);
                     });
                 }
                 builder.tighten_next_boundary();
@@ -193,7 +194,8 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
     }
     for child in children.get(2..).unwrap_or_default() {
         builder.tighten_next_boundary();
-        builder.with_direct_word_operands(|builder| append_inline_node(builder, child, name));
+        builder
+            .with_direct_word_operands(|builder| append_isolated_inline_node(builder, child, name));
     }
     if man_reference {
         // print_man_node() also resets after the suffix. A following fP

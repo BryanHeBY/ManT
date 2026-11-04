@@ -37,6 +37,13 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Preserve full source adjacency in recovered table-cell and bibliography
+  bodies, including synopsis flushes and pending zero-advance state.
+- Execute empty words against the incoming separator register before applying
+  the current spacing mode, preserving tight off-to-on transitions and the
+  independent effects of real zero-width cells, continuations and KEEP.
+  Keep that register independent of plain/field storage and distinguish direct
+  field flushes from real newlines, including empty-buffer line entries.
 - Preserve complete source sibling context while dispatching function arguments,
   including synopsis line flushes and same-line prefix/flag joins.
 - Execute repeated `Sm on` requests against the live native buffer without

@@ -122,7 +122,7 @@ impl InlineBuilder {
         }
         // term_newln() sets NOSPACE even when both lastcol and viscol were
         // zero, so an empty flush cannot re-arm the next word's auto blank.
-        self.execution.boundary = PendingBoundary::Tight;
+        self.tighten_next_boundary();
     }
 
     /// Commit the current formatter cell without ending its visual row.
@@ -140,12 +140,11 @@ impl InlineBuilder {
             .as_ref()
             .and_then(|state| state.no_break)
             .is_some_and(|field| self.execution.execution_epoch != field.resumed_execution_epoch);
-        if !self.has_formatter_cell() && !executed_field_word {
-            // A definitive rejection still occupied the native buffer:
-            // roff_term_pre_mc() calls term_flushln() with NOBREAK held;
-            // its reset (term.c:233-237) retires that unit even when no
-            // printable cell survives in this output owner. Registers for
-            // the dead buffer must not carry into the next formatter word.
+        let buffered_cells = !self.execution.word_input().0.is_empty();
+        if !self.has_formatter_cell() && !executed_field_word && !buffered_cells {
+            // A rejected unit can already have retired its cells at the
+            // preceding real flush. Clear its stale projection facts here;
+            // an actually empty MC call does not change the native flag.
             if self.execution.wipe_remainder {
                 self.execution.zero_advance.discard_at_row_end();
                 self.execution.wipe_remainder = false;
@@ -161,6 +160,14 @@ impl InlineBuilder {
             }
             return;
         }
+        self.consume_no_break_flush();
+        // Every occupied roff_term_pre_mc() branch reaches this operation
+        // after term_flushln(), including a resumed/rejected field. That
+        // flush may end a row, but MC then explicitly clears NOSPACE.
+        self.execution.native_word_spacing = super::super::NativeWordSpacing::Separate;
+    }
+
+    fn consume_no_break_flush(&mut self) {
         // term_fill() may accept a prefix and retire the rejected suffix's
         // cursor. Keep the input owner boundary of this actual flush before
         // either projection; accepted graph/origin receipts still belong to it.
@@ -243,10 +250,6 @@ impl InlineBuilder {
         // (roff_term.c:147-150). The next graphless term_word() therefore
         // writes a real automatic blank even on a fresh plain flush unit;
         // its deferred display padding cannot stand in for this input cell.
-        self.execution.plain_input.buffer.release_word_boundary();
-        if let Some(state) = &mut self.execution.definition {
-            state.field_buffer.release_word_boundary();
-        }
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;
         self.execution.row_zero_graph = false;

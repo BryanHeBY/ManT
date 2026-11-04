@@ -66,6 +66,16 @@ For example, `Sm off` joins ordinary `FIRST` and `SECOND` source words as
 still precedes the first word. Authored blanks, explicit `Ns` joins and `\c`
 continuations retain their separate execution rules.
 
+Each formatter word consumes the incoming separator state before the current
+spacing mode selects the next word's state. Empty and font-only operands still
+execute that transition. In particular, `Sm on` on an empty native buffer does
+not create a separator that an earlier `Sm off` word suppressed. A real
+zero-width cell such as `\&` remains distinct from an operand that writes no
+cells, and an IR ownership change does not retire the native buffer.
+Direct field flushes preserve the word register, while a real newline selects
+NOSPACE even on an empty buffer. Moving between ordinary input and a temporary
+function/name field does not create a second copy of this register.
+
 Synopsis declarations execute their native pre, children and post in ordinary
 flow, extended definition heads and transparent scopes alike. Entering `Nm`
 preserves the existing input buffer until its real HEAD pre consumes it.
@@ -74,6 +84,11 @@ generated suffix at the actual native boundary. One-line `D1`/`Dl` displays
 have literal presentation without changing source fill mode: their post ends
 the current row, then following closing punctuation executes with the next
 word rather than being appended to the completed display.
+
+The same source-sibling entry rules apply inside admitted table-cell macro
+recovery and bibliography bodies. Unsupported whole-table execution and an
+independently valid recovered fragment remain separate compatibility cases;
+rejected recovery keeps its native fallback rather than replaying macros.
 
 ## man Language
 

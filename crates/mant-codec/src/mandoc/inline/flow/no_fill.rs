@@ -39,6 +39,9 @@ impl NoFillInlineState {
         if !self.active {
             return;
         }
+        // This is the real source-row close. The later projection reset is
+        // independent and cannot recreate NOSPACE after subsequent words.
+        execution.native_word_spacing = super::NativeWordSpacing::NoSpace;
         // Resolve the complete active native unit against the actual literal
         // owner before its cells retire. A fragment return is not a flush:
         // earlier TEXT and delayed glyph owners remain reachable here.

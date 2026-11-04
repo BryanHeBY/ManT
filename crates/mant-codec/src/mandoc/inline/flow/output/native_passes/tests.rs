@@ -21,7 +21,7 @@ fn accepted_owner_receipt_intersects_each_ordered_range_once() {
         let mut anchors = Vec::new();
         for index in 0..=words {
             let start = buffer.cells().len();
-            buffer.begin_word(false, true, false);
+            buffer.begin_word(index == 0, false);
             let mut writes = if index == words {
                 vec![
                     FieldWrite::Cell(FieldCell::BreakMarker),
@@ -81,12 +81,9 @@ fn native_word_receipt_preserves_ordinary_kept_and_tight_boundaries() {
         (true, false, None),
     ] {
         let mut buffer = FieldBuffer::default();
-        assert_eq!(buffer.begin_word(true, true, false), 0);
+        assert_eq!(buffer.begin_word(true, false), 0);
         buffer.apply_writes(&FieldWrite::literal("A"));
-        assert_eq!(
-            buffer.begin_word(tight, true, kept),
-            usize::from(cell.is_some())
-        );
+        assert_eq!(buffer.begin_word(tight, kept), usize::from(cell.is_some()));
         let receipt = buffer.apply_writes(&FieldWrite::literal("B"));
         assert_eq!(receipt.first_content_cell, if tight { 1 } else { 2 });
         assert_eq!(

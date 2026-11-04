@@ -25,6 +25,7 @@ regex-syntax.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]
+serde.workspace = true
 serde_json.workspace = true
 mant-codec = { path = "../mant-codec", version = "^0.13.0", default-features = false }
 mant-engine = { path = "../mant-engine", version = "^0.13.0" }

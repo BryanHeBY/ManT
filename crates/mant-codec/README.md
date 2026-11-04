@@ -102,6 +102,8 @@ Special function-argument routing borrows the complete original parent sequence.
 Its raw successor (for `Pf`) and logical neighbours (for `Fl` and synopsis
 entry) remain distinct, including across argument boundaries and transparent
 requests. Nested functions never replace their parent's sibling context.
+Recovered table-cell bodies and bibliography bodies borrow that same context;
+an isolated generated operand does not pretend to be a source sibling list.
 
 Accepted device padding remains distinct from authored scalars until its
 annotation boundary is known. Moving a leading gap outside a link also
@@ -122,6 +124,14 @@ enabled `Sm on` releases NOSPACE when the live input buffer contains cells.
 An empty word's boundary register is distinct from an actual zero-width native
 cell. A retired buffer cannot borrow occupancy from already presented output;
 continuation and KEEP retain their own lifetimes.
+The incoming separator is consumed before the current spacing mode establishes
+the next word's register. Even a zero-cell word executes that transition, so
+enabling spacing on an empty buffer cannot invent a separator retrospectively.
+NOSPACE belongs to the shared execution state, independently of plain/field
+cell storage. A direct `term_flushln` consumes input without resetting this
+register; a real `term_newln` selects NOSPACE even when no output row is active.
+Decoded overstrike joins and field-pass row projection do not execute either
+native flag transition.
 
 A native field scope can span multiple paragraph and literal content owners.
 Its explicit source pre/post boundaries protect the live word, separator and

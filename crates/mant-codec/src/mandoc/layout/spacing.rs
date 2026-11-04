@@ -22,6 +22,7 @@ pub(in crate::mandoc) fn execute_man_paragraph_spacing(
     // predecessor. A fitting detached HEAD can still own viscol even when
     // this IR destination has no cells; closing it clears bare BACKAFTER
     // exactly once before PP/SY/IP/TP enters the following body.
+    formatter.execution.select_native_no_space();
     formatter.settle_definition_head_rows();
     if !has_predecessor {
         return 0;

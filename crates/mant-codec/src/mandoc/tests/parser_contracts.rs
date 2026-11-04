@@ -239,7 +239,10 @@ fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
             block => panic!("expected fallback paragraph, got {block:?}"),
         })
         .collect::<Vec<_>>();
-    assert_eq!(rendered, ["argument", "second_argument"]);
+    // FutureBlock is a deliberately synthetic unsupported owned AST, not a
+    // macro executed by the pinned reference. Its BODY owners preserve the
+    // ordinary word stream; their IR split cannot select native NOSPACE.
+    assert_eq!(rendered, ["argument", " second_argument"]);
 }
 
 #[test]

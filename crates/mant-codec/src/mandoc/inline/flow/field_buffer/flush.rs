@@ -111,7 +111,6 @@ impl FieldBuffer {
             word_scan: super::WordScanPolicy::Incremental,
             last_break_marker: None,
             projected_pass_ends: BTreeSet::new(),
-            word_space_ready: false,
             scan: None,
             word_first_content: None,
             completed_empty_pass_end: None,

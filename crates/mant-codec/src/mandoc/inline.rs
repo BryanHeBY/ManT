@@ -134,22 +134,20 @@ pub(super) fn updated_spacing(current: bool, setting: &str) -> bool {
     }
 }
 
-pub(super) fn append_inline_node(
+/// Execute one node without an original parent sequence. Native pre-handlers
+/// use this for their individual operands; callers owning a complete child
+/// array must use `adjacency::with_siblings` and `append_inline_node_with_source`.
+pub(super) fn append_isolated_inline_node(
     builder: &mut InlineBuilder,
     node: &Node,
     default_name: Option<&str>,
 ) {
-    append_inline_node_with_next(builder, node, None, default_name);
-}
-
-// Node entry, handler, and post have one shared execution sequence.
-pub(super) fn append_inline_node_with_next(
-    builder: &mut InlineBuilder,
-    node: &Node,
-    next: Option<&Node>,
-    default_name: Option<&str>,
-) {
-    append_inline_node_with_siblings(builder, node, None, next, default_name);
+    append_inline_node_with_source(
+        builder,
+        node,
+        super::adjacency::Siblings::default(),
+        default_name,
+    );
 }
 
 pub(in crate::mandoc) fn append_inline_node_with_siblings(
@@ -565,7 +563,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
             )
         });
     if execution.joins_preceding_node {
-        builder.tighten_next_boundary();
+        builder.join_projected_boundary();
         builder.note_zero_advance_join();
     }
     let provisional_definition_break = execution.pending_word_end_break

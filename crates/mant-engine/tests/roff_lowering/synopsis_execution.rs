@@ -12,6 +12,8 @@ use super::json_roundtrip::json_string_roundtrip;
 
 #[path = "synopsis_execution/query.rs"]
 mod query;
+#[path = "synopsis_execution/word_observations.rs"]
+mod word_observations;
 
 #[derive(Deserialize)]
 struct Fixture {
@@ -24,6 +26,10 @@ struct Fixture {
 struct Case {
     id: String,
     source: String,
+    source_sha256: String,
+    oracle: std::collections::BTreeMap<String, word_observations::Profile>,
+    #[serde(skip)]
+    exact_word_observation: bool,
     cohort: String,
     rows: Vec<String>,
     reading_rows: Vec<String>,
@@ -91,7 +97,7 @@ struct ManualLink {
 }
 
 fn cases() -> Vec<Case> {
-    let fixture: Fixture =
+    let mut fixture: Fixture =
         serde_json::from_str(include_str!("synopsis_execution/cases.json")).unwrap();
     assert_eq!(
         fixture.oracle_sha256,
@@ -107,6 +113,7 @@ fn cases() -> Vec<Case> {
             .count(),
         96
     );
+    word_observations::apply(&mut fixture.cases);
     fixture.cases
 }
 
@@ -166,6 +173,23 @@ fn body_rows(text: &str) -> Vec<String> {
 
 fn rows(content: &ResolvedContent) -> Vec<String> {
     body_rows(&mant_render::render_query_man(content))
+}
+
+fn observed_rows(content: &ResolvedContent, case: &Case) -> Vec<String> {
+    if !case.exact_word_observation {
+        return rows(content);
+    }
+    let text = mant_render::render_query_man(content);
+    text.split_once("SYNOPSIS\n")
+        .unwrap()
+        .1
+        .split_once("NEXT\n")
+        .unwrap()
+        .0
+        .trim_end_matches('\n')
+        .split('\n')
+        .map(|row| row.trim_end_matches(' ').to_owned())
+        .collect()
 }
 
 #[derive(Default)]
@@ -355,7 +379,7 @@ fn synopsis_core_and_pairwise_phases_match_native_after_json() {
         );
         let content = roundtrip(case);
         assert_eq!(
-            rows(&content),
+            observed_rows(&content, case),
             case.reading_rows,
             "{}: exact hard rows and word scalars",
             case.id
@@ -384,7 +408,7 @@ fn synopsis_actual_markdown_parser_preserves_rows_styles_and_link_owners() {
             unwrap_exported_item(&mut section.blocks);
         }
         assert_eq!(
-            rows(&read),
+            observed_rows(&read, case),
             case.portable_rows,
             "{}: actual Markdown body rows\n{markdown}",
             case.id
@@ -394,6 +418,17 @@ fn synopsis_actual_markdown_parser_preserves_rows_styles_and_link_owners() {
         // above retain the exact typed targets; this readback does not claim
         // to serialize those targets through the portable body policy.
         assert_reading_facts(&read, case, &case.portable_font_words, &[]);
+        if case.exact_word_observation {
+            let markdown = mant_codec::encode::render_markdown(&read);
+            let second = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            assert_eq!(
+                observed_rows(&second, case),
+                case.portable_rows,
+                "{}: second source-bound Markdown readback\n{markdown}",
+                case.id
+            );
+            assert_reading_facts(&second, case, &case.portable_font_words, &[]);
+        }
     });
 }
 

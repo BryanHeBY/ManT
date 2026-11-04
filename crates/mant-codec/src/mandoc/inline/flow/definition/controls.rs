@@ -29,6 +29,7 @@ impl InlineExecutionState {
     /// retain one absolute native target and declare its IR placement once.
     pub(in crate::mandoc) fn begin_man_synopsis_body(&mut self, absolute_origin: usize) {
         self.enter_native_field_scope();
+        self.native_word_spacing = super::super::NativeWordSpacing::NoSpace;
         self.boundary = PendingBoundary::Tight;
         let relative_origin = i64::try_from(absolute_origin)
             .unwrap_or(i64::MAX)
@@ -150,7 +151,7 @@ impl InlineBuilder {
                 .is_some_and(|state| !state.field_buffer.is_empty())
             || !self.execution.plain_input.buffer.is_empty();
         if occupied {
-            self.execute_native_newline_with_origin(origin);
+            self.consume_execution_line_with_origin(origin);
             return;
         }
         let native = self.native_field_device(false);
@@ -194,8 +195,15 @@ impl InlineBuilder {
         &mut self,
         origin: super::super::CompletedRowOrigin,
     ) -> bool {
+        self.tighten_next_boundary();
+        self.consume_execution_line_with_origin(origin)
+    }
+
+    fn consume_execution_line_with_origin(
+        &mut self,
+        origin: super::super::CompletedRowOrigin,
+    ) -> bool {
         let _ = self.commit_definition_row_origin();
-        self.execution.boundary = PendingBoundary::Tight;
         if self.execution.definition.as_ref().is_some_and(|state| {
             state.field_buffer.is_empty() && !state.hang_row.native_row_occupied()
         }) {
@@ -268,7 +276,7 @@ impl InlineBuilder {
                 self.project_captured_definition_field(native);
                 self.hard_break_after_field_projection_with_origin(Some(native), origin);
             } else {
-                self.hard_break_with_origin(origin);
+                self.project_hard_break_with_origin(origin);
             }
             self.retire_native_field_with_device(native.as_ref());
         }
@@ -292,7 +300,7 @@ impl InlineBuilder {
         let _ = self.commit_definition_row_origin();
         // term_newln selects NOSPACE before its lastcol/viscol test or flush
         // (term.c:475-481). BRIND/NOBREAK still describe the old buffer here.
-        self.execution.boundary = PendingBoundary::Tight;
+        self.tighten_next_boundary();
         let resumed = self
             .execution
             .definition

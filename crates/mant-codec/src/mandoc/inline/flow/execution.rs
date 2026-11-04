@@ -1,9 +1,9 @@
 use super::definition::PendingFieldGapOrigin;
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
-    InlineExecutionState, KeepPhase, PendingBoundary, PreservedInlineState, SourceFragmentState,
-    SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak, last_visible_character,
-    trim_trailing_breakable_spaces, updated_spacing,
+    InlineExecutionState, KeepPhase, NativeWordSpacing, PendingBoundary, PreservedInlineState,
+    SourceFragmentState, SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak,
+    last_visible_character, trim_trailing_breakable_spaces, updated_spacing,
 };
 use libmandoc_rs::{
     MacroToken::{Man, Roff},
@@ -33,6 +33,13 @@ impl InlineBuilder {
         self.execution.observe_no_fill_source_lines = previous;
     }
     pub(in crate::mandoc) fn tighten_next_boundary(&mut self) {
+        self.execution.native_word_spacing = NativeWordSpacing::NoSpace;
+        self.join_projected_boundary();
+    }
+
+    /// A decoded overstrike joins its projection after the incoming native
+    /// word boundary already executed. It cannot select NOSPACE a second time.
+    pub(in crate::mandoc) fn join_projected_boundary(&mut self) {
         self.execution.boundary = PendingBoundary::Tight;
     }
 
@@ -321,6 +328,10 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn release_next_boundary(&mut self) {
+        // Eo/En post may clear NOSPACE without writing a word, including
+        // under NONOSPACE (mdoc_term.c:1683,1734-1746). This is a real native
+        // register transition, unlike retiring the current IR owner.
+        self.execution.native_word_spacing = NativeWordSpacing::Separate;
         self.execution.boundary = PendingBoundary::Ordinary;
         self.execution.final_word_join = Some(false);
     }
@@ -464,10 +475,13 @@ impl InlineBuilder {
     /// consume it even without glyphs; anchors do not. Expire unused joins.
     /// An explicit control replaces `PrefixJoin` with `Tight` and must survive.
     pub(in crate::mandoc) fn with_prefix_join(&mut self, append: impl FnOnce(&mut Self)) {
+        let previous = self.execution.native_word_spacing;
+        self.execution.native_word_spacing = NativeWordSpacing::NoSpace;
         self.execution.boundary = PendingBoundary::PrefixJoin;
         append(self);
         if self.execution.boundary == PendingBoundary::PrefixJoin {
             self.execution.boundary = PendingBoundary::Ordinary;
+            self.execution.native_word_spacing = previous;
         }
     }
 
@@ -481,42 +495,55 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn set_spacing(&mut self, setting: &str) {
         let updated = updated_spacing(self.execution.spacing.enabled(), setting);
-        let buffer = self
-            .execution
-            .definition
-            .as_ref()
-            .map_or(&self.execution.plain_input.buffer, |state| {
-                &state.field_buffer
-            });
+        let has_input_cells = !self.execution.word_input().0.is_empty();
         // CVS mdoc_term.c::termp_sm_pre() clears NOSPACE whenever spacing
         // ends up enabled and the live input buffer is occupied (p->col),
         // even for a repeated `.Sm on`. An empty term_word() releases a
         // word boundary without writing a cell; NBRZW and a pending \z
         // glyph do write cells. Read the native ledger, not projected IR
         // or the output device's column. Neither NONEWLINE nor KEEP changes.
-        if updated && !buffer.is_empty() {
+        if updated && has_input_cells {
+            self.execution.native_word_spacing = NativeWordSpacing::Separate;
             if !matches!(
                 self.execution.boundary,
                 PendingBoundary::CommittedField | PendingBoundary::Kept
             ) {
                 self.execution.boundary = PendingBoundary::Ordinary;
             }
-        } else if !updated
-            && self.execution.spacing.enabled()
-            && buffer.word_boundary_ready()
-            && !self.execution.boundary.is_nonbreaking()
-        {
-            // NONOSPACE changes what the *next* word leaves behind, not
-            // its incoming NOSPACE flag (term.c::term_word(), 573-589).
-            // A repeated `off` changes neither register: an earlier word
-            // already executed under NONOSPACE must not release NOSPACE.
-            self.execution.boundary = PendingBoundary::Preserved;
         }
         self.execution.spacing = SpacingMode::from(updated);
     }
 }
 
 impl super::InlineExecutionState {
+    /// Select the global `TERMP_NOSPACE` flag at a real native entry. This
+    /// does not drain an IR owner or consume the current input buffer.
+    pub(in crate::mandoc) fn select_native_no_space(&mut self) {
+        self.native_word_spacing = NativeWordSpacing::NoSpace;
+    }
+
+    /// The recorder and all word-time register readers must use the same
+    /// live input. A standalone recovered Nm can retain field geometry
+    /// after restoring an authorless session; that geometry does not route
+    /// later words away from `PlainInput` (`term_word` writes one live tcol).
+    pub(super) fn uses_definition_word_buffer(&self) -> bool {
+        self.definition.is_some() && self.author_execution.is_some()
+    }
+
+    pub(super) fn word_input(
+        &self,
+    ) -> (
+        &super::field_buffer::FieldBuffer,
+        &[super::NativeWordAnchor],
+    ) {
+        if self.uses_definition_word_buffer() {
+            let field = self.definition.as_ref().expect("authored word field");
+            (&field.field_buffer, &field.field_word_anchors)
+        } else {
+            (&self.plain_input.buffer, &self.plain_input.anchors)
+        }
+    }
+
     pub(in crate::mandoc) fn enter_tab_source_node(&mut self, node: &libmandoc_rs::Node) {
         // A source node routed from block to inline execution is still one
         // entry event. Use stable AST identity, never a source coordinate.

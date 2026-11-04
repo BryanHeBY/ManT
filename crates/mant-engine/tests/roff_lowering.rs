@@ -11,6 +11,11 @@ use mant_loader::parse_manual_bytes;
 #[path = "support/semantic_read.rs"]
 mod semantic_test_read;
 
+#[path = "roff_lowering/source_sequences.rs"]
+mod source_sequences;
+#[path = "roff_lowering/word_spacing.rs"]
+mod word_spacing;
+
 #[path = "support/case_failures.rs"]
 mod case_failures;
 #[path = "support/json_roundtrip.rs"]

@@ -110,15 +110,20 @@ fn append_bibliography(builder: &mut InlineBuilder, node: &Node, name: Option<&s
 fn append_reference_body(builder: &mut InlineBuilder, nodes: &[Node], name: Option<&str>) {
     use crate::mandoc::blocks::mdoc_macros::{reference_author_conjunction, reference_field_post};
 
-    for (index, node) in nodes.iter().enumerate() {
+    // Validation may retain non-bibliography nodes with warnings. They still
+    // execute in the original Rs BODY chain; generated field punctuation is
+    // emitted once around that execution, never as a replacement traversal.
+    for (index, (node, siblings)) in crate::mandoc::adjacency::with_siblings(nodes).enumerate() {
         if reference_author_conjunction(nodes, index) {
             builder.append_text("and");
         }
-        super::append_inline_node_with_next(builder, node, nodes.get(index + 1), name);
+        super::append_inline_node_with_source(builder, node, siblings, name);
         if let Some(punctuation) = reference_field_post(nodes, index) {
             builder.tighten_next_boundary();
+            // termp____post() writes one real punctuation word. Its word
+            // entry consumes Tight and leaves NOSPACE according to Sm; it
+            // does not execute Eo/En's separate native release operation.
             builder.append_text(punctuation.glyph());
-            builder.release_next_boundary();
             // termp____post() explicitly arms SENTENCE after the final
             // generated period. This is not inferred from its glyph.
             if punctuation.ends_sentence() {
@@ -393,6 +398,10 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 self.builder.control_line_break();
             }
             Event::FlushLine => {
+                // ce/rj explicitly set NOSPACE before term_flushln for
+                // each grouped line (roff_term.c:103). Ordinary direct
+                // Fn/Nm flushes do not own this caller-side transition.
+                self.builder.tighten_next_boundary();
                 self.builder.flush_execution_line();
             }
             Event::Children(nodes) => append_inline_nodes(self.builder, nodes, self.name),

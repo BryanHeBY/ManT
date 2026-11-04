@@ -67,6 +67,11 @@ impl InlineBuilder {
         &mut self,
         line_request: bool,
     ) -> (Vec<Inline>, bool, u16, super::OutputRowEnd) {
+        if line_request {
+            // roff_term_pre_br() reaches term_newln() even with an empty
+            // input buffer; the output drain alone has no such effect.
+            self.tighten_next_boundary();
+        }
         // term_newln() consumes first, then the output owner accounts for
         // every row in its receipt (term.c:143-146,220,250-253). Doing this
         // in finish_nodes() is too late: the block row count is already
@@ -276,6 +281,7 @@ impl InlineBuilder {
         // This API is an actual term_newln(), unlike an IR owner drain.
         // NOSPACE is selected even when the flushed field left viscol live
         // (term.c:475-481), independently of the preserved column registers.
+        self.execution.native_word_spacing = super::super::NativeWordSpacing::NoSpace;
         self.execution.boundary = PendingBoundary::Tight;
         self.reset_native_tab_origin();
         (output, self.execution, occupied_head_row)
@@ -284,6 +290,9 @@ impl InlineBuilder {
     /// Execute the native BODY post selected by `FormatterRowBoundary::Settle`.
     /// An IR paragraph drain or a Preserve return must not invoke this.
     pub(in crate::mandoc) fn finish_run_in_field_row(&mut self) {
+        // This entry represents the real BODY post, including the ordinary
+        // no-field path. term_newln() selects NOSPACE before testing cells.
+        self.tighten_next_boundary();
         if self.execution.definition.is_none() && self.execution.detached_device_row.is_some() {
             // A fitting detached HEAD already consumed its input buffer,
             // leaving only viscol/minbl live. The BODY post still executes

@@ -269,6 +269,10 @@ impl BlockState {
         &mut self,
         _source: Option<mant_ir::SourceSpan>,
     ) {
+        // ce/rj explicitly select NOSPACE before their unconditional
+        // term_flushln() (roff_term.c:103). The flush itself does not select
+        // it; direct Fn/Nm field flushes must retain their different flag.
+        self.formatter.execution.select_native_no_space();
         // D1/Dl's literal presentation does not make rejected filled input
         // an authored literal row. Native source mode determines row kind.
         let flush: fn(&mut InlineBuilder) = if self.formatter.no_fill {

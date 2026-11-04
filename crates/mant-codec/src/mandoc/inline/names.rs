@@ -43,7 +43,7 @@ pub(super) fn append_block(
     }
     builder.begin_definition_head_consumption();
     builder.enter_keep_words();
-    for (index, part) in node.children.iter().enumerate() {
+    for (part, siblings) in crate::mandoc::adjacency::with_siblings(&node.children) {
         match part.kind {
             NodeKind::Head => {
                 append_head(
@@ -59,12 +59,7 @@ pub(super) fn append_block(
                 append_inline_nodes(builder, &part.children, name);
                 finish_body(builder, part, saved);
             }
-            _ => super::append_inline_node_with_next(
-                builder,
-                part,
-                node.children.get(index + 1),
-                name,
-            ),
+            _ => super::append_inline_node_with_source(builder, part, siblings, name),
         }
     }
     builder.exit_keep_words();

@@ -64,26 +64,20 @@ impl FieldBuffer {
     }
 
     #[cfg(test)]
-    pub(in crate::mandoc::inline::flow) fn begin_word(
-        &mut self,
-        tight: bool,
-        spacing: bool,
-        kept: bool,
-    ) -> usize {
-        self.begin_word_with_spacing(tight, spacing, kept, 1)
+    pub(in crate::mandoc::inline::flow) fn begin_word(&mut self, tight: bool, kept: bool) -> usize {
+        self.begin_word_with_spacing(tight, kept, 1)
     }
 
+    /// Write only the already executed word-entry receipt. NOSPACE and
+    /// NONOSPACE are formatter-global registers, not input-buffer history.
     pub(in crate::mandoc::inline::flow) fn begin_word_with_spacing(
         &mut self,
         tight: bool,
-        spacing: bool,
         kept: bool,
         ordinary_spaces: usize,
     ) -> usize {
         debug_assert!((1..=2).contains(&ordinary_spaces));
-        let separator = usize::from(self.word_space_ready && !tight && spacing)
-            * if kept { 1 } else { ordinary_spaces };
-        self.word_space_ready = true;
+        let separator = usize::from(!tight) * if kept { 1 } else { ordinary_spaces };
         if separator > 0 {
             if kept {
                 self.push_non_breaking_blank();
@@ -94,19 +88,6 @@ impl FieldBuffer {
             }
         }
         separator
-    }
-
-    /// A previous `term_word()` established the next word boundary even
-    /// when it buffered no glyph (`term.c:573-589`). Explicit NOSPACE joins
-    /// remain a separate caller-owned register.
-    pub(in crate::mandoc::inline::flow) const fn word_boundary_ready(&self) -> bool {
-        self.word_space_ready
-    }
-
-    /// A native handler can clear NOSPACE after retiring its buffer.
-    /// That register transition still applies to the next empty word.
-    pub(in crate::mandoc::inline::flow) fn release_word_boundary(&mut self) {
-        self.word_space_ready = true;
     }
 
     /// Whether this word's automatic separator still occupies its native
@@ -232,7 +213,6 @@ impl FieldBuffer {
         self.word_scan = WordScanPolicy::Incremental;
         self.last_break_marker = None;
         self.projected_pass_ends.clear();
-        self.word_space_ready = false;
         self.word_first_content = None;
         self.completed_empty_pass_end = None;
         self.last_graph_position = None;
@@ -246,9 +226,7 @@ impl FieldBuffer {
     /// `term_word()`'s NOSPACE lifecycle. A later `term_newln()` or macro pre
     /// decides that boundary separately; device viscol/minbl live elsewhere.
     pub(in crate::mandoc::inline::flow) fn clear_consumed_field(&mut self) {
-        let word_space_ready = self.word_space_ready;
         self.clear();
-        self.word_space_ready = word_space_ready;
     }
 
     pub(in crate::mandoc::inline::flow) fn claim_completed_empty_pass(
@@ -439,31 +417,29 @@ mod sentence_tests {
 
     #[test]
     fn sentence_separators_are_real_cells_and_backbefore_consumes_only_one() {
-        // Exact plain-line/KEEP/Sm/\z sources ran pinned profiles before
+        // Exact plain-line/KEEP/\z sources ran pinned profiles before
         // these assertions. term_word():573-589 inserts the cells before
         // encode1():901-908 can retreat over the final ordinary blank.
-        for (tight, spacing, kept, sentence, expected) in [
-            (false, true, false, false, 1),
-            (false, true, false, true, 2),
-            (false, true, true, true, 1),
-            (true, true, false, true, 0),
-            (false, false, false, true, 0),
+        for (tight, kept, sentence, expected) in [
+            (false, false, false, 1),
+            (false, false, true, 2),
+            (false, true, true, 1),
+            (true, false, true, 0),
         ] {
             let mut buffer = FieldBuffer::default();
-            buffer.begin_word(true, true, false);
+            buffer.begin_word(true, false);
             buffer.push_graph('F', 1);
             let start = buffer.cells().len();
-            let separator =
-                buffer.begin_word_with_spacing(tight, spacing, kept, 1 + usize::from(sentence));
+            let separator = buffer.begin_word_with_spacing(tight, kept, 1 + usize::from(sentence));
             assert_eq!(separator, expected);
             assert_eq!(buffer.cells().len(), start + expected);
             buffer.push_graph('N', 1);
             assert_eq!(buffer.surviving_word_separator(start, separator), expected);
         }
         let mut buffer = FieldBuffer::default();
-        buffer.begin_word(true, true, false);
+        buffer.begin_word(true, false);
         buffer.push_graph('F', 1);
-        let separator = buffer.begin_word_with_spacing(false, true, false, 2);
+        let separator = buffer.begin_word_with_spacing(false, false, 2);
         buffer.arm_backbefore();
         buffer.push_graph('N', 1);
         assert_eq!(buffer.surviving_word_separator(1, separator), 1);
@@ -475,9 +451,9 @@ mod sentence_tests {
         for words in [128, 4096] {
             let mut buffer = FieldBuffer::default();
             SEPARATOR_CELLS_VISITED.with(|count| count.set(0));
-            for _ in 0..words {
+            for index in 0..words {
                 let start = buffer.cells().len();
-                let separator = buffer.begin_word_with_spacing(false, true, false, 2);
+                let separator = buffer.begin_word_with_spacing(index == 0, false, 2);
                 buffer.push_graph('X', 1);
                 assert_eq!(buffer.surviving_word_separator(start, separator), separator);
             }

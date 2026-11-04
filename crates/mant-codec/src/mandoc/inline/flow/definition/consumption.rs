@@ -361,7 +361,7 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn in_definition_field(&self) -> bool {
-        self.execution.definition.is_some() && self.execution.author_execution.is_some()
+        self.execution.uses_definition_word_buffer()
     }
 
     /// A head field configured with `AuthorBreakEffect::Field` IS a

@@ -100,10 +100,10 @@ impl BlockLowerer<'_, '_> {
                     node,
                     crate::mandoc::containers::Event::Glyph(punctuation.glyph().to_owned()),
                 );
-                self.push_generated_container_event(
-                    node,
-                    crate::mandoc::containers::Event::Release,
-                );
+                // termp____post() emits a real punctuation word; unlike
+                // Eo/En it never clears NOSPACE after that word. Its outgoing
+                // register is whatever the current Sm mode establishes.
+
                 if punctuation.ends_sentence() {
                     self.state.formatter.execution.arm_sentence_end();
                 }
@@ -334,11 +334,19 @@ impl BlockLowerer<'_, '_> {
         self.state.formatter.execute_tab_configuration(node);
         if !self.column_field
             && node.kind == libmandoc_rs::NodeKind::Block
-            && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
+            && matches!(
+                node.macro_token.as_ref(),
+                Some(
+                    Mdoc(MdocMacro::Bl | MdocMacro::Bd | MdocMacro::D1 | MdocMacro::Dl)
+                        | Man(ManMacro::Rs)
+                )
+            )
         {
-            // Bl BLOCK pre is term_newln(), including an occupied detached
-            // HEAD with no BODY buffer (mdoc_term.c:1128-1134). An IR drain
-            // cannot substitute for this source execution boundary.
+            // These BLOCK pres call term_newln() before installing their
+            // own geometry, including an occupied detached HEAD with no
+            // BODY buffer (mdoc_term.c:1128,1329,1442; man_term.c:772).
+            // An IR drain cannot substitute for that source execution or
+            // its NOSPACE flag.
             self.state.finish_native_structural_row();
         }
         if self.column_field {

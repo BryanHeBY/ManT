@@ -2,8 +2,8 @@
 
 use super::super::field_buffer::FieldWrite;
 use super::super::{
-    FormatterColumn, Inline, InlineBuilder, KeepPhase, PendingBoundary, TrailingOutput,
-    WordEndBreak, has_printable_character, last_visible_character,
+    FormatterColumn, Inline, InlineBuilder, KeepPhase, NativeWordSpacing, PendingBoundary,
+    TrailingOutput, WordEndBreak, has_printable_character, last_visible_character,
 };
 use super::projection::has_rendered_formatter_glyph;
 use crate::mandoc::inline::is_formatter_word_blank;
@@ -383,7 +383,7 @@ impl InlineBuilder {
             // pass can never accept a row. CVS loses the following word at
             // this edge; ManT keeps it on the row this blank ends
             // (term.c:294-295) as the content-preserving deviation.
-            self.hard_break();
+            self.project_hard_break_with_origin(super::CompletedRowOrigin::Layout);
         }
         if next_is_visible
             && next_has_glyph
@@ -421,12 +421,25 @@ impl InlineBuilder {
                 // pass loop can never accept a row there, but the blank
                 // still ends the occupied row (term.c:294-295) and ManT
                 // keeps the following word's content.
-                self.hard_break();
+                self.project_hard_break_with_origin(super::CompletedRowOrigin::Layout);
             }
         }
     }
 
-    fn begin_native_word_registers(&mut self, next_is_visible: bool) -> bool {
+    pub(super) fn begin_native_word_registers(&mut self, next_is_visible: bool) -> bool {
+        // The global flag precedes decoding and is independent of both
+        // input-cell storage and a field's projection-only Tight boundary.
+        let separator_ready = self.execution.native_word_spacing.separated();
+        if separator_ready {
+            if self.execution.boundary == PendingBoundary::Tight {
+                self.execution.boundary = PendingBoundary::Ordinary;
+            }
+            if !self.execution.spacing.enabled() && !self.execution.boundary.is_nonbreaking() {
+                self.execution.boundary = PendingBoundary::Preserved;
+            }
+        } else {
+            self.execution.boundary = PendingBoundary::Tight;
+        }
         // term_word() consumes SENTENCE before interpreting its payload;
         // empty/control-only/generated words are still real word events.
         self.execution.native_word_sentence = std::mem::take(&mut self.execution.sentence_pending);
@@ -446,22 +459,18 @@ impl InlineBuilder {
         // NOSPACE/KEEP registers, then promotes PREKEEP (term.c:573-586).
         // Zero-advance projection may subsequently tighten the IR boundary;
         // that cannot change which native cell was already written.
-        if next_is_visible {
-            self.execution.native_word_boundary = Some(
-                if self.execution.keep.phase == KeepPhase::Keep
-                    && !self.execution.boundary.is_tight()
-                    && (self.execution.spacing.enabled()
-                        || matches!(
-                            self.execution.boundary,
-                            PendingBoundary::Preserved | PendingBoundary::Continued
-                        ))
-                {
-                    PendingBoundary::Kept
-                } else {
-                    self.execution.boundary
-                },
-            );
-        }
+        self.execution.native_word_boundary = Some(if !separator_ready {
+            PendingBoundary::Tight
+        } else if self.execution.keep.phase == KeepPhase::Keep {
+            PendingBoundary::Kept
+        } else {
+            PendingBoundary::Ordinary
+        });
+        // Even empty/rejected words update NOSPACE before decoding. Native
+        // escape/post effects may subsequently select it again; IR drains,
+        // term_flushln and input-owner changes never do so.
+        self.execution.native_word_spacing =
+            NativeWordSpacing::after_word(self.execution.spacing.enabled());
         continued_word
     }
 

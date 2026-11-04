@@ -316,7 +316,14 @@ impl InlineBuilder {
         boundary: FieldFlushBoundary,
     ) {
         let exit_field = boundary == FieldFlushBoundary::ExitField;
-        self.execution.boundary = PendingBoundary::Tight;
+        // A device row ending inside term_flushln is not term_newln. Keep
+        // only its independent global word register; other field projection
+        // registers below are finalized from this consumption result.
+        self.execution.boundary = if self.execution.native_word_spacing.separated() {
+            PendingBoundary::Ordinary
+        } else {
+            PendingBoundary::Tight
+        };
         self.execution.empty_word = false;
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = deferred_field_cells;

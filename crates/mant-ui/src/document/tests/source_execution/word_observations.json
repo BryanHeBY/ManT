@@ -1,0 +1,478 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "original_fixture_sha256": "359ae390af31d0c8351c8a6c5376023d97a5c7c66557497c470ae79850b98cdc",
+  "cases": [
+    {
+      "id": "direct-fn-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "cf622dc1abd0f2b0f95ef1fe5e6a2a156fb90e809854323f2e2430adc1952cc7",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "f8d40e4a42512ffb2b6c05a997a7856cd0d6d8d1e389df15371aabf839ed99ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "5d20fe24e1e1156132aa82e3768434b958353ab5d9fc0b35d6fdbc4c1baccd9e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-fn-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "cd50160518542c4c4bfc9ef6873f550112e60d8a440a2c2f535ede2b1e6e2efb",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "a21cbe6e0020099a9d1830cb4f55cff4d3b96b90912faf07c92ec3a6e4f5d1d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "a21cbe6e0020099a9d1830cb4f55cff4d3b96b90912faf07c92ec3a6e4f5d1d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "f8d40e4a42512ffb2b6c05a997a7856cd0d6d8d1e389df15371aabf839ed99ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "d0c643036eefce00729265b92c7b47b8f4ec6a2192473662d396b592b4c8e3da",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIXX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIXX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-fn-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "8155b5bee8a1d15432aca79411c7db0c904f33f5f591b284259c0dcb16773616",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "4dd288636e1ec29a5c6aab676abba7baadecc298c056db862ec4081bcc2ccc94",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "5518edb5a6d532761f86cc11d9ff598447ac2477a0020a406eec251bc8b8ab5f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-fn-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "e5feb9bcdc03231ab92d0da396d834f4526aae7a6bdd999d8e956e850dc38f5c",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "f8d40e4a42512ffb2b6c05a997a7856cd0d6d8d1e389df15371aabf839ed99ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "58dd0bdb719916e5ca02cba9c0926c01937370c0c5cb154b8c152a4aeb9d4a49",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-fo-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "11afe60ce5e3ab5ef1ae4dd29e0372970321fd913e3ac566252b1d3a95ee5b52",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "2b82b6c4b5e17e315a7e5fc71d71e6cc23c31845149b44c436acca7800360842",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "8fde0463866c0b7f4815c74854e4a7fb7187293340391adde15b02b5123938c1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-fo-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "cd95faf63d220c3ba10e4599291f2375cc1556264b23e11a5554817aa95aef25",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "a21cbe6e0020099a9d1830cb4f55cff4d3b96b90912faf07c92ec3a6e4f5d1d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "a21cbe6e0020099a9d1830cb4f55cff4d3b96b90912faf07c92ec3a6e4f5d1d3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "2b82b6c4b5e17e315a7e5fc71d71e6cc23c31845149b44c436acca7800360842",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "6481a49c4bc9552166c633406d0fcd68968ee083a660dc46ca3fcd8fd31f6d3a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIXX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIXX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-fo-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "df90a3410f2b4aacf66625e749daec79c7a0125d0dc988e032063cd08aa64492",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "a1e12bfd0c09b071d55b9059e586704f304db69645ba9d3e58debdf3b28be895",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "1a54cf819f5d2ec8ef375733a35fd48bff167513dc53c01b3b0c1f8896be05e1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-fo-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "5fe6e1b1c4698ee4dd3177feae213072f6111940b13ec599d39d304c929c2273",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "13eaed25532cb1cd921b22c56d5f7bdf0359ced5daefa6febe146b0866648117",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "2b82b6c4b5e17e315a7e5fc71d71e6cc23c31845149b44c436acca7800360842",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "b351eb8f68229a69483f358443aa16c54ed2e12ed1d866bca168a283115b0198",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        },
+        "lint": {
+          "status": 2,
+          "stdout_sha256": "ca44c559de2b9dab8752fb9c4da7aa2cc20e2de3e66ff200fb54d7c4a3b7a97b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr": ""
+        }
+      },
+      "native_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "reading_rows": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        " SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        " SUFFIX"
+      ]
+    }
+  ]
+}

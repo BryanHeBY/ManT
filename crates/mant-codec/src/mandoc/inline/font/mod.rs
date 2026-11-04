@@ -52,9 +52,10 @@ pub(super) fn lower_man_font_scope(
             };
             output.with_native_operand_role(role, |output| {
                 output.with_direct_word_operands(|output| {
-                    super::append_inline_node_with_next(
+                    super::append_inline_node_with_siblings(
                         output,
                         child,
+                        None,
                         node.children.get(index + 1),
                         default_name,
                     );
@@ -81,9 +82,10 @@ pub(super) fn lower_man_font_scope(
                 Font::Emphasis
             });
             output.with_direct_word_operands(|output| {
-                super::append_inline_node_with_next(
+                super::append_inline_node_with_siblings(
                     output,
                     child,
+                    None,
                     node.children.get(index + 1),
                     default_name,
                 );

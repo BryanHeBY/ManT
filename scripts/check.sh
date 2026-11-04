@@ -115,6 +115,12 @@ run "test table layout source and real-manual fixture identities" \
   python3 -m unittest scripts.roff.tests.test_table_fixture_contract
 run "test literal initial-row source identities and native profiles" \
   python3 -m unittest scripts.roff.tests.test_literal_leading_rows
+run "test complete source-sequence receipts and recovery classification" \
+  python3 -m unittest scripts.roff.tests.test_source_sequence_fixtures
+run "test incoming word-separator state fixture bindings" \
+  python3 -m unittest scripts.roff.tests.test_word_spacing_fixture
+run "test source-bound synopsis word observation corrections" \
+  python3 -m unittest scripts.roff.tests.test_synopsis_word_observations
 run "test exact roff fixture checkout across newline settings" \
   python3 -m unittest scripts.roff.tests.test_fixture_checkout
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test

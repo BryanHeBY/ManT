@@ -95,6 +95,12 @@ impl BlockState {
     /// A mdoc container's `NODE_LINE` is executed before its HEAD children.
     /// Those children can lack `NODE_LINE` themselves (notably Eo operands).
     pub(in crate::mandoc::blocks) fn begin_no_fill_source_line(&mut self) {
+        // Both native node drivers call term_newln() at this source gate,
+        // after testing NONEWLINE, even when the preceding word wrote no
+        // cells. Retiring an inactive literal owner cannot stand in for
+        // that global NOSPACE transition (mdoc_term.c:314-317,
+        // man_term.c:922-925; term.c:475-480).
+        self.formatter.execution.select_native_no_space();
         if self.literal.starts_new_row(true) {
             if self.hanging_origin.is_some() {
                 // man_term.c switches an HP BODY to its hanging origin after

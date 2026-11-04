@@ -2,8 +2,8 @@
 use super::tab_stops::TabStops;
 use super::{
     AuthorBreakEffect, AuthorExecution, DetachedDeviceRow, FontState, FormatterColumn,
-    InlineExecutionState, KeepState, LeadingLineBoundary, PendingBoundary, SourceLineObservation,
-    SpacingMode, TrailingOutput, WordEndBreak, ZeroAdvanceState, definition,
+    InlineExecutionState, KeepState, LeadingLineBoundary, NativeWordSpacing, PendingBoundary,
+    SourceLineObservation, SpacingMode, TrailingOutput, WordEndBreak, ZeroAdvanceState, definition,
 };
 use libmandoc_rs::MacroSet;
 use std::sync::Arc;
@@ -21,6 +21,7 @@ impl InlineExecutionState {
             escape_coverage: crate::mandoc::escape_coverage::EscapeCoverage::default(),
             boundary: PendingBoundary::Ordinary,
             spacing: SpacingMode::from_enabled(spacing_enabled),
+            native_word_spacing: NativeWordSpacing::NoSpace,
             last_visible_character: None,
             has_printable_content: false,
             visible_glyph_epoch: 0,
@@ -193,6 +194,7 @@ impl InlineExecutionState {
     }
 
     pub(in crate::mandoc) fn enter_man_definition_body(&mut self) {
+        self.native_word_spacing = NativeWordSpacing::NoSpace;
         self.boundary = PendingBoundary::Tight;
         self.final_source_continuation = Some(true);
         self.final_word_join = Some(false);
@@ -213,10 +215,7 @@ impl InlineExecutionState {
     }
 
     pub(super) fn current_native_word_is_rejected(&self) -> bool {
-        let (buffer, anchors) = self.definition.as_ref().map_or(
-            (&self.plain_input.buffer, &self.plain_input.anchors),
-            |field| (&field.field_buffer, &field.field_word_anchors),
-        );
+        let (buffer, anchors) = self.word_input();
         buffer.pending_pass_is_definitively_rejected()
             && anchors
                 .last()

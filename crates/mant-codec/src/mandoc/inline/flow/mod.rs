@@ -116,6 +116,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pub(in crate::mandoc) escape_coverage: crate::mandoc::escape_coverage::EscapeCoverage,
     pub(in crate::mandoc) boundary: PendingBoundary,
     spacing: SpacingMode,
+    /// The formatter-global NOSPACE flag. Neither input-cell retirement nor
+    /// an IR projection owner changes the next real word's incoming state.
+    native_word_spacing: NativeWordSpacing,
     last_visible_character: Option<char>,
     has_printable_content: bool,
     // Accepted native visible-glyph execution advances independently of generated
@@ -360,6 +363,26 @@ impl PendingBoundary {
 enum SpacingMode {
     Enabled,
     Disabled,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NativeWordSpacing {
+    NoSpace,
+    Separate,
+}
+
+impl NativeWordSpacing {
+    const fn after_word(spacing: bool) -> Self {
+        if spacing {
+            Self::Separate
+        } else {
+            Self::NoSpace
+        }
+    }
+
+    const fn separated(self) -> bool {
+        matches!(self, Self::Separate)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

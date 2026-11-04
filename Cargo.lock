@@ -1083,6 +1083,7 @@ dependencies = [
  "ratatui",
  "regex-automata",
  "regex-syntax",
+ "serde",
  "serde_json",
  "tokio",
  "unicode-width",

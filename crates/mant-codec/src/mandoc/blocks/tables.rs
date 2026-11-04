@@ -150,6 +150,12 @@ pub(super) fn append_table_row(
             source: source_span(node),
         });
     }
+    // term_tbl() selects NOSPACE|NONOSPACE before each span and removes
+    // only NONOSPACE afterwards (tbl_term.c:175,608). Cell recovery uses a
+    // local inline flow; its last word cannot replace the table's outgoing
+    // global NOSPACE with its own ordinary word-boundary state.
+    formatter.execution.select_native_no_space();
+    formatter.set_spacing_enabled(true);
 }
 
 const fn table_alignment(alignment: MandocTableAlignment) -> AstTableAlignment {

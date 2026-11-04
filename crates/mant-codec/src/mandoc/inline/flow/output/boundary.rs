@@ -74,6 +74,10 @@ impl InlineBuilder {
             return;
         }
 
+        if word && self.execution.native_word_boundary.is_none() {
+            self.begin_native_word_registers(false);
+        }
+
         if word && self.execution.wipe_remainder {
             // The flush unit was definitively rejected (term.c:143-146 with
             // 233-237): the words after the rejection point are unprinted
@@ -83,6 +87,8 @@ impl InlineBuilder {
             self.execution.boundary = PendingBoundary::Ordinary;
             self.execution.word_end_break = WordEndBreak::Clear;
             self.execution.native_word_writes = None;
+            self.execution.native_word_boundary = None;
+            self.execution.native_word_sentence = false;
             return;
         }
 

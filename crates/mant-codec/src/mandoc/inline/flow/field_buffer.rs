@@ -181,7 +181,6 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Accepted native row events already projected. A .ta change restarts
     /// width scanning, but cannot execute the same marker pass twice.
     projected_pass_ends: std::collections::BTreeSet<usize>,
-    word_space_ready: bool,
     /// Graphs, hyphens and backlines only append and survive until retirement:
     /// `encode1()` can retreat over a trailing blank/tab, never over these cells.
     /// The tail sweep needs only their last position (term.c:177-198), so do

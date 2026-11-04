@@ -18,7 +18,7 @@ use std::cell::RefCell;
 
 use crate::mandoc::table_recovery_budget::{MAX_FRAGMENT_BYTES, TableRecoveryBudget};
 
-use super::{InlineBuilder, append_inline_node_with_next, append_man_link};
+use super::{InlineBuilder, append_inline_node_with_source, append_man_link};
 
 #[must_use]
 pub(in crate::mandoc) struct RecoveredFragment {
@@ -298,14 +298,17 @@ fn lower_body(
     builder.font = formatter.font.clone();
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
     builder.inherit_zero_advance_armed(formatter.take_zero_advance_armed());
-    for (index, node) in nodes.iter().enumerate() {
+    // The synthetic BODY is a complete parent sequence, not independent
+    // term_word operands. synopsis_pre must see the original logical
+    // predecessor (mdoc_term.c::print_mdoc_nodelist/synopsis_pre).
+    for (node, siblings) in crate::mandoc::adjacency::with_siblings(nodes) {
         if matches!(
             node.macro_token.as_ref(),
             Some(Man(ManMacro::Ur | ManMacro::Mt))
         ) {
             append_man_link(&mut builder, node, default_name, node.flags.no_fill);
         } else {
-            append_inline_node_with_next(&mut builder, node, nodes.get(index + 1), default_name);
+            append_inline_node_with_source(&mut builder, node, siblings, default_name);
         }
     }
     // This admitted fragment owns one independent tbl cell. Its closing

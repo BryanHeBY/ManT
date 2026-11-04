@@ -1,6 +1,6 @@
 //! Dialect-specific link execution, separate from pure target construction.
 use super::{
-    Font, Inline, InlineBuilder, Node, NodeKind, append_inline_node, append_inline_nodes,
+    Font, Inline, InlineBuilder, Node, NodeKind, append_inline_nodes, append_isolated_inline_node,
     first_part_children, inline_children,
 };
 use libmandoc_rs::{MacroToken::Man, ManMacro};
@@ -89,7 +89,7 @@ fn append_terminal_link_suffix(
         presentation::Part::Uri,
         address,
         None,
-        |builder| append_inline_node(builder, first, default_name),
+        |builder| append_isolated_inline_node(builder, first, default_name),
     );
     // The outer owner keeps separators with their colon/URI interval until
     // the native receipt has decided its accepted range.
@@ -108,7 +108,7 @@ pub(super) fn append_mail_addresses(
     let saved = builder.font.push_scope(Font::Emphasis);
     for child in children {
         if child.flags.delimiter_close || child.flags.delimiter_open {
-            append_inline_node(builder, child, default_name);
+            append_isolated_inline_node(builder, child, default_name);
             continue;
         }
         let address = link_identity_text(child.text.as_deref().unwrap_or_default());
@@ -117,10 +117,10 @@ pub(super) fn append_mail_addresses(
             // but the visible operand still runs as ordinary Mt text.
             // `termp_under_pre()` visits every child; `encode1()` writes
             // the glyph before BACKBEFORE consumes the next word separator.
-            append_inline_node(builder, child, default_name);
+            append_isolated_inline_node(builder, child, default_name);
         } else {
             append_external_link(builder, &address, true, |builder| {
-                append_inline_node(builder, child, default_name);
+                append_isolated_inline_node(builder, child, default_name);
             });
         }
     }
@@ -137,10 +137,10 @@ fn append_link_target_or_text(
         // A malformed or control-only target must degrade to ordinary source
         // output. It still owns font and zero-width effects; an invalid URI
         // is not permission to erase its visible label or later state.
-        append_inline_node(builder, node, default_name);
+        append_isolated_inline_node(builder, node, default_name);
     } else {
         append_external_link(builder, address, false, |builder| {
-            append_inline_node(builder, node, default_name);
+            append_isolated_inline_node(builder, node, default_name);
         });
     }
 }
@@ -229,7 +229,7 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
     // formatter stream. The first authored child is the version even when it
     // contains only controls; every later child is a release/variant word.
     // Visibility must not rewrite that native arity or reorder execution.
-    append_inline_node(builder, first, name);
+    append_isolated_inline_node(builder, first, name);
     builder.tighten_next_boundary();
     builder.append_generated_word("BSD");
     for child in &authored[1..] {
@@ -237,7 +237,7 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
         builder.append_generated_word("-");
         builder.tighten_next_boundary();
         let checkpoint = builder.begin_output_checkpoint();
-        append_inline_node(builder, child, name);
+        append_isolated_inline_node(builder, child, name);
         if !builder.output_since_has_non_whitespace_glyph(checkpoint) {
             builder.consume_compacted_pending_padding();
         }
@@ -351,6 +351,6 @@ fn append_man_link_body(
             // each BODY child, including lines inside UR/MT.
             builder.hard_break();
         }
-        append_inline_node(builder, child, name);
+        append_isolated_inline_node(builder, child, name);
     }
 }

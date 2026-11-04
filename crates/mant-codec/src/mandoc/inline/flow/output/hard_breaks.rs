@@ -21,7 +21,17 @@ impl InlineBuilder {
         // term_newln() selects NOSPACE before even testing lastcol/viscol
         // (term.c:475-481). An empty word may have cleared it without
         // buffering a cell, so a no-output return still owns this update.
-        self.execution.boundary = PendingBoundary::Tight;
+        self.tighten_next_boundary();
+        self.project_hard_break_with_origin(origin);
+        self.tighten_next_boundary();
+    }
+
+    /// A `term_fill` pass may end the projected row inside a word. That
+    /// endline does not execute `term_newln` or alter the word-end NOSPACE.
+    pub(in crate::mandoc::inline::flow) fn project_hard_break_with_origin(
+        &mut self,
+        origin: CompletedRowOrigin,
+    ) {
         if let Some(mut native) = self.native_field_device(false) {
             // term_newln consumes the actual old field before clearing its
             // cells. Preserve accepted row ownership even when that owner
@@ -48,7 +58,10 @@ impl InlineBuilder {
         } else {
             self.hard_break_using_field(None, false, origin);
         }
-        self.execution.boundary = PendingBoundary::Tight;
+        // The separator that caused this projected row end belongs to the
+        // consumed row, not to the new IR line. This is a projection join;
+        // the global outgoing word flag still belongs to term_word().
+        self.join_projected_boundary();
     }
 
     /// The field's real flush already applied acceptance. Project its tail

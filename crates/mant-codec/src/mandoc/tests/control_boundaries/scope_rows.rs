@@ -378,7 +378,12 @@ fn explicit_display_end_restores_fill_inside_an_open_inline_scope() {
     };
     assert_eq!(inline_text(literal), "[\ninside");
     assert_eq!(inline_text(filled), "after-ed]");
-    assert_eq!(inline_text(after), "next");
+    // Pinned mdoc_term.c's enclosure post leaves this native word on the
+    // filled `after-ed] next` row (exact warning-recovery source rerun before
+    // this assertion). The established three-owner reading projection does
+    // not execute term_newln at its final owner split: keep its real incoming
+    // separator rather than inventing NOSPACE to hide that simplification.
+    assert_eq!(inline_text(after), " next");
 }
 
 #[test]

@@ -28,7 +28,7 @@ impl InlineBuilder {
             .take()
             .unwrap_or(boundary);
         let sentence = std::mem::take(&mut self.execution.native_word_sentence);
-        if self.execution.definition.is_none() || self.execution.author_execution.is_none() {
+        if !self.execution.uses_definition_word_buffer() {
             // Plain flow shares the field's ordered cell consumer: the
             // paragraph is a degenerate flush unit (term.c runs one
             // term_fill() over `tcol->buf` regardless of authorship), so
@@ -44,7 +44,6 @@ impl InlineBuilder {
         let native_word_start = definition.field_buffer.cells().len();
         let separator = definition.field_buffer.begin_word_with_spacing(
             native_boundary.is_native_tight(),
-            self.execution.spacing.enabled() || native_boundary == PendingBoundary::Preserved,
             native_boundary == PendingBoundary::Kept,
             1 + usize::from(sentence),
         );
@@ -141,7 +140,6 @@ impl InlineBuilder {
         let native_word_start = self.execution.plain_input.buffer.cells().len();
         let separator = self.execution.plain_input.buffer.begin_word_with_spacing(
             native_boundary.is_native_tight(),
-            self.execution.spacing.enabled() || native_boundary == PendingBoundary::Preserved,
             native_boundary == PendingBoundary::Kept,
             1 + usize::from(sentence),
         );
