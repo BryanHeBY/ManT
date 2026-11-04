@@ -2,6 +2,8 @@
 
 use super::*;
 
+mod finalization;
+
 #[derive(Debug, Eq, PartialEq)]
 struct Scalar {
     character: char,

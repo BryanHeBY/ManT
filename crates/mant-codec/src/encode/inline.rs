@@ -10,7 +10,7 @@ use std::{borrow::Cow, collections::HashSet};
 use mant_ir::{Inline, InlineContentRef, InlineLayout};
 
 use super::MarkdownOptions;
-use context::{render_inline_raw_nodes, render_inline_raw_segments};
+use context::render_inline_nodes;
 #[cfg(test)]
 use text::escape_plain_text;
 
@@ -44,21 +44,14 @@ pub(super) fn render_inline_segments(segments: &[&[Inline]], options: MarkdownOp
 /// splitting the delimiter context at invisible metadata fragments.
 #[cfg(test)]
 pub(super) fn render_inline_node_refs(nodes: &[&Inline], options: MarkdownOptions) -> String {
-    render_inline_rows(
-        &render_inline_raw_nodes(nodes.iter().copied(), options, false),
-        false,
-    )
+    render_inline_nodes(nodes.iter().copied(), options, false, false)
 }
 
 /// A block root must be interruptible by the following fence, list or rule.
 /// The newline entity carries the actual leading hard row without opening
 /// an HTML block that would consume the following structural syntax.
 pub(super) fn render_inline_block_refs(nodes: &[&Inline], options: MarkdownOptions) -> String {
-    render_inline_rows_with_origin(
-        &render_inline_raw_nodes(nodes.iter().copied(), options, false),
-        false,
-        true,
-    )
+    render_inline_nodes(nodes.iter().copied(), options, false, true)
 }
 
 #[cfg(test)]
@@ -78,12 +71,15 @@ fn render_inline_content_segments(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    render_inline_rows(
-        &render_inline_raw_segments(segments, options, manual_links),
+    render_inline_nodes(
+        segments.iter().flat_map(|nodes| nodes.iter()),
+        options,
+        manual_links,
         manual_links,
     )
 }
 
+#[cfg(test)]
 fn render_inline_rows(raw: &str, manual_links: bool) -> String {
     render_inline_rows_with_origin(raw, manual_links, false)
 }

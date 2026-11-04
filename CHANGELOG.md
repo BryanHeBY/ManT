@@ -41,6 +41,12 @@ that crate was not published for that change.
   including synopsis line flushes and same-line prefix/flag joins.
 - Execute repeated `Sm on` requests against the live native buffer without
   resetting continuation, zero-advance or keep state.
+- Validate final Markdown bytes after row-edge escaping, preserving accepted
+  child meanings during conservative style recovery. Protect text/link seams
+  from becoming images, including transparent link labels and repeated export.
+  Retain heading hard rows through their final Markdown framing.
+  Preserve authored Unicode tails in mapped artifacts and keep semantic
+  metadata from adding visible separator spaces.
 - Keep Unicode edge whitespace outside Markdown emphasis delimiters without
   dropping the inner text's representable style or changing its scalars.
 - Preserve one live native input buffer when entering synopsis fields from

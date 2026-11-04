@@ -8,7 +8,7 @@ use mant_ir::Inline;
 
 use super::links::{PhrasingNode, phrasing_nodes, render_link};
 use super::{MarkdownOptions, code_span, escape_text, html_anchor};
-use styles::render_inline_pieces;
+use styles::{Framing, append_safe_piece, render_inline_pieces};
 
 #[derive(Clone, Copy)]
 struct StyleMarkers {
@@ -86,13 +86,40 @@ pub(super) fn render_inline_raw_nodes<'source>(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    render_inline_pieces(&mut coalesce_code_pieces(inline_pieces(
-        nodes.clone(),
+    render_nodes(nodes, options, manual_links, Framing::Raw)
+}
+
+/// Row protection is part of the accepted representation, rather than an
+/// unchecked rewrite after delimiter validation. Every public inline route
+/// reaches this boundary once; recursively accepted children remain phrasing.
+pub(super) fn render_inline_nodes<'source>(
+    nodes: impl Iterator<Item = &'source Inline> + Clone,
+    options: MarkdownOptions,
+    manual_links: bool,
+    interruptible: bool,
+) -> String {
+    render_nodes(
+        nodes,
         options,
         manual_links,
-        false,
-    )))
-    .unwrap_or_else(|| render_unstyled(nodes, options, manual_links))
+        Framing::Rows {
+            manual_links,
+            interruptible,
+        },
+    )
+}
+
+fn render_nodes<'source>(
+    nodes: impl Iterator<Item = &'source Inline> + Clone,
+    options: MarkdownOptions,
+    manual_links: bool,
+    framing: Framing,
+) -> String {
+    render_inline_pieces(
+        &mut coalesce_code_pieces(inline_pieces(nodes.clone(), options, manual_links, false)),
+        framing,
+    )
+    .unwrap_or_else(|| render_unstyled_framed(nodes, options, manual_links, framing))
 }
 
 fn render_unstyled<'source>(
@@ -100,16 +127,27 @@ fn render_unstyled<'source>(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
+    render_unstyled_framed(nodes, options, manual_links, Framing::Raw)
+}
+
+fn render_unstyled_framed<'source>(
+    nodes: impl Iterator<Item = &'source Inline>,
+    options: MarkdownOptions,
+    manual_links: bool,
+    framing: Framing,
+) -> String {
     // Revisit the original borrowed nodes, preserving code coalescing and
     // typed links. Stripping bytes from a rejected Markdown candidate could
     // delete authored marker characters or change destination identities.
-    render_inline_pieces(&mut coalesce_code_pieces(inline_pieces(
-        nodes,
-        options,
-        manual_links,
-        true,
-    )))
-    .expect("unstyled phrasing has no generated style delimiters")
+    let pieces = coalesce_code_pieces(inline_pieces(nodes, options, manual_links, true));
+    // There are no generated style delimiters to recover here. Keep the
+    // independently re-encoded content even if an unsupported child prevents
+    // a semantic witness; recoverable Markdown syntax must never panic.
+    let mut output = String::new();
+    for piece in pieces {
+        append_safe_piece(&mut output, &piece.rendered);
+    }
+    framing.render(&output)
 }
 
 fn inline_pieces<'source>(
@@ -131,15 +169,7 @@ fn inline_pieces<'source>(
                     text.to_mut().push_str(value);
                     nodes.next();
                 }
-                let mut rendered = escape_text(&text);
-                // The content-preserving fallback must not turn a literal
-                // bang followed by a retained link into image syntax.
-                // Only the exposed final bang can join that next wrapper;
-                // never insert an escape inside an existing autolink URI.
-                if omit_styles && rendered.ends_with('!') {
-                    rendered.insert(rendered.len() - 1, '\\');
-                }
-                pieces.push(InlinePiece::plain(rendered));
+                pieces.push(InlinePiece::plain(escape_text(&text)));
             }
             PhrasingNode::Node(Inline::Strong { children }) => {
                 let mut segments = vec![children.as_slice()];

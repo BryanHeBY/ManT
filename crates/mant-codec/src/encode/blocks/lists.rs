@@ -30,8 +30,17 @@ pub(super) fn render_list(
                 && let Some(facts) = &item.entry
             {
                 if let Some(head) = blocks.first_mut() {
+                    // Metadata has no author text cell. Keep its comment on
+                    // its own source line: a separating SP would survive the
+                    // reader's annotation removal, while direct concatenation
+                    // would change the final style delimiter's lexical flank.
+                    // HTML comments interrupt phrasing without a blank line,
+                    // so this does not change a compact list's paragraph gaps.
+                    if !head.text.ends_with('\n') {
+                        head.text.push('\n');
+                    }
                     head.text
-                        .push_str(&crate::encode::semantic::metadata(facts));
+                        .push_str(crate::encode::semantic::metadata(facts).trim_start_matches(' '));
                 }
                 if let Some(domain) = facts
                     .value_domain

@@ -202,7 +202,14 @@ pub(super) fn render_heading(
     if depth <= 2 && content.contains('\n') {
         // Setext headings are the portable CommonMark form that retains
         // explicit inline breaks; an ATX newline would end the heading.
-        return format!("{content}\n{}", if depth == 1 { "===" } else { "---" });
+        // A final source LF belongs to the hard-row spelling, whose <br>
+        // already retains the authored row. A second LF would close the
+        // paragraph before its underline and turn the heading into a rule.
+        return format!(
+            "{}\n{}",
+            content.trim_end_matches('\n'),
+            if depth == 1 { "===" } else { "---" }
+        );
     }
     // CommonMark has no multiline ATX heading. Keep its hierarchy and
     // linked content on one line rather than accidentally emitting body
@@ -210,7 +217,10 @@ pub(super) fn render_heading(
     format!(
         "{} {}",
         "#".repeat(depth.clamp(1, 6)),
-        content.replace("<br>\n", " ").replace("  \n", " ")
+        content
+            .replace("&#10;\n", " ")
+            .replace("<br>\n", " ")
+            .replace("  \n", " ")
     )
 }
 

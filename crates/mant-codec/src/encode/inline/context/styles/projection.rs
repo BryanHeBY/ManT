@@ -2,6 +2,8 @@
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
+use super::Framing;
+
 #[derive(Clone, Copy)]
 pub(super) enum Style {
     Strong,
@@ -111,9 +113,18 @@ impl Projection {
 /// Expected meaning belongs to the accepted child before its new wrapper.
 /// Parsing a slice of `whole` here would certify that candidate against itself:
 /// outer delimiters can re-pair the child's formerly valid nested delimiters.
+#[cfg(test)]
 pub(super) fn equivalent<'a>(
     pieces: impl Iterator<Item = (&'a str, Option<Style>)>,
     whole: &str,
+) -> bool {
+    equivalent_framed(pieces, whole, Framing::Raw)
+}
+
+pub(super) fn equivalent_framed<'a>(
+    pieces: impl Iterator<Item = (&'a str, Option<Style>)>,
+    whole: &str,
+    framing: Framing,
 ) -> bool {
     let mut expected = Projection::default();
     for (source, style) in pieces {
@@ -127,7 +138,23 @@ pub(super) fn equivalent<'a>(
     }
     #[cfg(test)]
     super::WHOLE_PARSES.with(|count| count.set(count.get() + 1));
-    project(whole).is_some_and(|actual| actual == expected)
+    let actual = match framing {
+        Framing::Raw => project(whole),
+        Framing::Rows { .. } => project_rows(whole),
+    };
+    actual.is_some_and(|actual| actual == expected)
+}
+
+/// Inspect the bytes actually received by the reader. In particular, do not
+/// add the X/Z whitespace guards used for accepted child phrasing: entities at
+/// an author's row edge have already changed the delimiter scanner's flanks.
+fn project_rows(source: &str) -> Option<Projection> {
+    #[cfg(test)]
+    super::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + source.len()));
+    project_events(
+        crate::markdown::canonical_br::parse_events(source, pulldown_cmark::Options::empty())
+            .map(|(event, _)| event),
+    )
 }
 
 /// Reject an unsafe wrapper before sequence scoring can discard safe inner
@@ -149,11 +176,31 @@ fn project(source: &str) -> Option<Projection> {
     framed.push_str(" Z");
     #[cfg(test)]
     super::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + framed.len()));
+    let mut result = project_events(Parser::new(&framed))?;
+    let first = result.runs.first_mut()?;
+    if first.styles != 0 || first.link.is_some() || !first.text.starts_with("X ") {
+        return None;
+    }
+    first.text.drain(..2);
+    let last = result.runs.last_mut()?;
+    if last.styles != 0 || last.link.is_some() || !last.text.ends_with(" Z") {
+        return None;
+    }
+    last.text.truncate(last.text.len() - 2);
+    result.runs.retain(|run| !run.text.is_empty());
+    result.bytes -= 4;
+    for (offset, _) in &mut result.html {
+        *offset = offset.checked_sub(2)?;
+    }
+    Some(result)
+}
+
+fn project_events<'a>(events: impl Iterator<Item = Event<'a>>) -> Option<Projection> {
     let mut result = Projection::default();
     let mut strong = 0;
     let mut emphasis = 0;
     let mut owners = Vec::new();
-    for event in Parser::new(&framed) {
+    for event in events {
         let code = u8::from(matches!(&event, Event::Code(_))) << 2;
         match event {
             Event::Start(Tag::Strong) => strong += 1,
@@ -177,26 +224,19 @@ fn project(source: &str) -> Option<Projection> {
                 let styles = u8::from(strong > 0) | (u8::from(emphasis > 0) << 1) | code;
                 result.text(&text, styles, owners.last().copied());
             }
-            Event::InlineHtml(html) if html.as_ref() == "<br>" => result.text("\n", 0, None),
+            Event::InlineHtml(html) if matches!(html.as_ref(), "<br>" | "<br />") => {
+                result.text("\n", 0, None);
+            }
             Event::InlineHtml(html) => result.html.push((result.bytes, html.into_string())),
+            Event::HardBreak => result.text("\n", 0, None),
+            Event::SoftBreak
+                if result
+                    .runs
+                    .last()
+                    .is_some_and(|run| run.text.ends_with('\n')) => {}
             Event::Start(Tag::Paragraph) | Event::End(TagEnd::Paragraph) => {}
             _ => return None,
         }
-    }
-    let first = result.runs.first_mut()?;
-    if first.styles != 0 || first.link.is_some() || !first.text.starts_with("X ") {
-        return None;
-    }
-    first.text.drain(..2);
-    let last = result.runs.last_mut()?;
-    if last.styles != 0 || last.link.is_some() || !last.text.ends_with(" Z") {
-        return None;
-    }
-    last.text.truncate(last.text.len() - 2);
-    result.runs.retain(|run| !run.text.is_empty());
-    result.bytes -= 4;
-    for (offset, _) in &mut result.html {
-        *offset = offset.checked_sub(2)?;
     }
     Some(result)
 }
@@ -262,6 +302,33 @@ mod tests {
         assert!(equivalent(
             ["**--arg=**", "_reuse_level_"].into_iter(),
             "**--arg=**_reuse_level_"
+        ));
+    }
+
+    #[test]
+    fn final_bytes_reject_row_entity_flanks_and_unprotected_image_openers() {
+        let framing = super::Framing::Rows {
+            manual_links: false,
+            interruptible: true,
+        };
+        // Independent accepted source children, before the final delimiter
+        // choices and row-edge rewrite. Restoring the old raw-only validator
+        // would admit the damaged first sequence; removing seam protection
+        // would admit the image in the second sequence.
+        assert!(!super::equivalent_framed(
+            [("_a ***b***_", None), (" ", None)].into_iter(),
+            "_a _**b**__&#32;",
+            framing,
+        ));
+        assert!(!super::equivalent_framed(
+            [("!", None), ("[a](https://a.test)", None)].into_iter(),
+            "![a](https://a.test)",
+            framing,
+        ));
+        assert!(super::equivalent_framed(
+            [("!", None), ("[a](https://a.test)", None)].into_iter(),
+            "\\![a](https://a.test)",
+            framing,
         ));
     }
 }

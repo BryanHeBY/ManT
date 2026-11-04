@@ -68,6 +68,16 @@ candidate by reinterpreting that candidate's own inner delimiters. Existing
 conservative style fallback still preserves the original words without
 adding spaces or marker characters.
 
+The final check includes row-edge entity escaping and heading framing, because
+those bytes can change CommonMark delimiter interpretation. Recovery first
+keeps independently accepted child styles, then drops only styles that cannot
+be represented safely. A text `!` adjoining a retained link is escaped at the
+shared inline boundary so the link cannot turn into an image. Omitted link
+wrappers keep using that same boundary; destinations are not rewritten.
+Addressable export also emits HTML anchors. ManT's deliberate visible-source
+fallback for unsupported raw HTML remains distinct from ordinary Markdown
+roundtrip semantics.
+
 ## Links
 
 Markdown links are classified before entering the IR:

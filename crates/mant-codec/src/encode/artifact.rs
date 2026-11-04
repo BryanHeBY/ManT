@@ -329,7 +329,10 @@ impl<'src> ArtifactBuilder<'src> {
     }
 
     fn finish(mut self) -> MarkdownArtifact<'src> {
-        let end = self.text.trim_end().len();
+        // Author SP/TAB are already protected by the inline row frame. Only
+        // serializer ASCII separators may be trimmed here: Unicode whitespace
+        // remains content, including an otherwise whitespace-only final row.
+        let end = self.text.trim_end_matches([' ', '\t', '\r', '\n']).len();
         self.text.truncate(end);
         self.close_tldr(end);
         if let Some(root) = self.root.take() {
