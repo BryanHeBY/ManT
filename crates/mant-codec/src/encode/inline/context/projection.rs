@@ -2,7 +2,7 @@
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
-use super::Framing;
+use super::serialization::Framing;
 
 #[derive(Clone, Copy)]
 pub(super) enum Style {
@@ -93,7 +93,7 @@ impl Projection {
         for run in self.runs {
             for character in run.text.chars() {
                 #[cfg(test)]
-                super::PROJECTED_SCALARS.with(|visits| visits.set(visits.get() + 1));
+                super::work::PROJECTED_SCALARS.with(|visits| visits.set(visits.get() + 1));
                 // Hard rows have no style/link owner in this projection.
                 // Applying an outer style must not turn that boundary into
                 // authored text or change the accepted child code/link bits.
@@ -137,7 +137,7 @@ pub(super) fn equivalent_framed<'a>(
         });
     }
     #[cfg(test)]
-    super::WHOLE_PARSES.with(|count| count.set(count.get() + 1));
+    super::work::WHOLE_PARSES.with(|count| count.set(count.get() + 1));
     let actual = match framing {
         Framing::Raw => project(whole),
         Framing::Rows { .. } => project_rows(whole),
@@ -150,7 +150,7 @@ pub(super) fn equivalent_framed<'a>(
 /// an author's row edge have already changed the delimiter scanner's flanks.
 fn project_rows(source: &str) -> Option<Projection> {
     #[cfg(test)]
-    super::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + source.len()));
+    super::work::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + source.len()));
     project_events(
         crate::markdown::canonical_br::parse_events(source, pulldown_cmark::Options::empty())
             .map(|(event, _)| event),
@@ -175,7 +175,7 @@ fn project(source: &str) -> Option<Projection> {
     append_phrasing_rows(&mut framed, source);
     framed.push_str(" Z");
     #[cfg(test)]
-    super::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + framed.len()));
+    super::work::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + framed.len()));
     let mut result = project_events(Parser::new(&framed))?;
     let first = result.runs.first_mut()?;
     if first.styles != 0 || first.link.is_some() || !first.text.starts_with("X ") {
@@ -254,81 +254,4 @@ pub(super) fn append_phrasing_rows(output: &mut String, source: &str) {
 }
 
 #[cfg(test)]
-mod tests {
-    fn equivalent<'a>(pieces: impl Iterator<Item = &'a str>, whole: &str) -> bool {
-        super::equivalent(pieces.map(|piece| (piece, None)), whole)
-    }
-
-    #[test]
-    fn outer_style_cannot_certify_reinterpreted_child_delimiters() {
-        for (child, corrupted) in [
-            (r"_`a`_b\*__", r"**_`a`_b\*__**"),
-            (
-                r"_[a](https://a.test)_b\*__",
-                r"**_[a](https://a.test)_b\*__**",
-            ),
-        ] {
-            assert!(!super::equivalent(
-                [(child, Some(super::Style::Strong))].into_iter(),
-                corrupted,
-            ));
-        }
-        assert!(super::equivalent(
-            [(" `a` ", Some(super::Style::Strong))].into_iter(),
-            " **`a`** ",
-        ));
-        assert!(!super::equivalent(
-            [(" `a` ", Some(super::Style::Strong))].into_iter(),
-            "** `a` **",
-        ));
-    }
-
-    #[test]
-    fn complete_check_rejects_remote_pairing_changed_styles_and_link_occurrences() {
-        assert!(!equivalent(
-            ["**$((**", "*arithmetic_expression*"].into_iter(),
-            "**$((***arithmetic_expression*"
-        ));
-        assert!(!equivalent(["**A**", "_B_"].into_iter(), "_A_**B**"));
-        assert!(!equivalent(
-            ["[A](https://one.test)", "[B](https://one.test)"].into_iter(),
-            "[AB](https://one.test)"
-        ));
-        assert!(!equivalent(
-            ["[A](https://one.test \"first\")"].into_iter(),
-            "[A](https://one.test \"second\")"
-        ));
-        assert!(!equivalent(["`A`"].into_iter(), "A"));
-        assert!(equivalent(
-            ["**--arg=**", "_reuse_level_"].into_iter(),
-            "**--arg=**_reuse_level_"
-        ));
-    }
-
-    #[test]
-    fn final_bytes_reject_row_entity_flanks_and_unprotected_image_openers() {
-        let framing = super::Framing::Rows {
-            manual_links: false,
-            interruptible: true,
-        };
-        // Independent accepted source children, before the final delimiter
-        // choices and row-edge rewrite. Restoring the old raw-only validator
-        // would admit the damaged first sequence; removing seam protection
-        // would admit the image in the second sequence.
-        assert!(!super::equivalent_framed(
-            [("_a ***b***_", None), (" ", None)].into_iter(),
-            "_a _**b**__&#32;",
-            framing,
-        ));
-        assert!(!super::equivalent_framed(
-            [("!", None), ("[a](https://a.test)", None)].into_iter(),
-            "![a](https://a.test)",
-            framing,
-        ));
-        assert!(super::equivalent_framed(
-            [("!", None), ("[a](https://a.test)", None)].into_iter(),
-            "\\![a](https://a.test)",
-            framing,
-        ));
-    }
-}
+mod tests;

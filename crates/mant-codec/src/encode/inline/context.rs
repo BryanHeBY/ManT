@@ -1,6 +1,10 @@
 //! One borrowed phrasing stream for source-owned fragments and transparent labels.
 
+mod projection;
+mod serialization;
 mod styles;
+#[cfg(test)]
+mod work;
 
 use std::borrow::Cow;
 
@@ -8,7 +12,7 @@ use mant_ir::Inline;
 
 use super::links::{PhrasingNode, phrasing_nodes, render_link};
 use super::{MarkdownOptions, code_span, escape_text, html_anchor};
-use styles::{Framing, append_safe_piece, render_inline_pieces};
+use serialization::{Framing, append_safe_piece, render_inline_pieces};
 
 #[derive(Clone, Copy)]
 struct StyleMarkers {

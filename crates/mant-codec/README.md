@@ -16,6 +16,12 @@ Semantic recognition, explicit name bindings, declaration groups, and identity a
 
 Document encoding borrows existing IR. Addressable artifacts keep canonical text and source-owner mappings together. Report fragments may decorate one inline root without altering canonical artifact coordinates. This crate does not query, render terminal themes, read configuration, update sources, or launch processes.
 
+Markdown inline encoding separates bounded delimiter selection (`styles`),
+final row framing and seam serialization (`serialization`), and an independent
+accepted-child meaning check (`projection`). Validation sees the final bytes;
+one bounded recovery may retain representable child styles without accepting
+the candidate's own reinterpreted delimiters as its expected meaning.
+
 ## Public entry points
 
 | Need | API |
