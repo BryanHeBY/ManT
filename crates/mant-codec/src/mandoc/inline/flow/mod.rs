@@ -6,7 +6,9 @@ use mant_ir::{first_visible_character, has_printable_character, last_visible_cha
 
 mod builder;
 mod definition;
-pub(in crate::mandoc) use definition::{DefinitionGeometryCheckpoint, NamePartGeometry};
+pub(in crate::mandoc) use definition::{
+    DefinitionGeometryCheckpoint, NamePartGeometry, RunInBoundaryReceipt,
+};
 mod execution;
 pub(in crate::mandoc) mod field_buffer;
 use definition::DefinitionFieldState;
@@ -58,7 +60,7 @@ pub(in crate::mandoc) struct InlineBuilder {
         Option<std::rc::Rc<std::cell::RefCell<HeadOperandCapture>>>,
     // Macro handlers such as pre_alternate() call term_word() directly on
     // operands instead of visiting those TEXT nodes through print_man_node().
-    direct_word_operands: bool,
+    direct_word_operands: Option<crate::mandoc::roff_escape::WordSpace>,
     // An actual term_vspace() from empty TEXT asserted an empty output row.
     // The literal owner must distinguish it from a trailing term_newln().
     asserted_vertical_row: bool,

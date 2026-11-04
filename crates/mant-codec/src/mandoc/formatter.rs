@@ -64,7 +64,7 @@ pub(super) struct FormatterState {
         Option<std::rc::Rc<std::cell::RefCell<super::inline::HeadOperandCapture>>>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 // Independent observations of one BODY's native execution, not states.
 #[allow(clippy::struct_excessive_bools)]
 pub(super) struct DefinitionBodyObservation {
@@ -80,24 +80,37 @@ pub(super) struct DefinitionBodyObservation {
     /// filled its capacity (term.c:250-253), not because of request
     /// `TERMP_NOSPACE` (`roff_term.c:78`).
     first_word_flushed_at_body: bool,
+    run_in_boundary: Option<super::inline::RunInBoundaryReceipt>,
 }
 
 impl DefinitionBodyObservation {
-    pub(super) const fn placement_breaks(self) -> bool {
+    pub(super) const fn placement_breaks(&self) -> bool {
         self.placement_breaks
     }
 
-    pub(super) const fn source_continues_after_run_in(self) -> Option<bool> {
+    pub(super) const fn source_continues_after_run_in(&self) -> Option<bool> {
         self.source_continues_after_run_in
     }
 
-    pub(super) const fn first_word_concatenated(self) -> bool {
+    pub(super) const fn first_word_concatenated(&self) -> bool {
         self.first_word_concatenated
     }
 
     #[must_use]
-    pub(super) const fn first_word_flushed_at_body(self) -> bool {
+    pub(super) const fn first_word_flushed_at_body(&self) -> bool {
         self.first_word_flushed_at_body
+    }
+
+    pub(super) fn materialized_run_in_boundary(&self) -> bool {
+        self.run_in_boundary
+            .as_ref()
+            .is_some_and(super::inline::RunInBoundaryReceipt::materialized)
+    }
+
+    pub(super) fn joined_run_in_word(&self) -> bool {
+        self.run_in_boundary
+            .as_ref()
+            .is_some_and(super::inline::RunInBoundaryReceipt::following_word_joined)
     }
 }
 
@@ -109,13 +122,25 @@ impl Clone for FormatterState {
         let mut execution = self.execution.clone();
         execution.scope_posts = crate::mandoc::containers::ScopePostState::default();
         execution.escape_coverage = self.execution.escape_coverage.fork();
+        let pending: std::collections::HashMap<_, _> = execution
+            .shared_run_in_boundaries()
+            .map(|receipt| (receipt.id(), receipt))
+            .collect();
+        let mut definition_bodies = self.definition_bodies.clone();
+        for body in &mut definition_bodies {
+            if let Some(receipt) = &body.run_in_boundary
+                && let Some(forked) = pending.get(&receipt.id())
+            {
+                body.run_in_boundary = Some(forked.share());
+            }
+        }
         Self {
             execution,
             spare_execution: Some(InlineExecutionState::default()),
             no_fill: self.no_fill,
             no_fill_inline: self.no_fill_inline.clone(),
             row_handoff: self.row_handoff,
-            definition_bodies: self.definition_bodies.clone(),
+            definition_bodies,
             definition_head_rows: self.definition_head_rows,
             head_operand_capture: None,
         }
@@ -176,6 +201,7 @@ impl FormatterState {
             source_continues_after_run_in: None,
             first_word_concatenated: false,
             first_word_flushed_at_body: false,
+            run_in_boundary: None,
         });
     }
 
@@ -199,10 +225,14 @@ impl FormatterState {
         }
     }
 
-    pub(super) fn note_definition_run_in_executed(&mut self) {
+    pub(super) fn note_definition_run_in_executed(
+        &mut self,
+        boundary: Option<super::inline::RunInBoundaryReceipt>,
+    ) {
         let continuation = self.execution.source_row_continues();
         if let Some(body) = self.definition_bodies.last_mut() {
             body.source_continues_after_run_in = Some(continuation);
+            body.run_in_boundary = boundary;
         }
     }
 

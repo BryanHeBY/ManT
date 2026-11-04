@@ -99,6 +99,15 @@ fn assert_definition(case: &StructuralCase, document: &mant_ir::Document) {
         HeadBodyRelation::Separate
     };
     assert_eq!(actual_relation, relation, "{}: {item:#?}", case.basic.id);
+    if case.basic.source.contains(".Bl -inset") && relation == HeadBodyRelation::joined() {
+        // The rerun source prints HEAD + generated U+00A0 + BODY on one
+        // native row (mdoc_term.c::termp_it_pre). BODY owns its reading SP;
+        // SharedJoined prevents a second generic separator at export.
+        let [Block::Paragraph { children, .. }] = &item.description[..] else {
+            panic!("complete run-in BODY: {item:#?}");
+        };
+        assert_eq!(inline_text(children), " BODY", "{}", case.basic.id);
+    }
     for (word, expected) in &case.basic.native_columns {
         if word == "AFTER" {
             continue;

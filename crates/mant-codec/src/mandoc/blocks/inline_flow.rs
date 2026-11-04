@@ -1,7 +1,6 @@
 //! Filled inline routing and source-boundary recognition, not structural ownership.
 use super::{
-    Block, Inline, Node, NodeKind, append_inline_node_with_next, is_enclosure_macro, source_span,
-    visible_text,
+    Node, NodeKind, append_inline_node_with_next, is_enclosure_macro, source_span, visible_text,
 };
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
@@ -12,11 +11,10 @@ impl super::BlockLowerer<'_, '_> {
         // filled word executes, independently of the presentation fill mode.
         self.resume_no_fill_row();
         let source = source_span(node);
-        self.state.push_source_inline_with(
+        self.state.push_inline_with(
             source,
             starts_indented_filled_line(node),
             ends_with_line_continuation(node),
-            node.kind == NodeKind::Text && node.flags.line_start,
             |builder| append_inline_node_with_next(builder, node, next, self.context.default_name),
         );
     }
@@ -66,52 +64,6 @@ pub(super) fn follows_inline_equation_punctuation(nodes: &[Node], index: usize) 
             .map(visible_text)
             .and_then(|text| text.chars().next())
             .is_some_and(|character| matches!(character, '.' | ',' | ':' | ';' | '!' | '?'))
-}
-
-/// Attach a native closing delimiter to the preceding visible flow, walking
-/// the last actual item/cell rather than generating a new paragraph for it.
-pub(super) fn append_to_last_inline_block(blocks: &mut [Block], tail: &[Inline]) -> bool {
-    for block in blocks.iter_mut().rev() {
-        match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                children.extend_from_slice(tail);
-                return true;
-            }
-            Block::List { items, .. } => {
-                if items
-                    .last_mut()
-                    .is_some_and(|item| append_to_last_inline_block(&mut item.blocks, tail))
-                {
-                    return true;
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                if items.last_mut().is_some_and(|item| {
-                    append_to_last_inline_block(&mut item.description, tail)
-                        || item.terms.last_mut().is_some_and(|term| {
-                            term.content.extend_from_slice(tail);
-                            true
-                        })
-                }) {
-                    return true;
-                }
-            }
-            Block::Table { rows, .. } => {
-                if rows
-                    .last_mut()
-                    .and_then(|row| row.cells.last_mut())
-                    .is_some_and(|cell| append_to_last_inline_block(&mut cell.blocks, tail))
-                {
-                    return true;
-                }
-            }
-            Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-    false
 }
 
 /// Match the filled-text line-break rule used by libmandoc's terminal and

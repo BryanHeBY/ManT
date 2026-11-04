@@ -14,7 +14,7 @@ impl InlineBuilder {
     /// A pre-handler's direct `term_word` operands do not run the native node
     /// exit. `pre_alternate` explicitly forwards its child EOS separately.
     pub(in crate::mandoc) fn finish_executed_node(&mut self, node: &libmandoc_rs::Node) {
-        if !self.direct_word_operands
+        if self.direct_word_operands.is_none()
             && self.execution.observe_no_fill_source_lines != SourceLineObservation::Grouped
         {
             self.execution.finish_executed_node(node);
@@ -59,6 +59,20 @@ impl InlineBuilder {
         authors_section: bool,
         break_effect: AuthorBreakEffect,
     ) {
+        let inherited_start = self
+            .execution
+            .author_execution
+            .is_none()
+            .then(|| {
+                let live = self
+                    .execution
+                    .definition
+                    .as_ref()
+                    .is_some_and(|state| !state.field_word_anchors.is_empty())
+                    || !self.execution.flush_unit_anchors.is_empty();
+                live.then_some(self.execution.flush_unit_output_start)
+            })
+            .flatten();
         if matches!(break_effect, AuthorBreakEffect::Field { .. }) {
             self.definition_state_mut();
         }
@@ -66,7 +80,7 @@ impl InlineBuilder {
             flow,
             authors_section,
             break_effect,
-            field_output_start: self.nodes.len(),
+            field_output_start: inherited_start.unwrap_or(self.nodes.len()),
         });
     }
 
@@ -413,6 +427,7 @@ impl InlineBuilder {
         self.note_produced_formatter_cell(native_count > 0);
         self.tighten_next_boundary();
         self.begin_word_projection(true);
+        self.begin_native_word_owner();
         if count > 0 {
             let mut projected = Vec::new();
             self.execution.zero_advance.append_generated_cells(
@@ -433,14 +448,6 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn take_zero_advance_armed(&mut self) -> bool {
         self.execution.zero_advance.take_armed()
-    }
-
-    /// Source wrapping is a word boundary even while macro auto-spacing is
-    /// disabled. Explicit joins still take precedence over ordinary wrapping.
-    pub(in crate::mandoc) fn preserve_source_word_boundary(&mut self) {
-        if !self.execution.boundary.is_tight() {
-            self.execution.boundary = PendingBoundary::Preserved;
-        }
     }
 
     /// Preserve the formatter word boundary released inside a physically

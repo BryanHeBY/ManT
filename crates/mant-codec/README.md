@@ -74,6 +74,28 @@ ledger stages, while their source-node entry, sink routing, post-once claim
 and final geometry restoration remain ordered by their existing drivers.
 No helper return or destructor implicitly executes a native scope post.
 
+Entering a native field moves the existing plain input buffer and stable word
+owners; it does not create an empty parallel buffer or settle pending glyphs.
+`inline/synopsis.rs` applies source-sibling pre rules for prose, literal and
+definition destinations. `Nm` retains its distinct nonempty HEAD entry, while
+`Fn`/`Fo` share the real temporary name-field and argument-flush lifecycle.
+Declaration paragraphs are released only after those execution boundaries;
+their semantic grouping does not simulate another pre or post.
+
+Accepted device padding remains distinct from authored scalars until its
+annotation boundary is known. Moving a leading gap outside a link also
+remaps live output checkpoints using addresses recorded during projection,
+not a text diff. A generated inset/diag BODY word observes its own native
+cell interval; only actual field acceptance can establish its visible seam.
+Projection-only owner drains cannot supply that evidence.
+
+One-line display presentation chooses an IR destination independently of
+source fill mode. Its real post closes the live row before geometry returns.
+Following punctuation uses ordinary shared execution, never an independent
+lowering pass that edits an earlier completed content owner. Filled source
+line observation likewise cannot override the spacing state used by actual
+macro and text words.
+
 A native field scope can span multiple paragraph and literal content owners.
 Its explicit source pre/post boundaries protect the live word, separator and
 field registers while an IR drain releases only output indices. Resolved BODY
@@ -166,6 +188,9 @@ The shared display Tab phases and nested list phases in
 `mdoc_term.c`/`man_term.c` handlers and retain their ISC notices.
 The shared `Nm` handler in `src/mandoc/inline/names.rs` also adapts
 `mdoc_term.c` and retains its ISC notice.
+The shared synopsis entry in `src/mandoc/inline/synopsis.rs` and function
+field phases in `src/mandoc/inline/flow/definition/function_scope.rs` adapt
+the same handlers and retain their ISC notices.
 The private row presentation kernel in `src/mandoc/inline/flow/presentation.rs`
 and its `presentation/field.rs` helper adapt `roff_term.c` temporary offsets
 and `term.c`/`term_ascii.c` field placement and line retirement. Their headers

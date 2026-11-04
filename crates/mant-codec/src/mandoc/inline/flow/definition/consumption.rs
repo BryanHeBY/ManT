@@ -69,6 +69,7 @@ impl InlineBuilder {
         super::control_trace::projected();
         // This is an actual flush, unlike owner-prefix or word-time views.
         // Its row close can clear the buffer before retirement projects text.
+        self.capture_consumed_run_in_boundaries(native);
         let _ = self.capture_consumed_native_tabs(native);
         self.project_definition_field_receipt_using(false, false, Some(native))
     }
@@ -421,7 +422,7 @@ impl InlineBuilder {
     pub(in crate::mandoc::inline::flow) fn project_consumed_row_layout(
         &mut self,
         device: &NativeFieldDevice,
-    ) {
+    ) -> [super::super::output::row_origins::OutputNodeEdits; 2] {
         self.execution.row_presentation = device.presentation;
         self.execution.partial_row_alignment |= device.partial_alignment;
         if let Some(receiver) = self
@@ -435,20 +436,28 @@ impl InlineBuilder {
                 receiver.accept(std::slice::from_ref(receipt));
             }
         }
-        if let Some(receipt) = &device.cleared_alignment {
+        let cleared = if let Some(receipt) = &device.cleared_alignment {
             // One bounded old-owner metadata revocation per device row.
             // Text rejection still uses the new field's output_start.
-            super::super::output::row_origins::project_row_presentations(
+            let edits = super::super::output::row_origins::project_row_presentations(
                 &mut self.nodes,
                 std::slice::from_ref(receipt),
                 0,
             );
-        }
-        super::super::output::row_origins::project_row_presentations(
+            self.remap_output_projection(&edits);
+            edits
+        } else {
+            super::super::output::row_origins::OutputNodeEdits::default()
+        };
+        let mut output_start = device.output_start;
+        cleared.remap(&mut output_start);
+        let presented = super::super::output::row_origins::project_row_presentations(
             &mut self.nodes,
             &device.row_presentations,
-            device.output_start,
+            output_start,
         );
+        self.remap_output_projection(&presented);
+        [cleared, presented]
     }
 
     pub(in crate::mandoc::inline::flow) fn retire_native_field_with_device(
@@ -466,16 +475,24 @@ impl InlineBuilder {
         #[cfg(test)]
         super::control_trace::retired();
         if let Some(device) = device {
+            self.capture_consumed_run_in_boundaries(device);
             let tabs = self.capture_consumed_native_tabs(device);
-            self.project_consumed_row_layout(device);
+            let layout_edits = self.project_consumed_row_layout(device);
             let mut output_start = device.output_start;
+            let mut separator_field = device.separator_field;
+            for edits in layout_edits {
+                edits.remap(&mut output_start);
+                if let Some(field) = &mut separator_field {
+                    field.remap_output_projection(&edits);
+                }
+            }
             self.retire_unprinted_no_break_separator(
                 device.emission,
                 device.separator_retention,
-                device.separator_field,
+                separator_field,
                 &mut output_start,
             );
-            let edit = super::super::output::row_origins::project_native_positions_with_tabs(
+            let edits = super::super::output::row_origins::project_native_positions_with_tabs(
                 &mut self.nodes,
                 &device.row_origins,
                 &device.field_padding,
@@ -486,9 +503,7 @@ impl InlineBuilder {
                     .as_ref()
                     .is_some_and(|state| state.column_origin_units.is_none()),
             );
-            if let Some(edit) = edit {
-                self.remap_output_positions(edit);
-            }
+            self.remap_output_projection(&edits);
             // All native acceptance and layout receipts still address the
             // original scalar stream. Resolve TAB text only after those
             // receipts have been consumed, at this real field retirement.
@@ -527,6 +542,7 @@ impl InlineBuilder {
                 };
             }
             state.field_buffer.clear_consumed_field();
+            state.no_pad = false;
             state.field_word_anchors.clear();
             state.projected_passes = 0;
         }

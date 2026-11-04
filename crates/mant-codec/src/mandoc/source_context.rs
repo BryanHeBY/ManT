@@ -398,6 +398,7 @@ impl<'a> LoweringContext<'a> {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
                     record_native_cells: false,
                     field_authoritative: false,
+                    word_space: crate::mandoc::roff_escape::WordSpace::Breakable,
                 },
             },
         );

@@ -16,6 +16,35 @@
 use super::*;
 
 #[test]
+fn unconditional_literal_flush_keeps_its_row_owner_without_a_field() {
+    use super::super::super::field_buffer::{FieldCell, FieldWrite};
+    use super::super::super::output::{CompletedRowOrigin, trailing_completed_row_origins};
+
+    // The exact man-ce-zero-graph-nofill source reran pinned ASCII,
+    // UTF-8 40/80, HTML, tree and lint before this assertion. roff_term.c
+    // flushes ce groups unconditionally; term.c:233-253 closes their row.
+    // Native cells without visible text still belong to the literal sink,
+    // not to a newly invented gap. Empty-buffer flush is a unit control.
+    for occupied in [false, true] {
+        let mut builder = InlineBuilder::new();
+        if occupied {
+            builder
+                .execution
+                .flush_unit
+                .apply_writes(&[FieldWrite::Cell(FieldCell::ZeroWidthGraph)]);
+        }
+        builder.flush_literal_execution_line();
+        let rows = trailing_completed_row_origins(&builder.nodes);
+        assert_eq!(rows.len(), 1);
+        assert!(
+            rows.iter()
+                .all(|origin| *origin == CompletedRowOrigin::LiteralText)
+        );
+        assert!(builder.execution.flush_unit.is_empty());
+    }
+}
+
+#[test]
 fn definition_field_session_reenters_after_owner_handoff() {
     let mut builder = InlineBuilder::with_spacing(true);
     builder.inherit_author_execution_with_effect(

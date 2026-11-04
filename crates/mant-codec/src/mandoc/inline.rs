@@ -19,14 +19,15 @@ pub(in crate::mandoc) mod names;
 pub(super) use links::{append_man_link, man_link_identity_text};
 mod scopes;
 mod source_fragment;
+pub(in crate::mandoc) mod synopsis;
 pub(in crate::mandoc) use flow::{
     AuthorBreakEffect, CompletedRowOrigin, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags,
     HeadOperandCapture, InlineExecutionState, NamePartGeometry, NoFillInlineState, OutputRowEnd,
-    PreservedInlineState, consume_one_row_ending, ends_with_executed_line_break,
-    has_rendered_formatter_glyph, lower_no_fill_fragment_with_formatter, native_row_origin,
-    prepare_inline_output, retain_inline_identities, split_row_origin,
-    strip_native_projection_markers, take_definition_term_breaks, take_inline_layout,
-    trailing_completed_row_origins,
+    PreservedInlineState, RunInBoundaryReceipt, consume_one_row_ending,
+    ends_with_executed_line_break, has_rendered_formatter_glyph,
+    lower_no_fill_fragment_with_formatter, native_row_origin, prepare_inline_output,
+    retain_inline_identities, split_row_origin, strip_native_projection_markers,
+    take_definition_term_breaks, take_inline_layout, trailing_completed_row_origins,
 };
 pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
 mod source;
@@ -181,6 +182,7 @@ pub(in crate::mandoc) fn append_inline_node_with_siblings(
     }
     builder.begin_executed_node(node);
     let geometry = builder.definition_geometry_checkpoint(node);
+    synopsis::enter(builder, node, previous);
     if node.kind == NodeKind::Block
         && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Rs))
         && node.section == libmandoc_rs::NormalizedSection::SeeAlso
@@ -503,6 +505,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // until its native row retires; isolated table words retain their
     // independent cell scope.
     let field_authoritative = true;
+    let word_space = builder.word_operand_spaces();
     builder.begin_native_word_owner();
     // pre_alternate selects an operand role before this actual term_word;
     // internal font escapes remain within this same word identity.
@@ -521,6 +524,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
                 recognize_generated_references: !node.flags.no_fill,
                 record_native_cells: true,
                 field_authoritative,
+                word_space,
             },
         },
     );

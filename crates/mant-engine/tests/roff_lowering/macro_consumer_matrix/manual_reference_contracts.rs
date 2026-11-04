@@ -282,7 +282,7 @@ fn manual_identities_do_not_consume_pending_glyph_or_continuation_state() {
     for macro_name in ["Xr", "MR"] {
         for (prefix, label, text) in [
             (r"PRE\zQ", "printf(3)", "PREQprintf(3) AFTER"),
-            (r"PRE\z", " rintf(3)", "PRE rintf(3) AFTER"),
+            (r"PRE\z", "rintf(3)", "PRE rintf(3) AFTER"),
         ] {
             let prefix = if macro_name == "Xr" {
                 format!(".No {prefix}\n")
@@ -306,9 +306,37 @@ fn manual_identities_do_not_consume_pending_glyph_or_continuation_state() {
             &source,
             "printf",
             Some("3"),
-            " printf(3)",
+            "printf(3)",
             "PRE printf(3) AFTERTAIL",
         );
+    }
+}
+
+#[test]
+fn manual_annotations_keep_authored_blank_scalars_after_the_automatic_prefix() {
+    // Exact Xr/MR sources, including the existing pending-glyph/font/P/c
+    // cases above, first ran all five pinned profiles. term_word:573-589
+    // buffers its automatic separator before the original operand. The
+    // original Xr/MR HTML label includes authored SP/NBSP, but that automatic
+    // prefix stays outside its tag (mdoc_html.c::mdoc_xr_pre).
+    for macro_name in ["Xr", "MR"] {
+        for blank in [" ", "\u{a0}"] {
+            let name = format!("{blank}printf");
+            let label = format!("{name}(3)");
+            let prefix = if macro_name == "Xr" {
+                ".No PRE\n"
+            } else {
+                "PRE\n"
+            };
+            let source = source(macro_name, &format!("{prefix}.{macro_name} \"{name}\" 3\n"));
+            assert_manual(
+                &source,
+                &name,
+                Some("3"),
+                &label,
+                &format!("PRE {label} AFTER"),
+            );
+        }
     }
 }
 

@@ -26,6 +26,50 @@ struct PlainFlushUnit {
     output_start: usize,
 }
 
+/// The exceptional row fact of this consumed plain flush, never history.
+#[derive(Clone, Copy, Default)]
+pub(in crate::mandoc::inline::flow) enum PlainFlushOutcome {
+    #[default]
+    Ordinary,
+    UnprintedTail,
+    RepresentedTail,
+    Rejected,
+}
+
+impl PlainFlushOutcome {
+    const fn from_unprinted_tail(unprinted: bool, inherited: bool) -> Self {
+        if !unprinted {
+            Self::Ordinary
+        } else if inherited {
+            Self::RepresentedTail
+        } else {
+            Self::UnprintedTail
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn rejected(self) -> bool {
+        matches!(self, Self::Rejected)
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn closes_unprinted_row(self) -> bool {
+        matches!(self, Self::UnprintedTail)
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn closes_represented_row(self) -> bool {
+        matches!(self, Self::RepresentedTail)
+    }
+}
+
+fn plain_unit_inherits_printed_row(execution: &super::super::InlineExecutionState) -> bool {
+    execution
+        .definition
+        .as_ref()
+        .is_some_and(|state| state.hang_row.native_row_occupied())
+        || execution
+            .detached_device_row
+            .is_some_and(|row| row.page_origin_printed || row.viscol > 0)
+}
+
 /// Bind resolved layout to accepted source cells before output edits retire
 /// their stable owner coordinates. An IR drain is not this native flush.
 fn retire_plain_presentation(
@@ -35,7 +79,7 @@ fn retire_plain_presentation(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
-) {
+) -> super::super::output::row_origins::OutputNodeEdits {
     let offset = execution
         .definition
         .as_ref()
@@ -61,11 +105,13 @@ fn retire_plain_presentation(
     // in retirement never reaches this helper or consumes a pending ti.
     presentation.endline_at(offset);
     execution.row_presentation = presentation;
-    super::super::output::row_origins::project_row_presentations(
+    let edits = super::super::output::row_origins::project_row_presentations(
         nodes,
         &row_presentations,
         output_start,
     );
+    execution.remap_output_projection(&edits);
+    edits
 }
 
 impl InlineBuilder {
@@ -74,13 +120,28 @@ impl InlineBuilder {
     /// through 143-146): a definitively rejected flush unit dies at its
     /// retirement boundary - the unprinted suffix is trimmed from IR back
     /// to the accepted prefix and the zero-advance register is discarded.
-    /// Returns whether the retirement ended a native row.
+    /// Returns whether the native buffer was definitively rejected.
     pub(in crate::mandoc) fn retire_plain_flush_unit(&mut self) -> bool {
-        Self::retire_plain_flush_unit_at(
+        self.retire_plain_flush_unit_with_tail().rejected()
+    }
+
+    pub(in crate::mandoc::inline::flow) fn retire_plain_flush_unit_with_tail(
+        &mut self,
+    ) -> PlainFlushOutcome {
+        let mut projections = Vec::new();
+        let ends_row = Self::retire_plain_flush_unit_with_projections(
             &mut self.execution,
             &mut self.nodes,
             super::super::output::CompletedRowOrigin::Layout,
-        )
+            Some(&mut projections),
+        );
+        // Execution indices were mapped at the actual projection, before
+        // retirement reset their cursors. Only live builder checkpoints
+        // still need that same original-boundary receipt here.
+        for edits in projections {
+            self.remap_output_projection_checkpoints(&edits);
+        }
+        ends_row
     }
 
     /// Execution-state form shared with the no-fill row finisher, which
@@ -90,6 +151,16 @@ impl InlineBuilder {
         nodes: &mut Vec<Inline>,
         row_origin: super::super::output::CompletedRowOrigin,
     ) -> bool {
+        Self::retire_plain_flush_unit_with_projections(execution, nodes, row_origin, None)
+            .rejected()
+    }
+
+    fn retire_plain_flush_unit_with_projections(
+        execution: &mut super::super::InlineExecutionState,
+        nodes: &mut Vec<Inline>,
+        row_origin: super::super::output::CompletedRowOrigin,
+        projections: Option<&mut Vec<super::super::output::row_origins::OutputNodeEdits>>,
+    ) -> PlainFlushOutcome {
         use super::super::field_buffer::{FillTargets, FlushReceipt};
         // An author-less definition session has no field geometry: its
         // buffer is the same native `tcol->buf` as the plain unit (term.c
@@ -97,23 +168,17 @@ impl InlineBuilder {
         // the same receipt. Borrow whichever buffer is live.
         let authorless_definition =
             execution.definition.is_some() && execution.author_execution.is_none();
-        let inherited_printed_row = execution
-            .definition
-            .as_ref()
-            .is_some_and(|state| state.hang_row.native_row_occupied())
-            || execution
-                .detached_device_row
-                .is_some_and(|row| row.page_origin_printed || row.viscol > 0);
+        let inherited_printed_row = plain_unit_inherits_printed_row(execution);
         if execution.definition.is_some() && !authorless_definition {
-            return false;
+            return PlainFlushOutcome::Ordinary;
         }
         let Some(PlainFlushUnit {
             buffer,
             anchors,
-            output_start,
+            mut output_start,
         }) = Self::take_plain_flush_unit(execution, nodes, authorless_definition)
         else {
-            return false;
+            return PlainFlushOutcome::Ordinary;
         };
         // BRNEVER-shaped (term.c:134,143-144): responsive reflow owns the
         // device width, so a plain pass only ever ends at authored markers.
@@ -126,7 +191,12 @@ impl InlineBuilder {
         let passes = match &receipt {
             FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => passes,
         };
-        retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
+        let edits =
+            retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
+        edits.remap(&mut output_start);
+        if let Some(projections) = projections {
+            projections.push(edits);
+        }
         let empty_rows = completed_empty_plain_passes(
             &buffer,
             passes,
@@ -159,10 +229,14 @@ impl InlineBuilder {
             ..
         } = receipt
         else {
-            retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start);
+            let empty_tail =
+                retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start);
             project_retired_empty_rows(execution, nodes, empty_rows, row_origin);
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
-            return false;
+            return PlainFlushOutcome::from_unprinted_tail(
+                empty_tail,
+                inherited_printed_row && passes.len() == 1,
+            );
         };
         if !definitive {
             retain_blank_only_unit_output(
@@ -177,21 +251,21 @@ impl InlineBuilder {
             // along with it even though no term_field() ran (235-237).
             execution.zero_advance.discard_at_row_end();
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
-            return false;
+            // nbr=0 over buffered ordinary blanks still reaches the
+            // ordinary term_flushln tail endline. It is not a definitive
+            // rejection and must not depend on earlier completed rows.
+            return PlainFlushOutcome::from_unprinted_tail(true, inherited_printed_row);
         }
 
-        let accepted_owned_prefix =
-            !passes.is_empty() && anchors.iter().any(|anchor| anchor.start < rejected_from);
-        retain_unit_owner_ranges(nodes, &buffer, &anchors, &passes, output_start);
-        if reprojected_literal_rows {
-            reproject_plain_literal_loops(nodes, &buffer, &anchors, &passes, output_start);
-        } else if accepted_owned_prefix
-            && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(nodes)
-        {
-            // term_flushln() ended the last accepted pass before discovering
-            // nbr=0; the retirement boundary must expose that native event.
-            nodes.push(Inline::line_break());
-        }
+        project_rejected_plain_prefix(
+            nodes,
+            &buffer,
+            &anchors,
+            &passes,
+            output_start,
+            rejected_from,
+            reprojected_literal_rows,
+        );
         // term.c::term_flushln() clears both backtracking flags; a rejected
         // unit dies whole, including a still-buffered `\z` glyph.
         execution.zero_advance.discard_at_row_end();
@@ -205,7 +279,7 @@ impl InlineBuilder {
         } else {
             Self::clear_plain_flush_unit_at(execution, nodes);
         }
-        true
+        PlainFlushOutcome::Rejected
     }
 
     /// Move the selected native buffer and its owner interval as one unit;
@@ -290,6 +364,29 @@ impl InlineBuilder {
         execution.flush_unit.clear();
         execution.flush_unit_anchors.clear();
         execution.flush_unit_output_start = nodes.len();
+    }
+}
+
+fn project_rejected_plain_prefix(
+    nodes: &mut Vec<Inline>,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    passes: &[super::super::field_buffer::FillPass],
+    output_start: usize,
+    rejected_from: usize,
+    literal_rows: bool,
+) {
+    let accepted_owned_prefix =
+        !passes.is_empty() && anchors.iter().any(|anchor| anchor.start < rejected_from);
+    retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start);
+    if literal_rows {
+        reproject_plain_literal_loops(nodes, buffer, anchors, passes, output_start);
+    } else if accepted_owned_prefix
+        && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(nodes)
+    {
+        // term_flushln() ended the last accepted pass before discovering
+        // nbr=0; the retirement boundary must expose that native event.
+        nodes.push(Inline::line_break());
     }
 }
 
@@ -501,7 +598,7 @@ fn retain_accepted_unit_output(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
-) {
+) -> bool {
     // An accepted unit can still leave ordinary trailing blanks outside
     // its final nbr. Use exactly the same native ownership intervals as
     // rejection; provisional IR spaces do not prove printed native content.
@@ -528,6 +625,7 @@ fn retain_accepted_unit_output(
             value: String::new(),
         });
     }
+    accepted_empty_tail
 }
 
 /// Apply one native receipt to its active output interval. Acceptance and
@@ -556,6 +654,165 @@ fn retain_unit_owner_ranges(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plain_tail_outcomes_distinguish_acceptance_blanks_and_rejection() {
+        use super::super::super::field_buffer::{FieldCell, FieldWrite};
+        for inherited in [false, true] {
+            for (writes, rejected, unprinted) in [
+                (
+                    vec![FieldWrite::Cell(FieldCell::ZeroWidthGraph)],
+                    false,
+                    true,
+                ),
+                (
+                    vec![FieldWrite::Cell(FieldCell::BreakableBlank)],
+                    false,
+                    true,
+                ),
+                (FieldWrite::literal("X"), false, false),
+                (
+                    vec![
+                        FieldWrite::Cell(FieldCell::BreakMarker),
+                        FieldWrite::Cell(FieldCell::BreakableBlank),
+                        FieldWrite::Cell(FieldCell::ZeroWidthGraph),
+                    ],
+                    true,
+                    false,
+                ),
+            ] {
+                let mut builder = InlineBuilder::new();
+                if inherited {
+                    builder.execution.detached_device_row =
+                        Some(super::super::super::DetachedDeviceRow {
+                            viscol: 1,
+                            minbl: 0,
+                            page_origin_printed: true,
+                        });
+                }
+                builder.execution.flush_unit.apply_writes(&writes);
+                let outcome = builder.retire_plain_flush_unit_with_tail();
+                assert_eq!(outcome.rejected(), rejected);
+                assert_eq!(outcome.closes_unprinted_row(), unprinted && !inherited);
+                assert_eq!(outcome.closes_represented_row(), unprinted && inherited);
+            }
+        }
+    }
+
+    #[test]
+    fn only_a_real_plain_close_commits_its_unprinted_tail_once() {
+        use super::super::super::field_buffer::{FieldCell, FieldWrite};
+        // The exact 2/3/4 Ft controls ran all five native profiles first.
+        // An owner drain can retain an empty-word witness but cannot create
+        // the real term_flushln tail endline (term.c:233-253).
+        for cell in [FieldCell::ZeroWidthGraph, FieldCell::BreakableBlank] {
+            let mut projected = InlineBuilder::new();
+            projected
+                .execution
+                .flush_unit
+                .apply_writes(&[FieldWrite::Cell(cell.clone())]);
+            let (_, _, rows, _) = projected.take_paragraph_segment(false);
+            assert_eq!(rows, 0);
+
+            // The block .sp/.br path consumes this same unit at its real
+            // line-request boundary. Both a NBRZW cell and buffered ordinary
+            // blanks reach term_flushln's tail endline (term.c:143-146,250).
+            let mut requested = InlineBuilder::new();
+            requested
+                .execution
+                .flush_unit
+                .apply_writes(&[FieldWrite::Cell(cell.clone())]);
+            let (_, _, rows, _) = requested.take_paragraph_segment(true);
+            assert_eq!(rows, 1);
+            let (_, _, rows, _) = requested.take_paragraph_segment(false);
+            assert_eq!(rows, 0);
+
+            let mut consumed = InlineBuilder::new();
+            consumed
+                .execution
+                .flush_unit
+                .apply_writes(&[FieldWrite::Cell(cell)]);
+            consumed.execute_native_newline();
+            assert_eq!(consumed.execution.completed_vertical_rows, 1);
+            let (_, _, rows, _) = consumed.take_paragraph_segment(false);
+            assert_eq!(rows, 1);
+            let (_, _, rows, _) = consumed.take_paragraph_segment(false);
+            assert_eq!(rows, 0);
+        }
+    }
+
+    #[test]
+    fn a_requested_plain_tail_clears_backafter_only_when_it_flushed_cells() {
+        use super::super::super::field_buffer::{FieldCell, FieldWrite};
+        // The full X/Z output-carrier sources ran pristine first. Their
+        // ignored escape writes NBRZW without consuming BACKAFTER, but the
+        // real paragraph request flush then clears it (term.c:233-237).
+        // A cell-less bare-z has no term_newln flush (term.c:475-481).
+        for line_request in [false, true] {
+            for buffered in [false, true] {
+                let mut builder = InlineBuilder::new();
+                builder.execution.zero_advance.inherit_armed(true);
+                if buffered {
+                    builder
+                        .execution
+                        .flush_unit
+                        .apply_writes(&[FieldWrite::Cell(FieldCell::ZeroWidthGraph)]);
+                }
+                let (_, _, rows, _) = builder.take_paragraph_segment(line_request);
+                let flushed = line_request && buffered;
+                assert_eq!(rows, u16::from(flushed));
+                assert_eq!(builder.execution.zero_advance.take_armed(), !flushed);
+            }
+        }
+    }
+
+    #[test]
+    fn represented_plain_tails_notify_the_existing_owner_only_at_a_real_close() {
+        use super::super::super::field_buffer::{FieldCell, FieldWrite};
+        // The exact repeated Ft blank/NBRZW sources ran pristine first.
+        // term_newln closes the already printed tag row before term_vspace
+        // emits its own new row (term.c:475-497). A blank's projection flag
+        // cannot conceal that close from the existing BODY observer.
+        for blank in [false, true] {
+            for inherited in [false, true] {
+                for actual_close in [false, true] {
+                    let mut builder = InlineBuilder::new();
+                    if inherited {
+                        builder.execution.detached_device_row =
+                            Some(super::super::super::DetachedDeviceRow {
+                                viscol: 1,
+                                minbl: 0,
+                                page_origin_printed: true,
+                            });
+                    }
+                    builder.execution.has_printable_content = blank;
+                    builder.execution.formatter_column =
+                        super::super::super::FormatterColumn::Advanced;
+                    builder
+                        .execution
+                        .flush_unit
+                        .apply_writes(&[FieldWrite::Cell(if blank {
+                            FieldCell::BreakableBlank
+                        } else {
+                            FieldCell::ZeroWidthGraph
+                        })]);
+                    if actual_close {
+                        builder.execute_native_newline();
+                    } else {
+                        builder.take_paragraph_segment(false);
+                    }
+                    assert_eq!(
+                        builder.execution.take_leading_line_boundary().is_some(),
+                        actual_close && (!blank || inherited)
+                    );
+                    assert_eq!(
+                        builder.execution.completed_vertical_rows,
+                        u16::from(actual_close && !inherited)
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn empty_loop_classification_scans_each_accepted_cell_once() {

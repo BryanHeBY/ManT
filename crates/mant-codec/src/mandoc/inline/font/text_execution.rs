@@ -13,6 +13,7 @@ pub(in crate::mandoc) struct TextExecutionPolicy {
     pub(in crate::mandoc) recognize_generated_references: bool,
     pub(in crate::mandoc) record_native_cells: bool,
     pub(in crate::mandoc) field_authoritative: bool,
+    pub(in crate::mandoc) word_space: crate::mandoc::roff_escape::WordSpace,
 }
 
 /// Borrow the caller's registers for one word; output ownership never creates
@@ -61,6 +62,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
                 recognize_generated_references,
                 record_native_cells: false,
                 field_authoritative: false,
+                word_space: crate::mandoc::roff_escape::WordSpace::Breakable,
             },
         },
     );
@@ -289,7 +291,8 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     source: &str,
     context: TextExecutionContext<'_>,
 ) -> TextExecution {
-    let decoded = crate::mandoc::roff_escape::decode_with_status(source);
+    let decoded =
+        crate::mandoc::roff_escape::decode_word_with_status(source, context.policy.word_space);
     let mut execution = execute_formatter_word_events(&decoded.events, context);
     execution.escape_scan = decoded.budget_exhausted.into();
     execution
@@ -327,6 +330,23 @@ impl WordExecution {
         is_last: bool,
     ) {
         match event {
+            RoffInlineEvent::NonBreakingWordBlank => {
+                self.text_state.suppress_break_whitespace = false;
+                self.text_state.note_graph();
+                self.text_state.graph_count += 1;
+                if !self.text_state.wiped {
+                    // encode(ASCII_NBRSP) buffers a non-graph source byte
+                    // without consuming BACKAFTER/BACKBEFORE. Its later
+                    // term_fill scan is graph and normalizes it to SP.
+                    context.zero_advance.append_text(
+                        " ",
+                        &mut self.output,
+                        &mut self.buffer,
+                        self.font,
+                        self.link.as_deref(),
+                    );
+                }
+            }
             RoffInlineEvent::Text(value) => append_text_event(
                 value,
                 WordOutput {
@@ -533,6 +553,9 @@ fn record_native_event(
 ) {
     use super::super::flow::field_buffer::{FieldCell, FieldWrite};
     match event {
+        RoffInlineEvent::NonBreakingWordBlank => {
+            writes.push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
+        }
         // term_word() -> encode() copies an ordinary text run without
         // changing the marker state. Only an already pending break/suppressed
         // blank needs the per-character ownership path below (term.c:294-305,
@@ -686,6 +709,7 @@ fn trailing_breakable_spaces(events: &[RoffInlineEvent]) -> usize {
             | RoffInlineEvent::LineBreak => {}
 
             RoffInlineEvent::Glyph(_)
+            | RoffInlineEvent::NonBreakingWordBlank
             | RoffInlineEvent::BreakableHyphen
             | RoffInlineEvent::FallbackGlyph(_)
             | RoffInlineEvent::DeviceName
@@ -732,6 +756,58 @@ mod tests {
     use super::*;
 
     #[test]
+    fn function_word_policy_changes_only_literal_source_blanks() {
+        // Fn/Fo exact full sources for literal, escaped, numbered and motion
+        // blanks first ran all five pinned profiles. NBRWORD changes only
+        // ordinary source SP in term.c:593-608. Unicode escaped spaces keep
+        // their encode1 path; \N'32' and \h do not become ASCII_NBRSP.
+        use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+        use crate::mandoc::roff_escape::WordSpace;
+        for (source, text, nonbreaking) in [
+            ("alpha beta", "alpha beta", 1),
+            (r"alpha\ beta", "alpha\u{a0}beta", 0),
+            (r"alpha\N'32'beta", "alpha beta", 0),
+            (r"alpha\h'1n'beta", "alpha beta", 0),
+        ] {
+            for spaces in [WordSpace::Breakable, WordSpace::NonBreaking] {
+                let mut font = FontState::new();
+                let mut zero = ZeroAdvanceState::new();
+                let execution = parse_roff_text_with_zero_advance(
+                    source,
+                    TextExecutionContext {
+                        font: &mut font,
+                        zero_advance: &mut zero,
+                        pending_word_end_break: false,
+                        policy: TextExecutionPolicy {
+                            recognize_generated_references: false,
+                            record_native_cells: true,
+                            field_authoritative: true,
+                            word_space: spaces,
+                        },
+                    },
+                );
+                assert_eq!(mant_ir::inline_plain_text(&execution.output), text);
+                assert_eq!(
+                    execution
+                        .native_writes
+                        .iter()
+                        .filter(|write| matches!(
+                            write,
+                            FieldWrite::Cell(FieldCell::NonBreakingBlank)
+                        ))
+                        .count(),
+                    if spaces == WordSpace::NonBreaking {
+                        nonbreaking
+                    } else {
+                        0
+                    },
+                    "{source}",
+                );
+            }
+        }
+    }
+
+    #[test]
     fn isolated_words_consume_pending_markers_at_zero_width_breakpoints() {
         // Exact man and tbl inputs first ran on the pristine five profiles.
         // term_fill()287-305 stops at ASCII_BREAK exactly as at a blank,
@@ -769,6 +845,7 @@ mod tests {
                     recognize_generated_references: false,
                     record_native_cells: true,
                     field_authoritative: true,
+                    word_space: crate::mandoc::roff_escape::WordSpace::Breakable,
                 },
             },
         );
@@ -802,6 +879,7 @@ mod tests {
                         recognize_generated_references: false,
                         record_native_cells: record,
                         field_authoritative: false,
+                        word_space: crate::mandoc::roff_escape::WordSpace::Breakable,
                     },
                 },
             )

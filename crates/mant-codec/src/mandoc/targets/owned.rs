@@ -1,5 +1,5 @@
 //! Keep target spelling and its chosen native owner together while pending.
-use super::{Block, Inline, LayoutHint, SourceSpan, attach_targets};
+use super::{Block, LayoutHint, SourceSpan, attach_targets};
 
 #[derive(Clone, Debug)]
 pub(in crate::mandoc) struct OwnedTarget {
@@ -10,6 +10,7 @@ pub(in crate::mandoc) struct OwnedTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mant_ir::Inline;
 
     #[test]
     fn pending_batches_preserve_anchor_order_and_owner_provenance() {
@@ -53,10 +54,6 @@ mod tests {
 impl OwnedTarget {
     pub(in crate::mandoc) fn new(name: String, owner_source: Option<SourceSpan>) -> Self {
         Self { name, owner_source }
-    }
-
-    pub(in crate::mandoc) fn into_inline(self) -> Inline {
-        Inline::anchor_at(self.name, self.owner_source)
     }
 }
 

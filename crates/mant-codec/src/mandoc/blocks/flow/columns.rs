@@ -32,7 +32,7 @@ impl BlockState {
         let finish = |builder: &mut InlineBuilder| {
             crate::mandoc::inline::names::finish_body(builder, node, saved);
         };
-        if self.column_uses_literal_output() || self.formatter.no_fill {
+        if self.uses_literal_output() || self.formatter.no_fill {
             self.literal
                 .with_inline_builder(&mut self.formatter, finish);
         } else {
@@ -54,9 +54,10 @@ impl BlockState {
         }
     }
 
-    pub(super) fn column_uses_literal_output(&self) -> bool {
-        self.formatter.execution.has_column_output_scope()
-            && (self.column_display_owner || self.literal.has_output())
+    pub(super) fn uses_literal_output(&self) -> bool {
+        self.single_line_display_owner
+            || self.formatter.execution.has_column_output_scope()
+                && (self.column_display_owner || self.literal.has_output())
     }
 
     /// A no-fill word clears CVS skipvsp; its zero-width registers are
@@ -85,7 +86,7 @@ impl BlockState {
     /// Borrow the active destination so a detached HEAD row is consumed even
     /// when the BODY has no local glyph (`mdoc_term.c::termp_bl_pre`).
     pub(in crate::mandoc::blocks) fn finish_native_structural_row(&mut self) {
-        if self.column_uses_literal_output()
+        if self.uses_literal_output()
             || (!self.formatter.execution.has_column_output_scope() && self.formatter.no_fill)
         {
             self.literal
@@ -102,7 +103,7 @@ impl BlockState {
         kind: Option<libmandoc_rs::DisplayKind>,
     ) {
         let post = |builder: &mut InlineBuilder| builder.finish_display_body(kind);
-        if self.column_uses_literal_output() {
+        if self.formatter.no_fill || self.uses_literal_output() {
             self.literal.with_inline_builder(&mut self.formatter, post);
         } else {
             self.paragraph
@@ -115,7 +116,7 @@ impl BlockState {
         let enter = |builder: &mut InlineBuilder| {
             builder.begin_executed_node(node);
         };
-        if self.column_uses_literal_output() {
+        if self.uses_literal_output() {
             self.literal.with_inline_builder(&mut self.formatter, enter);
         } else {
             self.paragraph
@@ -136,7 +137,7 @@ impl BlockState {
         let execute = |builder: &mut InlineBuilder| {
             builder.native_vertical_space(u16::try_from(rows.max(0)).unwrap_or(u16::MAX));
         };
-        if self.column_uses_literal_output() {
+        if self.uses_literal_output() {
             self.literal
                 .with_inline_builder(&mut self.formatter, execute);
         } else {

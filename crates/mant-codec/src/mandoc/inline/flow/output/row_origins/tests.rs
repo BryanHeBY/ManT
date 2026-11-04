@@ -16,6 +16,231 @@ fn reset_work() {
     OWNER_HISTORY_STORES.with(|work| work.set(0));
     OWNER_TEXT_REBUILDS.with(|work| work.set(0));
     OWNER_CHARS_PROJECTED.with(|work| work.set(0));
+    ANNOTATION_NODES_PROJECTED.with(|work| work.set(0));
+    ROOT_BOUNDARIES_PROJECTED.with(|work| work.set(0));
+}
+
+fn manual(children: Vec<Inline>) -> Inline {
+    Inline::Link {
+        target: LinkTarget::Manual {
+            name: "scanf".into(),
+            manual_section: Some("3".into()),
+        },
+        title: Some("authored title".into()),
+        children,
+    }
+}
+
+#[test]
+fn leading_device_padding_stays_outside_nested_annotations_and_authored_spaces() {
+    // The complete pair-linked-prefix-name source first ran pinned five
+    // profiles: Xr's label is scanf(3), and term_field's advance precedes
+    // the first graph (term.c:389-427), outside that source annotation.
+    // The actual source byte SP below is deliberately part of the label.
+    let selected = owner("manual");
+    let content = vec![
+        Inline::anchor(selected.clone()),
+        Inline::anchor("authored-target"),
+        Inline::Emphasis {
+            children: vec![Inline::Code {
+                value: " α(3)".into(),
+            }],
+        },
+    ];
+    let annotation = Inline::Strong {
+        children: vec![manual(content)],
+    };
+    let mut nodes = vec![annotation.clone()];
+    let _ = project_native_positions(&mut nodes, &[], &[(selected, 0, 2, false)], 0, false);
+    assert_eq!(nodes, [text("  "), annotation]);
+    assert_eq!(plain_text(&nodes), "   α(3)");
+    assert_eq!(mant_ir::inline_scalar_len(&nodes), 7);
+}
+
+#[test]
+fn internal_device_padding_preserves_the_existing_link_identity_and_hard_rows() {
+    // Only the leading generated prefix can cross an annotation boundary.
+    // Moving an internal gap would split one Link identity into repeated
+    // occurrences. An authored SP or hard row is a real content barrier.
+    for (first, scalar, expected) in [(" ", 1, "    α"), ("A", 1, "A\n   α")] {
+        let selected = owner("internal");
+        let mut children = vec![Inline::anchor(selected.clone()), text(first)];
+        if first == "A" {
+            children.push(Inline::line_break());
+        }
+        children.push(text("α"));
+        let mut nodes = vec![manual(children)];
+        let _ =
+            project_native_positions(&mut nodes, &[], &[(selected, scalar, 3, false)], 0, false);
+        let [
+            Inline::Link {
+                target,
+                title,
+                children,
+            },
+        ] = nodes.as_slice()
+        else {
+            panic!("one original Link owner must remain");
+        };
+        assert_eq!(
+            target,
+            &LinkTarget::Manual {
+                name: "scanf".into(),
+                manual_section: Some("3".into()),
+            }
+        );
+        assert_eq!(title.as_deref(), Some("authored title"));
+        assert_eq!(plain_text(children), expected);
+    }
+}
+
+#[test]
+fn annotated_padding_projection_visits_each_piece_without_rescanning_text() {
+    for words in [64, 256, 1024] {
+        let mut nodes = Vec::new();
+        let mut padding = Vec::new();
+        for index in 0..words {
+            let selected = owner(&index.to_string());
+            nodes.push(Inline::Strong {
+                children: vec![manual(vec![Inline::anchor(selected.clone()), text("α")])],
+            });
+            padding.push((selected, 0, 1, false));
+        }
+        reset_work();
+        let _ = project_native_positions(&mut nodes, &[], &padding, 0, false);
+        assert_eq!(nodes.len(), 2 * words);
+        assert_eq!(OWNER_CHARS_PROJECTED.with(std::cell::Cell::get), words);
+        assert_eq!(
+            ANNOTATION_NODES_PROJECTED.with(std::cell::Cell::get),
+            5 * words
+        );
+        assert_eq!(
+            ROOT_BOUNDARIES_PROJECTED.with(std::cell::Cell::get),
+            2 * words + 1
+        );
+    }
+}
+
+#[test]
+fn late_padding_rebases_a_live_checkpoint_past_the_complete_old_link_and_suffix() {
+    // A private builder invariant, not a claim that this exact interleaving
+    // is reachable from a particular roff macro. A prior annotation can
+    // gain a root padding node while a newer scope holds a root address.
+    let selected = owner("old-link");
+    let old_link = manual(vec![Inline::anchor(selected.clone()), text("scanf(3)")]);
+    let mut builder = super::super::super::InlineBuilder::new();
+    builder.nodes = vec![old_link.clone(), text("A")];
+    let checkpoint = builder.begin_output_checkpoint();
+    let edits = project_native_positions(
+        &mut builder.nodes,
+        &[],
+        &[(selected, 0, 1, false)],
+        0,
+        false,
+    );
+    builder.remap_output_projection(&edits);
+    builder.nodes.push(text("TAIL"));
+    builder.wrap_output_since(checkpoint, |children| vec![Inline::Strong { children }]);
+    assert_eq!(
+        builder.nodes,
+        [
+            text(" "),
+            old_link,
+            text("A"),
+            Inline::Strong {
+                children: vec![text("TAIL")]
+            }
+        ],
+    );
+}
+
+#[test]
+fn text_splits_tabs_and_presentation_carriers_keep_live_scope_boundaries() {
+    for tabs in [false, true] {
+        let selected = owner("split");
+        let mut builder = super::super::super::InlineBuilder::new();
+        builder.nodes = vec![
+            Inline::anchor(selected.clone()),
+            Inline::Code {
+                value: if tabs { "α\tB" } else { "αB" }.into(),
+            },
+            text("A"),
+        ];
+        let checkpoint = builder.begin_output_checkpoint();
+        let edits = if tabs {
+            project_native_positions_with_tabs(
+                &mut builder.nodes,
+                &[],
+                &[(selected.clone(), 1, 2, false)],
+                &[super::super::tab_projection::TabExpansion {
+                    owner: selected,
+                    scalar: 1,
+                    spaces: 4,
+                }],
+                0,
+                false,
+            )
+        } else {
+            project_row_presentations(
+                &mut builder.nodes,
+                &[(
+                    selected,
+                    1,
+                    mant_ir::RowLayoutHint {
+                        indent_columns: 2,
+                        ..mant_ir::RowLayoutHint::default()
+                    },
+                )],
+                0,
+            )
+        };
+        builder.remap_output_projection(&edits);
+        builder.nodes.push(text("TAIL"));
+        builder.wrap_output_since(checkpoint, |children| vec![Inline::Emphasis { children }]);
+        assert_eq!(
+            builder.nodes.pop(),
+            Some(Inline::Emphasis {
+                children: vec![text("TAIL")]
+            })
+        );
+        assert_eq!(
+            plain_text(&builder.nodes),
+            if tabs { "α      BA" } else { "αBA" }
+        );
+    }
+}
+
+#[test]
+fn materialized_origins_map_prefix_insertions_and_removed_root_carriers() {
+    let selected = owner("origin");
+    let mut nodes = vec![
+        text("A"),
+        Inline::line_break(),
+        Inline::anchor(selected.clone()),
+        text("B"),
+        text("C"),
+    ];
+    let edits = project_native_positions(&mut nodes, &[(selected, 0, 6, false)], &[], 2, true);
+    let mut positions = [0, 1, 2, 3, 4, 5];
+    for position in &mut positions {
+        edits.remap(position);
+    }
+    assert_eq!(positions, [0, 2, 3, 4, 5, 6]);
+    assert_eq!(plain_text(&nodes), "A\nBC");
+
+    let selected = owner("removed");
+    let mut nodes = vec![
+        Inline::anchor(selected.clone()),
+        Inline::anchor(format!("{INTERNAL_ROW_ORIGIN}2")),
+        text("B"),
+    ];
+    let edits = project_native_positions(&mut nodes, &[], &[(selected, 0, 1, false)], 0, true);
+    let mut positions = [0, 1, 2, 3];
+    for position in &mut positions {
+        edits.remap(position);
+    }
+    assert_eq!(positions, [1, 3, 3, 4]);
+    assert_eq!(plain_text(&nodes), " B");
 }
 
 #[test]

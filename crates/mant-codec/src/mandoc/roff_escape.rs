@@ -58,6 +58,9 @@ pub(super) enum PresentationKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum RoffInlineEvent {
     Text(String),
+    /// NBRWORD converts a literal source ASCII blank to `ASCII_NBRSP`.
+    /// Its first native scan is graph, but its printed scalar is still SP.
+    NonBreakingWordBlank,
     /// The parser's `ASCII_HYPH` cell. It displays '-' but remains a native
     /// `term_fill` break candidate, unlike an authored nonbreaking \- escape.
     BreakableHyphen,
@@ -283,9 +286,9 @@ pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect 
                 InlineEventEffect::Visible
             }
         }
-        RoffInlineEvent::DeviceName | RoffInlineEvent::BreakableHyphen => {
-            InlineEventEffect::Visible
-        }
+        RoffInlineEvent::DeviceName
+        | RoffInlineEvent::BreakableHyphen
+        | RoffInlineEvent::NonBreakingWordBlank => InlineEventEffect::Visible,
         RoffInlineEvent::Overstrike { terminal, .. } => {
             if terminal.is_some() {
                 InlineEventEffect::Visible
@@ -320,21 +323,36 @@ pub(super) struct DecodedText {
 
 /// Parsing evidence accompanies events; safety loss is not a displayed glyph.
 pub(super) fn decode_with_status(source: &str) -> DecodedText {
-    decode_with_motion_spacing(source, true)
+    decode_word_with_status(source, WordSpace::Breakable)
+}
+
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub(in crate::mandoc) enum WordSpace {
+    #[default]
+    Breakable,
+    NonBreaking,
+}
+
+pub(in crate::mandoc) fn decode_word_with_status(source: &str, spaces: WordSpace) -> DecodedText {
+    decode_with_options(source, true, spaces)
 }
 
 /// Decode an identity operand without synthesizing reading-layout spaces.
 /// CVS `html.c::print_encode()` ignores horizontal motion in attributes; the
 /// terminal reading approximation belongs only to the visible text stream.
 pub(in crate::mandoc) fn decode_link_operand(source: &str) -> Vec<RoffInlineEvent> {
-    decode_with_motion_spacing(source, false).events
+    decode_with_options(source, false, WordSpace::Breakable).events
 }
 
-fn decode_with_motion_spacing(source: &str, reading_motion_spacing: bool) -> DecodedText {
+fn decode_with_options(
+    source: &str,
+    reading_motion_spacing: bool,
+    spaces: WordSpace,
+) -> DecodedText {
     // term.c::term_word() copies ordinary runs before interpreting escapes.
     // Sentinel and unsafe control bytes still need the full classifier; the
     // fast path must not bypass their masking or native-cell evidence.
-    if !source.contains('\\')
+    if !(source.contains('\\') || spaces == WordSpace::NonBreaking && source.contains(' '))
         && source
             .chars()
             .all(|character| !character.is_control() || matches!(character, '\t' | '\n' | '\r'))
@@ -350,6 +368,7 @@ fn decode_with_motion_spacing(source: &str, reading_motion_spacing: bool) -> Dec
     }
     let mut decoder = Decoder::new(source);
     decoder.reading_motion_spacing = reading_motion_spacing;
+    decoder.word_space = spaces;
     decoder.decode_with_status()
 }
 
@@ -381,7 +400,7 @@ pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
                     width = width.saturating_add(mant_ir::geometry::text_width(&text));
                 }
             }
-            RoffInlineEvent::BreakableHyphen => {
+            RoffInlineEvent::BreakableHyphen | RoffInlineEvent::NonBreakingWordBlank => {
                 if skip {
                     skip = false;
                 } else {
@@ -483,6 +502,7 @@ enum DelimitedArgument {
 struct Decoder {
     measurement: bool,
     reading_motion_spacing: bool,
+    word_space: WordSpace,
     budget_exhausted: bool,
     argument_completion: ArgumentCompletion,
     argument_kind: grammar::EscapeKind,
@@ -497,6 +517,7 @@ impl Decoder {
         Self {
             measurement: false,
             reading_motion_spacing: true,
+            word_space: WordSpace::Breakable,
             budget_exhausted: false,
             argument_completion: ArgumentCompletion::Complete,
             argument_kind: grammar::EscapeKind::Undefined,
@@ -881,6 +902,9 @@ impl Decoder {
 
     fn push_source_character(&mut self, character: char) {
         match character {
+            ' ' if self.word_space == WordSpace::NonBreaking => {
+                self.emit(RoffInlineEvent::NonBreakingWordBlank);
+            }
             ASCII_TABREF | ASCII_BREAK | ASCII_NBRZW => {}
             ASCII_HYPH => self.emit(RoffInlineEvent::BreakableHyphen),
             ASCII_NBRSP => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),

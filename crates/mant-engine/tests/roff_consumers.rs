@@ -66,7 +66,7 @@ fn every_complete_consumer_fixture_has_an_executed_behavior_check() {
         display_final_spacing,
         link_and_include_font_state,
         function_logical_adjacency,
-        plain_text_lines_keep_word_boundaries,
+        plain_text_lines_obey_spacing_registers,
         literal_macro_descendants_keep_source_lines,
     ] {
         check();
@@ -308,10 +308,13 @@ fn function_logical_adjacency() {
 }
 
 #[test]
-fn plain_text_lines_keep_word_boundaries() {
+fn plain_text_lines_obey_spacing_registers() {
+    // This complete fixture reran all five pristine profiles. Sm's
+    // NONOSPACE applies to ordinary TEXT exactly as it does to No operands
+    // (mdoc_term.c::termp_sm_pre; term.c:573-589), not only within a line.
     assert_eq!(
         description(&fixture("sm-plain-lines")).trim(),
-        "WORD NEXT TAIL"
+        "WORDNEXT TAIL"
     );
     for (body, expected) in [
         (".Sm off\n.No WORD NEXT\n.Sm on", "WORDNEXT"),

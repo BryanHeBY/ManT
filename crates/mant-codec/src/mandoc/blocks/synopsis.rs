@@ -19,14 +19,6 @@ pub(super) struct SynopsisFlow {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SynopsisDeclarationRole {
-    PostBreak,
-    NoPostBreak,
-    ReturnType,
-    Function,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) enum SynopsisBoundary {
     Newline,
     VerticalSpace,
@@ -128,24 +120,20 @@ fn invokes_synopsis_pre(node: &Node) -> bool {
         && SynopsisToken::from_node(node).invokes_pre()
 }
 
-fn mdoc_synopsis_declaration_role(node: &Node) -> Option<SynopsisDeclarationRole> {
-    let synopsis_pretty = node.flags.synopsis_pretty
-        || node
-            .children
-            .iter()
-            .any(|child| child.flags.synopsis_pretty);
-    if !synopsis_pretty {
-        return None;
-    }
-    match node.macro_token.as_ref()? {
-        Mdoc(MdocMacro::Fd) => Some(SynopsisDeclarationRole::PostBreak),
-        Mdoc(MdocMacro::Cd | MdocMacro::In | MdocMacro::Vt) => {
-            Some(SynopsisDeclarationRole::NoPostBreak)
-        }
-        Mdoc(MdocMacro::Ft) => Some(SynopsisDeclarationRole::ReturnType),
-        Mdoc(MdocMacro::Fn | MdocMacro::Fo) => Some(SynopsisDeclarationRole::Function),
-        _ => None,
-    }
+fn is_mdoc_synopsis_declaration(node: &Node) -> bool {
+    invokes_synopsis_pre(node)
+        && matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(
+                MdocMacro::Fd
+                    | MdocMacro::Cd
+                    | MdocMacro::In
+                    | MdocMacro::Vt
+                    | MdocMacro::Ft
+                    | MdocMacro::Fn
+                    | MdocMacro::Fo
+            ))
+        )
 }
 
 pub(super) fn lower_synopsis_head(
@@ -509,11 +497,10 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         }
         let default_name = self.context.default_name;
-        self.state.push_source_inline_with(
+        self.state.push_inline_with(
             source_span(node),
             super::inline_flow::starts_indented_filled_line(node),
             super::ends_with_line_continuation(node),
-            false,
             |builder| {
                 builder.observe_no_fill_source_lines(true);
                 crate::mandoc::inline::append_inline_node_with_siblings(
@@ -548,68 +535,13 @@ impl super::BlockLowerer<'_, '_> {
         if self.push_unflushed_name(node, previous) {
             return true;
         }
-        let mut newline_boundary = false;
-        if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Nm))
-            && invokes_synopsis_pre(node)
-            && let Some(previous) = previous
-        {
-            let boundary = synopsis_boundary(
-                SynopsisToken::from_node(previous),
-                SynopsisToken::from_node(node),
-            );
-            if boundary == SynopsisBoundary::VerticalSpace {
-                self.state.formatter.note_definition_boundary();
-                self.state.flush_paragraph_for_line_request();
-                self.state.output.push(Block::VerticalSpace {
-                    lines: 1,
-                    source: source_span(node),
-                });
-            } else {
-                newline_boundary = true;
-                // synopsis_pre() executes term_newln() even if the detached
-                // BODY has no local cell: the native definition HEAD may
-                // still be buffered on that row.
-                self.state.formatter.note_definition_boundary();
-                if !self.state.has_formatter_cell() {
-                    self.state.formatter.settle_definition_head_rows();
-                }
-            }
-        }
-
-        let Some(role) = mdoc_synopsis_declaration_role(node) else {
+        if !is_mdoc_synopsis_declaration(node) {
             return false;
-        };
-
-        // The real BODY walk owns its leading boundary. Once a visible word
-        // exists, keep each CVS synopsis break at that source position.
-        match role {
-            SynopsisDeclarationRole::ReturnType
-            | SynopsisDeclarationRole::NoPostBreak
-            | SynopsisDeclarationRole::PostBreak => {
-                if newline_boundary && self.state.has_formatter_cell() {
-                    self.state.flush_paragraph();
-                }
-                // Fd's shared inline exit already owns its term_newln()
-                // post. No presentation drain may repeat that post or skip
-                // its NOBREAK/empty-buffer decision.
-                self.push_inline_node(node, None);
-            }
-            SynopsisDeclarationRole::Function => {
-                if newline_boundary && self.state.has_formatter_cell() {
-                    if previous
-                        .is_some_and(|node| SynopsisToken::from_node(node) == SynopsisToken::Ft)
-                    {
-                        // CVS synopsis_pre() calls term_newln() for Ft→Fn/Fo.
-                        // This is one declaration paragraph with two rows.
-                        self.state.hard_break();
-                    } else {
-                        self.state.flush_paragraph();
-                    }
-                }
-                self.push_inline_node(node, None);
-                self.state.flush_paragraph();
-            }
         }
+        // The actual source entry already executed synopsis_pre against the
+        // live owner. Macro posts execute inside the shared inline driver;
+        // an IR paragraph drain is neither of these native boundaries.
+        self.push_inline_node(node, None);
         true
     }
 }

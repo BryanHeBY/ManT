@@ -153,6 +153,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     append: impl FnOnce(&mut InlineBuilder),
 ) -> (bool, bool) {
     let continued = formatter.no_fill_inline.continued;
+    let native_no_fill = formatter.no_fill;
     // A no-fill BODY word's NODE_LINE gate reads TERMP_NONEWLINE as it
     // stands at this fragment's entry (mdoc_term.c:314-317), before the
     // word's own term_word() clears it (term.c:588).
@@ -170,7 +171,7 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
         // mdoc_term.c:314-318: the NODE_NOFILL subtree prints under
         // TERMP_BRNEVER.
         let was_no_fill_word = builder.execution.no_fill_word_active;
-        builder.execution.no_fill_word_active = true;
+        builder.execution.no_fill_word_active = native_no_fill;
         append(builder);
         builder.execution.no_fill_word_active = was_no_fill_word;
         (

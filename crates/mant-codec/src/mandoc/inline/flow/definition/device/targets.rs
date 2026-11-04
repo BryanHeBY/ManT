@@ -107,8 +107,8 @@ impl InlineBuilder {
         let (flags, rmargin, _) = self.native_field_parameters(force_no_break, resumed)?;
         let row = &state.hang_row;
         let rmargin = self.native_margin_units(rmargin);
-        let placement = self.execution.row_presentation.field_placement(
-            state.field_offset_units,
+        let placement = self.execution.row_presentation.field_placement_signed(
+            self.native_first_field_origin(),
             row.viscol,
             row.minbl,
             row.native_row_occupied(),

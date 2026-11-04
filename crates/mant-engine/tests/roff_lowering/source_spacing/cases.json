@@ -1,0 +1,1139 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "baseline": "b363b2398993522508a77a6a60a730ac340fd7ab",
+  "profiles": [
+    "ascii",
+    "utf8-width78",
+    "html",
+    "tree",
+    "lint"
+  ],
+  "cases": [
+    {
+      "id": "off-text",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\nSECOND\n.Sm on\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "word": "TEXT"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 11,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 12,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-no",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\n.No FIRST\n.No SECOND\n.Sm on\n.No THIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "word": "No"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 11,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "on-text",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm on\nFIRST\nSECOND\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "on",
+        "word": "TEXT"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRST SECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "on",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "toggle-text",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm\nFIRST\nSECOND\n.Sm\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "toggle",
+        "word": "TEXT"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 12,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-after-word",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.No BEFORE\n.Sm off\nFIRST\nSECOND\n.Sm on\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "before": "word"
+      },
+      "recovery": false,
+      "native_rows": [
+        "BEFORE FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "BEFORE",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "off",
+          "line": 9,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-after-empty",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.No \"\"\n.Sm off\nFIRST\nSECOND\n.Sm on\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "before": "empty-word"
+      },
+      "recovery": false,
+      "native_rows": [
+        " FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "off",
+          "line": 9,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-inline-blank",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST SECOND\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off",
+        "blank": "authored internal"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRST SECONDTHIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST SECOND",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-fixed-blank",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\\ \nSECOND\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off",
+        "blank": "escaped trailing"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRST SECOND"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST\\ ",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-ns",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\n.Ns\nSECOND\n.Sm on\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "join": "Ns"
+      },
+      "recovery": true,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "on-ns",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\nFIRST\n.Ns\nSECOND\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "on",
+        "join": "Ns"
+      },
+      "recovery": true,
+      "native_rows": [
+        "FIRST SECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "FIRST",
+          "line": 8,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-c",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\\c\nSECOND\n.Sm on\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "join": "c"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST\\c",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 11,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 12,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "on-c",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\nFIRST\\c\nSECOND\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "on",
+        "join": "c"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "FIRST\\c",
+          "line": 8,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-unicode",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\n甲\n乙\n.Sm on\n丙\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "text": "unicode"
+      },
+      "recovery": false,
+      "native_rows": [
+        "甲乙 丙"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "\\[u7532]",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "\\[u4E59]",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 11,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "\\[u4E19]",
+          "line": 12,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-bold",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\n.Sy SECOND\nTHIRD\n.Sm on\nFOURTH\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "word": "style"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECONDTHIRD FOURTH"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FOURTH",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-link",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\n.Lk https://example.test/item SECOND\nTHIRD\n.Sm on\nFOURTH\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "word": "link"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND:https://example.test/itemTHIRD FOURTH"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "https://example.test/item",
+          "line": 10,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 10,
+          "column": 31,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FOURTH",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "xo-off-return",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.Sm off\n.No FIRST\n.Xc\nSECOND\nTHIRD\n.Sm on\nFOURTH\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "container": "Xo",
+        "return": true
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECONDTHIRD FOURTH"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 9,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 10,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 12,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 14,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FOURTH",
+          "line": 15,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "do-off-return",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.Sm off\n.No FIRST\n.Dc\nSECOND\nTHIRD\n.Sm on\nFOURTH\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "container": "Do",
+        "return": true
+      },
+      "recovery": false,
+      "native_rows": [
+        "“FIRST”SECONDTHIRD FOURTH"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 9,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 10,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 12,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 14,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FOURTH",
+          "line": 15,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "nested-off-return",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.Xo\n.Sm off\n.No FIRST\n.Xc\n.Dc\nSECOND\nTHIRD\n.Sm on\nFOURTH\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "container": "Do/Xo",
+        "return": true
+      },
+      "recovery": false,
+      "native_rows": [
+        "“FIRST”SECONDTHIRD FOURTH"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 10,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 11,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 14,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 15,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 16,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FOURTH",
+          "line": 17,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-nofill",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\n.nf\nFIRST\nSECOND\n.fi\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off",
+        "fill": "nf-fi"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRST",
+        "SECOND",
+        "THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": true
+        },
+        {
+          "value": "SECOND",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": true
+        },
+        {
+          "value": "THIRD",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-leading-blank",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\n SECOND\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off",
+        "blank": "source-leading"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRST",
+        " SECONDTHIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": " SECOND",
+          "line": 10,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-source-macro",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.de XX\nFIRST\nSECOND\n..\n.Sm off\n.XX\n.Sm on\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "word": "expanded TEXT"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 14,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 15,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "off-empty-control",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\n.ft R\nSECOND\n.Sm on\nTHIRD\n.Sh NEXT\nEND\n",
+      "axis": {
+        "mode": "off-on",
+        "between": "font-control"
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "off",
+          "line": 8,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "FIRST",
+          "line": 9,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "R",
+          "line": 10,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 11,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "on",
+          "line": 12,
+          "column": 5,
+          "line_start": false,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 13,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "man-words",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH DESCRIPTION\nFIRST\nSECOND\nTHIRD\n.SH NEXT\nEND\n",
+      "axis": {
+        "dialect": "man",
+        "control": true
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRST SECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "FIRST",
+          "line": 3,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 4,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 5,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    },
+    {
+      "id": "man-c",
+      "source": ".TH PROBE 1 \"November 4, 2026\"\n.SH DESCRIPTION\nFIRST\\c\nSECOND\nTHIRD\n.SH NEXT\nEND\n",
+      "axis": {
+        "dialect": "man",
+        "control": true
+      },
+      "recovery": false,
+      "native_rows": [
+        "FIRSTSECOND THIRD"
+      ],
+      "native_text": [
+        {
+          "value": "FIRST\\c",
+          "line": 3,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "SECOND",
+          "line": 4,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        },
+        {
+          "value": "THIRD",
+          "line": 5,
+          "column": 1,
+          "line_start": true,
+          "no_fill": false
+        }
+      ]
+    }
+  ]
+}

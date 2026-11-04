@@ -71,8 +71,14 @@ impl InlineBuilder {
         // every row in its receipt (term.c:143-146,220,250-253). Doing this
         // in finish_nodes() is too late: the block row count is already
         // detached, and trimming would erase the rejected pass's endline.
-        if self.retire_plain_flush_unit() {
+        let plain_flush = self.retire_plain_flush_unit_with_tail();
+        if plain_flush.rejected() || line_request && plain_flush.closes_unprinted_row() {
+            // A real block .sp/.br consumes this native tail here. Ordinary
+            // blanks reach term_flushln's endline even when nbr == 0;
+            // their filtered IR text cannot supply an invisible-row fallback.
+            // A pure owner drain must not manufacture that native close.
             self.record_completed_vertical_rows(1);
+            self.execution.zero_advance.discard_at_row_end();
             self.execution.word_end_break = WordEndBreak::Clear;
             self.execution.formatter_column = FormatterColumn::Origin;
         }

@@ -77,7 +77,9 @@ impl DeferredHeadProjection {
             let _ = capture.borrow_mut().take();
         }
         for term in terms.iter_mut() {
-            super::super::output::row_origins::project_row_presentations(term, &receipts, 0);
+            // Detached term vectors own no live builder/execution addresses.
+            let _ =
+                super::super::output::row_origins::project_row_presentations(term, &receipts, 0);
         }
         tab_projection::apply(terms, &tabs);
         for term in terms {

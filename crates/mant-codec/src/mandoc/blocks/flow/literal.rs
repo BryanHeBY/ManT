@@ -59,7 +59,6 @@ impl LiteralFlow {
         source: Option<SourceSpan>,
         starts_indented_line: bool,
         continues_line: bool,
-        ordinary_text: bool,
         append: impl FnOnce(&mut crate::mandoc::inline::InlineBuilder),
     ) {
         let source_line = source.map(|span| span.line);
@@ -76,13 +75,7 @@ impl LiteralFlow {
                 starts_indented_line && has_executed_predecessor,
                 crossed_source_line,
             );
-            super::paragraph::append_filled_fragment(
-                builder,
-                boundary,
-                continues_line,
-                ordinary_text,
-                append,
-            );
+            super::paragraph::append_filled_fragment(builder, boundary, continues_line, append);
         });
         self.row_occupied = formatter.execution.has_formatter_cell()
             || formatter.execution.has_open_native_device_row();

@@ -27,7 +27,10 @@ fn a_literal_display_switched_to_fill_keeps_source_word_and_indent_policy() {
     for (body, expected) in [
         ("ALPHA\n BETA", "ALPHA\n BETA"),
         ("ALPHA\\c\n BETA", "ALPHA BETA"),
-        (".Sm off\nALPHA\nBETA", "ALPHA BETA"),
+        // mdoc_term.c::termp_sm_pre and term.c::term_word keep NONOSPACE
+        // through filled source lines. The exact display source reran all
+        // five pristine profiles before accepting this joined spelling.
+        (".Sm off\nALPHA\nBETA", "ALPHABETA"),
     ] {
         let text = render_query_text(&query("mdoc", &format!(".fi\n{body}\n.nf\nGAMMA")));
         assert!(text.contains(expected), "{body}: {text:?}");

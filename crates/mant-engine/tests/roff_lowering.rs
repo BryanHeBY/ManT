@@ -242,3 +242,12 @@ mod shared_execution_owners;
 mod control_request_matrix;
 #[path = "roff_lowering/control_requests.rs"]
 mod control_requests;
+
+#[path = "roff_lowering/display_return.rs"]
+mod display_return;
+
+#[path = "roff_lowering/source_spacing.rs"]
+mod source_spacing;
+
+#[path = "roff_lowering/synopsis_execution.rs"]
+mod synopsis_execution;

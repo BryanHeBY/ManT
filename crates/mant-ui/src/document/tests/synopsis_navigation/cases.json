@@ -1,0 +1,283 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "pair-linked-prefix-name",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.Xr printf 3\n.Nm name\n.Xr scanf 3\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "23d7272d5085340cd115eb2154617f6a03ce106fa894a4c1f689c1f762f619aa",
+      "rows": [
+        "printf(3)",
+        "name scanf(3)"
+      ],
+      "links": [
+        {
+          "label": "printf(3)",
+          "name": "printf",
+          "section": "3",
+          "row": 0,
+          "column": 0
+        },
+        {
+          "label": "scanf(3)",
+          "name": "scanf",
+          "section": "3",
+          "row": 1,
+          "column": 5
+        }
+      ],
+      "names": [
+        {
+          "row": 1,
+          "column": 0,
+          "label": "name"
+        }
+      ],
+      "owner_source": {
+        "line": 5,
+        "column": 2
+      },
+      "original_parts": [
+        {
+          "macro": "Nm",
+          "kind": "block",
+          "line": 7,
+          "column": 2,
+          "line_start": true,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "head",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "body",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        }
+      ]
+    },
+    {
+      "id": "pair-duplicate-linked-names",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.Xr printf 3\n.Nm name\n.Nm name\n.Xr printf 3\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "ead914d0cd14248f74fca5ea64f9d70fd7b89e1e55f5f3a56e731c4b51e95ccb",
+      "rows": [
+        "printf(3)",
+        "name",
+        "name printf(3)"
+      ],
+      "links": [
+        {
+          "label": "printf(3)",
+          "name": "printf",
+          "section": "3",
+          "row": 0,
+          "column": 0
+        },
+        {
+          "label": "printf(3)",
+          "name": "printf",
+          "section": "3",
+          "row": 2,
+          "column": 5
+        }
+      ],
+      "names": [
+        {
+          "row": 1,
+          "column": 0,
+          "label": "name"
+        },
+        {
+          "row": 2,
+          "column": 0,
+          "label": "name"
+        }
+      ],
+      "owner_source": {
+        "line": 5,
+        "column": 2
+      },
+      "original_parts": [
+        {
+          "macro": "Nm",
+          "kind": "block",
+          "line": 7,
+          "column": 2,
+          "line_start": true,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "head",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "body",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "block",
+          "line": 8,
+          "column": 2,
+          "line_start": true,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "head",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "body",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        }
+      ]
+    },
+    {
+      "id": "pair-linked-type-tail",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Vt Xr printf 3 ;\n.Xr scanf 3\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "ccf6423092162b34b61130cd0276e7eb5089022622804d5d53a4c711c7dcc3d7",
+      "rows": [
+        "PREFIX",
+        "printf(3); scanf(3)"
+      ],
+      "links": [
+        {
+          "label": "printf(3)",
+          "name": "printf",
+          "section": "3",
+          "row": 1,
+          "column": 0
+        },
+        {
+          "label": "scanf(3)",
+          "name": "scanf",
+          "section": "3",
+          "row": 1,
+          "column": 11
+        }
+      ],
+      "names": [],
+      "owner_source": {
+        "line": 5,
+        "column": 2
+      },
+      "original_parts": [
+        {
+          "macro": "Vt",
+          "kind": "block",
+          "line": 7,
+          "column": 2,
+          "line_start": true,
+          "no_print": false
+        },
+        {
+          "macro": "Vt",
+          "kind": "head",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        },
+        {
+          "macro": "Vt",
+          "kind": "body",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        }
+      ]
+    },
+    {
+      "id": "pair-punctuated-name",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Nm ( name )\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "0aed2182d0bc0377e39796bf26591ee49247e0ea45aacb220405a5395e376c12",
+      "rows": [
+        "PREFIX (",
+        "name) SUFFIX"
+      ],
+      "links": [],
+      "names": [
+        {
+          "row": 1,
+          "column": 0,
+          "label": "name"
+        }
+      ],
+      "owner_source": {
+        "line": 5,
+        "column": 2
+      },
+      "original_parts": [
+        {
+          "macro": "Nm",
+          "kind": "block",
+          "line": 7,
+          "column": 2,
+          "line_start": true,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "head",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        },
+        {
+          "macro": "Nm",
+          "kind": "body",
+          "line": 7,
+          "column": 2,
+          "line_start": false,
+          "no_print": false
+        }
+      ]
+    },
+    {
+      "id": "name-plain-buffer",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd execution boundary audit\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Nm name\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "6d41cff08da9d773eecdb864da4df46af2005edd1585145fdeece883388b15d1",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ],
+      "links": [],
+      "names": [
+        {
+          "row": 1,
+          "column": 0,
+          "label": "name"
+        }
+      ],
+      "owner_source": {
+        "line": 8,
+        "column": 2
+      }
+    }
+  ]
+}

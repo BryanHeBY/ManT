@@ -1,0 +1,1392 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "head-vt-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.Vt int value ;\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "int value; SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-vt-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.Vt int value ;\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "int value; SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-vt-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.Vt int value ;\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "int value; SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-vt-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.Vt int value ;\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "int value; SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-ft-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.Ft int\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "int SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-ft-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.Ft int\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "int SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-ft-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.Ft int\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "int SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-ft-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.Ft int\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "int SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fd-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.Fd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "DECL  SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fd-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.Fd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "DECL  SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fd-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.Fd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "DECL  SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fd-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.Fd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "DECL  SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-cd-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.Cd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "DECL SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-cd-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.Cd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "DECL SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-cd-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.Cd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "DECL SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-cd-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.Cd DECL\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "DECL SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-in-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.In stdio.h\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "#include <stdio.h> SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-in-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.In stdio.h\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "#include <stdio.h> SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-in-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.In stdio.h\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "#include <stdio.h> SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-in-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.In stdio.h\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "#include <stdio.h> SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fn-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.Fn call arg\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "call  (arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fn-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.Fn call arg\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "call  (arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fn-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.Fn call arg\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "call  (arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fn-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.Fn call arg\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "call  (arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fo-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "call(  arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fo-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "call(  arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fo-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "call(  arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-fo-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "call(  arg);",
+        "SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-nm-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\n.Nm name\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "name SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-nm-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\zX\n.Nm name\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIXX",
+        "name SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-nm-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\z\n.Nm name\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "name SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "head-nm-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( Xo\n.No PREFIX\\c\n.Nm name\n.No SUFFIX\n.Xc\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "rows": [
+        "(PREFIX",
+        "name SUFFIX",
+        "BODY."
+      ]
+    },
+    {
+      "id": "xo-vt-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.Vt int value ;\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-vt-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.Vt int value ;\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "int value; SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-vt-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Vt int value ;\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-vt-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.Vt int value ;\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-ft-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.Ft int\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "int SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-ft-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.Ft int\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "int SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-ft-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Ft int\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "int SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-ft-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.Ft int\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "int SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fd-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.Fd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "DECL",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fd-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.Fd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "DECL",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fd-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Fd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "DECL",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fd-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.Fd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "DECL",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-cd-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.Cd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-cd-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.Cd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "DECL SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-cd-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Cd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-cd-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.Cd DECL\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-in-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.In stdio.h\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-in-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.In stdio.h\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "#include <stdio.h> SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-in-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.In stdio.h\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-in-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.In stdio.h\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fn-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.Fn call arg\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fn-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.Fn call arg\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fn-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Fn call arg\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fn-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.Fn call arg\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fo-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fo-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fo-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-fo-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-nm-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\n.Nm name\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-nm-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\zX\n.Nm name\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIXX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-nm-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Nm name\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "xo-nm-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\c\n.Nm name\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-vt-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Vt int value ;\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "int value; SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-vt-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Vt int value ;\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "int value; SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "int value; SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "int value; SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-vt-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Vt int value ;\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "int value; SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-vt-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Vt int value ;\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "int value; SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "int value; SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-ft-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Ft int\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "int SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "int SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "int SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-ft-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Ft int\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "int SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "int SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "int SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-ft-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Ft int\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "int SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "int SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "int SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-ft-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Ft int\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "int SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "int SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "int SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fd-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Fd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "DECL\nSUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fd-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Fd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "DECL\nSUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fd-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Fd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "DECL\nSUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fd-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Fd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "DECL",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "DECL\nSUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-cd-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Cd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "DECL SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-cd-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Cd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "DECL SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "DECL SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "DECL SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-cd-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Cd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "DECL SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-cd-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Cd DECL\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "DECL SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "DECL SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-in-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.In stdio.h\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-in-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.In stdio.h\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-in-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.In stdio.h\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-in-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.In stdio.h\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "#include <stdio.h> SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fn-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fn-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fn-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fn-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Fn call arg\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fo-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fo-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIXX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fo-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-fo-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Fo call\n.Fa arg\n.Fc\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "call(arg);",
+        "",
+        "SUFFIX"
+      ],
+      "portable_owner_texts": [
+        "PREFIX",
+        "call(arg);",
+        "SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact."
+    },
+    {
+      "id": "direct-nm-ordinary",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\n.Nm name\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "name SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact.",
+      "portable_owner_texts": [
+        "PREFIX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-nm-zero-glyph",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\zX\n.Nm name\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIXX",
+        "name SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIXX",
+        "",
+        "name SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact.",
+      "portable_owner_texts": [
+        "PREFIXX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-nm-pending-zero",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\z\n.Nm name\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "name SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact.",
+      "portable_owner_texts": [
+        "PREFIX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "direct-nm-continuation",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.No PREFIX\\c\n.Nm name\n.No SUFFIX\n.Sh NEXT\nAFTER.\n",
+      "context": "direct",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ],
+      "portable_rows": [
+        "PREFIX",
+        "",
+        "name SUFFIX"
+      ],
+      "portable_boundary": "Ordinary prefix and completed declarations retain distinct original Paragraph owners. Ft/Fn pairing is tested separately. Canonical Markdown keeps semantic paragraph framing; native physical rows remain independently exact.",
+      "portable_owner_texts": [
+        "PREFIX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "display-authored-tail",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd execution boundary audit\n.Sh DESCRIPTION\n.Xo\n.D1 CONTENT\n.Xc )\nAFTER\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "heading": "DESCRIPTION",
+      "rows": [
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "display-generated-tail",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd execution boundary audit\n.Sh DESCRIPTION\n.Do\n.D1 CONTENT\n.Dc\nAFTER\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "heading": "DESCRIPTION",
+      "rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ]
+    },
+    {
+      "id": "source-spacing",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd execution boundary audit\n.Sh DESCRIPTION\n.Sm off\nFIRST\nSECOND\n.Sm on\nTHIRD\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "heading": "DESCRIPTION",
+      "rows": [
+        "FIRSTSECOND THIRD"
+      ]
+    },
+    {
+      "id": "name-plain-buffer",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd execution boundary audit\n.Sh SYNOPSIS\n.Xo\n.No PREFIX\\z\n.Nm name\n.No SUFFIX\n.Xc\n.Sh NEXT\nAFTER.\n",
+      "context": "xo",
+      "heading": "SYNOPSIS",
+      "rows": [
+        "PREFIX",
+        "name SUFFIX"
+      ]
+    },
+    {
+      "id": "type-inline-pre",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd execution boundary audit\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It ( No PREFIX\\z Vt int value ;\nBODY.\n.El\n.Sh NEXT\nAFTER.\n",
+      "context": "head",
+      "heading": "SYNOPSIS",
+      "rows": [
+        "(PREFIX",
+        "int value;",
+        "BODY."
+      ]
+    },
+    {
+      "id": "display-rejected-unit-d1",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.D1 X\\p\n.D1 \"\\p DROP\"\n.D1 Tail\n.Sh NEXT\n.No END\n",
+      "heading": "DESCRIPTION",
+      "context": "xo",
+      "rows": [
+        "X",
+        "",
+        "Tail"
+      ],
+      "native_relative_indent": 6,
+      "original_owners": [
+        {
+          "kind": "Preformatted",
+          "text": "X",
+          "line": 8,
+          "column": 5
+        },
+        {
+          "kind": "VerticalSpace",
+          "lines": 1
+        },
+        {
+          "kind": "Preformatted",
+          "text": "Tail",
+          "line": 10,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "id": "display-rejected-unit-dl",
+      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Dl X\\p\n.Dl \"\\p DROP\"\n.Dl Tail\n.Sh NEXT\n.No END\n",
+      "heading": "DESCRIPTION",
+      "context": "xo",
+      "rows": [
+        "X",
+        "",
+        "Tail"
+      ],
+      "native_relative_indent": 6,
+      "original_owners": [
+        {
+          "kind": "Preformatted",
+          "text": "X",
+          "line": 8,
+          "column": 5
+        },
+        {
+          "kind": "VerticalSpace",
+          "lines": 1
+        },
+        {
+          "kind": "Preformatted",
+          "text": "Tail",
+          "line": 10,
+          "column": 5
+        }
+      ]
+    }
+  ]
+}

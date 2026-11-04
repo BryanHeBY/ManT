@@ -79,6 +79,9 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// Same-row padding can instead belong to an inline HEAD/BODY owner.
     pub(in crate::mandoc::inline::flow) declared_body_origin: Option<BodyOriginProjection>,
     pub(in crate::mandoc::inline::flow) projected_passes: usize,
+    /// `TERMP_NOPAD`, consumed by the next real `term_flushln`, not an IR drain.
+    pub(in crate::mandoc::inline::flow) no_pad: bool,
+    pub(in crate::mandoc::inline::flow) run_in_boundaries: Vec<super::run_in::PendingRunInBoundary>,
     pub(in crate::mandoc::inline::flow) pending_indent: Option<usize>,
     /// True only for a NOBREAK field carried across the HEAD/BODY ownership
     /// split (`PreservedDefinitionField`): its rejection is decided by the
@@ -333,6 +336,31 @@ impl InlineExecutionState {
     ) -> &mut DefinitionFieldState {
         let tabs = self.tab_stops.clone();
         let detached_row = self.detached_device_row.take();
+        // Nm/It change the geometry of the existing tcol, not its input
+        // buffer (mdoc_term.c::termp_nm_pre(), termp_it_pre()). Preserve
+        // native cells and stable word owners before HEAD's synopsis_pre
+        // inspects lastcol. Pending BACKBEFORE/BACKAFTER stays in the same
+        // execution state until that real flush consumes it.
+        if self.definition.is_none() {
+            self.definition = Some(DefinitionFieldState {
+                field_buffer: std::mem::take(&mut self.flush_unit),
+                field_word_anchors: std::mem::take(&mut self.flush_unit_anchors),
+                ..DefinitionFieldState::default()
+            });
+            if !self
+                .definition
+                .as_ref()
+                .unwrap()
+                .field_word_anchors
+                .is_empty()
+                && let Some(author) = &mut self.author_execution
+            {
+                author.field_output_start = self.flush_unit_output_start;
+            }
+            // Authorless sessions retire this same range through
+            // take_plain_flush_unit(); keep its cursor until a real owner
+            // drain rebases it, even after the cells changed storage.
+        }
         let state = self
             .definition
             .get_or_insert_with(DefinitionFieldState::default);
@@ -407,6 +435,14 @@ pub(in crate::mandoc::inline::flow) struct NoBreakField {
 }
 
 impl NoBreakField {
+    pub(in crate::mandoc::inline::flow) fn remap_output_projection(
+        &mut self,
+        edits: &super::super::output::row_origins::OutputNodeEdits,
+    ) {
+        edits.remap(&mut self.output_end_before_separator);
+        edits.remap(&mut self.resumed_output_start);
+    }
+
     pub(in crate::mandoc::inline::flow) fn remap_output_positions(
         &mut self,
         edit: super::super::output::row_origins::OutputNodeEdit,
@@ -420,4 +456,108 @@ impl NoBreakField {
 pub(super) enum DefinitionFieldStyle {
     Tag,
     Hang,
+}
+
+#[cfg(test)]
+mod buffer_handoff_tests {
+    use super::*;
+    use crate::mandoc::formatter::AuthorFlow;
+    use crate::mandoc::inline::flow::{
+        NativeWordAnchor,
+        field_buffer::{FieldCell, FieldWrite},
+    };
+
+    fn buffer_owner(builder: &mut InlineBuilder) {
+        builder
+            .execution
+            .flush_unit
+            .apply_writes(&FieldWrite::literal("LIVE"));
+        builder.execution.flush_unit_anchors.push(NativeWordAnchor {
+            start: 0,
+            content: 0,
+            owner: "source-owner".into(),
+            projected_device_padding: 0,
+            projected_field_prefix: false,
+        });
+    }
+
+    #[test]
+    fn only_an_owned_plain_interval_replaces_the_author_cursor() {
+        for cells in [false, true] {
+            let mut builder = InlineBuilder::new();
+            builder.inherit_author_execution(AuthorFlow::Automatic, false);
+            builder
+                .execution
+                .author_execution
+                .as_mut()
+                .unwrap()
+                .field_output_start = 3;
+            builder.execution.flush_unit_output_start = 2;
+            if cells {
+                builder
+                    .execution
+                    .flush_unit
+                    .apply_writes(&[FieldWrite::Cell(FieldCell::TabReference)]);
+            }
+            builder.begin_definition_head_consumption();
+            assert_eq!(
+                builder
+                    .execution
+                    .author_execution
+                    .unwrap()
+                    .field_output_start,
+                3
+            );
+            assert_eq!(builder.execution.flush_unit_output_start, 2);
+        }
+        let mut builder = InlineBuilder::new();
+        builder.inherit_author_execution(AuthorFlow::Automatic, false);
+        builder
+            .execution
+            .author_execution
+            .as_mut()
+            .unwrap()
+            .field_output_start = 3;
+        builder.execution.flush_unit_output_start = 2;
+        buffer_owner(&mut builder);
+        builder.inherit_zero_advance_armed(true);
+        builder.begin_definition_head_consumption();
+        assert_eq!(
+            builder
+                .execution
+                .author_execution
+                .unwrap()
+                .field_output_start,
+            2
+        );
+        let state = builder.execution.definition.as_ref().unwrap();
+        assert_eq!(state.field_buffer.cells().len(), 4);
+        assert_eq!(state.field_word_anchors[0].owner, "source-owner");
+        assert!(builder.execution.flush_unit.is_empty());
+        assert!(builder.take_zero_advance_armed());
+    }
+
+    #[test]
+    fn an_authorless_field_keeps_its_owned_interval_when_the_author_arrives() {
+        let mut builder = InlineBuilder::new();
+        builder.nodes = vec![
+            mant_ir::Inline::Text {
+                value: "EARLIER".into()
+            };
+            4
+        ];
+        builder.execution.flush_unit_output_start = 2;
+        buffer_owner(&mut builder);
+        builder.begin_definition_head_consumption();
+        assert_eq!(builder.execution.flush_unit_output_start, 2);
+        builder.inherit_author_execution(AuthorFlow::Automatic, false);
+        assert_eq!(
+            builder
+                .execution
+                .author_execution
+                .unwrap()
+                .field_output_start,
+            2
+        );
+    }
 }

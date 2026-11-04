@@ -12,6 +12,8 @@ fn append_generated_event(builder: &mut InlineBuilder, event: Event<'_>) {
         Event::Tight => builder.tighten_next_boundary(),
         Event::Release => builder.release_next_boundary(),
         Event::EmptyWord => builder.execute_empty_word(),
+        Event::FunctionBodyBegin(synopsis) => builder.begin_function_body(synopsis),
+        Event::FunctionBodyEnd(synopsis) => builder.finish_function_body(synopsis),
         _ => unreachable!("container children and font scopes handled above"),
     }
 }
@@ -39,7 +41,7 @@ impl super::BlockLowerer<'_, '_> {
     }
 
     fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {
-        if self.state.formatter.no_fill {
+        if self.state.formatter.no_fill || self.state.single_line_display_owner {
             self.push_no_fill_generated(
                 argument,
                 super::ends_with_line_continuation(argument),
@@ -58,25 +60,20 @@ impl super::BlockLowerer<'_, '_> {
             if !self.column_field {
                 self.state.flush_preformatted();
             }
-            self.state.push_source_inline_with(
-                source_span(argument),
-                false,
-                false,
-                false,
-                |builder| {
+            self.state
+                .push_inline_with(source_span(argument), false, false, |builder| {
                     crate::mandoc::inline::function_argument(
                         builder,
                         argument,
                         comma_after,
                         self.context.default_name,
                     );
-                },
-            );
+                });
         }
     }
 
     pub(super) fn push_generated_container_event(&mut self, source: &Node, event: Event<'_>) {
-        if self.state.formatter.no_fill {
+        if self.state.formatter.no_fill || self.state.single_line_display_owner {
             // Generated words are their own term_word() calls. They consume
             // the preceding authored `\c`; only state-only events inherit it.
             let continuation = self.state.formatter.no_fill_inline.continues_source_line();

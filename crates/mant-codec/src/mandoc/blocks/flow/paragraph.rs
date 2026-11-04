@@ -108,10 +108,13 @@ impl ParagraphFlow {
         count: usize,
         native_count: usize,
         generated_word: bool,
-    ) {
+    ) -> Option<crate::mandoc::inline::RunInBoundaryReceipt> {
         self.with_inline_builder(formatter, |builder| {
             builder.append_run_in_cells(count, native_count, generated_word);
-        });
+            (count > 0 && generated_word)
+                .then(|| builder.observe_run_in_boundary())
+                .flatten()
+        })
     }
 
     pub(super) fn append(
@@ -120,7 +123,6 @@ impl ParagraphFlow {
         source: Option<SourceSpan>,
         starts_indented_line: bool,
         continues_line: bool,
-        ordinary_text: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         let source_line = source.map(|span| span.line);
@@ -140,7 +142,7 @@ impl ParagraphFlow {
                 starts_indented_line && has_executed_predecessor,
                 crossed_source_line,
             );
-            append_filled_fragment(builder, boundary, continues_line, ordinary_text, append)
+            append_filled_fragment(builder, boundary, continues_line, append)
         });
         if changed {
             if self.source.is_none() {
@@ -191,14 +193,15 @@ pub(super) fn append_filled_fragment(
     builder: &mut InlineBuilder,
     boundary: FilledBoundary,
     continues_line: bool,
-    ordinary_text: bool,
     append: impl FnOnce(&mut InlineBuilder),
 ) -> bool {
     if boundary == FilledBoundary::LineBreak {
         builder.hard_break();
-    } else if boundary == FilledBoundary::Word && ordinary_text {
-        builder.preserve_source_word_boundary();
     }
+    // Filled NODE_LINE observes tab/source state but does not rewrite the
+    // next word's NOSPACE/NONOSPACE decision (mdoc_term.c:318-322,
+    // term.c:573-589). Ordinary source words use the same word entry as
+    // macro operands, including the one released boundary before Sm off.
     if builder.final_source_continuation_or(false) && !builder.has_tight_boundary() {
         builder.preserve_continued_boundary();
     }

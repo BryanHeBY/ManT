@@ -39,6 +39,14 @@ that crate was not published for that change.
 
 - Keep Unicode edge whitespace outside Markdown emphasis delimiters without
   dropping the inner text's representable style or changing its scalars.
+- Preserve one live native input buffer when entering synopsis fields from
+  ordinary prose. Execute synopsis pre/post rules in nested and structural
+  contexts alike, including function-name fields and their argument flushes.
+  Keep display presentation separate from source fill mode, so authored and
+  generated closing words execute after the display's actual post. Ordinary
+  source lines now obey the same `Sm` word-spacing state as macro operands.
+  Keep accepted leading field gaps outside link labels and preserve the
+  escaped blank of run-in definitions without duplicating their word seam.
 - Validate nested Markdown delimiters against accepted child semantics before
   adding an outer wrapper. Keep text, code, links, hard rows and available
   styles stable through repeated parser readback without self-validating a

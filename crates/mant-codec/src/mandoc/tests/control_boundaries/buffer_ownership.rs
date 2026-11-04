@@ -210,8 +210,11 @@ fn invisible_graph_passes_keep_distinct_native_row_events() {
 #[test]
 fn new_display_native_units_start_inside_their_actual_output_owner() {
     // Exact D1/Dl sources ran pristine probes first. Their BLOCK pre and
-    // BODY post call term_newln (termp_d1_pre/termp_bl_post), so a new
-    // unit cannot inherit the former display's projection offset.
+    // BLOCK post calls term_newln (termp_d1_pre/termp_bl_post), so a new
+    // unit cannot inherit the former display's projection offset. D1/Dl
+    // do not set NODE_NOFILL: rejecting the middle field produces resolved
+    // vertical space, not an authored empty literal. The exact sources were
+    // re-run in all five pristine profiles before changing this assertion.
     for display in ["D1", "Dl"] {
         let source = format!(
             "{MDOC}.{display} X\\p\n.{display} \"\\p DROP\"\n.{display} Tail\n.Sh NEXT\n.No END\n"
@@ -221,15 +224,18 @@ fn new_display_native_units_start_inside_their_actual_output_owner() {
             source.as_bytes(),
         )
         .unwrap();
-        let rows = document.sections[1]
-            .blocks
-            .iter()
-            .filter_map(|block| match block {
-                Block::Preformatted { children, .. } => Some(inline_text(children)),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(rows, ["X", "", "Tail"], "{source}\n{document:#?}");
+        let [
+            Block::Preformatted {
+                children: first, ..
+            },
+            Block::VerticalSpace { lines: 1, .. },
+            Block::Preformatted { children: last, .. },
+        ] = document.sections[1].blocks.as_slice()
+        else {
+            panic!("{source}\n{document:#?}")
+        };
+        assert_eq!(inline_text(first), "X");
+        assert_eq!(inline_text(last), "Tail");
     }
 }
 

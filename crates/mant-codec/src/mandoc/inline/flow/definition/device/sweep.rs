@@ -67,7 +67,7 @@ impl InlineBuilder {
             loop_row_end: LoopRowEnd::Open,
             loop_rows: Vec::new(),
         };
-        let mut row_origin_units = i64::try_from(state.field_offset_units).unwrap_or(i64::MAX);
+        let mut row_origin_units = self.native_first_field_origin();
         let mut placement = sweep.presentation.field_placement_signed(
             row_origin_units,
             sweep.viscol,

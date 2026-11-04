@@ -48,6 +48,9 @@ impl InlineBuilder {
             native_boundary == PendingBoundary::Kept,
             1 + usize::from(sentence),
         );
+        if let Some(boundary) = definition.run_in_boundaries.last_mut() {
+            boundary.observe_following_word(separator);
+        }
         // The text executor supplied native writes before IR projection.
         // A stable owner marker follows wrappers and compact presentation;
         // it never contributes a native cell.

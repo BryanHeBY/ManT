@@ -1,0 +1,541 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "baseline": "b363b2398993522508a77a6a60a730ac340fd7ab",
+  "profiles": [
+    "ascii",
+    "utf8-width78",
+    "html",
+    "tree",
+    "lint"
+  ],
+  "cases": [
+    {
+      "id": "xo-d1",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.D1 CONTENT\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Xo",
+        "tail": "author"
+      },
+      "recovery": false,
+      "native_rows": [
+        "      CONTENT",
+        ") AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "do-d1",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.D1 CONTENT\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Do",
+        "tail": "generated"
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "      CONTENT",
+        "” AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ]
+    },
+    {
+      "id": "po-d1",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Po\n.D1 CONTENT\n.Pc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Po",
+        "tail": "generated"
+      },
+      "recovery": false,
+      "native_rows": [
+        "(",
+        "      CONTENT",
+        ") AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "(",
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "xo-dl",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.Dl CONTENT\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Dl",
+        "enclosure": "Xo",
+        "tail": "author"
+      },
+      "recovery": false,
+      "native_rows": [
+        "      CONTENT",
+        ") AFTER"
+      ],
+      "display": "Dl",
+      "display_count": 1,
+      "visible_rows": [
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "do-dl",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.Dl CONTENT\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Dl",
+        "enclosure": "Do",
+        "tail": "generated"
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "      CONTENT",
+        "” AFTER"
+      ],
+      "display": "Dl",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ]
+    },
+    {
+      "id": "po-dl",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Po\n.Dl CONTENT\n.Pc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Dl",
+        "enclosure": "Po",
+        "tail": "generated"
+      },
+      "recovery": false,
+      "native_rows": [
+        "(",
+        "      CONTENT",
+        ") AFTER"
+      ],
+      "display": "Dl",
+      "display_count": 1,
+      "visible_rows": [
+        "(",
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "xo-bd-literal",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.Bd -literal -compact\nCONTENT\n.Ed\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Bd",
+        "fill": "literal",
+        "enclosure": "Xo"
+      },
+      "recovery": false,
+      "native_rows": [
+        "CONTENT",
+        ") AFTER"
+      ],
+      "display": "Bd",
+      "display_count": 1,
+      "visible_rows": [
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "do-bd-literal",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.Bd -literal -compact\nCONTENT\n.Ed\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Bd",
+        "fill": "literal",
+        "enclosure": "Do"
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ],
+      "display": "Bd",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ]
+    },
+    {
+      "id": "xo-bd-unfilled",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.Bd -unfilled -compact\nCONTENT\n.Ed\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Bd",
+        "fill": "unfilled",
+        "enclosure": "Xo"
+      },
+      "recovery": false,
+      "native_rows": [
+        "CONTENT",
+        ") AFTER"
+      ],
+      "display": "Bd",
+      "display_count": 1,
+      "visible_rows": [
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "do-bd-unfilled",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.Bd -unfilled -compact\nCONTENT\n.Ed\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Bd",
+        "fill": "unfilled",
+        "enclosure": "Do"
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ],
+      "display": "Bd",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ]
+    },
+    {
+      "id": "xo-bd-filled",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.Bd -filled -compact\nCONTENT\n.Ed\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Bd",
+        "fill": "filled",
+        "enclosure": "Xo"
+      },
+      "recovery": false,
+      "native_rows": [
+        "CONTENT",
+        ") AFTER"
+      ],
+      "display": "Bd",
+      "display_count": 1,
+      "visible_rows": [
+        "CONTENT",
+        ") AFTER"
+      ],
+      "portable_rows": [
+        "CONTENT",
+        "",
+        ") AFTER"
+      ],
+      "portable_owners": [
+        {
+          "kind": "paragraph",
+          "text": "CONTENT",
+          "line": 10,
+          "column": 1
+        },
+        {
+          "kind": "paragraph",
+          "text": ") AFTER",
+          "line": 12,
+          "column": 5
+        }
+      ],
+      "explained_difference": "Independent complete Paragraph owners require CommonMark paragraph framing; this adds portable reading distance, not native source rows. Original owner kinds, payloads and source locations are asserted separately."
+    },
+    {
+      "id": "do-bd-filled",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.Bd -filled -compact\nCONTENT\n.Ed\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Bd",
+        "fill": "filled",
+        "enclosure": "Do"
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ],
+      "display": "Bd",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "CONTENT",
+        "” AFTER"
+      ],
+      "portable_rows": [
+        "“",
+        "",
+        "CONTENT",
+        "",
+        "” AFTER"
+      ],
+      "portable_owners": [
+        {
+          "kind": "paragraph",
+          "text": "“",
+          "line": 8,
+          "column": 2
+        },
+        {
+          "kind": "paragraph",
+          "text": "CONTENT",
+          "line": 10,
+          "column": 1
+        },
+        {
+          "kind": "paragraph",
+          "text": "” AFTER",
+          "line": 8,
+          "column": 2
+        }
+      ],
+      "explained_difference": "Independent complete Paragraph owners require CommonMark paragraph framing; this adds portable reading distance, not native source rows. Original owner kinds, payloads and source locations are asserted separately."
+    },
+    {
+      "id": "xo-d1-c",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.D1 CONTENT\\c\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Xo",
+        "escape": "\\c"
+      },
+      "recovery": false,
+      "native_rows": [
+        "      CONTENT",
+        ") AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "xo-d1-z",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.D1 CONTENT\\z\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Xo",
+        "escape": "\\z"
+      },
+      "recovery": false,
+      "native_rows": [
+        "      CONTENT",
+        ") AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "CONTENT",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "do-d1-link",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.D1 Lk https://example.test/item CONTENT\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Do",
+        "link": true
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "      CONTENT: https://example.test/item",
+        "” AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "CONTENT: https://example.test/item",
+        "” AFTER"
+      ]
+    },
+    {
+      "id": "xo-two-d1",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Xo\n.D1 FIRST\n.D1 SECOND\n.Xc )\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Xo",
+        "count": 2
+      },
+      "recovery": false,
+      "native_rows": [
+        "      FIRST",
+        "      SECOND",
+        ") AFTER"
+      ],
+      "display": "D1",
+      "display_count": 2,
+      "visible_rows": [
+        "FIRST",
+        "SECOND",
+        ") AFTER"
+      ]
+    },
+    {
+      "id": "do-empty-d1",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.D1\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Do",
+        "empty": true
+      },
+      "recovery": true,
+      "native_rows": [
+        "“",
+        "” AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "” AFTER"
+      ],
+      "portable_rows": [
+        "“",
+        "",
+        "” AFTER"
+      ],
+      "portable_owners": [
+        {
+          "kind": "paragraph",
+          "text": "“",
+          "line": 8,
+          "column": 2
+        },
+        {
+          "kind": "paragraph",
+          "text": "” AFTER",
+          "line": 8,
+          "column": 2
+        }
+      ],
+      "explained_difference": "Independent complete Paragraph owners require CommonMark paragraph framing; this adds portable reading distance, not native source rows. Original owner kinds, payloads and source locations are asserted separately."
+    },
+    {
+      "id": "xo-d1-broken",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.D1 Xo FIRST\nSECOND\n.Xc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Xo",
+        "crossed": true
+      },
+      "recovery": true,
+      "native_rows": [
+        "      FIRST SECOND",
+        "AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "FIRST SECOND",
+        "AFTER"
+      ]
+    },
+    {
+      "id": "do-bd-switch",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.Do\n.Bd -literal -compact\nFIRST\n.fi\nSECOND\n.Ed\n.Dc\nAFTER\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "Bd",
+        "enclosure": "Do",
+        "request": "fi"
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "FIRST",
+        "SECOND",
+        "” AFTER"
+      ],
+      "display": "Bd",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "FIRST",
+        "SECOND",
+        "” AFTER"
+      ],
+      "portable_rows": [
+        "“",
+        "FIRST",
+        "SECOND",
+        "",
+        "” AFTER"
+      ],
+      "portable_owners": [
+        {
+          "kind": "paragraph",
+          "text": "“",
+          "line": 8,
+          "column": 2
+        },
+        {
+          "kind": "preformatted",
+          "text": "FIRST",
+          "line": 10,
+          "column": 1
+        },
+        {
+          "kind": "paragraph",
+          "text": "SECOND",
+          "line": 12,
+          "column": 1
+        },
+        {
+          "kind": "paragraph",
+          "text": "” AFTER",
+          "line": 8,
+          "column": 2
+        }
+      ],
+      "explained_difference": "Independent complete Paragraph owners require CommonMark paragraph framing; this adds portable reading distance, not native source rows. Original owner kinds, payloads and source locations are asserted separately."
+    },
+    {
+      "id": "nf-do-d1",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd boundary audit\n.Sh DESCRIPTION\n.nf\n.Do\n.D1 CONTENT\n.Dc\nAFTER\n.fi\n.Sh NEXT\nEND\n",
+      "axis": {
+        "display": "D1",
+        "enclosure": "Do",
+        "outer": "nf"
+      },
+      "recovery": false,
+      "native_rows": [
+        "“",
+        "      CONTENT",
+        "”",
+        "AFTER"
+      ],
+      "display": "D1",
+      "display_count": 1,
+      "visible_rows": [
+        "“",
+        "CONTENT",
+        "”",
+        "AFTER"
+      ]
+    }
+  ]
+}

@@ -131,6 +131,16 @@ impl InlineBuilder {
     /// `roff_term_pre_ce()` calls `term_flushln()`, even over an empty buffer.
     /// A HANG tail may keep its device row open; this is not a hard break.
     pub(in crate::mandoc) fn flush_execution_line(&mut self) {
+        self.flush_execution_line_with_origin(super::super::CompletedRowOrigin::Layout);
+    }
+
+    /// The same unconditional flush belongs to the active literal owner,
+    /// including a row with native cells but no visible scalar.
+    pub(in crate::mandoc) fn flush_literal_execution_line(&mut self) {
+        self.flush_execution_line_with_origin(super::super::CompletedRowOrigin::LiteralText);
+    }
+
+    fn flush_execution_line_with_origin(&mut self, origin: super::super::CompletedRowOrigin) {
         let occupied = self.has_formatter_cell()
             || self.execution.has_open_native_device_row()
             || self
@@ -140,7 +150,7 @@ impl InlineBuilder {
                 .is_some_and(|state| !state.field_buffer.is_empty())
             || !self.execution.flush_unit.is_empty();
         if occupied {
-            self.execute_native_newline();
+            self.execute_native_newline_with_origin(origin);
             return;
         }
         let native = self.native_field_device(false);
@@ -162,7 +172,7 @@ impl InlineBuilder {
             // row. Transfer its own receipt alongside earlier vspace rows;
             // a paragraph drain must not count only the preceding .sp and
             // trim this additional close (roff_term_pre_ce(), term.c:250).
-            self.record_completed_vertical_rows(1);
+            self.record_completed_rows(1, origin);
             self.execution.last_visible_character = Some('\n');
         }
     }
@@ -258,7 +268,7 @@ impl InlineBuilder {
                 self.project_captured_definition_field(native);
                 self.hard_break_after_field_projection_with_origin(Some(native), origin);
             } else {
-                self.hard_break();
+                self.hard_break_with_origin(origin);
             }
             self.retire_native_field_with_device(native.as_ref());
         }

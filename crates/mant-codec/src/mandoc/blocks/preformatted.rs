@@ -59,7 +59,8 @@ impl BlockLowerer<'_, '_> {
         } else {
             DisplayFillMode::SingleLine
         });
-        self.state.formatter.no_fill = true;
+        let inbound_presentation = self.state.single_line_display_owner;
+        self.state.single_line_display_owner = !is_bd;
         crate::mandoc::inline::display_tabs::enter_pre(&mut self.state.formatter.execution, node);
         let body_index = node
             .children
@@ -112,9 +113,7 @@ impl BlockLowerer<'_, '_> {
             .formatter
             .execution
             .restore_definition_geometry(geometry);
-        if !is_bd {
-            self.state.formatter.no_fill = inbound_fill;
-        }
+        self.state.single_line_display_owner = inbound_presentation;
         self.display_fill = inbound_display;
         self.state.queue_targets(
             super::targets::structural_targets(node),
@@ -152,7 +151,8 @@ pub(super) fn preformatted_blocks(
     } else {
         DisplayFillMode::SingleLine
     });
-    lowerer.state.formatter.no_fill = true;
+    lowerer.state.single_line_display_owner =
+        node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Bd));
     // The enclosing block driver already settled the former output row.
     // Display pre handlers use the same execution state as inline HEADs.
     crate::mandoc::inline::display_tabs::enter_pre(&mut lowerer.state.formatter.execution, node);
@@ -195,19 +195,30 @@ pub(super) fn preformatted_blocks(
 
     // A crossed .Ed restores fill at its source marker. If that marker has
     // already consumed the checkpoint, a later .nf remains in force here.
-    let close_at_source_marker = body_index.is_some_and(|index| {
-        node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
-            && match context
+    let returned_fill = body_index.and_then(|index| {
+        (node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))).then(|| {
+            context
                 .scope_posts
                 .exit_display_fill(node.children[index].id)
-            {
-                Some(fill) => {
-                    lowerer.state.formatter.no_fill = fill;
-                    false
-                }
-                None => true,
-            }
+        })
     });
+    let close_at_source_marker = returned_fill == Some(None);
+    if !close_at_source_marker {
+        // D1/Dl BLOCK post is termp_bl_post(): consume the live field before
+        // geometry returns (mdoc_term.c:1142-1148). Its literal presentation
+        // does not set NODE_NOFILL or choose a different execution lifetime.
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
+            lowerer.state.finish_column_display_body(node.display_kind);
+        } else {
+            lowerer.state.finish_native_body_line();
+        }
+    }
+    if let Some(Some(fill)) = returned_fill {
+        // The BODY post consumes the last child's live owner first. Only
+        // then does normal return restore Bd's fill checkpoint. A crossed
+        // Ed already consumed it at its own source position.
+        lowerer.state.formatter.no_fill = fill;
+    }
     let output = lowerer.finish_into(
         formatter,
         if close_at_source_marker {

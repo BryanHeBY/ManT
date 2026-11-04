@@ -2472,7 +2472,7 @@
         "AFTER": 5
       },
       "definition": true,
-      "relation": "separated",
+      "relation": "joined",
       "body_column": null,
       "lint": ""
     },
@@ -2492,7 +2492,7 @@
         "AFTER": 5
       },
       "definition": true,
-      "relation": "separated",
+      "relation": "joined",
       "body_column": null,
       "lint": ""
     },
@@ -2512,7 +2512,7 @@
         "AFTER": 5
       },
       "definition": true,
-      "relation": "separated",
+      "relation": "joined",
       "body_column": null,
       "lint": ""
     },
@@ -2875,7 +2875,7 @@
         "AFTER": 9
       },
       "definition": true,
-      "relation": "separated",
+      "relation": "joined",
       "body_column": null,
       "lint": ""
     },
@@ -2916,7 +2916,7 @@
         "AFTER": 9
       },
       "definition": true,
-      "relation": "separated",
+      "relation": "joined",
       "body_column": null,
       "lint": ""
     },
@@ -2957,7 +2957,7 @@
         "AFTER": 5
       },
       "definition": true,
-      "relation": "separated",
+      "relation": "joined",
       "body_column": null,
       "lint": ""
     },

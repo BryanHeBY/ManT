@@ -131,7 +131,7 @@ impl BlockState {
     }
 
     pub(super) fn flush_paragraph_with(&mut self, line_request: bool) {
-        if self.column_uses_literal_output() && self.paragraph.is_empty() {
+        if self.uses_literal_output() && self.paragraph.is_empty() {
             // The live column buffer belongs to LiteralFlow. Draining an
             // empty paragraph must not retire its native cells or claim its
             // completed-row receipts at a different IR destination.
@@ -269,12 +269,18 @@ impl BlockState {
         &mut self,
         _source: Option<mant_ir::SourceSpan>,
     ) {
-        if self.formatter.no_fill || self.column_uses_literal_output() {
-            self.literal
-                .with_inline_builder(&mut self.formatter, InlineBuilder::flush_execution_line);
+        // D1/Dl's literal presentation does not make rejected filled input
+        // an authored literal row. Native source mode determines row kind.
+        let flush: fn(&mut InlineBuilder) = if self.formatter.no_fill {
+            InlineBuilder::flush_literal_execution_line
+        } else {
+            InlineBuilder::flush_execution_line
+        };
+        if self.formatter.no_fill || self.uses_literal_output() {
+            self.literal.with_inline_builder(&mut self.formatter, flush);
         } else {
             self.paragraph
-                .with_inline_builder(&mut self.formatter, InlineBuilder::flush_execution_line);
+                .with_inline_builder(&mut self.formatter, flush);
         }
         self.formatter.no_fill_inline.retire_consumed_cell();
         self.flush_preformatted();
@@ -332,7 +338,7 @@ impl BlockState {
             // destination. Its subsequent words and the actual It post
             // consume that same owner (mdoc_term.c:1482 with 953), so a
             // rejected receipt must not target an empty paragraph Vec.
-            column_closed_row = if self.column_uses_literal_output() {
+            column_closed_row = if self.uses_literal_output() {
                 self.literal
                     .with_inline_builder(&mut self.formatter, finish_column)
             } else {

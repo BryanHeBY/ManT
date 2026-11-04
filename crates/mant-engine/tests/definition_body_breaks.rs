@@ -390,6 +390,92 @@ fn pending_head_boundaries_account_for_the_visible_successor() {
 }
 
 #[test]
+fn synopsis_pre_delivers_head_and_invisible_rows_before_the_owner_drains() {
+    // Both complete inputs reran pinned ASCII/UTF-8/HTML/tree/lint before
+    // these assertions. mdoc_term.c::synopsis_pre calls term_vspace after
+    // Ft/Vt; term.c:475-497 closes the occupied invisible row separately
+    // from its explicit vertical row. An IR drain executes neither event.
+    for (date, declarations, expected) in [
+        (
+            "September 12, 2026",
+            ".Ft \\&\n.Ft \\&\n.sp 0\n",
+            vec!["x", "", "", "        BODY"],
+        ),
+        (
+            "September 13, 2026",
+            ".Vt \\&\n.In stdio.h\n",
+            vec!["x", "", "        #include <stdio.h> BODY"],
+        ),
+    ] {
+        let source = format!(
+            ".Dd {date}\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It x\n{declarations}.No BODY\n.El\n"
+        );
+        let query = load_roff_bytes(source.as_bytes()).unwrap();
+        let text = render_query_text(&query);
+        let rows = text
+            .split_once("SYNOPSIS\n")
+            .unwrap()
+            .1
+            .trim_end_matches('\n')
+            .lines()
+            .collect::<Vec<_>>();
+        assert_eq!(rows, expected, "{source}\n{text}");
+        assert_eq!(mant_ir::inline_plain_text(&item(&query).terms[0]), "x");
+        assert_eq!(
+            item(&query).head_body_relation,
+            mant_ir::HeadBodyRelation::Separate
+        );
+    }
+}
+
+#[test]
+fn invisible_synopsis_words_keep_each_real_row_across_owner_drains() {
+    // All ten complete sources ran pinned ASCII/UTF-8/HTML/tree/lint first.
+    // The parser joins two quoted empty operands into one TEXT(" ");
+    // term_word buffers that blank, while a lone empty/font word writes
+    // no cell. NBRZW and blank-only buffers both
+    // reach the ordinary term_flushln tail endline (term.c:233-253), while
+    // bare BACKAFTER survives term_newln when lastcol and viscol are zero.
+    for (operand, count, expected) in [
+        ("\\&", 2, vec!["x", "", "", "        BODY"]),
+        ("\\&", 3, vec!["x", "", "", "", "", "        BODY"]),
+        ("\\&", 4, vec!["x", "", "", "", "", "", "", "        BODY"]),
+        ("\"\"", 2, vec!["x", "", "        BODY"]),
+        ("\"\"", 3, vec!["x", "", "", "        BODY"]),
+        ("\"\" \"\"", 2, vec!["x", "", "", "        BODY"]),
+        ("\"\" \"\"", 3, vec!["x", "", "", "", "", "        BODY"]),
+        ("\\fB", 3, vec!["x", "", "", "        BODY"]),
+        ("\\z", 3, vec!["x", "", "", "        ODY"]),
+        (
+            "\\zX",
+            3,
+            vec![
+                "x       X",
+                "",
+                "        X",
+                "",
+                "        X",
+                "        BODY",
+            ],
+        ),
+    ] {
+        let declarations = format!(".Ft {operand}\n").repeat(count);
+        let source = format!(
+            ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It x\n{declarations}.sp 0\n.No BODY\n.El\n"
+        );
+        let text = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
+        let rows = text
+            .split_once("SYNOPSIS\n")
+            .unwrap()
+            .1
+            .trim_end_matches('\n')
+            .lines()
+            .collect::<Vec<_>>();
+        assert_eq!(rows, expected, "{source}\n{text}");
+    }
+}
+
+#[test]
 fn pending_body_scan_observes_author_mode_executed_by_the_term() {
     // The fixed CVS renderer executes the It head before the body; -split in
     // the head therefore makes the body An close the pending tag row.

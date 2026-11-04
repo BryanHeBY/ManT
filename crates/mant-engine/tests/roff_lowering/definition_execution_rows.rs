@@ -362,6 +362,57 @@ fn field_marker_is_consumed_before_the_next_operands_internal_spaces() {
     }
 }
 
+const SHARED_EMPTY_HEAD_OWNERS: [(&str, &str, &str, &str); 8] = [
+    (
+        ".No \"\"\n.No alpha\n",
+        " alpha",
+        " BodyWord",
+        " alpha BodyWord",
+    ),
+    (
+        ".No alpha\n.No \"\"\n",
+        "alpha",
+        "  BodyWord",
+        "alpha  BodyWord",
+    ),
+    (
+        ".Em \"\"\n.No alpha\n",
+        " alpha",
+        " BodyWord",
+        " alpha BodyWord",
+    ),
+    (
+        ".No alpha\n.Em \"\"\n",
+        "alpha",
+        "  BodyWord",
+        "alpha  BodyWord",
+    ),
+    (
+        ".No \\fB\n.No alpha\n",
+        " alpha",
+        " BodyWord",
+        " alpha BodyWord",
+    ),
+    (
+        ".No alpha\n.No \\fB\n",
+        "alpha",
+        "  BodyWord",
+        "alpha  BodyWord",
+    ),
+    (
+        ".No \\&\n.No alpha\n",
+        " alpha",
+        " BodyWord",
+        " alpha BodyWord",
+    ),
+    (
+        ".No alpha\n.No \\&\n",
+        "alpha",
+        "  BodyWord",
+        "alpha  BodyWord",
+    ),
+];
+
 #[test]
 fn empty_head_operands_do_not_predict_a_native_line_end() {
     // All complete inputs were run with pristine CVS -Tascii/-Tutf8/tree
@@ -370,6 +421,9 @@ fn empty_head_operands_do_not_predict_a_native_line_end() {
     // (mdoc_term.c:354-378). The source-empty cases intentionally produce
     // CVS's blank-line-in-fill-mode lint warning. A real buffered \p still
     // meets the empty word's automatic separator in term_fill():287-306.
+    // Fresh five-profile source gold also distinguishes the leading word
+    // separator (native column six, not five) from a trailing empty word's
+    // separator and the BODY's separately generated escaped-space word.
     let cases = [
         (".No \"\"\n.No alpha\n", vec!["alpha BodyWord"]),
         (".No alpha\n.No \"\"\n", vec!["alpha BodyWord"]),
@@ -396,6 +450,10 @@ fn empty_head_operands_do_not_predict_a_native_line_end() {
             .collect();
         assert_eq!(rows, expected, "{body}");
         if !head.contains("\\p") && !head.contains("\n\n") && !head.starts_with('\n') {
+            let (_, expected_head, expected_body, expected_readback) = SHARED_EMPTY_HEAD_OWNERS
+                .iter()
+                .find(|(source, ..)| *source == head)
+                .unwrap();
             let query = mant_loader::load_roff_bytes(source(&body).as_bytes()).unwrap();
             let document = query.document.as_ref().unwrap();
             let mant_ir::Block::DefinitionList { items, .. } = &document.sections[1].blocks[0]
@@ -405,10 +463,32 @@ fn empty_head_operands_do_not_predict_a_native_line_end() {
             assert_eq!(
                 (items[0].head_body_relation, items[0].layout.body_alignment),
                 (
-                    mant_ir::HeadBodyRelation::separated(),
-                    mant_ir::DefinitionBodyAlignment::Indented
+                    mant_ir::HeadBodyRelation::joined(),
+                    mant_ir::DefinitionBodyAlignment::AfterTerm
                 )
             );
+            assert_eq!(
+                mant_ir::inline_plain_text(&items[0].terms[0]),
+                *expected_head
+            );
+            // termp_it_pre() actually writes the inset BODY's escaped
+            // word before selecting NOSPACE again. Its existing reading SP
+            // is owned by BODY, so the outer relation must not add another.
+            let [mant_ir::Block::Paragraph { children, .. }] = &items[0].description[..] else {
+                panic!("complete BODY owner: {items:?}");
+            };
+            assert_eq!(mant_ir::inline_plain_text(children), *expected_body);
+            let markdown = mant_codec::encode::render_markdown(&query);
+            let read = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            let mant_ir::Block::List { items, .. } =
+                &read.document.as_ref().unwrap().sections[1].blocks[0]
+            else {
+                panic!("actual Markdown definition item: {markdown}");
+            };
+            let [mant_ir::Block::Paragraph { children, .. }] = &items[0].blocks[..] else {
+                panic!("complete readback owner: {markdown}");
+            };
+            assert_eq!(mant_ir::inline_plain_text(children), *expected_readback);
         }
     }
 }

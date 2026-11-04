@@ -82,6 +82,29 @@ pub(in crate::mandoc) use row_origins::{
 pub(in crate::mandoc::inline::flow) mod split;
 
 impl InlineBuilder {
+    /// Apply one projection's original-root boundary receipts to live scopes
+    /// and native owner indices. Each address is looked up once.
+    pub(in crate::mandoc::inline::flow) fn remap_output_projection(
+        &mut self,
+        edits: &row_origins::OutputNodeEdits,
+    ) {
+        self.remap_output_projection_checkpoints(edits);
+        self.execution.remap_output_projection(edits);
+    }
+
+    pub(in crate::mandoc::inline::flow) fn remap_output_projection_checkpoints(
+        &mut self,
+        edits: &row_origins::OutputNodeEdits,
+    ) {
+        if let Some(registry) = &self.output_positions {
+            for position in registry.borrow().iter().filter_map(std::rc::Weak::upgrade) {
+                let mut index = position.get();
+                edits.remap(&mut index);
+                position.set(index);
+            }
+        }
+    }
+
     /// Rehome an already represented HEAD row without moving the remaining
     /// native unit's output cursors away from their source owners.
     pub(in crate::mandoc) fn consume_invisible_head_row(&mut self) -> bool {
@@ -276,17 +299,26 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(in crate::mandoc) fn hard_break(&mut self) {
+        self.hard_break_with_origin(CompletedRowOrigin::Layout);
+    }
+
+    pub(in crate::mandoc::inline::flow) fn hard_break_with_origin(
+        &mut self,
+        origin: CompletedRowOrigin,
+    ) {
         // term_newln() selects NOSPACE before even testing lastcol/viscol
         // (term.c:475-481). An empty word may have cleared it without
         // buffering a cell, so a no-output return still owns this update.
         self.execution.boundary = PendingBoundary::Tight;
-        if let Some(native) = self.native_field_device(false) {
+        if let Some(mut native) = self.native_field_device(false) {
             // term_newln consumes the actual old field before clearing its
             // cells. Preserve accepted row ownership even when that owner
             // is a HEAD already drained into a different IR container.
             self.project_captured_definition_field(&native);
-            self.project_consumed_row_layout(&native);
-            self.hard_break_using_field(Some(&native), true, CompletedRowOrigin::Layout);
+            for edits in self.project_consumed_row_layout(&native) {
+                native.remap_output_projection(&edits);
+            }
+            self.hard_break_using_field(Some(&native), true, origin);
             // This standalone term_newln() has no later field-retirement
             // caller. Its row reset already consumed the live buffer, so
             // deliver the captured text receipt without re-running the tail
@@ -302,7 +334,7 @@ impl InlineBuilder {
                 receiver.accept_tabs(tabs);
             }
         } else {
-            self.hard_break_using_field(None, false, CompletedRowOrigin::Layout);
+            self.hard_break_using_field(None, false, origin);
         }
         self.execution.boundary = PendingBoundary::Tight;
     }
@@ -354,25 +386,9 @@ impl InlineBuilder {
                 });
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
-        let plain_flush_rejection = if projected {
-            self.execution
-                .definition
-                .as_ref()
-                .is_some_and(|state| state.hang_row.field_discarded)
-        } else if self.in_definition_field() {
-            // term_newln() flushes the same tcol->buf after a TAG request
-            // cleared NOBREAK. A definition session still owns that input;
-            // consume its receipt before the row reset retires the cells.
-            self.discard_unprinted_definition_field_output()
-        } else {
-            self.retire_plain_flush_unit()
-        };
-        if !self.execution.has_printable_content
-            && self.execution.leading_line_boundary == super::LeadingLineBoundary::None
-        {
-            self.execution.leading_line_boundary =
-                super::LeadingLineBoundary::AtVisibleCheckpoint(self.execution.visible_glyph_epoch);
-        }
+        let plain_flush = self.consume_hard_break_buffer(projected);
+        let plain_flush_rejection = plain_flush.rejected();
+        self.observe_hard_break_boundary(plain_flush);
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
         // a bare armed `\z` did not and remains ordered before the next word.
@@ -409,6 +425,7 @@ impl InlineBuilder {
             // the paragraph owner drains (term.c:143-146,250-253).
             self.record_completed_rows(1, origin);
         } else if unprinted_field_tail
+            || plain_flush.closes_unprinted_row()
             || !self.in_definition_field()
                 && self.execution.completed_vertical_rows > 0
                 && self.execution.formatter_column == FormatterColumn::Advanced
@@ -450,6 +467,44 @@ impl InlineBuilder {
             retiring_rejection,
         );
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
+    }
+
+    fn consume_hard_break_buffer(
+        &mut self,
+        projected: bool,
+    ) -> super::definition::PlainFlushOutcome {
+        use super::definition::PlainFlushOutcome;
+        let rejected = if projected {
+            self.execution
+                .definition
+                .as_ref()
+                .is_some_and(|state| state.hang_row.field_discarded)
+        } else if self.in_definition_field() {
+            // term_newln() flushes the same tcol->buf after a TAG request
+            // cleared NOBREAK. A definition session still owns that input;
+            // consume its receipt before the row reset retires the cells.
+            self.discard_unprinted_definition_field_output()
+        } else {
+            return self.retire_plain_flush_unit_with_tail();
+        };
+        if rejected {
+            PlainFlushOutcome::Rejected
+        } else {
+            PlainFlushOutcome::Ordinary
+        }
+    }
+
+    fn observe_hard_break_boundary(&mut self, plain_flush: super::definition::PlainFlushOutcome) {
+        if (!self.execution.has_printable_content || plain_flush.closes_represented_row())
+            && self.execution.leading_line_boundary == super::LeadingLineBoundary::None
+        {
+            // An ordinary blank can set the projection's printable flag,
+            // while its real flush only closes the inherited HEAD row.
+            // Publish that boundary before its vspace successor, so the
+            // existing BODY observer retires HEAD rather than the new gap.
+            self.execution.leading_line_boundary =
+                super::LeadingLineBoundary::AtVisibleCheckpoint(self.execution.visible_glyph_epoch);
+        }
     }
 
     fn finish_hard_break_projection(
@@ -689,5 +744,25 @@ impl InlineBuilder {
         self.execution.trailing_output = TrailingOutput::None;
         self.execution.pending_breakable_spaces = 0;
         self.execution.pending_field_spaces = 0;
+    }
+}
+
+impl super::InlineExecutionState {
+    pub(in crate::mandoc::inline::flow) fn remap_output_projection(
+        &mut self,
+        edits: &row_origins::OutputNodeEdits,
+    ) {
+        edits.remap(&mut self.flush_unit_output_start);
+        if let Some(author) = &mut self.author_execution {
+            edits.remap(&mut author.field_output_start);
+        }
+        if let Some(definition) = &mut self.definition {
+            if let Some(field) = &mut definition.no_break {
+                field.remap_output_projection(edits);
+            }
+            if let Some(index) = &mut definition.hang_row.provisional_trailing_break {
+                edits.remap(index);
+            }
+        }
     }
 }

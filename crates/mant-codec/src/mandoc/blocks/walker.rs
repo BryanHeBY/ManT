@@ -16,9 +16,8 @@ use libmandoc_rs::{
 use super::super::controls::{FormatterBoundary, formatter_control};
 use super::{
     Block, BlockLowerer, DisplayFillMode, NodeSourceContext, StructuralLowerer, TableEmbedding,
-    TableEmbeddingPlan, adjacent_ip_run, append_to_last_inline_block,
-    follows_inline_equation_punctuation, is_inline_equation_quote_artifact,
-    is_native_transparent_sibling, lower_inline_nodes,
+    TableEmbeddingPlan, adjacent_ip_run, follows_inline_equation_punctuation,
+    is_inline_equation_quote_artifact, is_native_transparent_sibling,
     man_nofill::no_fill_boundary,
     mdoc_macros::{reference_author_conjunction, reference_field_post},
     participates_in_inline_flow, restores_macro_indent, source_span, synopsis, targets,
@@ -53,6 +52,7 @@ impl BlockLowerer<'_, '_> {
             // source event is independent of the request's own line effect.
             let source_line_entered = self.enter_no_fill_source_line(node);
             self.prepare_node_execution(node);
+            self.state.enter_synopsis_node(node, synopsis_previous);
             let author_pre = reference_body && reference_author_conjunction(nodes, index);
             if author_pre {
                 self.push_generated_container_event(
@@ -104,6 +104,21 @@ impl BlockLowerer<'_, '_> {
     }
 
     fn finish_node_execution(&mut self, node: &Node) {
+        if node.flags.synopsis_pretty
+            && matches!(
+                node.macro_token.as_ref(),
+                Some(Mdoc(MdocMacro::Fn | MdocMacro::Fo))
+            )
+            && !self.state.formatter.no_fill
+            && !self.column_field
+            && self.display_fill.is_none()
+            && !self.state.formatter.execution.has_formatter_cell()
+            && !self.state.formatter.execution.has_open_native_device_row()
+        {
+            // The real Fn/Fo suffix already flushed. Release its completed
+            // declaration owner without making a second native post.
+            self.state.flush_paragraph();
+        }
         let Some((first_id, origin)) = self.first_body_post else {
             return;
         };
@@ -157,8 +172,7 @@ impl BlockLowerer<'_, '_> {
             }
             return;
         }
-        let single_line_literal =
-            self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
+        let single_line_literal = self.display_fill == Some(DisplayFillMode::SingleLine);
         if self.push_no_fill_lines(node, next, source.line_entered, single_line_literal) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
@@ -187,9 +201,6 @@ impl BlockLowerer<'_, '_> {
         }
         self.state.flush_preformatted();
         if self.push_mdoc_synopsis_declaration(node, synopsis_previous) {
-            return;
-        }
-        if self.append_delimiter_to_prior_owner(node) {
             return;
         }
         if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Br)) {
@@ -235,17 +246,6 @@ impl BlockLowerer<'_, '_> {
                 .finish_structural_output(output_start, accepted_before);
             self.state.attach_pending_to_structural_output(output_start);
         }
-    }
-
-    fn append_delimiter_to_prior_owner(&mut self, node: &Node) -> bool {
-        if !node.flags.delimiter_close
-            || !participates_in_inline_flow(node)
-            || !self.state.paragraph_is_empty()
-        {
-            return false;
-        }
-        let tail = lower_inline_nodes(std::slice::from_ref(node), self.context.default_name);
-        append_to_last_inline_block(&mut self.state.output, &tail)
     }
 
     fn push_node_pre_handlers(
@@ -362,8 +362,7 @@ impl BlockLowerer<'_, '_> {
             // before BODY output. The definition checkpoint records it once.
             self.state.formatter.note_definition_boundary();
         }
-        let single_line_literal =
-            self.display_fill == Some(DisplayFillMode::SingleLine) && self.state.formatter.no_fill;
+        let single_line_literal = self.display_fill == Some(DisplayFillMode::SingleLine);
         match no_fill_boundary(node, single_line_literal) {
             FormatterBoundary::None => {}
             FormatterBoundary::Line => {
@@ -452,7 +451,9 @@ impl BlockLowerer<'_, '_> {
             _ if self.display_fill == Some(DisplayFillMode::NodeFlags) => {
                 self.state.formatter.no_fill = node.flags.no_fill;
             }
-            _ if self.display_fill == Some(DisplayFillMode::SingleLine) => {}
+            _ if self.display_fill == Some(DisplayFillMode::SingleLine) => {
+                self.state.formatter.no_fill = node.flags.no_fill;
+            }
             _ if node.flags.no_fill => self.state.formatter.no_fill = true,
             _ if node.scope_end.is_none() && participates_in_inline_flow(node) => {
                 self.state.formatter.no_fill = false;

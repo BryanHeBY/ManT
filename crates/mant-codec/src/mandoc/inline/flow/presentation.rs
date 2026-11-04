@@ -140,21 +140,6 @@ impl RowPresentation {
 
     /// term_flushln():113-137: padding and capacity use the actual signed
     /// reading-relative device position, including a ti-restored outdent.
-    pub(in crate::mandoc) fn field_placement(
-        self,
-        offset: usize,
-        viscol: usize,
-        minbl: usize,
-        occupied: bool,
-    ) -> FieldPlacement {
-        self.field_placement_signed(
-            i64::try_from(offset).unwrap_or(i64::MAX),
-            viscol,
-            minbl,
-            occupied,
-        )
-    }
-
     pub(in crate::mandoc) fn source_offset_units(self, offset: usize) -> i64 {
         i64::try_from(offset)
             .unwrap_or(i64::MAX)

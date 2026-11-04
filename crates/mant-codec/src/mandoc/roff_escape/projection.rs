@@ -78,6 +78,7 @@ impl PlainTextProjection {
 
     fn append_event(&mut self, event: RoffInlineEvent) {
         match event {
+            RoffInlineEvent::NonBreakingWordBlank => self.append_text(" "),
             RoffInlineEvent::Text(value) => self.append_text(&value),
             RoffInlineEvent::Glyph(value)
             | RoffInlineEvent::Overstrike {

@@ -3,6 +3,52 @@ use super::{BlockState, InlineBuilder};
 use mant_ir::{Block, Inline};
 
 impl BlockState {
+    pub(in crate::mandoc::blocks) fn enter_synopsis_node(
+        &mut self,
+        node: &libmandoc_rs::Node,
+        previous: Option<&libmandoc_rs::Node>,
+    ) {
+        if !crate::mandoc::inline::synopsis::has_pre(node) || previous.is_none() {
+            return;
+        }
+        let enter = |builder: &mut InlineBuilder| {
+            let occupied = builder.has_formatter_cell() || builder.has_open_native_device_row();
+            crate::mandoc::inline::synopsis::enter(builder, node, previous);
+            (occupied || builder.asserted_vertical_row())
+                && !builder.has_formatter_cell()
+                && !builder.has_open_native_device_row()
+        };
+        let visible_before = self.formatter.execution.visible_content_checkpoint();
+        let closed = if self.formatter.no_fill || self.uses_literal_output() {
+            self.literal.with_inline_builder(&mut self.formatter, enter);
+            false
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, enter)
+        };
+        // A real macro pre can close the detached HEAD before any child
+        // becomes visible. Deliver that same BODY observation before an IR
+        // drain resets its leading boundary or subtracts the HEAD row again.
+        self.observe_inline_source_effects(visible_before);
+        let return_type_pair = previous.is_some_and(|previous| {
+            previous.macro_token.as_ref()
+                == Some(&libmandoc_rs::MacroToken::Mdoc(libmandoc_rs::MdocMacro::Ft))
+                && matches!(
+                    node.macro_token.as_ref(),
+                    Some(libmandoc_rs::MacroToken::Mdoc(
+                        libmandoc_rs::MdocMacro::Fn | libmandoc_rs::MdocMacro::Fo
+                    ))
+                )
+        });
+        // Preserve semantic declaration owners after the actual pre
+        // consumes their row. Ft + Fn/Fo is one declaration with an
+        // internal hard row. An empty native pre cannot drain pending
+        // zero-advance state merely to change its IR destination.
+        if closed && !return_type_pair {
+            self.flush_paragraph();
+        }
+    }
+
     pub(in crate::mandoc::blocks) fn temporary_indent(&mut self, node: &libmandoc_rs::Node) {
         self.pre_break_request();
         self.formatter.execution.apply_temporary_indent(
@@ -16,7 +62,7 @@ impl BlockState {
         &mut self,
         alignment: mant_ir::TextAlignment,
     ) {
-        if self.formatter.no_fill || self.column_uses_literal_output() {
+        if self.formatter.no_fill || self.uses_literal_output() {
             self.literal
                 .with_inline_builder(&mut self.formatter, |builder| {
                     builder.set_text_alignment(alignment);
@@ -96,25 +142,13 @@ impl BlockState {
         continues_line: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
-        self.push_source_inline_with(source, starts_indented_line, continues_line, false, append);
-    }
-
-    pub(in crate::mandoc::blocks) fn push_source_inline_with(
-        &mut self,
-        source: Option<mant_ir::SourceSpan>,
-        starts_indented_line: bool,
-        continues_line: bool,
-        ordinary_text: bool,
-        append: impl FnOnce(&mut InlineBuilder),
-    ) {
         let visible_before = self.formatter.execution.visible_content_checkpoint();
-        if self.column_uses_literal_output() {
+        if self.uses_literal_output() {
             self.literal.append_filled_fragment(
                 &mut self.formatter,
                 source,
                 starts_indented_line,
                 continues_line,
-                ordinary_text,
                 append,
             );
         } else {
@@ -123,10 +157,13 @@ impl BlockState {
                 source,
                 starts_indented_line,
                 continues_line,
-                ordinary_text,
                 append,
             );
         }
+        self.observe_inline_source_effects(visible_before);
+    }
+
+    fn observe_inline_source_effects(&mut self, visible_before: (u64, bool)) {
         let visible = self.formatter.definition_before_visible()
             && self
                 .formatter
@@ -295,7 +332,7 @@ impl BlockState {
     /// their `pre_br` still consumes the request node's original source owner.
     pub(in crate::mandoc::blocks) fn pre_break_request_in_source_mode(&mut self, no_fill: bool) {
         self.formatter.note_definition_boundary();
-        if no_fill || self.column_uses_literal_output() {
+        if no_fill || self.uses_literal_output() {
             self.literal
                 .with_inline_builder(&mut self.formatter, |builder| {
                     builder.control_line_break();
@@ -311,7 +348,7 @@ impl BlockState {
     }
 
     pub(in crate::mandoc::blocks) fn no_break_formatter_flush(&mut self) {
-        if self.formatter.no_fill || self.column_uses_literal_output() {
+        if self.formatter.no_fill || self.uses_literal_output() {
             self.literal.no_break_flush(&mut self.formatter);
         } else {
             self.paragraph.no_break_flush(&mut self.formatter);
@@ -320,14 +357,19 @@ impl BlockState {
 
     /// Execute a real BODY post's `term_newln` while its output owner is live.
     pub(in crate::mandoc::blocks) fn finish_native_body_line(&mut self) {
-        if self.formatter.no_fill || self.column_uses_literal_output() {
-            self.literal.with_inline_builder(
-                &mut self.formatter,
-                InlineBuilder::execute_native_literal_newline,
-            );
+        // A one-line display uses a literal destination without setting
+        // NODE_NOFILL. Its rejected row is resolved layout, not authored text.
+        let finish: fn(&mut InlineBuilder) = if self.formatter.no_fill {
+            InlineBuilder::execute_native_literal_newline
+        } else {
+            InlineBuilder::execute_native_newline
+        };
+        if self.formatter.no_fill || self.uses_literal_output() {
+            self.literal
+                .with_inline_builder(&mut self.formatter, finish);
         } else {
             self.paragraph
-                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
+                .with_inline_builder(&mut self.formatter, finish);
         }
         // fi can leave historical no-fill bookkeeping while the live native
         // buffer already belongs to ParagraphFlow. The real post selected

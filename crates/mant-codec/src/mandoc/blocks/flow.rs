@@ -34,6 +34,8 @@ pub(super) struct BlockState {
     // an empty vector or a device row which has just ended. Neither fact is
     // permission to run the same native buffer against a different Vec.
     column_display_owner: bool,
+    /// D1/Dl present one literal owner without changing source fill mode.
+    pub(in crate::mandoc::blocks) single_line_display_owner: bool,
     // Only the latest accepted output tail can hand a closed graph boundary
     // to its cell. Transparent structures relocate this owner position;
     // later accepted graph reopens the tail.
@@ -55,7 +57,7 @@ pub(super) struct LinkOutputCursor {
 impl BlockState {
     pub(super) fn link_output_cursor(&mut self, node_id: u32) -> LinkOutputCursor {
         let marker = super::man_links::link_cursor_marker(node_id);
-        if self.formatter.no_fill || self.column_uses_literal_output() {
+        if self.formatter.no_fill || self.uses_literal_output() {
             self.literal.insert_link_cursor(marker);
         } else {
             self.paragraph.insert_link_cursor(marker);
@@ -171,6 +173,7 @@ impl BlockState {
             paragraph: ParagraphFlow::new(),
             literal: LiteralFlow::new(),
             column_display_owner: false,
+            single_line_display_owner: false,
             closed_output_tail: None,
             pending_targets: targets::PendingTargets::new(),
             pending_spacing: None,
@@ -233,13 +236,13 @@ impl BlockState {
                 self.formatter.settle_definition_head_rows();
             }
         }
-        self.paragraph.append_run_in_cells(
+        let boundary = self.paragraph.append_run_in_cells(
             &mut self.formatter,
             generated_cells,
             native_generated_cells,
             generated_word,
         );
-        self.formatter.note_definition_run_in_executed();
+        self.formatter.note_definition_run_in_executed(boundary);
     }
 }
 

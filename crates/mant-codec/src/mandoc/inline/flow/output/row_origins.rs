@@ -2,6 +2,12 @@
 
 use std::collections::BTreeMap;
 
+mod padding;
+mod positions;
+use padding::{ProjectedNode, project_annotation};
+pub(in crate::mandoc::inline::flow) use positions::OutputNodeEdits;
+use positions::RootProjection;
+
 #[cfg(test)]
 use super::INTERNAL_FIELD_WORD;
 use super::{INTERNAL_FIELD_PREFIX, INTERNAL_ROW_ORIGIN, Inline};
@@ -14,9 +20,9 @@ pub(in crate::mandoc::inline::flow) fn project_row_presentations(
     nodes: &mut Vec<Inline>,
     receipts: &[(String, usize, mant_ir::RowLayoutHint)],
     output_start: usize,
-) {
+) -> OutputNodeEdits {
     if receipts.is_empty() {
-        return;
+        return OutputNodeEdits::default();
     }
     let mut positions = BTreeMap::<String, Vec<(usize, NativePosition, bool)>>::new();
     for (owner, scalar, hint) in receipts {
@@ -40,8 +46,9 @@ pub(in crate::mandoc::inline::flow) fn project_row_presentations(
         next: 0,
         previous: BTreeMap::new(),
     };
-    let pending = nodes.split_off(output_start.min(nodes.len()));
-    nodes.extend(cursor.project(pending));
+    let start = output_start.min(nodes.len());
+    let pending = nodes.split_off(start);
+    cursor.project_roots(pending, start).finish(nodes, None)
 }
 
 /// A mutation of the active top-level output vector. Native cell/scalar
@@ -189,7 +196,7 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions(
     padding: &[(String, usize, usize, bool)],
     output_start: usize,
     materialize_line_origins: bool,
-) -> Option<OutputNodeEdit> {
+) -> OutputNodeEdits {
     project_native_positions_with_tabs(
         nodes,
         origins,
@@ -207,9 +214,9 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions_with_tabs(
     tabs: &[super::tab_projection::TabExpansion],
     output_start: usize,
     materialize_line_origins: bool,
-) -> Option<OutputNodeEdit> {
+) -> OutputNodeEdits {
     if origins.is_empty() && padding.is_empty() && tabs.is_empty() {
-        return None;
+        return OutputNodeEdits::default();
     }
     let mut positions = BTreeMap::<String, Vec<(usize, NativePosition, bool)>>::new();
     for (owner, scalar, origin, hidden_graph) in origins {
@@ -251,12 +258,13 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions_with_tabs(
     // Earlier fields are already committed. The captured current-owner
     // start predates its retirement; only that suffix is projected, using
     // stable words/scalars rather than indices for the receipt positions.
-    let pending = nodes.split_off(output_start.min(nodes.len()));
-    let mut projected = cursor.project(pending);
+    let start = output_start.min(nodes.len());
+    let pending = nodes.split_off(start);
+    let mut projected = cursor.project_roots(pending, start);
     let mut edit = None;
     if materialize_line_origins {
         let mut origin = None;
-        materialize_origins(&mut projected, &mut origin);
+        projected.materialize_origins(&mut origin);
         if let Some(origin) = origin {
             let (applied, insertion) = apply_tail_origin(nodes, origin);
             edit = insertion;
@@ -265,12 +273,11 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions_with_tabs(
                 // restored native offset without a prior row delimiter.
                 // Its accepted print owns this positioning; an empty
                 // earlier owner cannot represent it through LineBreak.
-                projected.insert(0, Inline::anchor(format!("{CURRENT_ROW}{origin}")));
+                projected.prepend(Inline::anchor(format!("{CURRENT_ROW}{origin}")));
             }
         }
     }
-    nodes.extend(projected);
-    edit
+    projected.finish(nodes, edit)
 }
 
 fn apply_tail_origin(
@@ -343,80 +350,103 @@ struct OriginCursor<'a> {
 }
 
 impl OriginCursor<'_> {
-    fn project(&mut self, nodes: Vec<Inline>) -> Vec<Inline> {
-        let mut output = Vec::with_capacity(nodes.len());
-        for mut node in nodes {
-            if let Inline::Anchor { id, .. } = &node
-                && id.as_str().starts_with(INTERNAL_FIELD_PREFIX)
-            {
-                // Position the actually written field prefix at its accepted
-                // word's origin. Do not advance the content owner's scalar
-                // cursor: these cells are device padding, not input glyphs.
-                if let Some(positions) = self.positions.get(id.as_str()) {
-                    for (scalar, position, _) in positions {
-                        if *scalar == 0
-                            && let NativePosition::RowOrigin(origin) = position
-                        {
-                            output.push(Inline::anchor(format!("{INTERNAL_ROW_ORIGIN}{origin}")));
-                        }
-                    }
-                }
-                output.push(node);
-                continue;
-            }
-            if let Some(marker) = super::native_passes::native_word_marker(&node) {
-                // encode1() can write an accepted graph that the next word
-                // overstrikes before it acquires an IR scalar (term.c:901-
-                // 927). Its term_field() padding nevertheless printed. The
-                // receipt owns that positioning even for an empty projected
-                // owner; discharge it before advancing to the replacement.
-                if self.has_unprojected_graph_here() {
-                    self.emit_here(&mut output);
-                }
-                if let Some(owner) = self.owner.take() {
-                    #[cfg(test)]
-                    OWNER_HISTORY_STORES.with(|stores| stores.set(stores.get().saturating_add(1)));
-                    self.previous.insert(owner, (self.scalar, self.next));
-                }
-                // Positions are complete and immutable for this receipt.
-                // An unselected word can never need a cursor on re-entry;
-                // preserve its IR without rebuilding glyph strings.
-                self.owner = self
-                    .positions
-                    .contains_key(marker)
-                    .then(|| marker.to_owned());
-                (self.scalar, self.next) = self
-                    .owner
-                    .as_ref()
-                    .and_then(|owner| self.previous.get(owner))
-                    .copied()
-                    .unwrap_or_default();
-                output.push(node);
-                continue;
-            }
-            match &mut node {
-                Inline::Text { value } | Inline::Code { value }
-                    if !value.is_empty() && self.owner.is_some() =>
-                {
-                    self.project_text(&node, &mut output);
-                    continue;
-                }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => {
-                    *children = self.project(std::mem::take(children));
-                }
-                _ => {}
-            }
-            output.push(node);
+    fn project_roots(&mut self, nodes: Vec<Inline>, start: usize) -> RootProjection {
+        let mut projected = RootProjection::new(start, nodes.len());
+        let mut pieces = Vec::new();
+        for (index, node) in nodes.into_iter().enumerate() {
+            #[cfg(test)]
+            ROOT_BOUNDARIES_PROJECTED.with(|work| work.set(work.get().saturating_add(1)));
+            self.project_node(node, &mut pieces);
+            projected.append(&mut pieces, Some(index));
         }
-        // A final accepted native graph can be waiting in BACKAFTER at the
-        // end of this IR owner. No following marker or Text exists yet to
-        // discharge its layout receipt before the glyph settles.
+        if self.has_unprojected_graph_here() {
+            self.emit_here(&mut pieces);
+            projected.append(&mut pieces, None);
+        }
+        projected
+    }
+
+    fn project(&mut self, nodes: Vec<Inline>) -> Vec<ProjectedNode> {
+        let mut output = Vec::with_capacity(nodes.len());
+        for node in nodes {
+            self.project_node(node, &mut output);
+        }
+        // An accepted graph can still be waiting in BACKAFTER without an IR
+        // scalar. Discharge that receipt only after this complete child list.
         if self.has_unprojected_graph_here() {
             self.emit_here(&mut output);
         }
         output
+    }
+
+    fn project_node(&mut self, mut node: Inline, output: &mut Vec<ProjectedNode>) {
+        if let Inline::Anchor { id, .. } = &node
+            && id.as_str().starts_with(INTERNAL_FIELD_PREFIX)
+        {
+            // Position the actually written field prefix at its accepted
+            // word's origin. Do not advance the content owner's scalar
+            // cursor: these cells are device padding, not input glyphs.
+            if let Some(positions) = self.positions.get(id.as_str()) {
+                for (scalar, position, _) in positions {
+                    if *scalar == 0
+                        && let NativePosition::RowOrigin(origin) = position
+                    {
+                        output.push(ProjectedNode::Position(Inline::anchor(format!(
+                            "{INTERNAL_ROW_ORIGIN}{origin}"
+                        ))));
+                    }
+                }
+            }
+            output.push(ProjectedNode::content(node));
+            return;
+        }
+        if let Some(marker) = super::native_passes::native_word_marker(&node) {
+            // encode1() can write an accepted graph that the next word
+            // overstrikes before it acquires an IR scalar (term.c:901-
+            // 927). Its term_field() padding nevertheless printed. The
+            // receipt owns that positioning even for an empty projected
+            // owner; discharge it before advancing to the replacement.
+            if self.has_unprojected_graph_here() {
+                self.emit_here(output);
+            }
+            if let Some(owner) = self.owner.take() {
+                #[cfg(test)]
+                OWNER_HISTORY_STORES.with(|stores| stores.set(stores.get().saturating_add(1)));
+                self.previous.insert(owner, (self.scalar, self.next));
+            }
+            // Positions are complete and immutable for this receipt.
+            // An unselected word can never need a cursor on re-entry;
+            // preserve its IR without rebuilding glyph strings.
+            self.owner = self
+                .positions
+                .contains_key(marker)
+                .then(|| marker.to_owned());
+            (self.scalar, self.next) = self
+                .owner
+                .as_ref()
+                .and_then(|owner| self.previous.get(owner))
+                .copied()
+                .unwrap_or_default();
+            output.push(ProjectedNode::content(node));
+            return;
+        }
+        match &mut node {
+            Inline::Text { value } | Inline::Code { value }
+                if !value.is_empty() && self.owner.is_some() =>
+            {
+                self.project_text(&node, output);
+                return;
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => {
+                let projected = self.project(std::mem::take(children));
+                project_annotation(node, projected, output);
+                return;
+            }
+            _ => {}
+        }
+        output.push(ProjectedNode::content(node));
     }
 
     fn has_unprojected_graph_here(&self) -> bool {
@@ -431,7 +461,7 @@ impl OriginCursor<'_> {
             })
     }
 
-    fn emit_here(&mut self, output: &mut Vec<Inline>) {
+    fn emit_here(&mut self, output: &mut Vec<ProjectedNode>) {
         let Some(positions) = self
             .owner
             .as_ref()
@@ -444,29 +474,27 @@ impl OriginCursor<'_> {
                 break;
             }
             output.push(match position {
-                NativePosition::RowOrigin(origin) => {
-                    Inline::anchor(format!("{INTERNAL_ROW_ORIGIN}{origin}"))
-                }
-                NativePosition::FieldPadding(cells) => Inline::Text {
-                    value: " ".repeat(*cells),
-                },
+                NativePosition::RowOrigin(origin) => ProjectedNode::Position(Inline::anchor(
+                    format!("{INTERNAL_ROW_ORIGIN}{origin}"),
+                )),
+                NativePosition::FieldPadding(cells) => ProjectedNode::FieldPadding(*cells),
                 NativePosition::Presentation(hint) => {
                     let alignment = match hint.alignment {
                         mant_ir::TextAlignment::Left => 0,
                         mant_ir::TextAlignment::Center => 1,
                         mant_ir::TextAlignment::Right => 2,
                     };
-                    Inline::anchor(format!(
+                    ProjectedNode::Position(Inline::anchor(format!(
                         "{PRESENTATION}{alignment}:{}:{}",
                         hint.first_line_indent_columns, hint.indent_columns
-                    ))
+                    )))
                 }
             });
             self.next += 1;
         }
     }
 
-    fn project_text(&mut self, node: &Inline, output: &mut Vec<Inline>) {
+    fn project_text(&mut self, node: &Inline, output: &mut Vec<ProjectedNode>) {
         let (Inline::Text { value } | Inline::Code { value }) = node else {
             unreachable!("only word glyph projections advance the scalar cursor");
         };
@@ -507,16 +535,16 @@ impl OriginCursor<'_> {
     }
 }
 
-fn append_piece(node: &Inline, piece: &mut String, output: &mut Vec<Inline>) {
+fn append_piece(node: &Inline, piece: &mut String, output: &mut Vec<ProjectedNode>) {
     if piece.is_empty() {
         return;
     }
     let value = std::mem::take(piece);
-    output.push(match node {
+    output.push(ProjectedNode::content(match node {
         Inline::Text { .. } => Inline::Text { value },
         Inline::Code { .. } => Inline::Code { value },
         _ => unreachable!("only Text and Code have scalar pieces"),
-    });
+    }));
 }
 
 #[cfg(test)]
@@ -524,6 +552,8 @@ std::thread_local! {
     static OWNER_HISTORY_STORES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static OWNER_TEXT_REBUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static OWNER_CHARS_PROJECTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static ANNOTATION_NODES_PROJECTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static ROOT_BOUNDARIES_PROJECTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]

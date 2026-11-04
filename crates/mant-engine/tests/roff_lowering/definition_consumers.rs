@@ -86,19 +86,37 @@ fn effective_body_start_keeps_hard_rows_paragraphs_and_empty_node_controls() {
     for case in cases.iter().filter(|case| case.category == "body-boundary") {
         count += 1;
         assert_ast_owners(case);
-        let body_prefix = native_body_prefix(case, &cases);
+        let (generated_prefix, word_prefix) = native_body_prefix(case, &cases);
+        let body_prefix = generated_prefix + word_prefix;
         let mut expected = expected_rows(case, true);
         let body_row = expected
             .iter_mut()
             .find(|row| row.contains("BODY"))
             .unwrap();
         let body_start = body_row.find("BODY").unwrap();
-        body_row.insert_str(body_start, &" ".repeat(body_prefix));
+        // expected_rows already projects this source's actual generated
+        // inset escaped word as the one HEAD/BODY reading separator. Only
+        // the distinct empty/control operand contributes another word cell.
+        // Do not count that same generated scalar a second time here.
+        let represented = usize::from(generated_prefix > 0);
+        if represented > 0 {
+            assert_eq!(generated_prefix, 1, "{}: inset generated word", case.id);
+            assert_eq!(*body_row, format!("{} BODY", case.head));
+        }
+        body_row.insert_str(body_start, &" ".repeat(body_prefix - represented));
         let original = mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap();
         let decoded = round_trip(&original);
         for content in [&original, &decoded] {
             assert_native_rows(case, content);
             assert_owner_ranges(case, content);
+            if generated_prefix > 0 {
+                let item = definition(content);
+                assert_eq!(item.head_body_relation, HeadBodyRelation::joined());
+                assert_eq!(
+                    item.layout.body_alignment,
+                    mant_ir::DefinitionBodyAlignment::AfterTerm
+                );
+            }
             let body = definition(content)
                 .description
                 .iter()
@@ -128,7 +146,7 @@ fn effective_body_start_keeps_hard_rows_paragraphs_and_empty_node_controls() {
     assert_eq!(count, 112);
 }
 
-fn native_body_prefix(case: &Case, cases: &[Case]) -> usize {
+fn native_body_prefix(case: &Case, cases: &[Case]) -> (usize, usize) {
     // These 112 exact sources reran all five pristine profiles before this
     // assertion. term.c::term_word writes a separator before interpreting an
     // empty/control-only word. Compare its real BODY column against the exact
@@ -173,7 +191,7 @@ fn native_body_prefix(case: &Case, cases: &[Case]) -> usize {
         .chars()
         .filter(|character| *character == '\u{a0}')
         .count();
-    fixed + extra
+    (fixed, extra)
 }
 
 fn round_trip(content: &ResolvedContent) -> ResolvedContent {

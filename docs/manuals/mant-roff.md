@@ -60,6 +60,21 @@ may display `NEXTSECTION` for `Sx NEXT SECTION`, and a preceding bare `\z` may
 remove the first displayed glyph, without changing the typed destination.
 Display text is never reverse-mapped into navigation identity.
 
+Filled source lines and macro operands share the same spacing registers.
+For example, `Sm off` joins ordinary `FIRST` and `SECOND` source words as
+`FIRSTSECOND`; an already released separator before switching spacing off
+still precedes the first word. Authored blanks, explicit `Ns` joins and `\c`
+continuations retain their separate execution rules.
+
+Synopsis declarations execute their native pre, children and post in ordinary
+flow, extended definition heads and transparent scopes alike. Entering `Nm`
+preserves the existing input buffer until its real HEAD pre consumes it.
+`Fn` and `Fo` use their temporary name field before arguments and flush their
+generated suffix at the actual native boundary. One-line `D1`/`Dl` displays
+have literal presentation without changing source fill mode: their post ends
+the current row, then following closing punctuation executes with the next
+word rather than being appended to the completed display.
+
 ## man Language
 
 The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:
@@ -125,6 +140,13 @@ Inside a definition field, `\p` remains an ordered native buffer cell until
 is not decoded again against the next TEXT's internal spaces. This keeps the
 same line result when validation represents several words in one TEXT or as
 separate operands, including diagnostic BODY text and suppressed separators.
+
+Generated inset/diagnostic gaps keep the native nonbreaking cells for
+execution, including overstrikes and field acceptance. Their surviving reading
+projection uses ordinary spaces or resolved definition layout, as before;
+it does not turn generated padding into authored nonbreaking text. Explicit
+source nonbreaking spaces remain distinct. The accepted generated word and
+the following word's actual spacing state determine their shared word seam.
 
 An empty macro parameter is not automatically a physical blank line: ManT follows mandoc's macro-set-specific word behavior, preserving zero-width row glyphs such as `\&` separately from pure font state. A groff `\z` operand is an overstrike glyph with no advance: ManT consumes its complete control spelling and retains a final literal glyph when no later glyph can cover it. Executed `fi`/`nf` inside `SY` or a display switch the actual content mode; a filled run resumes ordinary source-word and indented-line handling. Explicit argument and enclosure wrapper boundaries remain observable even when their child text shares one macro call-site line number.
 

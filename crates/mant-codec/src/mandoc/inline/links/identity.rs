@@ -50,6 +50,12 @@ pub(in crate::mandoc::inline) fn link_identity_text(source: &str) -> String {
                     identity.push('-');
                 }
             }
+            RoffInlineEvent::NonBreakingWordBlank => {
+                if !skip_next_glyph {
+                    identity.push(' ');
+                }
+                skip_next_glyph = false;
+            }
             RoffInlineEvent::FallbackGlyph(_) => {
                 // Unknown and out-of-range glyphs have no HTML codepoint.
                 // They remain readable in terminal prose but are omitted by

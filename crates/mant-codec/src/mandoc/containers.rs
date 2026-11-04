@@ -45,6 +45,9 @@ pub(super) enum Event<'a> {
     /// A direct Fa child of a structural Fo body; the sibling relation is
     /// needed for mandoc's generated comma after an argument.
     FunctionArgument(&'a Node, bool),
+    /// Real Fo BODY pre/post, shared with inline Fn field execution.
+    FunctionBodyBegin(bool),
+    FunctionBodyEnd(bool),
 }
 
 /// The native renderer has one node dispatch and one font stack regardless
@@ -299,8 +302,7 @@ fn walk_scope_end<'a>(
         emit(Event::Children(&node.children));
         emit(Event::RestoreBody(end.body_id));
         if let Some(synopsis) = posts.function_suffix(end.body_id) {
-            emit(Event::Tight);
-            emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
+            emit(Event::FunctionBodyEnd(synopsis));
             posts.finish(end.body_id);
         }
         return true;
@@ -360,14 +362,11 @@ fn emit_structural_function<'a>(
                 let synopsis = node.flags.synopsis_pretty || part.flags.synopsis_pretty;
                 posts.register_function(part.id, synopsis);
                 emit(Event::At(part, true));
-                emit(Event::Tight);
-                emit(Event::Glyph("(".to_owned()));
-                emit(Event::Tight);
+                emit(Event::FunctionBodyBegin(synopsis));
                 emit_function_body(&part.children, emit);
                 if !posts.ended(part.id) {
                     emit(Event::RestoreBody(part.id));
-                    emit(Event::Tight);
-                    emit(Event::Glyph(if synopsis { ");" } else { ")" }.to_owned()));
+                    emit(Event::FunctionBodyEnd(synopsis));
                 }
                 emit(Event::EndNode(part));
             }

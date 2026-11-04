@@ -224,6 +224,16 @@ pub(in crate::mandoc) struct NativeFieldDevice {
 }
 
 impl NativeFieldDevice {
+    pub(in crate::mandoc::inline::flow) fn remap_output_projection(
+        &mut self,
+        edits: &super::super::output::row_origins::OutputNodeEdits,
+    ) {
+        edits.remap(&mut self.output_start);
+        if let Some(field) = &mut self.separator_field {
+            field.remap_output_projection(edits);
+        }
+    }
+
     pub(in crate::mandoc::inline::flow) const fn current_output_start(&self) -> usize {
         self.output_start
     }

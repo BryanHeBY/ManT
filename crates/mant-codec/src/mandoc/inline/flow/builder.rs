@@ -16,7 +16,7 @@ impl InlineBuilder {
             nodes: Vec::new(),
             output_positions: None,
             head_operand_capture: None,
-            direct_word_operands: false,
+            direct_word_operands: None,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
             pending_output_scope_prefixes: Vec::new(),
@@ -33,7 +33,7 @@ impl InlineBuilder {
             nodes,
             output_positions: None,
             head_operand_capture: None,
-            direct_word_operands: false,
+            direct_word_operands: None,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
             pending_output_scope_prefixes: Vec::new(),
@@ -50,10 +50,29 @@ impl InlineBuilder {
         &mut self,
         append: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        let previous = std::mem::replace(&mut self.direct_word_operands, true);
+        self.with_word_operand_spaces(crate::mandoc::roff_escape::WordSpace::Breakable, append)
+    }
+
+    pub(in crate::mandoc) fn with_nonbreaking_word_operand<R>(
+        &mut self,
+        append: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.with_word_operand_spaces(crate::mandoc::roff_escape::WordSpace::NonBreaking, append)
+    }
+
+    fn with_word_operand_spaces<R>(
+        &mut self,
+        spaces: crate::mandoc::roff_escape::WordSpace,
+        append: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = self.direct_word_operands.replace(spaces);
         let result = append(self);
         self.direct_word_operands = previous;
         result
+    }
+
+    pub(in crate::mandoc) fn word_operand_spaces(&self) -> crate::mandoc::roff_escape::WordSpace {
+        self.direct_word_operands.unwrap_or_default()
     }
 
     pub(in crate::mandoc) const fn asserted_vertical_row(&self) -> bool {
@@ -74,7 +93,7 @@ impl InlineBuilder {
         if self.execution.observe_no_fill_source_lines == super::SourceLineObservation::Grouped {
             return false;
         }
-        if self.direct_word_operands {
+        if self.direct_word_operands.is_some() {
             return false;
         }
         match self.execution.macro_set {

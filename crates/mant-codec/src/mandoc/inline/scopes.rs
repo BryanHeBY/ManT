@@ -408,6 +408,8 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
             Event::FunctionArgument(argument, comma_after) => {
                 super::generated::function_argument(self.builder, argument, comma_after, self.name);
             }
+            Event::FunctionBodyBegin(pretty) => self.builder.begin_function_body(pretty),
+            Event::FunctionBodyEnd(pretty) => self.builder.finish_function_body(pretty),
             _ => unreachable!("the shared container driver owns source and font events"),
         }
     }

@@ -31,8 +31,8 @@ mod controls;
 mod inline_flow;
 pub(super) use inline_flow::ends_with_line_continuation;
 use inline_flow::{
-    append_to_last_inline_block, follows_inline_equation_punctuation, is_inline_equation,
-    is_inline_equation_quote_artifact, participates_in_inline_flow,
+    follows_inline_equation_punctuation, is_inline_equation, is_inline_equation_quote_artifact,
+    participates_in_inline_flow,
 };
 
 mod sections;

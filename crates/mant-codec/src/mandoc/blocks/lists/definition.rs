@@ -219,7 +219,7 @@ pub(super) fn definition_item(
         flow,
         closed_head_row,
         finished.definition_field_exited,
-        observed,
+        &observed,
         head_source_continues,
         &description,
     );
@@ -426,7 +426,7 @@ fn apply_executed_definition_body_layout(
     flow: DefinitionFlow,
     closed_head_row: bool,
     definition_field_exited: bool,
-    observed: crate::mandoc::formatter::DefinitionBodyObservation,
+    observed: &crate::mandoc::formatter::DefinitionBodyObservation,
     head_source_continues: bool,
     description: &[Block],
 ) {
@@ -454,6 +454,23 @@ fn apply_executed_definition_body_layout(
             mant_ir::DefinitionBodyAlignment::AfterTerm,
         ));
         geometry.gap = 0;
+    }
+    if flow.head.generated_cells().is_some_and(|count| count > 0)
+        && (observed.materialized_run_in_boundary() || observed.joined_run_in_word())
+        && !matches!(
+            geometry.placement,
+            crate::mandoc::layout::TermPlacement::Stacked
+        )
+        && !closed_head_row
+        && !definition_field_exited
+        && !observed.placement_breaks()
+    {
+        // The actual generated BODY word already owns this accepted scalar
+        // seam. Adding a second generic word separator would duplicate it.
+        geometry.relation_override = Some((
+            mant_ir::HeadBodyRelation::joined(),
+            mant_ir::DefinitionBodyAlignment::AfterTerm,
+        ));
     }
     if matches!(description.first(), Some(Block::Preformatted { .. }))
         && !observed
