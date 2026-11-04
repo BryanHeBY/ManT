@@ -1,7 +1,7 @@
 //! Man no-fill words retain executed empty rows, not formatter operands.
 use super::{
-    Node, NodeKind, append_inline_node_with_next, ends_with_line_continuation, first_part_children,
-    participates_in_inline_flow, source_span, targets,
+    Node, NodeKind, ends_with_line_continuation, first_part_children, participates_in_inline_flow,
+    source_span, targets,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
 use libmandoc_rs::{
@@ -63,7 +63,7 @@ impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_no_fill_lines(
         &mut self,
         node: &Node,
-        next: Option<&Node>,
+        mut siblings: crate::mandoc::adjacency::Siblings<'_>,
         source_line_entered: bool,
         single_line_literal: bool,
     ) -> bool {
@@ -84,11 +84,19 @@ impl super::BlockLowerer<'_, '_> {
         // Move a surviving bare BACKAFTER request into the no-fill executor;
         // an occupied cell was already settled by the mode boundary.
         let default_name = self.context.default_name;
+        siblings.previous = None;
         self.state.execute_no_fill_fragment(
             source_span(node),
             ends_with_line_continuation(node),
             false,
-            |builder| append_inline_node_with_next(builder, node, next, default_name),
+            |builder| {
+                crate::mandoc::inline::append_inline_node_with_source(
+                    builder,
+                    node,
+                    siblings,
+                    default_name,
+                );
+            },
         );
         true
     }

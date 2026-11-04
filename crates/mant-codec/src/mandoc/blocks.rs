@@ -14,8 +14,8 @@ use mant_ir::{Block, Inline, Section};
 use super::{
     LoweringContext, first_part_children,
     inline::{
-        FilledBoundary, InlineBuilder, append_inline_node_with_next, is_enclosure_macro,
-        lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text,
+        FilledBoundary, InlineBuilder, is_enclosure_macro, lower_inline_nodes,
+        lower_inline_nodes_with_font_state, plain_text,
     },
     layout::{
         add_leading_spacing, layout, section_spacing, set_block_spacing, update_paragraph_distance,

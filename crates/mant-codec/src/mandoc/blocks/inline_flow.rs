@@ -1,11 +1,24 @@
 //! Filled inline routing and source-boundary recognition, not structural ownership.
-use super::{
-    Node, NodeKind, append_inline_node_with_next, is_enclosure_macro, source_span, visible_text,
-};
+use super::{Node, NodeKind, is_enclosure_macro, source_span, visible_text};
+use crate::mandoc::adjacency::Siblings;
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 impl super::BlockLowerer<'_, '_> {
     pub(super) fn push_inline_node(&mut self, node: &Node, next: Option<&Node>) {
+        self.push_inline_node_with_source(
+            node,
+            Siblings {
+                raw_next: next,
+                next,
+                ..Default::default()
+            },
+        );
+    }
+
+    pub(super) fn push_inline_node_with_source(&mut self, node: &Node, mut siblings: Siblings<'_>) {
+        // The block dispatcher already executed synopsis_pre. Retain both
+        // next relations for macro post without replaying the predecessor.
+        siblings.previous = None;
         // A native post may have consumed a display's field while leaving
         // its physical row open. Reuse that actual owner before another
         // filled word executes, independently of the presentation fill mode.
@@ -15,7 +28,14 @@ impl super::BlockLowerer<'_, '_> {
             source,
             starts_indented_filled_line(node),
             ends_with_line_continuation(node),
-            |builder| append_inline_node_with_next(builder, node, next, self.context.default_name),
+            |builder| {
+                crate::mandoc::inline::append_inline_node_with_source(
+                    builder,
+                    node,
+                    siblings,
+                    self.context.default_name,
+                );
+            },
         );
     }
 }

@@ -1,0 +1,439 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "minimal-fa-z-ft",
+      "section": "SYNOPSIS",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd source adjacency regression\n.Sh SYNOPSIS\n.Fo call\n.Fa \"arg\\z\"\n.Ft int\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "cohort": "minimal",
+      "context": "direct",
+      "rows": [
+        "call(arg",
+        "int);"
+      ],
+      "ascii_rows": [
+        "call(arg",
+        "int);"
+      ],
+      "portable_definition_gap": null,
+      "known_layout_difference": null,
+      "owners": [
+        {
+          "macro": "Fo",
+          "kind": "block",
+          "line": 8,
+          "column": 2,
+          "line_start": true,
+          "no_print": false,
+          "parent": "Sh:body:7:2"
+        },
+        {
+          "macro": "Fo",
+          "kind": "head",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:block:8:2"
+        },
+        {
+          "macro": "Fo",
+          "kind": "body",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:block:8:2"
+        },
+        {
+          "macro": "Fa",
+          "kind": "elem",
+          "line": 9,
+          "column": 2,
+          "line_start": true,
+          "no_print": false,
+          "parent": "Fo:body:8:2"
+        },
+        {
+          "macro": "Ft",
+          "kind": "elem",
+          "line": 10,
+          "column": 2,
+          "line_start": true,
+          "no_print": false,
+          "parent": "Fo:body:8:2"
+        }
+      ],
+      "source_sha256": "dd9ae48e54a1cd41f574cbd941e5a73638bc3a5adebfaf4c6a2ae8a8d3bceaa9",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "2ed2e311b41745cee75e0ec55473c42a754773bc6c93e2aa4316ead60a65d1f7",
+          "diagnostics": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "b057051e1310dada2f71f23cf684ccb3c138c7349f7aed85a66450408c462eaa",
+          "diagnostics": ""
+        },
+        "html": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "0a7c1279842cd958606e740a39f5ed4d2203648983d34e748aa8b5d789f9f7d1",
+          "diagnostics": ""
+        },
+        "tree": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "02f04d7b0aa25184e557aef324b7e32c2c16a9f8ab9662ac2ad579fd2bc3f802",
+          "diagnostics": ""
+        },
+        "lint": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "diagnostics": ""
+        }
+      },
+      "native_indents": [
+        0,
+        4
+      ],
+      "font_runs": [
+        {
+          "row": 0,
+          "start": 0,
+          "text": "call",
+          "bold": true,
+          "italic": false
+        },
+        {
+          "row": 0,
+          "start": 5,
+          "text": "arg",
+          "bold": false,
+          "italic": true
+        },
+        {
+          "row": 1,
+          "start": 0,
+          "text": "int",
+          "bold": false,
+          "italic": true
+        }
+      ],
+      "link": null
+    },
+    {
+      "id": "minimal-pf-fa",
+      "section": "SYNOPSIS",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd source adjacency regression\n.Sh SYNOPSIS\n.Fo call\n.Pf PRE Fa arg\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "cohort": "minimal",
+      "context": "direct",
+      "rows": [
+        "call(PREarg);"
+      ],
+      "ascii_rows": [
+        "call(PREarg);"
+      ],
+      "portable_definition_gap": null,
+      "known_layout_difference": null,
+      "owners": [
+        {
+          "macro": "Fo",
+          "kind": "block",
+          "line": 8,
+          "column": 2,
+          "line_start": true,
+          "no_print": false,
+          "parent": "Sh:body:7:2"
+        },
+        {
+          "macro": "Fo",
+          "kind": "head",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:block:8:2"
+        },
+        {
+          "macro": "Fo",
+          "kind": "body",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:block:8:2"
+        },
+        {
+          "macro": "Pf",
+          "kind": "elem",
+          "line": 9,
+          "column": 2,
+          "line_start": true,
+          "no_print": false,
+          "parent": "Fo:body:8:2"
+        },
+        {
+          "macro": "Fa",
+          "kind": "elem",
+          "line": 9,
+          "column": 9,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:body:8:2"
+        }
+      ],
+      "source_sha256": "ace57f9d4ff47119f93694de1b007d5df1a83d736dc4d0e75e3060b7039cd40e",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "14591c6e5c0c2ac03916c3d1a2277fcc9bf04b7cd712d80998d0237f7cd27ab7",
+          "diagnostics": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "ae8aafde4df972ca463730e44b502dab600f311fa5b9f1c87af2c2cbb66da47e",
+          "diagnostics": ""
+        },
+        "html": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "9055d9771caee487e608f39ba39e42c9b3d368c3e0f268c7347773b148651f33",
+          "diagnostics": ""
+        },
+        "tree": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "fa53d2795ed8e2697a0c996dd18dfc16be8962451bbf90cda7dd90001e0335fe",
+          "diagnostics": ""
+        },
+        "lint": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "diagnostics": ""
+        }
+      },
+      "native_indents": [
+        0
+      ],
+      "font_runs": [
+        {
+          "row": 0,
+          "start": 0,
+          "text": "call",
+          "bold": true,
+          "italic": false
+        },
+        {
+          "row": 0,
+          "start": 8,
+          "text": "arg",
+          "bold": false,
+          "italic": true
+        }
+      ],
+      "link": null
+    },
+    {
+      "id": "minimal-fl-fa",
+      "section": "SYNOPSIS",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd source adjacency regression\n.Sh SYNOPSIS\n.Fo call\n.Fl Fa arg\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "cohort": "minimal",
+      "context": "direct",
+      "rows": [
+        "call(-arg);"
+      ],
+      "ascii_rows": [
+        "call(-arg);"
+      ],
+      "portable_definition_gap": null,
+      "known_layout_difference": null,
+      "owners": [
+        {
+          "macro": "Fo",
+          "kind": "block",
+          "line": 8,
+          "column": 2,
+          "line_start": true,
+          "no_print": false,
+          "parent": "Sh:body:7:2"
+        },
+        {
+          "macro": "Fo",
+          "kind": "head",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:block:8:2"
+        },
+        {
+          "macro": "Fo",
+          "kind": "body",
+          "line": 8,
+          "column": 2,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:block:8:2"
+        },
+        {
+          "macro": "Fl",
+          "kind": "elem",
+          "line": 9,
+          "column": 2,
+          "line_start": true,
+          "no_print": false,
+          "parent": "Fo:body:8:2"
+        },
+        {
+          "macro": "Fa",
+          "kind": "elem",
+          "line": 9,
+          "column": 5,
+          "line_start": false,
+          "no_print": false,
+          "parent": "Fo:body:8:2"
+        }
+      ],
+      "source_sha256": "f8f6b52a9a69c4fef74ab290c9bc1f3bad079430dc52f8015213e64102d64ee1",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "cb867df7c8662e074e57aa5af7ed301e8e45ada7e4c9445a875a1037f4d2cc42",
+          "diagnostics": ""
+        },
+        "utf8": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "84c2d998f974f535b5c0abd993b6adad27d8e36834c5c3e60f18e71e08a15429",
+          "diagnostics": ""
+        },
+        "html": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "2f04eb7712cc5c493dfa1f93735f08dda8638928b4ec12e3cfdd7cc6d722d0f6",
+          "diagnostics": ""
+        },
+        "tree": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "3d6a08cf12f3bdc2c28b7c2c23c3e3787f207d92a109bd7f99e4ade95d203375",
+          "diagnostics": ""
+        },
+        "lint": {
+          "status": 0,
+          "stderr": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "diagnostics": ""
+        }
+      },
+      "native_indents": [
+        0
+      ],
+      "font_runs": [
+        {
+          "row": 0,
+          "start": 0,
+          "text": "call",
+          "bold": true,
+          "italic": false
+        },
+        {
+          "row": 0,
+          "start": 6,
+          "text": "arg",
+          "bold": false,
+          "italic": true
+        },
+        {
+          "row": 0,
+          "start": 5,
+          "text": "-",
+          "bold": true,
+          "italic": false
+        }
+      ],
+      "link": null
+    },
+    {
+      "id": "ui-linked-owner",
+      "section": "SYNOPSIS",
+      "source": ".Dd November 4, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd source adjacency regression\n.Sh SYNOPSIS\n.Fo call\n.Tg argument-target\n.Fa arg\n.Lk https://a.test LINK\n.Fa last\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "7e0cb6535b0a8f988eb447304f42e42299b23c51ff6ca9afa9944affe6bae838",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "sha256": "74c5a8e0305e61bae967e1699089ba8b10482e0841b2d84205d7f78f4480ce76"
+        },
+        "utf8": {
+          "status": 0,
+          "sha256": "de24b548745726aee4880f991678e64f48a9ef37b3d952571220c7c063cec62d"
+        },
+        "html": {
+          "status": 0,
+          "sha256": "b8dc2aacd56ccc06abed4311221e7fc12192e3d95ad205876216f2307db02b92"
+        },
+        "tree": {
+          "status": 0,
+          "sha256": "53430970742e019e15345be62bd6ecef77e56716f6ea53240e55e61f8dd6112c"
+        },
+        "lint": {
+          "status": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "rows": [
+        "call(arg LINK: https://a.test last);"
+      ],
+      "native_indents": [
+        0
+      ],
+      "font_runs": [
+        {
+          "row": 0,
+          "start": 0,
+          "text": "call",
+          "bold": true,
+          "italic": false
+        },
+        {
+          "row": 0,
+          "start": 5,
+          "text": "arg",
+          "bold": false,
+          "italic": true
+        },
+        {
+          "row": 0,
+          "start": 9,
+          "text": "LINK",
+          "bold": false,
+          "italic": true
+        },
+        {
+          "row": 0,
+          "start": 30,
+          "text": "last",
+          "bold": false,
+          "italic": true
+        }
+      ],
+      "link": {
+        "row": 0,
+        "start": 9,
+        "text": "LINK",
+        "uri": "https://a.test",
+        "anchor": "argument-target",
+        "anchor_line": 9
+      }
+    }
+  ]
+}

@@ -82,6 +82,11 @@ definition destinations. `Nm` retains its distinct nonempty HEAD entry, while
 Declaration paragraphs are released only after those execution boundaries;
 their semantic grouping does not simulate another pre or post.
 
+Special function-argument routing borrows the complete original parent sequence.
+Its raw successor (for `Pf`) and logical neighbours (for `Fl` and synopsis
+entry) remain distinct, including across argument boundaries and transparent
+requests. Nested functions never replace their parent's sibling context.
+
 Accepted device padding remains distinct from authored scalars until its
 annotation boundary is known. Moving a leading gap outside a link also
 remaps live output checkpoints using addresses recorded during projection,

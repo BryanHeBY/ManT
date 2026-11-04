@@ -367,8 +367,8 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
     }
 
     fn source_node(&mut self, node: &'node Node, starts_line: bool) {
-        // The caller entered the root before scope dispatch.  Direct Fo Fa
-        // operands enter in function_argument(); all other nested source
+        // The caller entered the root before scope dispatch. Function BODY
+        // children enter through their complete parent-local walker; nested
         // wrappers use the same cursor as ordinary text nodes.
         if starts_line
             && node.id != self.root_id
@@ -405,8 +405,8 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
             Event::EmptyWord => self.builder.execute_empty_word(),
             Event::EnterKeep => self.builder.enter_keep_words(),
             Event::ExitKeep => self.builder.exit_keep_words(),
-            Event::FunctionArgument(argument, comma_after) => {
-                super::generated::function_argument(self.builder, argument, comma_after, self.name);
+            Event::FunctionChildren(nodes) => {
+                super::append_function_children(self.builder, nodes, self.name);
             }
             Event::FunctionBodyBegin(pretty) => self.builder.begin_function_body(pretty),
             Event::FunctionBodyEnd(pretty) => self.builder.finish_function_body(pretty),

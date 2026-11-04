@@ -249,5 +249,7 @@ mod display_return;
 #[path = "roff_lowering/source_spacing.rs"]
 mod source_spacing;
 
+#[path = "roff_lowering/source_adjacency.rs"]
+mod source_adjacency;
 #[path = "roff_lowering/synopsis_execution.rs"]
 mod synopsis_execution;

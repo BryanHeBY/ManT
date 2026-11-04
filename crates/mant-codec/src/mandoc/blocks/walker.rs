@@ -7,6 +7,7 @@
 //! targets only after it is emitted. Subdomains execute a node once and
 //! return, never replay its macros.
 
+use crate::mandoc::adjacency::{self, Siblings};
 use libmandoc_rs::Node;
 use libmandoc_rs::{
     MacroToken::{Man, Mdoc, Roff},
@@ -29,11 +30,19 @@ impl BlockLowerer<'_, '_> {
     /// field; the `Rs` wrapper itself has no post text or formatter row
     /// break.
     pub(super) fn push_nodes_with_reference_posts(&mut self, nodes: &[Node], reference_body: bool) {
+        self.push_source_sequence(nodes, reference_body, false);
+    }
+
+    pub(super) fn push_function_children(&mut self, nodes: &[Node]) {
+        self.push_source_sequence(nodes, false, true);
+    }
+
+    fn push_source_sequence(&mut self, nodes: &[Node], reference_body: bool, function_body: bool) {
         let table_plan = TableEmbeddingPlan::new(nodes, self.context);
         let mut synopsis_previous = None;
         let mut has_native_sibling = false;
         let mut previous_native_is_sy = false;
-        for (index, node) in nodes.iter().enumerate() {
+        for (index, (node, siblings)) in adjacency::with_siblings(nodes).enumerate() {
             let source_predecessor = has_native_sibling || self.man_source_predecessor;
             let previous_is_sy = previous_native_is_sy;
             if !is_native_transparent_sibling(node) {
@@ -60,18 +69,26 @@ impl BlockLowerer<'_, '_> {
                     crate::mandoc::containers::Event::Glyph("and".to_owned()),
                 );
             }
-            self.push(
-                node,
-                nodes.get(index + 1),
-                table_plan.embedding(index),
-                synopsis_previous,
-                adjacent_ip_run(nodes, index),
-                NodeSourceContext {
-                    line_entered: source_line_entered,
-                    predecessor: source_predecessor,
-                    previous_is_sy,
-                },
-            );
+            if function_body && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa)) {
+                let comma_after = !node.children.is_empty()
+                    && siblings.next.is_some_and(|next| {
+                        next.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa))
+                    });
+                self.push_function_argument(node, comma_after);
+            } else {
+                self.push(
+                    node,
+                    siblings,
+                    table_plan.embedding(index),
+                    synopsis_previous,
+                    adjacent_ip_run(nodes, index),
+                    NodeSourceContext {
+                        line_entered: source_line_entered,
+                        predecessor: source_predecessor,
+                        previous_is_sy,
+                    },
+                );
+            }
             self.finish_node_execution(node);
             self.state
                 .formatter
@@ -138,13 +155,14 @@ impl BlockLowerer<'_, '_> {
     fn push(
         &mut self,
         node: &Node,
-        next: Option<&Node>,
+        siblings: Siblings<'_>,
         table_embedding: Option<&TableEmbedding>,
         synopsis_previous: Option<&Node>,
         ip_run: Option<super::lists::man::IpRun>,
         source: NodeSourceContext,
     ) {
-        if self.push_node_pre_handlers(node, next, source) {
+        let next = siblings.raw_next;
+        if self.push_node_pre_handlers(node, siblings, source) {
             return;
         }
         let structural_targets = targets::structural_targets(node);
@@ -173,7 +191,7 @@ impl BlockLowerer<'_, '_> {
             return;
         }
         let single_line_literal = self.display_fill == Some(DisplayFillMode::SingleLine);
-        if self.push_no_fill_lines(node, next, source.line_entered, single_line_literal) {
+        if self.push_no_fill_lines(node, siblings, source.line_entered, single_line_literal) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
             return;
@@ -209,7 +227,7 @@ impl BlockLowerer<'_, '_> {
             // late accepted HEAD presentation receipt.
             self.state.pre_break_request();
         } else if participates_in_inline_flow(node) {
-            self.push_inline_node(node, next);
+            self.push_inline_node_with_source(node, siblings);
         } else {
             self.state.flush_paragraph();
             self.end_literal_for_structure(node);
@@ -251,7 +269,7 @@ impl BlockLowerer<'_, '_> {
     fn push_node_pre_handlers(
         &mut self,
         node: &Node,
-        next: Option<&Node>,
+        siblings: Siblings<'_>,
         source: NodeSourceContext,
     ) -> bool {
         if self.consume_font_request(node) {
@@ -265,7 +283,7 @@ impl BlockLowerer<'_, '_> {
         if self.push_column_display(node) {
             return true;
         }
-        if self.column_field && self.push_column_payload(node, next) {
+        if self.column_field && self.push_column_payload(node, siblings) {
             return true;
         }
         if self.consume_control_or_empty_block(node) {
@@ -290,7 +308,7 @@ impl BlockLowerer<'_, '_> {
     /// The output destination changes field flags, never macro interpretation.
     /// Requests and words borrow the same live paragraph/native buffer; real
     /// structural nodes continue through the ordinary block driver below.
-    fn push_column_payload(&mut self, node: &Node, next: Option<&Node>) -> bool {
+    fn push_column_payload(&mut self, node: &Node, siblings: Siblings<'_>) -> bool {
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Pp)) {
             self.state.column_vertical_space(1);
             return true;
@@ -305,7 +323,7 @@ impl BlockLowerer<'_, '_> {
                 ))
             )
         {
-            self.push_inline_node(node, next);
+            self.push_inline_node_with_source(node, siblings);
             return true;
         }
         false

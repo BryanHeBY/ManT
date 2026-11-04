@@ -42,9 +42,9 @@ pub(super) enum Event<'a> {
     RestoreBody(u32),
     /// `.Ed` restores the parser's saved fill mode at its source marker.
     RestoreFill(u32, &'a Node),
-    /// A direct Fa child of a structural Fo body; the sibling relation is
-    /// needed for mandoc's generated comma after an argument.
-    FunctionArgument(&'a Node, bool),
+    /// A complete Fo BODY. Its direct Fa children use generated argument
+    /// output, while every child retains this same original parent sequence.
+    FunctionChildren(&'a [Node]),
     /// Real Fo BODY pre/post, shared with inline Fn field execution.
     FunctionBodyBegin(bool),
     FunctionBodyEnd(bool),
@@ -125,10 +125,6 @@ pub(super) fn drive<'a>(
             if let Some(saved) = saved {
                 sink.font().pop_scope(saved);
             }
-        }
-        Event::FunctionArgument(argument, comma_after) => {
-            sink.source_node(argument, true);
-            sink.event(Event::FunctionArgument(argument, comma_after));
         }
         event => sink.event(event),
     })
@@ -363,7 +359,7 @@ fn emit_structural_function<'a>(
                 posts.register_function(part.id, synopsis);
                 emit(Event::At(part, true));
                 emit(Event::FunctionBodyBegin(synopsis));
-                emit_function_body(&part.children, emit);
+                emit(Event::FunctionChildren(&part.children));
                 if !posts.ended(part.id) {
                     emit(Event::RestoreBody(part.id));
                     emit(Event::FunctionBodyEnd(synopsis));
@@ -372,29 +368,6 @@ fn emit_structural_function<'a>(
             }
             _ => emit(Event::Children(std::slice::from_ref(part))),
         }
-    }
-}
-
-/// CVS `mdoc_html.c::mdoc_fa_pre()` emits a comma after each operand and when
-/// the next logical sibling is another Fa. Preserve the direct Fo body
-/// relation even while structural children enter a separate output buffer.
-fn emit_function_body<'a>(body: &'a [Node], emit: &mut impl FnMut(Event<'a>)) {
-    let mut pending = 0;
-    for (index, node) in body.iter().enumerate() {
-        if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Fa)) {
-            continue;
-        }
-        if pending < index {
-            emit(Event::Children(&body[pending..index]));
-        }
-        let comma_after = !node.children.is_empty()
-            && super::adjacency::next(&body[index + 1..])
-                .is_some_and(|next| next.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa)));
-        emit(Event::FunctionArgument(node, comma_after));
-        pending = index + 1;
-    }
-    if pending < body.len() {
-        emit(Event::Children(&body[pending..]));
     }
 }
 

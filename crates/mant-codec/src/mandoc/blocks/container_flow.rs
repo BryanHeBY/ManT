@@ -40,7 +40,7 @@ impl super::BlockLowerer<'_, '_> {
         let _ = starts_line;
     }
 
-    fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {
+    pub(super) fn push_function_argument(&mut self, argument: &Node, comma_after: bool) {
         if self.state.formatter.no_fill || self.state.single_line_display_owner {
             self.push_no_fill_generated(
                 argument,
@@ -267,8 +267,8 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
             }
             Event::EnterKeep => self.lowerer.state.formatter.enter_keep_words(),
             Event::ExitKeep => self.lowerer.state.formatter.exit_keep_words(),
-            Event::FunctionArgument(argument, comma_after) => {
-                self.lowerer.push_function_argument(argument, comma_after);
+            Event::FunctionChildren(nodes) => {
+                self.lowerer.push_function_children(nodes);
             }
             event => self
                 .lowerer

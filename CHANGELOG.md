@@ -37,6 +37,8 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Preserve complete source sibling context while dispatching function arguments,
+  including synopsis line flushes and same-line prefix/flag joins.
 - Keep Unicode edge whitespace outside Markdown emphasis delimiters without
   dropping the inner text's representable style or changing its scalars.
 - Preserve one live native input buffer when entering synopsis fields from

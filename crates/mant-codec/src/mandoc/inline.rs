@@ -158,6 +158,26 @@ pub(in crate::mandoc) fn append_inline_node_with_siblings(
     next: Option<&Node>,
     default_name: Option<&str>,
 ) {
+    append_inline_node_with_source(
+        builder,
+        node,
+        super::adjacency::Siblings {
+            previous,
+            raw_next: next,
+            next,
+        },
+        default_name,
+    );
+}
+
+pub(in crate::mandoc) fn append_inline_node_with_source(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    siblings: super::adjacency::Siblings<'_>,
+    default_name: Option<&str>,
+) {
+    let previous = siblings.previous;
+    let next = siblings.raw_next;
     if node.flags.no_print || node.kind == NodeKind::Comment {
         // Tg can recover an authored target even when native output is hidden.
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
@@ -214,7 +234,7 @@ pub(in crate::mandoc) fn append_inline_node_with_siblings(
         let checkpoint = builder.begin_semantic_owner_checkpoint();
         execute_inline_macro_handler(builder, node, previous, next, default_name);
         builder.finish_semantic_owner_checkpoint(checkpoint);
-        finish_inline_node_execution(builder, node, next, final_word_join_before);
+        finish_inline_node_execution(builder, node, siblings.next, final_word_join_before);
         execute_inline_macro_post(builder, node);
         builder.finish_executed_node(node);
         builder.restore_definition_geometry(geometry);
@@ -224,7 +244,7 @@ pub(in crate::mandoc) fn append_inline_node_with_siblings(
         builder.tighten_next_boundary();
     }
     execute_inline_macro_handler(builder, node, previous, next, default_name);
-    finish_inline_node_execution(builder, node, next, final_word_join_before);
+    finish_inline_node_execution(builder, node, siblings.next, final_word_join_before);
     execute_inline_macro_post(builder, node);
     builder.finish_executed_node(node);
     builder.restore_definition_geometry(geometry);
@@ -616,30 +636,46 @@ pub(super) fn append_inline_nodes(
     nodes: &[Node],
     default_name: Option<&str>,
 ) {
-    let mut previous = None;
-    for (index, node) in nodes.iter().enumerate() {
+    append_inline_sequence(builder, nodes, default_name, false);
+}
+
+pub(super) fn append_function_children(
+    builder: &mut InlineBuilder,
+    nodes: &[Node],
+    default_name: Option<&str>,
+) {
+    append_inline_sequence(builder, nodes, default_name, true);
+}
+
+fn append_inline_sequence(
+    builder: &mut InlineBuilder,
+    nodes: &[Node],
+    default_name: Option<&str>,
+    function_body: bool,
+) {
+    for (node, siblings) in super::adjacency::with_siblings(nodes) {
         // mandoc joins the final pair in a contiguous mdoc bibliography
         // author run with "and". The conjunction is formatter-generated, so
         // it is not a child of either `%A` node and must be restored while the
         // sibling context is still available.
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
-            && index > 0
-            && nodes[index - 1].macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
-            && nodes
-                .get(index + 1)
+            && siblings.previous.is_some_and(|previous| {
+                previous.macro_token.as_ref() == Some(&Mdoc(MdocMacro::PercentA))
+            })
+            && siblings
+                .next
                 .is_none_or(|next| next.macro_token.as_ref() != Some(&Mdoc(MdocMacro::PercentA)))
         {
             builder.append_text("and");
         }
-        append_inline_node_with_siblings(
-            builder,
-            node,
-            previous,
-            nodes.get(index + 1),
-            default_name,
-        );
-        if super::adjacency::is_logical_sibling(node) {
-            previous = Some(node);
+        if function_body && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa)) {
+            let comma_after = !node.children.is_empty()
+                && siblings
+                    .next
+                    .is_some_and(|next| next.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa)));
+            generated::function_argument(builder, node, comma_after, default_name);
+        } else {
+            append_inline_node_with_source(builder, node, siblings, default_name);
         }
     }
 }
