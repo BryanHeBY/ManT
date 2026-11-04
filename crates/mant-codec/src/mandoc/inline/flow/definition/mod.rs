@@ -18,13 +18,11 @@ mod head_row;
 mod list_scope;
 mod name_scope;
 mod no_break;
-mod retirement;
 mod run_in;
 mod state;
 mod vertical_space;
 
 pub(super) use device::NativeFieldDevice;
-pub(super) use retirement::PlainFlushOutcome;
 pub(in crate::mandoc) use state::PreservedDefinitionField;
 pub(super) use state::{DefinitionFieldState, PendingFieldGapOrigin};
 

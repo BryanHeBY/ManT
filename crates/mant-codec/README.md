@@ -59,6 +59,9 @@ literal displays, lists and table recovery:
 | Container routing | `containers.rs` streams borrowed children and scope boundaries; structural payloads remain tables/lists. Logical punctuation adjacency is a separate, non-executing classification in `adjacency.rs`. |
 | Scope posts | `containers/posts.rs` retains the single shared BODY post, font-checkpoint and display-fill record across output destinations. |
 | Inline and physical lines | `InlineBuilder` executes word/control events; `source_cursor.rs` places source-visible events on physical lines. No-fill changes layout, not macro interpretation. |
+| Text execution | `inline/text_execution/` consumes decoded events in order using borrowed font and zero-advance state; native writes precede presentation. `roff_escape/` owns event types, decoding, pure width measurement and the shared zero-advance machine. |
+| Plain input retirement | `inline/flow/plain_input/` consumes ordinary or authorless input at real native boundaries; presentation is separate from the consumption decision. |
+| Output ownership | `inline/flow/output/` separates checkpoints, scope annotations, physical hard breaks and drains. Draining IR does not consume native input. |
 | Nested list execution | `inline/scopes/nested.rs` executes nested list and column phases in the caller's existing builder and field state. |
 | Link identities | `inline/links/identity.rs` applies HTML attribute glyph rules independently to each source operand; it never consumes the visible formatter's state. `Xr`/`MR` share this path with `UR`/`MT`/`Lk`/`Mt`/`%U`. |
 | Link annotations | `inline/links/annotation.rs` places typed links around accepted output, keeping preceding glyphs and layout boundaries outside the label without executing another formatter boundary. |
@@ -73,6 +76,8 @@ native `term_strlen` contract. Display paths share explicit BODY font/fill
 ledger stages, while their source-node entry, sink routing, post-once claim
 and final geometry restoration remain ordered by their existing drivers.
 No helper return or destructor implicitly executes a native scope post.
+`blocks/lists/definition/` keeps the ordered item driver in `mod.rs`, with
+HEAD execution, BODY handoff and resolved layout in sibling modules.
 
 Entering a native field moves the existing plain input buffer and stable word
 owners; it does not create an empty parallel buffer or settle pending glyphs.

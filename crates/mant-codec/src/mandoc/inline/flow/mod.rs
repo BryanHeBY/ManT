@@ -14,6 +14,7 @@ pub(in crate::mandoc) mod field_buffer;
 use definition::DefinitionFieldState;
 mod lifecycle;
 mod native_field;
+mod plain_input;
 mod presentation;
 mod tab_stops;
 use std::cell::{Cell, RefCell};

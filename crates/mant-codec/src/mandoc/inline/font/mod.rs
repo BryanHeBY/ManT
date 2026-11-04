@@ -1,21 +1,15 @@
 //! Stateful roff font decoding shared by prose, macro operands and table cells.
-use super::flow::TrailingOutput;
-use super::{
-    Font, FontState, Inline, InlineBuilder, Node, RoffInlineEvent, append_inline_nodes,
-    is_formatter_word_blank,
-};
+use super::{Font, FontState, Inline, InlineBuilder, Node, append_inline_nodes};
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
-mod style;
-mod text_execution;
-mod zero_advance;
+pub(super) mod style;
 
-pub(super) use style::coalesce_font_runs;
-pub(in crate::mandoc) use text_execution::{
+pub(in crate::mandoc) use super::text_execution::{PrefixMeasure, ZeroAdvanceState};
+pub(in crate::mandoc) use super::text_execution::{
     TextExecutionContext, TextExecutionPolicy, parse_roff_text_with_scan_status,
     parse_roff_text_with_state, parse_roff_text_with_zero_advance,
 };
-pub(in crate::mandoc) use zero_advance::{PrefixMeasure, ZeroAdvanceState};
+pub(super) use style::coalesce_font_runs;
 
 pub(in crate::mandoc) fn parse_roff_text(source: &str) -> Vec<Inline> {
     parse_roff_text_with_font(source, Font::Regular, true)

@@ -1,6 +1,6 @@
 use super::{Font, Inline};
 
-pub(super) fn flush_segment(
+pub(in crate::mandoc::inline) fn flush_segment(
     output: &mut Vec<Inline>,
     buffer: &mut String,
     font: Font,
@@ -13,7 +13,11 @@ pub(super) fn flush_segment(
     output.push(styled_link(value, font, link));
 }
 
-pub(super) fn styled_link(value: String, font: Font, link: Option<&str>) -> Inline {
+pub(in crate::mandoc::inline) fn styled_link(
+    value: String,
+    font: Font,
+    link: Option<&str>,
+) -> Inline {
     let styled = styled_segment(value, font);
     if let Some(target) = link {
         Inline::Link {

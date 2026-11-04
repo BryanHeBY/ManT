@@ -1,5 +1,5 @@
-use super::style::{flush_segment, styled_link, styled_segment};
 use super::{Font, Inline, is_formatter_word_blank};
+use crate::mandoc::inline::font::style::{flush_segment, styled_link, styled_segment};
 use crate::mandoc::roff_escape::ZeroAdvanceMachine;
 
 /// Bounded semantic projection of CVS mandoc's `TERMP_BACKAFTER`/
@@ -175,11 +175,13 @@ impl ZeroAdvanceState {
             if let Some(owner) = glyph.owner {
                 output.push(Inline::anchor(format!(
                     "{}{owner}",
-                    super::super::flow::INTERNAL_FIELD_WORD
+                    crate::mandoc::inline::flow::INTERNAL_FIELD_WORD
                 )));
             }
             if glyph.link_continuation {
-                output.push(Inline::anchor(super::super::flow::INTERNAL_LINK_SPLIT));
+                output.push(Inline::anchor(
+                    crate::mandoc::inline::flow::INTERNAL_LINK_SPLIT,
+                ));
             }
             output.push(glyph.value);
         }
@@ -187,7 +189,7 @@ impl ZeroAdvanceState {
         if let Some(owner) = self.native_word_owner {
             output.push(Inline::anchor(format!(
                 "{}{owner}",
-                super::super::flow::INTERNAL_FIELD_WORD
+                crate::mandoc::inline::flow::INTERNAL_FIELD_WORD
             )));
         }
         output

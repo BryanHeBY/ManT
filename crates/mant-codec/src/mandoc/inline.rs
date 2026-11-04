@@ -13,6 +13,7 @@ pub(in crate::mandoc) mod display_tabs;
 mod flow;
 mod font;
 mod generated;
+mod text_execution;
 pub(in crate::mandoc) use generated::function_argument;
 mod links;
 pub(in crate::mandoc) mod names;

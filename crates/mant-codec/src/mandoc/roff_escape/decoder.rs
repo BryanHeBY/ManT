@@ -1,449 +1,13 @@
-//! Tokenizes formatter-level roff escapes before semantic AST lowering.
-//!
-//! libmandoc intentionally retains several GNU roff extensions inside text
-//! nodes. This module is the sole boundary allowed to interpret those bytes:
-//! consumers receive typed events and can never mistake an escape operand for
-//! visible document text.
-
-mod glyphs;
-mod grammar;
-mod projection;
-mod scanner;
-use glyphs::{
+use super::glyphs::{
     dedicated_special_character, documented_groff_composite_character, unicode_special_characters,
 };
-pub(super) use projection::visible_text;
-use scanner::{ArgumentCompletion, QuotedOutcome, scan_argument, scan_quoted_argument};
-
+use super::scanner::{ArgumentCompletion, QuotedOutcome, scan_argument, scan_quoted_argument};
+use super::{
+    ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, ASCII_NBRZW, ASCII_TABREF, DecodedText, PresentationKind,
+    RoffInlineEvent, WordSpace, font, grammar, scanner,
+};
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
-
-const ASCII_TABREF: char = '\u{1a}';
-const ASCII_BREAK: char = '\u{1d}';
-const ASCII_HYPH: char = '\u{1c}';
-const ASCII_NBRZW: char = '\u{1e}';
-const ASCII_NBRSP: char = '\u{1f}';
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum RoffFont {
-    Regular,
-    Strong,
-    Emphasis,
-    StrongEmphasis,
-    Code,
-    CodeStrong,
-    CodeEmphasis,
-}
-
-impl From<libmandoc_rs::NormalizedFont> for RoffFont {
-    fn from(font: libmandoc_rs::NormalizedFont) -> Self {
-        match font {
-            libmandoc_rs::NormalizedFont::Emphasis => Self::Emphasis,
-            libmandoc_rs::NormalizedFont::Symbolic => Self::Strong,
-            libmandoc_rs::NormalizedFont::Literal => Self::Code,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum PresentationKind {
-    Color,
-    PointSize,
-    HorizontalMotion,
-    Motion,
-    FormatterState,
-    Postprocessor,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum RoffInlineEvent {
-    Text(String),
-    /// NBRWORD converts a literal source ASCII blank to `ASCII_NBRSP`.
-    /// Its first native scan is graph, but its printed scalar is still SP.
-    NonBreakingWordBlank,
-    /// The parser's `ASCII_HYPH` cell. It displays '-' but remains a native
-    /// `term_fill` break candidate, unlike an authored nonbreaking \- escape.
-    BreakableHyphen,
-    /// One source-level glyph whose printable fallback spans several
-    /// characters, for example an unknown `\\[name]` escape.
-    Glyph(String),
-    /// An unrecognized source glyph. It remains visible normally, but cannot
-    /// be made into a terminal `\\z` glyph because no output glyph exists to
-    /// overstrike.
-    FallbackGlyph(String),
-    /// The formatter's current output-device name. Terminal and HTML
-    /// projections intentionally spell this differently (`utf8` vs `html`).
-    DeviceName,
-    /// A roff overstrike request. Terminal geometry is outside the IR, but
-    /// HTML link identities retain its final source glyph.
-    Overstrike {
-        source: String,
-        terminal: Option<String>,
-    },
-    /// `\\z` makes the next complete glyph zero-advance. The decoder keeps
-    /// decoding that glyph and every intervening formatter control; the
-    /// cross-node projection decides whether a later glyph overstrikes it.
-    ZeroAdvance,
-    /// An invisible glyph buffered by the terminal formatter. Unlike a font
-    /// selection, it occupies a literal output row without adding text.
-    ZeroWidthGlyph,
-    /// The named `\\:` control writes `ASCII_BREAK` on both terminal devices.
-    /// It offers a zero-width break candidate without arming `term_fill`'s
-    /// graph flag. The catalog's U+200B belongs to HTML, not terminal prose.
-    Breakpoint,
-    Font(RoffFont),
-    PreviousFont,
-    Link(Option<String>),
-    /// Exact legacy Sphinx `\%<>` output. It is invisible only when the
-    /// preceding visible text proves that it belongs to a manual reference.
-    EmptyDestination,
-    LineBreak,
-    /// `\\c` conditionally suppresses the next input-line boundary.  CVS
-    /// `term_word()` gives it a special interaction with `\\z`: when a
-    /// zero-advance glyph is waiting to be overstruck, `\\c` cancels that
-    /// backtracking state instead of enabling a source-line join.
-    NoSpace,
-    Presentation {
-        kind: PresentationKind,
-        argument: Option<String>,
-    },
-}
-
-/// Formatter-neutral core of CVS `TERMP_BACKAFTER`/`TERMP_BACKBEFORE`.
-///
-/// Styled terminal output and plain semantic text both use this state so a
-/// target/name projection cannot disagree with the visible document about
-/// which complete glyph survives `\z`.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct ZeroAdvanceMachine<T> {
-    armed: bool,
-    pending: Option<PendingGlyph<T>>,
-    recoveries: Vec<T>,
-    recoveries_before_pending: usize,
-}
-
-/// BACKBEFORE can survive a pass that already owns the preceding glyph.
-/// Its next retreat still consumes a buffered blank, but cannot erase that
-/// immutable projection (`term_fill()` with `encode1()`).
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum PendingGlyph<T> {
-    Buffered(T),
-    Projected,
-}
-
-impl<T> ZeroAdvanceMachine<T> {
-    pub(super) const fn new() -> Self {
-        Self {
-            armed: false,
-            pending: None,
-            recoveries: Vec::new(),
-            recoveries_before_pending: 0,
-        }
-    }
-
-    pub(super) fn arm(&mut self) {
-        self.armed = true;
-    }
-
-    pub(super) const fn is_armed(&self) -> bool {
-        self.armed
-    }
-
-    pub(super) const fn has_pending(&self) -> bool {
-        self.pending.is_some()
-    }
-
-    pub(super) const fn has_projected_pending(&self) -> bool {
-        matches!(self.pending, Some(PendingGlyph::Projected))
-    }
-
-    /// A real cell already assigned to an earlier word can await the next
-    /// word's output assembly without becoming another backtracking glyph.
-    pub(super) fn defer_projection(&mut self, glyph: T) {
-        self.recoveries.push(glyph);
-        self.recoveries_before_pending = self.recoveries.len();
-    }
-
-    pub(super) fn deferred_projection(&self) -> &[T] {
-        &self.recoveries
-    }
-
-    pub(super) const fn pending_ref(&self) -> Option<&T> {
-        match &self.pending {
-            Some(PendingGlyph::Buffered(glyph)) => Some(glyph),
-            Some(PendingGlyph::Projected) | None => None,
-        }
-    }
-
-    /// Change projection metadata without consuming either backtracking flag.
-    pub(super) fn pending_mut(&mut self) -> Option<&mut T> {
-        match &mut self.pending {
-            Some(PendingGlyph::Buffered(glyph)) => Some(glyph),
-            Some(PendingGlyph::Projected) | None => None,
-        }
-    }
-
-    pub(super) fn cancel_armed(&mut self) -> bool {
-        std::mem::take(&mut self.armed)
-    }
-
-    pub(super) fn project_glyph(&mut self, glyph: T) -> Option<(T, bool)> {
-        if self.pending.is_some() {
-            self.recoveries_before_pending = self.recoveries.len();
-        }
-        if self.armed {
-            self.armed = false;
-            self.pending = Some(PendingGlyph::Buffered(glyph));
-            return None;
-        }
-        let replaced_pending = matches!(self.pending.take(), Some(PendingGlyph::Buffered(_)));
-        Some((glyph, replaced_pending))
-    }
-
-    /// Unknown SPECIAL/invalid NUMBERED uses `bufferc(ASCII_NBRZW)`, not
-    /// `encode1()`: its recovery spelling cannot consume either backtracking
-    /// flag (term.c:610-638). Defer only spelling following a pending glyph,
-    /// so source order remains stable when that native glyph later survives
-    /// or is overstruck. The queue contains this unresolved suffix only.
-    pub(super) fn project_fallback(&mut self, glyph: T) -> Option<(T, bool)> {
-        if self.armed {
-            return None;
-        }
-        if self.pending.is_some() {
-            self.recoveries.push(glyph);
-            return None;
-        }
-        Some((glyph, false))
-    }
-
-    pub(super) fn take_recoveries(&mut self) -> Vec<T> {
-        self.recoveries_before_pending = 0;
-        std::mem::take(&mut self.recoveries)
-    }
-
-    pub(super) fn resolve_word_boundary(&mut self) -> Option<Vec<T>> {
-        (!self.armed).then(|| self.take_pending()).flatten()
-    }
-
-    pub(super) fn take_pending(&mut self) -> Option<Vec<T>> {
-        let glyph = self.pending.take()?;
-        let position = self.recoveries_before_pending;
-        let mut output = self.take_recoveries();
-        if let PendingGlyph::Buffered(glyph) = glyph {
-            output.insert(position, glyph);
-        }
-        (!output.is_empty()).then_some(output)
-    }
-
-    /// Assign the glyph to an accepted pass while retaining BACKBEFORE for
-    /// the next `encode1()` write. Projection ownership and retreat state are
-    /// independent even though they normally advance together.
-    pub(super) fn commit_pending_projection(&mut self) -> Option<Vec<T>> {
-        if !matches!(self.pending, Some(PendingGlyph::Buffered(_))) {
-            return None;
-        }
-        let output = self.take_pending();
-        self.pending = Some(PendingGlyph::Projected);
-        output
-    }
-
-    pub(super) fn discard_pending(&mut self) {
-        self.pending = None;
-        self.recoveries.clear();
-        self.recoveries_before_pending = 0;
-    }
-
-    pub(super) fn clear(&mut self) {
-        self.armed = false;
-        self.discard_pending();
-    }
-}
-
-/// The observable role of one decoded inline event.
-///
-/// Consumers need this shared classification when deciding whether a
-/// formatter request can be crossed while looking for visible body content.
-/// It intentionally distinguishes an invisible row marker (`\&`) from a
-/// pure state transition (such as a font selection) and from a real line
-/// boundary. Adding a new decoder event must therefore make its effect
-/// explicit instead of silently flowing through a catch-all branch.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum InlineEventEffect {
-    Visible,
-    RowMarker,
-    StateOnly,
-    LineBoundary,
-}
-
-pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect {
-    match event {
-        RoffInlineEvent::Text(value)
-        | RoffInlineEvent::Glyph(value)
-        | RoffInlineEvent::FallbackGlyph(value) => {
-            if value.is_empty() {
-                InlineEventEffect::StateOnly
-            } else {
-                InlineEventEffect::Visible
-            }
-        }
-        RoffInlineEvent::DeviceName
-        | RoffInlineEvent::BreakableHyphen
-        | RoffInlineEvent::NonBreakingWordBlank => InlineEventEffect::Visible,
-        RoffInlineEvent::Overstrike { terminal, .. } => {
-            if terminal.is_some() {
-                InlineEventEffect::Visible
-            } else {
-                InlineEventEffect::StateOnly
-            }
-        }
-        RoffInlineEvent::ZeroWidthGlyph | RoffInlineEvent::Breakpoint => {
-            InlineEventEffect::RowMarker
-        }
-        RoffInlineEvent::LineBreak | RoffInlineEvent::EmptyDestination => {
-            InlineEventEffect::LineBoundary
-        }
-        RoffInlineEvent::ZeroAdvance
-        | RoffInlineEvent::NoSpace
-        | RoffInlineEvent::Font(_)
-        | RoffInlineEvent::PreviousFont
-        | RoffInlineEvent::Link(_)
-        | RoffInlineEvent::Presentation { .. } => InlineEventEffect::StateOnly,
-    }
-}
-
-/// Decode one libmandoc text node into typed, renderer-independent events.
-pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
-    decode_with_status(source).events
-}
-
-pub(super) struct DecodedText {
-    pub(super) events: Vec<RoffInlineEvent>,
-    pub(super) budget_exhausted: bool,
-}
-
-/// Parsing evidence accompanies events; safety loss is not a displayed glyph.
-pub(super) fn decode_with_status(source: &str) -> DecodedText {
-    decode_word_with_status(source, WordSpace::Breakable)
-}
-
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
-pub(in crate::mandoc) enum WordSpace {
-    #[default]
-    Breakable,
-    NonBreaking,
-}
-
-pub(in crate::mandoc) fn decode_word_with_status(source: &str, spaces: WordSpace) -> DecodedText {
-    decode_with_options(source, true, spaces)
-}
-
-/// Decode an identity operand without synthesizing reading-layout spaces.
-/// CVS `html.c::print_encode()` ignores horizontal motion in attributes; the
-/// terminal reading approximation belongs only to the visible text stream.
-pub(in crate::mandoc) fn decode_link_operand(source: &str) -> Vec<RoffInlineEvent> {
-    decode_with_options(source, false, WordSpace::Breakable).events
-}
-
-fn decode_with_options(
-    source: &str,
-    reading_motion_spacing: bool,
-    spaces: WordSpace,
-) -> DecodedText {
-    // term.c::term_word() copies ordinary runs before interpreting escapes.
-    // Sentinel and unsafe control bytes still need the full classifier; the
-    // fast path must not bypass their masking or native-cell evidence.
-    if !(source.contains('\\') || spaces == WordSpace::NonBreaking && source.contains(' '))
-        && source
-            .chars()
-            .all(|character| !character.is_control() || matches!(character, '\t' | '\n' | '\r'))
-    {
-        return DecodedText {
-            events: if source.is_empty() {
-                Vec::new()
-            } else {
-                vec![RoffInlineEvent::Text(source.to_owned())]
-            },
-            budget_exhausted: false,
-        };
-    }
-    let mut decoder = Decoder::new(source);
-    decoder.reading_motion_spacing = reading_motion_spacing;
-    decoder.word_space = spaces;
-    decoder.decode_with_status()
-}
-
-/// Device measurement of an unevaluated width sample. This follows
-/// `term.c::term_strlen()` rather than executing `term_word()`: `\\z` skips
-/// the next measured glyph, font/motion controls have no width, and an
-/// overstrike measures its widest unescaped constituent.
-pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
-    let mut width = 0_usize;
-    let mut skip = false;
-    let mut decoder = Decoder::new(source);
-    decoder.measurement = true;
-    for event in decoder.decode() {
-        match event {
-            RoffInlineEvent::Text(text) => {
-                let tail = if skip && !text.is_empty() {
-                    skip = false;
-                    text.get(text.chars().next().map_or(0, char::len_utf8)..)
-                        .unwrap_or_default()
-                } else {
-                    &text
-                };
-                width = width.saturating_add(mant_ir::geometry::text_width(tail));
-            }
-            RoffInlineEvent::Glyph(text) => {
-                if skip {
-                    skip = false;
-                } else {
-                    width = width.saturating_add(mant_ir::geometry::text_width(&text));
-                }
-            }
-            RoffInlineEvent::BreakableHyphen | RoffInlineEvent::NonBreakingWordBlank => {
-                if skip {
-                    skip = false;
-                } else {
-                    width = width.saturating_add(1);
-                }
-            }
-            RoffInlineEvent::DeviceName => {
-                if skip {
-                    skip = false;
-                } else {
-                    width = width.saturating_add(4);
-                }
-            }
-            RoffInlineEvent::ZeroAdvance => skip = true,
-            RoffInlineEvent::Overstrike { source, .. } => {
-                let mut decoder = Decoder::new(&source);
-                let mut maximum = 0;
-                while let Some(character) = decoder.take_character() {
-                    if character == '\\' {
-                        if let Some(trigger) = decoder.take_character() {
-                            decoder.decode_escape(trigger);
-                        }
-                    } else {
-                        maximum =
-                            maximum.max(mant_ir::geometry::text_width(&character.to_string()));
-                    }
-                }
-                width = width.saturating_add(maximum);
-            }
-            RoffInlineEvent::FallbackGlyph(_)
-            | RoffInlineEvent::ZeroWidthGlyph
-            | RoffInlineEvent::Breakpoint
-            | RoffInlineEvent::Font(_)
-            | RoffInlineEvent::PreviousFont
-            | RoffInlineEvent::Link(_)
-            | RoffInlineEvent::EmptyDestination
-            | RoffInlineEvent::LineBreak
-            | RoffInlineEvent::NoSpace
-            | RoffInlineEvent::Presentation { .. } => {}
-        }
-    }
-    width
-}
 
 /// Project the one terminal cell written by CVS `ESCAPE_OVERSTRIKE`.
 ///
@@ -478,13 +42,6 @@ fn overstrike_terminal_glyph(source: &str) -> Option<String> {
     cell
 }
 
-/// CVS terminal filling recognizes only its ordinary ASCII word blank as a
-/// break opportunity. Tabs, NBSP (including Unicode and numbered spellings),
-/// and other Unicode whitespace are formatter glyphs, not prose separators.
-pub(in crate::mandoc) const fn is_formatter_word_blank(character: char) -> bool {
-    character == ' '
-}
-
 /// One quoted escape argument, classified the way fixed CVS `roff_escape()`
 /// ends it.
 enum DelimitedArgument {
@@ -499,10 +56,10 @@ enum DelimitedArgument {
     Missing,
 }
 
-struct Decoder {
-    measurement: bool,
-    reading_motion_spacing: bool,
-    word_space: WordSpace,
+pub(super) struct Decoder {
+    pub(super) measurement: bool,
+    pub(super) reading_motion_spacing: bool,
+    pub(super) word_space: WordSpace,
     budget_exhausted: bool,
     argument_completion: ArgumentCompletion,
     argument_kind: grammar::EscapeKind,
@@ -513,7 +70,7 @@ struct Decoder {
 }
 
 impl Decoder {
-    fn new(source: &str) -> Self {
+    pub(super) fn new(source: &str) -> Self {
         Self {
             measurement: false,
             reading_motion_spacing: true,
@@ -528,11 +85,11 @@ impl Decoder {
         }
     }
 
-    fn decode(self) -> Vec<RoffInlineEvent> {
+    pub(super) fn decode(self) -> Vec<RoffInlineEvent> {
         self.decode_with_status().events
     }
 
-    fn decode_with_status(mut self) -> DecodedText {
+    pub(super) fn decode_with_status(mut self) -> DecodedText {
         'input: while self.index < self.characters.len() {
             let character = self.characters[self.index];
             if character != '\\' {
@@ -567,7 +124,7 @@ impl Decoder {
         }
     }
 
-    fn decode_escape(&mut self, trigger: char) {
+    pub(super) fn decode_escape(&mut self, trigger: char) {
         self.argument_completion = ArgumentCompletion::Complete;
         self.argument_kind = grammar::syntax(trigger).kind;
         match trigger {
@@ -924,7 +481,7 @@ impl Decoder {
         }
     }
 
-    fn take_character(&mut self) -> Option<char> {
+    pub(super) fn take_character(&mut self) -> Option<char> {
         let character = self.characters.get(self.index).copied()?;
         self.index += 1;
         Some(character)
@@ -1039,28 +596,9 @@ fn is_positive_literal_motion(argument: &str) -> bool {
                 .all(|character| character.is_ascii_alphabetic()))
 }
 
-pub(super) fn font(name: &str) -> RoffFont {
-    match name {
-        "B" | "3" => RoffFont::Strong,
-        "I" | "2" => RoffFont::Emphasis,
-        "BI" | "4" => RoffFont::StrongEmphasis,
-        "C" | "CR" | "CW" | "V" => RoffFont::Code,
-        "CB" | "VB" => RoffFont::CodeStrong,
-        "CI" | "VI" => RoffFont::CodeEmphasis,
-        _ => RoffFont::Regular,
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum NamedCharacterSyntax {
     TwoCharacter,
     Bracketed,
     CharacterDescriptor,
 }
-
-#[cfg(test)]
-mod delimiter_scanning;
-#[cfg(test)]
-mod rule_matrix;
-#[cfg(test)]
-mod tests;
