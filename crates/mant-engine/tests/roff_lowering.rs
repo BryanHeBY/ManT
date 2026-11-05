@@ -267,3 +267,6 @@ mod source_spacing;
 mod source_adjacency;
 #[path = "roff_lowering/synopsis_execution.rs"]
 mod synopsis_execution;
+
+#[path = "roff_lowering/enclosure_operands.rs"]
+mod enclosure_operands;

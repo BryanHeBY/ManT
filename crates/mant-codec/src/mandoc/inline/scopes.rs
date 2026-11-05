@@ -411,7 +411,15 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
             Event::Glyph(value) => self.builder.append_text(&value),
             Event::Tight => self.builder.tighten_next_boundary(),
             Event::Release => self.builder.release_next_boundary(),
-            Event::EmptyWord => self.builder.execute_empty_word(),
+            Event::Word(super::super::containers::NativeWord::Empty) => {
+                self.builder.execute_empty_word();
+            }
+            Event::Word(super::super::containers::NativeWord::Invisible) => {
+                super::append_normalized_word(self.builder, "\\&");
+            }
+            Event::Word(super::super::containers::NativeWord::Roff(value)) => {
+                super::append_normalized_word(self.builder, value);
+            }
             Event::EnterKeep => self.builder.enter_keep_words(),
             Event::ExitKeep => self.builder.exit_keep_words(),
             Event::FunctionChildren(nodes) => {

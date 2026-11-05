@@ -483,7 +483,6 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.tighten_next_boundary();
     }
     let source = node.decoder_text().unwrap_or_default();
-    let events = decode(source);
     if source.is_empty() && builder.visits_empty_text_as_space(node) {
         // man_term.c visits every empty TEXT through term_vspace(); mdoc_term.c
         // does so only for NODE_LINE. Neither path calls term_word(), so a
@@ -491,6 +490,23 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
         builder.execute_visited_empty_text(node.flags.no_fill);
         return;
     }
+    append_roff_word(builder, source, WordSource::Text(node));
+}
+
+/// Es stores normalized operand spelling on En. Execute those bytes now,
+/// at En's current source/owner, without re-entering the Es definition node.
+pub(super) fn append_normalized_word(builder: &mut InlineBuilder, source: &str) {
+    append_roff_word(builder, source, WordSource::NormalizedOperand);
+}
+
+#[derive(Clone, Copy)]
+enum WordSource<'a> {
+    Text(&'a Node),
+    NormalizedOperand,
+}
+
+fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSource<'_>) {
+    let events = decode(source);
     // `term_word()` consumes its inter-word boundary even for an explicit
     // empty operand. That word event can resolve a preceding `\\z` glyph
     // before generated enclosure punctuation is emitted. Control *nodes* are
@@ -528,11 +544,17 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     builder.begin_native_word_owner();
     // pre_alternate selects an operand role before this actual term_word;
     // internal font escapes remain within this same word identity.
-    builder.record_current_native_operand(
-        events
-            .iter()
-            .any(|event| matches!(event, RoffInlineEvent::Font(_))),
-    );
+    if matches!(origin, WordSource::Text(_)) {
+        builder.record_current_native_operand(
+            events
+                .iter()
+                .any(|event| matches!(event, RoffInlineEvent::Font(_))),
+        );
+    }
+    let recognize_generated_references = match origin {
+        WordSource::Text(node) => !node.flags.no_fill,
+        WordSource::NormalizedOperand => !builder.execution.no_fill_word_active,
+    };
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {
@@ -540,7 +562,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
             zero_advance: &mut builder.execution.zero_advance,
             pending_word_end_break: pending_word_end_break && !field_authoritative,
             policy: font::TextExecutionPolicy {
-                recognize_generated_references: !node.flags.no_fill,
+                recognize_generated_references,
                 record_native_cells: true,
                 field_authoritative,
                 word_space,
@@ -555,7 +577,7 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     // a buffered zero-width glyph (for example \&) still occupies that row.
     let occupies_literal_row = !execution.output.is_empty()
         || builder.zero_advance.has_buffered_glyph()
-        || (node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
+        || matches!(origin, WordSource::Text(node) if node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
         || events.iter().any(|event| {
             matches!(
                 event,
@@ -590,8 +612,8 @@ fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     }
     let continues_line = execution
         .source_continuation
-        .unwrap_or(node.flags.line_continuation);
-    if node.flags.delimiter_open || continues_line {
+        .unwrap_or(matches!(origin, WordSource::Text(node) if node.flags.line_continuation));
+    if matches!(origin, WordSource::Text(node) if node.flags.delimiter_open) || continues_line {
         builder.tighten_next_boundary();
     }
     builder.continue_source_line(continues_line);

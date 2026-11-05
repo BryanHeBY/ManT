@@ -69,7 +69,10 @@ impl InlineBuilder {
         self.begin_word_projection(true);
         self.begin_native_word_owner();
         self.execution.native_word_writes = Some(Vec::new());
-        self.append_word(Vec::new());
+        // term_word("") updates registers but writes no operand cell. Its
+        // automatic separator, if any, is recorded independently; the word
+        // event itself cannot manufacture a no-fill physical row.
+        self.append_word_with_literal_row(Vec::new(), false, TrailingOutput::None, 0);
     }
 
     /// Generated glyphs use the effective font just like authored text, but

@@ -11,6 +11,14 @@ pub(super) use posts::ScopePostState;
 
 use super::{first_part_children, inline::enclosure_marks, roff_escape::RoffFont};
 
+/// Actual `term_word` operands, before native escape execution. A zero-cell
+/// empty word differs from the invisible input cell produced by `\\&`.
+pub(super) enum NativeWord<'a> {
+    Empty,
+    Invisible,
+    Roff(&'a str),
+}
+
 pub(super) enum Event<'a> {
     /// Source owner of subsequent generated output. True executes this
     /// node's `NODE_LINE`; false only changes ownership for a later post.
@@ -30,10 +38,11 @@ pub(super) enum Event<'a> {
     Children(&'a [Node]),
     /// `pre_ce` visits `term_word/roff_term_pre` directly, without `NODE_LINE`.
     AlignedChildren(&'a [Node]),
+    /// Formatter-generated spelling, already resolved to literal glyphs.
     Glyph(String),
     Tight,
     Release,
-    EmptyWord,
+    Word(NativeWord<'a>),
     EnterKeep,
     ExitKeep,
     EnterFont(RoffFont, Option<u32>),
@@ -255,15 +264,11 @@ fn emit_enclosure<'a>(
         emit(Event::Children(&node.children));
         return true;
     }
-    let Some((open, close)) = resolved_enclosure_marks(node) else {
+    let Some(marks) = resolved_enclosure_marks(node) else {
         return false;
     };
-    if let Some(open) = open {
-        if open.is_empty() {
-            emit(Event::EmptyWord);
-        } else {
-            emit(Event::Glyph(open));
-        }
+    if let Some(open) = marks.opening {
+        emit_enclosure_mark(open, emit);
         emit(Event::Tight);
     }
     emit(Event::Children(&node.children));
@@ -271,7 +276,7 @@ fn emit_enclosure<'a>(
         if node.kind == NodeKind::Body {
             emit(Event::RestoreBody(node.id));
         }
-        emit_enclosure_post(close.as_deref(), emit);
+        emit_enclosure_post(marks.closing, emit);
     }
     true
 }
@@ -314,13 +319,13 @@ fn walk_scope_end<'a>(
         posts.finish(end.body_id);
         return true;
     }
-    if let Some((_, close)) = resolved_enclosure_marks(node) {
+    if let Some(marks) = resolved_enclosure_marks(node) {
         if !node.children.is_empty() {
             emit(Event::BeginNode(node));
         }
         emit(Event::Children(&node.children));
         emit(Event::RestoreBody(end.body_id));
-        emit_enclosure_post(close.as_deref(), emit);
+        emit_enclosure_post(marks.closing, emit);
         posts.finish(end.body_id);
         return true;
     }
@@ -371,12 +376,25 @@ fn emit_structural_function<'a>(
     }
 }
 
-fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<String>)> {
+enum EnclosureMark<'a> {
+    Glyph(String),
+    Operand(&'a str),
+}
+
+struct EnclosureMarks<'a> {
+    opening: Option<EnclosureMark<'a>>,
+    closing: Option<EnclosureMark<'a>>,
+}
+
+fn resolved_enclosure_marks(node: &Node) -> Option<EnclosureMarks<'_>> {
     node.enclosure.as_ref().map_or_else(
         || {
             let name = node.macro_token.as_ref()?;
             if name == &Mdoc(MdocMacro::En) {
-                Some((None, None))
+                Some(EnclosureMarks {
+                    opening: None,
+                    closing: None,
+                })
             } else {
                 enclosure_marks(name).map(|(opening, closing)| {
                     // mdoc_term.c::termp_quote_pre/post (1600-1603, 1658-1661)
@@ -384,20 +402,23 @@ fn resolved_enclosure_marks(node: &Node) -> Option<(Option<String>, Option<Strin
                     // child is an `.Mt`; every other child shape takes the
                     // device glyph pair from the character catalog.
                     if matches!(name, Mdoc(MdocMacro::Aq | MdocMacro::Ao)) && sole_mt_child(node) {
-                        return (Some("<".to_owned()), Some(">".to_owned()));
+                        return EnclosureMarks {
+                            opening: Some(EnclosureMark::Glyph("<".to_owned())),
+                            closing: Some(EnclosureMark::Glyph(">".to_owned())),
+                        };
                     }
-                    (Some(opening), Some(closing))
+                    EnclosureMarks {
+                        opening: Some(EnclosureMark::Glyph(opening)),
+                        closing: Some(EnclosureMark::Glyph(closing)),
+                    }
                 })
             }
         },
         |enclosure| {
-            Some((
-                Some(super::roff_escape::visible_text(&enclosure.opening)),
-                enclosure
-                    .closing
-                    .as_deref()
-                    .map(super::roff_escape::visible_text),
-            ))
+            Some(EnclosureMarks {
+                opening: Some(EnclosureMark::Operand(&enclosure.opening)),
+                closing: enclosure.closing.as_deref().map(EnclosureMark::Operand),
+            })
         },
     )
 }
@@ -411,14 +432,18 @@ fn sole_mt_child(node: &Node) -> bool {
     }
 }
 
-fn emit_enclosure_post<'a>(close: Option<&str>, emit: &mut impl FnMut(Event<'a>)) {
+fn emit_enclosure_mark<'a>(mark: EnclosureMark<'a>, emit: &mut impl FnMut(Event<'a>)) {
+    match mark {
+        EnclosureMark::Glyph(value) => emit(Event::Glyph(value)),
+        EnclosureMark::Operand("") => emit(Event::Word(NativeWord::Empty)),
+        EnclosureMark::Operand(value) => emit(Event::Word(NativeWord::Roff(value))),
+    }
+}
+
+fn emit_enclosure_post<'a>(close: Option<EnclosureMark<'a>>, emit: &mut impl FnMut(Event<'a>)) {
     if let Some(close) = close {
         emit(Event::Tight);
-        if close.is_empty() {
-            emit(Event::EmptyWord);
-        } else {
-            emit(Event::Glyph(close.to_owned()));
-        }
+        emit_enclosure_mark(close, emit);
     } else {
         // mdoc_term.c releases NOSPACE after an absent `.En` closing mark.
         emit(Event::Release);
@@ -488,28 +513,31 @@ fn authored_enclosure<'a>(
             emit(Event::At(child, true));
         }
         match child.kind {
-            NodeKind::Head => {
+            NodeKind::Head | NodeKind::Tail => {
                 emit(Event::Children(&child.children));
-                if !head.is_empty() && (!body.is_empty() || !tail.is_empty()) {
-                    emit(Event::Tight);
-                }
             }
             NodeKind::Body => {
+                // termp_eo_pre distinguishes a normal BODY beginning with
+                // an immediate end marker from a genuinely empty word.
+                // Presence is the original child pointer, not visible text.
+                if head.is_empty() && body.first().is_some_and(|node| node.scope_end.is_some()) {
+                    emit(Event::Word(NativeWord::Invisible));
+                } else if !head.is_empty() && (!body.is_empty() || !tail.is_empty()) {
+                    emit(Event::Tight);
+                }
                 emit(Event::Children(&child.children));
                 if !posts.ended(child.id) {
                     emit(Event::RestoreBody(child.id));
+                    // termp_eo_post writes a real NBRZW cell for the fully
+                    // absent HEAD/BODY/TAIL form; it is not term_word("").
+                    if (!head.is_empty() || !body.is_empty()) && !tail.is_empty() {
+                        emit(Event::Tight);
+                    } else if head.is_empty() && body.is_empty() && tail.is_empty() {
+                        emit(Event::Word(NativeWord::Invisible));
+                    } else if tail.is_empty() {
+                        emit(Event::Release);
+                    }
                 }
-                if head.is_empty() && body.is_empty() && tail.is_empty() {
-                    emit(Event::EmptyWord);
-                } else if tail.is_empty() && !posts.ended(child.id) {
-                    emit(Event::Release);
-                }
-            }
-            NodeKind::Tail => {
-                if !tail.is_empty() && (!head.is_empty() || !body.is_empty()) {
-                    emit(Event::Tight);
-                }
-                emit(Event::Children(&child.children));
             }
             _ => emit(Event::Children(&node.children[index..=index])),
         }

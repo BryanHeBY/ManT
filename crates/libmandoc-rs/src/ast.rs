@@ -189,9 +189,9 @@ pub enum AuthorMode {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NormalizedEnclosure {
-    /// Visible opening delimiter.
+    /// Raw normalized opening operand, including any roff escapes.
     pub opening: String,
-    /// Visible closing delimiter, when the definition supplied one.
+    /// Raw closing operand when supplied; `Some("")` differs from absence.
     pub closing: Option<String>,
 }
 

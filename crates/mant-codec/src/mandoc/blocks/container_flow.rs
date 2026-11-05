@@ -1,6 +1,6 @@
 //! Container events re-enter the single driver and preserve font/flush lifetimes.
 use super::{InlineBuilder, Node, source_span, targets};
-use crate::mandoc::containers::{ContainerSink, Event};
+use crate::mandoc::containers::{ContainerSink, Event, NativeWord};
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 fn append_generated_event(builder: &mut InlineBuilder, event: Event<'_>) {
@@ -11,7 +11,13 @@ fn append_generated_event(builder: &mut InlineBuilder, event: Event<'_>) {
         }
         Event::Tight => builder.tighten_next_boundary(),
         Event::Release => builder.release_next_boundary(),
-        Event::EmptyWord => builder.execute_empty_word(),
+        Event::Word(NativeWord::Empty) => builder.execute_empty_word(),
+        Event::Word(NativeWord::Invisible) => {
+            crate::mandoc::inline::append_normalized_word(builder, "\\&");
+        }
+        Event::Word(NativeWord::Roff(value)) => {
+            crate::mandoc::inline::append_normalized_word(builder, value);
+        }
         Event::FunctionBodyBegin(synopsis) => builder.begin_function_body(synopsis),
         Event::FunctionBodyEnd(synopsis) => builder.finish_function_body(synopsis),
         _ => unreachable!("container children and font scopes handled above"),

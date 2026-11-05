@@ -827,7 +827,15 @@ wrappers. When Markdown cannot represent a style without changing that text,
 the style may be simplified while code, navigation and authored hard rows
 remain intact.
 
-An empty `Eo`/`Ec` scope is a zero-width word event. If an authored enclosure has no closing delimiter, its closing boundary still releases an internal no-space request. Empty strings and zero-width text can consume word boundaries; invisible targets and hidden nodes cannot.
+An empty `Eo`/`Ec` scope writes mandoc's invisible `\&` word, not a genuinely
+empty operand. The former contributes a native cell; the latter can update
+word spacing without occupying a physical row. Absent and present-empty
+HEAD/BODY/TAIL operands remain distinct. An enclosure without a closing
+delimiter still releases its internal no-space request at the native post.
+Normalized `Es` operands retain their roff spelling and execute through the
+same word decoder as text, including font changes, `\p`, `\z` and `\c`.
+They are not flattened to delimiter strings before execution. Invisible
+navigation targets and hidden nodes do not consume a word boundary.
 
 Inline spacing follows output order across prose, definition heads, literal displays, and supported tbl source recovery. `Ap` attaches on both sides, including across styled siblings (`.No x Ap y` becomes `x'y`). A generated closing bracket or quote consumes an internal `Ns`/`Pf` boundary; it does not carry that boundary outside the enclosure. An explicitly external `Ns` can still join the following text. Styles and zero-width targets do not consume pending boundaries; real line and paragraph breaks terminate them.
 
