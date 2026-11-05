@@ -82,7 +82,7 @@ fn restored_nodes(query: &ResolvedContent, context: &str) -> Vec<Inline> {
     }
 }
 
-fn final_rounds(nodes: &[Inline], context: &str, options: MarkdownOptions) -> Meaning {
+pub(super) fn final_rounds(nodes: &[Inline], context: &str, options: MarkdownOptions) -> Meaning {
     let expected = meaning(nodes);
     let mut query = enclosed(nodes.to_vec(), context);
     let mut result = Meaning::default();

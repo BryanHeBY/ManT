@@ -14,10 +14,9 @@ pub(crate) fn escape_text(value: &str) -> String {
             return output;
         };
         let url = &value[offset..end];
-        if url
-            .chars()
-            .any(|character| character.is_whitespace() || matches!(character, '<' | '>'))
-        {
+        if url.chars().any(|character| {
+            character.is_whitespace() || character.is_control() || matches!(character, '<' | '>')
+        }) {
             append_plain_text(&mut output, &remainder[start..start + opening_width]);
             remainder = after_open;
             continue;
@@ -74,6 +73,12 @@ fn escape_html_attribute(value: &str) -> String {
             '"' => output.push_str("&quot;"),
             '<' => output.push_str("&lt;"),
             '>' => output.push_str("&gt;"),
+            '\r' => output.push_str("&#13;"),
+            '\n' => output.push_str("&#10;"),
+            '\t' => output.push_str("&#9;"),
+            character if character.is_control() => {
+                output.extend(std::iter::repeat_n(' ', character.len_utf8()));
+            }
             _ => output.push(character),
         }
     }
@@ -90,6 +95,25 @@ fn append_plain_text(output: &mut String, value: &str) {
     let mut characters = value.chars().peekable();
     let mut previous = None;
     while let Some(character) = characters.next() {
+        if !crate::text_safety::is_safe_source_character(character) {
+            output.extend(std::iter::repeat_n(' ', character.len_utf8()));
+            previous = Some(' ');
+            continue;
+        }
+        if character == '\r' {
+            // CR decoded from an entity is content, not a new Markdown
+            // source line. LF alone participates in hard-row framing.
+            output.push_str("&#13;");
+            previous = Some(character);
+            continue;
+        }
+        if character == '\u{feff}' {
+            // Decoded BOM content must not turn back into the source BOM
+            // when a public inline fragment starts with this scalar.
+            output.push_str("&#65279;");
+            previous = Some(character);
+            continue;
+        }
         let intraword_underscore = character == '_'
             && previous.is_some_and(char::is_alphanumeric)
             && characters

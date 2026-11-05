@@ -47,7 +47,7 @@ List tightness follows the parser's direct item structure: a loose nested list d
 | Markdown construct | IR result | Notes |
 | --- | --- | --- |
 | Plain text | `text` | UTF-8 is preserved |
-| Code span | `code` | Literal content |
+| Code span | `code` | Literal content; source line endings become spaces |
 | Strong emphasis | `strong` | Nested content retained |
 | Emphasis | `emphasis` | Nested content retained |
 | Soft break | Text space | Source wrapping does not change prose |
@@ -471,6 +471,10 @@ first-line spelling above. Other edge or consecutive breaks keep the standard
 inline spelling. No visible or zero-width sentinel is inserted. Code content
 with hard rows is emitted as separate code spans around those row boundaries,
 because CommonMark normalizes line endings inside one code span to spaces.
+For hand-built IR, export first canonicalizes CR and CRLF to LF in a multi-row
+`Inline::Code` or fenced payload, without mutating the original owner. Existing
+LF hard rows remain hard rows. The Rust `commonmark_code_span` helper instead
+encodes exactly one syntax span, so CR, LF and CRLF each become one space.
 Author row-edge ASCII spaces and tabs are protected as character entities and
 decode to their original characters. Boundary whitespace and hard rows can lie
 outside a style delimiter while the
@@ -587,7 +591,44 @@ not the first block's variant. An already open hard tail is settled once;
 navigation cannot move or duplicate its completed empty row. This avoids
 counting the same resolved gap both as a hard row and as paragraph distance.
 
-A leading UTF-8 byte-order mark is masked so it cannot hide the embedded tldr marker or demote the first heading. Terminal-unsafe control characters are replaced with spaces. Both cases produce diagnostics while preserving source offsets.
+A leading UTF-8 byte-order mark is masked so it cannot hide the embedded tldr
+marker or demote the first heading. Original source controls are masked before
+syntax parsing. TAB, LF and CR are permitted; other Unicode control characters
+become one ASCII space per UTF-8 byte, preserving original source offsets.
+Both kinds of source masking produce diagnostics. Malformed raw source is
+therefore interpreted after masking; this source-level recovery does not
+promise to preserve an original control-bearing destination's identity.
+
+Character references can introduce controls absent from the original bytes.
+Decoded Text, Code and link titles receive the same control policy on their
+first read, with a `markdown.control-characters` diagnostic when masking is
+needed. The diagnostic covers the original parser event containing the
+spelling, not an invented byte position within the decoded value. The locked
+parser treats numeric C1 references as their Unicode scalars: `&#133;` is a
+control and is masked, while `&#8230;` or `&hellip;` is an ordinary ellipsis.
+Double-encoded entities are decoded once, not recursively.
+
+CR decoded into ordinary Text or a link label remains a content scalar, not a
+second source-line terminator. Export writes it as `&#13;`; LF alone carries
+the owner's logical hard rows. Title CR, LF and TAB use metadata entities and
+never pass through visible-row assembly. NBSP, Unicode line/paragraph
+separators and zero-width space retain their existing scalar identities.
+An entity-decoded U+FEFF is also content, distinct from a raw leading source
+BOM. Export writes it as `&#65279;` so a detached fragment cannot turn that
+content back into an input BOM.
+
+Destinations are not cleaned into different valid addresses. A decoded target
+with controls keeps its original invalid IR value and validator diagnostic;
+safe Markdown export preserves the label transparently without an activatable
+wrapper. This invalid-target policy is distinct from retaining valid target
+identity and from the earlier source-byte masking recovery.
+
+String export of hand-built IR has no producer-diagnostic channel. It applies
+the same safe content/title masking and the code-line projection described
+above without changing the original IR. A later read must not be the first
+place where that exported content needs control masking. These explicit
+projections do not promise that every arbitrary hand-built code scalar or
+invalid target can round-trip through CommonMark; use IR JSON for that data.
 
 Markdown parsing never executes HTML, follows remote links, loads images, or reads linked local files. Cross-document navigation resolves only through ManT's registered catalog.
 

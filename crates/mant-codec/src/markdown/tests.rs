@@ -4,6 +4,7 @@ use mant_ir::{Block, EntryKind, Inline, ListKind, SourceFormat, TableAlignment, 
 
 use super::{parse_document, parse_markdown};
 
+mod decoded_content;
 mod entry_forms;
 mod source_contracts;
 

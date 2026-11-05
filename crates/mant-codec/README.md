@@ -26,6 +26,22 @@ through bracket serialization and final framing. Link metadata has its own
 escaping: literal entities and control whitespace never become visible rows.
 Unrepresentable nested link ownership remains outside the portable subset.
 
+Markdown admission masks terminal-unsafe controls both in original source
+bytes and in decoded Text, Code and link titles. Decoded findings retain the
+original parser event's source range, not a fabricated decoded-character
+offset. TAB, LF and CR remain allowed content; Text/label CR is entity-encoded
+on export so it cannot change Markdown source lines. Metadata stays outside
+visible-row framing. Destinations containing controls remain invalid in IR;
+safe export preserves their labels without creating an activatable wrapper.
+Raw-source masking precedes syntax parsing and is not a destination-identity
+guarantee for malformed control-bearing source.
+
+Encoding hand-built IR is a checked projection without mutating that IR:
+unsafe content/title controls are masked, code/fence CR and CRLF become LF,
+and multi-row `Inline::Code` retains its existing LF hard rows. The separate
+`commonmark_code_span` helper encodes one syntax span, whose CR/LF/CRLF become
+spaces. These reductions do not make Markdown a lossless IR transport.
+
 Routine tests include 13,729 delimiter-risk configurations and 2,720 Markdown
 link-source configurations, each checked twice against original IR. The full
 252,362-configuration corpus has an explicit release entry:
@@ -34,6 +50,10 @@ link-source configurations, each checked twice against original IR. The full
 cargo test --locked -p mant-codec --release --all-features --lib \
   complete_phrasing_link_matrix_has_252362_original_ir_two_round_cases \
   -- --ignored --nocapture
+
+cargo test --locked -p mant-codec --all-features --lib \
+  link_metadata_and_bracket_context_matrix_use_original_ir_for_both_readbacks \
+  -- --nocapture
 ```
 
 Its style counters distinguish first-read loss, further second-read loss and

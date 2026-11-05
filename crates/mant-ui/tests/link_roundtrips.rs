@@ -7,6 +7,8 @@ use unicode_width::UnicodeWidthStr;
 
 #[path = "../../mant-engine/tests/support/json_roundtrip.rs"]
 mod json_roundtrip;
+#[path = "../../mant-engine/tests/support/link_evidence.rs"]
+mod link_evidence;
 #[path = "../../mant-engine/tests/support/link_meaning.rs"]
 mod link_meaning;
 #[path = "support/reader_actions.rs"]

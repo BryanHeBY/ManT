@@ -363,11 +363,16 @@ fn coalesce_code_pieces(pieces: Vec<InlinePiece<'_>>) -> Vec<InlinePiece<'_>> {
 }
 
 fn code_rows(value: &str) -> String {
+    // Inline::Code may own multiple logical hard rows, unlike the single
+    // commonmark_code_span syntax helper. Keep that enhanced reading policy;
+    // canonicalize CR/CRLF before splitting, so a CRLF cannot leave an extra
+    // code-space at the end of its first row.
+    let value = crate::text_safety::markdown_code_text(value, false);
     if value.is_empty() {
         return String::new();
     }
     if !value.contains('\n') {
-        return code_span(value);
+        return code_span(&value);
     }
     let mut output = String::with_capacity(value.len());
     for (index, row) in value.split('\n').enumerate() {
@@ -385,6 +390,73 @@ fn code_rows(value: &str) -> String {
 mod tests {
     use super::*;
     use pulldown_cmark::{Event, Parser, Tag};
+
+    #[test]
+    fn forced_unstyled_recovery_uses_decoded_admission_and_safe_metadata() {
+        for (raw, normalized) in [
+            ("\r\n", "\r\n"),
+            ("\x0c", " "),
+            ("\x1b", " "),
+            ("\u{81}", "  "),
+        ] {
+            let source = [Inline::Strong {
+                children: vec![Inline::Link {
+                    target: mant_ir::LinkTarget::External {
+                        uri: "https://a.test/&amp;".into(),
+                    },
+                    title: Some(format!("before{raw}after\\")),
+                    children: vec![Inline::Text {
+                        value: format!("a{raw}b"),
+                    }],
+                }],
+            }];
+            let markdown = render_unstyled_framed(
+                source.iter(),
+                MarkdownOptions::default(),
+                false,
+                Framing::Rows {
+                    manual_links: false,
+                    interruptible: false,
+                },
+                TextContext::Ordinary,
+            );
+            assert!(
+                markdown
+                    .chars()
+                    .all(|character| !character.is_control() || matches!(character, '\n' | '\t'))
+            );
+            let parsed = crate::parse_markdown(&markdown, None).unwrap();
+            assert_eq!(parsed.document.diagnostics, []);
+            let [mant_ir::Block::Paragraph { children, .. }] = parsed.document.blocks.as_slice()
+            else {
+                panic!("paragraph")
+            };
+            let [
+                Inline::Link {
+                    target,
+                    title,
+                    children,
+                },
+            ] = children.as_slice()
+            else {
+                panic!("original link remains")
+            };
+            assert_eq!(
+                target,
+                &mant_ir::LinkTarget::External {
+                    uri: "https://a.test/&amp;".into()
+                }
+            );
+            assert_eq!(
+                title.as_deref(),
+                Some(format!("before{normalized}after\\").as_str())
+            );
+            assert_eq!(
+                mant_ir::inline_plain_text(children),
+                format!("a{normalized}b")
+            );
+        }
+    }
 
     #[test]
     fn unstyled_fallback_reencodes_authored_markers_code_and_link_identities() {

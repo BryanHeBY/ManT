@@ -93,3 +93,28 @@ fn bracket_witness_retains_original_label_metadata_and_occurrence_extent() {
         "[a ](https://a.test/&amp;amp; \"say \\\\&#10;\")"
     ));
 }
+
+#[test]
+fn decoded_control_witness_agrees_with_actual_reader_not_only_bare_parser() {
+    let meaning = super::link_meaning("a&#13;&#10;b", "https://a.test", Some("t u")).unwrap();
+    let raw = "[a&#13;<br>b](https://a.test \"t&#12;u\")";
+    assert!(super::matches_link(&meaning, raw));
+    let framing = super::Framing::Rows {
+        manual_links: false,
+        interruptible: true,
+    };
+    let compare = |candidate| {
+        super::equivalent_with_meanings(
+            [(raw, None, Some(&meaning))].into_iter(),
+            candidate,
+            framing,
+        )
+    };
+    assert!(compare("[a&#13;  \nb](https://a.test \"t&#12;u\")"));
+    // Without decoded normalization the local witness would wrongly reject
+    // this exact safe meaning; without final CR protection it would admit
+    // an output whose actual reader no longer owns one Link.
+    assert!(!compare("[a\r  \nb](https://a.test \"t u\")"));
+    assert!(!compare("[a&#13;  \nb](https://other.test \"t u\")"));
+    assert!(!compare("[a&#13;  \nb](https://a.test \"t x\")"));
+}

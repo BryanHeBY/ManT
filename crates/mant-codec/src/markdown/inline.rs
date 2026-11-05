@@ -66,9 +66,12 @@ fn parse_inline_sequence(
         end_offset = range.end;
         match event {
             Event::End(actual) if Some(actual) == expected_end => break,
-            Event::Text(value) => push_text(&mut output, value.into_string()),
+            Event::Text(value) => push_text(
+                &mut output,
+                super::decoded::normalize(value.into_string(), &range, source, diagnostics),
+            ),
             Event::Code(value) => output.push(Inline::Code {
-                value: value.into_string(),
+                value: super::decoded::normalize(value.into_string(), &range, source, diagnostics),
             }),
             Event::SoftBreak if mant_ir::last_visible_character(&output) != Some('\n') => {
                 push_text(&mut output, " ".to_owned());
@@ -115,7 +118,9 @@ fn parse_inline_sequence(
                 cursor.ascend();
                 end_offset = nested_end;
                 let destination = dest_url.into_string();
-                let title = (!title.is_empty()).then(|| title.into_string());
+                let title = (!title.is_empty()).then(|| {
+                    super::decoded::normalize(title.into_string(), &range, source, diagnostics)
+                });
                 output.push(Inline::Link {
                     target: mant_ir::LinkTarget::from_uri(&destination),
                     title,

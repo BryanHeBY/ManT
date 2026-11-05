@@ -7,6 +7,7 @@ mod bindings;
 mod blocks;
 pub(crate) mod canonical_br;
 mod container;
+mod decoded;
 mod directives;
 mod entries;
 mod events;
@@ -159,12 +160,20 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
         });
     }
     if controls > 0 {
+        let first = source_text
+            .char_indices()
+            .find(|(_, character)| !crate::text_safety::is_safe_source_character(*character))
+            .map_or(0, |(offset, _)| offset);
+        let end = source_text
+            .char_indices()
+            .rfind(|(_, character)| !crate::text_safety::is_safe_source_character(*character))
+            .map_or(first, |(offset, character)| offset + character.len_utf8());
         diagnostics.push(Diagnostic {
             impact: mant_ir::DiagnosticImpact::None,
             level: DiagnosticLevel::Warning,
             code: Some("markdown.control-characters".to_owned()),
             message: format!("masked {controls} terminal-unsafe control character(s)"),
-            source: None,
+            source: Some(MarkdownSource::new(source_text).span(&(first..end))),
         });
     }
     Some(sanitized)

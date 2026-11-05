@@ -18,6 +18,7 @@ use mant_ir::ResolvedContent;
 
 mod addressable_maps;
 mod block_structure;
+mod decoded_blocks;
 mod definition_rows;
 mod hard_rows;
 mod inline_contexts;

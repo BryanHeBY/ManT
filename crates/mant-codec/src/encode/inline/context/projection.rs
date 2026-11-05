@@ -1,5 +1,7 @@
 //! Compare accepted local phrasing with one actual parse of the whole sequence.
 
+use std::borrow::Cow;
+
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use super::serialization::Framing;
@@ -59,7 +61,10 @@ pub(in crate::encode::inline) fn link_meaning(
         return None;
     }
     let mut linked = Projection {
-        links: vec![(destination.to_owned(), title.unwrap_or_default().to_owned())],
+        links: vec![(
+            destination.to_owned(),
+            normalized_content(title.unwrap_or_default()).into_owned(),
+        )],
         html: meaning.html,
         ..Projection::default()
     };
@@ -235,6 +240,8 @@ fn equivalent_with_meanings<'a>(
 fn project_rows(source: &str) -> Option<Projection> {
     #[cfg(test)]
     super::work::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + source.len()));
+    let (safe, _) = crate::text_safety::mask_terminal_controls(source);
+    let source = safe.as_deref().unwrap_or(source);
     project_events(
         crate::markdown::canonical_br::parse_events(source, pulldown_cmark::Options::empty())
             .map(|(event, _)| event),
@@ -254,6 +261,8 @@ fn project(source: &str) -> Option<Projection> {
     // A phrasing stream is not a block root. Guard both edges and encode
     // its existing hard rows as inline breaks; block-prefix/row framing is
     // applied by the caller after the accepted phrasing is returned.
+    let (safe, _) = crate::text_safety::mask_terminal_controls(source);
+    let source = safe.as_deref().unwrap_or(source);
     let mut framed = String::with_capacity(source.len() + 4);
     framed.push_str("X ");
     append_phrasing_rows(&mut framed, source);
@@ -295,9 +304,10 @@ fn project_events<'a>(events: impl Iterator<Item = Event<'a>>) -> Option<Project
                 dest_url, title, ..
             }) => {
                 owners.push(result.links.len());
-                result
-                    .links
-                    .push((dest_url.into_string(), title.into_string()));
+                result.links.push((
+                    dest_url.into_string(),
+                    normalized_content(&title).into_owned(),
+                ));
             }
             Event::End(TagEnd::Link) => {
                 owners.pop();
@@ -306,7 +316,7 @@ fn project_events<'a>(events: impl Iterator<Item = Event<'a>>) -> Option<Project
                 // Code is a separate semantic bit; its literal delimiters
                 // must never be confused with generated style punctuation.
                 let styles = u8::from(strong > 0) | (u8::from(emphasis > 0) << 1) | code;
-                result.text(&text, styles, owners.last().copied());
+                result.text(&normalized_content(&text), styles, owners.last().copied());
             }
             Event::InlineHtml(html) if matches!(html.as_ref(), "<br>" | "<br />") => {
                 result.text("\n", 0, None);
@@ -323,6 +333,15 @@ fn project_events<'a>(events: impl Iterator<Item = Event<'a>>) -> Option<Project
         }
     }
     Some(result)
+}
+
+/// Match the actual reader's decoded admission, independently of whether a
+/// control arrived as a literal source byte or a character reference. This
+/// scalar pass is linear and does not reparse a document or its prefixes.
+fn normalized_content(source: &str) -> Cow<'_, str> {
+    crate::text_safety::mask_terminal_controls(source)
+        .0
+        .map_or(Cow::Borrowed(source), Cow::Owned)
 }
 
 /// Hard rows have inline syntax at both the local and complete parse

@@ -141,7 +141,9 @@ pub fn render_tldr(page: &TldrDocument) -> Vec<String> {
 fn render_more_information(value: &str) -> String {
     let value = value.trim();
     if (value.starts_with("http://") || value.starts_with("https://"))
-        && !value.chars().any(char::is_whitespace)
+        && !value
+            .chars()
+            .any(|character| character.is_whitespace() || character.is_control())
         && !value.contains(['<', '>'])
     {
         return format!("**More information:** <{value}>");

@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod decoded_content;
 mod finalization;
 mod link_semantics;
 mod phrasing_matrix;

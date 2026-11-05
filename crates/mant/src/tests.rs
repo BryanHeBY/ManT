@@ -657,7 +657,7 @@ fn invoke_with_terminal_output(
 }
 
 #[test]
-fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exact() {
+fn markdown_checks_untrusted_heading_controls_without_mutating_input() {
     let mut document = semantic_markdown();
     document.heading = Some("ris\u{1b}c".into());
     let host = FakeHost {
@@ -670,7 +670,24 @@ fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exac
     let (status, redirected, diagnostics) = invoke(&arguments, b"", &host);
     assert_eq!(status, 0);
     assert_eq!(diagnostics.len(), 0);
-    assert!(redirected.contains('\u{1b}'));
+    // Markdown's checked hand-IR projection masks unsafe content before
+    // serialization, including redirected output. JSON retains the input IR.
+    assert!(!redirected.contains('\u{1b}'));
+    assert!(redirected.contains("ris c"));
+    let (status, json, diagnostics) = invoke(&["--input", path, "--format", "json"], b"", &host);
+    assert_eq!(status, 0);
+    assert_eq!(diagnostics.len(), 0);
+    assert!(json.contains("\\u001b"));
+    assert_eq!(
+        host.document
+            .as_ref()
+            .unwrap()
+            .heading
+            .as_ref()
+            .unwrap()
+            .plain_text(),
+        "ris\u{1b}c"
+    );
 
     let (status, terminal, diagnostics) = invoke_with_terminal_output(&arguments, b"", &host);
     assert_eq!(status, 0);

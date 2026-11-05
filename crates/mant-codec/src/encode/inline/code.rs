@@ -1,7 +1,8 @@
 //! Backtick framing for inline code and preformatted blocks.
 
 pub(in crate::encode) fn fenced_code(value: &str, language: Option<&str>) -> String {
-    let width = longest_backtick_run(value).saturating_add(1).max(3);
+    let value = crate::text_safety::markdown_code_text(value, false);
+    let width = longest_backtick_run(&value).saturating_add(1).max(3);
     let fence = "`".repeat(width);
     let language = language
         .map(|language| {
@@ -27,7 +28,8 @@ pub(crate) fn code_span(value: &str) -> String {
 }
 
 pub(super) fn append_code_span(output: &mut String, value: &str) {
-    let width = longest_backtick_run(value).saturating_add(1).max(1);
+    let value = crate::text_safety::markdown_code_text(value, true);
+    let width = longest_backtick_run(&value).saturating_add(1).max(1);
     let padding = (value.starts_with(['`', ' ']) || value.ends_with(['`', ' ']))
         && !value.bytes().all(|byte| byte == b' ');
     for _ in 0..width {
@@ -36,7 +38,7 @@ pub(super) fn append_code_span(output: &mut String, value: &str) {
     if padding {
         output.push(' ');
     }
-    output.push_str(value);
+    output.push_str(&value);
     if padding {
         output.push(' ');
     }
@@ -61,6 +63,38 @@ fn longest_backtick_run(value: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn manual_code_projection_normalizes_line_endings_without_bare_controls() {
+        for (value, span, literal) in [
+            ("a\rb", "a b", "a\nb"),
+            ("a\r\nb", "a b", "a\nb"),
+            ("a\nb", "a b", "a\nb"),
+            ("a\x0cb\x1bc\u{81}d", "a b c  d", "a b c  d"),
+            (
+                "a\u{a0}b\u{2028}c\u{2029}d\u{200b}e",
+                "a\u{a0}b\u{2028}c\u{2029}d\u{200b}e",
+                "a\u{a0}b\u{2028}c\u{2029}d\u{200b}e",
+            ),
+        ] {
+            let code = super::code_span(value);
+            let parsed = crate::parse_markdown(&code, None).unwrap().document;
+            assert_eq!(parsed.diagnostics, []);
+            let [mant_ir::Block::Paragraph { children, .. }] = parsed.blocks.as_slice() else {
+                panic!("code paragraph")
+            };
+            assert!(
+                matches!(children.as_slice(), [mant_ir::Inline::Code { value }] if value == span)
+            );
+            let fenced = super::fenced_code(value, Some("text"));
+            let parsed = crate::parse_markdown(&fenced, None).unwrap().document;
+            assert_eq!(parsed.diagnostics, []);
+            let [mant_ir::Block::Preformatted { children, .. }] = parsed.blocks.as_slice() else {
+                panic!("literal")
+            };
+            assert_eq!(mant_ir::inline_plain_text(children), literal);
+        }
+    }
+
     #[test]
     fn direct_code_writes_keep_backticks_padding_and_unicode_after_readback() {
         for (value, expected) in [

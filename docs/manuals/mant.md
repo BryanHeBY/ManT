@@ -700,6 +700,12 @@ features it does not implement.
 
 Source spans keep original Markdown line and column positions. Extracting an
 embedded tldr preface does not shift those coordinates.
+Terminal-unsafe controls are masked on the first read, including controls
+introduced by character references in text or link titles. Such decoded
+diagnostics cover the original parser event, not decoded-character offsets.
+Decoded Text/label CR remains content and exports as an entity; title line
+controls use separate metadata encoding. See [mant-markdown(7)](mant-markdown.md)
+for code-line normalization and invalid-target export limits.
 
 ## Interactive Reader
 

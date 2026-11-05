@@ -360,7 +360,7 @@ fn uncoloured_terminal_presentations_mask_controls_in_direct_input_labels() {
 }
 
 #[test]
-fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() {
+fn markdown_checks_content_controls_before_terminal_presentation() {
     for view in [
         QueryView::Full {},
         QueryView::Outline {
@@ -398,12 +398,10 @@ fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() 
         )
         .expect("terminal Markdown");
 
-        if matches!(view, QueryView::Explain { .. }) {
-            // The new evidence presentation is safe even for unchecked public IR.
-            assert!(!redirected.contains('\u{1b}'), "{redirected:?}");
-        } else {
-            assert!(redirected.contains('\u{1b}'), "{view:?}: {redirected:?}");
-        }
+        // Public-IR Markdown encoding applies its checked content projection
+        // even for streams. Terminal metadata still uses its own visible
+        // replacement glyph rather than rewriting the original query.
+        assert!(!redirected.contains('\u{1b}'), "{view:?}: {redirected:?}");
         assert!(!terminal.contains('\u{1b}'), "{view:?}: {terminal:?}");
         assert!(terminal.contains("ris�c"));
     }

@@ -82,6 +82,11 @@ pub fn render_heading_fragment(
 }
 
 /// Encode literal text as a `CommonMark` code span with safe delimiters.
+///
+/// The single-span grammar normalizes CR, LF and CRLF to spaces and masks
+/// terminal-unsafe controls. A multi-row `Inline::Code` instead retains
+/// logical LF rows as separate spans joined by hard breaks during ordinary
+/// document export; hand-built CR/CRLF rows are first canonicalized to LF.
 #[must_use]
 pub fn commonmark_code_span(value: &str) -> String {
     super::inline::code_span(value)

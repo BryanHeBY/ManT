@@ -43,6 +43,11 @@ that crate was not published for that change.
 - Establish complete local word and name-field sessions for admitted table
   fragments, preserving genuine `Nm` HEAD/BODY boundaries and transactional
   fallback without expanding recovery limits.
+- Normalize forbidden entity-decoded controls on the first Markdown read with
+  original source-range diagnostics. Safely serialize permitted CR, content
+  BOM scalars and metadata through repeated readback; apply the same checked
+  safety projection to authored IR, code and fallback encoding. Invalid destinations
+  containing controls remain non-activatable rather than becoming another URI.
 - Preserve full source adjacency in recovered table-cell and bibliography
   bodies, including synopsis flushes and pending zero-advance state.
 - Execute empty words against the incoming separator register before applying

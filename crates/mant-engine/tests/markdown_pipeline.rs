@@ -13,10 +13,14 @@ use mant_query::{
 };
 use mant_render::{render_outline_text, render_query_text};
 
+#[path = "markdown_pipeline/decoded_content.rs"]
+mod decoded_content;
 #[path = "markdown_pipeline/entries.rs"]
 mod entries;
 #[path = "markdown_pipeline/entry_forms.rs"]
 mod entry_forms;
+#[path = "support/link_evidence.rs"]
+mod link_evidence;
 #[path = "markdown_pipeline/link_roundtrips.rs"]
 mod link_roundtrips;
 #[path = "markdown_pipeline/link_seams.rs"]

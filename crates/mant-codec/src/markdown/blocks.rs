@@ -69,7 +69,9 @@ pub(super) fn parse_block(
                 source: Some(source.span(&(start..end))),
             })
         }
-        Event::Start(Tag::CodeBlock(kind)) => Some(parse_code_block(cursor, source, kind, range)),
+        Event::Start(Tag::CodeBlock(kind)) => {
+            Some(parse_code_block(cursor, source, diagnostics, kind, range))
+        }
         Event::Start(Tag::List(start)) => {
             if cursor.subtree_contains_task_marker() {
                 let whole = cursor.consume_balanced(range);
@@ -97,7 +99,7 @@ pub(super) fn parse_block(
         Event::Text(value) | Event::Code(value) => Some(Block::Paragraph {
             inline_layout: mant_ir::InlineLayout::default(),
             children: vec![Inline::Text {
-                value: value.into_string(),
+                value: super::decoded::normalize(value.into_string(), &range, source, diagnostics),
             }],
             layout: LayoutHint::default(),
             source: Some(source.span(&range)),
@@ -117,6 +119,7 @@ pub(super) fn parse_block(
 fn parse_code_block(
     cursor: &mut EventCursor<'_>,
     source: &MarkdownSource<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
     kind: CodeBlockKind<'_>,
     start_range: Range<usize>,
 ) -> Block {
@@ -126,7 +129,12 @@ fn parse_code_block(
         end = range.end;
         match event {
             Event::End(TagEnd::CodeBlock) => break,
-            Event::Text(text) | Event::Code(text) => value.push_str(&text),
+            Event::Text(text) | Event::Code(text) => value.push_str(&super::decoded::normalize(
+                text.into_string(),
+                &range,
+                source,
+                diagnostics,
+            )),
             Event::SoftBreak | Event::HardBreak => value.push('\n'),
             _ => value.push_str(source.raw(&range)),
         }

@@ -106,6 +106,12 @@ fn encode_link(target: &str, title: Option<&str>, label: &str, children: &[Inlin
     // Preserve the existing representation policy for invalid source URIs
     // containing SP. Valid typed destinations retain every original scalar.
     let destination = target.replace(' ', "%20");
+    let normalized_title = title.map(|title| {
+        crate::text_safety::mask_terminal_controls(title)
+            .0
+            .map_or(Cow::Borrowed(title), Cow::Owned)
+    });
+    let title = normalized_title.as_deref();
     let meaning = link_meaning(label, &destination, title);
     if title.is_none()
         && !children.is_empty()
@@ -165,14 +171,19 @@ pub(in crate::encode) fn link_destination(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> Option<Cow<'_, str>> {
-    match target {
+    let destination = match target {
         // Keep existing external-source representation policy; invalid source
         // references remain visible and diagnosed rather than silently erased.
         LinkTarget::External { uri } => Some(Cow::Borrowed(uri.as_str())),
         LinkTarget::Manual { .. } if !manual_links => None,
         LinkTarget::Section { .. } if !options.preserve_anchors => None,
         _ => target.to_uri().map(Cow::Owned),
-    }
+    }?;
+    // A forbidden target remains invalid in the original IR and receives
+    // its ordinary producer/validator diagnostic. Do not wash it into an
+    // activatable URI through lossy escaping or normalization. Only the
+    // label participates in the safe projection of such a target.
+    (!destination.chars().any(char::is_control)).then_some(destination)
 }
 
 #[cfg(test)]
