@@ -89,6 +89,11 @@ The same source-sibling entry rules apply inside admitted table-cell macro
 recovery and bibliography bodies. Unsupported whole-table execution and an
 independently valid recovered fragment remain separate compatibility cases;
 rejected recovery keeps its native fallback rather than replaying macros.
+An admitted fragment establishes a complete local ordinary-word session in
+its actual dialect before entering a name field. Its `Nm` HEAD/BODY phases
+share that live input, including pending glyphs and the field's resolved gap;
+the final section boundary closes the native row before output is drained.
+This does not expand the recovery language or its per-cell and session budgets.
 
 ## man Language
 

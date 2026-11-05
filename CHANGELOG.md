@@ -40,6 +40,9 @@ that crate was not published for that change.
 - Execute native enclosure operands without conflating empty words, invisible
   cells and escaped content. Preserve `Es`/`En` hard lines, font effects and
   zero-advance state across prose, literals and definition owners.
+- Establish complete local word and name-field sessions for admitted table
+  fragments, preserving genuine `Nm` HEAD/BODY boundaries and transactional
+  fallback without expanding recovery limits.
 - Preserve full source adjacency in recovered table-cell and bibliography
   bodies, including synopsis flushes and pending zero-advance state.
 - Execute empty words against the incoming separator register before applying

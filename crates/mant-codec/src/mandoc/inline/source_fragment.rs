@@ -141,7 +141,7 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         .iter()
         .find(|node| node.kind == NodeKind::Body)?;
     let mut formatter = formatter;
-    let inlines = lower_body(&body.children, default_name, &mut formatter);
+    let inlines = lower_body(&body.children, dialect, default_name, &mut formatter);
     let output_text_bytes = admit_fragment_output(&inlines, budget)?;
     Some(RecoveredFragment {
         inlines,
@@ -290,6 +290,7 @@ fn requires_native_evaluation(source: &str, escape: Option<u8>) -> bool {
 
 fn lower_body(
     nodes: &[libmandoc_rs::Node],
+    dialect: MacroSet,
     default_name: Option<&str>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
@@ -298,6 +299,13 @@ fn lower_body(
     builder.font = formatter.font.clone();
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
     builder.inherit_zero_advance_armed(formatter.take_zero_advance_armed());
+    // This private parse owns a complete local source session, just like the
+    // ordinary section BODY entry. Install its ordinary line execution and
+    // dialect before any word can populate PlainInput. Nm can then enter and
+    // leave its native HEAD/BODY field protocol without an authorless field
+    // buffer, or borrowing an enclosing table/list's geometry.
+    builder.macro_set = dialect;
+    builder.inherit_author_execution(crate::mandoc::formatter::AuthorFlow::Automatic, false);
     // The synthetic BODY is a complete parent sequence, not independent
     // term_word operands. synopsis_pre must see the original logical
     // predecessor (mdoc_term.c::print_mdoc_nodelist/synopsis_pre).
@@ -311,10 +319,12 @@ fn lower_body(
             append_inline_node_with_source(&mut builder, node, siblings, default_name);
         }
     }
-    // This admitted fragment owns one independent tbl cell. Its closing
-    // term_newln consumes the same receipt as a paragraph drain, retaining
-    // completed empty rows separately from the ordinary closing delimiter.
-    let (mut inlines, _, completed_rows, _) = builder.take_paragraph_segment(true);
+    // mdoc_term.c::termp_sh_post ends the synthetic section BODY with
+    // term_newln. Unlike draining an IR owner, that boundary consumes either
+    // live plain input or a field still open after its last source node.
+    // An already closed Nm BODY has no input to flush a second time.
+    builder.execute_native_newline();
+    let (mut inlines, _, completed_rows, _) = builder.take_paragraph_segment(false);
     if completed_rows > 0 {
         // A cell's split_terminator consumes the printed row's closing
         // delimiter. Completed empty rows therefore need their own ones.

@@ -12,6 +12,67 @@ const MAN_STYLE: &str = include_str!("budget_tests/fixtures/man-style.1");
 const ROWS: &str = include_str!("budget_tests/fixtures/cumulative-rows.1");
 const STATE: &str = include_str!("budget_tests/fixtures/state-candidate.1");
 const MIXED: &str = include_str!("budget_tests/fixtures/adjacent-unsafe-safe.1");
+const NAME_SESSION: &str = include_str!("budget_tests/fixtures/name-session.1");
+
+#[test]
+fn name_session_refusal_keeps_the_complete_native_cell_and_discards_speculation() {
+    // This exact complete source is core-plain-Ft in name_field_sessions;
+    // all five pristine profiles ran before this assertion. Whole tbl lint
+    // is UNSUPP, and its base operand stream is exactly "probe int". Limits
+    // refuse the optional session, never its complete native cell payload.
+    let (dialect, rows) = parsed_tables(NAME_SESSION);
+    for limits in [
+        Limits {
+            attempts: 0,
+            ..Limits::default()
+        },
+        Limits {
+            input: 0,
+            ..Limits::default()
+        },
+        Limits {
+            output_nodes: 1,
+            ..Limits::default()
+        },
+        Limits {
+            output_bytes: 8,
+            ..Limits::default()
+        },
+    ] {
+        let mut context = LoweringContext::new(Some("probe"), Some(NAME_SESSION));
+        context.macro_set = dialect;
+        *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
+        let mut formatter = FormatterState::default();
+        let initial_font = formatter.font.clone();
+        formatter.execution.scope_posts.finish(u32::MAX);
+        let output = decode_cell(
+            &rows[0],
+            0,
+            &context,
+            &TableTextBlock {
+                source: ".Nm probe\n.Ft int".to_owned(),
+                escape: Some(b'\\'),
+            },
+            &mut formatter,
+        );
+        assert_eq!(mant_ir::inline_plain_text(&output), "probe int");
+        assert!(
+            output
+                .iter()
+                .all(|node| matches!(node, Inline::Text { .. }))
+        );
+        assert_eq!(formatter.font, initial_font);
+        assert!(formatter.spacing_enabled());
+        assert!(formatter.execution.scope_posts.ended(u32::MAX));
+        assert!(
+            context
+                .table_recovery_budget
+                .borrow()
+                .exhaustion()
+                .is_some()
+        );
+    }
+}
 
 fn tables(node: &Node, output: &mut Vec<Node>) {
     if node.kind == NodeKind::Table {

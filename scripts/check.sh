@@ -123,6 +123,8 @@ run "test source-bound synopsis word observation corrections" \
   python3 -m unittest scripts.roff.tests.test_synopsis_word_observations
 run "test native enclosure operand identities and profile admission" \
   python3 -m unittest scripts.roff.tests.test_enclosure_operands
+run "test complete name-field session identities and profile admission" \
+  python3 -m unittest scripts.roff.tests.test_name_field_session_fixture
 run "test exact roff fixture checkout across newline settings" \
   python3 -m unittest scripts.roff.tests.test_fixture_checkout
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test
