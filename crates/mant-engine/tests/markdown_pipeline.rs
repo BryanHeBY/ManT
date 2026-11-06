@@ -19,6 +19,8 @@ mod decoded_content;
 mod entries;
 #[path = "markdown_pipeline/entry_forms.rs"]
 mod entry_forms;
+#[path = "support/json_roundtrip.rs"]
+mod json_roundtrip;
 #[path = "support/link_evidence.rs"]
 mod link_evidence;
 #[path = "markdown_pipeline/link_roundtrips.rs"]
@@ -29,6 +31,8 @@ mod link_seams;
 mod navigation;
 #[path = "support/semantic_read.rs"]
 mod semantic_test_read;
+#[path = "markdown_pipeline/source_admission.rs"]
+mod source_admission;
 #[path = "markdown_pipeline/source_contracts.rs"]
 mod source_contracts;
 

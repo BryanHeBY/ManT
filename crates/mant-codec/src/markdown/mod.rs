@@ -1,7 +1,7 @@
 //! Parses a conservative Markdown subset into the shared document contract.
 //!
 //! Supported syntax becomes semantic IR nodes. Recognized extensions outside
-//! the subset remain visible as exact source text with an attached diagnostic.
+//! the subset remain visible as safe source reading fragments with a diagnostic.
 
 mod bindings;
 mod blocks;
@@ -96,8 +96,13 @@ pub fn parse_markdown(
     let source_text = line_endings.text.as_ref();
     let mut sanitize_diagnostics = Vec::new();
     let sanitized = sanitize_source(source_text, &mut sanitize_diagnostics);
+    let unrecovered = source_text;
     let source_text = sanitized.as_deref().unwrap_or(source_text);
     let parts = split_markdown(source_text).map_err(MarkdownParseError::TldrDirective)?;
+    let recovery_source = sanitized
+        .as_ref()
+        .map(|_| parts.source_for_target_checks(unrecovered));
+    let recovery = recovery_source.as_deref().map(source::Recovery::new);
     let tldr = parts
         .tldr
         .map(|source| {
@@ -118,7 +123,12 @@ pub fn parse_markdown(
         .transpose()?;
     let mut entry_diagnostics = Vec::new();
     let prepared = PreparedMarkdown::new(parts.document.as_ref(), &mut entry_diagnostics);
-    let mut document = parse_document_with_entries(prepared, source_path, &mut entry_diagnostics);
+    let mut document = parse_document_with_entries(
+        prepared,
+        source_path,
+        &mut entry_diagnostics,
+        recovery.as_ref(),
+    );
     if !entry_diagnostics.is_empty() {
         entry_diagnostics.extend(std::mem::take(&mut document.diagnostics));
         document.diagnostics = entry_diagnostics;
@@ -201,6 +211,7 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
         },
         source_path,
         &mut diagnostics,
+        None,
     );
     line_endings.restore_sources(&mut document, original_source);
     document
@@ -210,6 +221,7 @@ fn parse_document_with_entries(
     prepared: PreparedMarkdown<'_>,
     source_path: Option<String>,
     entry_diagnostics: &mut Vec<Diagnostic>,
+    recovery: Option<&source::Recovery<'_>>,
 ) -> Document {
     let PreparedMarkdown {
         source: source_text,
@@ -218,7 +230,7 @@ fn parse_document_with_entries(
         metadata_origins,
         mut declarations,
     } = prepared;
-    let source = MarkdownSource::new(&display_source);
+    let source = MarkdownSource::with_recovery(&display_source, recovery);
     let ParsedDocumentStructure {
         mut diagnostics,
         mut root_blocks,

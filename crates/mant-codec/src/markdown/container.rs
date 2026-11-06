@@ -15,6 +15,24 @@ const CLOSING_MARKER: &str = "<!-- mant:tldr:end -->";
 pub(super) struct MarkdownParts<'a> {
     pub(super) document: Cow<'a, str>,
     pub(super) tldr: Option<&'a str>,
+    masked: Option<Range<usize>>,
+}
+
+impl MarkdownParts<'_> {
+    /// Keep the same document boundary while checking unrepaired destinations.
+    /// Embedded quick-reference definitions cannot become manual definitions.
+    pub(super) fn source_for_target_checks<'a>(&self, original: &'a str) -> Cow<'a, str> {
+        let mut source = self
+            .masked
+            .as_ref()
+            .map_or(Cow::Borrowed(original), |range| {
+                Cow::Owned(mask_range(original, range.clone()))
+            });
+        if original.starts_with('\u{feff}') {
+            source.to_mut().replace_range(..3, "   ");
+        }
+        source
+    }
 }
 
 /// Invalid structure in a document-owned tldr directive.
@@ -47,6 +65,7 @@ pub(super) fn split_markdown(source: &str) -> Result<MarkdownParts<'_>, TldrDire
         return Ok(MarkdownParts {
             document: Cow::Borrowed(source),
             tldr: None,
+            masked: None,
         });
     };
     let opening = &lines[opening_index];
@@ -54,6 +73,7 @@ pub(super) fn split_markdown(source: &str) -> Result<MarkdownParts<'_>, TldrDire
         return Ok(MarkdownParts {
             document: Cow::Borrowed(source),
             tldr: None,
+            masked: None,
         });
     }
 
@@ -69,6 +89,7 @@ pub(super) fn split_markdown(source: &str) -> Result<MarkdownParts<'_>, TldrDire
     Ok(MarkdownParts {
         document: Cow::Owned(mask_range(source, opening.start..masked_end)),
         tldr: Some(&source[tldr_start..tldr_end]),
+        masked: Some(opening.start..masked_end),
     })
 }
 

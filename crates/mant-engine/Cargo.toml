@@ -22,6 +22,7 @@ include = [
   "/tests/support/semantic_read.rs",
   "/tests/support/link_meaning.rs", "/tests/support/link_evidence.rs",
   "/tests/support/decoded_content.rs", "/tests/support/enclosure_operands.rs",
+  "/tests/support/source_admission.rs",
   "/tests/support/name_field_sessions.rs",
   "/tests/support/oracle_receipt.rs", "/tests/support/json_roundtrip.rs",
   "/tests/support/case_failures.rs",

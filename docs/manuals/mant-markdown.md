@@ -613,8 +613,24 @@ marker or demote the first heading. Original source controls are masked before
 syntax parsing. TAB, LF and CR are permitted; other Unicode control characters
 become one ASCII space per UTF-8 byte, preserving original source offsets.
 Both kinds of source masking produce diagnostics. Malformed raw source is
-therefore interpreted after masking; this source-level recovery does not
-promise to preserve an original control-bearing destination's identity.
+therefore interpreted after masking, but recovery alone cannot establish a
+different link destination. Affected targets, reference identifiers and
+changed effective definitions are checked against the unrepaired source with
+the same parser. Unchanged destinations remain links even when their labels
+or titles require display masking. A changed or unprovable identity retains
+its label without a link and reports `markdown.recovered-link-target` at the
+associated source range. No target is guessed from the recovered label.
+
+Damaged inputs retain at most 4096 changed ranges, conservatively covering the
+remaining suffix on saturation. They use one additional original-source parser
+first pass to retain reference binding order, with the same embedded-preface
+boundary. Local checks share a budget of the larger of source bytes and
+100,000 bytes; failed checks and actual callback destination copies are charged
+before parsing or copying. Effective-definition decisions are reused. Clean
+sources do not incur these extra checks. Context-dependent fragments and
+budget exhaustion may conservatively omit a link with the same diagnostic;
+source body recovery continues. This is not a promise that malformed Markdown
+and its repaired spelling have identical syntax trees.
 
 Character references can introduce controls absent from the original bytes.
 Decoded Text, Code and link titles receive the same control policy on their

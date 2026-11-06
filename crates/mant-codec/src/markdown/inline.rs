@@ -111,7 +111,7 @@ fn parse_inline_sequence(
                 link_type,
                 dest_url,
                 title,
-                ..
+                id,
             }) if supported_link(link_type) && cursor.try_descend() => {
                 let (children, nested_end) =
                     parse_inlines(cursor, source, diagnostics, TagEnd::Link);
@@ -128,6 +128,10 @@ fn parse_inline_sequence(
                         diagnostics,
                     )
                 });
+                if !cursor.accept_link(link_type, &id, &destination, &range, source, diagnostics) {
+                    output.extend(children);
+                    continue;
+                }
                 output.push(Inline::Link {
                     target: mant_ir::LinkTarget::from_uri(&destination),
                     title,

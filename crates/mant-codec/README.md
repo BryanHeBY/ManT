@@ -34,13 +34,17 @@ of literal descriptions and examples.
 
 Markdown admission masks terminal-unsafe controls both in original source
 bytes and in decoded Text, Code and link titles. Decoded findings retain the
-original parser event's source range, not a fabricated decoded-character
-offset. TAB, LF and CR remain allowed content; Text/label CR is entity-encoded
+original content-event range or effective reference-definition range, not a
+fabricated decoded-character offset. TAB, LF and CR remain allowed content; Text/label CR is entity-encoded
 on export so it cannot change Markdown source lines. Metadata stays outside
 visible-row framing. Destinations containing controls remain invalid in IR;
 safe export preserves their labels without creating an activatable wrapper.
 Raw-source masking precedes syntax parsing and is not a destination-identity
-guarantee for malformed control-bearing source.
+repair mechanism. Bounded changed ranges and the original parser's reference
+bindings guard target admission; an unprovable identity retains its label with
+a source diagnostic. Label/title display recovery does not by itself refuse an
+unchanged destination. Only damaged inputs require an extra original-source
+first pass; bounded local checks and callback copies share one explicit quota.
 
 Encoding hand-built IR is a checked projection without mutating that IR:
 unsafe content/title controls are masked, code/fence CR and CRLF become LF,

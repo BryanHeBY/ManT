@@ -4,7 +4,9 @@ use std::ops::Range;
 
 use mant_ir::{Block, Diagnostic, DiagnosticLevel, LayoutHint, SourceSpan, TextRange, TextSize};
 mod endings;
+mod recovery;
 pub(super) use endings::LineEndings;
+pub(super) use recovery::{LinkUse, Recovery, TargetAdmission};
 
 /// Physical `CommonMark` lines, retaining LF, CRLF or CR terminators exactly.
 pub(super) fn physical_lines(mut text: &str) -> impl Iterator<Item = &str> {
@@ -36,6 +38,7 @@ pub(super) fn parser_events(source: &str) -> Vec<super::SpannedEvent<'_>> {
 pub(super) struct MarkdownSource<'a> {
     text: &'a str,
     line_starts: Vec<usize>,
+    pub(super) recovery: Option<&'a Recovery<'a>>,
 }
 
 impl<'a> MarkdownSource<'a> {
@@ -48,7 +51,18 @@ impl<'a> MarkdownSource<'a> {
                 line_starts.push(offset);
             }
         }
-        Self { text, line_starts }
+        Self {
+            text,
+            line_starts,
+            recovery: None,
+        }
+    }
+
+    pub(super) fn with_recovery(text: &'a str, recovery: Option<&'a Recovery<'a>>) -> Self {
+        Self {
+            recovery,
+            ..Self::new(text)
+        }
     }
 
     pub(super) fn raw(&self, range: &Range<usize>) -> &'a str {

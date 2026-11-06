@@ -37,6 +37,11 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Preserve bounded raw-source recovery evidence when admitting Markdown links.
+  Reject changed or unprovable target identities without dropping labels,
+  including repaired reference IDs and definitions exposed by recovery.
+  Keep label/title cleansing separate and reuse original reference bindings
+  under explicit parsing and copying budgets.
 - Export ordinary text literally and activate only checked typed links. Keep
   invalid link labels in the surrounding inline context without repairing URI
   spaces or reinterpreting literal angle URLs; encode typed tldr information

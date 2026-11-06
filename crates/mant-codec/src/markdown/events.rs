@@ -27,6 +27,7 @@ pub(super) struct EventCursor<'a> {
     depth: usize,
     pub(super) metadata_origins: MetadataOrigins,
     pub(super) reported_titles: std::collections::BTreeSet<(usize, usize)>,
+    target_admission: super::source::TargetAdmission,
 }
 
 /// Recursion budget shared by nested block containers and inline spans.
@@ -44,7 +45,31 @@ impl<'a> EventCursor<'a> {
             depth: 0,
             metadata_origins: MetadataOrigins::default(),
             reported_titles: std::collections::BTreeSet::new(),
+            target_admission: super::source::TargetAdmission::default(),
         }
+    }
+
+    pub(super) fn accept_link(
+        &mut self,
+        link_type: pulldown_cmark::LinkType,
+        id: &str,
+        destination: &str,
+        range: &Range<usize>,
+        source: &super::source::MarkdownSource<'_>,
+        diagnostics: &mut Vec<mant_ir::Diagnostic>,
+    ) -> bool {
+        self.target_admission.accept(
+            source.recovery,
+            super::source::LinkUse {
+                link_type,
+                id,
+                destination,
+                range,
+                definition: self.metadata_origins.get(&range.start),
+            },
+            source,
+            diagnostics,
+        )
     }
 
     /// Reserve one nesting level; callers must pair with [`Self::ascend`].

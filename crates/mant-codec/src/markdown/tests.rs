@@ -7,6 +7,7 @@ use super::{parse_document, parse_markdown};
 mod decoded_content;
 mod entry_forms;
 mod metadata_origins;
+mod recovered_targets;
 mod source_contracts;
 mod source_endings;
 
