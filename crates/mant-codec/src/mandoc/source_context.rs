@@ -237,8 +237,8 @@ impl<'a> LoweringContext<'a> {
             // print_mdoc_node() visits it before termp_it_pre(HEAD) selects
             // NOSPACE, the field flags, margin, or diagnostic font.
             inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
-            builder.enter_definition_head_effect(author_break_effect);
         }
+        builder.enter_definition_head_effect(author_break_effect);
         if preserve_rows && let Some(units) = native_head_field_units {
             builder.set_definition_native_margin(units);
         }
@@ -295,8 +295,8 @@ impl<'a> LoweringContext<'a> {
                 // and NOBREAK field, but remain in its live input buffer.
                 builder.enter_definition_head_effect(inline::AuthorBreakEffect::Line);
                 inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
-                builder.enter_definition_head_effect(author_break_effect);
             }
+            builder.enter_definition_head_effect(author_break_effect);
             if strong_scope && saved_font.is_none() {
                 saved_font = Some(
                     builder

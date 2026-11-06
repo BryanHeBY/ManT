@@ -1,5 +1,5 @@
 //! Execute filled and literal source input against their existing flow owners.
-use super::{BlockState, InlineBuilder};
+use super::{BlockState, InlineBuilder, InlineOutputRole};
 use mant_ir::{Block, Inline};
 
 impl BlockState {
@@ -19,7 +19,7 @@ impl BlockState {
                 && !builder.has_open_native_device_row()
         };
         let visible_before = self.formatter.execution.visible_content_checkpoint();
-        let closed = if self.formatter.no_fill || self.uses_literal_output() {
+        let closed = if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.with_inline_builder(&mut self.formatter, enter);
             false
         } else {
@@ -49,6 +49,23 @@ impl BlockState {
         }
     }
 
+    /// The no-fill source gate may have completed this owner before the
+    /// next macro's own pre. Its row bookkeeping and native empty input,
+    /// not the later handler's incoming cell count, identify that handoff.
+    pub(in crate::mandoc::blocks) fn has_completed_inline_owner(&self) -> bool {
+        self.literal.has_output()
+            && !self.literal.has_formatter_column()
+            && !self.formatter.execution.has_formatter_cell()
+            && !self.formatter.execution.has_open_native_device_row()
+    }
+
+    /// The real pre has consumed the old row; only its output owner remains.
+    pub(in crate::mandoc::blocks) fn drain_closed_inline_owner(&mut self) {
+        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.flush_preformatted();
+        self.flush_paragraph();
+    }
+
     pub(in crate::mandoc::blocks) fn temporary_indent(&mut self, node: &libmandoc_rs::Node) {
         self.pre_break_request();
         self.formatter.execution.apply_temporary_indent(
@@ -62,7 +79,7 @@ impl BlockState {
         &mut self,
         alignment: mant_ir::TextAlignment,
     ) {
-        if self.formatter.no_fill || self.uses_literal_output() {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal
                 .with_inline_builder(&mut self.formatter, |builder| {
                     builder.set_text_alignment(alignment);
@@ -125,8 +142,15 @@ impl BlockState {
     /// the next source node enters no-fill execution. A real `NODE_LINE`
     /// consumes the original owner first; only a still-live destination
     /// change transfers the complete vector and its native anchor ranges.
-    pub(in crate::mandoc::blocks) fn adopt_no_fill_owner(&mut self) {
-        if self.formatter.no_fill
+    pub(in crate::mandoc::blocks) fn adopt_inline_output_owner(&mut self) {
+        if self.inline_output_role == InlineOutputRole::Declaration
+            && !self.uses_literal_output()
+            && self.paragraph.is_empty()
+            && self.literal.has_output()
+        {
+            let (nodes, source) = self.literal.take_active_output();
+            self.paragraph.adopt_active_output(nodes, source);
+        } else if self.inline_output_is_literal(self.formatter.no_fill)
             && self.formatter.execution.has_native_definition_field()
             && self.literal.is_empty()
             && !self.paragraph.is_empty()
@@ -139,7 +163,7 @@ impl BlockState {
     }
 
     fn consume_active_invisible_head_row(&mut self) -> bool {
-        if self.paragraph.is_empty() && (self.formatter.no_fill || self.uses_literal_output()) {
+        if self.paragraph.is_empty() && self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.consume_invisible_head_row(&mut self.formatter)
         } else {
             self.paragraph
@@ -266,6 +290,13 @@ impl BlockState {
         finishes_row: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
+        if !self.inline_output_is_literal(self.formatter.no_fill) {
+            // NODE_LINE already ran through the common source gate. Rich
+            // declaration text retains that hard row in Paragraph instead
+            // of turning its styles into fenced-code content.
+            self.push_inline_with(source, false, fallback, append);
+            return;
+        }
         let visible_before = self.formatter.execution.visible_content_checkpoint();
         self.literal
             .execute_fragment(&mut self.formatter, source, fallback, finishes_row, append);
@@ -292,23 +323,29 @@ impl BlockState {
             // Filled-to-no-fill entry still consumes the old destination:
             // the generated inset BODY word can be buffered there. Its
             // native anchors must not be applied to an empty literal Vec.
-            if paragraph_owns_row {
+            let ended_row = if paragraph_owns_row {
                 self.paragraph.with_inline_builder(
                     &mut self.formatter,
-                    InlineBuilder::execute_native_newline,
-                );
+                    InlineBuilder::execute_native_newline_with_tail,
+                )
             } else {
                 self.literal.with_inline_builder(
                     &mut self.formatter,
-                    InlineBuilder::execute_native_literal_newline,
-                );
+                    InlineBuilder::execute_native_literal_newline_with_tail,
+                )
+            };
+            if source_line && ended_row {
+                // NODE_LINE closed the actual inherited physical row.
+                // Deliver that fact before an owner drain clears its local
+                // leading break; its eventual Block kind is irrelevant.
+                self.formatter.note_definition_boundary();
             }
             // The native print receipt already delivered every completed
             // row to this literal owner. Retire the old cell classification
             // even if a buffered zero-advance glyph only printed at flush.
             self.formatter.no_fill_inline.retire_consumed_cell();
             self.settle_definition_line_boundary();
-            if paragraph_owns_row {
+            if paragraph_owns_row && self.inline_output_role == InlineOutputRole::SourceMode {
                 // The actual source event already consumed this row. Drain
                 // its original owner without requesting a second newline;
                 // later no-fill words can now start their literal owner.
@@ -376,7 +413,7 @@ impl BlockState {
     /// their `pre_br` still consumes the request node's original source owner.
     pub(in crate::mandoc::blocks) fn pre_break_request_in_source_mode(&mut self, no_fill: bool) {
         self.formatter.note_definition_boundary();
-        if no_fill || self.uses_literal_output() {
+        if self.inline_output_is_literal(no_fill) {
             self.literal
                 .with_inline_builder(&mut self.formatter, |builder| {
                     builder.control_line_break();
@@ -392,7 +429,7 @@ impl BlockState {
     }
 
     pub(in crate::mandoc::blocks) fn no_break_formatter_flush(&mut self) {
-        if self.formatter.no_fill || self.uses_literal_output() {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.no_break_flush(&mut self.formatter);
         } else {
             self.paragraph.no_break_flush(&mut self.formatter);
@@ -408,7 +445,7 @@ impl BlockState {
         } else {
             InlineBuilder::execute_native_newline
         };
-        if self.formatter.no_fill || self.uses_literal_output() {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal
                 .with_inline_builder(&mut self.formatter, finish);
         } else {

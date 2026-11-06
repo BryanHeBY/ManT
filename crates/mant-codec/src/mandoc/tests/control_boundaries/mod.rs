@@ -76,3 +76,5 @@ mod scope_rows;
 mod vertical_rows;
 
 mod buffer_ownership;
+
+mod session_retirement;

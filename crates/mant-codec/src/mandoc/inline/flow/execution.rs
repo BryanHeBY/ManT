@@ -98,6 +98,15 @@ impl InlineBuilder {
         if matches!(effect, AuthorBreakEffect::Field { .. }) {
             self.definition_state_mut();
         }
+        if let Some(state) = &mut self.execution.definition {
+            // A nested original It HEAD installs its own pre flags on the
+            // same native cells/device row. An enclosing HEAD's completed
+            // post is not evidence that this new HEAD's flags were cleared.
+            state.no_break = None;
+            state.no_break_cleared = false;
+            state.head_flags_cleared = false;
+            state.cleared_field_capacity_columns = 0;
+        }
         if let Some(author) = &mut self.execution.author_execution {
             author.break_effect = effect;
         }

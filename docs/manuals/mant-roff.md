@@ -92,6 +92,10 @@ output moves between paragraphs and literals. This preserves the selected
 mandoc word boundaries and hard lines without frontend joins. Resolved BODY
 origins also retain continuation indentation and authored leading spaces;
 relative content layout does not replace the native source origin.
+No-fill inside a name declaration preserves its styled paragraph and hard
+rows; it does not turn the declaration into a code fence. Explicit literal
+displays keep their own content kind. Completed native row state is retired
+only after its actual source operation, independently of IR owner changes.
 
 The same source-sibling entry rules apply inside admitted table-cell macro
 recovery and bibliography bodies. Unsupported whole-table execution and an

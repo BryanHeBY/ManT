@@ -73,7 +73,11 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         }
         self.resume_no_fill_row();
-        if !self.state.paragraph_is_empty() {
+        if self
+            .state
+            .inline_output_is_literal(self.state.formatter.no_fill)
+            && !self.state.paragraph_is_empty()
+        {
             self.state.flush_paragraph();
         }
         if node.flags.line_start

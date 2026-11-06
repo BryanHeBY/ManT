@@ -73,6 +73,13 @@ impl ParagraphFlow {
         (std::mem::take(&mut self.nodes), self.source.take())
     }
 
+    pub(super) fn adopt_active_output(&mut self, nodes: Vec<Inline>, source: Option<SourceSpan>) {
+        assert_eq!(self.nodes.len(), 0);
+        self.nodes = nodes;
+        self.source = source;
+        self.last_line = source.map(|span| span.line);
+    }
+
     /// The detached definition HEAD already represents its pending native
     /// row. Drop that row at the moment a real BODY break closes it, while
     /// retaining target anchors that identify the following visible word.

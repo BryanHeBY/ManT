@@ -34,7 +34,11 @@ impl super::BlockLowerer<'_, '_> {
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         self.resume_no_fill_row();
-        if !self.state.paragraph_is_empty() {
+        if self
+            .state
+            .inline_output_is_literal(self.state.formatter.no_fill)
+            && !self.state.paragraph_is_empty()
+        {
             self.state.flush_paragraph();
         }
         self.state.execute_no_fill_fragment(
@@ -233,6 +237,9 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 self.lowerer.state.set_text_alignment(alignment);
             }
             Event::Break => {
+                // roff_term_pre_ce/rj first execute pre_br, including its
+                // live field consumption and BRIND transition.
+                self.lowerer.state.pre_break_request();
                 // roff_term_pre_br() ends the active formatter row before
                 // either IR destination is drained.
                 self.lowerer.settle_no_fill_inline();

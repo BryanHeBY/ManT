@@ -200,6 +200,11 @@ the enclosing HEAD configuration. Source-line entry runs against the active
 output before choosing paragraph or literal presentation. Native source
 origins and relative IR owner origins stay distinct; accepted hard-row and
 soft-wrap origins use the existing layout fields.
+Declaration content keeps its paragraph identity when native execution enters
+no-fill; explicit displays still choose literal owners. This private output
+role selects a destination, not another interpreter or a saved fill mode.
+Actual macro pre/post and backend line endings consume native input before
+retiring its projection; a plain IR drain preserves unconsumed requests.
 
 HEAD/BODY selectors borrow structural views, not an exhaustive content stream.
 Macro drivers execute their direct siblings in order and apply fonts, field

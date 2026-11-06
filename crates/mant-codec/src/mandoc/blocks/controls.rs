@@ -41,16 +41,57 @@ impl super::BlockLowerer<'_, '_> {
         {
             return false;
         }
-        self.state.flush_preformatted();
-        let lines = self
-            .state
-            .resolve_vertical_space(vertical_space_delta(node));
-        self.state.flush_paragraph_for_line_request();
-        if lines > 0 {
-            self.state.formatter.row_presentation.endline();
+        let requested = vertical_space_delta(node);
+        if requested > 0 {
+            // roff_term_pre_sp() first calls term_vspace: consume the live
+            // field before its backend endline, with the old BRIND flags.
+            self.state.finish_native_structural_row();
         }
+        self.state.flush_preformatted();
+        let lines = self.state.resolve_vertical_space(requested);
+        self.state
+            .formatter
+            .execution
+            .finish_native_vertical_rows(usize::from(lines));
+        // Every spelling, including zero/negative .sp, ends in pre_br.
+        // That real field consumption and flag update cannot be replaced
+        // by the output owner's take_paragraph_segment(true).
+        self.state
+            .pre_break_request_in_source_mode(node.flags.no_fill);
+        self.state.flush_paragraph_for_line_request();
         self.state.consume_hanging_first_line();
         if space {
+            self.state.output.push(Block::VerticalSpace {
+                lines,
+                source: source_span(node),
+            });
+        }
+        true
+    }
+
+    /// A retained Pp executes vspace independently of the native fill mode.
+    pub(super) fn push_mdoc_paragraph_spacing(
+        &mut self,
+        node: &Node,
+        structural_targets: &[String],
+    ) -> bool {
+        if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Pp)) {
+            return false;
+        }
+        // termp_pp_pre() calls term_vspace(), beginning with term_newln.
+        // Consume the live field before either output owner is drained.
+        self.state.finish_native_structural_row();
+        self.state.flush_preformatted();
+        let lines = self.state.resolve_vertical_space(1);
+        self.state
+            .formatter
+            .execution
+            .finish_native_vertical_rows(usize::from(lines));
+        self.state.flush_paragraph_for_line_request();
+        self.state
+            .queue_targets(structural_targets.iter().cloned(), source_span(node));
+        // Empty output cannot cancel an already executed endline.
+        if lines > 0 {
             self.state.output.push(Block::VerticalSpace {
                 lines,
                 source: source_span(node),
@@ -124,7 +165,10 @@ impl super::BlockLowerer<'_, '_> {
             let lines = self.state.resolve_vertical_space(1);
             self.state.flush_paragraph_for_line_request();
             if lines > 0 {
-                self.state.formatter.row_presentation.endline();
+                self.state
+                    .formatter
+                    .execution
+                    .finish_native_vertical_rows(usize::from(lines));
                 self.state.output.push(Block::VerticalSpace {
                     lines,
                     source: source_span(node),

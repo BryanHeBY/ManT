@@ -35,6 +35,12 @@ impl InlineExecutionState {
             .unwrap_or(i64::MAX)
             .saturating_sub(i64::from(self.row_presentation.parent));
         let state = self.ensure_definition_state();
+        // pre_SY(BODY) restores maxrmargin after the narrow name field.
+        // The responsive page bound is deliberately not the HEAD's width;
+        // keeping that cached bound would wrap even filled BODY words.
+        state.native_margin_units = None;
+        state.margin_override = Some(usize::MAX / 2);
+        state.cleared_field_capacity_columns = 0;
         state.field_offset_units = usize::try_from(relative_origin).unwrap_or_default();
         state.hang_row.field_offset = state.field_offset_units.saturating_add(11) / 24;
         self.declare_name_body_origin();
@@ -86,8 +92,17 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn set_definition_native_margin(&mut self, units: usize) {
-        self.definition_state_mut().native_margin_units =
-            Some(i64::try_from(units).unwrap_or(i64::MAX));
+        let presentation = self.execution.row_presentation;
+        let state = self.definition_state_mut();
+        // It/SY HEAD pre assigns offset + width on the existing tcol.
+        // Its width is not an absolute margin when an outer BODY already
+        // moved offset, and this assignment replaces a request override.
+        state.native_margin_units = Some(
+            presentation
+                .source_offset_units(state.field_offset_units)
+                .saturating_add(i64::try_from(units).unwrap_or(i64::MAX)),
+        );
+        state.margin_override = None;
     }
 
     pub(in crate::mandoc) fn has_definition_head(&self) -> bool {
@@ -180,7 +195,7 @@ impl InlineBuilder {
 
     /// Return the consumed native tail to callers with a real post effect.
     /// This is the same execution, never another IR-width observation.
-    pub(in crate::mandoc::inline::flow) fn execute_native_newline_with_tail(&mut self) -> bool {
+    pub(in crate::mandoc) fn execute_native_newline_with_tail(&mut self) -> bool {
         self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::Layout)
     }
 
@@ -188,7 +203,11 @@ impl InlineBuilder {
     /// Its old `Invisible` classification cannot distinguish a buffered
     /// zero-advance glyph from an accepted NBRZW cell after this flush.
     pub(in crate::mandoc) fn execute_native_literal_newline(&mut self) {
-        self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::LiteralText);
+        self.execute_native_literal_newline_with_tail();
+    }
+
+    pub(in crate::mandoc) fn execute_native_literal_newline_with_tail(&mut self) -> bool {
+        self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::LiteralText)
     }
 
     fn execute_native_newline_with_origin(

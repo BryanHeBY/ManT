@@ -282,7 +282,7 @@ impl InlineBuilder {
         } else {
             self.finish_nodes()
         };
-        self.execution.reset_paragraph_segment(surviving_armed);
+        self.execution.reset_consumed_projection(surviving_armed);
         // This API is an actual term_newln(), unlike an IR owner drain.
         // NOSPACE is selected even when the flushed field left viscol live
         // (term.c:475-481), independently of the preserved column registers.

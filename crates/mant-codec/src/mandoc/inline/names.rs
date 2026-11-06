@@ -25,6 +25,12 @@ use crate::mandoc::blocks::synopsis::{
 };
 
 #[derive(Clone, Copy)]
+pub(in crate::mandoc) struct NameHeadScope {
+    geometry: NamePartGeometry,
+    font: FontScope,
+}
+
+#[derive(Clone, Copy)]
 pub(in crate::mandoc) struct NameBodyScope {
     geometry: NamePartGeometry,
     font: FontScope,
@@ -72,32 +78,55 @@ pub(in crate::mandoc) fn append_head(
     previous: Option<SynopsisToken>,
     name: Option<&str>,
 ) -> bool {
+    let saved = begin_head(builder, block, head, previous);
+    append_started_head(builder, block, head, name, saved)
+}
+
+/// Execute source entry and the real synopsis pre before choosing the next
+/// semantic output owner. A still-live native field is never drained here.
+pub(in crate::mandoc) fn begin_head(
+    builder: &mut InlineBuilder,
+    block: &Node,
+    head: &Node,
+    previous: Option<SynopsisToken>,
+) -> NameHeadScope {
     builder.begin_executed_node(head);
-    let geometry = builder.name_part_geometry(head);
-    let font = builder.font.checkpoint();
-    if !head.children.is_empty() {
-        // termp_nm_pre returns zero for an empty HEAD. For a real name,
-        // synopsis_pre runs here, after the BLOCK's direct prefix.
-        if (block.flags.synopsis_pretty || head.flags.synopsis_pretty)
-            && let Some(previous) = previous
-        {
-            match synopsis_boundary(previous, SynopsisToken::Nm) {
-                SynopsisBoundary::Newline => builder.execute_native_newline(),
-                SynopsisBoundary::VerticalSpace => builder.native_vertical_space(1),
-            }
+    let saved = NameHeadScope {
+        geometry: builder.name_part_geometry(head),
+        font: builder.font.checkpoint(),
+    };
+    if !head.children.is_empty()
+        && (block.flags.synopsis_pretty || head.flags.synopsis_pretty)
+        && let Some(previous) = previous
+    {
+        match synopsis_boundary(previous, SynopsisToken::Nm) {
+            SynopsisBoundary::Newline => builder.execute_native_newline(),
+            SynopsisBoundary::VerticalSpace => builder.native_vertical_space(1),
         }
+    }
+    saved
+}
+
+pub(in crate::mandoc) fn append_started_head(
+    builder: &mut InlineBuilder,
+    block: &Node,
+    head: &Node,
+    name: Option<&str>,
+    saved: NameHeadScope,
+) -> bool {
+    if !head.children.is_empty() {
         builder.enter_name_head(lifecycle::head_effect(block));
         builder.font.push_scope(Font::Strong);
         append_inline_nodes(builder, &head.children, name);
     }
-    builder.font.pop_scope(font);
+    builder.font.pop_scope(saved.font);
     let occupied = if lifecycle::flushes_head(block) {
         builder.finish_name_head()
     } else {
         builder.definition_head_row_occupied()
     };
     builder.finish_executed_node(head);
-    builder.restore_name_part_geometry(geometry);
+    builder.restore_name_part_geometry(saved.geometry);
     occupied
 }
 

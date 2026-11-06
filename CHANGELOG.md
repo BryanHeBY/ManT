@@ -71,6 +71,9 @@ that crate was not published for that change.
   Preserve their word boundaries, hard lines, pending glyphs and resolved BODY
   origins across paragraph and literal owners, including continuation layout
   and authored leading spaces.
+  Keep declaration ownership independent of native fill mode, and retire
+  completed projections at actual macro and device boundaries while retaining
+  unconsumed requests across output drains.
 - Normalize forbidden entity-decoded controls on the first Markdown read with
   original source-range diagnostics. Safely serialize permitted CR, content
   BOM scalars and metadata through repeated readback; apply the same checked

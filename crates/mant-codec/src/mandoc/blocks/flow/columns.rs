@@ -1,13 +1,29 @@
 //! Execute native column entry and posts against the active output destination.
-use super::{BlockState, InlineBuilder};
+use super::{BlockState, InlineBuilder, InlineOutputRole};
 
 impl BlockState {
+    pub(in crate::mandoc::blocks) const fn inline_output_role(&self) -> InlineOutputRole {
+        self.inline_output_role
+    }
+
+    pub(in crate::mandoc::blocks) fn set_inline_output_role(
+        &mut self,
+        role: InlineOutputRole,
+    ) -> InlineOutputRole {
+        std::mem::replace(&mut self.inline_output_role, role)
+    }
+
+    pub(in crate::mandoc::blocks) fn inline_output_is_literal(&self, no_fill: bool) -> bool {
+        self.uses_literal_output()
+            || no_fill && self.inline_output_role == InlineOutputRole::SourceMode
+    }
+
     pub(in crate::mandoc::blocks) fn note_inline_source(
         &mut self,
         source: Option<mant_ir::SourceSpan>,
     ) {
-        self.adopt_no_fill_owner();
-        if self.formatter.no_fill || self.uses_literal_output() {
+        self.adopt_inline_output_owner();
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.note_source(source);
         } else {
             self.paragraph.note_source(source);
@@ -20,9 +36,9 @@ impl BlockState {
         &mut self,
         operation: impl FnOnce(&mut InlineBuilder) -> R,
     ) -> R {
-        self.adopt_no_fill_owner();
+        self.adopt_inline_output_owner();
         let visible_before = self.formatter.execution.visible_content_checkpoint();
-        let result = if self.formatter.no_fill || self.uses_literal_output() {
+        let result = if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal
                 .with_inline_builder(&mut self.formatter, operation)
         } else {
@@ -53,7 +69,7 @@ impl BlockState {
         let finish = |builder: &mut InlineBuilder| {
             crate::mandoc::inline::names::finish_body(builder, node, saved);
         };
-        if self.uses_literal_output() || self.formatter.no_fill {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal
                 .with_inline_builder(&mut self.formatter, finish);
         } else {
@@ -61,7 +77,7 @@ impl BlockState {
                 .with_inline_builder(&mut self.formatter, finish);
         }
         self.formatter.no_fill_inline.retire_consumed_cell();
-        if !self.formatter.no_fill && !self.uses_literal_output() {
+        if !self.inline_output_is_literal(self.formatter.no_fill) {
             // The actual Nm BODY post has already flushed the native field.
             // Its completed owner can now retain the BODY's resolved wrap
             // origin before print_mdoc_node restores the source scope.
@@ -114,7 +130,8 @@ impl BlockState {
     /// when the BODY has no local glyph (`mdoc_term.c::termp_bl_pre`).
     pub(in crate::mandoc::blocks) fn finish_native_structural_row(&mut self) {
         if self.uses_literal_output()
-            || (!self.formatter.execution.has_column_output_scope() && self.formatter.no_fill)
+            || (!self.formatter.execution.has_column_output_scope()
+                && self.inline_output_is_literal(self.formatter.no_fill))
         {
             self.literal
                 .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
@@ -130,7 +147,7 @@ impl BlockState {
         kind: Option<libmandoc_rs::DisplayKind>,
     ) {
         let post = |builder: &mut InlineBuilder| builder.finish_display_body(kind);
-        if self.formatter.no_fill || self.uses_literal_output() {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.with_inline_builder(&mut self.formatter, post);
         } else {
             self.paragraph

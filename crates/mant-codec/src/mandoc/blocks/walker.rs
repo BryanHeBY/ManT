@@ -16,7 +16,7 @@ use libmandoc_rs::{
 
 use super::super::controls::{FormatterBoundary, formatter_control};
 use super::{
-    Block, BlockLowerer, DisplayFillMode, NodeSourceContext, StructuralLowerer, TableEmbedding,
+    BlockLowerer, DisplayFillMode, NodeSourceContext, StructuralLowerer, TableEmbedding,
     TableEmbeddingPlan, adjacent_ip_run, follows_inline_equation_punctuation,
     is_inline_equation_quote_artifact, is_native_transparent_sibling,
     man_nofill::no_fill_boundary,
@@ -171,23 +171,7 @@ impl BlockLowerer<'_, '_> {
                 .queue_targets(structural_targets, source_span(node));
             return;
         }
-        // A retained Pp executes term_vspace even when native no-fill flags
-        // would otherwise route it through inline-only word lowering.
-        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Pp)) {
-            self.state.flush_preformatted();
-            let lines = self.state.resolve_vertical_space(1);
-            self.state.flush_paragraph_for_line_request();
-            self.state
-                .queue_targets(structural_targets, source_span(node));
-            // A Pp retained by the validator executes term_vspace even in
-            // an empty destination (mdoc_term.c::termp_pp_pre). Output owner
-            // emptiness cannot cancel the executed vertical-space receipt.
-            if lines > 0 {
-                self.state.output.push(Block::VerticalSpace {
-                    lines,
-                    source: source_span(node),
-                });
-            }
+        if self.push_mdoc_paragraph_spacing(node, &structural_targets) {
             return;
         }
         // Nm's HEAD and BODY consume the current native field. Changing its
@@ -389,6 +373,12 @@ impl BlockLowerer<'_, '_> {
             return;
         }
         let formatter_control = formatter_control(node.macro_token.as_ref());
+        if formatter_control.is_some() && crate::mandoc::containers::is_container(node) {
+            // The common container driver owns its pre_br and grouped flush
+            // events in both output destinations. Preparing another break
+            // here would reconsume the already retired rejected field.
+            return;
+        }
         if formatter_control.is_some_and(|control| control.boundary == FormatterBoundary::Line) {
             // This is the actual request dispatch, after HEAD execution and
             // before BODY output. The definition checkpoint records it once.

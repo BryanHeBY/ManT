@@ -36,7 +36,9 @@ impl StructuralLowerer<'_, '_, '_> {
         // layout hint eventually attached to the detached display body.
         let rows = self.formatter.execution.resolve_vertical_space(1);
         if rows > 0 {
-            self.formatter.row_presentation.endline();
+            self.formatter
+                .execution
+                .finish_native_vertical_rows(usize::from(rows));
         }
         rows
     }

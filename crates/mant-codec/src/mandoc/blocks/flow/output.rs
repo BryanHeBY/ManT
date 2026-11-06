@@ -137,7 +137,10 @@ impl BlockState {
             // completed-row receipts at a different IR destination.
             return;
         }
-        if self.formatter.no_fill && self.paragraph.is_empty() && !line_request {
+        if self.inline_output_is_literal(self.formatter.no_fill)
+            && self.paragraph.is_empty()
+            && !line_request
+        {
             // A block output boundary has no filled content to drain. The
             // current no-fill formatter row remains live until term_newln().
             return;
@@ -284,7 +287,7 @@ impl BlockState {
         } else {
             InlineBuilder::flush_execution_line
         };
-        if self.formatter.no_fill || self.uses_literal_output() {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.with_inline_builder(&mut self.formatter, flush);
         } else {
             self.paragraph

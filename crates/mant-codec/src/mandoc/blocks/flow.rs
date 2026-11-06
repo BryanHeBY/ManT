@@ -22,6 +22,14 @@ struct ClosedOutputTail {
     row_end: OutputRowEnd,
 }
 
+/// A declaration keeps rich inline semantics under native no-fill execution.
+/// This chooses only the output container, never formatter registers or rows.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(in crate::mandoc::blocks) enum InlineOutputRole {
+    SourceMode,
+    Declaration,
+}
+
 pub(super) struct BlockState {
     pub(super) output: Vec<Block>,
     pub(super) formatter: crate::mandoc::formatter::FormatterState,
@@ -29,6 +37,7 @@ pub(super) struct BlockState {
     // Filled and literal buffers are independent, not mutually exclusive modes.
     paragraph: ParagraphFlow,
     literal: LiteralFlow,
+    inline_output_role: InlineOutputRole,
     // A column display transfers the active projection vector to LiteralFlow.
     // Its source and native posts keep borrowing that destination, including
     // an empty vector or a device row which has just ended. Neither fact is
@@ -61,7 +70,7 @@ pub(super) struct LinkOutputCursor {
 impl BlockState {
     pub(super) fn link_output_cursor(&mut self, node_id: u32) -> LinkOutputCursor {
         let marker = super::man_links::link_cursor_marker(node_id);
-        if self.formatter.no_fill || self.uses_literal_output() {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.insert_link_cursor(marker);
         } else {
             self.paragraph.insert_link_cursor(marker);
@@ -182,6 +191,7 @@ impl BlockState {
             literal_assembly: LiteralAssembly::default(),
             paragraph: ParagraphFlow::new(),
             literal: LiteralFlow::new(),
+            inline_output_role: InlineOutputRole::SourceMode,
             column_display_owner: false,
             single_line_display_owner: false,
             closed_output_tail: None,

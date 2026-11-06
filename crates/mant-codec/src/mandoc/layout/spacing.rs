@@ -36,7 +36,9 @@ pub(in crate::mandoc) fn execute_man_paragraph_spacing(
     if rows > 0 {
         // Each actual term_vspace endline consumes ti. A skipvsp-cancelled
         // row does not; the following macro pre separately assigns offset.
-        formatter.row_presentation.endline();
+        formatter
+            .execution
+            .finish_native_vertical_rows(usize::from(rows));
     }
     rows
 }

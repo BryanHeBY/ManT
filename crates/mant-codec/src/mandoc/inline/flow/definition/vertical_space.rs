@@ -60,16 +60,7 @@ impl InlineBuilder {
     }
 
     pub(super) fn finish_native_vertical_row(&mut self, rows: usize) {
-        if rows == 0 {
-            return;
-        }
-        self.execution.row_presentation.endline();
-        if let Some(definition) = &mut self.execution.definition {
-            // term_vspace() emits an endline after the current field. Unlike
-            // a HANG term_newln(), the next word starts a new device row.
-            definition.hang_row.endline();
-            definition.vertical_started_row = true;
-        }
+        self.execution.finish_native_vertical_rows(rows);
     }
 
     /// Plain `term_vspace()`, as used by `print_bvspace()`; unlike roff `.sp`,
@@ -104,5 +95,21 @@ impl InlineBuilder {
         // skipvsp. They survive an output-owner return independently of
         // the ordinary row end from its leading term_newln().
         self.record_completed_rows(completed_rows, origin);
+    }
+}
+
+impl super::super::InlineExecutionState {
+    /// The backend's real vertical endline closes device occupancy even
+    /// when an IR owner preserves its surrounding field session.
+    pub(in crate::mandoc) fn finish_native_vertical_rows(&mut self, rows: usize) {
+        if rows == 0 {
+            return;
+        }
+        self.row_presentation.endline();
+        self.detached_device_row = None;
+        if let Some(definition) = &mut self.definition {
+            definition.hang_row.endline();
+            definition.vertical_started_row = true;
+        }
     }
 }

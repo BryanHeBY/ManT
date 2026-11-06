@@ -69,6 +69,13 @@ impl LiteralFlow {
         };
     }
 
+    /// Transfer the unchanged active vector; native anchors keep addressing
+    /// the same positions while its semantic output container changes.
+    pub(super) fn take_active_output(&mut self) -> (Vec<Inline>, Option<SourceSpan>) {
+        let previous = std::mem::replace(self, Self::new());
+        (previous.nodes, previous.source)
+    }
+
     /// Continue a filled source word in the output owner of an already
     /// printed, still-open device row. Bd BODY post calls `term_newln()`, but
     /// NOBREAK can keep that row alive (`mdoc_term.c:1474`; term.c:250-253).

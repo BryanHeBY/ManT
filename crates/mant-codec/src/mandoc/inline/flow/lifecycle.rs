@@ -78,8 +78,19 @@ impl InlineExecutionState {
             // pre/post. Retiring its IR owner must retain NOSPACE/NONEWLINE,
             // the occupied device row and the next field's native minbl.
             self.retire_output_owner();
+            // The caller may have temporarily taken a bare BACKAFTER before
+            // draining the owner. No buffered cell caused a native flush,
+            // so that live request still precedes the next formatter word.
+            self.zero_advance.inherit_armed(armed_zero_advance);
             return;
         }
+        self.reset_consumed_projection(armed_zero_advance);
+    }
+
+    /// A real field post consumed the input before its completed owner drains.
+    /// Native geometry/viscol survive independently of the retired owner's
+    /// visible row and separator projection (term.c:233-253).
+    pub(super) fn reset_consumed_projection(&mut self, armed_zero_advance: bool) {
         self.boundary = PendingBoundary::Ordinary;
         self.last_visible_character = None;
         self.has_printable_content = false;
