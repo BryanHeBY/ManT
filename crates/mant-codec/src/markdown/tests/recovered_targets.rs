@@ -191,3 +191,86 @@ fn original_reference_checks_share_the_embedded_preface_boundary() {
         }
     );
 }
+
+fn control_warning_sources(document: &Document, source: &str) -> Vec<String> {
+    document
+        .diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("markdown.control-characters"))
+        .map(|diagnostic| {
+            let range = diagnostic.source.unwrap().byte_range.unwrap();
+            source[range.start.get() as usize..range.end.get() as usize].to_owned()
+        })
+        .collect()
+}
+
+#[test]
+fn declined_targets_do_not_execute_repaired_or_discarded_titles() {
+    let mut cases = 0;
+    for ending in ["\n", "\r\n", "\r"] {
+        for prefix in ["", "<br />\n"] {
+            for (link, definitions, original_control) in [
+                (
+                    "[DECLINED][r]",
+                    "[r]: \u{85}\n\n[r]: https://other.test \"before&#12;after\"\n",
+                    "\u{85}",
+                ),
+                (
+                    "[DECLINED][r\x1bf]",
+                    "[r f]: https://other.test \"before&#12;after\"\n",
+                    "\x1b",
+                ),
+                (
+                    "[DECLINED](https://a.test/\x1b \"before&#12;after\")",
+                    "",
+                    "\x1b",
+                ),
+            ] {
+                let source = format!("{prefix}{link}\n\n{definitions}").replace('\n', ending);
+                let document = check(&source, 0, 1);
+                // Original source recovery still warns about its raw control.
+                // The rejected Link's decoded title is not retained or visited,
+                // including a formerly shadowed definition exposed by masking.
+                assert_eq!(
+                    control_warning_sources(&document, &source),
+                    [original_control],
+                    "{source:?}"
+                );
+                assert!(document.blocks.iter().any(|block| matches!(block,
+                    mant_ir::Block::Paragraph { children, .. }
+                        if mant_ir::inline_plain_text(children).contains("DECLINED"))));
+                cases += 1;
+            }
+        }
+    }
+    assert_eq!(cases, 18);
+}
+
+#[test]
+fn a_later_admitted_reference_still_normalizes_its_title_once() {
+    for ending in ["\n", "\r\n", "\r"] {
+        for prefix in ["", "<br />\n"] {
+            let definition = "[r f]: https://other.test \"before&#12;after\"";
+            let source = format!(
+                "{prefix}[DECLINED][r\x1bf] [ACCEPTED][r f] [LATER][r f]\n\n{definition}\n"
+            )
+            .replace('\n', ending);
+            let document = check(&source, 2, 1);
+            assert_eq!(
+                links(&document),
+                ["ACCEPTED", "LATER"].map(|label| (
+                    LinkTarget::External {
+                        uri: "https://other.test".into()
+                    },
+                    Some("before after".into()),
+                    label.into()
+                ))
+            );
+            assert_eq!(
+                control_warning_sources(&document, &source),
+                ["\x1b", definition],
+                "a refused use cannot consume the accepted definition's title diagnostic"
+            );
+        }
+    }
+}

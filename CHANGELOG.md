@@ -58,6 +58,9 @@ that crate was not published for that change.
 - Locate decoded reference-title diagnostics at the effective definition and
   report each affected field once, including references following leading hard
   rows. Labels and inline-link titles retain their individual source ranges.
+  Admit recovered target identities before inspecting title metadata so
+  rejected links cannot diagnose discarded titles or consume a later valid
+  reference's diagnostic slot.
 - Execute native enclosure operands without conflating empty words, invisible
   cells and escaped content. Preserve `Es`/`En` hard lines, font effects and
   zero-advance state across prose, literals and definition owners.

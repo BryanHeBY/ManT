@@ -118,6 +118,14 @@ fn parse_inline_sequence(
                 cursor.ascend();
                 end_offset = nested_end;
                 let destination = dest_url.into_string();
+                if !cursor.accept_link(link_type, &id, &destination, &range, source, diagnostics) {
+                    // Rejected navigation retains its already admitted label,
+                    // but discarded metadata is not an executed title. In
+                    // particular, a repaired shadow definition must neither
+                    // diagnose nor consume the real definition's dedup slot.
+                    output.extend(children);
+                    continue;
+                }
                 let title = (!title.is_empty()).then(|| {
                     super::decoded::title(
                         title.into_string(),
@@ -128,10 +136,6 @@ fn parse_inline_sequence(
                         diagnostics,
                     )
                 });
-                if !cursor.accept_link(link_type, &id, &destination, &range, source, diagnostics) {
-                    output.extend(children);
-                    continue;
-                }
                 output.push(Inline::Link {
                     target: mant_ir::LinkTarget::from_uri(&destination),
                     title,

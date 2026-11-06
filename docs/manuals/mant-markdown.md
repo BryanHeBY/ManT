@@ -655,6 +655,9 @@ once; unused and shadowed definitions add no decoded-metadata warning. Inline
 link titles use their complete link range, while labels and ordinary text keep
 their individual event ranges. Canonical leading hard rows use the same
 full-document definition table and expansion budget.
+Source-recovery target admission precedes title normalization: a rejected link
+retains its safe label and recovery diagnostic, but does not diagnose unused
+title metadata or consume the definition's first-used diagnostic slot.
 
 CR decoded into ordinary Text or a link label remains a content scalar, not a
 second source-line terminator. Export writes it as `&#13;`; LF alone carries
