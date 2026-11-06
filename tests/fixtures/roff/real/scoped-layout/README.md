@@ -58,3 +58,10 @@ tests separately exercise the selected rows, origins, owners, links, JSON
 and Markdown readbacks. Neither the catalogue nor a successful parse asserts
 whole-page equivalence, every font, arbitrary column geometry or all roff
 behavior.
+
+The structure, Markdown projection, target, semantic and active-CVS fidelity
+ledgers include all three exact identities. The layout observer retains a
+reviewed partial result for bhyve: its lexical keys leave the backslash-e escape undecoded in
+five literal owners. Independent comparison of all 30 decoded payload rows
+preserves their authored spaces and physical rows after only the common page
+origin is removed. That limitation is not relabeled as full-page clean.
