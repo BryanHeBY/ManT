@@ -87,8 +87,9 @@ impl<'a> MarkdownSource<'a> {
     }
 
     /// Whether the exact source boundary between two parsed nodes contains an
-    /// empty line. Parser ranges sometimes include the first newline in the
-    /// preceding block, so inspect both sides of that boundary.
+    /// empty line. Container ranges can include trailing blank lines and the
+    /// following sibling's indentation, so inspect the complete whitespace
+    /// suffix of the preceding block as well as the gap between the ranges.
     pub(super) fn has_blank_line_between(&self, previous: SourceSpan, current: SourceSpan) -> bool {
         let previous_end = previous.byte_range.map_or_else(
             || {
@@ -103,10 +104,26 @@ impl<'a> MarkdownSource<'a> {
             || self.offset(current.line, current.column),
             |range| usize::try_from(range.start.get()).unwrap_or(usize::MAX),
         );
-        // Look back far enough to catch a newline the preceding block's range
-        // may have absorbed, then settle onto a char boundary so a multi-byte
-        // character before the boundary cannot make the slice fail.
-        let mut boundary_start = previous_end.saturating_sub(2);
+        let previous_start = previous.byte_range.map_or_else(
+            || self.offset(previous.line, previous.column),
+            |range| usize::try_from(range.start.get()).unwrap_or(usize::MAX),
+        );
+        // pulldown-cmark firstpass::pop/finish_list closes a container at
+        // its current input cursor. After the outer list's indentation was
+        // consumed, that range can end at the next paragraph's first glyph.
+        // A fixed lookback misses the absorbed blank line when that prefix
+        // has two or more spaces. Scan only this block's whitespace suffix;
+        // the first physical line is still the preceding content's tail.
+        let mut boundary_start = previous_end.min(self.text.len());
+        let floor = previous_start.min(boundary_start);
+        while boundary_start > floor
+            && matches!(
+                self.text.as_bytes()[boundary_start - 1],
+                b' ' | b'\t' | b'\r' | b'\n'
+            )
+        {
+            boundary_start -= 1;
+        }
         while boundary_start > 0 && !self.text.is_char_boundary(boundary_start) {
             boundary_start -= 1;
         }

@@ -10,6 +10,7 @@ mod metadata_origins;
 mod recovered_targets;
 mod source_contracts;
 mod source_endings;
+mod source_spacing;
 
 #[test]
 fn classifies_mailto_schemes_without_ascii_case_distinctions() {

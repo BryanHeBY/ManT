@@ -37,6 +37,9 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Retain source blank-line spacing after nested Markdown lists even when the
+  parser includes the next line's indentation in the preceding list range.
+  Keep original source coordinates and literal content unchanged.
 - Keep ordinary margin-change flushes tied to live native input cells. Avoid
   duplicate separators and preserve joined words across empty operands, `Ns`
   and spacing-mode changes; keep tagged-field alignment independent.

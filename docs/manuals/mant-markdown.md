@@ -42,6 +42,11 @@ Lists may contain paragraphs, code blocks, tables, and nested lists. Content dee
 
 List tightness follows the parser's direct item structure: a loose nested list does not make its tight parent loose. LF, CRLF and CR are equivalent line endings; an empty line or one containing only spaces or tabs counts as a blank line. Original byte ranges and physical source-line coordinates remain available in IR spans. Semantic declarations are consumed within the original event tree, so removing a declaration cannot merge two independently authored lists.
 
+Source blank-line spacing also survives nested list boundaries whose parser
+range includes the indentation before the next block. Layout observes those
+physical lines without changing the original ranges or treating literal code
+content as a separate block gap.
+
 ## Supported Inline Syntax
 
 | Markdown construct | IR result | Notes |
