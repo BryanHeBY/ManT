@@ -1,0 +1,3679 @@
+{
+  "schema": "mant.markdown-reference-binding-matrix/v1",
+  "baseline": "38f7daa2a2175b58818ae0ccc3ba95eb1d22eec4",
+  "case_count": 108,
+  "cases": [
+    {
+      "id": "reference-full-lf-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[X][r\u001bf]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "e02a30faebccf79db3162bd1496404a169c9dc82cf3b78595b5d16d9d0f4bc74",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-lf-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[X][r\u001bf]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "cc580d5e3411c889009fbc7d24d14d4461db06bd6e12598923253823adf7969b",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-lf-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[X][r\u001bf]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "5808200110ac8df48040fe22e653a933a076e95537051965e035a9dcb3f677a1",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-lf-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[X][r\u001bf]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "b89609e2d859ff4c6872636ad3e4fea4b117a838e7e0624c79323f69ef9fb09c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-lf-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\n[X][r\u001bf]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "44783f5be2f027ead3fd040dfb7108517244c297a42d8902522bcf3e0c56f283",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-lf-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\n[X][r\u001bf]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "05b4c914ac98ecd4039f96fe7561f7394a1cb61cd7dfe2d20840f704f0d7ff28",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-lf-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\n[X][r\u001bf]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "c01a06842e6e27c2eaba3163caf97ba81526e758e9c71af80f655daa983d88f8",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-lf-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\n[X][r\u001bf]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "c6a247198aac234faffaf32007afaf4b19cd9bf42bd3e30aeb5232e5f45bee77",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-lf-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [X][r\u001bf]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "1a866f504117a8df243808580a2a6ff477ef10363ca39c636aa68d576b77c712",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-lf-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [X][r\u001bf]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "353029472218a84747b99acab83adbf22ec24daca2db79054f39964f38eef088",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-lf-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [X][r\u001bf]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "78cfa475f7202bfac5b8764182ae97aea645ce29fce7fae708b3aced69107182",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-lf-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [X][r\u001bf]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "901c398ceb430ab049600dd285a7dafc3c9732b86ae468ef56d395a7ac724095",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-crlf-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[X][r\u001bf]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "1a34e94f6067ca5a0b9d16401d2b2f19f332b12ef902db2f89b19f9ef71f7b5c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-crlf-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[X][r\u001bf]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "1eee6212792b71ef901ceca2c93070103a8834c2f7b1e7ed36b1a06bd9f7cd49",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-crlf-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[X][r\u001bf]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "b29248d0f4a9bff787fd42d75b27df11a45152871ae8487609bc10441af07de3",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-crlf-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[X][r\u001bf]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "477dcf689b6bcd72d7ca99e3bd97765d7646682a3367f9d785ddbffb248f2202",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-crlf-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\r\n[X][r\u001bf]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "3e3f0b5d798d4b5678d3d2e1d279e47568a0e6f1949f1797937dbc9379bbc768",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-crlf-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\r\n[X][r\u001bf]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "3006b93b8203ff543717c6bd7a214680e03c3e97405d517a9a75ce569a12fdd9",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-crlf-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\r\n[X][r\u001bf]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "b3420e4107dd80a23a2a5205b7f133d1acff13b704d079ae7329db7fedac3113",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-crlf-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\r\n[X][r\u001bf]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "91d2cd4c37bf5707f51c52529fbff51e981cfa488f403a526574df9bc8266eb3",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-crlf-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [X][r\u001bf]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "e4b852c6df375a9e58b9a5c7641cdcdd06e4e762246e57e3aad1367aa73aa0be",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-crlf-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [X][r\u001bf]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "ef0cd772aae0a9fbc05c82089c4e0205b5f9ddb19db9ab74bbe3ca1cb4b8d094",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-crlf-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [X][r\u001bf]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "912c6800ed8db7ac2fd1fef636c676a810de6155c55a5dc4250046f69177def0",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-crlf-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [X][r\u001bf]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "cd3b43de7465c1953a6073e41202fce405950cf341765c5c978db08a766e7186",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-cr-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[X][r\u001bf]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "5ddc47e8d82c9e5d7000ac220ea6f9955a5a34875e3081fac629565a29434bd8",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-cr-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[X][r\u001bf]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "3192b56ae579668f3af295ba2e612930848813474d5e1c26a15375ec47b6013b",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-cr-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[X][r\u001bf]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "d2f12fd46b07a1d8c95bf38271d73765b1024b07a9094ab75e79c5296adbd822",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-cr-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[X][r\u001bf]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "a0e00328040e8b3590ab49d199c5d14cbc890f54ca82c96c5971bb781d210d92",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-cr-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\r[X][r\u001bf]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "74f3ea075e358bf9b28647266a5d738f5084b019a215ac3d86902a8edc404454",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-cr-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\r[X][r\u001bf]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "ad7c47016a581a41df4d4269aa7a1aaa058430a47b33bc8698afca136683b133",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-cr-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\r[X][r\u001bf]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "19ec781da90374ec478a759b5f1a9c0dc32a39ab5e9ad10a48b9bd0e4e3637fc",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-cr-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\r[X][r\u001bf]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "8b9785b63354644ade7e4637d6e416201d08c56157adce8659071b41d1ae4a89",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nX",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-cr-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [X][r\u001bf]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "607878a3e721cacd885f2beeff19f686a65de0e7be2e703efc5c177e30354f31",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-cr-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [X][r\u001bf]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "d2aef59c4a4797486ab0afb4b170dbba7c533020469f29bbceb0811c8a4eb722",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-full-cr-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [X][r\u001bf]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "0f4d21021c9cf133e7742735f67f46544177459adc3a1264d844eb82ebe74f0d",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-full-cr-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "full",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [X][r\u001bf]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "a1a978ec61c12b1f6755402953cfee5f4c785da881b50145381817ada2c802a0",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "X",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-lf-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[r\u001bf][]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "5c3674597d8c3d69d00e7dc313b7ae3977742a1444373870ec4f7e11eb6af8cc",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-lf-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[r\u001bf][]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "a421e899fd17d060dcebd7eab37b44f06b92e7ea00028906bbb06a6d8865bd61",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-lf-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[r\u001bf][]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "0c75bb43c058a9e180ee1f0e3c8f892fe0555b1c7c952f20af406f4f61f0095d",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-lf-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[r\u001bf][]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "acf5a85f95989c75f5ceca4f57ab70e662806793e765d03cb6ad35d47cba42e2",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-lf-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\n[r\u001bf][]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "0663fa4536d8922926bb6a97ba58cf2b81b97aaa14e64522f082dd755a23de3f",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-lf-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\n[r\u001bf][]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "89111aec184eb5e110c35cf8f44c04e0cfda7a130be70d19be212ddca263a8ce",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-lf-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\n[r\u001bf][]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "0b4572c656d1ac300328150769a58db08b7c00f91d174220a3d3e7066ff02d6d",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-lf-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\n[r\u001bf][]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "01568623f492504a8bd29247219390d647c70bedcf26170a16676155185589cf",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-lf-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [r\u001bf][]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "4cf94eafb197c669a238ecde5e688c877abe0819a8c067bc06930c32a5b66863",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-lf-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [r\u001bf][]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "a4db7b91c7b6be067ee02713ec180e1d2c89488ff38e8cdb7199a4575288d8c8",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-lf-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [r\u001bf][]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "42d7717a46e37dc53272c64233862d2aabe674e9c2297bc42552552a941ba455",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-lf-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [r\u001bf][]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "41bf38e1abf6a42b166fa7bcde817355c45235143e7806e4b03d8eb687a1e649",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[r\u001bf][]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "ee6b434b69fcdd8591a821669b2bfbacf2ed4d1ac21022b32ce790f88e473804",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[r\u001bf][]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "f2777dbcdc2e93a8b4da289cb347d2e180561066ab4c34d0a45c527042640958",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[r\u001bf][]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "ea85e4750da169030110b1c2a92fec1a8eb9cdc353d51f3cef7f3ccc5445a0d9",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[r\u001bf][]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "898376ce14307ed619521065ca2fcecc0748ca8d2f940d8f754fe4b2f020bc89",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\r\n[r\u001bf][]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "2dd4e73fdec6bfa53c11310e53ecf87d7f1b040b991cdc70e7901889470015f6",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\r\n[r\u001bf][]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "725970f0884086661a9c26d4676614b0ec1c42aa215f18329e2cc4e08a41cf27",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\r\n[r\u001bf][]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "c4ce5f7b0d868cebc45ea457fb23708942c2252af94350bca1e1babe94423763",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\r\n[r\u001bf][]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "cfa360643a0fd96b5e9e7a8342b6f4cb178bc9c6b76f6946fd34db66e48549f8",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [r\u001bf][]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "7b509291b606b27cae3f0b9a82b3cd3acd540a6e92d5d7b26714d66cecd21c36",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [r\u001bf][]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "a0fced441a49e180562ccc9dbf6235acd77bdfea5d04f96705284e2809764564",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [r\u001bf][]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "cec4694fcddc51d9df5f31bcba5fb62082642a02a7d2c41cc2480ba481a06700",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-crlf-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [r\u001bf][]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "1730b187fc05b25c01953c4648cdd5b3eae3b45459aa29b9d8cc99a2d14880c2",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-cr-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[r\u001bf][]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "b8a9bb4aa0f9e13b65a7345ec86d74d7bc727bb14a4888bd0b8705630d843557",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-cr-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[r\u001bf][]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "1f0b47df8f47390e2aa836d1ad1c94523b66e48a8790eb80a3db1dd388c9eaeb",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-cr-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[r\u001bf][]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "aeae10a9632619664773807a8f7c7a6b6959594849257e8f923e7c81de327d7c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-cr-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[r\u001bf][]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "61333e5090f95482524f4f4bae07860537c8cdb019343926b4e8ddafbe8f0624",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-cr-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\r[r\u001bf][]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "93b190bfaeb257c144d84613303b4d7f914109863602e48ad9487d0c7c2912c6",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-cr-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\r[r\u001bf][]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "5b03311901039c78d8326d1e329b9dff6ca70014a0707be74e7c490901f09bde",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-cr-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\r[r\u001bf][]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "f779539b0bab9932d796bc0d2a27d6adb997f59093bdb5a9c4ecb7534af5b575",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-cr-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\r[r\u001bf][]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "3f2dba93a9837b9d7c0cbb3ce337ed52736aff9325f05f632eb94f7c22bef2e3",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-cr-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [r\u001bf][]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "4e8c0f24c496184a4571ff88d09611181ef2c6cb245ea77a4233d0b98d7d64e7",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-cr-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [r\u001bf][]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "711d87f6efb3d440cc65511730094417d63b1d5a1dbe1580132c1e8125dec059",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-collapsed-cr-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [r\u001bf][]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "720bb7016c33e84a03519e26321587c1379b95528cf6ca4967f5329c3e124147",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-collapsed-cr-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "collapsed",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [r\u001bf][]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "7a4063d46bb9fa00e8b761a07053916a26ce5df43a08499808bae2f52a5a6363",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-lf-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[r\u001bf]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "4c0c6b89ebd31aad05d5bcff9e3fb2cab76334b8d35ba50ab070138ccb0fca38",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-lf-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[r\u001bf]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "4b828fd318e01fe95f331fea32470cb363d714112db18075b2fefb837850462e",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-lf-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[r\u001bf]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "c08cda8e3c5a867faf1c4f460fd1cf3ac75de59cf82c690e040f12c79584ce14",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-lf-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[r\u001bf]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "ccbf0b74295cfd41b54d3495c55aa2482e394bae903ea0bfd4e125e06f29809c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-lf-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\n[r\u001bf]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "da9669ca024bb8d0116984b32fab5255087f647eccc430414156deb949e1f4bf",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-lf-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\n[r\u001bf]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "ee2162d604e66576612b682ca8000f04f83d2166b295cd03f948925417685a0c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-lf-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\n[r\u001bf]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "06991df9c0c9e5f191541b793619fa7328fc99d3fafe71de4cf3f0a78955a5b6",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-lf-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\n[r\u001bf]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "9551bd36d97b169654ecdc84deb7ddf0deb4a0d74d47f6d671e6a3832c0fa581",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-lf-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [r\u001bf]\n\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "7b0177fd659aeb828e895af808c2376b477ec177d1023b8c0b7d938ec87dd580",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-lf-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [r\u001bf]\n\n[r f]: https://same.test \"SAME\"\n[r\u001bf]: https://same.test \"SAME\"\n",
+      "source_sha256": "74b3e2b2e636bb4cc3e6e1ea4f4647dc1235864818e705301d41c72c2ee93d86",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-lf-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [r\u001bf]\n\n[r f]: https://wrong.test \"SAME\"\n[r\u001bf]: https://right.test \"SAME\"\n",
+      "source_sha256": "92437de4e6417a042f765db5a21d2f893134a6f965222dbf3e0764c7be6d6a4b",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-lf-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "lf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [r\u001bf]\n\n[r f]: https://wrong.test \"WRONG&#12;\"\n[r\u001bf]: https://right.test \"RIGHT\"\n",
+      "source_sha256": "58820b6fc117ee975a4581b10288bd05e196df960339545a95e308f879132b12",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[r\u001bf]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "0507a6bad8194b4dd49dcf41f8660020da812a992738292259560ab07d40b139",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[r\u001bf]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "39ade0bae65be552759e7b48c39672435890d4d3d9e10068feb6c4909f98c27b",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[r\u001bf]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "965833838ef42d76b8a8ebd9cfe4b51e207117f9223a45726721bc8108a7e1d2",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[r\u001bf]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "7180e225998f855b910496ea57ad6e463dbbf030cc1d9a5e0ae94f9943b7b96e",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\r\n[r\u001bf]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "01c34bdae19bafe034db5ee3049bf313fdec9df05135c82ba68500b2bf42f605",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\r\n[r\u001bf]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "9c5c132d3038c6d36611c085339b52e5b4df7c89f93bd23011622f53b09fe4b4",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\r\n[r\u001bf]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "f6bfb7a51ce15db446dcc4a32a3eb605cb959b68dc56c8796ffad1b9ae1cf697",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\r\n[r\u001bf]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "fbb93fc29b2702a7be8a4e7d298ce70095a116817a1df67e6c93ed6195caef80",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [r\u001bf]\r\n\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "25ad176a870883a9507ec35f3c214c4f08eda59132a3a17e278f51b6c1ab799b",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [r\u001bf]\r\n\r\n[r f]: https://same.test \"SAME\"\r\n[r\u001bf]: https://same.test \"SAME\"\r\n",
+      "source_sha256": "19c870ae1707246a0a06addf778281d0e03f8f3cc2455b359034c6c33151b333",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [r\u001bf]\r\n\r\n[r f]: https://wrong.test \"SAME\"\r\n[r\u001bf]: https://right.test \"SAME\"\r\n",
+      "source_sha256": "e5f7f97a64e4831fbc8934dbba85ced116e082374818c74c14fa4a5fdce1b689",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-crlf-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "crlf",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [r\u001bf]\r\n\r\n[r f]: https://wrong.test \"WRONG&#12;\"\r\n[r\u001bf]: https://right.test \"RIGHT\"\r\n",
+      "source_sha256": "f23e7fa2d8b17ee0f2f81b8204150e008d96e516a2c1efbb7781f64d44e1ad68",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-cr-paragraph-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "[r\u001bf]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "144e24db531b13f9369eef6f2cf96a218fd1406924972150f6919af1bfa939ff",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-cr-paragraph-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "[r\u001bf]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "11e118bcbe7da6470ca3e30207b274e88768411f396e235263dea62ef03eb9d7",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-cr-paragraph-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "[r\u001bf]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "d5bad807069c69d898237ca287ca22b3c21c5a782f9580d69b13688803c95262",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-cr-paragraph-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "paragraph",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "[r\u001bf]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "f62af0517260df4384bf269cba9ad443222da63a48dbf37c07cb0781de5d2a9d",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-cr-canonical-break-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "<br />\r[r\u001bf]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "21e21f696e650ccbdf5698d27bd88326f3a9240120167996d5e6349824c43c86",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-cr-canonical-break-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "<br />\r[r\u001bf]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "204cebbaae8ac1f8fb3e35e6bcb7cd91a07592c019ed44a7952e38c668cf71a2",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-cr-canonical-break-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "<br />\r[r\u001bf]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "facb202ed1342d3f7305425ee5322112c34e4b4cd1738c15059d2abc7e5243e6",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-cr-canonical-break-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "canonical-break",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "<br />\r[r\u001bf]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "d03c7e6ca687075b8f5fe9c8f532558bd00181bbf293e4460b6ae7462a274fa0",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "\nr f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-cr-heading-same-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "same-uri-different-title"
+      },
+      "source": "# [r\u001bf]\r\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "57b623a4a669e6ea3db5784a8efcbca6d284cfa88a843719fb02ef41c87e0f2c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-cr-heading-same-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "same-uri-same-title"
+      },
+      "source": "# [r\u001bf]\r\r[r f]: https://same.test \"SAME\"\r[r\u001bf]: https://same.test \"SAME\"\r",
+      "source_sha256": "56f447afb9b48d36275afdfc25f20c9860169bc27729ec036cabf7927cfb6c37",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://same.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://same.test"
+    },
+    {
+      "id": "reference-shortcut-cr-heading-different-uri-same-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "different-uri-same-title"
+      },
+      "source": "# [r\u001bf]\r\r[r f]: https://wrong.test \"SAME\"\r[r\u001bf]: https://right.test \"SAME\"\r",
+      "source_sha256": "fd8275939612765916d67a72ba6e3043d81504319b7dc9a88ecf76d87306d429",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "SAME",
+      "recovered_uri": "https://wrong.test"
+    },
+    {
+      "id": "reference-shortcut-cr-heading-different-uri-different-title",
+      "family": "reference-binding-identity",
+      "axes": {
+        "form": "shortcut",
+        "lineEnding": "cr",
+        "entry": "heading",
+        "definitionRelation": "different-uri-different-title"
+      },
+      "source": "# [r\u001bf]\r\r[r f]: https://wrong.test \"WRONG&#12;\"\r[r\u001bf]: https://right.test \"RIGHT\"\r",
+      "source_sha256": "4243aab3da8e7cd9832a1af2c7f85b682ce59e0cbfe3f5b8a32825c9a01f737a",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original parser effective raw ID r\\x1bf resolves later source definition; sanitized ID r f resolves earlier different source span, so refuse regardless of URI/title equality.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip",
+        "markdown-two-readbacks"
+      ],
+      "asserted_axes": [
+        "original-and-recovered-effective-definition-span",
+        "safe-label",
+        "target-refusal",
+        "title-not-executed",
+        "original-use-diagnostic-range",
+        "per-round-source-ranges"
+      ],
+      "status": "permanent-regression",
+      "reason": "F4 confirmed binding-identity defect",
+      "expected_label": "r f",
+      "original_uri": "https://right.test",
+      "original_title": "RIGHT",
+      "recovered_uri": "https://wrong.test"
+    }
+  ]
+}

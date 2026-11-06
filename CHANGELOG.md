@@ -41,6 +41,10 @@ that crate was not published for that change.
   parent input once at table entry, and run ordinary list HEAD/BODY geometry
   through the shared field lifecycle. Keep subsequent prose, table topology
   and nested display origins intact across output owners.
+- Require the original effective Markdown reference definition's source
+  identity during recovery, including equal-URI/title collisions. Keep proof
+  caches isolated and refuse unprovable context-dependent uses with a bounded
+  diagnostic before inspecting their metadata.
 - Keep scoped list and display origins relative to their actual content owner,
   including signed outdents, without restoring consumed device rows or stale
   column flags. Preserve nested column headings on their original row and run

@@ -8,6 +8,7 @@ mod decoded_content;
 mod entry_forms;
 mod metadata_origins;
 mod recovered_targets;
+mod reference_bindings;
 mod source_contracts;
 mod source_endings;
 mod source_spacing;

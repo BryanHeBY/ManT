@@ -639,10 +639,18 @@ remaining suffix on saturation. They use one additional original-source parser
 first pass to retain reference binding order, with the same embedded-preface
 boundary. Local checks share a budget of the larger of source bytes and
 100,000 bytes; failed checks and actual callback destination copies are charged
-before parsing or copying. Effective-definition decisions are reused. Clean
+before parsing or copying. An accepted reference must retain the same effective
+definition's original source range, even when another definition has the same
+URI and title.
+Unchanged uses may reuse that paired definition proof; changed uses keep their
+own parser-event identity. Effective-definition decisions are reused. Clean
 sources do not incur these extra checks. Context-dependent fragments and
 budget exhaustion may conservatively omit a link with the same diagnostic;
-source body recovery continues. This is not a promise that malformed Markdown
+source body recovery continues. In particular, an escaped-pipe reference
+identifier in a GFM table can depend on table-only parser rules. If a damaged label requires a local proof that
+cannot reproduce that context, its safe label is retained with a recovery
+warning; an undamaged use of the same identifier remains a link. No identifier
+is guessed by removing escapes. This is not a promise that malformed Markdown
 and its repaired spelling have identical syntax trees.
 
 Character references can introduce controls absent from the original bytes.

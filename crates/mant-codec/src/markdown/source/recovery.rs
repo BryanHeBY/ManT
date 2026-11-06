@@ -63,8 +63,39 @@ impl<'a> Recovery<'a> {
 #[derive(Default)]
 pub(in crate::markdown) struct TargetAdmission {
     remaining: Option<usize>,
-    decisions: BTreeMap<(usize, usize), bool>,
+    decisions: BTreeMap<ProofKey, bool>,
     reported: BTreeSet<(usize, usize)>,
+}
+
+/// Only unchanged uses may share an effective-definition proof. Changed uses
+/// and inline destinations retain their own parser-event identity.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum ProofKey {
+    InlineUse((usize, usize)),
+    ReferenceUse {
+        use_range: (usize, usize),
+        definition: Option<(usize, usize)>,
+    },
+    ReferenceDefinition {
+        original: Option<(usize, usize)>,
+        recovered: Option<(usize, usize)>,
+    },
+}
+
+/// Destination equality has already been checked by the original parser.
+/// Reference identity remains separate from that address proof.
+enum BindingProof {
+    Inline,
+    Reference { definition: Range<usize> },
+}
+
+impl BindingProof {
+    fn matches(&self, link: &LinkUse<'_>) -> bool {
+        match self {
+            Self::Inline => link.definition.is_none(),
+            Self::Reference { definition } => link.definition == Some(definition),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -74,6 +105,30 @@ pub(in crate::markdown) struct LinkUse<'a> {
     pub(in crate::markdown) destination: &'a str,
     pub(in crate::markdown) range: &'a Range<usize>,
     pub(in crate::markdown) definition: Option<&'a Range<usize>>,
+}
+
+impl LinkUse<'_> {
+    fn proof_key(
+        &self,
+        is_reference: bool,
+        changed_use: bool,
+        original_definition: Option<&Range<usize>>,
+    ) -> ProofKey {
+        let definition = self.definition.map(|range| (range.start, range.end));
+        if !is_reference {
+            ProofKey::InlineUse((self.range.start, self.range.end))
+        } else if changed_use {
+            ProofKey::ReferenceUse {
+                use_range: (self.range.start, self.range.end),
+                definition,
+            }
+        } else {
+            ProofKey::ReferenceDefinition {
+                original: original_definition.map(|range| (range.start, range.end)),
+                recovered: definition,
+            }
+        }
+    }
 }
 
 impl TargetAdmission {
@@ -111,7 +166,12 @@ impl TargetAdmission {
             return true;
         }
         let proof_range = if changed_use { link.range } else { origin };
-        let key = (proof_range.start, proof_range.end);
+        let diagnostic_key = (proof_range.start, proof_range.end);
+        let key = link.proof_key(
+            is_reference,
+            changed_use,
+            original_definition.map(|definition| &definition.span),
+        );
         let accepted = if let Some(decision) = self.decisions.get(&key) {
             *decision
         } else {
@@ -128,14 +188,15 @@ impl TargetAdmission {
             };
             let accepted = if cost <= *fuel {
                 *fuel -= cost;
-                original_destination_matches(recovery, &link, changed_use, fuel)
+                original_binding(recovery, &link, changed_use, fuel)
+                    .is_some_and(|proof| proof.matches(&link))
             } else {
                 false
             };
             self.decisions.insert(key, accepted);
             accepted
         };
-        if !accepted && self.reported.insert(key) {
+        if !accepted && self.reported.insert(diagnostic_key) {
             diagnostics.push(Diagnostic {
                 impact: DiagnosticImpact::None,
                 level: DiagnosticLevel::Warning,
@@ -148,16 +209,14 @@ impl TargetAdmission {
     }
 }
 
-fn original_destination_matches(
+fn original_binding(
     recovery: &Recovery<'_>,
     link: &LinkUse<'_>,
     changed_use: bool,
     fuel: &mut usize,
-) -> bool {
+) -> Option<BindingProof> {
     let original = recovery.original;
-    let Some(raw) = original.get(link.definition.unwrap_or(link.range).clone()) else {
-        return false;
-    };
+    let raw = original.get(link.definition.unwrap_or(link.range).clone())?;
     let options = crate::markdown::markdown_options();
     match link.link_type {
         LinkType::Inline | LinkType::Autolink | LinkType::Email => Parser::new_ext(raw, options)
@@ -173,109 +232,69 @@ fn original_destination_matches(
                     None
                 }
             })
-            .unwrap_or(false),
+            .unwrap_or(false)
+            .then_some(BindingProof::Inline),
         LinkType::Reference | LinkType::Collapsed | LinkType::Shortcut => {
-            let Some(references) = recovery.references() else {
-                return false;
-            };
-            if !changed_use {
-                return references
-                    .get(link.id)
-                    .is_some_and(|definition| definition.dest.as_ref() == link.destination);
-            }
-            let Some(use_source) = original.get(link.range.clone()) else {
-                return false;
-            };
-            // The original definition is the resolver: a repaired reference ID
-            // cannot prove itself against the recovered document's bindings.
-            let resolve = |broken: pulldown_cmark::BrokenLink<'_>| {
-                let definition = references.get(&broken.reference)?;
-                if definition.dest.len() > *fuel {
-                    return None;
-                }
-                *fuel -= definition.dest.len();
-                Some((definition.dest.clone(), "".into()))
-            };
-            Parser::new_with_broken_link_callback(use_source, options, Some(resolve))
-                .into_offset_iter()
-                .find_map(|(event, range)| {
-                    if let Event::Start(Tag::Link { dest_url, .. }) = event {
-                        Some(
-                            range.start == 0
-                                && range.end == use_source.len()
-                                && dest_url.as_ref() == link.destination,
-                        )
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(false)
+            original_reference_binding(recovery, link, changed_use, fuel)
         }
-        _ => false,
+        _ => None,
+    }
+}
+
+fn original_reference_binding(
+    recovery: &Recovery<'_>,
+    link: &LinkUse<'_>,
+    changed_use: bool,
+    fuel: &mut usize,
+) -> Option<BindingProof> {
+    let original = recovery.original;
+    let references = recovery.references()?;
+    if !changed_use {
+        let definition = references.get(link.id)?;
+        return (definition.dest.as_ref() == link.destination).then(|| BindingProof::Reference {
+            definition: definition.span.clone(),
+        });
+    }
+    let use_source = original.get(link.range.clone())?;
+    let options = crate::markdown::markdown_options();
+    let mut original_definition = None;
+    let destination_matches = {
+        // Locked parse.rs::fetch_link_type_url_title supplies the
+        // original use's normalized reference and complete use range.
+        // Keep the actual first-pass definition identity: a different
+        // definition with the same destination/title is still wrong.
+        let resolve = |broken: pulldown_cmark::BrokenLink<'_>| {
+            let definition = references.get(&broken.reference)?;
+            if broken.span == (0..use_source.len()) {
+                original_definition = Some(definition.span.clone());
+            }
+            if definition.dest.len() > *fuel {
+                return None;
+            }
+            *fuel -= definition.dest.len();
+            Some((definition.dest.clone(), "".into()))
+        };
+        Parser::new_with_broken_link_callback(use_source, options, Some(resolve))
+            .into_offset_iter()
+            .find_map(|(event, range)| {
+                if let Event::Start(Tag::Link { dest_url, .. }) = event {
+                    Some(
+                        range.start == 0
+                            && range.end == use_source.len()
+                            && dest_url.as_ref() == link.destination,
+                    )
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(false)
+    };
+    if destination_matches {
+        original_definition.map(|definition| BindingProof::Reference { definition })
+    } else {
+        None
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn proof_budget_and_source_change_storage_are_bounded() {
-        let original = "[a\x1bb](https://a.test)";
-        let recovery = Recovery::new(original);
-        let source = MarkdownSource::new(original);
-        let mut diagnostics = Vec::new();
-        let mut admission = TargetAdmission {
-            remaining: Some(0),
-            ..TargetAdmission::default()
-        };
-        let range = 0..original.len();
-        let link = || LinkUse {
-            link_type: LinkType::Inline,
-            id: "",
-            destination: "https://a.test",
-            range: &range,
-            definition: None,
-        };
-        assert!(!admission.accept(Some(&recovery), link(), &source, &mut diagnostics));
-        let mut normal = TargetAdmission::default();
-        assert!(normal.accept(Some(&recovery), link(), &source, &mut diagnostics));
-        let large = "x\x1b".repeat(10_000);
-        let changes = Recovery::new(&large);
-        assert_eq!(changes.changes.len(), MAX_CHANGE_RANGES);
-        assert!(changes.intersects(&(large.len() - 1..large.len())));
-    }
-
-    #[test]
-    fn callback_charges_the_original_reference_destination_before_copying() {
-        let use_ = "[x][r\x1bf]";
-        let original = format!(
-            "{use_}\n\n[r f]: https://short.test\n[r\x1bf]: https://long.test/{}\n",
-            "&amp;".repeat(1024)
-        );
-        let recovery = Recovery::new(&original);
-        let source = MarkdownSource::new(&original);
-        let range = 0..use_.len();
-        let definition = original.find("[r f]:").unwrap()..original.find("\n[r\x1bf]:").unwrap();
-        let mut admission = TargetAdmission {
-            remaining: Some(100),
-            ..TargetAdmission::default()
-        };
-        let mut diagnostics = Vec::new();
-        assert!(!admission.accept(
-            Some(&recovery),
-            LinkUse {
-                link_type: LinkType::Reference,
-                id: "r f",
-                destination: "https://short.test",
-                range: &range,
-                definition: Some(&definition)
-            },
-            &source,
-            &mut diagnostics
-        ));
-        // Only source parsing was affordable. The larger original target was
-        // refused before clone, without charging the recovered short target.
-        assert_eq!(admission.remaining, Some(100 - use_.len()));
-    }
-}
+mod tests;

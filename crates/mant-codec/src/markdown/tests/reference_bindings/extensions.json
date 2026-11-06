@@ -1,0 +1,3535 @@
+{
+  "schema": "mant.markdown-reference-binding-extensions/v1",
+  "case_count": 71,
+  "cases": [
+    {
+      "id": "normalized-lf-False-0",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": false,
+        "normalization": 0
+      },
+      "source": "[a\u001bb][r]\n\n[r]: https://same.test \"before&#12;after\"\n[r]: https://shadow.test \"unused&#12;\"\n",
+      "source_sha256": "6fcebed78e02a4d9e9cf8c4c5d93faf0b3228acb80899e68f7030edb9feb0427",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-False-1",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": false,
+        "normalization": 1
+      },
+      "source": "[a\u001bb][ReF]\n\n[ref]: https://same.test \"before&#12;after\"\n[ref]: https://shadow.test \"unused&#12;\"\n",
+      "source_sha256": "2f9d928ccf39fb3b4b01fbc9d11fcc296ee2b837b005a6705f2796703ebbfe36",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[ref]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-False-2",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": false,
+        "normalization": 2
+      },
+      "source": "[a\u001bb][ R\t F ]\n\n[r f]: https://same.test \"before&#12;after\"\n[r f]: https://shadow.test \"unused&#12;\"\n",
+      "source_sha256": "c66f80ecffab7f4b773595e03736564d21f5700e37b10c6981f8fbe01fac6ce4",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-False-3",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": false,
+        "normalization": 3
+      },
+      "source": "[a\u001bb][RÉF]\n\n[Réf]: https://same.test \"before&#12;after\"\n[Réf]: https://shadow.test \"unused&#12;\"\n",
+      "source_sha256": "8084a377e4387cc7aee0e5b6203a4d6f1d282cc806d6dcfb24e6c42da5d25336",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-False-4",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": false,
+        "normalization": 4
+      },
+      "source": "[a\u001bb][中文]\n\n[中文]: https://same.test \"before&#12;after\"\n[中文]: https://shadow.test \"unused&#12;\"\n",
+      "source_sha256": "670be67d45f950feadedc4fc5225b2cdaf7812fc02845a30da1abf65a5477470",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[中文]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-True-0",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": true,
+        "normalization": 0
+      },
+      "source": "[r]: https://same.test \"before&#12;after\"\n[r]: https://shadow.test \"unused&#12;\"\n\n[a\u001bb][r]\n",
+      "source_sha256": "1f50a308d72461513d67e60e2842a913e00ade757834a4f27b19e8fe42c39c78",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-True-1",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": true,
+        "normalization": 1
+      },
+      "source": "[ref]: https://same.test \"before&#12;after\"\n[ref]: https://shadow.test \"unused&#12;\"\n\n[a\u001bb][ReF]\n",
+      "source_sha256": "3ed7249b96523961df5173fcf8881d93070d24cfd16aaca54daee971554cbb94",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[ref]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-True-2",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": true,
+        "normalization": 2
+      },
+      "source": "[r f]: https://same.test \"before&#12;after\"\n[r f]: https://shadow.test \"unused&#12;\"\n\n[a\u001bb][ R\t F ]\n",
+      "source_sha256": "b436772b3a1bba09c687d69234f84771ed6d41302e2f7bbaad83bf8ebebe8284",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-True-3",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": true,
+        "normalization": 3
+      },
+      "source": "[Réf]: https://same.test \"before&#12;after\"\n[Réf]: https://shadow.test \"unused&#12;\"\n\n[a\u001bb][RÉF]\n",
+      "source_sha256": "7c0fa0f8c9f7b6506c959889b3431d89382ee1b5ecba33c4dcad1c0d1338fe91",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-lf-True-4",
+      "family": "first-definition",
+      "axes": {
+        "ending": "lf",
+        "before": true,
+        "normalization": 4
+      },
+      "source": "[中文]: https://same.test \"before&#12;after\"\n[中文]: https://shadow.test \"unused&#12;\"\n\n[a\u001bb][中文]\n",
+      "source_sha256": "951594a466f6f6cc78d6d17be5dffcb653891d8a9e6fa2351d3377a5e35ecdc5",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[中文]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "later-metadata-lf-paragraph",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "lf",
+        "context": "paragraph"
+      },
+      "source": "[DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\n\n[r f]: https://same.test \"same&#12;title\"\n[r\u001bf]: https://same.test \"same&#12;title\"\n[s]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "66b3a49cd66310a2c4205b466a0bfb66d76abb931123d4e9016f94b5b5b37596",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-lf-canonical",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "lf",
+        "context": "canonical"
+      },
+      "source": "<br />\n[DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\n\n[r f]: https://same.test \"same&#12;title\"\n[r\u001bf]: https://same.test \"same&#12;title\"\n[s]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "dff8a9474a5e55842daeab9daf04dc563d1cf6c2b413bd37621b87b565c404d9",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-lf-heading",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "lf",
+        "context": "heading"
+      },
+      "source": "# [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\n\n[r f]: https://same.test \"same&#12;title\"\n[r\u001bf]: https://same.test \"same&#12;title\"\n[s]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "4351840795c2823ee0bb86fc7ca5afdf754186a46b64fd74098e4d1af526424c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-lf-list",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "lf",
+        "context": "list"
+      },
+      "source": "- [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\n\n[r f]: https://same.test \"same&#12;title\"\n[r\u001bf]: https://same.test \"same&#12;title\"\n[s]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "a9a8d7979263e5692d0f8d2185aa5ac89640300d250cfe49ec7cd92c1ff1be32",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-lf-table",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "lf",
+        "context": "table"
+      },
+      "source": "| [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s] |\n| --- |\n| END |\n\n[r f]: https://same.test \"same&#12;title\"\n[r\u001bf]: https://same.test \"same&#12;title\"\n[s]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "0e9e33ae771298606d07d3c62f5c2a3abdcdd90da173782ea3260a2a1fb61022",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-False-0",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": false,
+        "normalization": 0
+      },
+      "source": "[a\u001bb][r]\r\n\r\n[r]: https://same.test \"before&#12;after\"\r\n[r]: https://shadow.test \"unused&#12;\"\r\n",
+      "source_sha256": "dbbac904f1d0166e7c979365c9648bd5c26741a4a3734ecea9a87b94f0a80a14",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-False-1",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": false,
+        "normalization": 1
+      },
+      "source": "[a\u001bb][ReF]\r\n\r\n[ref]: https://same.test \"before&#12;after\"\r\n[ref]: https://shadow.test \"unused&#12;\"\r\n",
+      "source_sha256": "49a2ce188d678ac44a3f4a5a1b3351db5f459cfcff7e13ede740c5bedbee1a63",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[ref]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-False-2",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": false,
+        "normalization": 2
+      },
+      "source": "[a\u001bb][ R\t F ]\r\n\r\n[r f]: https://same.test \"before&#12;after\"\r\n[r f]: https://shadow.test \"unused&#12;\"\r\n",
+      "source_sha256": "c87dc26103a4d25599f037da0e9cfdee2e9b4648910568a8260bce8a8dddef4a",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-False-3",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": false,
+        "normalization": 3
+      },
+      "source": "[a\u001bb][RÉF]\r\n\r\n[Réf]: https://same.test \"before&#12;after\"\r\n[Réf]: https://shadow.test \"unused&#12;\"\r\n",
+      "source_sha256": "1e7b12ac1b5bc1cdd841caf343b5509981243f82b52ada9a46cc4717d8e4018e",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-False-4",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": false,
+        "normalization": 4
+      },
+      "source": "[a\u001bb][中文]\r\n\r\n[中文]: https://same.test \"before&#12;after\"\r\n[中文]: https://shadow.test \"unused&#12;\"\r\n",
+      "source_sha256": "8bca928a9129b590dcaa0d5724b190e27aea1d8235e0e477524fd34c391c2904",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[中文]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-True-0",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": true,
+        "normalization": 0
+      },
+      "source": "[r]: https://same.test \"before&#12;after\"\r\n[r]: https://shadow.test \"unused&#12;\"\r\n\r\n[a\u001bb][r]\r\n",
+      "source_sha256": "892c2fd49248663be61b57d907b19c9b95bdee7567c806486e0bcbdfcd45eb45",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-True-1",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": true,
+        "normalization": 1
+      },
+      "source": "[ref]: https://same.test \"before&#12;after\"\r\n[ref]: https://shadow.test \"unused&#12;\"\r\n\r\n[a\u001bb][ReF]\r\n",
+      "source_sha256": "2732e827aa4615c5efe098c56883e2f188d94160d5483ede0e7ca65b5e3b8231",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[ref]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-True-2",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": true,
+        "normalization": 2
+      },
+      "source": "[r f]: https://same.test \"before&#12;after\"\r\n[r f]: https://shadow.test \"unused&#12;\"\r\n\r\n[a\u001bb][ R\t F ]\r\n",
+      "source_sha256": "e23d4946bc986f492f81eaaab459f34524bdd86b92dc1748232e21ea5df45b67",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-True-3",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": true,
+        "normalization": 3
+      },
+      "source": "[Réf]: https://same.test \"before&#12;after\"\r\n[Réf]: https://shadow.test \"unused&#12;\"\r\n\r\n[a\u001bb][RÉF]\r\n",
+      "source_sha256": "ad1f55274039eda3b2b7678f3436ba90deece94f448bb91f983090230cd8dbb1",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-crlf-True-4",
+      "family": "first-definition",
+      "axes": {
+        "ending": "crlf",
+        "before": true,
+        "normalization": 4
+      },
+      "source": "[中文]: https://same.test \"before&#12;after\"\r\n[中文]: https://shadow.test \"unused&#12;\"\r\n\r\n[a\u001bb][中文]\r\n",
+      "source_sha256": "3b66d0c637a42eaeafed8f0c9bf46d2cb29a710282e2f3ba7a5a81822e0c1050",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[中文]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "later-metadata-crlf-paragraph",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "crlf",
+        "context": "paragraph"
+      },
+      "source": "[DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\n\r\n[r f]: https://same.test \"same&#12;title\"\r\n[r\u001bf]: https://same.test \"same&#12;title\"\r\n[s]: https://same.test \"same&#12;title\"\r\n",
+      "source_sha256": "fbcdac8dbaacd3cc795dbafad723f294c25ab685a46db275d2842de17d2c886d",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-crlf-canonical",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "crlf",
+        "context": "canonical"
+      },
+      "source": "<br />\r\n[DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\n\r\n[r f]: https://same.test \"same&#12;title\"\r\n[r\u001bf]: https://same.test \"same&#12;title\"\r\n[s]: https://same.test \"same&#12;title\"\r\n",
+      "source_sha256": "ebf86640a5ed1af6c6311e6d4a557c0ec287b93394673d937901fbeccf6966a4",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-crlf-heading",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "crlf",
+        "context": "heading"
+      },
+      "source": "# [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\n\r\n[r f]: https://same.test \"same&#12;title\"\r\n[r\u001bf]: https://same.test \"same&#12;title\"\r\n[s]: https://same.test \"same&#12;title\"\r\n",
+      "source_sha256": "0b9746d6b016c3221f728233de9a620c2e7e8c16430156e5decf1036b3565e07",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-crlf-list",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "crlf",
+        "context": "list"
+      },
+      "source": "- [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\n\r\n[r f]: https://same.test \"same&#12;title\"\r\n[r\u001bf]: https://same.test \"same&#12;title\"\r\n[s]: https://same.test \"same&#12;title\"\r\n",
+      "source_sha256": "a0b163d5eb5115bc4f4546a7f8c2159d2dfd542c92ad9060ec4e91f123b65871",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-crlf-table",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "crlf",
+        "context": "table"
+      },
+      "source": "| [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s] |\r\n| --- |\r\n| END |\r\n\r\n[r f]: https://same.test \"same&#12;title\"\r\n[r\u001bf]: https://same.test \"same&#12;title\"\r\n[s]: https://same.test \"same&#12;title\"\r\n",
+      "source_sha256": "8d74e18b0caba781a74e53476b3504d7a1caeb374916d91f76b05ac9c6d6a2c9",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "normalized-cr-False-0",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": false,
+        "normalization": 0
+      },
+      "source": "[a\u001bb][r]\r\r[r]: https://same.test \"before&#12;after\"\r[r]: https://shadow.test \"unused&#12;\"\r",
+      "source_sha256": "31fb1fde2fbf25dfb77deaeecab43202b329f57c59c3aab821a9e5633ec3db11",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-False-1",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": false,
+        "normalization": 1
+      },
+      "source": "[a\u001bb][ReF]\r\r[ref]: https://same.test \"before&#12;after\"\r[ref]: https://shadow.test \"unused&#12;\"\r",
+      "source_sha256": "5f9320b24fdfc9eb2b3ba93a7ac55d2614cf810af37dd2f4b7d25366ed5eb73a",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[ref]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-False-2",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": false,
+        "normalization": 2
+      },
+      "source": "[a\u001bb][ R\t F ]\r\r[r f]: https://same.test \"before&#12;after\"\r[r f]: https://shadow.test \"unused&#12;\"\r",
+      "source_sha256": "cdabaa633c3ba08cd767cfe67807550d5e70033dabc6b3231a6f52b1462abcff",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-False-3",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": false,
+        "normalization": 3
+      },
+      "source": "[a\u001bb][RÉF]\r\r[Réf]: https://same.test \"before&#12;after\"\r[Réf]: https://shadow.test \"unused&#12;\"\r",
+      "source_sha256": "9e77fe2234b22bf368cb883f5aac89fc356c415a7e0bb8658d34d94368a85751",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-False-4",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": false,
+        "normalization": 4
+      },
+      "source": "[a\u001bb][中文]\r\r[中文]: https://same.test \"before&#12;after\"\r[中文]: https://shadow.test \"unused&#12;\"\r",
+      "source_sha256": "48780a36bf7464fe6d003ca1e2e3691672174eb7ab735fb21e1ea2aac570f832",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[中文]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-True-0",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": true,
+        "normalization": 0
+      },
+      "source": "[r]: https://same.test \"before&#12;after\"\r[r]: https://shadow.test \"unused&#12;\"\r\r[a\u001bb][r]\r",
+      "source_sha256": "9eb15c3961b22c699eb6bc9b8711dc720fe7a31a2e2cead0e70e1726363c104d",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-True-1",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": true,
+        "normalization": 1
+      },
+      "source": "[ref]: https://same.test \"before&#12;after\"\r[ref]: https://shadow.test \"unused&#12;\"\r\r[a\u001bb][ReF]\r",
+      "source_sha256": "9f71cd859c7b01292302343e75540fdfcc5f541adff0999f96fe21fa44936ea1",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[ref]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-True-2",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": true,
+        "normalization": 2
+      },
+      "source": "[r f]: https://same.test \"before&#12;after\"\r[r f]: https://shadow.test \"unused&#12;\"\r\r[a\u001bb][ R\t F ]\r",
+      "source_sha256": "7b13763e3e377b7fede8b7dbc3735736b4894894387e782ff8948343800773d7",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-True-3",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": true,
+        "normalization": 3
+      },
+      "source": "[Réf]: https://same.test \"before&#12;after\"\r[Réf]: https://shadow.test \"unused&#12;\"\r\r[a\u001bb][RÉF]\r",
+      "source_sha256": "6cb6ba86dfeb45f38492804584d1dd79b7b0f686fda7f958b4f3e10672c8f232",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "normalized-cr-True-4",
+      "family": "first-definition",
+      "axes": {
+        "ending": "cr",
+        "before": true,
+        "normalization": 4
+      },
+      "source": "[中文]: https://same.test \"before&#12;after\"\r[中文]: https://shadow.test \"unused&#12;\"\r\r[a\u001bb][中文]\r",
+      "source_sha256": "84464c082ccbd60df62341b5f835822659598cd9fdf8ce14fcfa498ab3c2a88c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[中文]: https://same.test \"before&#12;after\""
+      ]
+    },
+    {
+      "id": "later-metadata-cr-paragraph",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "cr",
+        "context": "paragraph"
+      },
+      "source": "[DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\r[r f]: https://same.test \"same&#12;title\"\r[r\u001bf]: https://same.test \"same&#12;title\"\r[s]: https://same.test \"same&#12;title\"\r",
+      "source_sha256": "ff62131ad234edad81b1a6610de3b2db7486b638c45cf8efdd867819f69dd062",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-cr-canonical",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "cr",
+        "context": "canonical"
+      },
+      "source": "<br />\r[DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\r[r f]: https://same.test \"same&#12;title\"\r[r\u001bf]: https://same.test \"same&#12;title\"\r[s]: https://same.test \"same&#12;title\"\r",
+      "source_sha256": "fcb97a30a2e29a850637f20f0e2b3f1f30ad44d54d0c921c6f2887cd49689771",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-cr-heading",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "cr",
+        "context": "heading"
+      },
+      "source": "# [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\r[r f]: https://same.test \"same&#12;title\"\r[r\u001bf]: https://same.test \"same&#12;title\"\r[s]: https://same.test \"same&#12;title\"\r",
+      "source_sha256": "3722762124444fde324105f89d4ea1a1dec3131f5cfe70730f8de83fc3b017bd",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-cr-list",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "cr",
+        "context": "list"
+      },
+      "source": "- [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s]\r\r[r f]: https://same.test \"same&#12;title\"\r[r\u001bf]: https://same.test \"same&#12;title\"\r[s]: https://same.test \"same&#12;title\"\r",
+      "source_sha256": "4cd0df0e3ca7ff32af9ef79a1eb38965ddd20636384a89af5c46ff2c4cf8e362",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "later-metadata-cr-table",
+      "family": "metadata-admission",
+      "axes": {
+        "ending": "cr",
+        "context": "table"
+      },
+      "source": "| [DECLINED][r\u001bf] [ACCEPTED][r f] [LATER][r f] [OTHER][s] |\r| --- |\r| END |\r\r[r f]: https://same.test \"same&#12;title\"\r[r\u001bf]: https://same.test \"same&#12;title\"\r[s]: https://same.test \"same&#12;title\"\r",
+      "source_sha256": "df8ed9dbd648dce0975bdeef3afc2ce8a7948a83cebd166d29f6cdd42dfb1b1a",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED",
+        "LATER",
+        "OTHER"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": [
+        "[r f]: https://same.test \"same&#12;title\"",
+        "[s]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "cache-order-False",
+      "family": "cache-isolation",
+      "axes": {
+        "reverse": false
+      },
+      "source": "[DECLINED0][r\u001bf] [DECLINED1][r\u0001f] [DECLINED2][rf] [ACCEPTED][r f]\n\n[r f]: https://same.test \"same\"\n[r\u001bf]: https://same.test \"same\"\n[r\u0001f]: https://same.test \"same\"\n[rf]: https://same.test \"same\"\n",
+      "source_sha256": "12e8e6964feb0aa03a1918e79b404e61b51d042123a0e7a3777b67470abfbf72",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED"
+      ],
+      "expected_refused": 3,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "cache-order-True",
+      "family": "cache-isolation",
+      "axes": {
+        "reverse": true
+      },
+      "source": "[DECLINED0][rf] [DECLINED1][r\u0001f] [DECLINED2][r\u001bf] [ACCEPTED][r f]\n\n[r f]: https://same.test \"same\"\n[rf]: https://same.test \"same\"\n[r\u0001f]: https://same.test \"same\"\n[r\u001bf]: https://same.test \"same\"\n",
+      "source_sha256": "29b34d05bcbd519fb66b76f73cf08c5ce0a06847fe26bc6a72286d5b54e5eb26",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "ACCEPTED"
+      ],
+      "expected_refused": 3,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "normal-control-0",
+      "family": "normal-control",
+      "axes": {
+        "control": 0
+      },
+      "source": "[plain][r]\n\n[r]: https://same.test\n",
+      "source_sha256": "a81e48291c4cb952422e1ae94a9d94856b9bb37fc388182e948914caf9e1a45c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "plain",
+      "expected_link_labels": [
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "normal-control-1",
+      "family": "normal-control",
+      "axes": {
+        "control": 1
+      },
+      "source": "[a\u001bb][r]\n\n[r]: https://same.test\n",
+      "source_sha256": "78808fb7bdaa8b6d8f31425221a3f777f43a3f419af3bc9b6e6266bb8bad3e70",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "normal-control-2",
+      "family": "normal-control",
+      "axes": {
+        "control": 2
+      },
+      "source": "[plain][r]\n\n[r]: https://same.test \"a\u001bb\"\n",
+      "source_sha256": "2ccbc730e6a8117d81f33714d076ea2c74be85d0f1bb94e772507a82532912b7",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "plain",
+      "expected_link_labels": [
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "normal-control-3",
+      "family": "normal-control",
+      "axes": {
+        "control": 3
+      },
+      "source": "[a\u001bb](https://same.test \"same\")",
+      "source_sha256": "08ff1c6fcf18de50260242c600995bdcd1657c4118a43ae1936a480651e5bccb",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a b",
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "normal-control-4",
+      "family": "normal-control",
+      "axes": {
+        "control": 4
+      },
+      "source": "[plain][r]\n\n[r]: https://same.test/%20/%1B\n\nTAIL\u001bEND",
+      "source_sha256": "599be053ad26848f7b26d57e24ad03303109a50754a5834106e0d4b02fbc3274",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "plainTAIL END",
+      "expected_link_labels": [
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "normal-control-5",
+      "family": "normal-control",
+      "axes": {
+        "control": 5
+      },
+      "source": "[missing][none]\n\n[unused]: https://unused.test \"unused&#12;\"\n\nEND\u001bTAIL",
+      "source_sha256": "f67afd9d646a9adb74dd13ca74471eacc9e9f3a4ceda47ea4afed91394f0e846",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "[missing][none]END TAIL",
+      "expected_link_labels": [],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "use-count-1",
+      "family": "scale",
+      "axes": {
+        "uses": 1
+      },
+      "source": "[a\u001bb][r] \n\n[r]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "34279a67ea8fa0824f67ad1f592631d33966234ce1165a55161f941f0f1d5810",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "use-count-100",
+      "family": "scale",
+      "axes": {
+        "uses": 100
+      },
+      "source": "[a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] \n\n[r]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "c5725fef7b531e2e757498565fa13396562b75d17f42813fb150207bbb7bff00",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "use-count-1000",
+      "family": "scale",
+      "axes": {
+        "uses": 1000
+      },
+      "source": "[a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] [a\u001bb][r] \n\n[r]: https://same.test \"same&#12;title\"\n",
+      "source_sha256": "c9e3ce82725bfbdae59dff5a9fe5506bfbd8021ff1067b47c93448a9819319e1",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b",
+        "a b"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[r]: https://same.test \"same&#12;title\""
+      ]
+    },
+    {
+      "id": "preface-bom-lf",
+      "family": "prepared-source-boundary",
+      "axes": {
+        "ending": "lf"
+      },
+      "source": "﻿<!-- mant:tldr:start -->\n# tool\n\n> Quick reference.\n\n- Run:\n\n`tool`\n\n[r f]: https://preface.test \"preface&#12;\"\n<!-- mant:tldr:end -->\n\n# 中\n\n## Section\n[a\u001bb][r] [DECLINED][r\u001bf]\n\n[r]: https://safe.test\n[r f]: https://same.test \"WRONG&#12;\"\n[r\u001bf]: https://same.test \"RIGHT\"\n",
+      "source_sha256": "da382c3c00fa5773757f72b7c024866ea3b44cb425e89e6c1406528725276c64",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "cross-section-lf-False",
+      "family": "cross-section",
+      "axes": {
+        "ending": "lf",
+        "before": false
+      },
+      "source": "# Page\n\n## First\n[a\u001bb][RÉF]\n\n## Second\n[plain][réf]\n\n[Réf]: https://same.test \"a&#12;b\"\n",
+      "source_sha256": "b8dcfa849138c6874c76d0e9751914be75fd894c55cfc45e4cf5570dd171f0b3",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "PageFirsta bSecondplain",
+      "expected_link_labels": [
+        "a b",
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"a&#12;b\""
+      ]
+    },
+    {
+      "id": "cross-section-lf-True",
+      "family": "cross-section",
+      "axes": {
+        "ending": "lf",
+        "before": true
+      },
+      "source": "[Réf]: https://same.test \"a&#12;b\"\n\n# Page\n\n## First\n[a\u001bb][RÉF]\n\n## Second\n[plain][réf]\n",
+      "source_sha256": "d3aabfdba87546c8815c8e50110d6fd8b9a283caa725456c16399c3260846691",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "PageFirsta bSecondplain",
+      "expected_link_labels": [
+        "a b",
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"a&#12;b\""
+      ]
+    },
+    {
+      "id": "preface-bom-crlf",
+      "family": "prepared-source-boundary",
+      "axes": {
+        "ending": "crlf"
+      },
+      "source": "﻿<!-- mant:tldr:start -->\r\n# tool\r\n\r\n> Quick reference.\r\n\r\n- Run:\r\n\r\n`tool`\r\n\r\n[r f]: https://preface.test \"preface&#12;\"\r\n<!-- mant:tldr:end -->\r\n\r\n# 中\r\n\r\n## Section\r\n[a\u001bb][r] [DECLINED][r\u001bf]\r\n\r\n[r]: https://safe.test\r\n[r f]: https://same.test \"WRONG&#12;\"\r\n[r\u001bf]: https://same.test \"RIGHT\"\r\n",
+      "source_sha256": "5f73ba4df150b175746e33c8b7d41a509fb86a3f42925cd7381bb137e3785955",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "cross-section-crlf-False",
+      "family": "cross-section",
+      "axes": {
+        "ending": "crlf",
+        "before": false
+      },
+      "source": "# Page\r\n\r\n## First\r\n[a\u001bb][RÉF]\r\n\r\n## Second\r\n[plain][réf]\r\n\r\n[Réf]: https://same.test \"a&#12;b\"\r\n",
+      "source_sha256": "1cf1a4198a9ae75df92fa52a9f5ac468e4347f2409a82eaf6a858c1c761e548c",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "PageFirsta bSecondplain",
+      "expected_link_labels": [
+        "a b",
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"a&#12;b\""
+      ]
+    },
+    {
+      "id": "cross-section-crlf-True",
+      "family": "cross-section",
+      "axes": {
+        "ending": "crlf",
+        "before": true
+      },
+      "source": "[Réf]: https://same.test \"a&#12;b\"\r\n\r\n# Page\r\n\r\n## First\r\n[a\u001bb][RÉF]\r\n\r\n## Second\r\n[plain][réf]\r\n",
+      "source_sha256": "9f02ffce8bf61bd3b9f96d0e45ff96622983f8d440e9356f44de63fbe0e5acc8",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "PageFirsta bSecondplain",
+      "expected_link_labels": [
+        "a b",
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"a&#12;b\""
+      ]
+    },
+    {
+      "id": "preface-bom-cr",
+      "family": "prepared-source-boundary",
+      "axes": {
+        "ending": "cr"
+      },
+      "source": "﻿<!-- mant:tldr:start -->\r# tool\r\r> Quick reference.\r\r- Run:\r\r`tool`\r\r[r f]: https://preface.test \"preface&#12;\"\r<!-- mant:tldr:end -->\r\r# 中\r\r## Section\r[a\u001bb][r] [DECLINED][r\u001bf]\r\r[r]: https://safe.test\r[r f]: https://same.test \"WRONG&#12;\"\r[r\u001bf]: https://same.test \"RIGHT\"\r",
+      "source_sha256": "bb0f60fc1d55519fcbb53c25fc13486da7f98e405aadb6f3b314cf459b98466e",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": null,
+      "expected_link_labels": [
+        "a b"
+      ],
+      "expected_refused": 1,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "cross-section-cr-False",
+      "family": "cross-section",
+      "axes": {
+        "ending": "cr",
+        "before": false
+      },
+      "source": "# Page\r\r## First\r[a\u001bb][RÉF]\r\r## Second\r[plain][réf]\r\r[Réf]: https://same.test \"a&#12;b\"\r",
+      "source_sha256": "c9f512d9b0d302d978f7d69d0296a0511071e8850fc441763644ec61c8bd0872",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "PageFirsta bSecondplain",
+      "expected_link_labels": [
+        "a b",
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"a&#12;b\""
+      ]
+    },
+    {
+      "id": "cross-section-cr-True",
+      "family": "cross-section",
+      "axes": {
+        "ending": "cr",
+        "before": true
+      },
+      "source": "[Réf]: https://same.test \"a&#12;b\"\r\r# Page\r\r## First\r[a\u001bb][RÉF]\r\r## Second\r[plain][réf]\r",
+      "source_sha256": "e813351f18cda61d3ef9aa76e23cdfa8472a08ddea7a990f78dad7c04caac759",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "PageFirsta bSecondplain",
+      "expected_link_labels": [
+        "a b",
+        "plain"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": [
+        "[Réf]: https://same.test \"a&#12;b\""
+      ]
+    },
+    {
+      "id": "first-definition-erased-0",
+      "family": "first-definition-erased",
+      "axes": {
+        "control": 133
+      },
+      "source": "[x][r]\n\n[r]: \n\n[r]: https://other.test \"wrong&#12;\"\n",
+      "source_sha256": "9048a25b6223ccdf09a88120d43ae0c4304d19f2b7974003152aea65ca3b4338",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "xr:",
+      "expected_link_labels": [],
+      "expected_refused": 1,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "first-definition-erased-1",
+      "family": "first-definition-erased",
+      "axes": {
+        "control": 155
+      },
+      "source": "[x][r]\n\n[r]: \n\n[r]: https://other.test \"wrong&#12;\"\n",
+      "source_sha256": "ab19bd74c91454c568997d36ab1e704454ca738489534e446d710688f96c43b0",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "xr:",
+      "expected_link_labels": [],
+      "expected_refused": 1,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "table-escaped-pipe-clean",
+      "family": "context-proof",
+      "axes": {
+        "control": "clean"
+      },
+      "source": "| [ab][r\\|f] |\n| --- |\n| END |\n\n[r|f]: https://same.test \"same\"\n",
+      "source_sha256": "e70c345bbf1e2f04c43c332e6c97ce1e0c7cc5e8f8d5ecb9071087a3f7d98859",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "abEND",
+      "expected_link_labels": [
+        "ab"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "table-escaped-pipe-unrelated-taint",
+      "family": "context-proof",
+      "axes": {
+        "control": "unrelated-taint"
+      },
+      "source": "| [ab][r\\|f] |\n| --- |\n| END |\n\n[r|f]: https://same.test \"same\"\n\nTAIL\u001bEND\n",
+      "source_sha256": "9b11bd8de6c554fcba2694c5b63cb1162d954817a482814fff368535616912de",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "abENDTAIL END",
+      "expected_link_labels": [
+        "ab"
+      ],
+      "expected_refused": 0,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "table-escaped-pipe-label-taint",
+      "family": "context-proof",
+      "axes": {
+        "control": "label-taint"
+      },
+      "source": "| [a\u001bb][r\\|f] |\n| --- |\n| END |\n\n[r|f]: https://same.test \"same\"\n",
+      "source_sha256": "c60bd37666fc41b802ea36a9f92bbfd3643c58d65c46f5580d6b30dc0f5c27fc",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "a bEND",
+      "expected_link_labels": [],
+      "expected_refused": 1,
+      "expected_decoded_definitions": []
+    },
+    {
+      "id": "table-escaped-pipe-collision",
+      "family": "context-proof",
+      "axes": {
+        "control": "collision"
+      },
+      "source": "| [X][r\\|\u001bf] |\n| --- |\n| END |\n\n[r| f]: https://same.test \"same\"\n[r|\u001bf]: https://same.test \"same\"\n",
+      "source_sha256": "9c7a517adb523445e2147fb14330c9f0edf33476034e5030a3a3865295c0e0c5",
+      "oracle_identity": "pulldown-cmark-0.13.6-original-effective-definition",
+      "profile": "locked-markdown-options",
+      "expected_basis": "Original complete source, first-definition span and independently selected F4 safe-label/identity policy; expected outputs do not come from codec candidate.",
+      "consumer": [
+        "codec-ir",
+        "json-string-round-trip"
+      ],
+      "asserted_axes": [
+        "safe-label",
+        "typed-target-count",
+        "refusal-count",
+        "decoded-metadata-effective-definition-slices",
+        "original-source-positions"
+      ],
+      "status": "permanent-regression",
+      "reason": "M4 mandatory extension",
+      "expected_text": "XEND",
+      "expected_link_labels": [],
+      "expected_refused": 1,
+      "expected_decoded_definitions": []
+    }
+  ]
+}
