@@ -43,6 +43,19 @@ class ExecutionScopeFixtureTests(unittest.TestCase):
                 elif profile != "lint":
                     self.assertEqual(receipt["status"], 0)
 
+    def test_consumer_registration_does_not_promote_unexecuted_axes(self):
+        cases = self.fixture["cases"]
+        for case in cases:
+            registered = set(case["registered_consumer_checks"])
+            uncovered = set(case["uncovered_consumer_axes"])
+            self.assertFalse(registered & uncovered)
+            self.assertIn("whole-page-font-and-device-geometry", uncovered)
+            self.assertIn("pty-cli-40-78", uncovered)
+        self.assertEqual(sum("cli-pipe-plain-and-ansi" in case["registered_consumer_checks"]
+                             for case in cases), 236)
+        self.assertEqual(sum("actual-buffer-40-78" in case["registered_consumer_checks"]
+                             for case in cases), 164)
+
     def test_native_witnesses_do_not_conflate_markers_or_container_tables(self):
         cases = {case["id"]: case for case in self.fixture["cases"]}
         nested = cases["m3-tag-enum-d1"]["expected"]["glyphs"]

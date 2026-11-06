@@ -45,3 +45,7 @@ mod source_updates;
 mod windows_resolution;
 
 const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/manuals/mant-protocol.md");
+
+#[cfg(feature = "roff")]
+#[path = "process/execution_scopes.rs"]
+mod execution_scopes;

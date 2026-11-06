@@ -90,3 +90,24 @@ before the authored opening parenthesis. They independently assert that
 AFTER, AFTER/TAIL retain native origins, and two actual Markdown readers
 preserve authored words, order and ordered/bullet identity. They do not claim
 pristine marker-position equivalence.
+
+## Consumer registrations and limits
+
+The 609-source native/IR/JSON assertions are distinct from these finite
+consumer subsets. Test execution receipts establish pass/failure; registration
+here does not upgrade every source to every consumer:
+
+| Entry | Registered exact source domain |
+| --- | --- |
+| CLI pipe plain/ANSI text | All 96 M1 core +120 M2 +20 M3, 472 child processes; no terminal viewport is claimed. |
+| Actual 40/78-column Buffer | All M1 core and M3; 48 M2 root/tag/column/literal controls. |
+| M2 public text 40/78 and two Markdown readers | All 120 source tbl cases; 12 nested column cases use the existing portable nested-table spelling. |
+| Additional two Markdown readers | Eight M1 SY, twelve M3 display controls, two DELIMO controls and the separate styled name witness. |
+| Actual 12-column App | Original tag/enum D1 source; backward search reveal, visual copy and same-App resize. |
+
+Extended native-only sources do not inherit the core consumer verdict. Whole-
+page device geometry/fonts, every owner/click range and a CLI PTY at both widths
+remain outside this finite source matrix. Separate F4/F5 code-row and reference
+matrices exercise their accepted/refused links, queries, artifact byte/scalar
+ranges and painted 40/78-column copies. The complete real scmdctl source also
+has an independent actual 40/78-column continuous-frame check.
