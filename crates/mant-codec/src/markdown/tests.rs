@@ -8,6 +8,7 @@ mod decoded_content;
 mod entry_forms;
 mod metadata_origins;
 mod source_contracts;
+mod source_endings;
 
 #[test]
 fn classifies_mailto_schemes_without_ascii_case_distinctions() {

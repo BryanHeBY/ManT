@@ -17,22 +17,6 @@ pub(super) fn prepare_events(
     source: &str,
     options: Options,
 ) -> (Vec<SpannedEvent<'_>>, super::events::MetadataOrigins) {
-    if super::source::physical_lines(source).any(|line| line.ends_with('\r')) {
-        let normalized = super::source::physical_lines(source)
-            .map(|line| {
-                line.strip_suffix('\r')
-                    .map_or_else(|| line.to_owned(), |body| format!("{body}\n"))
-            })
-            .collect::<String>();
-        let (events, origins) = prepare_events(&normalized, options);
-        return (
-            events
-                .into_iter()
-                .map(|(event, range)| (event.into_static(), range))
-                .collect(),
-            origins,
-        );
-    }
     let mut parser = CanonicalEvents::new(source, options);
     let mut events = Vec::new();
     let mut origins = super::events::MetadataOrigins::default();
@@ -59,19 +43,11 @@ pub(crate) fn parse_events(
     source: &str,
     options: Options,
 ) -> impl Iterator<Item = SpannedEvent<'_>> {
-    // Match CommonMark's bare-CR line endings without changing byte offsets.
-    // The upstream HTML scanner otherwise includes later lines in comments.
-    // Only this owned normalization path needs to collect before returning.
-    if super::source::physical_lines(source).any(|line| line.ends_with('\r')) {
-        let normalized = super::source::physical_lines(source)
-            .map(|line| {
-                line.strip_suffix('\r')
-                    .map_or_else(|| line.to_owned(), |body| format!("{body}\n"))
-            })
-            .collect::<String>();
+    let endings = super::source::LineEndings::new(source);
+    if matches!(endings.text, std::borrow::Cow::Owned(_)) {
         SourceEvents::Normalized(
-            CanonicalEvents::new(&normalized, options)
-                .map(|(event, range)| (event.into_static(), range))
+            CanonicalEvents::new(&endings.text, options)
+                .map(|(event, range)| (event.into_static(), endings.range(range)))
                 .collect::<Vec<_>>()
                 .into_iter(),
         )

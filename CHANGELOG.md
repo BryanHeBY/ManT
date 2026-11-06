@@ -37,6 +37,10 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Normalize Markdown physical LF, CRLF and CR before parsing while retaining
+  original byte and line coordinates. Code spans use one space per source line
+  ending; preserved unsupported reading fragments no longer expose CRLF as
+  terminal replacement glyphs. Entity-decoded CR remains distinct content.
 - Locate decoded reference-title diagnostics at the effective definition and
   report each affected field once, including references following leading hard
   rows. Labels and inline-link titles retain their individual source ranges.

@@ -3,6 +3,8 @@
 use std::ops::Range;
 
 use mant_ir::{Block, Diagnostic, DiagnosticLevel, LayoutHint, SourceSpan, TextRange, TextSize};
+mod endings;
+pub(super) use endings::LineEndings;
 
 /// Physical `CommonMark` lines, retaining LF, CRLF or CR terminators exactly.
 pub(super) fn physical_lines(mut text: &str) -> impl Iterator<Item = &str> {

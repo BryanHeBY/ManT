@@ -6,7 +6,7 @@ mant-markdown — supported Markdown dialect and semantic extensions for ManT do
 
 ## Description
 
-ManT parses `.md` and `.markdown` input with `pulldown-cmark` 0.13, then lowers a deliberately conservative subset into [mant-ir(7)](mant-ir.md). Supported constructs become semantic nodes shared with native manuals. Recognized but unsupported constructs remain visible as exact source text and produce structured diagnostics.
+ManT parses `.md` and `.markdown` input with `pulldown-cmark` 0.13, then lowers a deliberately conservative subset into [mant-ir(7)](mant-ir.md). Supported constructs become semantic nodes shared with native manuals. Recognized but unsupported constructs remain visible as source text and produce structured diagnostics. Reading fragments use normalized physical line endings and safe source recovery; their spans still address the original file bytes.
 
 This preservation rule keeps a document readable without pretending that unsupported presentation or interaction semantics were understood.
 
@@ -446,6 +446,13 @@ The parser recognizes several CommonMark or GFM extensions that ManT does not as
 | YAML or plus-delimited metadata | Complete source block |
 
 Preserved source is rendered as visible text, not interpreted HTML, executable code, remote media, or mathematics. This behavior is intentionally safe and deterministic.
+
+Source LF, CRLF and bare CR each become one LF before parsing, including code
+spans, unsupported HTML and the embedded tldr preface. Thus one physical code
+span line ending becomes one space. Original source ranges and line/column
+coordinates retain the exact authored byte boundaries; preserved unsupported
+reading fragments use normalized line endings rather than exact source bytes.
+Entity-decoded CR is content and is not affected by this preparation.
 
 An inline `br` tag without attributes becomes a hard line break. The name is
 case-insensitive; ordinary HTML whitespace before `>` or `/>` is accepted.

@@ -91,6 +91,9 @@ pub fn parse_markdown(
     source_text: &str,
     source_path: Option<String>,
 ) -> Result<ParsedMarkdown, MarkdownParseError> {
+    let original_source = source_text;
+    let line_endings = source::LineEndings::new(source_text);
+    let source_text = line_endings.text.as_ref();
     let mut sanitize_diagnostics = Vec::new();
     let sanitized = sanitize_source(source_text, &mut sanitize_diagnostics);
     let source_text = sanitized.as_deref().unwrap_or(source_text);
@@ -124,6 +127,7 @@ pub fn parse_markdown(
         sanitize_diagnostics.extend(std::mem::take(&mut document.diagnostics));
         document.diagnostics = sanitize_diagnostics;
     }
+    line_endings.restore_sources(&mut document, original_source);
     Ok(ParsedMarkdown { document, tldr })
 }
 
@@ -182,9 +186,12 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
 /// Lower the ordinary document portion after extension extraction.
 #[cfg(test)]
 fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
+    let original_source = source_text;
+    let line_endings = source::LineEndings::new(source_text);
+    let source_text = line_endings.text.as_ref();
     let mut diagnostics = Vec::new();
     let (events, metadata_origins) = canonical_br::prepare_events(source_text, markdown_options());
-    parse_document_with_entries(
+    let mut document = parse_document_with_entries(
         PreparedMarkdown {
             source: source_text,
             display_source: source_text.to_owned(),
@@ -194,7 +201,9 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
         },
         source_path,
         &mut diagnostics,
-    )
+    );
+    line_endings.restore_sources(&mut document, original_source);
+    document
 }
 
 fn parse_document_with_entries(

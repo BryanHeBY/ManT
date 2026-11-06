@@ -291,15 +291,12 @@ fn locked_parser_numeric_references_are_unicode_scalars_without_c1_reinterpretat
 #[test]
 fn physical_source_line_endings_and_decoded_content_use_their_own_first_read_rules() {
     for ending in ["\r", "\n", "\r\n"] {
-        // Locked parse.rs::make_code_span visits CR and LF separately;
-        // unlike a soft break, an authored CRLF currently produces two code
-        // spaces. The frozen baseline source confirms this first-read fact.
+        // CommonMark source line endings are one logical break. Source
+        // preparation fixes the locked make_code_span CRLF byte-wise behavior
+        // before parsing; decoded CR scalars are a separate content contract.
         for (source, expected) in [
             (format!("a{ending}b"), "a b"),
-            (
-                format!("`a{ending}b`"),
-                if ending == "\r\n" { "a  b" } else { "a b" },
-            ),
+            (format!("`a{ending}b`"), "a b"),
         ] {
             let document = parse_markdown(&source, None).unwrap().document;
             assert_eq!(document.diagnostics, []);
