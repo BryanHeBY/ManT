@@ -1,6 +1,11 @@
 //! Immediate ownership transfer from an opaque native session.
 mod owned;
 mod raw;
+mod table_measure;
+pub(crate) use table_measure::{
+    measure_table_columns, number_padding, table_hline_input, table_hmotion_input,
+    table_line_length,
+};
 #[cfg(feature = "render")]
 mod render;
 mod session;
@@ -102,6 +107,8 @@ mod tests {
                 table_row_kind,
                 table_alignment,
                 table_column_count,
+                table_decimal_point,
+                table_width_edges,
                 table_frame,
                 table_allbox,
                 table_left_border,
@@ -121,6 +128,7 @@ mod tests {
                 enclosure_close,
                 equation,
                 table_cells,
+                table_rule_data,
                 table_rule_cells,
                 child,
                 next,
@@ -160,7 +168,40 @@ mod tests {
             mant_mandoc_table_layout_cell_view_size,
             mant_mandoc_table_layout_cell_view_align,
             mant_mandoc_table_layout_cell_view_offsets,
-            [column, minimum_width, right_border, next]
+            [
+                column,
+                kind,
+                minimum_width,
+                spacing,
+                width_flags,
+                right_border,
+                next
+            ]
+        );
+    }
+
+    #[test]
+    fn table_measurement_input_matches_the_native_abi() {
+        use super::raw::{
+            CTableMeasureCell, mant_mandoc_table_measure_cell_align,
+            mant_mandoc_table_measure_cell_offsets, mant_mandoc_table_measure_cell_size,
+        };
+        check_view!(
+            "table measurement",
+            CTableMeasureCell,
+            mant_mandoc_table_measure_cell_size,
+            mant_mandoc_table_measure_cell_align,
+            mant_mandoc_table_measure_cell_offsets,
+            [
+                column,
+                kind,
+                minimum_width,
+                spacing,
+                width_flags,
+                text,
+                following_spans,
+                text_block
+            ]
         );
     }
 

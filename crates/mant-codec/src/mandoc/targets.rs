@@ -648,6 +648,7 @@ mod tests {
             table_alignment: None,
             table_column_count: None,
             table_cells: Vec::new(),
+            table_rule_data_columns: Vec::new(),
             equation: None,
             children,
         }

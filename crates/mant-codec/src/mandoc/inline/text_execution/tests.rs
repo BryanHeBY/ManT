@@ -5,14 +5,15 @@ fn function_word_policy_changes_only_literal_source_blanks() {
     // Fn/Fo exact full sources for literal, escaped, numbered and motion
     // blanks first ran all five pinned profiles. NBRWORD changes only
     // ordinary source SP in term.c:593-608. Unicode escaped spaces keep
-    // their encode1 path; \N'32' and \h do not become ASCII_NBRSP.
+    // their encode1 path and \N'32' remains ordinary SP. ESCAPE_HORIZ
+    // itself writes NBRSP regardless of NBRWORD (term.c:688-696).
     use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
     use crate::mandoc::roff_escape::WordSpace;
-    for (source, text, nonbreaking) in [
-        ("alpha beta", "alpha beta", 1),
-        (r"alpha\ beta", "alpha\u{a0}beta", 0),
-        (r"alpha\N'32'beta", "alpha beta", 0),
-        (r"alpha\h'1n'beta", "alpha beta", 0),
+    for (source, text, nonbreaking, intrinsic) in [
+        ("alpha beta", "alpha beta", 1, 0),
+        (r"alpha\ beta", "alpha\u{a0}beta", 0, 0),
+        (r"alpha\N'32'beta", "alpha beta", 0, 0),
+        (r"alpha\h'1n'beta", "alpha beta", 0, 1),
     ] {
         for spaces in [WordSpace::Breakable, WordSpace::NonBreaking] {
             let mut font = FontState::new();
@@ -38,11 +39,12 @@ fn function_word_policy_changes_only_literal_source_blanks() {
                     .iter()
                     .filter(|write| matches!(write, FieldWrite::Cell(FieldCell::NonBreakingBlank)))
                     .count(),
-                if spaces == WordSpace::NonBreaking {
-                    nonbreaking
-                } else {
-                    0
-                },
+                intrinsic
+                    + if spaces == WordSpace::NonBreaking {
+                        nonbreaking
+                    } else {
+                        0
+                    },
                 "{source}",
             );
         }
@@ -162,4 +164,21 @@ fn unknown_recovery_preserves_source_order_without_consuming_zero_advance() {
         if mant_ir::inline_plain_text(children) == "Y"));
     assert!(matches!(output.first(), Some(Inline::Text { value })
         if value == r"\[unknownname]"));
+}
+
+#[test]
+fn positive_motion_consumes_backbefore_before_buffering_remaining_cells() {
+    // Complete mdoc sources first ran the pristine five profiles. The
+    // first positive HORIZ cell consumes BACKBEFORE (term.c:692-699),
+    // whereas the absolute zero-advance control leaves it armed.
+    for (source, expected) in [
+        (r"\zX\h'1n'Y", "XY"),
+        (r"\zX\h'2n'Y", "X Y"),
+        (r"\zX\h'|1n'Y", "Y"),
+        (r"\zX \h'1n'Y", "X Y"),
+        (r"\zX \h'2n'Y", "X  Y"),
+    ] {
+        let output = parse_roff_text_with_state(source, &mut FontState::new(), false);
+        assert_eq!(mant_ir::inline_plain_text(&output), expected, "{source}");
+    }
 }

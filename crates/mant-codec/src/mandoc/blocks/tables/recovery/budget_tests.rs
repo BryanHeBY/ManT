@@ -540,7 +540,7 @@ fn unavailable_source_does_not_attempt_optional_recovery_or_damage_native_payloa
     let mut context = LoweringContext::new(None, None);
     context.macro_set = dialect;
     let plan = TableEmbeddingPlan::new(&rows, &context);
-    assert!(plan.embedding(0).is_none());
+    assert!(plan.embedding(0).unwrap().blocks.is_empty());
     let output = lower_table_cell(
         &rows[0].table_cells[0],
         CellPosition {
@@ -599,4 +599,75 @@ fn ownership_comparison_charges_both_inputs_before_visiting_native_payload() {
             }
         );
     }
+}
+
+#[test]
+fn real_row_execution_keeps_followers_when_all_candidate_attempts_are_refused() {
+    use mant_ir::visit::Visit;
+    #[derive(Default)]
+    struct Roots(Vec<String>);
+    impl<'a> Visit<'a> for Roots {
+        fn visit_block(&mut self, block: &'a mant_ir::Block) {
+            match block {
+                mant_ir::Block::Paragraph { children, .. }
+                | mant_ir::Block::Preformatted { children, .. } => {
+                    self.0.push(mant_ir::inline_plain_text(children));
+                }
+                _ => mant_ir::visit::walk_block(self, block),
+            }
+        }
+    }
+    // Sixteen complete sources are shared with the pristine five-profile
+    // execution matrix. Unlike its public API pass, this test actually sets
+    // the private budget before traversing their complete source order.
+    let cases: serde_json::Value =
+        serde_json::from_str(include_str!("budget_tests/fixtures/execution.json")).unwrap();
+    let mut exhausted = 0;
+    for case in cases.as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        let report = Parser::default()
+            .parse_bytes("execution-budget.1", source.as_bytes())
+            .unwrap();
+        let mut context = LoweringContext::new(Some("probe"), Some(source));
+        context.macro_set = report.document.macro_set;
+        context
+            .scope_posts
+            .index_structural_payload(&report.document.root);
+        *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+            attempts: 0,
+            ..Limits::default()
+        });
+        let (blocks, sections) =
+            crate::mandoc::blocks::lower_document_structure(&report.document.root, &mut context);
+        let mut roots = Roots::default();
+        for block in &blocks {
+            roots.visit_block(block);
+        }
+        for section in &sections {
+            roots.visit_section(section);
+        }
+        let label = case["expected_label"].as_str().unwrap();
+        assert_eq!(
+            roots
+                .0
+                .iter()
+                .filter(|root| root.split_whitespace().any(|word| word == label))
+                .count(),
+            1,
+            "{}: {:?}",
+            case["id"],
+            roots.0
+        );
+        exhausted += usize::from(
+            context
+                .table_recovery_budget
+                .borrow()
+                .exhaustion()
+                .is_some(),
+        );
+        assert!(!context.take_diagnostics().iter().any(|finding| finding.code.as_deref()==Some("manual.table-execution-incomplete")));
+    }
+    // Each complete source reaches at least one eligible sibling; budget
+    // refusal cannot publish the declined candidate's formatter receipt.
+    assert_eq!(exhausted, 16);
 }

@@ -7,7 +7,7 @@
 //! rather than imposing a presentation model on downstream renderers.
 
 mod table_layout;
-pub use table_layout::{TableBorderStyle, TableLayout, TableLayoutCell};
+pub use table_layout::{TableBorderStyle, TableLayout, TableLayoutCell, TableLayoutKind};
 
 /// High-level macro package detected by libmandoc.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -461,6 +461,9 @@ pub struct Node {
     pub columns: Vec<String>,
     /// Cells copied from a tbl(7) row represented by this node.
     pub table_cells: Vec<TableCell>,
+    /// Original data-column allocations under an all-rule layout. They
+    /// constrain native widths but own no semantic cell or printable text.
+    pub table_rule_data_columns: Vec<u32>,
     /// Owned native eqn(7) expression carried by this node.
     pub equation: Option<crate::EquationBox>,
     /// Child nodes in source order.

@@ -96,6 +96,7 @@ pub(in crate::mandoc::inline) fn link_identity_text(source: &str) -> String {
             | RoffInlineEvent::EmptyDestination
             | RoffInlineEvent::LineBreak
             | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::HorizontalMotion { .. }
             | RoffInlineEvent::Presentation { .. } => skip_next_glyph = false,
         }
     }

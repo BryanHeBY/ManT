@@ -44,13 +44,13 @@ const LIBMANDOC_SOURCES: &[&str] = &[
     "mandoc_ohash.c",
     "mandoc_xr.c",
     "msec.c",
+    "out.c",
     "preconv.c",
     "read.c",
     "tag.c",
 ];
 
 const RENDER_SOURCES: &[&str] = &[
-    "out.c",
     "term.c",
     "term_ascii.c",
     "term_tab.c",

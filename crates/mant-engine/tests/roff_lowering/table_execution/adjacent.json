@@ -1,0 +1,3076 @@
+{
+  "reference_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "expected_basis": "Exact complete pristine five-profile sources precede assertions. Cursor rows preserve raw overstrike visible glyphs. term.c::term_word/term_fill/term_flushln; tbl_term.c::term_tbl; out.c::tblcalc.",
+  "cases": [
+    {
+      "id": "authored-blank-invalid-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\nA \\z\\h'bogus'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "3065de56eea030bc4fcd232e0cba6edbf097d9aa1ec33cabd433f719917dacbc",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A",
+        "     B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "601665381fe45bdd693d05feb870628cc5e108d31fe552f0ee121e8a058022a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "f6972b8bba1b5da59ff8ca5950310e4fb2df04b465ec764027bb429271d458c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "3543be124ff06d54b31fb00bc1fc0474c62478af3ee9af8ba969cbd628a04c2b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'bogus'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "authored-blank-invalid-motion-wide",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nlw(20n) l.\nA \\z\\h'bogus'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "4e7527042efd1c3947852ad841525e008562eb797b882e89fc9ed8e9f9374394",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "215870fe82224cbb035dbf520ba377ebc22b8586403072523844bac985e8d29e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30d82482e6f02961795c62bb84adc46235f33bb1a59b55a3b792f7784299beca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "3543be124ff06d54b31fb00bc1fc0474c62478af3ee9af8ba969cbd628a04c2b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'bogus'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "authored-blank-negative-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\nA \\z\\h'-1n'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "51ee590adf505854f88fe2bee8fe1e6267c88ae9060376bf05ae095a59b98643",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A",
+        "     B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "601665381fe45bdd693d05feb870628cc5e108d31fe552f0ee121e8a058022a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "f6972b8bba1b5da59ff8ca5950310e4fb2df04b465ec764027bb429271d458c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "adcf3f74f3bbfbbf5399185a02e708cbfc5a8292357cb62bcc7e75a67a997296",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'-1n'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "authored-blank-negative-motion-wide",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nlw(20n) l.\nA \\z\\h'-1n'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "fb5c4b9f5cd560fe43c589dc1dd97f87d0c985db640d24361ec7d689c9f2d522",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "215870fe82224cbb035dbf520ba377ebc22b8586403072523844bac985e8d29e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30d82482e6f02961795c62bb84adc46235f33bb1a59b55a3b792f7784299beca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "adcf3f74f3bbfbbf5399185a02e708cbfc5a8292357cb62bcc7e75a67a997296",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'-1n'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "authored-blank-positive-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\nA \\z\\h'1n'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "e900a5a5af652862a60bd01cd3a7bc2b123617c1b07d8f3326a29381c8e35f8e",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A",
+        "     B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "601665381fe45bdd693d05feb870628cc5e108d31fe552f0ee121e8a058022a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "f6972b8bba1b5da59ff8ca5950310e4fb2df04b465ec764027bb429271d458c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "7a44d4385f8674d0d94bc7d24bb3c61f8404edef73aec8670392501ff8b594f0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'1n'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "authored-blank-positive-motion-wide",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nlw(20n) l.\nA \\z\\h'1n'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "5e715fd11e2c67aa5b4032083a073ec3a7eee5c6eb51c4603a4305fc50582f5c",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "215870fe82224cbb035dbf520ba377ebc22b8586403072523844bac985e8d29e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30d82482e6f02961795c62bb84adc46235f33bb1a59b55a3b792f7784299beca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "7a44d4385f8674d0d94bc7d24bb3c61f8404edef73aec8670392501ff8b594f0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'1n'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "authored-blank-zero-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\nA \\z\\h'0n'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "1b35752d3dd17728b22a548296bc82b60fa8f54c14b5d4da337197c2db719e4e",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A",
+        "     B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "601665381fe45bdd693d05feb870628cc5e108d31fe552f0ee121e8a058022a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "f6972b8bba1b5da59ff8ca5950310e4fb2df04b465ec764027bb429271d458c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "f45b03491b2389f637cfd45bc30bdadc4780ae50bdd6a6d7321ff461384c785e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'0n'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "authored-blank-zero-motion-wide",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nlw(20n) l.\nA \\z\\h'0n'B;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "eb2e6372f2fa67b5f264b8ace4db799ee99de95aa35d2eccfa1c38249e1e0eff",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A B",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "215870fe82224cbb035dbf520ba377ebc22b8586403072523844bac985e8d29e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30d82482e6f02961795c62bb84adc46235f33bb1a59b55a3b792f7784299beca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "3bf9a944202f3a41bd0b99e715633e18309f2e869bf6c8a968adb4270360d867",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "f45b03491b2389f637cfd45bc30bdadc4780ae50bdd6a6d7321ff461384c785e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A \\z\\h'0n'B] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "h-absolute-buffer",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\h'|1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "6b0705ae2d90004ccc07f4f987bbbfd968cf86ba1f97cc72133317779382f8ac",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "76860a6da2dfcca3e74153fca1d2a8ffa12eb98550f7e597a04637f0fa17ef32",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "614218a4b8ce9f081d788837f653d2421bdd496e2ca820334e93fb4c287779c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a97b630ddbce208c4936957bdd21c2539864e26d4d3207955eed40fed94d11a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "7048a3099a2c3eb8a60f7f93e2cdf19ac0efeaa53eccebc7be97c97db569848b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\h'|1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "h-absolute-suppressed",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\z\\h'|1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "4e7bedd513494d0e429ebde94992c59cab192aab0b05a478b76feeaba2c6ad20",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "de7bd753366de8e87f46bdfe7b870ce2a5010ac6c72229b579792c21f0c4ab88",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "3d5ca07e7f4c14a6096488a23536d6354c5bd36848bd96ed534153eac43b75c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a97b630ddbce208c4936957bdd21c2539864e26d4d3207955eed40fed94d11a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "529dfd553ce07e5d1c9d0a8c19a66e60d6d4c887fd8c798738e1cf239a49a3cf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\z\\h'|1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "h-positive",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\h'1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "6064852d57768abc2f9b8a6f540d40a3278ade0596243beaeab3c2456489b3f0",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "7c06e1eb4edc1bdee15253b6697ac254cb1f30278d947083a97d94332a1cebd6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\h'1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "h-subunit-buffer",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\h'0.1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "d1da5216f2dd0e73ba98849ba46e321a38cf5337dd9e5b672bc1f3d84bf814d9",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "76860a6da2dfcca3e74153fca1d2a8ffa12eb98550f7e597a04637f0fa17ef32",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "614218a4b8ce9f081d788837f653d2421bdd496e2ca820334e93fb4c287779c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a97b630ddbce208c4936957bdd21c2539864e26d4d3207955eed40fed94d11a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "f1050a9b842452ee45b2b4a6049358224d4b9954d7eef0917f83bb464552cc30",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\h'0.1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "h-subunit-zero",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\h'0.001n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "c7cefcd5c79e2b227f03bc593ace853c028258ae90a6dfc61c6022313c4a41f5",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "de7bd753366de8e87f46bdfe7b870ce2a5010ac6c72229b579792c21f0c4ab88",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "3d5ca07e7f4c14a6096488a23536d6354c5bd36848bd96ed534153eac43b75c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a97b630ddbce208c4936957bdd21c2539864e26d4d3207955eed40fed94d11a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "6f16a1d53ec5e39425ff1ea55f9f49b739668b09edfcf6442e42d157cd08157a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\h'0.001n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "h-suppressed",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\z\\h'1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "172934bb2ced8ccfd5f0fe67cacc2f0049cef627ed176baed05646fe6014c4b1",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "27bef2782406e3dea341e90481c824b521cf5411e12f09c9666101fe7d161356",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\z\\h'1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "h-suppressed-rearmed",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\z\\h'1n'\\z;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "af02b99441859088113a155611d0af734ba81ee6abeaff4cfc31104ecd37e19c",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "ba8e2ccce96eee8333c43d2cc1d352af5ac9b6f8c53c6b13e3730125d8951313",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\z\\h'1n'\\z] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "hline-invalid",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\l'bogus';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "153a784a1f549825c924c38cfce5fa80a0786e75f7dfe1daf45914cb2b4984f7",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "b45582d915ed2a9a91af60d79c2e4ffcf07e4dc73a55579ca7655850e5de280f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\l'bogus'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "hline-negative",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\l'-1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "c483d7c90bb123fb01cd2ab1175a43211096c8088db2da9fcbec03a47283a2ac",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     _",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "f2aa7443e9be75914f00a057cd7472df2ac41f19ce7a5acaf72c0ff011a0de0f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30564a2c16866f063ba34758e43c02c4eaf8b3f81efd4cffe57c819eaf0364f4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "0b262fdd77b585b8d53f53067242e9db4b21aff11cf4a0e5fcf3d8f180e9f11d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\l'-1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "hline-positive",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\l'1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "d1f9b56f06ec050cd90a11c524b452f865b5b52babc27d760ff3777fffb68186",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     _",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "f2aa7443e9be75914f00a057cd7472df2ac41f19ce7a5acaf72c0ff011a0de0f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30564a2c16866f063ba34758e43c02c4eaf8b3f81efd4cffe57c819eaf0364f4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "09fd1c5c51c0c37f05148d52478c8cd74a3653fba991d4d680db0d48fbc034e7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\l'1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "hline-zero",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\l'0n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "e894dea3da150de1564fcb553d869c923c69b839a59a8f33560c05060f391f90",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     _",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "f2aa7443e9be75914f00a057cd7472df2ac41f19ce7a5acaf72c0ff011a0de0f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30564a2c16866f063ba34758e43c02c4eaf8b3f81efd4cffe57c819eaf0364f4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "5afec93f2dda0c3365c749549f9c3d043d893760cb71e1b76a41b4965c38d026",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\l'0n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "horizontal-line-buffer",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\l'1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "d1f9b56f06ec050cd90a11c524b452f865b5b52babc27d760ff3777fffb68186",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     _",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "f2aa7443e9be75914f00a057cd7472df2ac41f19ce7a5acaf72c0ff011a0de0f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "30564a2c16866f063ba34758e43c02c4eaf8b3f81efd4cffe57c819eaf0364f4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "09fd1c5c51c0c37f05148d52478c8cd74a3653fba991d4d680db0d48fbc034e7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\l'1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "horizontal-span-tail-z",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\nl s.\n\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "b6251618899466c70f08f03b44eefa37172d1b342dbe1d313ec8c0500f794a3b",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "77eca335dce0bdcccce6d5901827df94153e545eb4e6b6cb4d486c5b0d610df0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "3b5f146058e860e829dd59e8193321ea8a736a817cd936914a7282d772e3a101",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 10:1\n      Ls 0L[\\z]>1 (tbl) 10:1\n      nf (elem) *12:2\n      ALPHA BETA (text) *13:1 NOFILL\n      fi (elem) *14:2 NOFILL\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      AFTER (text) *16:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "late-left-border-maximized",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20n\n.TS\ntab(;);\nl4 s nx l.\n\\fB;\\fR;\\fR\n.T&\n| l4 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "e754adc1c66d89fb2bc8d2788d91276c03ef138f819314a59fefdd2623f0988f",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ╷ ",
+        "     │ ",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "1ebc7c7103b0e1f4af6c09cb658fe9821071dc5ce36d2dc0d6ee6ccc4125f04e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "3be90fb5728bd8029b407651e2c26ffa13604948f15bb9ea611bd894befa458a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "b21f0658c07a3ce77ab2fb61c428f31d1caf8a09004bec6f2474558a180cdea9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "ae12b666e6977a6a70f974e21b4c3aa999ed9194b673b0c39511ada62a9d60ec",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20n (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\fR] (tbl) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 15:1\n      nf (elem) *17:2\n      ALPHA BETA (text) *18:1 NOFILL\n      fi (elem) *19:2 NOFILL\nSh (block) *20:2\n  Sh (head) 20:2 ID=HREF\n      NEXT (text) 20:5\n  Sh (body) 20:2\n      AFTER (text) *21:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "literal-font-only",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\fB;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "57ec8989e1985f587c9b1bf530173af3bac41adbe1ef423edd9fccf66ee1a3a3",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "79bf72e484911eeb65c56cd49a4ce5e1949ec40ce7e78248223db66681592401",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "6a8a4b2c77de72739b5678ebc5571bb674c032b4b48f7c3dacac3842d8389cd9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "865745f1f54e09c8bf5f17c0ec578c252cc5af20fe4201ad3eabbac6aa77e509",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "1e8ba9d09c147cb273451ca3b64c4fdee0c8669cd31ecbc7e2bc7af5d971d687",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\fB] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "no-late-left-border-maximized",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20n\n.TS\ntab(;);\nl4 s nx l.\n\\fB;\\fR;\\fR\n.T&\nl4 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "a4168a10f31fc5af1fcb37de8b0aaaf0b99b3182437f083f77cb9e880f69e2e0",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "afc211a6932da8a697db0e32c96bbbc8c3af478105321e1934cdc3adf9bf08a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "b98b24d0d45261d5e917ab4ec90d1ba5f069c9a6666fd4a180aad354d36297d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "bd654586df828873308649242d5d3b232c26e9a1a8b4a10fbe89cefb19997795",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "ae12b666e6977a6a70f974e21b4c3aa999ed9194b673b0c39511ada62a9d60ec",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20n (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\fR] (tbl) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 15:1\n      nf (elem) *17:2\n      ALPHA BETA (text) *18:1 NOFILL\n      fi (elem) *19:2 NOFILL\nSh (block) *20:2\n  Sh (head) 20:2 ID=HREF\n      NEXT (text) 20:5\n  Sh (body) 20:2\n      AFTER (text) *21:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "numeric-font-bracketdigit",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nn l.\n\\f[1];\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "719fb514f67c7eca6ffb8b3a02e92a86ce1d6fc67d9ef3e511df61d1c17ff950",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "35bed59de5e6b7cc81641426d6a3d0d590fe9368a37a1772334c6b21c0934a96",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "88f9684a353a7f33f83d9c6799f6bc2930895d7cc0a36cdd11d29e726b8917c1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      nL 0n[\\f[1]] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "numeric-font-digit",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nn l.\n\\f1;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "042b75d2f460c7479799eb3f1d640c396b99a85424215d449feb15069f37042d",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "24e944f1d4d94fa668a5568a95f800064a0866bfbb589ce4cb0f3827277a4910",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "e11fb618cd35ce090f3da507212b70cff4f2f9791ac14198eaa6781833c6c360",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      nL 0n[\\f1] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "numeric-font-name",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nn l.\n\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "33583e821ff40f65983f9c9f4afe3146402f38554ebfc4b9216733bedb57dfc5",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "24e944f1d4d94fa668a5568a95f800064a0866bfbb589ce4cb0f3827277a4910",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "b8d79a5bb28b9ff5813f29243a91bd3a7f798e604f2c518161786b013ed2b7f2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      nL 0n[\\fR] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "numeric-font-only",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nn l.\n\\fB;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "29942a2eb2515a4231941d9805b7cf779d11c22f1e775be5052bc21b26c6fff0",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "31f124f4ae47265629670c6ce687fb2398209509af1f0d86b5a70273e09c02e0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "df7cc7d6746b139a0f5fa061f0cba5dbe3ac88144cdaee5d70efc80289d8d1cb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "5c4b3a964dfe861ce695737116b85e6bcf27be11332381e5e707df2c7f9bdbb4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "4abdbaccf550dc1c0b465d1ce47a237a4784473f57e444e29803cb4019dd940c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      nL 0n[\\fB] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "numeric-raw-slash-threshold",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl4 s n l.\n\\fB;\\f1;\\fR\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "608f28c0e8a20616d92f62c73af4d3dc08307b813fed954f17a53ea78825787d",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "afc211a6932da8a697db0e32c96bbbc8c3af478105321e1934cdc3adf9bf08a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "b98b24d0d45261d5e917ab4ec90d1ba5f069c9a6666fd4a180aad354d36297d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "bd654586df828873308649242d5d3b232c26e9a1a8b4a10fbe89cefb19997795",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "789f096b1e685924a1f4a327fde57db71a0c1fd7c16167f69b92d0a5139e78af",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      LsnL 0L[\\fB]>1 2n[\\f1] 3L[\\fR] (tbl) 11:1\n      LsnL 0L[\\fB]>1 2n[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "numeric-size-digit",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nn l.\n\\s2;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "6e40163abbf33a5de70d207d67f4219c2a6c316dcac02f21fcefae12a7fa6249",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "24e944f1d4d94fa668a5568a95f800064a0866bfbb589ce4cb0f3827277a4910",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "fc9e6b78a0d298b6ffb2d412d435353d9bdd7af71ca2d9461afb1d1a1d1458d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      nL 0n[\\s2] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "overstrike-empty",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\o'';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "89682fa37115ca7552a1da8748970010c8ae105a514dd7369cfd62ef08b1b118",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "de7bd753366de8e87f46bdfe7b870ce2a5010ac6c72229b579792c21f0c4ab88",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "3d5ca07e7f4c14a6096488a23536d6354c5bd36848bd96ed534153eac43b75c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a97b630ddbce208c4936957bdd21c2539864e26d4d3207955eed40fed94d11a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "a4f048a91cf383178dd45bcf2633b1f5599fddc1161601fe94d015edc4d9ebc7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\o''] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "overstrike-one-blank",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\o' ';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "e41bf147fc66213b4aa2c96baebf7a58156e256c2ab386ff7c8b5222df90558f",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "76860a6da2dfcca3e74153fca1d2a8ffa12eb98550f7e597a04637f0fa17ef32",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "614218a4b8ce9f081d788837f653d2421bdd496e2ca820334e93fb4c287779c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "16c39fbe375fa7988b5d475e12b1833950def4c2c75f952a8b67f7d1610c53e5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "d2e626b0147737a84778b673d16f3b9177cd4666e408400f2ba0915c359bf0cf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\o' '] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "overstrike-one-tab",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\o'\t';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "d4b85ab5b4e82cb82312bfb35c56c420a5fd8d3e3345e3db4b286d244e881f35",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "76860a6da2dfcca3e74153fca1d2a8ffa12eb98550f7e597a04637f0fa17ef32",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "614218a4b8ce9f081d788837f653d2421bdd496e2ca820334e93fb4c287779c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "40fe353271a0b72f548a096b50f53bb8d310b3b67c59a4b1b5e544cff09240cc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "e0df20fbf9f29af5f655bed011fd6836067e1404991f33111840caf90ef56b54",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\o'\t'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "overstrike-two-blanks",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\o'  ';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "2878c66134c12cc338c9f9bb774143efbbdf17f829cb04070ee52252213431e6",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "76860a6da2dfcca3e74153fca1d2a8ffa12eb98550f7e597a04637f0fa17ef32",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "614218a4b8ce9f081d788837f653d2421bdd496e2ca820334e93fb4c287779c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "16c39fbe375fa7988b5d475e12b1833950def4c2c75f952a8b67f7d1610c53e5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "648b4d94357924ff38819ab8da288d92567bc93c279e18ba8ca20edfebafc441",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\o'  '] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "relative-margin-display",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bd -filled -offset 10n\n.No BEFORE\n.ll 10n\n.TS\ntab(;);\nl4 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Ed\n",
+      "source_sha256": "8b48564a75fd3e70fabd19118360bee411079e9f24e0e72a2859c1ab396572cb",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "               BEFORE",
+        "",
+        "               LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "21a752b7935f212c0ccfd80c48578a910e4f36d1c3d0003fbc0e1289e651163f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "4f239337c0a49a695942e7122a4e01616b0fa81a5a1548d1deb8b94ad5e12a70",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "103eea952c9adf29630881fb3005e241e3eaefbdf87b90a5c2da5ed687d9ef22",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "2dbe6fc8bc2684ab2313c9c0f6c177acea40ed1b6a0d4bd57e55fcd5a64757df",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bd (block) -filled -offset [ [10n] ] *8:2\n        Bd (head) 8:2\n        Bd (body) 8:2\n            No (elem) *9:2\n                BEFORE (text) 9:5\n            ll (elem) *10:2\n                10n (text) 10:5\n            4 (tbl options) 14:1\n            LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 14:1\n            nf (elem) *16:2\n            ALPHA BETA (text) *17:1 NOFILL\n            fi (elem) *18:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "               LPHA BETA"
+    },
+    {
+      "id": "relative-margin-list",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -item -offset 10n\n.It\n.No BEFORE\n.ll 10n\n.TS\ntab(;);\nl4 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.El\n",
+      "source_sha256": "98ddc5314c41da5cfef333d01053a40e36a6965174e1ae244c4d39835ce4b14e",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "               BEFORE",
+        "",
+        "               LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "21a752b7935f212c0ccfd80c48578a910e4f36d1c3d0003fbc0e1289e651163f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "4f239337c0a49a695942e7122a4e01616b0fa81a5a1548d1deb8b94ad5e12a70",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "061c3bfedea1001cef27469144b87f3edf17d034778e1483d4f8b73ca1129dfa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "276b34e3a834c3916bb9f249164048e856e039f8cac8112c51abe96a190bc151",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -item -offset [ [10n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2\n              It (body) 9:2 ID=BEFORE\n                  No (elem) *10:2 HREF\n                      BEFORE (text) 10:5\n                  ll (elem) *11:2\n                      10n (text) 11:5\n                  4 (tbl options) 15:1\n                  LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 15:1\n                  nf (elem) *17:2\n                  ALPHA BETA (text) *18:1 NOFILL\n                  fi (elem) *19:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "               LPHA BETA"
+    },
+    {
+      "id": "relative-margin-root",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No BEFORE\n.ll 10n\n.TS\ntab(;);\nl4 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "307e96a847331b1933745d61dee2d17dbba2c18084540c2ed6cedd1b68a22adb",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     BEFORE",
+        "",
+        "     LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "4609a67f4850a4b65b0febb22da03bf24c0b09c4dea3eb99e50e33d8d2f7498d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "641d3c7da826be2dbe3a5972c0bf8106223bc51e54551979bb61c9ee034ee251",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "d027d5102033cff00f8deaa9492e0bfd409ec8694ff8d2411507f938e2622edd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "78dee80b5c954992837f13a8e406dbef31ec944bb10cfbbac1f74122fe982c57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          BEFORE (text) 8:5\n      ll (elem) *9:2\n          10n (text) 9:5\n      4 (tbl options) 13:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 13:1\n      nf (elem) *15:2\n      ALPHA BETA (text) *16:1 NOFILL\n      fi (elem) *17:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "single-z",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\nl.\n\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "d293492cd4e6709c594409e4859a77bced675004afa14982a8907733e98d6acc",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a27b664911c207eb62406955e02542d42d310be12f6f3508dbca921117eceea8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "3ebc0ec12a8872083eb4c2910efd944be8264329571e62b7bc5623d76116d758",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      1 (tbl options) 10:1\n      L 0L[\\z] (tbl) 10:1\n      nf (elem) *12:2\n      ALPHA BETA (text) *13:1 NOFILL\n      fi (elem) *14:2 NOFILL\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      AFTER (text) *16:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "spaced-numeric-equalized",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl9e s ne lew(14n).\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "63a824a27b672bac4537c46ac5f2a1ada058a009940f3eb696c46285609af4ca",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "4562d61d44a3e77b891a43b50d02fc90d34be3ce2d19df54989b980b92c1f4b4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      LsnL 0Le[\\fB]>1 2ne[\\fR] 3Le[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "spaced-numeric-expand-narrow",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20n\n.TS\ntab(;);\nl9 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "4fd2bc14ae069fd0bebcf4648d6d2a13b104688bca967978c7c6ed458a65561b",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "f4b12000f5706b4be56dd48a42ac1ca3855fa529ea5ff541c4f2deb18c34b3e3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20n (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "spaced-numeric-expand-wide",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 78n\n.TS\ntab(;);\nl9 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "c24fd7d2f60149b6cf400516dd5cea53f9b1801cc593c55cddfe418d765973cd",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "7d9bbef878645962395f92a4c0cd6d91c92b87d500fdc960d24cd7181d70b6c1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          78n (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "spaced-numeric-wide-minimum",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl9 s nw(14n) l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "8b462d1d131e7868a7951f77e7adc61836e311dfde348ca132ad7eb0428c6a1f",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "dcdee3ac9ad1f9ac6f728aaca6f632b41762b8d8001c657f9d40fd7bfca74d81",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      LsnL 0L[\\fB]>1 2n[\\fR] 3L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "spaced-numeric-wide-other-row",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl9 s n l.\n\\fB;12345678901234567890;\\fR\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "0b9576f4e073cf44ef2e9d86edbf2bb24977895080055e251ce60b0cf5d61a06",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "                   12345678901234567890",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "c0bec1aeb4124b8c4d8c1e728c9a0787264f4027a16fc5d29820d0646e3807c9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "2f08a9b4856c7811a2095149ae40059c7f25d9c0cf10939f29274f7e725fd97e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "061c3a57d94c1df2897e0357d6e730c3103988ed602b55248d355daea8fc7b87",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "16e3ea27269787d189158912c3f4b8ff2783595988aafc17a71242e4c601d520",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      LsnL 0L[\\fB]>1 2n[12345678901234567890] 3L[\\fR] (tbl) 11:1\n      LsnL 0L[\\fB]>1 2n[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "span-default-numeric",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl s n l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "11d18569d5ada656ff462f53597bdeb2262e559dd27fd21058928d99991d6fdd",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "dcdee3ac9ad1f9ac6f728aaca6f632b41762b8d8001c657f9d40fd7bfca74d81",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      LsnL 0L[\\fB]>1 2n[\\fR] 3L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "span-default-rule",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl s _ l.\n\\fB;;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "8bc7f59f0d73ba98949cbe9e5a3aae682aff2397fc91ccb522b78e60f3d52948",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "             ──╴",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "3e09b0b013d7d99cc26b7b8ec14507ba42b93146c22c1c62d83b7e07d2711061",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "3674020a4227e148c5d89e1a24979366e0e0eee666e8fc23dd131d46538252c0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "6fd93bf678c33355c5540dbf5148b38625a140c33f337c903567df2b2b154d24",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "5dea638a8064672abf0e359398eb39066723a06bf7a11505d54dd918c56e32b8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      Ls-L 0L[\\fB]>1 2-[] 3L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "span-spaced-numeric-control",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl9 s n l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "d2881cfe37152aa1482344dbbe87ff4034aba0326f278ed7aa39b47d8dc22d9b",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "dcdee3ac9ad1f9ac6f728aaca6f632b41762b8d8001c657f9d40fd7bfca74d81",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      LsnL 0L[\\fB]>1 2n[\\fR] 3L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "span-spaced-rule-control",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl9 s _ l.\n\\fB;;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "318b7febdc6e9d36794932d7e3d764ca4ad874c358722cca7b3c573f95fbaea4",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "                    ─╴",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "298e30599043012ede724281280770c13d8f30500118795e3d79aaae3569bbdd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "2a552edb073d1f4d54525197bd65ce6f81f43ff0f20b8c547b45d673784ba684",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "6fd93bf678c33355c5540dbf5148b38625a140c33f337c903567df2b2b154d24",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "5dea638a8064672abf0e359398eb39066723a06bf7a11505d54dd918c56e32b8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      4 (tbl options) 11:1\n      Ls-L 0L[\\fB]>1 2-[] 3L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "textblock-font-only",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\nT{\n\\fB\nT};\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "0b55268fc5d08c992d5cdd991831db53c61d0b3d05fe1e50f167d5befb217c06",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "79bf72e484911eeb65c56cd49a4ce5e1949ec40ce7e78248223db66681592401",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "6a8a4b2c77de72739b5678ebc5571bb674c032b4b48f7c3dacac3842d8389cd9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "865745f1f54e09c8bf5f17c0ec578c252cc5af20fe4201ad3eabbac6aa77e509",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "d1e971eb1f470d828093e91bf3817e53f525924c8df9e57ab4e9d7fdf571b53c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L{\\fB} 1L[\\z] (tbl) 11:1\n      nf (elem) *15:2\n      ALPHA BETA (text) *16:1 NOFILL\n      fi (elem) *17:2 NOFILL\nSh (block) *18:2\n  Sh (head) 18:2 ID=HREF\n      NEXT (text) 18:5\n  Sh (body) 18:2\n      AFTER (text) *19:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "textblock-invisible",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\nT{\n\\&\nT};\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "65fe300113f76176057c2786dec2d9dc95991dbbc5b943013a9165462901511e",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "34e001f891d8b680fc80e13cebc5daabf7cdcc4041302d7408ef8ec08d6c1a06",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L{\\&} 1L[\\z] (tbl) 11:1\n      nf (elem) *15:2\n      ALPHA BETA (text) *16:1 NOFILL\n      fi (elem) *17:2 NOFILL\nSh (block) *18:2\n  Sh (head) 18:2 ID=HREF\n      NEXT (text) 18:5\n  Sh (body) 18:2\n      AFTER (text) *19:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "textblock-single-bare-z",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\nl.\nT{\n\\z\nT}\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "2e2768a8582ad312739e3da14963b7823c0dc8d670a711d07fd4016344100cc3",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a27b664911c207eb62406955e02542d42d310be12f6f3508dbca921117eceea8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "50b16b901e1c66845ac895fe3691a73ba8feb020475db0631c6474ea2343409f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      1 (tbl options) 10:1\n      L 0L{\\z} (tbl) 10:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "tx01a",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\nA;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "cd493f88498a5c2206dcc9edcabd91cba68afb2f001910d20fbc8876f6351a47",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     A",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "454c8622dc3a74ae49511c997b3deee09812643a3d5b531070092520bebf930a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "b199876769b52ddf118f392bb76a3ae5ad20d7b6cb67ac900d79374912c508d2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "b1af44c1cff67c25e657f97eae0f2ad317199fc6317c91e2bb0588dc984328b2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "a7b3d517afe1c12a7814346c7fb0d93a41910df0ba94dc08da5058a3777396fb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[A] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "tx01b",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\nl l.\n\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "85285e968162a09e86b01ca1f673dde3a5fc145b715c7f3bde933e585226d94d",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a27b664911c207eb62406955e02542d42d310be12f6f3508dbca921117eceea8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "fb5cfacb3fc387e6c572f1b2a5af868f3fe4f89c7e2b64438310191e2d84a798",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 10:1\n      LL 0L[\\z] (tbl) 10:1\n      nf (elem) *12:2\n      ALPHA BETA (text) *13:1 NOFILL\n      fi (elem) *14:2 NOFILL\nSh (block) *15:2\n  Sh (head) 15:2 ID=HREF\n      NEXT (text) 15:5\n  Sh (body) 15:2\n      AFTER (text) *16:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "unused-left-border-maximized",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20n\n.TS\ntab(;);\nl4 s nx l.\n\\fB;\\fR;\\z\n.T&\n| l4 s nx l.\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "020fff82f92ee75816630dbbadbcc5078d58445f10ac998d454509f1f6d2ea6c",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "eababf06cf801ca75fc559c53278165838f35e860f8cb6646b161ad023613fc6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "ae947ebdcd3b03dd5f7542aa120d7cdef6a61fa3fa6daea930faea05bee9942e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "fc19adfc3049decd4a155b30870f4323b936ceb4eefa5235f97b52889d4d4cf5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20n (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *16:2\n      ALPHA BETA (text) *17:1 NOFILL\n      fi (elem) *18:2 NOFILL\nSh (block) *19:2\n  Sh (head) 19:2 ID=HREF\n      NEXT (text) 19:5\n  Sh (body) 19:2\n      AFTER (text) *20:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "unused-right-border-maximized",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20n\n.TS\ntab(;);\nl4 s nx l.\n\\fB;\\fR;\\z\n.T&\nl4 s nx l |.\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "2ea4d90c0944f2990fc22627e208ac0cd9bca7c4e784325e4ceadb94cdb00bff",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "fc19adfc3049decd4a155b30870f4323b936ceb4eefa5235f97b52889d4d4cf5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20n (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *16:2\n      ALPHA BETA (text) *17:1 NOFILL\n      fi (elem) *18:2 NOFILL\nSh (block) *19:2\n  Sh (head) 19:2 ID=HREF\n      NEXT (text) 19:5\n  Sh (body) 19:2\n      AFTER (text) *20:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "vertical-data-marker",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\fB;\\fR\n\\^;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "ced693201f1d1b268a129ac677c9fa3217bd900b41b3c247dd0a4b26309f1d4b",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "afc211a6932da8a697db0e32c96bbbc8c3af478105321e1934cdc3adf9bf08a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "b98b24d0d45261d5e917ab4ec90d1ba5f069c9a6666fd4a180aad354d36297d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "f8d32331bdbcfd9093c3edec74d03255fa85cc1577c819c7157a7dd302072bb0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "ec1572897b7fd9c70a731e6278cbcf7b074f8c9ce4eacee588b3ef671ac72a8e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\fB]v1 1L[\\fR] (tbl) 11:1\n      LL 0L[\\^] 1L[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "vertical-layout-down",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l\n^ l.\n\\fB;\\fR\n;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "a2dcd41bdc3021fd130834756e32cfdfb56dc5589e6834d61710a449ef3ef109",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "eababf06cf801ca75fc559c53278165838f35e860f8cb6646b161ad023613fc6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "ae947ebdcd3b03dd5f7542aa120d7cdef6a61fa3fa6daea930faea05bee9942e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "f8d32331bdbcfd9093c3edec74d03255fa85cc1577c819c7157a7dd302072bb0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "7f1a0058aca0f73ba16d2e9dee49e1f4e38d802bac35fe55f8f57790ac84c0ad",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 12:1\n      LL 0L[\\fB]v1 1L[\\fR] (tbl) 12:1\n      ^L 0^[] 1L[\\z] (tbl) 13:1\n      nf (elem) *15:2\n      ALPHA BETA (text) *16:1 NOFILL\n      fi (elem) *17:2 NOFILL\nSh (block) *18:2\n  Sh (head) 18:2 ID=HREF\n      NEXT (text) 18:5\n  Sh (body) 18:2\n      AFTER (text) *19:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "vertical-motion-no-buffer",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\ntab(;);\nl l.\n\\v'1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "9d807600d6eed7d559a8a31c39f8efd2cccb6d3c66dba73ba616c9a4eaef42d5",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0d3ba131a885eb8683a2316e0e96c2cdc3b6de8556943e7c1414c801c0653a57",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "a2924879b071e4cefa2cdef2d4b4943d00f7d3ea7462939c65c3f364206371a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      2 (tbl options) 11:1\n      LL 0L[\\v'1n'] 1L[\\z] (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "whole-row-rule-tail-z",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.TS\nl.\n\\z\n_\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "4946d30a51cca8ebef4c06f27beebec523cb326d574621d186a059a302717060",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ──",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "3e5f0eff15f96d39cd2b5d0afed8046eeb9acc846a9bf3721e508798272a1555",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "d3ba3699498104c8142366c89d1c7d0e58e9fac5a56b53c28914b2fbde4d1c42",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "4264a2cecd252b114ec64e30dfe067844ff0f4e94a8479123b367bd5d3d64dff",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "d27e53963b7d571071087a33643076a54b27491b65b56b7cf4dd8fa9923379fa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      1 (tbl options) 10:1\n      L 0L[\\z] (tbl) 10:1\n      - (tbl) 11:1\n      nf (elem) *13:2\n      ALPHA BETA (text) *14:1 NOFILL\n      fi (elem) *15:2 NOFILL\nSh (block) *16:2\n  Sh (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  Sh (body) 16:2\n      AFTER (text) *17:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "zero-width-maximized-font",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 193u\n.TS\ntab(;);\nlx lx.\n\\fB;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "8387f5a5800ef53dd9e30c2bb5fc9f01823d2d2eb33e83a7ffbc259d4fb27e20",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "d994b8c94c756d2377821bdb2ed8d446bf47acadf8aad1d9308c5fe0b34c2cfb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "1b9472a6d4ecdac8a0438b722c5b9030870fbaf877aba4df5d5662e19f6a76ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0862941685d474aacfcc4719208f157289fe942eb33a22d2aa35a9c2cc83d5a5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "de3ca7f956b025a9c2e73cecccf58c4493e5b12e5683fde0e9c2dafd074d92dd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          193u (text) 8:5\n      2 (tbl options) 12:1\n      LL 0Lx[\\fB] 1Lx[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "zero-width-maximized-hline-positive",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 193u\n.TS\ntab(;);\nlx lx.\n\\l'1n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "f6946c762dcb31401f69e5652d635dfac248cc0c1216a4583402c0a29bc5d572",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     _",
+        "     ALPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "db9dfd0f7aa1413bbbfecaf53db2068a6778c9c966fd21e378f916f9568557f5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "1499a49bacf6926ff5900cc0b6cef78d15aa358f7282752bdee4e21bb6027f25",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a97b630ddbce208c4936957bdd21c2539864e26d4d3207955eed40fed94d11a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "47146388e4a9d865ea7375ef4ea992f0cb2eed3624be25456279a634814cc446",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          193u (text) 8:5\n      2 (tbl options) 12:1\n      LL 0Lx[\\l'1n'] 1Lx[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "zero-width-maximized-hline-zero",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 193u\n.TS\ntab(;);\nlx lx.\n\\l'0n';\\z\n.TE\n.nf\nALPHA BETA\n.fi\n",
+      "source_sha256": "5867e479cb94dc6aba53fef9159b5bf34003c395af150804fa90e78d5c7ec195",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "de7bd753366de8e87f46bdfe7b870ce2a5010ac6c72229b579792c21f0c4ab88",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "3d5ca07e7f4c14a6096488a23536d6354c5bd36848bd96ed534153eac43b75c4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "a97b630ddbce208c4936957bdd21c2539864e26d4d3207955eed40fed94d11a4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "0d1ee7148dbe5ded97e03e7b4c3fe40a6001ca4f780d2dea14a5f01d4f06695c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          193u (text) 8:5\n      2 (tbl options) 12:1\n      LL 0Lx[\\l'0n'] 1Lx[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "explicit",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20u\n.TS\ntab(;);\nl9 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "bb6d3f91534d7a1ea3ece20f03b2d553d2b8eae119d3613f230b3d462ae12723",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "0a02e16a3e213153e813c94e4c9d61d58e65d3f866ecaad0dd0a574e5a9f5fc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20u (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "relative",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20n\n.ll +5n\n.TS\ntab(;);\nl9 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "dfdc9104535fe5f5ba46a88e681002e8eabdecb72ae9763e830ecafff3106c55",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     LPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "0a93eb3207ffc2ebf56ac4306f0b059fd02505390dbccc5ba1162ea3ff21a2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "57f1bf77839d2de8b189fe38f2bc26c0f69e695dd3bac17d9ae3a431c9cd38d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "0fb9e7c4be4f683d79bfbd1a6a03aa7d33de71bc2eb66109a1671a0daa9ba113",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20n (text) 8:5\n      ll (elem) *9:2\n          +5n (text) 9:5\n      4 (tbl options) 13:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 13:1\n      nf (elem) *15:2\n      ALPHA BETA (text) *16:1 NOFILL\n      fi (elem) *17:2 NOFILL\nSh (block) *18:2\n  Sh (head) 18:2 ID=HREF\n      NEXT (text) 18:5\n  Sh (body) 18:2\n      AFTER (text) *19:1\n",
+      "lint_clean": true,
+      "expected_label": "LPHA",
+      "native_follower_row": "     LPHA BETA"
+    },
+    {
+      "id": "revert",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20n\n.ll\n.TS\ntab(;);\nl9 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "21df594d030b25159122a66a98565c289a29946550e82d504a1a79ea4bc86d7d",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "8b030445b65acdf23a21763f193bf152616fb4024546917e707c21dd0be6a011",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20n (text) 8:5\n      ll (elem) *9:2\n      4 (tbl options) 13:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 13:1\n      nf (elem) *15:2\n      ALPHA BETA (text) *16:1 NOFILL\n      fi (elem) *17:2 NOFILL\nSh (block) *18:2\n  Sh (head) 18:2 ID=HREF\n      NEXT (text) 18:5\n  Sh (body) 18:2\n      AFTER (text) *19:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    },
+    {
+      "id": "unitless",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.ll 20\n.TS\ntab(;);\nl9 s nx l.\n\\fB;\\fR;\\z\n.TE\n.nf\nALPHA BETA\n.fi\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "7bb3a76ec870fb263e4d31d50b2ba51f9a740ca610556cdb9bb4d5788fa2a6b2",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     ALPHA BETA",
+        "",
+        "NEXT",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "8ceae2a5224a4b987b5ab6c953ab767392732a11a69f40c9db51ef21b39a5797",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "e978d4e08ed27503afe114e4a87f55ba841e5f515f2d5b8b5c52f215fdf11bc1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dbc540865e0b65a6dd7861a40bcfc056f8b53e4bc0cdf59d39ff6602d9a5d642",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "9fee714a608d976ad9e3a7bd78304653ed269b44c74eaab0b1dc0f3368433a84",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      ll (elem) *8:2\n          20 (text) 8:5\n      4 (tbl options) 12:1\n      LsnL 0L[\\fB]>1 2nx[\\fR] 3L[\\z] (tbl) 12:1\n      nf (elem) *14:2\n      ALPHA BETA (text) *15:1 NOFILL\n      fi (elem) *16:2 NOFILL\nSh (block) *17:2\n  Sh (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  Sh (body) 17:2\n      AFTER (text) *18:1\n",
+      "lint_clean": true,
+      "expected_label": "ALPHA",
+      "native_follower_row": "     ALPHA BETA"
+    }
+  ]
+}

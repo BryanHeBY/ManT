@@ -4,10 +4,13 @@ use super::super::raw::{
     self, CDocument, CTableCell, CTableCellView, CTableLayoutCell, CTableLayoutCellView,
     CTableRuleCell, CTableRuleCellView,
 };
-use super::{budget::TransferBudget, strings::copy_text};
+use super::{
+    budget::{MAX_OWNED_SYNTAX_ITEMS, TransferBudget},
+    strings::copy_text,
+};
 use crate::{
     TableAlignment, TableBorderStyle, TableCell, TableCellKind, TableFont, TableLayout,
-    TableLayoutCell, TableRowKind, TableRuleCellKind,
+    TableLayoutCell, TableLayoutKind, TableRowKind, TableRuleCellKind,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -29,10 +32,15 @@ impl TableLayouts {
         document: *const CDocument,
         first: *const CTableLayoutCell,
         left_border: i32,
+        decimal_point: u8,
+        width_edge_columns: u8,
         budget: &mut TransferBudget,
     ) -> Result<Option<Arc<TableLayout>>, String> {
         if first.is_null() {
             return Ok(None);
+        }
+        if width_edge_columns > 2 {
+            return Err("libmandoc returned invalid table width edges".into());
         }
         if let Some(layout) = self.0.get(&first) {
             return Ok(Some(Arc::clone(layout)));
@@ -54,12 +62,38 @@ impl TableLayouts {
             budget.reserve_bytes(std::mem::size_of::<TableLayoutCell>())?;
             cells.push(TableLayoutCell {
                 column: view.column,
+                kind: match view.kind {
+                    0 => TableLayoutKind::Center,
+                    1 => TableLayoutKind::Right,
+                    2 => TableLayoutKind::Left,
+                    3 => TableLayoutKind::Number,
+                    4 => TableLayoutKind::Span,
+                    5 => TableLayoutKind::Long,
+                    6 => TableLayoutKind::Down,
+                    7 => TableLayoutKind::HorizontalRule,
+                    8 => TableLayoutKind::DoubleHorizontalRule,
+                    _ => return Err("libmandoc returned an invalid table layout kind".to_owned()),
+                },
                 minimum_width_basic_units: view.minimum_width.try_into().unwrap_or(u64::MAX),
+                spacing_columns: if view.spacing == usize::MAX {
+                    None
+                } else {
+                    Some(
+                        u32::try_from(view.spacing).map_err(|_| {
+                            "libmandoc returned an invalid table spacing".to_owned()
+                        })?,
+                    )
+                },
+                ignore_width: view.width_flags & 1 != 0,
+                equal_width: view.width_flags & 2 != 0,
+                maximize_width: view.width_flags & 4 != 0,
                 right_border: border_style(view.right_border)?,
             });
             pointer = view.next;
         }
         let layout = Arc::new(TableLayout {
+            decimal_point,
+            width_edge_columns,
             left_border: border_style(left_border)?,
             cells,
         });
@@ -79,6 +113,9 @@ pub(super) fn table_options(
     };
     let column_count = match column_count {
         0 => None,
+        count if usize::try_from(count).map_or(true, |count| count > MAX_OWNED_SYNTAX_ITEMS) => {
+            return Err("libmandoc returned an excessive table column count".into());
+        }
         count => Some(
             u32::try_from(count)
                 .map_err(|_| "libmandoc returned an invalid table column count".to_owned())?,
@@ -159,6 +196,28 @@ pub(super) unsafe fn copy_table_cells(
         pointer = view.next;
     }
     Ok(cells)
+}
+
+pub(super) unsafe fn copy_table_rule_data_columns(
+    document: *const CDocument,
+    mut pointer: *const CTableCell,
+    budget: &mut TransferBudget,
+) -> Result<Vec<u32>, String> {
+    let mut columns = Vec::new();
+    while !pointer.is_null() {
+        let mut view = std::mem::MaybeUninit::<CTableCellView>::uninit();
+        if unsafe { raw::mant_mandoc_table_cell_snapshot(document, pointer, view.as_mut_ptr()) }
+            == 0
+        {
+            return Err("invalid rule-row width input".into());
+        }
+        let view = unsafe { view.assume_init() };
+        budget.reserve_items(1)?;
+        budget.reserve_bytes(std::mem::size_of::<u32>())?;
+        columns.push(view.column);
+        pointer = view.next;
+    }
+    Ok(columns)
 }
 
 pub(super) unsafe fn copy_table_rule_cells(

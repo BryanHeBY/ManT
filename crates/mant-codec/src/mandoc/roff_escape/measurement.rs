@@ -67,6 +67,7 @@ pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
             | RoffInlineEvent::EmptyDestination
             | RoffInlineEvent::LineBreak
             | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::HorizontalMotion { .. }
             | RoffInlineEvent::Presentation { .. } => {}
         }
     }

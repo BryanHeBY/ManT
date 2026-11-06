@@ -79,6 +79,8 @@ pub(in crate::mandoc) enum FieldWrite {
     UnprojectedBlank,
     ArmBackafter,
     CancelBackafter,
+    /// A positive HORIZ first clears BACKBEFORE without buffering a cell.
+    CancelBackbefore,
 }
 
 impl FieldWrite {

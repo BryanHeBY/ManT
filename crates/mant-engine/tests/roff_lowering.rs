@@ -278,3 +278,5 @@ mod name_field_sessions;
 
 #[path = "roff_lowering/execution_scopes.rs"]
 mod execution_scopes;
+#[path = "roff_lowering/table_execution.rs"]
+mod table_execution;

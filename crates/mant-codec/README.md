@@ -259,6 +259,20 @@ prefix sharing a definition HEAD row. Row origins and exact native HP evidence
 are rebased before semantic names and positions are identified. Markdown input
 is unchanged; consumers render the normalized IR without another trimming pass.
 
+Native tbl rows use a shared execution plan separate from their semantic
+cell owners. Every declared execution column enters before any row buffer is
+flushed; horizontal-span continuations skip entry, while missing data slots
+still clear column-local backtracking. The word executor records actual input
+writes before presentation, including invisible cells and blank overstrikes.
+Numeric/rule padding and width-dependent horizontal lines use one lazy pinned
+width calculation per table, never IR text as a buffer proof. A truly empty
+row and a direct whole-row border remain opposite controls. Admitted T{}
+recovery publishes its execution receipt atomically; refusal retains native
+cell input and cannot publish speculative state. Bounded measurement or column
+work refusal preserves every safe owner and following text, with explicit
+`manual.table-execution-incomplete` `ContentCoverage` rather than a claimed
+successful native flush. No formatter registers enter public IR.
+
 Definition fields record native cells as the text executor decodes them,
 before text is styled, linked, or compacted. The pinned CVS `term_fill()`
 consumer decides accepted source intervals and rejected suffixes; semantic

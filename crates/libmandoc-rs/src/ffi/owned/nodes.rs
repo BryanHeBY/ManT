@@ -6,8 +6,8 @@ use super::{
     equations::copy_equation,
     strings::{checked_macro, checked_string, copy_column_strings, copy_text, visible_string},
     tables::{
-        TableLayouts, border_style, copy_table_cells, copy_table_rule_cells, table_options,
-        table_row_kind,
+        TableLayouts, border_style, copy_table_cells, copy_table_rule_cells,
+        copy_table_rule_data_columns, table_options, table_row_kind,
     },
 };
 use crate::{
@@ -303,6 +303,8 @@ unsafe fn copy_node_shallow(
                 document,
                 view.table_layout_cells,
                 view.table_left_border,
+                view.table_decimal_point,
+                view.table_width_edges,
                 transfer_budget,
             )
         }?,
@@ -321,6 +323,9 @@ unsafe fn copy_node_shallow(
         width: unsafe { checked_string(view.width, transfer_budget) }?,
         columns: unsafe { copy_column_strings(view.cols, view.ncols, transfer_budget) }?,
         table_cells: unsafe { copy_table_cells(document, view.table_cells, transfer_budget) }?,
+        table_rule_data_columns: unsafe {
+            copy_table_rule_data_columns(document, view.table_rule_data, transfer_budget)
+        }?,
         equation: unsafe { copy_equation(document, view.equation, 0, equation_budget) }?,
         children: Vec::new(),
     };

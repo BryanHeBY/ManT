@@ -1,0 +1,441 @@
+{
+  "reference_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "expected_basis": "Exact complete pristine five-profile sources precede assertions. Cursor rows preserve raw overstrike visible glyphs. term.c::term_word/term_fill/term_flushln; tbl_term.c::term_tbl; out.c::tblcalc.",
+  "cases": [
+    {
+      "id": "empty-word-clears-debt",
+      "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH DESCRIPTION\nBEFORE\n.sp -1\n.TS\ntab(;);\nl l.\n;\n.TE\n.sp 1\nAFTER\n",
+      "source_sha256": "4e7f6ee6e5743392d8f0b3b5a9c809c911b9e8dbc1dfc623970423223dee2193",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "DESCRIPTION",
+        "     BEFORE",
+        "",
+        "",
+        "     AFTER",
+        "",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "081970ab41ee7940dba6ad97186c272d3be5b769d2f18208dc80e0d23adbf9d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "081970ab41ee7940dba6ad97186c272d3be5b769d2f18208dc80e0d23adbf9d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "dd605d55fcad62ee0bbf5894beb29eec88d46f3c4e88b7f8ca98e707587b4af0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "d4a733d98f5b56f41a31cf7f7987144a874e85a7af9a35b7b2e541bd8a5a00e8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"November 6, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      DESCRIPTION (text) 2:5\n  SH (body) 2:2\n      BEFORE (text) *3:1\n      sp (elem) *4:2\n          -1 (text) 4:5\n      2 (tbl options) 8:1\n      LL 0L[] (tbl) 8:1\n      sp (elem) *10:2\n          1 (text) 10:5\n      AFTER (text) *11:1\n",
+      "lint_clean": true,
+      "native_x_space_y": false
+    },
+    {
+      "id": "empty-word-spacing-debt",
+      "source": ".TH PROBE 1\n.SH DESCRIPTION\nBEFORE\n.sp -1\n.TS\ntab(;);\nl l.\n;\n.TE\n.sp 1\nAFTER\n",
+      "source_sha256": "dcb74120932e9a81fc8b79a1bfa7c40ada08a15139983554e259b5782d7aad26",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "DESCRIPTION",
+        "     BEFORE",
+        "",
+        "",
+        "     AFTER",
+        "",
+        "                                                                      PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "9d8ba436edac8a521e85413712856a7ce5e2ec169d6e4616450f07e06fd48623",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "9d8ba436edac8a521e85413712856a7ce5e2ec169d6e4616450f07e06fd48623",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "58a14e1c27d4eaf545131ed535a1a02a0cbe0aceefb463b4d17a336ad5d18ded",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "83cfea4795c0513e561f9eba35982766861b0af7bab1091a58364ff29982e72b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "7bab6d46755fc9277d022088d5d7cff002a332fdf776d0b5c6b302e971617871",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      DESCRIPTION (text) 2:5\n  SH (body) 2:2\n      BEFORE (text) *3:1\n      sp (elem) *4:2\n          -1 (text) 4:5\n      2 (tbl options) 8:1\n      LL 0L[] (tbl) 8:1\n      sp (elem) *10:2\n          1 (text) 10:5\n      AFTER (text) *11:1\n",
+      "lint_clean": false,
+      "native_x_space_y": false
+    },
+    {
+      "id": "hang-capacity-positive-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -hang -width 2n\n.It Xo\n.sp\n.No \"AA\\h'1n'BB\"\n.Xc\n.No BodyWord\n.El\n",
+      "source_sha256": "735a7dcb9d43bbf7bb1c99e243f2c585f076271a79699ed778e36c8726bc30df",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "",
+        "     AA BBBodyWord",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "6b4ed2bb5e4c9267450e8ee84888f040a28e7abb013a5b2d4605ba6a2b13a44f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "fc45ce34b4b3e3b522ab5d69c45e934e609907ef3b58655c96e7c3bd9ac1dce7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0bd6bb56bdbaa6cf41e70307b395acc288f302984bd86edaa24a030bf226d7c3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "12be6e3026f9bdf72cf2656c61e80f1cd9cce7424dd208b53bd06dee9b14344e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -hang -width [ [2n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2 ID=BodyWord\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        sp (elem) *10:2\n                        No (elem) *11:2\n                            AA\\h'1n'BB (text) 11:5\n              It (body) *9:2\n                  No (elem) *13:2 HREF\n                      BodyWord (text) 13:5\n",
+      "lint_clean": true,
+      "native_x_space_y": false
+    },
+    {
+      "id": "hang-crossword-positive-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -hang -width 4n\n.It Xo\n.No X\\p\n.No \"\\h'1n'Y\"\n.No Z\n.Xc\n.No BodyWord\n.El\n",
+      "source_sha256": "be664efec56bf5987343189622df3f179fbfa31c654765b3c17bb73af07a81a9",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     X",
+        "            Y Z BodyWord",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "3a95c05e9ba2853dd1271bfee0f46f90b321cd578512bcbaed7b2bd590d7f5c5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "0df7823f7010ab8ddfdad604ac74a0ca2c6a6c71e5126e999155c926be26db08",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "81dc98db16c9e51528b1b71fe56ecc3635182fe407b9505dc6a499fc85826a7c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "9835066319822ade2e6869e3bb5e6d9145d97a8f7dd6e088f279a617aa6a5112",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -hang -width [ [4n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2 ID=X\\p\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        No (elem) *10:2 HREF\n                            X\\p (text) 10:5\n                        No (elem) *11:2\n                            \\h'1n'Y (text) 11:5\n                        No (elem) *12:2\n                            Z (text) 12:5\n              It (body) *9:2\n                  No (elem) *14:2 ID=HREF\n                      BodyWord (text) 14:5\n",
+      "lint_clean": true,
+      "native_x_space_y": false
+    },
+    {
+      "id": "hang-marker-positive-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -hang -width 0n\n.It Xo\n.br\n.No \"X\\p\\h'1n'Y\"\n.No Z\n.Xc\n.No BodyWord\n.El\n",
+      "source_sha256": "fc1d4aabe5df7bfb5c2ac4769db49f82d9a1e2eecb410a98fc56b84ebdc8369c",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     X Y",
+        "     Z BodyWord",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "1e9e108cdde9b34fd17aaa6bd6843ecf34a6136c765af0dd2a679b6c6d988f9f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "b5d7bdbb6382ac0fcfac9f7499c9c1a3ec1c5d173af56a1907c577527a6033c0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "0e2530b70ee92729cd0765772ff425ae2279bc3f96ea091045a82acf339762b5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "cd392e2702d2d5a089ed86371182e4010b48c9ec43162296f0e6016ea01da6a6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      Bl (block) -hang -width [ [0n] ] *8:2\n        Bl (head) 8:2\n        Bl (body) 8:2\n            It (block) *9:2\n              It (head) 9:2 ID=BodyWord\n                  Xo (block) 9:5 BROKEN\n                    Xo (head) 9:5\n                    Xo (body) 9:5 BROKEN\n                        br (elem) *10:2\n                        No (elem) *11:2\n                            X\\p\\h'1n'Y (text) 11:5\n                        No (elem) *12:2\n                            Z (text) 12:5\n              It (body) *9:2\n                  No (elem) *14:2 HREF\n                      BodyWord (text) 14:5\n",
+      "lint_clean": true,
+      "native_x_space_y": true
+    },
+    {
+      "id": "plain-marker-positive-motion",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"X\\p\\h'1n'Y\"\n.No AFTER\n",
+      "source_sha256": "5e2bcbd721fb27e5152279f749fde6593fb0f18a69b4ecbcbdd0188d8fa505ec",
+      "native_rows": [
+        "PROBE(1)                    General Commands Manual                   PROBE(1)",
+        "",
+        "NAME",
+        "     probe – test",
+        "",
+        "DESCRIPTION",
+        "     X Y",
+        "     AFTER",
+        "",
+        "Linux 6.18.54.1-microsoft-standard-WSL2",
+        "                               November 6, 2026                       PROBE(1)",
+        ""
+      ],
+      "profiles": {
+        "ascii": {
+          "stdout_sha256": "ff067f51481d93eb67fce3e88151443c0862e2b262f8af7f9242337112915a50",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "stdout_sha256": "1ac2d6d9f70980bd6f1a7bf1e389c4aa39965b2d9a5315c9f184a088eaf22658",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "stdout_sha256": "7454a84395d896477ded4a19dda29e87db4939c628e7869cc62fa4a970a9e1e1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "stdout_sha256": "c214b0c4a14dafe5f1f7927b793a3755ea5148c34daa6ddee58b56826b8d58c6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          X\\p\\h'1n'Y (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\n",
+      "lint_clean": true,
+      "native_x_space_y": true
+    },
+    {
+      "id": "backbefore-hmotion-one",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"\\zX\\h'1n'Y\"\n.No AFTER\n",
+      "source_sha256": "79c8710c2e5b3af1cf97a2e4a818d158c1f09a5ea054dd23109d492bf9b64130",
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "6527a27766fc36b658fea45f3921253db6cfe4961da53365994f9b1b6809d591",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "b913053b4f347e1e1a8f84d103beecbfc3285372f81b4823e5365b1468d8135b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "a2168243bdd9f70a11a04ed0c8a713ff396a9af91b71e679cdf5a0468a8b5a9f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "1519605e2dd75eae117c7a95c0b2d103439065d1d10797339097d206440837aa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          \\zX\\h'1n'Y (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\n",
+      "expected_inline_text": "XY AFTER",
+      "lint_clean": true
+    },
+    {
+      "id": "backbefore-hmotion-two",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"\\zX\\h'2n'Y\"\n.No AFTER\n",
+      "source_sha256": "3541dcc2e954969d4c8b820e910367ec2d7e59b695aa83211131bd30c7374f38",
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "f54a0bdc00b33283cb21f654be5db25879babe27777a8f4d2397d2009c96e069",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "a5d68f171c2a201d3afbb153f625364907f5ce3f553a08a7a05f2078384d47d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "a2168243bdd9f70a11a04ed0c8a713ff396a9af91b71e679cdf5a0468a8b5a9f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "9ec259109a0134d4a1aba5f2bcf20b160b54d21758715f19feb4c886bb31adba",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          \\zX\\h'2n'Y (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\n",
+      "expected_inline_text": "X Y AFTER",
+      "lint_clean": true
+    },
+    {
+      "id": "backbefore-hmotion-absolute",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"\\zX\\h'|1n'Y\"\n.No AFTER\n",
+      "source_sha256": "182ef08a4d1adc01b1e3d218a706e529188375152c809264417a20a155e67bd8",
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "9580c2c9c0aed3b1b4a10418622b4587842977dce800cbc65bdd02ae1d275623",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "35a385bfbe19799ecc993512d27f83c75aee7f21ed7e47eb1ba8787b922040f0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "a2168243bdd9f70a11a04ed0c8a713ff396a9af91b71e679cdf5a0468a8b5a9f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "3041bac64a8bbc45ff3536fce2e4754395d71e7018c5799f5337b6c1c60aea00",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          \\zX\\h'|1n'Y (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\n",
+      "expected_inline_text": "Y AFTER",
+      "lint_clean": true
+    },
+    {
+      "id": "backbefore-held-hmotion-one",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"\\zX \\h'1n'Y\"\n.No AFTER\n",
+      "source_sha256": "46a746e4c2fd67631a97822207a99f06ca08280760896106f3cf54a031566854",
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "f54a0bdc00b33283cb21f654be5db25879babe27777a8f4d2397d2009c96e069",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "a5d68f171c2a201d3afbb153f625364907f5ce3f553a08a7a05f2078384d47d7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "ad2c1c3d88feffae87d738f06818811f9e0f634abc8510298774cc7e041b1c9f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "59dadd6541a3467dd315d24ea2e50ebf073e48cfd32c0d2087e3cbb6b329e0e3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          \\zX \\h'1n'Y (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\n",
+      "expected_inline_text": "X Y AFTER",
+      "lint_clean": true
+    },
+    {
+      "id": "backbefore-held-hmotion-two",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"\\zX \\h'2n'Y\"\n.No AFTER\n",
+      "source_sha256": "b50f3cb926a1c7a21a2162adea1c7e7cab544817e78d4cd4dd3119ffa2bfa58d",
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "d5c6daf30baf1baf2a92cf0fa5328f5a53a0b9a2918ed6bede2f7cc87586574c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "72fe7117aa4ebdb55a2b6ab9045e4e7956a2cd6b721e27140e1b0bb950b2bdb3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "ad2c1c3d88feffae87d738f06818811f9e0f634abc8510298774cc7e041b1c9f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "a18244dc15ae0ac7af8b2feb526c33a22e370b6edca88a382b5c04b61190f173",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_tree": "title = \"PROBE\"\nname  = \"probe\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\nos    = \"Linux 6.18.54.1-microsoft-standard-WSL2\"\ndate  = \"November 6, 2026\"\n\nDd (elem) *1:2 NOPRT\n    November 6, 2026 (text) 1:5\nDt (elem) *2:2 NOPRT\n    PROBE (text) 2:5\n    1 (text) 2:11\nOs (elem) *3:2 NOPRT\nSh (block) *4:2\n  Sh (head) 4:2 ID=HREF\n      NAME (text) 4:5\n  Sh (body) 4:2\n      Nm (elem) *5:2\n          probe (text) 5:5\n      Nd (block) *6:2\n        Nd (head) 6:2\n        Nd (body) 6:2\n            test (text) 6:5\nSh (block) *7:2\n  Sh (head) 7:2 ID=HREF\n      DESCRIPTION (text) 7:5\n  Sh (body) 7:2\n      No (elem) *8:2\n          \\zX \\h'2n'Y (text) 8:5\n      No (elem) *9:2\n          AFTER (text) 9:5\n",
+      "expected_inline_text": "X  Y AFTER",
+      "lint_clean": true
+    }
+  ]
+}

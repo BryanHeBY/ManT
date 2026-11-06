@@ -571,6 +571,10 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     );
     builder.ensure_definition_field_session();
     builder.escape_coverage.record(execution.escape_scan);
+    if let Some(buffered) = &mut builder.table_buffer_written {
+        *buffered |= execution.table_device_buffer_written;
+        builder.execution.table_line_needs_width |= execution.table_line_needs_width;
+    }
     builder.native_word_writes = Some(execution.native_writes);
     // mdoc_term gives an empty text node a vertical row only when the text
     // itself begins an input line. An empty No/Em argument does not, whereas

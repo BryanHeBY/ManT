@@ -1166,6 +1166,17 @@ Decoded text is never interpreted a second time as roff syntax. In particular, l
 
 ## Tables
 
+Table execution enters the declared columns, including unoccupied trailing
+slots, before completing any row buffer. This preserves following ordinary
+text, reference labels and definition names without clearing a legitimately
+surviving bare `\z`. Invisible input, numeric padding and in-cell rules differ
+from whole-row borders. Width-dependent effects use the final native source
+measurements, while CLI/TUI wrapping remains responsive. An optional T{} macro
+recovery commits its effects once; refused recovery keeps native cell text.
+Unprovable execution caused by bounded work is reported as content coverage
+incomplete while safe cells and subsequent text remain available.
+
+
 Text, Markdown and TUI preserve the logical column after a horizontal span; covered slots stay empty instead of shifting later cells left. Tables wider than 256 logical columns use explicit column labels in text/Markdown and stacked cells in the TUI, avoiding span-driven allocation amplification.
 
 Mdoc `.Bl -column` keeps its ordered width declarations in `Table.columnPreferences.widths`:

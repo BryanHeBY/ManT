@@ -37,6 +37,16 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Complete native tbl column entry before row-buffer flush, including missing
+  trailing data, spans, invisible input, numeric padding and effective rule
+  widths. Preserve following text, links and declaration names; keep genuine
+  surviving zero-advance controls distinct. Retain authored spaces around
+  skipped horizontal motion and keep its nonbreaking separator in shared
+  field execution. Literal execution state survives output-owner returns.
+- Expose owned table layout kinds and native width evidence in libmandoc-rs,
+  with a bounded borrowed solver independent of the optional renderer.
+  Keep semantic cells and the frozen v0.13 document/query protocols unchanged.
+
 - Retire completed synopsis field widths at their native scope exit, consume
   parent input once at table entry, and run ordinary list HEAD/BODY geometry
   through the shared field lifecycle. Keep subsequent prose, table topology

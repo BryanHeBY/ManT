@@ -42,6 +42,10 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 		view->table_alignment =
 		    (source->span->opts->opts & TBL_OPT_CENTRE) != 0;
 		view->table_column_count = source->span->opts->cols;
+		view->table_decimal_point = (unsigned char)source->span->opts->decimal;
+		view->table_width_edges =
+		    source->span->opts->opts & (TBL_OPT_BOX | TBL_OPT_DBOX) ? 2 :
+		    !!source->span->opts->lvert + !!source->span->opts->rvert;
 		/* tbl_opts.c aliases frame/box and doubleframe/doublebox. */
 		view->table_frame = (source->span->opts->opts & TBL_OPT_DBOX) ?
 		    2 : (source->span->opts->opts & TBL_OPT_BOX) ? 1 : 0;
@@ -108,6 +112,10 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	if (source->type == ROFFT_TBL && source->span != NULL &&
 	    view->table_row_kind == MANT_MANDOC_TABLE_ROW_DATA)
 		view->table_cells =
+		    (const struct mant_mandoc_table_cell *)source->span->first;
+	else if (source->type == ROFFT_TBL && source->span != NULL &&
+	    view->table_row_kind == MANT_MANDOC_TABLE_ROW_LAYOUT_RULE)
+		view->table_rule_data =
 		    (const struct mant_mandoc_table_cell *)source->span->first;
 	else if (source->type == ROFFT_EQN)
 		view->equation = (const struct mant_mandoc_eqn_box *)source->eqn;
@@ -193,7 +201,13 @@ mant_mandoc_table_layout_cell_snapshot(
 		return 0;
 	memset(view, 0, sizeof(*view));
 	view->column = (unsigned int)source->col;
+	view->kind = (int)source->pos;
 	view->minimum_width = source->width;
+	view->spacing = source->spacing;
+	view->width_flags =
+	    ((source->flags & TBL_CELL_WIGN) ? 1U : 0U) |
+	    ((source->flags & TBL_CELL_EQUAL) ? 2U : 0U) |
+	    ((source->flags & TBL_CELL_WMAX) ? 4U : 0U);
 	view->right_border = source->vert;
 	view->next = (const struct mant_mandoc_table_layout_cell *)source->next;
 	return 1;

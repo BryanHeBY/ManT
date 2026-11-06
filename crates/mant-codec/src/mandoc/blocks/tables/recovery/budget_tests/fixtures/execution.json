@@ -1,0 +1,114 @@
+[
+  {
+    "id": "t3-recovery-man-basic-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.SH NEXT\nTAIL\n",
+    "source_sha256": "55d8f7973dcff2750a5b2caa2b1f594af419435a7b07e3c5f84312565dd0b2bc",
+    "expected_label": "FIRST",
+    "content": "basic"
+  },
+  {
+    "id": "t3-recovery-man-style-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.B CELL\n\\fIITALIC\\fP\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.SH NEXT\nTAIL\n",
+    "source_sha256": "b0bcd95a24a590e06d2f11599be6bc8d1c529b1e7574970840269ddfdd2337fd",
+    "expected_label": "FIRST",
+    "content": "style"
+  },
+  {
+    "id": "t3-recovery-man-link-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.UR https://example.test\nCELL\n.UE\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.SH NEXT\nTAIL\n",
+    "source_sha256": "7e8ab08fabdc14d23c075de9aae53399514f1962edc53803a90fae05a46d28a4",
+    "expected_label": "FIRST",
+    "content": "link"
+  },
+  {
+    "id": "t3-recovery-man-isolated-reject-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.so forbidden-cell-include\nSAFE_CELL\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.SH NEXT\nTAIL\n",
+    "source_sha256": "f5bced7c81c8b1b12fdf806438600864c6703c3aba6d85179477ea54ed091198",
+    "expected_label": "FIRST",
+    "content": "isolated-reject"
+  },
+  {
+    "id": "t3-recovery-mdoc-basic-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "8fb85b21dd14a1347c8d343724331ef8bff73a4a5ae8271247c75f9c9276cf98",
+    "expected_label": "FIRST",
+    "content": "basic"
+  },
+  {
+    "id": "t3-recovery-mdoc-style-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.B CELL\n\\fIITALIC\\fP\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "580e00aa67cf19d156584033ff58b0f125d05ba137d7f39366f9046bcca6fd66",
+    "expected_label": "FIRST",
+    "content": "style"
+  },
+  {
+    "id": "t3-recovery-mdoc-link-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.Lk https://example.test CELL\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "0b83a6f45e50f247eb91452419a0e26e4227327c7db6b27f807acefab891d182",
+    "expected_label": "FIRST",
+    "content": "link"
+  },
+  {
+    "id": "t3-recovery-mdoc-isolated-reject-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.so forbidden-cell-include\nSAFE_CELL\nT}\t\\z\n.TE\n.nf\nFIRST BETA\n.fi\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "5a0bcf2e765c1d953054247fd3df8d6f346f13ac36913a83267ece32f80c6099",
+    "expected_label": "FIRST",
+    "content": "isolated-reject"
+  },
+  {
+    "id": "t3-explicit-recovery-man-font-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.ft I\nCELL\n\\fPEND\nT}\t\\z\n.TE\nFIRST BETA\n.SH NEXT\nTAIL\n",
+    "source_sha256": "540e59a2013725e31a4e5ba819bef07152fd1eec938cd6b4ce91b7c6bbe6dc0b",
+    "expected_label": "FIRST",
+    "content": "font"
+  },
+  {
+    "id": "t3-explicit-recovery-man-continuation-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\\c\nNEXT\nT}\t\\z\n.TE\nFIRST BETA\n.SH NEXT\nTAIL\n",
+    "source_sha256": "0014a92e00326ff46357f4fcef321f6d6c970502aa3b46e28c05c0c70f369dd1",
+    "expected_label": "FIRST",
+    "content": "continuation"
+  },
+  {
+    "id": "t3-explicit-recovery-man-zero-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\\zX\nT}\t\\z\n.TE\nFIRST BETA\n.SH NEXT\nTAIL\n",
+    "source_sha256": "a1747e0147d6e73e01336e2cd028675905aa8b89fe4d6fa3548e211a409a9582",
+    "expected_label": "FIRST",
+    "content": "zero"
+  },
+  {
+    "id": "t3-explicit-recovery-man-hard-break-zero-recovery-budget",
+    "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\\p\nNEXT\nT}\t\\z\n.TE\nFIRST BETA\n.SH NEXT\nTAIL\n",
+    "source_sha256": "436b9898c339184abf3e154866294d42a5445153a74d8fab48c8c7a198747b39",
+    "expected_label": "FIRST",
+    "content": "hard-break"
+  },
+  {
+    "id": "t3-explicit-recovery-mdoc-font-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\n.ft I\nCELL\n\\fPEND\nT}\t\\z\n.TE\nFIRST BETA\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "8df05735c19fb4d4ed2913f0b25570aa53daf830bf7cd66d685a98e1e702ed92",
+    "expected_label": "FIRST",
+    "content": "font"
+  },
+  {
+    "id": "t3-explicit-recovery-mdoc-continuation-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\\c\nNEXT\nT}\t\\z\n.TE\nFIRST BETA\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "c0bf690537cae45fc6e87691632b6ac9500b1c9a6af7729685f5108e8b1550b1",
+    "expected_label": "FIRST",
+    "content": "continuation"
+  },
+  {
+    "id": "t3-explicit-recovery-mdoc-zero-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\\zX\nT}\t\\z\n.TE\nFIRST BETA\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "4db91e45afb4716038fa44b44f384ce17c1ca877a36cb3121e1b7339573d9e64",
+    "expected_label": "FIRST",
+    "content": "zero"
+  },
+  {
+    "id": "t3-explicit-recovery-mdoc-hard-break-zero-recovery-budget",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\nPREFIX\n.TS\nl l.\nT{\nCELL\\p\nNEXT\nT}\t\\z\n.TE\nFIRST BETA\n.Sh NEXT\nTAIL\n",
+    "source_sha256": "333383854142cfe9d718ccae280527d60da7188116a5eee71bde74c326ea70f9",
+    "expected_label": "FIRST",
+    "content": "hard-break"
+  }
+]

@@ -13,6 +13,8 @@ impl WordExecution {
             source_continuation: None,
             text_state: TextEventState::new(context.pending_word_end_break),
             native_writes: Vec::new(),
+            table_device_buffer_written: false,
+            table_line_needs_width: false,
         }
     }
 
@@ -109,18 +111,45 @@ impl WordExecution {
                 self.text_state.zero_graph_seen = true;
             }
             RoffInlineEvent::Breakpoint => self.append_breakpoint(context),
-            RoffInlineEvent::Presentation {
-                kind: crate::mandoc::roff_escape::PresentationKind::HorizontalMotion,
-                ..
+            RoffInlineEvent::HorizontalMotion {
+                reading_blank,
+                argument,
             } => {
-                // Positive \h under BACKAFTER clears the arm and skips the
-                // advance (term.c:677-680), including its projected blank.
-                if context.zero_advance.take_armed() && self.buffer.ends_with(' ') {
-                    self.buffer.pop();
-                }
+                self.append_horizontal_motion(*reading_blank, argument.as_deref(), context);
             }
             RoffInlineEvent::Presentation { .. }
             | RoffInlineEvent::Overstrike { terminal: None, .. } => {}
+        }
+    }
+
+    fn append_horizontal_motion(
+        &mut self,
+        reading_blank: bool,
+        argument: Option<&str>,
+        context: &mut TextExecutionContext<'_>,
+    ) {
+        // ESCAPE_HORIZ clears BACKAFTER before parsing the operand. Omit
+        // only this generated approximation; never remove an author blank.
+        if context.zero_advance.take_armed() || !reading_blank {
+            return;
+        }
+        let pending = context.zero_advance.has_pending_glyph();
+        if pending {
+            // The first positive HORIZ cell clears BACKBEFORE, rather than
+            // overstriking its graph. Absolute zero motion is not this path.
+            context.zero_advance.settle_horizontal_motion(
+                &mut self.output,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+            );
+        }
+        if !pending
+            || argument.is_some_and(
+                libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore,
+            )
+        {
+            self.append_glyph(" ", context.zero_advance);
         }
     }
 

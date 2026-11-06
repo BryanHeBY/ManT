@@ -28,6 +28,10 @@ impl InlineBuilder {
             .take()
             .unwrap_or(boundary);
         let sentence = std::mem::take(&mut self.execution.native_word_sentence);
+        self.execution.observe_table_word_writes(
+            native_writes.as_deref().unwrap_or_default(),
+            !native_boundary.is_native_tight(),
+        );
         if !self.execution.uses_definition_word_buffer() {
             // Plain flow shares the field's ordered cell consumer: the
             // paragraph is a degenerate flush unit (term.c runs one

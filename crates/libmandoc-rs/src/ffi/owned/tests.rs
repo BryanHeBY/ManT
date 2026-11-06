@@ -88,6 +88,8 @@ fn transfer_usage(raw: &RawDocument) -> (usize, usize) {
         *bytes += node.columns.len() * std::mem::size_of::<String>()
             + node.columns.iter().map(String::len).sum::<usize>();
         *items += node.table_cells.len();
+        *items += node.table_rule_data_columns.len();
+        *bytes += node.table_rule_data_columns.len() * std::mem::size_of::<u32>();
         *bytes += node.table_cells.len() * std::mem::size_of::<crate::TableCell>();
         for cell in &node.table_cells {
             *bytes += cell.text.as_deref().map_or(0, str::len)

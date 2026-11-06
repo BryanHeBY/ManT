@@ -30,6 +30,8 @@ mant_mandoc_node_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_node_view, table_row_kind),
 		offsetof(struct mant_mandoc_node_view, table_alignment),
 		offsetof(struct mant_mandoc_node_view, table_column_count),
+		offsetof(struct mant_mandoc_node_view, table_decimal_point),
+		offsetof(struct mant_mandoc_node_view, table_width_edges),
 		offsetof(struct mant_mandoc_node_view, table_frame),
 		offsetof(struct mant_mandoc_node_view, table_allbox),
 		offsetof(struct mant_mandoc_node_view, table_left_border),
@@ -49,6 +51,7 @@ mant_mandoc_node_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_node_view, enclosure_close),
 		offsetof(struct mant_mandoc_node_view, equation),
 		offsetof(struct mant_mandoc_node_view, table_cells),
+		offsetof(struct mant_mandoc_node_view, table_rule_data),
 		offsetof(struct mant_mandoc_node_view, table_rule_cells),
 		offsetof(struct mant_mandoc_node_view, child),
 		offsetof(struct mant_mandoc_node_view, next),
@@ -108,7 +111,10 @@ mant_mandoc_table_layout_cell_view_offsets(size_t *count)
 {
 	static const size_t offsets[] = {
 		offsetof(struct mant_mandoc_table_layout_cell_view, column),
+		offsetof(struct mant_mandoc_table_layout_cell_view, kind),
 		offsetof(struct mant_mandoc_table_layout_cell_view, minimum_width),
+		offsetof(struct mant_mandoc_table_layout_cell_view, spacing),
+		offsetof(struct mant_mandoc_table_layout_cell_view, width_flags),
 		offsetof(struct mant_mandoc_table_layout_cell_view, right_border),
 		offsetof(struct mant_mandoc_table_layout_cell_view, next),
 	};

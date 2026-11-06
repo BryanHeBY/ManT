@@ -395,6 +395,7 @@ impl<'a> LoweringContext<'a> {
     ) -> Vec<mant_ir::Inline> {
         let mut zero_advance = inline::ZeroAdvanceState::new();
         zero_advance.inherit_armed(formatter.take_zero_advance_armed());
+        let record_native_cells = formatter.execution.table_buffer_written.is_some();
         let execution = inline::parse_roff_text_with_zero_advance(
             source,
             inline::TextExecutionContext {
@@ -403,7 +404,7 @@ impl<'a> LoweringContext<'a> {
                 pending_word_end_break: false,
                 policy: inline::TextExecutionPolicy {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
-                    record_native_cells: false,
+                    record_native_cells,
                     field_authoritative: false,
                     word_space: crate::mandoc::roff_escape::WordSpace::Breakable,
                 },
@@ -413,6 +414,13 @@ impl<'a> LoweringContext<'a> {
             .execution
             .escape_coverage
             .record(execution.escape_scan);
+        formatter
+            .execution
+            .observe_table_word_writes(&execution.native_writes, false);
+        if let Some(buffered) = &mut formatter.execution.table_buffer_written {
+            *buffered |= execution.table_device_buffer_written;
+            formatter.execution.table_line_needs_width |= execution.table_line_needs_width;
+        }
         let mut output = execution.output;
         if execution.pending_word_end_break {
             output.push(mant_ir::Inline::line_break());

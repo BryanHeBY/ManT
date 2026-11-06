@@ -5,11 +5,10 @@ use libmandoc_rs::{
     Node, TableAlignment as MandocTableAlignment, TableCellKind, TableFont,
     TableRowKind as MandocTableRowKind, TableRuleCellKind as MandocTableRuleCellKind,
 };
-use mant_ir::{
-    Block, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
-};
+use mant_ir::{Block, TableAlignment as AstTableAlignment, TableRow};
+mod cells;
+mod execution;
 mod recovery;
-use recovery::lower_table_cell;
 pub(super) use recovery::{TableEmbedding, TableEmbeddingPlan};
 
 pub(super) fn append_table_row(
@@ -31,98 +30,12 @@ pub(super) fn append_table_row(
         // structurally inconsistent foreign snapshot as printable contents.
         return;
     }
-    let mut text_block_index = 0;
+    let cells = cells::lower_cells(node, &kind, context, indent_columns, embedding, formatter);
     let (column_borders, newly_reduced) = table_row_borders(node, context);
     let row = TableRow {
         kind,
         column_borders,
-        // `tbl_data.c` determines field boundaries using the table's executed
-        // delimiter and escape state. The owned native row is consequently
-        // the only authority for how many cells exist. Source text can enrich
-        // one proven cell below, but must never manufacture a new column from
-        // a raw TAB (or from an alternate `tab()` delimiter).
-        cells: (0..node.table_cells.len())
-            .map(|index| {
-                // tbl_term.c clears both backtracking flags before each data
-                // cell. A bare `\z` produced by the final cell can survive
-                // the table, but input state and preceding cells cannot enter
-                // this one.
-                formatter.clear_zero_advance();
-                let cell = &node.table_cells[index];
-                let vertical_continuation = cell.vertical_continuation;
-                let text_block = if cell.text_block {
-                    let block = embedding
-                        .and_then(|embedding| embedding.blocks.get(text_block_index))
-                        .and_then(Option::as_ref);
-                    text_block_index += 1;
-                    block
-                } else {
-                    None
-                };
-                let blocks = if vertical_continuation || cell.kind != TableCellKind::Text {
-                    // `\^` is tbl's vertical-span control marker. The
-                    // preceding cell owns the actual content and its copied
-                    // `row_span`; rendering the marker as text would invent
-                    // a visible token that groff and mandoc both suppress.
-                    // Rules likewise own layout, not their data-column
-                    // payload: source recovery must never resurrect it.
-                    Vec::new()
-                } else {
-                    // CVS tbl_html.c::print_tbl and tbl_term.c::tbl_word
-                    // select the layout font before printing the cell word.
-                    // In-word \f escapes can therefore override it, while
-                    // the selection itself ends at the cell boundary.
-                    let saved_font =
-                        table_cell_font(cell.font).map(|font| formatter.font.push_scope(font));
-                    if cell.font == Some(TableFont::Code) {
-                        formatter.font.begin_code_table_cell();
-                    }
-                    let mut children = lower_table_cell(
-                        cell,
-                        recovery::CellPosition {
-                            index,
-                            row: &node.table_cells,
-                        },
-                        node,
-                        context,
-                        text_block,
-                        formatter,
-                    )
-                    // A successfully decoded control-only cell is empty, not
-                    // missing source that needs synthetic recovery.
-                    .unwrap_or_default();
-                    if let Some(saved_font) = saved_font {
-                        formatter.font.pop_scope(saved_font);
-                    }
-                    if cell.font == Some(TableFont::Code) {
-                        formatter.font.end_code_table_cell();
-                    }
-                    // `tbl_term.c` clears BACKAFTER/BACKBEFORE before every
-                    // cell and the row flush clears them again whenever this
-                    // cell actually populated the native buffer.  Only a
-                    // completely bare `\z` cell can carry its armed state
-                    // beyond the final column.
-                    if table_cell_occupies_formatter(cell, &children) {
-                        formatter.clear_zero_advance();
-                    }
-                    vec![Block::Paragraph {
-                        inline_layout: crate::mandoc::inline::take_inline_layout(&mut children),
-                        children,
-                        layout: LayoutHint::default(),
-                        source: source_span(node),
-                    }]
-                };
-                AstTableCell {
-                    preferred_width_columns: table_cell_width(node, cell),
-                    break_after: false,
-                    kind: table_cell_kind(cell.kind),
-                    blocks,
-                    column_span: cell.column_span,
-                    row_span: cell.row_span,
-                    alignment: Some(table_alignment(cell.alignment)),
-                }
-            })
-            .collect(),
+        cells,
     };
     if !node.flags.table_start
         && let Some(Block::Table { rows, .. }) = output.last_mut()
@@ -236,23 +149,4 @@ const fn table_cell_kind(kind: TableCellKind) -> mant_ir::TableCellKind {
         }
         TableCellKind::Text | TableCellKind::Empty => mant_ir::TableCellKind::Text,
     }
-}
-
-fn table_cell_occupies_formatter(
-    cell: &libmandoc_rs::TableCell,
-    children: &[mant_ir::Inline],
-) -> bool {
-    if !children.is_empty() {
-        return true;
-    }
-    cell.text.as_deref().is_some_and(|text| {
-        crate::mandoc::roff_escape::decode(text)
-            .iter()
-            .any(|event| {
-                !matches!(
-                    crate::mandoc::roff_escape::inline_event_effect(event),
-                    crate::mandoc::roff_escape::InlineEventEffect::StateOnly
-                )
-            })
-    })
 }

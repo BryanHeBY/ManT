@@ -163,10 +163,11 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     ) = formatter.with_output_builder(output, |builder| {
         // mdoc_term.c:314-318: the NODE_NOFILL subtree prints under
         // TERMP_BRNEVER.
-        let was_no_fill_word = builder.execution.no_fill_word_active;
         builder.execution.no_fill_word_active = native_no_fill;
         append(builder);
-        builder.execution.no_fill_word_active = was_no_fill_word;
+        // This is a native node/word fact, not a temporary output-builder
+        // mode. Keep BRNEVER until the next executed source entry or an
+        // explicit display post changes it, including the final fi flush.
         (
             builder.final_source_continuation_or(source_continuation_fallback),
             builder.has_formatter_cell(),

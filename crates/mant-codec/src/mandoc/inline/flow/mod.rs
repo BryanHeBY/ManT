@@ -17,6 +17,7 @@ mod native_field;
 mod plain_input;
 mod presentation;
 mod tab_stops;
+mod table_input;
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
@@ -191,6 +192,13 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// like the `TERMP_NOSPACE` left by the request's own `term_newln()`
     /// (`roff_term.c:78`).
     pub(in crate::mandoc) native_word_writes: Option<Vec<field_buffer::FieldWrite>>,
+    /// Row-local tbl observation of actual accepted `term_word` writes. It
+    /// survives projection drains, but only a committed recovery publishes it.
+    pub(in crate::mandoc) table_buffer_written: Option<bool>,
+    pub(in crate::mandoc) table_line_needs_width: bool,
+    /// Source page bounds used by tbl width execution, never viewport layout.
+    table_page_margin: usize,
+    table_previous_margin: usize,
     pub(in crate::mandoc) native_word_boundary: Option<PendingBoundary>,
     /// `NODE_EOS` arms `TERMP_SENTENCE` at source-node exit; the next actual
     /// `term_word` consumes it even when that word has no visible glyph.

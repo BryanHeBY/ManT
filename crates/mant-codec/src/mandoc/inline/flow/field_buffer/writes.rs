@@ -285,6 +285,10 @@ impl FieldBuffer {
                 }
                 FieldWrite::ArmBackafter => self.backafter_armed = true,
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
+                FieldWrite::CancelBackbefore => {
+                    self.backbefore_armed = false;
+                    self.pending_projection_graph = None;
+                }
             }
         }
         let end_cell = self.cells.len();

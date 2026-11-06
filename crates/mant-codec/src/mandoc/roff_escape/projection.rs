@@ -103,6 +103,24 @@ impl PlainTextProjection {
             RoffInlineEvent::NoSpace => {
                 self.zero_advance.cancel_armed();
             }
+            RoffInlineEvent::HorizontalMotion {
+                reading_blank,
+                argument,
+            } => {
+                let canceled = self.zero_advance.is_armed();
+                self.zero_advance.cancel_armed();
+                if reading_blank && !canceled {
+                    let pending = self.zero_advance.has_pending();
+                    if let Some(glyph) = self.zero_advance.take_pending() {
+                        self.output.extend(glyph);
+                    }
+                    if !pending || argument.as_deref().is_some_and(
+                        libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore,
+                    ) {
+                        self.append_glyph(" ".into());
+                    }
+                }
+            }
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::Breakpoint

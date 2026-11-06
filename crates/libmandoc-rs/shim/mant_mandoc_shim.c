@@ -9,6 +9,7 @@
 #include "mant_thread_local.h"
 
 #include <errno.h>
+#include <ctype.h>
 #ifndef MANDOC_MEMORY_ONLY
 #include <fcntl.h>
 #endif
@@ -29,6 +30,7 @@
 #include "roff.h"
 #include "roff_int.h"
 #include "tbl.h"
+#include "out.h"
 #include "mandoc_parse.h"
 
 #include "mant_mandoc_shim.h"
@@ -37,6 +39,7 @@
 #else
 #define MANT_VIEW_ALIGNOF(type) _Alignof(type)
 #endif
+#include "mant_mandoc_shim/table_measure.inc"
 #ifdef MANT_MANDOC_RENDER
 #include "main.h"
 #include "manconf.h"

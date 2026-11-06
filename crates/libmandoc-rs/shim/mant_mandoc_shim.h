@@ -49,6 +49,8 @@ struct mant_mandoc_node_view {
 	int			 table_row_kind;
 	int			 table_alignment;
 	int			 table_column_count;
+	unsigned char		 table_decimal_point;
+	unsigned char		 table_width_edges;
 	int			 table_frame;
 	int			 table_allbox;
 	int			 table_left_border;
@@ -68,6 +70,7 @@ struct mant_mandoc_node_view {
 	const char		*enclosure_close;
 	const struct mant_mandoc_eqn_box *equation;
 	const struct mant_mandoc_table_cell *table_cells;
+	const struct mant_mandoc_table_cell *table_rule_data;
 	const struct mant_mandoc_table_rule_cell *table_rule_cells;
 	const struct mant_mandoc_node *child;
 	const struct mant_mandoc_node *next;
@@ -109,10 +112,37 @@ struct mant_mandoc_table_cell_view {
 /* Shared layout slots, traversed once for each declaration identity. */
 struct mant_mandoc_table_layout_cell_view {
 	unsigned int		 column;
+	int			 kind;
 	size_t			 minimum_width;
+	size_t			 spacing;
+	unsigned int		 width_flags;
 	int			 right_border;
 	const struct mant_mandoc_table_layout_cell *next;
 };
+
+/* Borrowed owned-AST inputs for out.c::tblcalc, never native pointers. */
+struct mant_mandoc_table_measure_cell {
+	unsigned int column;
+	int kind;
+	size_t minimum_width;
+	size_t spacing;
+	unsigned int width_flags;
+	const char *text;
+	unsigned int following_spans;
+	int text_block;
+};
+typedef size_t (*mant_mandoc_measure_text)(const char *, void *);
+int mant_mandoc_table_measure(const struct mant_mandoc_table_measure_cell *,
+    size_t, unsigned int, unsigned char, unsigned int, size_t, size_t,
+    mant_mandoc_measure_text, void *, size_t *, size_t *, size_t *);
+size_t mant_mandoc_table_number_padding(const char *, unsigned char, size_t,
+    size_t, mant_mandoc_measure_text, void *);
+int mant_mandoc_table_hline_input(const char *);
+int mant_mandoc_table_hmotion_input(const char *, int);
+size_t mant_mandoc_table_line_length(size_t, size_t, const char *);
+size_t mant_mandoc_table_measure_cell_size(void);
+size_t mant_mandoc_table_measure_cell_align(void);
+const size_t *mant_mandoc_table_measure_cell_offsets(size_t *);
 
 /* Borrowed projection of one layout-only tbl(7) rule cell. */
 struct mant_mandoc_table_rule_cell_view {

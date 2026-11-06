@@ -94,6 +94,9 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) output: Vec<Inline>,
     /// Native writes in decode order; semantic wrappers never supply cells.
     pub(in crate::mandoc) native_writes: Vec<crate::mandoc::inline::flow::field_buffer::FieldWrite>,
+    /// Device motion, lines and blank overstrikes can buffer without text.
+    pub(in crate::mandoc) table_device_buffer_written: bool,
+    pub(in crate::mandoc) table_line_needs_width: bool,
     pub(in crate::mandoc) joins_preceding_node: bool,
     /// Automatic separator cells already placed after a cached glyph by
     /// the marker-blank path, rather than before this complete word.
@@ -164,6 +167,8 @@ struct WordExecution {
     source_continuation: Option<bool>,
     text_state: TextEventState,
     native_writes: Vec<crate::mandoc::inline::flow::field_buffer::FieldWrite>,
+    table_device_buffer_written: bool,
+    table_line_needs_width: bool,
 }
 
 // Record each decoded native write before its presentation action, in the
@@ -175,7 +180,53 @@ fn execute_formatter_word_events(
     let mut word = WordExecution::new(&context);
     context.zero_advance.begin_fragment();
     for (index, event) in events.iter().enumerate() {
+        // These native writes have no reading-text glyph. Keep their receipt
+        // separate from FieldBuffer's graph/width model. Once any column has
+        // buffered input its later flush retires BACKAFTER for the whole row.
+        word.table_device_buffer_written |= match event {
+            RoffInlineEvent::Presentation {
+                kind: crate::mandoc::roff_escape::PresentationKind::HorizontalLine,
+                argument: Some(argument),
+            } => {
+                match libmandoc_rs::TableColumnMetrics::horizontal_line_needs_column_width(argument)
+                {
+                    Some(false) => true,
+                    Some(true) => {
+                        word.table_line_needs_width = true;
+                        false
+                    }
+                    None => false,
+                }
+            }
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(argument),
+                ..
+            } if !context.zero_advance.is_armed() => {
+                libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input(argument)
+            }
+            RoffInlineEvent::Overstrike { buffered, .. } => *buffered,
+            _ => false,
+        };
         if context.policy.record_native_cells {
+            if let RoffInlineEvent::HorizontalMotion {
+                reading_blank: true,
+                argument,
+            } = event
+                && !context.zero_advance.is_armed()
+            {
+                use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+                let pending = context.zero_advance.has_pending_glyph();
+                if pending {
+                    // ESCAPE_HORIZ consumes the first advance by clearing
+                    // BACKBEFORE, preserving the previous graph (term.c:692).
+                    word.native_writes.push(FieldWrite::CancelBackbefore);
+                }
+                if !pending || argument.as_deref().is_some_and(
+                    libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore,
+                ) {
+                    word.native_writes.push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
+                }
+            }
             record_native_event(
                 event,
                 &mut word.native_writes,
@@ -201,6 +252,8 @@ fn finish_text_execution(
     let WordExecution {
         output,
         native_writes,
+        table_device_buffer_written,
+        table_line_needs_width,
         source_continuation,
         text_state,
         ..
@@ -222,6 +275,8 @@ fn finish_text_execution(
         escape_scan: crate::mandoc::escape_coverage::EscapeScanStatus::Complete,
         output,
         native_writes,
+        table_device_buffer_written,
+        table_line_needs_width,
         joins_preceding_node: zero_advance.take_preceding_join(),
         projected_word_separator: text_state.projected_word_separator,
         source_continuation,
@@ -257,6 +312,7 @@ fn trailing_breakable_spaces(events: &[RoffInlineEvent]) -> usize {
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::ZeroAdvance
             | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::HorizontalMotion { .. }
             | RoffInlineEvent::Presentation { .. }
             | RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::Breakpoint

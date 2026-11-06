@@ -57,6 +57,10 @@ impl<T> ZeroAdvanceMachine<T> {
         &self.recoveries
     }
 
+    pub(in crate::mandoc) const fn pending_recovery_position(&self) -> usize {
+        self.recoveries_before_pending
+    }
+
     pub(in crate::mandoc) const fn pending_ref(&self) -> Option<&T> {
         match &self.pending {
             Some(PendingGlyph::Buffered(glyph)) => Some(glyph),

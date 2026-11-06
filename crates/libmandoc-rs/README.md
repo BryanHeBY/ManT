@@ -173,6 +173,26 @@ data cell retains its zero-based `column`; its `column_span` and `row_span`
 are u32, so the formerly narrow 65,535-column boundary cannot silently move
 following cell owners. Widths are preferences, not clipped or prewrapped text.
 
+`TableLayoutKind`, explicit/default column spacing, decimal punctuation and
+ignore/equal/maximize width flags retain the execution facts that cannot be
+recovered from alignment or semantic cell text. `width_edge_columns` records
+the final shared option edges even when a later `T&` layout has no data.
+`table_rule_data_columns` retains only the original allocations below an
+all-rule layout; it neither duplicates text nor creates printable cell owners.
+
+`measure_table_columns` borrows these owned spans for one bounded call to the
+pinned `out.c::tblcalc` solver. It accepts source offset/margin in basic units
+and a synchronous `term_strlen`-style callback; the resulting widths are native
+input evidence, not fixed viewport layout. Empty declared slots, spans,
+raw numeric escape spelling and WMAX zero-width results stay distinguishable.
+No parser pointer, terminal renderer, native text buffer or callback outlives
+the call. The solver is available without the `render` feature. `CString` input,
+callback byte/unit costs, derived column widths and structural span-group work
+are bounded; malformed foreign facts, callback panics and exhausted proof
+return an error. These owned-AST/FFI additions leave the frozen `ManT` document
+IR and query protocols unchanged.
+
+
 ## Basic use
 
 ```rust,no_run

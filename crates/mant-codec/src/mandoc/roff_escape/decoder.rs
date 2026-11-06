@@ -191,20 +191,7 @@ impl Decoder {
                     });
                 }
             }
-            'o' => {
-                // An unclosed overstrike keeps its scanned payload (the CVS
-                // "Aow" families); rejected delimiters cannot occur for
-                // `\o`, which never appears in the rejection sets.
-                let source = match self.take_delimited_argument('o') {
-                    DelimitedArgument::Closed(source)
-                    | DelimitedArgument::Unclosed(Some(source)) => source,
-                    DelimitedArgument::Unclosed(None)
-                    | DelimitedArgument::Rejected
-                    | DelimitedArgument::Missing => String::new(),
-                };
-                let terminal = overstrike_terminal_glyph(&source);
-                self.emit(RoffInlineEvent::Overstrike { source, terminal });
-            }
+            'o' => self.decode_overstrike(),
             'A' | 'b' | 'D' | 'R' | 'Z' => {
                 let argument = self.take_presentation_argument(trigger);
                 self.emit(RoffInlineEvent::Presentation {
@@ -216,7 +203,11 @@ impl Decoder {
             'H' | 'L' | 'l' | 'S' | 'v' | 'x' => {
                 let argument = self.take_presentation_argument(trigger);
                 self.emit(RoffInlineEvent::Presentation {
-                    kind: PresentationKind::Motion,
+                    kind: if trigger == 'l' {
+                        PresentationKind::HorizontalLine
+                    } else {
+                        PresentationKind::Motion
+                    },
                     argument,
                 });
             }
@@ -378,22 +369,42 @@ impl Decoder {
         }
     }
 
+    fn decode_overstrike(&mut self) {
+        // An unclosed overstrike keeps its scanned payload (the CVS
+        // "Aow" families); rejected delimiters cannot occur for
+        // `\o`, which never appears in the rejection sets.
+        let source = match self.take_delimited_argument('o') {
+            DelimitedArgument::Closed(source) | DelimitedArgument::Unclosed(Some(source)) => source,
+            DelimitedArgument::Unclosed(None)
+            | DelimitedArgument::Rejected
+            | DelimitedArgument::Missing => String::new(),
+        };
+        let terminal = overstrike_terminal_glyph(&source);
+        // In this particular loop mandoc_escape receives the introducer
+        // itself (not the byte after it), so only reverse-solidus bytes are
+        // skipped. Match the existing terminal projection without recursively
+        // decoding nested operands; blanks still reach encode1().
+        let buffered = source.chars().any(|character| character != '\\');
+        self.emit(RoffInlineEvent::Overstrike {
+            source,
+            terminal,
+            buffered,
+        });
+    }
+
     fn decode_horizontal_motion(&mut self) {
         // A positive literal advance only exists for a closed argument with
         // a kept payload: unclosed and rejected motion renders nothing.
         let argument = self.take_presentation_argument('h');
-        if self.reading_motion_spacing
+        let reading_blank = self.reading_motion_spacing
             && !self.measurement
-            && argument.as_deref().is_some_and(is_positive_literal_motion)
-        {
-            // ManT does not reproduce formatter geometry, but an explicit
-            // positive advance is still a semantic word boundary. Retaining
-            // one space matters when `\c` suppresses the input-line break.
-            self.text.push(' ');
-        }
-        self.emit(RoffInlineEvent::Presentation {
-            kind: PresentationKind::HorizontalMotion,
+            && argument.as_deref().is_some_and(|argument| {
+                is_positive_literal_motion(argument)
+                    && libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input(argument)
+            });
+        self.emit(RoffInlineEvent::HorizontalMotion {
             argument,
+            reading_blank,
         });
     }
 

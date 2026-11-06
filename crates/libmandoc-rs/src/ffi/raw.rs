@@ -50,6 +50,8 @@ pub(super) struct CNodeView {
     pub(super) table_row_kind: i32,
     pub(super) table_alignment: i32,
     pub(super) table_column_count: i32,
+    pub(super) table_decimal_point: u8,
+    pub(super) table_width_edges: u8,
     pub(super) table_frame: i32,
     pub(super) table_allbox: i32,
     pub(super) table_left_border: i32,
@@ -69,6 +71,7 @@ pub(super) struct CNodeView {
     pub(super) enclosure_close: *const c_char,
     pub(super) equation: *const CEquationBox,
     pub(super) table_cells: *const CTableCell,
+    pub(super) table_rule_data: *const CTableCell,
     pub(super) table_rule_cells: *const CTableRuleCell,
     pub(super) child: *const CNode,
     pub(super) next: *const CNode,
@@ -92,7 +95,10 @@ pub(super) struct CTableCellView {
 #[repr(C)]
 pub(super) struct CTableLayoutCellView {
     pub(super) column: u32,
+    pub(super) kind: i32,
     pub(super) minimum_width: usize,
+    pub(super) spacing: usize,
+    pub(super) width_flags: u32,
     pub(super) right_border: i32,
     pub(super) next: *const CTableLayoutCell,
 }
@@ -102,6 +108,20 @@ pub(super) struct CTableRuleCellView {
     pub(super) kind: i32,
     pub(super) next: *const CTableRuleCell,
 }
+
+#[repr(C)]
+pub(super) struct CTableMeasureCell {
+    pub(super) column: u32,
+    pub(super) kind: i32,
+    pub(super) minimum_width: usize,
+    pub(super) spacing: usize,
+    pub(super) width_flags: u32,
+    pub(super) text: *const c_char,
+    pub(super) following_spans: u32,
+    pub(super) text_block: i32,
+}
+
+pub(super) type CMeasureText = extern "C" fn(*const c_char, *mut c_void) -> usize;
 
 #[repr(C)]
 pub(super) struct CEquationBoxView {
@@ -149,6 +169,41 @@ extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
 }
 
 unsafe extern "C" {
+    pub(super) fn mant_mandoc_table_hline_input(argument: *const c_char) -> i32;
+    pub(super) fn mant_mandoc_table_hmotion_input(argument: *const c_char, backbefore: i32) -> i32;
+    pub(super) fn mant_mandoc_table_line_length(
+        current: usize,
+        previous: usize,
+        argument: *const c_char,
+    ) -> usize;
+    pub(super) fn mant_mandoc_table_measure(
+        cells: *const CTableMeasureCell,
+        count: usize,
+        columns: u32,
+        decimal: u8,
+        edges: u32,
+        offset: usize,
+        margin: usize,
+        measure: CMeasureText,
+        context: *mut c_void,
+        widths: *mut usize,
+        spacings: *mut usize,
+        decimals: *mut usize,
+    ) -> i32;
+    pub(super) fn mant_mandoc_table_number_padding(
+        text: *const c_char,
+        decimal: u8,
+        width: usize,
+        position: usize,
+        measure: CMeasureText,
+        context: *mut c_void,
+    ) -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_measure_cell_size() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_measure_cell_align() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_table_measure_cell_offsets(count: *mut usize) -> *const usize;
     #[cfg(unix)]
     pub(super) fn mant_mandoc_parse_file(
         path: *const c_char,

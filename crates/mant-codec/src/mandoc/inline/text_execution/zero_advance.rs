@@ -84,6 +84,9 @@ pub(in crate::mandoc) struct PendingPrefix {
 }
 
 impl ZeroAdvanceState {
+    pub(super) fn is_armed(&self) -> bool {
+        self.machine.is_armed()
+    }
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
             marker_blank_separator: 0,
@@ -731,6 +734,36 @@ impl ZeroAdvanceState {
             }
             output.extend(glyph);
         }
+    }
+
+    /// HORIZ consumes BACKBEFORE without encode1's retreat. Preserve the
+    /// glyph and every following author blank, in recovery/owner order.
+    pub(super) fn settle_horizontal_motion(
+        &mut self,
+        output: &mut Vec<Inline>,
+        buffer: &mut String,
+        font: Font,
+        link: Option<&str>,
+    ) {
+        flush_segment(output, buffer, font, link);
+        let before = self.machine.pending_recovery_position();
+        let position = before
+            + self
+                .held
+                .iter()
+                .take_while(|cell| cell.recovery_offset < before)
+                .count();
+        let mut prefix = self.projected_prefix();
+        if let Some(glyph) = self.machine.pending_ref().cloned() {
+            prefix.insert(position, glyph);
+        }
+        self.machine.take_pending();
+        self.held.clear();
+        self.note_pending_emitted();
+        if self.fragment_started_pending {
+            self.resolved_preexisting = true;
+        }
+        output.extend(self.project_owned(prefix));
     }
 
     /// A pending marker followed by `ASCII_BREAK` assigns the old glyph to

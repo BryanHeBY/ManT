@@ -573,6 +573,13 @@ impl super::InlineExecutionState {
     }
 
     pub(in crate::mandoc) fn execute_tab_configuration(&mut self, node: &libmandoc_rs::Node) {
+        if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Ll)) && !node.flags.no_print {
+            self.set_table_line_length(
+                node.children
+                    .first()
+                    .and_then(libmandoc_rs::Node::decoder_text),
+            );
+        }
         if node.macro_token.as_ref() == Some(&Man(ManMacro::Dt)) && !node.flags.no_print {
             self.reset_default_tabs();
         } else if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Ta)) && !node.flags.no_print {

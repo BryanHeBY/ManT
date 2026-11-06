@@ -49,7 +49,7 @@ impl From<libmandoc_rs::NormalizedFont> for RoffFont {
 pub(super) enum PresentationKind {
     Color,
     PointSize,
-    HorizontalMotion,
+    HorizontalLine,
     Motion,
     FormatterState,
     Postprocessor,
@@ -79,6 +79,15 @@ pub(super) enum RoffInlineEvent {
     Overstrike {
         source: String,
         terminal: Option<String>,
+        /// At least one unescaped byte reaches native `encode1()`, even when
+        /// the reading projection omits an all-blank overstrike.
+        buffered: bool,
+    },
+    /// Keep generated reading spacing distinct from authored blanks. Native
+    /// `ESCAPE_HORIZ` may consume BACKAFTER without writing either one.
+    HorizontalMotion {
+        argument: Option<String>,
+        reading_blank: bool,
     },
     /// `\\z` makes the next complete glyph zero-advance. The decoder keeps
     /// decoding that glyph and every intervening formatter control; the
@@ -107,58 +116,6 @@ pub(super) enum RoffInlineEvent {
         kind: PresentationKind,
         argument: Option<String>,
     },
-}
-
-/// The observable role of one decoded inline event.
-///
-/// Consumers need this shared classification when deciding whether a
-/// formatter request can be crossed while looking for visible body content.
-/// It intentionally distinguishes an invisible row marker (`\&`) from a
-/// pure state transition (such as a font selection) and from a real line
-/// boundary. Adding a new decoder event must therefore make its effect
-/// explicit instead of silently flowing through a catch-all branch.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum InlineEventEffect {
-    Visible,
-    RowMarker,
-    StateOnly,
-    LineBoundary,
-}
-
-pub(super) fn inline_event_effect(event: &RoffInlineEvent) -> InlineEventEffect {
-    match event {
-        RoffInlineEvent::Text(value)
-        | RoffInlineEvent::Glyph(value)
-        | RoffInlineEvent::FallbackGlyph(value) => {
-            if value.is_empty() {
-                InlineEventEffect::StateOnly
-            } else {
-                InlineEventEffect::Visible
-            }
-        }
-        RoffInlineEvent::DeviceName
-        | RoffInlineEvent::BreakableHyphen
-        | RoffInlineEvent::NonBreakingWordBlank => InlineEventEffect::Visible,
-        RoffInlineEvent::Overstrike { terminal, .. } => {
-            if terminal.is_some() {
-                InlineEventEffect::Visible
-            } else {
-                InlineEventEffect::StateOnly
-            }
-        }
-        RoffInlineEvent::ZeroWidthGlyph | RoffInlineEvent::Breakpoint => {
-            InlineEventEffect::RowMarker
-        }
-        RoffInlineEvent::LineBreak | RoffInlineEvent::EmptyDestination => {
-            InlineEventEffect::LineBoundary
-        }
-        RoffInlineEvent::ZeroAdvance
-        | RoffInlineEvent::NoSpace
-        | RoffInlineEvent::Font(_)
-        | RoffInlineEvent::PreviousFont
-        | RoffInlineEvent::Link(_)
-        | RoffInlineEvent::Presentation { .. } => InlineEventEffect::StateOnly,
-    }
 }
 
 /// Decode one libmandoc text node into typed, renderer-independent events.

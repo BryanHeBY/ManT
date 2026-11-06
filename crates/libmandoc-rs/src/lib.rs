@@ -17,13 +17,15 @@ mod renderer;
 mod request;
 mod source_bundle;
 mod special_character;
+mod table_measure;
 mod transport;
+pub use table_measure::{TableColumnMetrics, measure_table_columns};
 
 pub use ast::{
     AuthorMode, DefinitionListStyle, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags,
     NodeKind, NormalizedEnclosure, NormalizedFont, NormalizedListKind, NormalizedSection, ScopeEnd,
     TableAlignment, TableBorderStyle, TableCell, TableCellKind, TableFont, TableLayout,
-    TableLayoutCell, TableRowKind, TableRuleCellKind,
+    TableLayoutCell, TableLayoutKind, TableRowKind, TableRuleCellKind,
 };
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocation};
