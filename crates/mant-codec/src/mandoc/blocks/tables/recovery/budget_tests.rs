@@ -14,6 +14,9 @@ const STATE: &str = include_str!("budget_tests/fixtures/state-candidate.1");
 const MIXED: &str = include_str!("budget_tests/fixtures/adjacent-unsafe-safe.1");
 const NAME_SESSION: &str = include_str!("budget_tests/fixtures/name-session.1");
 
+#[path = "budget_tests/ownership.rs"]
+mod ownership;
+
 #[test]
 fn name_session_refusal_keeps_the_complete_native_cell_and_discards_speculation() {
     // This exact complete source is core-plain-Ft in name_field_sessions;

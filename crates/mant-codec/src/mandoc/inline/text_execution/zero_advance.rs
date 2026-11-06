@@ -1,6 +1,8 @@
 use super::{Font, Inline, is_formatter_word_blank};
 use crate::mandoc::inline::font::style::{flush_segment, styled_link, styled_segment};
+use crate::mandoc::inline::ownership::{Annotation, Decoration, OutputMembership, delayed_origin};
 use crate::mandoc::roff_escape::ZeroAdvanceMachine;
+use std::sync::Arc;
 
 /// Bounded semantic projection of CVS mandoc's `TERMP_BACKAFTER`/
 /// `TERMP_BACKBEFORE` state for `\\z`.
@@ -14,7 +16,8 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     native_word_owner: Option<u64>,
     fragment_started_pending: bool,
     resolved_preexisting: bool,
-    output_owners: Vec<PendingOutputOwner>,
+    output_owners: Vec<u64>,
+    output_epoch: u64,
     /// The word began with a `\p` marker whose blank the pending glyph's
     /// retreat consumes: the cross-word separator survives in the native
     /// buffer (term.c:573-576 with 901-908) and must print after the glyph.
@@ -32,6 +35,9 @@ struct HeldCell {
     character: char,
     owner: Option<u64>,
     recovery_offset: usize,
+    epoch: u64,
+    decoration: Option<Arc<Decoration>>,
+    link_continuation: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,46 +47,7 @@ struct OwnedGlyph {
     /// This cached tail and the preceding annotated output are one authored
     /// link. The seam joins only those pieces after native acceptance.
     link_continuation: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct PendingOutputOwner {
-    pending_at_entry: bool,
-    emitted_before_owner: bool,
-}
-
-#[derive(Clone, Copy, Default)]
-pub(in crate::mandoc) enum PrefixMeasure {
-    #[default]
-    Glyphs,
-    Cells,
-}
-
-impl PrefixMeasure {
-    pub(in crate::mandoc) fn includes(self, character: char) -> bool {
-        matches!(self, Self::Cells) || !character.is_whitespace()
-    }
-
-    pub(in crate::mandoc) fn count(self, node: &Inline) -> usize {
-        match node {
-            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                value
-                    .chars()
-                    .filter(|&character| self.includes(character))
-                    .count()
-            }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => children.iter().map(|node| self.count(node)).sum(),
-            Inline::Anchor { .. } | Inline::LineBreak { .. } => 0,
-        }
-    }
-}
-
-pub(in crate::mandoc) struct PendingPrefix {
-    pub(in crate::mandoc) count: usize,
-    pub(in crate::mandoc) originals: Vec<Inline>,
-    pub(in crate::mandoc) measure: PrefixMeasure,
+    epoch: u64,
 }
 
 impl ZeroAdvanceState {
@@ -96,6 +63,7 @@ impl ZeroAdvanceState {
             fragment_started_pending: false,
             resolved_preexisting: false,
             output_owners: Vec::new(),
+            output_epoch: 0,
         }
     }
 
@@ -103,23 +71,66 @@ impl ZeroAdvanceState {
     /// preceding source. Track that glyph through the shared formatter until
     /// it is emitted or overstruck, including across nested wrappers.
     pub(in crate::mandoc) fn begin_output_owner(&mut self) {
-        self.output_owners.push(PendingOutputOwner {
-            pending_at_entry: self.machine.has_pending(),
-            emitted_before_owner: false,
-        });
+        self.output_epoch = self
+            .output_epoch
+            .checked_add(1)
+            .expect("bounded annotation entries");
+        self.output_owners.push(self.output_epoch);
     }
 
-    pub(in crate::mandoc) fn end_output_owner(&mut self) -> bool {
-        self.output_owners
-            .pop()
-            .is_some_and(|owner| owner.emitted_before_owner)
+    pub(in crate::mandoc) fn end_output_owner(&mut self) -> OutputMembership {
+        let epoch = self.output_owners.pop().expect("balanced annotation owner");
+        OutputMembership {
+            epoch,
+            enclosing: self.output_owners.last().copied(),
+        }
+    }
+
+    /// Annotate this scope's members which remain native input. Birth epochs
+    /// are monotone even after returning from a nested scope, so old deferred
+    /// history is skipped in logarithmic time rather than rescanned per word.
+    pub(in crate::mandoc) fn bind_deferred(
+        &mut self,
+        scope: OutputMembership,
+        annotation: &Annotation,
+        continuation: bool,
+    ) {
+        if let Some(glyph) = self
+            .machine
+            .pending_mut()
+            .filter(|glyph| glyph.epoch >= scope.epoch)
+        {
+            glyph.value = annotation.apply(glyph.value.clone());
+            glyph.link_continuation |= continuation;
+        }
+        let items = self.machine.deferred_projection_mut();
+        let first = items.partition_point(|glyph| glyph.epoch < scope.epoch);
+        for glyph in &mut items[first..] {
+            glyph.value = annotation.apply(glyph.value.clone());
+            glyph.link_continuation |= continuation;
+        }
+        let first = self.held.partition_point(|cell| cell.epoch < scope.epoch);
+        let mut decorations = std::collections::HashMap::new();
+        for cell in &mut self.held[first..] {
+            let key = cell
+                .decoration
+                .as_ref()
+                .map_or(0, |value| Arc::as_ptr(value) as usize);
+            let decoration = decorations.entry(key).or_insert_with(|| {
+                Arc::new(Decoration {
+                    annotation: annotation.clone(),
+                    previous: cell.decoration.clone(),
+                })
+            });
+            cell.decoration = Some(Arc::clone(decoration));
+            cell.link_continuation |= continuation;
+        }
     }
 
     /// A paragraph drain or physical row closes zero-advance projection but
     /// does not end a semantic owner spanning that output boundary.  Keep
     /// the ownership ledger until the enclosing macro reaches its post.
     pub(in crate::mandoc) fn reset_projection(&mut self, bare_armed: bool) {
-        self.note_pending_replaced();
         self.machine.clear();
         self.held.clear();
         self.fragment_started_pending = false;
@@ -127,34 +138,17 @@ impl ZeroAdvanceState {
         self.inherit_armed(bare_armed);
     }
 
-    fn note_pending_emitted(&mut self) {
-        for owner in &mut self.output_owners {
-            if owner.pending_at_entry {
-                owner.emitted_before_owner = true;
-                owner.pending_at_entry = false;
-            }
-        }
-    }
-
-    fn note_pending_replaced(&mut self) {
-        for owner in &mut self.output_owners {
-            owner.pending_at_entry = false;
-        }
-    }
-
     pub(in crate::mandoc) fn set_native_word_owner(&mut self, owner: u64) {
         self.native_word_owner = Some(owner);
     }
 
     fn project_glyph(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
-        if self.machine.has_pending() {
-            self.note_pending_replaced();
-        }
         self.machine
             .project_glyph(OwnedGlyph {
                 value: glyph,
                 owner: self.native_word_owner,
                 link_continuation: false,
+                epoch: self.output_epoch,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
@@ -165,6 +159,7 @@ impl ZeroAdvanceState {
                 value: glyph,
                 owner: self.native_word_owner,
                 link_continuation: false,
+                epoch: self.output_epoch,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
@@ -181,12 +176,22 @@ impl ZeroAdvanceState {
                     crate::mandoc::inline::flow::INTERNAL_FIELD_WORD
                 )));
             }
+            let mut value = Vec::new();
             if glyph.link_continuation {
-                output.push(Inline::anchor(
+                value.push(Inline::anchor(
                     crate::mandoc::inline::flow::INTERNAL_LINK_SPLIT,
                 ));
             }
-            output.push(glyph.value);
+            value.push(glyph.value);
+            if self
+                .output_owners
+                .last()
+                .is_some_and(|scope| glyph.epoch < *scope)
+            {
+                output.push(delayed_origin(glyph.epoch, value));
+            } else {
+                output.extend(value);
+            }
         }
         // Resume the current owner for the new source word's following run.
         if let Some(owner) = self.native_word_owner {
@@ -200,9 +205,6 @@ impl ZeroAdvanceState {
 
     fn take_pending(&mut self) -> Option<Vec<Inline>> {
         let glyph = self.machine.take_pending();
-        if glyph.is_some() {
-            self.note_pending_emitted();
-        }
         glyph.map(|glyphs| self.project_owned(glyphs))
     }
 
@@ -242,8 +244,56 @@ impl ZeroAdvanceState {
     /// Blanks buffered behind the pending glyph when a `\p` marker
     /// arrives: the next graph's retreat lands on the marker's own blank,
     /// so the held bytes survive and print after the settled glyph.
-    pub(super) fn take_held(&mut self) -> String {
-        self.held.drain(..).map(|cell| cell.character).collect()
+    fn take_deferred_with_held(&mut self) -> Vec<Inline> {
+        let (pending, recoveries) = self.machine.take_projection_parts();
+        let mut pending = pending;
+        let mut held = std::mem::take(&mut self.held).into_iter().peekable();
+        let mut output =
+            Vec::with_capacity(recoveries.len() + held.len() + usize::from(pending.is_some()));
+        for (index, recovery) in recoveries
+            .into_iter()
+            .map(Some)
+            .chain(std::iter::once(None))
+            .enumerate()
+        {
+            if pending.as_ref().is_some_and(|(before, _)| *before == index) {
+                output.push(pending.take().expect("pending position").1);
+            }
+            while held
+                .peek()
+                .is_some_and(|cell| cell.recovery_offset <= index)
+            {
+                let cell = held.next().expect("held cell");
+                let value = Inline::Text {
+                    value: cell.character.to_string(),
+                };
+                output.push(OwnedGlyph {
+                    value: if let Some(decoration) = cell.decoration {
+                        decoration.apply(value)
+                    } else {
+                        value
+                    },
+                    owner: cell.owner,
+                    epoch: cell.epoch,
+                    link_continuation: cell.link_continuation,
+                });
+            }
+            if let Some(recovery) = recovery {
+                output.push(recovery);
+            }
+        }
+        self.project_owned(output)
+    }
+
+    pub(super) fn flush_with_held(
+        &mut self,
+        output: &mut Vec<Inline>,
+        buffer: &mut String,
+        font: Font,
+        link: Option<&str>,
+    ) {
+        flush_segment(output, buffer, font, link);
+        output.extend(self.take_deferred_with_held());
     }
 
     fn hold(&mut self, character: char) {
@@ -251,6 +301,9 @@ impl ZeroAdvanceState {
             character,
             owner: self.native_word_owner,
             recovery_offset: self.machine.deferred_projection().len(),
+            epoch: self.output_epoch,
+            decoration: None,
+            link_continuation: false,
         });
     }
 
@@ -263,11 +316,19 @@ impl ZeroAdvanceState {
             output.extend_from_slice(&recoveries[recovery..end]);
             recovery = end;
             output.push(OwnedGlyph {
-                value: Inline::Text {
-                    value: cell.character.to_string(),
+                value: {
+                    let value = Inline::Text {
+                        value: cell.character.to_string(),
+                    };
+                    if let Some(decoration) = &cell.decoration {
+                        decoration.apply(value)
+                    } else {
+                        value
+                    }
                 },
                 owner: cell.owner,
-                link_continuation: false,
+                link_continuation: cell.link_continuation,
+                epoch: cell.epoch,
             });
         }
         output.extend_from_slice(&recoveries[recovery..]);
@@ -294,9 +355,6 @@ impl ZeroAdvanceState {
             let prefix = self.projected_prefix();
             self.machine.take_pending();
             self.held.clear();
-            if !prefix.is_empty() {
-                self.note_pending_emitted();
-            }
             for glyph in prefix {
                 self.machine.defer_projection(glyph);
             }
@@ -312,15 +370,13 @@ impl ZeroAdvanceState {
         // A pass may already own the glyph while BACKBEFORE still owns
         // these held bytes. The next automatic separator is retreated, not
         // the older authored blanks, even when no glyph remains to drain.
-        let mut glyph = self.take_pending().unwrap_or_default();
-        if !self.held.is_empty() {
-            // The held bytes behind the glyph survive the boundary: the
-            // next word's automatic separator is the cell its retreat
-            // consumes (term.c:901-908), so the word joins directly
-            // after the survivors instead of after a fresh blank.
-            let survivors = self.take_held();
-            glyph.push(Inline::Text { value: survivors });
+        // A projected glyph can have retired BACKBEFORE while its original
+        // recovery/blank projection still awaits the next source word. That
+        // receipt has ownership, but no retreat to consume the word separator.
+        if !self.machine.has_pending() && self.held.is_empty() {
+            return None;
         }
+        let glyph = self.take_deferred_with_held();
         (!glyph.is_empty()).then_some(glyph)
     }
 
@@ -354,69 +410,9 @@ impl ZeroAdvanceState {
         })
     }
 
-    /// Original glyph annotation is evidence of ownership; the size of a
-    /// later wrapper's projected node cannot establish that ownership.
-    pub(in crate::mandoc) fn pending_projection(&self) -> Option<Inline> {
-        self.machine.pending_ref().map(|glyph| glyph.value.clone())
-    }
-
-    pub(in crate::mandoc) fn pending_output_prefix(&self) -> PendingPrefix {
-        if self.machine.has_projected_pending() {
-            let originals: Vec<_> = self
-                .projected_prefix()
-                .into_iter()
-                .map(|glyph| glyph.value)
-                .collect();
-            PendingPrefix {
-                count: originals
-                    .iter()
-                    .map(|node| PrefixMeasure::Cells.count(node))
-                    .sum(),
-                originals,
-                measure: PrefixMeasure::Cells,
-            }
-        } else {
-            PendingPrefix {
-                count: self.pending_visible_characters(),
-                originals: self.pending_projection().into_iter().collect(),
-                measure: PrefixMeasure::Glyphs,
-            }
-        }
-    }
-
-    pub(in crate::mandoc) fn pending_native_owner(&self) -> Option<u64> {
-        self.machine.pending_ref().and_then(|glyph| glyph.owner)
-    }
-
-    /// Annotate a glyph created by this link's real operands even when it is
-    /// still waiting for the next `encode1()`/word boundary. An older cached
-    /// glyph never acquires the new link. `mdoc_html.c::mdoc_mt_pre` and
-    /// `mdoc_sx_pre` bind the source operand, while terminal `under_pre/encode1`
-    /// supply its font and execution lifetime independently.
-    pub(in crate::mandoc) fn bind_pending_link(
-        &mut self,
-        previous_owner: Option<u64>,
-        target: mant_ir::LinkTarget,
-        has_annotation_prefix: bool,
-    ) {
-        let Some(glyph) = self.machine.pending_mut() else {
-            return;
-        };
-        if glyph.owner == previous_owner {
-            return;
-        }
-        glyph.value = Inline::Link {
-            target,
-            title: None,
-            children: vec![glyph.value.clone()],
-        };
-        glyph.link_continuation = has_annotation_prefix;
-    }
-
     /// `term_flushln()` clears both backtracking flags when the native tag row
     /// ends. A bare `\z` or buffered blank cannot act on the next BODY row.
     pub(in crate::mandoc) fn discard_at_row_end(&mut self) {
-        self.note_pending_replaced();
         self.machine.clear();
         self.held.clear();
         self.fragment_started_pending = false;
@@ -463,13 +459,7 @@ impl ZeroAdvanceState {
     /// blanks, and the graph itself follows as ordinary output.
     fn settle_pending_before_graph(&mut self, output: &mut Vec<Inline>) {
         self.held.pop();
-        let survivors = self.take_held();
-        if let Some(glyph) = self.take_pending() {
-            output.extend(glyph);
-        }
-        if !survivors.is_empty() {
-            output.push(Inline::Text { value: survivors });
-        }
+        output.extend(self.take_deferred_with_held());
     }
 
     /// Execute CVS `ESCAPE_NOSPACE` against the pending `\\z` state.
@@ -605,12 +595,7 @@ impl ZeroAdvanceState {
                     // this graph's encode1() tail (term.c:924-926), so the
                     // graph itself may become the next deferred target.
                     self.held.pop();
-                    let survivors = self.take_held();
-                    self.flush(output, buffer, font, link);
-                    if !survivors.is_empty() {
-                        self.flush_recoveries(output, buffer, font, link);
-                        buffer.push_str(&survivors);
-                    }
+                    self.flush_with_held(output, buffer, font, link);
                     if self.machine.is_armed() {
                         let _ = self.project_glyph(styled_link(character.to_string(), font, link));
                         continue;
@@ -679,12 +664,7 @@ impl ZeroAdvanceState {
             // like an ordinary graph: the pending glyph settles before the
             // surviving held bytes instead of being replaced.
             self.held.pop();
-            let survivors = self.take_held();
-            self.flush(output, buffer, font, link);
-            if !survivors.is_empty() {
-                self.flush_recoveries(output, buffer, font, link);
-                buffer.push_str(&survivors);
-            }
+            self.flush_with_held(output, buffer, font, link);
             if self.machine.is_armed() {
                 let _ = self.project_glyph(styled_link(value.to_owned(), font, link));
                 return;
@@ -745,25 +725,10 @@ impl ZeroAdvanceState {
         font: Font,
         link: Option<&str>,
     ) {
-        flush_segment(output, buffer, font, link);
-        let before = self.machine.pending_recovery_position();
-        let position = before
-            + self
-                .held
-                .iter()
-                .take_while(|cell| cell.recovery_offset < before)
-                .count();
-        let mut prefix = self.projected_prefix();
-        if let Some(glyph) = self.machine.pending_ref().cloned() {
-            prefix.insert(position, glyph);
-        }
-        self.machine.take_pending();
-        self.held.clear();
-        self.note_pending_emitted();
+        self.flush_with_held(output, buffer, font, link);
         if self.fragment_started_pending {
             self.resolved_preexisting = true;
         }
-        output.extend(self.project_owned(prefix));
     }
 
     /// A pending marker followed by `ASCII_BREAK` assigns the old glyph to
@@ -783,7 +748,6 @@ impl ZeroAdvanceState {
             for cell in &mut self.held {
                 cell.recovery_offset = 0;
             }
-            self.note_pending_emitted();
             if self.fragment_started_pending {
                 self.resolved_preexisting = true;
             }

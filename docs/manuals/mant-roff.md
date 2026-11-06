@@ -1162,6 +1162,15 @@ a completed zero-advance glyph retains source order whether that glyph
 survives or is later overstruck. Native field acceptance uses the zero-width
 cell, while output ownership records the recovery spelling separately.
 
+Deferred spelling keeps the annotation of its original source operand even
+when a later word releases it. Overwriting a preceding zero-advance glyph
+does not transfer the surviving recovery into the next link, include/code
+span or generated list marker. Conversely, recovery authored inside a label
+remains part of that label. This rule preserves source order and font runs
+without introducing an extra formatter boundary or changing native field
+acceptance. Refused table enrichment cannot commit speculative annotations
+or change earlier accepted or subsequent ordinary links.
+
 Decoded text is never interpreted a second time as roff syntax. In particular, literal font-escape spellings authored with `\e` or `\[rs]` remain visible even when their letters resemble the currently selected font.
 
 ## Tables

@@ -8,7 +8,7 @@ mod native_writes;
 mod references;
 mod word;
 mod zero_advance;
-pub(in crate::mandoc) use zero_advance::{PrefixMeasure, ZeroAdvanceState};
+pub(in crate::mandoc) use zero_advance::ZeroAdvanceState;
 
 use event_state::append_text_event;
 use native_writes::record_native_event;

@@ -13,9 +13,6 @@ use crate::mandoc::inline::is_formatter_word_blank;
 #[derive(Clone)]
 pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
     output: super::super::OutputCheckpoint,
-    pending: usize,
-    originals: Vec<Inline>,
-    measure: crate::mandoc::inline::PrefixMeasure,
 }
 
 impl InlineBuilder {
@@ -156,7 +153,6 @@ impl InlineBuilder {
     /// `ListKind` owner. Keep delayed glyphs from earlier source, but retire
     /// the marker's own origin/padding and line receipts after its real post.
     pub(in crate::mandoc) fn execute_structural_marker(&mut self, execute: impl FnOnce(&mut Self)) {
-        let prefix = self.execution.zero_advance.pending_output_prefix();
         self.execution.zero_advance.begin_output_owner();
         let marker = format!(
             "{}list-marker:{}",
@@ -165,18 +161,12 @@ impl InlineBuilder {
         );
         self.begin_output_scope(&marker);
         execute(self);
-        let emitted = self.execution.zero_advance.end_output_owner();
+        let membership = self.execution.zero_advance.end_output_owner();
         self.wrap_output_scope(&marker, |children| {
-            let (mut previous, mut marker) = Self::split_delayed_glyph_prefix(
-                children,
-                prefix.count,
-                emitted,
-                &prefix.originals,
-                prefix.measure,
-            );
-            super::projection::retain_inline_identities(&mut marker);
-            previous.extend(marker);
-            previous
+            membership.map_owned(children, |mut marker| {
+                super::projection::retain_inline_identities(&mut marker);
+                marker
+            })
         });
     }
 
@@ -194,15 +184,9 @@ impl InlineBuilder {
     /// annotation. The zero-advance owner ledger carries that receipt
     /// across the whole handler execution.
     pub(in crate::mandoc) fn begin_semantic_owner_checkpoint(&mut self) -> SemanticOwnerCheckpoint {
-        let prefix = self.execution.zero_advance.pending_output_prefix();
         self.execution.zero_advance.begin_output_owner();
         let output = self.begin_output_checkpoint();
-        SemanticOwnerCheckpoint {
-            output,
-            pending: prefix.count,
-            originals: prefix.originals,
-            measure: prefix.measure,
-        }
+        SemanticOwnerCheckpoint { output }
     }
 
     /// Close a semantic wrapper checkpoint after its handler ran: glyphs
@@ -213,45 +197,10 @@ impl InlineBuilder {
         &mut self,
         checkpoint: SemanticOwnerCheckpoint,
     ) {
-        let SemanticOwnerCheckpoint {
-            output,
-            pending,
-            originals,
-            measure,
-        } = checkpoint;
-        let mut owned = if self.execution.zero_advance.end_output_owner() {
-            pending
-        } else {
-            0
-        };
-        let start = self.output_checkpoint_index(&output);
-        if owned > 0 && start < self.nodes.len() && !originals.is_empty() {
-            let projected = self.nodes.split_off(start);
-            let (owned, rest) =
-                super::split::split_owned_glyph_prefix(projected, &mut owned, &originals, measure);
-            self.nodes.extend(owned);
-            self.nodes.extend(rest);
-        }
-    }
-
-    /// Split delayed glyphs out of one wrapper's collected output just
-    /// before that wrapper compacts the rest into a single annotation
-    /// node (`.In`'s code span, which flattens nested identity).
-    /// `entry_pending` is the glyph count the zero-advance ledger held
-    /// when the wrapper's output began; `emitted` is the ledger's receipt
-    /// of whether those glyphs settled while it ran.
-    pub(in crate::mandoc) fn split_delayed_glyph_prefix(
-        nodes: Vec<Inline>,
-        entry_pending: usize,
-        emitted: bool,
-        originals: &[Inline],
-        measure: crate::mandoc::inline::PrefixMeasure,
-    ) -> (Vec<Inline>, Vec<Inline>) {
-        let mut remaining = usize::from(emitted) * entry_pending;
-        if remaining == 0 || originals.is_empty() {
-            return (Vec::new(), nodes);
-        }
-        super::split::split_owned_glyph_prefix(nodes, &mut remaining, originals, measure)
+        let membership = self.execution.zero_advance.end_output_owner();
+        self.wrap_output_since(checkpoint.output, |nodes| {
+            membership.map_owned(nodes, |nodes| nodes)
+        });
     }
 
     /// Start an ordinary formatter word after a source text node. If a prior

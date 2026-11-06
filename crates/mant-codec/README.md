@@ -128,6 +128,7 @@ literal displays, lists and table recovery:
 | Nested list execution | `inline/scopes/nested.rs` executes nested list and column phases in the caller's existing builder and field state. |
 | Link identities | `inline/links/identity.rs` applies HTML attribute glyph rules independently to each source operand; it never consumes the visible formatter's state. `Xr`/`MR` share this path with `UR`/`MT`/`Lk`/`Mt`/`%U`. |
 | Link annotations | `inline/links/annotation.rs` places typed links around accepted output, keeping preceding glyphs and layout boundaries outside the label without executing another formatter boundary. |
+| Deferred annotation members | `inline/ownership.rs` classifies actual released members by their local annotation entry, independently of native glyph survival. Queued recovery and held cells retain their original style and receiver. Private receipts expire at the last interested scope; they are never public link targets. |
 | Layout measurement | `layout/measurement.rs` shares pure native-list unit/sample measurement; it does not execute sample escapes in the live formatter. |
 | Structural layout | Block drivers own pending paragraphs and list state; section, synopsis, man no-fill and dialect-specific list consumers remain separate. Shared definition helpers do not own formatter state. |
 | Speculative recovery | Table-cell candidates retain output, final formatter state and diagnostics until ownership acceptance. Rejection rolls back all three, unlike a normal font-scope exit. |

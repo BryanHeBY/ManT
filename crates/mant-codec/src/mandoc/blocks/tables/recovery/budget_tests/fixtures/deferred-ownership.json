@@ -1,0 +1,294 @@
+{
+  "schema": "mant.deferred-owner-budget-sources/v1",
+  "reference_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "source_count": 4,
+  "native_profiles_executed": 20,
+  "expected_basis": [
+    "Exact pristine tree.c::print_span payload text and actual native stdout decide native word data and surviving X/Q.",
+    "Pinned tbl_data.c::tbl_cdata joins direct macro operands into one cell word; roff_req_or_macro consumes native br before tbl.",
+    "Pinned term_word SPECIAL/NUMBERED NBRZW leaves BACK state unchanged; internal blank is consumed on following encode1 retreat, so X/Q survive adjacent to URI.",
+    "Documented ManT recovery retains unknown/unsupported escape spelling at its own source position. Native formatter never prints that spelling.",
+    "Existing refusal contract lower_table_cell_text decodes finalized native cell once; it does not replay Lk/UR annotations. Literal trailing blank from native empty UE input is retained in man raw cell projection; do not global-trim it.",
+    "Private budget begin_candidate charges before clone; attempts0 refuses immediately; output_nodes1/output_bytes8 refuse after candidate generation; no speculative origin/decoration/diagnostic commit.",
+    "All expected active target membership is based on original source macro membership, not candidate full JSON as an oracle. Current/before JSON is observation only.",
+    "All20 exact pristine profiles preceded these assertions; stage evidence is retained outside the repository."
+  ],
+  "diagnostics_contract": {
+    "additional_code": "manual.table-recovery-budget",
+    "additional_level": "warning",
+    "additional_impact": "none",
+    "additional_source": null,
+    "one_budget_summary_when_exhausted": true,
+    "preserve_original_native_unknown_and_tbl_unsupported_diagnostics": true,
+    "forbidden_new_codes": [
+      "manual.table-execution-incomplete",
+      "manual.escape-scan-truncated"
+    ],
+    "speculative_synthetic_parse_diagnostics_must_not_escape": true
+  },
+  "cases": [
+    {
+      "id": "accepted-mdoc",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://shared.test OLDLINK\n.No OLDACCEPTED\n.br\n.TS\nl l.\nT{\n.No \\fB\\zX\\[cell-bad]\\fP\n.Lk https://shared.test CELL\nT}\t\\z\n.TE\n.Lk https://shared.test AFTERLINK\n.No AFTERTEXT\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "ec3a3e80ecc9dff5975e5f4428d9248ab4e2febb07d7d5ee50fee4c43cfa7e59",
+      "source_basis": "T3-short-enhancement",
+      "native_table_tree_rows": [
+        "      2 (tbl options) 13:1",
+        "      LL 0L{\\fB\\zX\\[cell-bad]\\fP https://shared.test CELL} 1L[\\z] (tbl) 13:1"
+      ],
+      "native_text_block_payloads": [
+        {
+          "column": 0,
+          "native_payload": "\\fB\\zX\\[cell-bad]\\fP https://shared.test CELL"
+        }
+      ],
+      "native_lint_exit": 4,
+      "default_contract_labels": [
+        "OLDLINK",
+        "CELL",
+        "AFTERLINK"
+      ],
+      "budget_variants": [
+        {
+          "limits": {
+            "attempts": 0
+          },
+          "expected_exhaustion": "Attempts",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\[cell-bad]https://shared.test CELL"
+          ]
+        },
+        {
+          "limits": {
+            "output_nodes": 1
+          },
+          "expected_exhaustion": "OutputNodes",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\[cell-bad]https://shared.test CELL"
+          ]
+        },
+        {
+          "limits": {
+            "output_bytes": 8
+          },
+          "expected_exhaustion": "OutputBytes",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\[cell-bad]https://shared.test CELL"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "request-refused-mdoc",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://shared.test OLDLINK\n.No OLDACCEPTED\n.br\n.TS\nl l.\nT{\n.br\n.No \\fB\\zX\\[cell-bad]\\fP\n.Lk https://shared.test CELL\nT}\t\\z\n.TE\n.Lk https://shared.test AFTERLINK\n.No AFTERTEXT\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "24599347b94af1139935fed6f9fb7495a68d5b32572be47b96d42b2ead638bfc",
+      "source_basis": "T3-native-request-refusal",
+      "native_table_tree_rows": [
+        "      2 (tbl options) 13:1",
+        "      LL 0L{\\fB\\zX\\[cell-bad]\\fP https://shared.test CELL} 1L[\\z] (tbl) 13:1"
+      ],
+      "native_text_block_payloads": [
+        {
+          "column": 0,
+          "native_payload": "\\fB\\zX\\[cell-bad]\\fP https://shared.test CELL"
+        }
+      ],
+      "native_lint_exit": 4,
+      "default_contract_labels": [
+        "OLDLINK",
+        "AFTERLINK"
+      ],
+      "budget_variants": [
+        {
+          "limits": {
+            "attempts": 0
+          },
+          "expected_exhaustion": "Attempts",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\[cell-bad]https://shared.test CELL"
+          ]
+        },
+        {
+          "limits": {
+            "output_nodes": 1,
+            "output_bytes": 8
+          },
+          "expected_exhaustion": null,
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\[cell-bad]https://shared.test CELL"
+          ],
+          "classification": "NativeRequestRefusalControlNotOutputBudgetRefusal",
+          "reason": "br makes semantic recovery ineligible before output charge; native payload nonempty means raw speculative branch not entered."
+        }
+      ]
+    },
+    {
+      "id": "accepted-man",
+      "source": ".TH PROBE 1 \"November 6, 2026\"\n.SH DESCRIPTION\n.UR https://shared.test\nOLDLINK\n.UE\nOLDACCEPTED\n.br\n.TS\nl l.\nT{\n\\zX\\N'999'\n.UR https://shared.test\n.B CELL\n.UE\nT}\t\\z\n.TE\n.UR https://shared.test\nAFTERLINK\n.UE\nAFTERTEXT\n.SH NEXT\nAFTER\n",
+      "source_sha256": "88d015b74ff9b0b0feaa8d9db46ba4cf0c360e38a29751d0c1ee312d60ef4c45",
+      "source_basis": "existing closed inline UR/UE T{} recovery",
+      "native_table_tree_rows": [
+        "      2 (tbl options) 10:1",
+        "      LL 0L{\\zX\\N'999' https://shared.test CELL } 1L[\\z] (tbl) 10:1"
+      ],
+      "native_text_block_payloads": [
+        {
+          "column": 0,
+          "native_payload": "\\zX\\N'999' https://shared.test CELL "
+        }
+      ],
+      "native_lint_exit": 4,
+      "default_contract_labels": [
+        "OLDLINK",
+        "CELL",
+        "AFTERLINK"
+      ],
+      "budget_variants": [
+        {
+          "limits": {
+            "attempts": 0
+          },
+          "expected_exhaustion": "Attempts",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\N'999'https://shared.test CELL "
+          ]
+        },
+        {
+          "limits": {
+            "output_nodes": 1
+          },
+          "expected_exhaustion": "OutputNodes",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\N'999'https://shared.test CELL "
+          ]
+        },
+        {
+          "limits": {
+            "output_bytes": 8
+          },
+          "expected_exhaustion": "OutputBytes",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "X\\N'999'https://shared.test CELL "
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sibling-accepted-before-refusal",
+      "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Lk https://shared.test OLDLINK\n.No OLDACCEPTED\n.br\n.TS\nl l l.\nT{\n.Lk https://shared.test FIRSTCELL\nT}\tT{\n.No \\zQ\\[later-bad]\n.Lk https://shared.test SECONDCELL\nT}\t\\z\n.TE\n.Lk https://shared.test AFTERLINK\n.No AFTERTEXT\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "f7a50aa1ac8b0e35be045cfd7a4960f419e960b0ac07d96ce7f276fb7fccf74e",
+      "source_basis": "T3-unsafe-safe-siblings topology, safe two-candidate transaction variant",
+      "native_table_tree_rows": [
+        "      3 (tbl options) 13:1",
+        "      LLL 0L{https://shared.test FIRSTCELL} 1L{\\zQ\\[later-bad] https://shared.test SECONDCELL} 2L[\\z] (tbl) 13:1"
+      ],
+      "native_text_block_payloads": [
+        {
+          "column": 0,
+          "native_payload": "https://shared.test FIRSTCELL"
+        },
+        {
+          "column": 1,
+          "native_payload": "\\zQ\\[later-bad] https://shared.test SECONDCELL"
+        }
+      ],
+      "native_lint_exit": 4,
+      "default_contract_labels": [
+        "OLDLINK",
+        "FIRSTCELL",
+        "SECONDCELL",
+        "AFTERLINK"
+      ],
+      "budget_variants": [
+        {
+          "limits": {
+            "attempts": 0
+          },
+          "expected_exhaustion": "Attempts",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "https://shared.test FIRSTCELL",
+            "Q\\[later-bad]https://shared.test SECONDCELL"
+          ]
+        },
+        {
+          "limits": {
+            "output_nodes": 1
+          },
+          "expected_exhaustion": "OutputNodes",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "https://shared.test FIRSTCELL",
+            "Q\\[later-bad]https://shared.test SECONDCELL"
+          ]
+        },
+        {
+          "limits": {
+            "output_bytes": 8
+          },
+          "expected_exhaustion": "OutputBytes",
+          "expected_active_labels": [
+            "OLDLINK",
+            "AFTERLINK"
+          ],
+          "expected_safe_cell_text": [
+            "https://shared.test FIRSTCELL",
+            "Q\\[later-bad]https://shared.test SECONDCELL"
+          ]
+        },
+        {
+          "limits": {
+            "attempts": 1
+          },
+          "expected_exhaustion": "Attempts",
+          "expected_active_labels": [
+            "OLDLINK",
+            "FIRSTCELL",
+            "AFTERLINK"
+          ],
+          "expected_first_cell_text": "FIRSTCELL: https://shared.test",
+          "expected_second_safe_cell_text": "Q\\[later-bad]https://shared.test SECONDCELL",
+          "expected_attempts": 2
+        }
+      ]
+    }
+  ]
+}

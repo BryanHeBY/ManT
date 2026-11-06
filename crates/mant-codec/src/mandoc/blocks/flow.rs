@@ -85,9 +85,8 @@ impl BlockState {
         &mut self,
         cursor: LinkOutputCursor,
         target: &mant_ir::LinkTarget,
-        skip_prior_glyph: bool,
+        membership: crate::mandoc::inline::ownership::OutputMembership,
     ) -> bool {
-        let mut skip_visible = usize::from(skip_prior_glyph);
         let marker = super::man_links::link_cursor_marker(cursor.node_id);
         let mut started = false;
         for index in cursor.output..self.output.len() {
@@ -97,7 +96,7 @@ impl BlockState {
                 target,
                 &marker,
                 &mut started,
-                &mut skip_visible,
+                membership,
             );
             if started {
                 // HTML closes the annotation when this output owner closes
@@ -111,14 +110,30 @@ impl BlockState {
                 return wrapped;
             }
         }
-        let wrapped =
-            self.paragraph
-                .wrap_first_link(target, &marker, &mut started, &mut skip_visible);
+        let wrapped = self
+            .paragraph
+            .wrap_first_link(target, &marker, &mut started, membership);
         if started {
             return wrapped;
         }
         self.literal
-            .wrap_first_link(target, &marker, &mut started, &mut skip_visible)
+            .wrap_first_link(target, &marker, &mut started, membership)
+    }
+
+    pub(super) fn finish_output_membership(
+        &mut self,
+        cursor: LinkOutputCursor,
+        membership: crate::mandoc::inline::ownership::OutputMembership,
+    ) {
+        let marker = super::man_links::link_cursor_marker(cursor.node_id);
+        let mut started = false;
+        for block in &mut self.output[cursor.output..] {
+            super::man_links::finish_output_membership(block, &marker, &mut started, membership);
+        }
+        self.paragraph
+            .finish_output_membership(&marker, &mut started, membership);
+        self.literal
+            .finish_output_membership(&marker, &mut started, membership);
     }
 
     pub(super) fn discard_link_cursor(&mut self, cursor: LinkOutputCursor) {

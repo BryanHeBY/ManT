@@ -13,6 +13,10 @@ keywords = ["man", "mdoc", "roff", "markdown", "parser"]
 categories = ["parser-implementations", "text-processing"]
 include = [
   "/Cargo.toml", "/LICENSE", "/README.md", "/src/**",
+  "/tests/deferred_ownership.rs", "/tests/deferred_ownership/**",
+  "/tests/support/deferred_ownership.rs", "/tests/support/deferred_ownership/**", "/tests/support/explanation_ranges.rs",
+  "/tests/native_table_execution.rs", "/tests/native_table_execution/**",
+  "/tests/support/table_execution.rs",
   "/tests/roff_lowering.rs", "/tests/roff_lowering/**",
   "/tests/markdown_pipeline.rs", "/tests/markdown_pipeline/**",
   "/tests/definition_normalization_layout.rs",

@@ -129,7 +129,8 @@ impl InlineBuilder {
         owner: u32,
         append: impl FnOnce(&mut Self),
         mut wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
-    ) -> bool {
+    ) -> (bool, crate::mandoc::inline::ownership::OutputMembership) {
+        self.execution.zero_advance.begin_output_owner();
         let scope = format!("{INTERNAL_OUTPUT_SCOPE}semantic:{owner}");
         let content = format!("{scope}:content");
         self.begin_output_scope(&scope);
@@ -137,29 +138,37 @@ impl InlineBuilder {
         append(self);
         self.pending_output_scope_prefixes
             .retain(|pending| pending != &content);
+        let membership = self.execution.zero_advance.end_output_owner();
         let mut started = false;
         let mut annotated = false;
         self.wrap_output_scope(&scope, |children| {
-            if started {
-                let output = wrap(children);
-                annotated |= output
-                    .iter()
-                    .any(|node| matches!(node, Inline::Link { .. }));
-                return output;
-            }
-            let (mut prefix, children, found) =
-                projection::split_output_scope_prefix(children, &content);
-            started = found;
-            if found {
-                let output = wrap(children);
-                annotated |= output
-                    .iter()
-                    .any(|node| matches!(node, Inline::Link { .. }));
-                prefix.extend(output);
-            }
-            prefix
+            membership.map_owned(children, |children| {
+                if started {
+                    if !has_annotation_member(&children) {
+                        return children;
+                    }
+                    let output = wrap(children);
+                    annotated |= output
+                        .iter()
+                        .any(|node| matches!(node, Inline::Link { .. }));
+                    return output;
+                }
+                let (mut prefix, children, found) =
+                    projection::split_output_scope_prefix(children, &content);
+                started = found;
+                if found && has_annotation_member(&children) {
+                    let output = wrap(children);
+                    annotated |= output
+                        .iter()
+                        .any(|node| matches!(node, Inline::Link { .. }));
+                    prefix.extend(output);
+                } else {
+                    prefix.extend(children);
+                }
+                prefix
+            })
         });
-        annotated
+        (annotated, membership)
     }
 
     /// Append content using the formatter-level boundary selected by the
@@ -181,4 +190,14 @@ impl InlineBuilder {
             }
         }
     }
+}
+
+fn has_annotation_member(nodes: &[Inline]) -> bool {
+    nodes.iter().any(|node| match node {
+        Inline::Anchor { id, .. } => !id.as_str().starts_with("\0mant:"),
+        Inline::Strong { children } | Inline::Emphasis { children } => {
+            has_annotation_member(children)
+        }
+        _ => true,
+    })
 }

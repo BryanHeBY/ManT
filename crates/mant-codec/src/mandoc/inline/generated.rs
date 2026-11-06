@@ -136,11 +136,10 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
         .get(1)
         .and_then(|child| child.text.as_deref())
         .map(super::links::identity::link_identity_text);
-    let previous_owner = builder.zero_advance.pending_native_owner();
     // term_word's automatic/field prefix precedes the first source operand;
     // only the source spelling belongs to Xr/MR's Link. The shared marker
     // boundary retains authored leading spaces without classifying Text.
-    let annotated = builder.append_semantic_scope(
+    let (annotated, membership) = builder.append_semantic_scope(
         node.id,
         |builder| {
             if let Some(first) = first {
@@ -183,11 +182,14 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
         // A section-final bare z can defer the generated ')' until the next
         // word. term_word()/encode1() keep its original ownership; annotate
         // that delayed glyph and rejoin only this occurrence's prefix.
-        builder.zero_advance.bind_pending_link(
-            previous_owner,
-            mant_ir::LinkTarget::Manual {
-                name: target_name,
-                manual_section: section,
+        builder.zero_advance.bind_deferred(
+            membership,
+            &super::ownership::Annotation::Link {
+                target: mant_ir::LinkTarget::Manual {
+                    name: target_name,
+                    manual_section: section,
+                },
+                title: None,
             },
             annotated,
         );

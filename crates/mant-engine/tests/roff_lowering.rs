@@ -280,3 +280,6 @@ mod name_field_sessions;
 mod execution_scopes;
 #[path = "roff_lowering/table_execution.rs"]
 mod table_execution;
+
+#[path = "roff_lowering/deferred_ownership.rs"]
+mod deferred_ownership;

@@ -17,6 +17,8 @@ mod text_execution;
 pub(in crate::mandoc) use generated::function_argument;
 mod links;
 pub(in crate::mandoc) mod names;
+pub(in crate::mandoc) mod ownership;
+pub(in crate::mandoc) use links::split_boundary_prefix;
 pub(super) use links::{append_man_link, man_link_identity_text};
 mod scopes;
 mod source_fragment;
@@ -37,8 +39,7 @@ use font::lower_man_font_scope;
 #[cfg(test)]
 use font::parse_roff_text_with_font;
 pub(super) use font::{
-    PrefixMeasure, TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState,
-    parse_roff_text_with_zero_advance,
+    TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState, parse_roff_text_with_zero_advance,
 };
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
@@ -738,7 +739,6 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     // compaction, and the outer semantic checkpoint could only recover
     // plain text from the flattened value.
     let scope = builder.begin_output_checkpoint();
-    let prefix = builder.zero_advance.pending_output_prefix();
     builder.zero_advance.begin_output_owner();
     if node.flags.synopsis_pretty && node.flags.line_start {
         // termp_in_pre()1552-1558 writes two separate words, "#include"
@@ -754,21 +754,19 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     builder.font.pop_scope(saved);
     builder.tighten_next_boundary();
     builder.append_text(">");
-    let emitted = builder.zero_advance.end_output_owner();
+    let membership = builder.zero_advance.end_output_owner();
+    builder
+        .zero_advance
+        .bind_deferred(membership, &ownership::Annotation::Code, false);
     builder.wrap_output_since(scope, |nodes| {
-        let (owned, rest) = InlineBuilder::split_delayed_glyph_prefix(
-            nodes,
-            prefix.count,
-            emitted,
-            &prefix.originals,
-            prefix.measure,
-        );
-        let value = plain_text(&rest);
-        let mut output = owned;
-        if !value.is_empty() {
-            output.push(Inline::Code { value });
-        }
-        output
+        membership.map_owned(nodes, |rest| {
+            let value = plain_text(&rest);
+            let mut output = Vec::new();
+            if !value.is_empty() {
+                output.push(Inline::Code { value });
+            }
+            output
+        })
     });
 }
 

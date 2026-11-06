@@ -60,9 +60,13 @@ with tempfile.TemporaryDirectory(prefix='mant-table-pty-') as scratch:
                     assert child.returncode == 0, (case['id'], error)
                     text = ANSI.sub('', output.decode()).replace('\r\n', '\n')
                     assert '\x1b' not in text, 'unclosed/unexpected decoration'
-                    for word in [case['expected_label'], 'BETA', 'AFTER']:
+                    for word in ([case['expected_label'], 'BETA', 'AFTER']
+                                 if 'expected_label' in case else ['AFTER']):
                         hits = list(re.finditer(r'(?<![\w-])'+re.escape(word)+r'(?![\w-])', text))
                         assert len(hits) == 1, (case['id'], width, color, word, text)
+                    for recovery in case.get('recoveries', []):
+                        assert text.count(recovery['text']) == recovery['occurrences'], (case['id'], width, color, recovery, text)
+                    assert 'mant:deferred-origin:' not in text
                 finally:
                     if child is not None:
                         try:

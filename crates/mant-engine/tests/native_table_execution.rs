@@ -5,6 +5,8 @@ use mant_codec::encode::{
 };
 #[path = "support/table_execution.rs"]
 mod cases;
+#[path = "support/explanation_ranges.rs"]
+mod explanation_ranges;
 #[path = "support/json_roundtrip.rs"]
 mod json_roundtrip;
 #[path = "native_table_execution/names.rs"]

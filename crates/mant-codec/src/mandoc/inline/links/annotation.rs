@@ -13,149 +13,38 @@ pub(super) fn append_external_link(
     append: impl FnOnce(&mut InlineBuilder),
 ) {
     let checkpoint = builder.begin_output_checkpoint();
-    let pending = builder.zero_advance.pending_output_prefix();
-    let previous_owner = builder.zero_advance.pending_native_owner();
     builder.zero_advance.begin_output_owner();
     append(builder);
-    let previous_glyph_emitted = builder.zero_advance.end_output_owner();
-    builder.zero_advance.bind_pending_link(
-        previous_owner,
-        external_link_target(address.to_owned(), email),
-        true, // This operand always emits its own typed Link below.
-    );
-    let mut previous_glyph = if previous_glyph_emitted {
-        pending.count
-    } else {
-        0
-    };
-    builder.wrap_output_since(checkpoint, |children| {
-        let (mut output, children) = split_boundary_prefix(children);
-        previous_glyph = previous_glyph
-            .saturating_sub(output.iter().map(|node| pending.measure.count(node)).sum());
-        // CVS term_word()/encode1() may print an earlier operand's cached
-        // glyph while this address executes. Its source ownership survives
-        // that delay: annotation cannot move it into the address hit range.
-        let (prior, children) =
-            split_visible_prefix(children, &mut previous_glyph, pending.measure);
-        output.extend(prior);
-        output.push(Inline::Link {
-            target: external_link_target(address.to_owned(), email),
+    let membership = builder.zero_advance.end_output_owner();
+    let target = external_link_target(address.to_owned(), email);
+    builder.zero_advance.bind_deferred(
+        membership,
+        &crate::mandoc::inline::ownership::Annotation::Link {
+            target: target.clone(),
             title: None,
-            children,
-        });
-        output
-    });
-}
-
-/// Separate an already-receipted preceding glyph while retaining its styles
-/// and zero-width markers. This changes output ownership only; it executes no
-/// formatter boundary and does not settle another pending source glyph.
-pub(super) fn split_visible_prefix(
-    nodes: Vec<Inline>,
-    remaining: &mut usize,
-    measure: super::super::PrefixMeasure,
-) -> (Vec<Inline>, Vec<Inline>) {
-    let mut prefix = Vec::new();
-    let mut suffix = Vec::new();
-    for node in nodes {
-        if *remaining == 0 {
-            suffix.push(node);
-            continue;
-        }
-        match node {
-            Inline::Text { value } => {
-                split_text_prefix(&value, remaining, false, &mut prefix, &mut suffix, measure);
-            }
-            Inline::Code { value } => {
-                split_text_prefix(&value, remaining, true, &mut prefix, &mut suffix, measure);
-            }
-            Inline::Strong { children } => {
-                let (before, after) = split_visible_prefix(children, remaining, measure);
-                if !before.is_empty() {
-                    prefix.push(Inline::Strong { children: before });
-                }
-                if !after.is_empty() {
-                    suffix.push(Inline::Strong { children: after });
-                }
-            }
-            Inline::Emphasis { children } => {
-                let (before, after) = split_visible_prefix(children, remaining, measure);
-                if !before.is_empty() {
-                    prefix.push(Inline::Emphasis { children: before });
-                }
-                if !after.is_empty() {
-                    suffix.push(Inline::Emphasis { children: after });
-                }
-            }
-            Inline::Link {
-                target,
-                title,
+        },
+        true,
+    );
+    builder.wrap_output_since(checkpoint, |children| {
+        membership.map_owned(children, |children| {
+            let (mut output, children) = split_boundary_prefix(children);
+            output.push(Inline::Link {
+                target: target.clone(),
+                title: None,
                 children,
-            } => {
-                let (before, after) = split_visible_prefix(children, remaining, measure);
-                if !before.is_empty() {
-                    prefix.push(Inline::Link {
-                        target: target.clone(),
-                        title: title.clone(),
-                        children: before,
-                    });
-                }
-                if !after.is_empty() {
-                    suffix.push(Inline::Link {
-                        target,
-                        title,
-                        children: after,
-                    });
-                }
-            }
-            Inline::Equation { .. } => {
-                // A pending zero-advance glyph is never a structured equation.
-                // Preserve the node intact if an equation precedes the range.
-                prefix.push(node);
-            }
-            Inline::Anchor { .. } | Inline::LineBreak { .. } => prefix.push(node),
-        }
-    }
-    (prefix, suffix)
-}
-
-fn split_text_prefix(
-    value: &str,
-    remaining: &mut usize,
-    code: bool,
-    prefix: &mut Vec<Inline>,
-    suffix: &mut Vec<Inline>,
-    measure: super::super::PrefixMeasure,
-) {
-    let split = value
-        .char_indices()
-        .find_map(|(index, ch)| {
-            if measure.includes(ch) {
-                *remaining -= 1;
-            }
-            (*remaining == 0).then_some(index + ch.len_utf8())
+            });
+            output
         })
-        .unwrap_or(value.len());
-    let inline = |value: String| {
-        if code {
-            Inline::Code { value }
-        } else {
-            Inline::Text { value }
-        }
-    };
-    if split > 0 {
-        prefix.push(inline(value[..split].to_owned()));
-    }
-    if split < value.len() {
-        suffix.push(inline(value[split..].to_owned()));
-    }
+    });
 }
 
 /// `InlineBuilder` owns inter-word padding. When a new link begins a word,
 /// that padding is appended before its first child. Executed row boundaries
 /// and private word anchors can precede it through style wrappers too: keep
 /// the full layout prefix outside the clickable label without swallowing it.
-pub(super) fn split_boundary_prefix(children: Vec<Inline>) -> (Vec<Inline>, Vec<Inline>) {
+pub(in crate::mandoc) fn split_boundary_prefix(
+    children: Vec<Inline>,
+) -> (Vec<Inline>, Vec<Inline>) {
     let mut prefix = Vec::new();
     let mut suffix = Vec::new();
     for node in children {

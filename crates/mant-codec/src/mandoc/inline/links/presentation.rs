@@ -2,9 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::{
-    Inline, InlineBuilder, external_link_target, split_boundary_prefix, split_visible_prefix,
-};
+use super::{Inline, InlineBuilder, external_link_target, split_boundary_prefix};
 
 const OWNER_PREFIX: &str = "\0mant:lk-presentation:";
 
@@ -71,34 +69,30 @@ pub(super) fn append_owned_part(
 ) {
     let marker = scope_marker(owner, part);
     builder.begin_output_scope(&marker);
-    let pending = builder.zero_advance.pending_output_prefix();
     builder.zero_advance.begin_output_owner();
     append(builder);
-    let mut previous = if builder.zero_advance.end_output_owner() {
-        pending.count
-    } else {
-        0
+    let membership = builder.zero_advance.end_output_owner();
+    let Inline::Link { target, title, .. } = placeholder(owner, part, address, Vec::new()) else {
+        unreachable!()
     };
+    builder.zero_advance.bind_deferred(
+        membership,
+        &crate::mandoc::inline::ownership::Annotation::Link { target, title },
+        false,
+    );
     let mut first_fragment = true;
+    let _ = preceding; // Deferred members already retain their actual part annotation.
     builder.wrap_output_scope(&marker, |children| {
-        let (mut output, children) = if first_fragment {
-            first_fragment = false;
-            split_boundary_prefix(children)
-        } else {
-            (Vec::new(), children)
-        };
-        previous =
-            previous.saturating_sub(output.iter().map(|node| pending.measure.count(node)).sum());
-        let (prior, children) = split_visible_prefix(children, &mut previous, pending.measure);
-        if let Some(preceding) = preceding {
-            if !prior.is_empty() {
-                output.push(placeholder(owner, preceding, address, prior));
-            }
-        } else {
-            output.extend(prior);
-        }
-        output.push(placeholder(owner, part, address, children));
-        output
+        membership.map_owned(children, |children| {
+            let (mut output, children) = if first_fragment {
+                first_fragment = false;
+                split_boundary_prefix(children)
+            } else {
+                (Vec::new(), children)
+            };
+            output.push(placeholder(owner, part, address, children));
+            output
+        })
     });
 }
 
@@ -196,6 +190,7 @@ fn has_readable_text(nodes: &[Inline]) -> bool {
 #[derive(Default)]
 struct AcceptedLabel {
     readable: bool,
+    uri_readable: bool,
 }
 
 /// Final native field receipts already chose these children. One collection
@@ -212,24 +207,29 @@ pub(in crate::mandoc::inline) fn finalize_accepted_links(nodes: &mut Vec<Inline>
 fn collect_labels(
     nodes: &[Inline],
     labels: &mut HashMap<u32, AcceptedLabel>,
-    description: Option<u32>,
+    owned: Option<(u32, Part)>,
 ) {
     for node in nodes {
         #[cfg(test)]
         note_visit();
-        let description = if let Some((owner, part, _)) = metadata(node) {
+        let owned = if let Some((owner, part, _)) = metadata(node) {
             labels.entry(owner).or_default();
-            (part == Part::Description).then_some(owner)
+            Some((owner, part))
         } else {
-            description
+            owned
         };
         match node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect_labels(children, labels, description),
+            | Inline::Link { children, .. } => collect_labels(children, labels, owned),
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                if let Some(owner) = description {
-                    labels.entry(owner).or_default().readable |= text_is_readable(value);
+                if let Some((owner, part)) = owned {
+                    let label = labels.entry(owner).or_default();
+                    match part {
+                        Part::Description => label.readable |= text_is_readable(value),
+                        Part::Uri => label.uri_readable |= text_is_readable(value),
+                        Part::Colon | Part::Suffix => {}
+                    }
                 }
             }
             Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
@@ -260,10 +260,30 @@ fn resolve_parts(
             let label = labels.get(&owner).is_some_and(|label| label.readable);
             match part {
                 Part::Description if label && !address.is_empty() => {
-                    bind_accepted_link(&mut output, children, address, owner, part, bound);
+                    if super::super::plain_text(&children).is_empty()
+                        && labels.get(&owner).is_some_and(|label| match part {
+                            Part::Description => label.readable,
+                            Part::Uri => label.uri_readable,
+                            _ => false,
+                        })
+                    {
+                        output.extend(children);
+                    } else {
+                        bind_accepted_link(&mut output, children, address, owner, part, bound);
+                    }
                 }
                 Part::Uri if !label && !address.is_empty() => {
-                    bind_accepted_link(&mut output, children, address, owner, part, bound);
+                    if super::super::plain_text(&children).is_empty()
+                        && labels.get(&owner).is_some_and(|label| match part {
+                            Part::Description => label.readable,
+                            Part::Uri => label.uri_readable,
+                            _ => false,
+                        })
+                    {
+                        output.extend(children);
+                    } else {
+                        bind_accepted_link(&mut output, children, address, owner, part, bound);
+                    }
                 }
                 _ => output.extend(children),
             }

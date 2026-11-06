@@ -51,5 +51,8 @@ const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/manuals/mant-protoc
 mod execution_scopes;
 
 #[cfg(feature = "roff")]
+#[path = "process/deferred_ownership.rs"]
+mod deferred_ownership;
+#[cfg(feature = "roff")]
 #[path = "process/table_execution.rs"]
 mod table_execution;

@@ -256,8 +256,7 @@ fn append_section_reference(
     name: Option<&str>,
 ) {
     let authored_target = authored_section_phrase(children, name);
-    let previous_owner = builder.zero_advance.pending_native_owner();
-    let annotated = builder.append_semantic_scope(
+    let (annotated, membership) = builder.append_semantic_scope(
         node_id,
         |builder| {
             builder.with_font_scope(Font::Emphasis, |builder| {
@@ -266,10 +265,13 @@ fn append_section_reference(
         },
         |children| section_reference(authored_target.clone(), children),
     );
-    builder.zero_advance.bind_pending_link(
-        previous_owner,
-        mant_ir::LinkTarget::Section {
-            id: authored_target.into(),
+    builder.zero_advance.bind_deferred(
+        membership,
+        &super::ownership::Annotation::Link {
+            target: mant_ir::LinkTarget::Section {
+                id: authored_target.into(),
+            },
+            title: None,
         },
         annotated,
     );

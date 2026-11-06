@@ -1,0 +1,700 @@
+{
+  "schema": "mant.delayed-recovery-consumer-subset/v1",
+  "source_count": 42,
+  "source_origin": "Exactly existing219 sources. No new domain expansion. All expected facts referenced from sealed source/native gold.",
+  "cases": [
+    {
+      "id": "recovery-after-lk-fill-on",
+      "source_sha256": "c12ee3223d6039720b3a1cec36d7b59a90adafda4feb31e1992dcd11c81a084b",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-lk-fill-off",
+      "source_sha256": "430fd85b590a128de853688578318693e4074609c0ab255e74a6025ac0ada466",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-lk-nf-on",
+      "source_sha256": "1034f2994effeda5b1950290a9fd9a9c31cb59aaf2e745907c6ebd433e098021",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-lk-nf-c-on",
+      "source_sha256": "8721766f5aefb1b368016e03a398d0329d4f5ce0192c664440bf293d4f611d2e",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-font-lk-fill-on",
+      "source_sha256": "e1a1e801becae30d77e68b7e049c2d7f17e20212e878d37dbfd292df59e4352d",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-two-lk-fill-on",
+      "source_sha256": "40c8f9aeabf16d5ac1965e0f38d55a018ac233537c85bd68bc39b836331d8a7f",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-lk-1-fill-on",
+      "source_sha256": "4a40e77ea0e3918a3fa7fe68cda1b2ef0c77ff07c59030dbdd41806b45fbbad3",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-lk-2-fill-off",
+      "source_sha256": "22cb45feaf0353155b2b5da90a8f1f92ccd55ed2fc458a9549b415b352bdff26",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-mt-fill-on",
+      "source_sha256": "b140dc2564d5d90a7632220aed2c054a58ab57769b82f602a7a804c5940fdf71",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-mt-fill-off",
+      "source_sha256": "c73b1907709f41a9d7e690ab8d584d17d26eb6ff83557520a0a59e1987e69320",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": true,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-mt-nf-on",
+      "source_sha256": "d5a5ac72d07b5b9d568691c90767b415fbce3b51613b7d507e0a923f70b51c3c",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-mt-nf-c-on",
+      "source_sha256": "f80ea7c9ca77db860adbb2e5ab600ecc0336e40cb088e693365ff9b4dd1748ac",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-font-mt-fill-on",
+      "source_sha256": "7868f98b75f1651e211b27b50dcf75fbb0d4f24c4ab64fde72afa42382a21877",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-two-mt-fill-off",
+      "source_sha256": "f1e09aa0e03d3248cb8ac89726132973fb4bd1c70a1b088b369572816c10fd76",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-sx-fill-on",
+      "source_sha256": "012b5c1e68ad9260ae99a55e2d5f3be6fc6e7cafd0edb6b3be7e181efe2305d1",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-sx-fill-off",
+      "source_sha256": "4de8a8484aa1d89dee49f81e476f6b0f3c5420cc21ab8211a5150b7424065467",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-sx-nf-on",
+      "source_sha256": "699bf3468a123a1f247ab89c00b55ee51a6c5bb4f0583c99f3ce738d7297401c",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-sx-nf-c-on",
+      "source_sha256": "3351ebbcfbfa2dac0fbf80a756ed1744c00cd7965bffd4fc6a7f51845a196807",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-ur-fill-on",
+      "source_sha256": "edb046921f8700abadd2d2186d8b86bbb1a37abb5725e434c5d211837ebc22cf",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-ur-nf-on",
+      "source_sha256": "7b99ff5ecf88058205a069f3b73aa7744c3bc966362d8eabe35447f47fdeddbc",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-ur-nf-c-on",
+      "source_sha256": "984d7d7a0c41a07cc34402fcf46d995c0c725afe6fed5aaee92e50a64fcea94f",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": true,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-two-ur-nf-c-on",
+      "source_sha256": "f74d06ffdd713dd3e9bfd396a5f445d271460b66901cde671d3b66acb6e5107a",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-mail-fill-on",
+      "source_sha256": "93d929e4388a2c6159b9a4dbcf8df745f3c62043b7f6b15b6e71f1a7e285bf40",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-mail-nf-on",
+      "source_sha256": "9a205f3fea2d3acc28bd01c9328985583a4668e7e42f2855f5a7a3b3d5d0d941",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-after-mail-nf-c-on",
+      "source_sha256": "fb7204d6c38d71aeebad603f052ea78948211b6b31f7296824224bd28a677ff3",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-before-lk-fill-on",
+      "source_sha256": "7fd4b05257c7ae15b7f087848b809f76daf491010304526529d65cb4cf2e7f61",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "recovery-no-z-lk-fill-on",
+      "source_sha256": "7aa14d08ab2bbd6738c12124db53c0b428efe272609d3e77c8049a92981e3080",
+      "gold_file": "d1-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-mixed-old-style-overwrite",
+      "source_sha256": "16985476e695bafa1a24ab9c6d3cc0b5a0439216fc6a8482d71cf89e91a4467d",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-new-recovery-inside-label",
+      "source_sha256": "f322e80513a296410f8c53f376866e7683f398b8923d114e0788aff0fb4d61d4",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-same-recovery-both-owners",
+      "source_sha256": "b8982295f0213ff9bc245210916db504c331b820d98d9be55348909eb422a496",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": true,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-same-uri-two-links",
+      "source_sha256": "8cd31f849543afc4f93a2f21ce1b9d6baf497861add1d008525cbd52f572380a",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-ur-control-only-body",
+      "source_sha256": "87c0c309b5e727fd6ff26803638566961e3724bf6554bc7cc175f092fc7019a8",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-include-code-destination",
+      "source_sha256": "84fc3acbf4c2aa6c434f0379ad0ef8dd0fd279f16b68be2bed3d7c130021128b",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": true,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-tag-head-link",
+      "source_sha256": "15184ef962b0b76d7dba87f76fd28223ca05a59c40e0bfe58b92b78418043c84",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-literal-link-continuation",
+      "source_sha256": "4fa1f44d2205fc6b73b7d70d7112b279719db0b7b02709eda331a99b567e2ac9",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-macro-same-coordinate",
+      "source_sha256": "696174c20ebb13e783780d9ed7dbc89b197c2f027d6fda613f5951f6505474e3",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-text-block-accepted",
+      "source_sha256": "534a5b7124c2f3cad93c7554a0f2103bb80440d2011c08b90b2c3140032624d2",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-text-block-refused",
+      "source_sha256": "54f058b1bda458ee10299fa9a0b85dbcd2bb5662c74bf9182fb7c9f95f450e74",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-accepted-link-prefix-rejected-suffix-hang",
+      "source_sha256": "17e7d40dae953d0542ec2163f86374a16e8612aef38d73679e91f2883ac2436f",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-ur-head-fallback",
+      "source_sha256": "b2b0e2f9abcfd99aa7eb8c3f5671c9a77e074c245def9d4e6f33927df9b2a3f5",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-mt-head-fallback",
+      "source_sha256": "dd164c54f5b43e0581a525a55c6d184af1d32b785862cd3f757de155dfb586fb",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    },
+    {
+      "id": "d2-invalid-numbered-direct-overwrite",
+      "source_sha256": "7ffe6c1be62e9a2255ef33f0ba6624b6d2ee09f296d5e1bc789a6b533bbf6506",
+      "gold_file": "d2-import-gold.json",
+      "recovery_occurrence_matching": "source sequence plus accepted owner/scalar range; no unique text find or URI-only dedup",
+      "json_string_roundtrip": true,
+      "cli_plain_ansi": true,
+      "markdown_two_readers_two_rounds_both_options": true,
+      "actual_buffer_widths": [
+        40,
+        78
+      ],
+      "narrow_actual_app": false,
+      "query_search_explain_ranges": true,
+      "copy_positive_new_label_negative_old_recovery": true
+    }
+  ],
+  "projection_contracts": {
+    "default_section_links": "Default Markdown omits active Section wrapper; text and style must still survive. ADDRESSABLE preserves#next with section anchor. Do not call default wrapper omission regression.",
+    "portable_preformatted_table": "A portable literal/table fence may intentionally omit active inner Link/style wrappers. Verify exact visible recovery/source ordering; after-table ordinary Link must remain clickable exactly once. Preserve root originalIR link ownership before projection.",
+    "code_in": "Original Code payload is <stdio.h> only; old recovered spelling remains regular outside. Actual portable code flatten may omit link styles per existing policy, not move old recovery into Code.",
+    "empty_ur_body": "No BODY children gives clickable HEAD; controls-only BODY preserves empty own label identity and native post. Empty own Link has no positive pointer cell; do not click fallback address outside identity and claim label test.",
+    "plain_vs_ansi": "Compare stripped ANSI text to plain with exact hardlines; do not strip authored spaces/NBSP/recovery spellings. ANSI style segments must not cover old recovered text with new owner style.",
+    "native_motion": "One-space reading approximation for positive literal motion is selected existing contract; not a new demand for exact native device columns."
+  },
+  "assertion_sequence": [
+    "Load exact sealed roff through ordinary producer and check complete recovery/source diagnostics+typed labels/runs against source/native gold.",
+    "JSON serialize to actual UTF8 text and deserialize QueryBundle; repeat public owner/style/range assertions.",
+    "Run plain/ANSI through real publicCLI; compare exact recovery ordinals/full source body/order, not whitespace-folding.",
+    "Export default and ADDRESSABLE, use both current Markdown readers; reload then re-export/reload once; independently check label membership where active link projection is promised and exact visible spelling/style where portability flattens.",
+    "Actual rendered Buffer40/78; identify each source recovery occurrence and correct label cells from display coordinate mapping; same-URI links stay ordinal. New label positive open action; old recovery negative action unless it genuinely belongs to its own originalLink.",
+    "Narrow12/16 sameApp: first prove selected label unavailable, search/reveal actual App action, then click/copy original cells; resize sameApp to78 and recheck ownership. Wrapped email labels use multirow scalar fragments, not contiguous rendered-line search.",
+    "Visible/Markdown search results must select exact intended recovered spelling and whole new label; resolve actual query responses and ranges back to same owner/scalar. For definition HEAD compare DirectEntry only if source actually creates entry; do not invent entry ownership from any text.",
+    "Copy full recovery+label source slice and selected label separately; decorations/target text appear only per selected readable projection. No privateOrigin/marker appears in public JSON,Markdown,search or clipboard."
+  ],
+  "not_covered_by_research_execution": [
+    "Actual Markdown readers/exports, actualUI events/Buffer, Query responses/artifact/search. These are required root permanent consumer assertions, not Pass here."
+  ]
+}

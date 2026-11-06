@@ -53,12 +53,12 @@ impl<T> ZeroAdvanceMachine<T> {
         self.recoveries_before_pending = self.recoveries.len();
     }
 
-    pub(in crate::mandoc) fn deferred_projection(&self) -> &[T] {
-        &self.recoveries
+    pub(in crate::mandoc) fn deferred_projection_mut(&mut self) -> &mut [T] {
+        &mut self.recoveries
     }
 
-    pub(in crate::mandoc) const fn pending_recovery_position(&self) -> usize {
-        self.recoveries_before_pending
+    pub(in crate::mandoc) fn deferred_projection(&self) -> &[T] {
+        &self.recoveries
     }
 
     pub(in crate::mandoc) const fn pending_ref(&self) -> Option<&T> {
@@ -116,6 +116,16 @@ impl<T> ZeroAdvanceMachine<T> {
 
     pub(in crate::mandoc) fn resolve_word_boundary(&mut self) -> Option<Vec<T>> {
         (!self.armed).then(|| self.take_pending()).flatten()
+    }
+
+    /// Move the local pending projection without losing its source-order slot.
+    pub(in crate::mandoc) fn take_projection_parts(&mut self) -> (Option<(usize, T)>, Vec<T>) {
+        let position = self.recoveries_before_pending;
+        let pending = match self.pending.take() {
+            Some(PendingGlyph::Buffered(glyph)) => Some((position, glyph)),
+            _ => None,
+        };
+        (pending, self.take_recoveries())
     }
 
     pub(in crate::mandoc) fn take_pending(&mut self) -> Option<Vec<T>> {

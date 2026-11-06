@@ -191,19 +191,33 @@ impl LiteralFlow {
         super::super::man_links::remove_link_cursor(&mut self.nodes, marker);
     }
 
+    pub(super) fn finish_output_membership(
+        &mut self,
+        marker: &str,
+        started: &mut bool,
+        membership: crate::mandoc::inline::ownership::OutputMembership,
+    ) {
+        super::super::man_links::finish_inline_membership(
+            &mut self.nodes,
+            marker,
+            started,
+            membership,
+        );
+    }
+
     pub(super) fn wrap_first_link(
         &mut self,
         target: &mant_ir::LinkTarget,
         marker: &str,
         started: &mut bool,
-        skip_visible: &mut usize,
+        membership: crate::mandoc::inline::ownership::OutputMembership,
     ) -> bool {
         super::super::man_links::wrap_first_visible_inline(
             &mut self.nodes,
             target,
             marker,
             started,
-            skip_visible,
+            membership,
         )
     }
 

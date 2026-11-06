@@ -9,9 +9,8 @@ pub(in crate::mandoc::inline) mod identity;
 pub(in crate::mandoc::inline) mod presentation;
 
 mod annotation;
-use annotation::{
-    append_external_link, external_link_target, split_boundary_prefix, split_visible_prefix,
-};
+pub(in crate::mandoc) use annotation::split_boundary_prefix;
+use annotation::{append_external_link, external_link_target};
 use identity::link_identity_text;
 
 /// Execute mdoc `.Lk` in the caller's formatter stream, then wrap the visible
@@ -275,7 +274,6 @@ pub(in crate::mandoc) fn append_man_link(
         }
     };
     let checkpoint = builder.begin_output_checkpoint();
-    let pending = builder.zero_advance.pending_output_prefix();
     builder.zero_advance.begin_output_owner();
     append_man_link_body(builder, body, default_name, no_fill);
     // BODY post resets font before BLOCK post executes its first word. That
@@ -283,26 +281,31 @@ pub(in crate::mandoc) fn append_man_link(
     // the typed destination never decides whether this native post executes.
     builder.font.select(Font::Regular);
     builder.prepare_generated_word();
-    let mut previous_glyph = if builder.zero_advance.end_output_owner() {
-        pending.count
-    } else {
-        0
-    };
+    let membership = builder.zero_advance.end_output_owner();
     let head_is_label = body.is_empty() && !target.is_empty();
     if !target.is_empty() && !head_is_label {
-        builder.wrap_output_since(checkpoint, |children| {
-            let (mut output, children) = split_boundary_prefix(children);
-            previous_glyph = previous_glyph
-                .saturating_sub(output.iter().map(|node| pending.measure.count(node)).sum());
-            let (prior, children) =
-                split_visible_prefix(children, &mut previous_glyph, pending.measure);
-            output.extend(prior);
-            output.push(Inline::Link {
+        builder.zero_advance.bind_deferred(
+            membership,
+            &crate::mandoc::inline::ownership::Annotation::Link {
                 target: link_target.clone(),
                 title: None,
-                children,
-            });
-            output
+            },
+            true,
+        );
+        builder.wrap_output_since(checkpoint, |children| {
+            membership.map_owned(children, |children| {
+                let (mut output, children) = split_boundary_prefix(children);
+                output.push(Inline::Link {
+                    target: link_target.clone(),
+                    title: None,
+                    children,
+                });
+                output
+            })
+        });
+    } else {
+        builder.wrap_output_since(checkpoint, |nodes| {
+            membership.map_owned(nodes, |nodes| nodes)
         });
     }
     // post_UR always executes <, the original HEAD word, and >, including an

@@ -172,6 +172,7 @@ fn replace_scope_children(node: &mut Inline, replacement: Vec<Inline>) {
 /// supply a replacement label, address, or activation range.
 pub(in crate::mandoc) fn retain_inline_identities(inlines: &mut Vec<Inline>) {
     inlines.retain_mut(|inline| {
+        let delayed = crate::mandoc::inline::ownership::is_delayed_origin(inline);
         let identity =
             crate::mandoc::inline::links::presentation::retains_authored_identity(inline);
         match inline {
@@ -182,7 +183,7 @@ pub(in crate::mandoc) fn retain_inline_identities(inlines: &mut Vec<Inline>) {
             | Inline::Equation { .. } => false,
             Inline::Link { children, .. } => {
                 retain_inline_identities(children);
-                true
+                !delayed || !children.is_empty()
             }
             Inline::Strong { children } | Inline::Emphasis { children } => {
                 retain_inline_identities(children);
@@ -282,6 +283,7 @@ pub(in crate::mandoc) fn prepare_inline_output(nodes: &mut Vec<Inline>) {
 
 pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
     nodes.retain_mut(|node| match node {
+        node if crate::mandoc::inline::ownership::is_delayed_origin(node) => true,
         Inline::Anchor { .. } => {
             super::row_origins::is_layout_carrier(node)
                 || super::is_term_alternative(node)

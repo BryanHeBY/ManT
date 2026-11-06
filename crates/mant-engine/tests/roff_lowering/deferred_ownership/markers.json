@@ -1,0 +1,356 @@
+[
+  {
+    "id": "marker-after-paragraph-bullet",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n\\zX\\[bad-name]\n.Bl -bullet -compact\n.It\n.No BODY\n.El\n.Sh NEXT\nAFTER\n",
+    "source_sha256": "504b8ccc984901e80e714babd7fdd32bef55b9b4295bb834a17a73e9967a8876",
+    "profiles": {
+      "ascii": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tascii",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "61a69390c1db6ca387b62432e08a3c7abe774f5e8d700523f1fced2b7273b6a5",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "utf8": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tutf8",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "9e8e91ceb17abadc84bf4984f6624eede0f0bd60dbf0865e023ba8e09b9237ae",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "html": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Thtml"
+        ],
+        "exit": 0,
+        "stdout_sha256": "e50277186579eb7e3de27f38644d402c78fe7b76d12ec57f5c36fc7161bd7857",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Ttree"
+        ],
+        "exit": 0,
+        "stdout_sha256": "3b44bc2932ce12d66800f3cce01a7a0bbeb540769e125107dcc7e083a48c9808",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tlint"
+        ],
+        "exit": 3,
+        "stdout_sha256": "9fd5b4e6ef9d32faf880e7b16f0244cef8fa090f1fd37f47d75469ca1e2f3bff",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_recovery": "\\[bad-name]",
+    "expected_old_glyph": "X",
+    "expected_following": "BODY",
+    "former_owner": "paragraph",
+    "basis": "mdoc_term.c termp_bl_pre/termp_it_pre first execute term_newln. Native X survives; documented recovery remains with its preceding source, not a generated marker or next item."
+  },
+  {
+    "id": "marker-after-paragraph-dash",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n\\zX\\[bad-name]\n.Bl -dash -compact\n.It\n.No BODY\n.El\n.Sh NEXT\nAFTER\n",
+    "source_sha256": "6b61dc0a0756c8ca555d9cf5ad457347197945ef3a6e44f0284d5c91dc38c64f",
+    "profiles": {
+      "ascii": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tascii",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "335091d48865adf4adf7ec2219a4891ba438d547b0a36093c83acdedaaf724e2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "utf8": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tutf8",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "1584e71f267bd07bc05e9fb3db9bfb6a72ecd050d4c4640e2c46335b6c3c7c80",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "html": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Thtml"
+        ],
+        "exit": 0,
+        "stdout_sha256": "69b01db97e1820d266eed0d4f142e9fa04ec8e79c78f7fd69323d44b868031fc",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Ttree"
+        ],
+        "exit": 0,
+        "stdout_sha256": "4bc82457a8208f5d37f2609856c2792881761a6830bcad44f0db21b7c274d576",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tlint"
+        ],
+        "exit": 3,
+        "stdout_sha256": "9fd5b4e6ef9d32faf880e7b16f0244cef8fa090f1fd37f47d75469ca1e2f3bff",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_recovery": "\\[bad-name]",
+    "expected_old_glyph": "X",
+    "expected_following": "BODY",
+    "former_owner": "paragraph",
+    "basis": "mdoc_term.c termp_bl_pre/termp_it_pre first execute term_newln. Native X survives; documented recovery remains with its preceding source, not a generated marker or next item."
+  },
+  {
+    "id": "marker-after-paragraph-enum",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n\\zX\\[bad-name]\n.Bl -enum -compact\n.It\n.No BODY\n.El\n.Sh NEXT\nAFTER\n",
+    "source_sha256": "f61f7fd5e05ba6fd46887d2b2fe4bcba8ae4dbfc84ad86c80dd205e41fd30c9d",
+    "profiles": {
+      "ascii": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tascii",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "5044d2c98fe171103c7c693cc89a2abf7986b84ac382c64e3790994325a5a40a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "utf8": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tutf8",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "7b3e8ccca1d32b117cfcdf0b23dca1349c2daef6c3c8124d96697b24d16902a4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "html": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Thtml"
+        ],
+        "exit": 0,
+        "stdout_sha256": "bf03b6abee5fe788c740935e3ef208313421d58370228275c75e61ea885e6264",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Ttree"
+        ],
+        "exit": 0,
+        "stdout_sha256": "39a7b524454a06974f63c5097e4e2a9473510242e74755cf7f54f44ad4e4fa84",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tlint"
+        ],
+        "exit": 3,
+        "stdout_sha256": "9fd5b4e6ef9d32faf880e7b16f0244cef8fa090f1fd37f47d75469ca1e2f3bff",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_recovery": "\\[bad-name]",
+    "expected_old_glyph": "X",
+    "expected_following": "BODY",
+    "former_owner": "paragraph",
+    "basis": "mdoc_term.c termp_bl_pre/termp_it_pre first execute term_newln. Native X survives; documented recovery remains with its preceding source, not a generated marker or next item."
+  },
+  {
+    "id": "marker-after-item-c-bullet",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -bullet -compact\n.It\n\\zX\\[bad-name]\\c\n.It\n.No BODY\n.El\n.Sh NEXT\nAFTER\n",
+    "source_sha256": "1499f9c1a1981d00f0b01789d76eec23d5daf111212ad184b32ebe330146f901",
+    "profiles": {
+      "ascii": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tascii",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "bf204f307404f9881900ac054bc3425b16b36a2ec355fe4059acb0f9b338481c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "utf8": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tutf8",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "65ac9077c6e0fbd271cbe2bdad03b9cc95414f4357a8f3ae264d7d23b6d81ba5",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "html": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Thtml"
+        ],
+        "exit": 0,
+        "stdout_sha256": "b5bc0486dc5c92e1a741c930ffd9231b2a93a2fdf31814177f1d8112c9b2bf69",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Ttree"
+        ],
+        "exit": 0,
+        "stdout_sha256": "4569dfdc58a762cf427aa01f3f1134d6b6d22fdd8fb876e6354583235d3f2078",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tlint"
+        ],
+        "exit": 3,
+        "stdout_sha256": "522d347b2cf6275bfc61483f986fe0063b8f1fd129fc9c2783b91c9a820843cb",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_recovery": "\\[bad-name]",
+    "expected_old_glyph": "X",
+    "expected_following": "BODY",
+    "former_owner": "previous-item",
+    "basis": "mdoc_term.c termp_bl_pre/termp_it_pre first execute term_newln. Native X survives; documented recovery remains with its preceding source, not a generated marker or next item."
+  },
+  {
+    "id": "marker-after-item-c-dash",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -dash -compact\n.It\n\\zX\\[bad-name]\\c\n.It\n.No BODY\n.El\n.Sh NEXT\nAFTER\n",
+    "source_sha256": "f3186b0bcf5f28648d945c8294935d63bddb85311f2e43d54880e74bc59c3e38",
+    "profiles": {
+      "ascii": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tascii",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "e54521541f0e1377ffc5d1ca2444a19d9c225f28a2d8d42a6395cb90aabdea56",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "utf8": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tutf8",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "58a5e649e52eb6b2c4ab403895eba0528cfe2824116a1bb5567a13d3da8dd483",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "html": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Thtml"
+        ],
+        "exit": 0,
+        "stdout_sha256": "0ff69ad875e4f6f59ceedf023647af4b2c79f5e2b0469dbf9b30cdb8801b419c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Ttree"
+        ],
+        "exit": 0,
+        "stdout_sha256": "e279f987e9787e4a1c4483a53efaa374e3a1f8ec104b3bc9bcfec050578f800c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tlint"
+        ],
+        "exit": 3,
+        "stdout_sha256": "522d347b2cf6275bfc61483f986fe0063b8f1fd129fc9c2783b91c9a820843cb",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_recovery": "\\[bad-name]",
+    "expected_old_glyph": "X",
+    "expected_following": "BODY",
+    "former_owner": "previous-item",
+    "basis": "mdoc_term.c termp_bl_pre/termp_it_pre first execute term_newln. Native X survives; documented recovery remains with its preceding source, not a generated marker or next item."
+  },
+  {
+    "id": "marker-after-item-c-enum",
+    "source": ".Dd November 6, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -enum -compact\n.It\n\\zX\\[bad-name]\\c\n.It\n.No BODY\n.El\n.Sh NEXT\nAFTER\n",
+    "source_sha256": "4325718bbb234e2b33b9e178080c48b825c0e26edb583e1859417862d6dd0316",
+    "profiles": {
+      "ascii": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tascii",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "1c3f14f47f6155439d9be6f57b1b91274516a1ef1f1368e8dedc44f0f7dc5e3f",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "utf8": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tutf8",
+          "-Owidth=78"
+        ],
+        "exit": 0,
+        "stdout_sha256": "7850ed748d9e0d28a4dca2675b1b375d8faf3b9b7891164617db31378e7648d4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "html": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Thtml"
+        ],
+        "exit": 0,
+        "stdout_sha256": "bee98c82a5ddc74e26797d682e36ce1bd6cf34b7d1b65b41815d7c7f5701ed87",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "tree": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Ttree"
+        ],
+        "exit": 0,
+        "stdout_sha256": "93854cc218cbac7afd4b54d3d5a4df06bda991608a460ee806865f5cfb7b8a25",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "lint": {
+        "argv": [
+          "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+          "-Tlint"
+        ],
+        "exit": 3,
+        "stdout_sha256": "522d347b2cf6275bfc61483f986fe0063b8f1fd129fc9c2783b91c9a820843cb",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "expected_recovery": "\\[bad-name]",
+    "expected_old_glyph": "X",
+    "expected_following": "BODY",
+    "former_owner": "previous-item",
+    "basis": "mdoc_term.c termp_bl_pre/termp_it_pre first execute term_newln. Native X survives; documented recovery remains with its preceding source, not a generated marker or next item."
+  }
+]

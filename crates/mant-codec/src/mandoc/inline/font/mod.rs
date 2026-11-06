@@ -4,7 +4,7 @@ use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 pub(super) mod style;
 
-pub(in crate::mandoc) use super::text_execution::{PrefixMeasure, ZeroAdvanceState};
+pub(in crate::mandoc) use super::text_execution::ZeroAdvanceState;
 pub(in crate::mandoc) use super::text_execution::{
     TextExecutionContext, TextExecutionPolicy, parse_roff_text_with_scan_status,
     parse_roff_text_with_state, parse_roff_text_with_zero_advance,

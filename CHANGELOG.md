@@ -37,6 +37,12 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Preserve delayed recovery text's original annotation and font independently
+  of zero-advance glyph survival. New links, include/code spans and generated
+  markers no longer absorb preceding recovery; recovery inside a label stays
+  inside it. Keep native field acceptance and bounded table refusal intact,
+  with permanent source, Markdown, query, CLI and TUI regressions.
+
 - Complete native tbl column entry before row-buffer flush, including missing
   trailing data, spans, invisible input, numeric padding and effective rule
   widths. Preserve following text, links and declaration names; keep genuine

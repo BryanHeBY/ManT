@@ -92,9 +92,7 @@ pub(super) fn append_text_event(
                 // (term.c:573-576).  `breakline` stays armed: term_fill()
                 // cannot stop at the eaten blank and defers the break to
                 // the next surviving blank (term.c:294-295).
-                zero_advance.flush(output, buffer, font, link);
-                let held = zero_advance.take_held();
-                buffer.push_str(&held);
+                zero_advance.flush_with_held(output, buffer, font, link);
                 let cells = zero_advance.take_marker_blank_separator();
                 buffer.extend(std::iter::repeat_n(' ', cells));
                 state.projected_word_separator =

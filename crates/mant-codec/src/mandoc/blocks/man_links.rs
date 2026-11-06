@@ -1,5 +1,6 @@
 //! Man link labels are annotations over normally executed block content.
 use super::{Block, Inline, Node, NodeKind, first_part_children, source_span};
+use crate::mandoc::inline::ownership::{Annotation, OutputMembership};
 use crate::mandoc::inline::{InlineBuilder, append_inline_nodes, man_link_identity_text};
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 use mant_ir::LinkTarget;
@@ -43,7 +44,7 @@ impl super::BlockLowerer<'_, '_> {
         // even for an empty HEAD. Its boundary may settle a final BODY \z
         // glyph, while a tight \c still permits the bracket to overstrike.
         self.push_link_word(node, InlineBuilder::prepare_generated_word);
-        let prior_glyph_emitted = self
+        let membership = self
             .state
             .formatter
             .execution
@@ -51,10 +52,20 @@ impl super::BlockLowerer<'_, '_> {
             .end_output_owner();
         let head_is_label = body.is_empty() && !target_text.is_empty();
         let cursor_executed = !target_text.is_empty() && !head_is_label;
+        if cursor_executed {
+            self.state.formatter.execution.zero_advance.bind_deferred(
+                membership,
+                &Annotation::Link {
+                    target: target.clone(),
+                    title: None,
+                },
+                true,
+            );
+        }
         if cursor_executed
             && !self
                 .state
-                .wrap_first_link_since(output_start, &target, prior_glyph_emitted)
+                .wrap_first_link_since(output_start, &target, membership)
         {
             self.push_link_word(node, |builder| {
                 builder.append(vec![Inline::Link {
@@ -64,6 +75,8 @@ impl super::BlockLowerer<'_, '_> {
                 }]);
             });
         }
+        self.state
+            .finish_output_membership(output_start, membership);
         self.push_link_word(node, |builder| {
             builder.append_prepared_text("<");
             builder.tighten_next_boundary();
@@ -84,9 +97,7 @@ impl super::BlockLowerer<'_, '_> {
             builder.tighten_next_boundary();
             builder.append_text(">");
         });
-        if !cursor_executed {
-            self.state.discard_link_cursor(output_start);
-        }
+        self.state.discard_link_cursor(output_start);
         self.state.formatter.font.man_text_boundary(); // BLOCK post
     }
 
@@ -105,12 +116,11 @@ pub(super) fn wrap_first_visible_inline(
     target: &LinkTarget,
     marker: &str,
     started: &mut bool,
-    skip_visible: &mut usize,
+    membership: OutputMembership,
 ) -> bool {
     let start = if let Some(index) = nodes.iter().rposition(|node| is_link_cursor(node, marker)) {
-        nodes.remove(index);
         *started = true;
-        index
+        index + 1
     } else if *started {
         0
     } else {
@@ -125,10 +135,6 @@ pub(super) fn wrap_first_visible_inline(
                 .chars()
                 .any(|ch| !ch.is_whitespace())
             {
-                return None;
-            }
-            if *skip_visible > 0 {
-                *skip_visible -= 1;
                 return None;
             }
             Some(index)
@@ -153,13 +159,26 @@ pub(super) fn wrap_first_visible_inline(
     } else {
         Vec::new()
     };
-    nodes.push(Inline::Link {
-        target: target.clone(),
-        title: None,
-        children,
-    });
+    let mut wrapped = false;
+    nodes.extend(membership.map_owned(children, |children| {
+        let (mut output, children) = crate::mandoc::inline::split_boundary_prefix(children);
+        if mant_ir::inline_plain_text(&children)
+            .chars()
+            .any(|ch| !ch.is_whitespace())
+        {
+            output.push(Inline::Link {
+                target: target.clone(),
+                title: None,
+                children,
+            });
+            wrapped = true;
+        } else {
+            output.extend(children);
+        }
+        output
+    }));
     nodes.extend(trailing);
-    true
+    wrapped
 }
 
 pub(super) fn wrap_first_visible_block(
@@ -167,29 +186,29 @@ pub(super) fn wrap_first_visible_block(
     target: &LinkTarget,
     marker: &str,
     started: &mut bool,
-    skip_visible: &mut usize,
+    membership: OutputMembership,
 ) -> bool {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            wrap_first_visible_inline(children, target, marker, started, skip_visible)
+            wrap_first_visible_inline(children, target, marker, started, membership)
         }
         Block::List { items, .. } => items.iter_mut().any(|item| {
             item.blocks
                 .iter_mut()
-                .any(|block| wrap_first_visible_block(block, target, marker, started, skip_visible))
+                .any(|block| wrap_first_visible_block(block, target, marker, started, membership))
         }),
         Block::DefinitionList { items, .. } => items.iter_mut().any(|item| {
             item.terms.iter_mut().any(|term| {
-                wrap_first_visible_inline(&mut term.content, target, marker, started, skip_visible)
+                wrap_first_visible_inline(&mut term.content, target, marker, started, membership)
             }) || item
                 .description
                 .iter_mut()
-                .any(|block| wrap_first_visible_block(block, target, marker, started, skip_visible))
+                .any(|block| wrap_first_visible_block(block, target, marker, started, membership))
         }),
         Block::Table { rows, .. } => rows.iter_mut().any(|row| {
             row.cells.iter_mut().any(|cell| {
                 cell.blocks.iter_mut().any(|block| {
-                    wrap_first_visible_block(block, target, marker, started, skip_visible)
+                    wrap_first_visible_block(block, target, marker, started, membership)
                 })
             })
         }),
@@ -203,6 +222,67 @@ pub(super) fn wrap_first_visible_block(
 // One marker per active UR/MT scope. It cannot be authored by roff input
 // (NUL terminates native strings), never writes a formatter cell and dies
 // at that scope's exit. A suffix lookup avoids rescanning accumulated words.
+pub(super) fn finish_output_membership(
+    block: &mut Block,
+    marker: &str,
+    started: &mut bool,
+    membership: OutputMembership,
+) {
+    match block {
+        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+            finish_inline_membership(children, marker, started, membership);
+        }
+        Block::List { items, .. } => {
+            for item in items {
+                for block in &mut item.blocks {
+                    finish_output_membership(block, marker, started, membership);
+                }
+            }
+        }
+        Block::DefinitionList { items, .. } => {
+            for item in items {
+                for term in &mut item.terms {
+                    finish_inline_membership(&mut term.content, marker, started, membership);
+                }
+                for block in &mut item.description {
+                    finish_output_membership(block, marker, started, membership);
+                }
+            }
+        }
+        Block::Table { rows, .. } => {
+            for row in rows {
+                for cell in &mut row.cells {
+                    for block in &mut cell.blocks {
+                        finish_output_membership(block, marker, started, membership);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The cursor survives first-label annotation until all accepted fragments
+/// are classified. Only that scope's suffix is visited: a long live paragraph
+/// of independent UR/MT links must not be rebuilt at every wrapper exit.
+pub(super) fn finish_inline_membership(
+    nodes: &mut Vec<Inline>,
+    marker: &str,
+    started: &mut bool,
+    membership: OutputMembership,
+) {
+    let start = if let Some(at) = nodes.iter().rposition(|node| is_link_cursor(node, marker)) {
+        *started = true;
+        at + 1
+    } else if *started {
+        0
+    } else {
+        return;
+    };
+    let suffix = nodes.split_off(start);
+    nodes.extend(membership.map_owned(suffix, |nodes| nodes));
+}
+
 pub(super) fn link_cursor_marker(node_id: u32) -> String {
     format!("\0mant:link-scope:{node_id}")
 }
