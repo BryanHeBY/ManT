@@ -49,3 +49,7 @@ const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/manuals/mant-protoc
 #[cfg(feature = "roff")]
 #[path = "process/execution_scopes.rs"]
 mod execution_scopes;
+
+#[cfg(feature = "roff")]
+#[path = "process/table_execution.rs"]
+mod table_execution;

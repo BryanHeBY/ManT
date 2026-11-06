@@ -1,0 +1,278 @@
+{
+  "scope": "independent expected style, not candidate runtime receipt; original IR styles differ intentionally from table-fence readback",
+  "cases": [
+    {
+      "id": "T1-man-Q01-link",
+      "source_sha256": "50d6318fadbe4361fa19d303b3888587c62b07d63c811edc681233a2019c215a",
+      "expected_label": "ALPHA",
+      "label_role": "regular",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-man-Q02-link",
+      "source_sha256": "767657ebaf687fadb461b35f3127130a4f1260aea100358bceac8b39aba3a012",
+      "expected_label": "ALPHA",
+      "label_role": "regular",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-man-Q03-link",
+      "source_sha256": "559589564886517c40c6a635e531f3fe2ab98035b8b96a2cb830bc554d24be97",
+      "expected_label": "LPHA",
+      "label_role": "regular",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-man-Q04-link",
+      "source_sha256": "d51aefac6b3202375830a56a1d44114bd2c74b2f830b901c5020b57903f40235",
+      "expected_label": "ALPHA",
+      "label_role": "regular",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-man-Q10-link",
+      "source_sha256": "888b8e7722c8244b40830a27f0f770adf3a2c06b20a744ad006edf56d2b87099",
+      "expected_label": "LPHA",
+      "label_role": "regular",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-man-Q16-link",
+      "source_sha256": "078134162bfab701f89cabaac663ec4389f133bba68145857f0b98f693293dc7",
+      "expected_label": "ALPHA",
+      "label_role": "regular",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-mdoc-Q01-link",
+      "source_sha256": "8b5bc8cba72bdf6ce17ba718891719176852d00b36a68d76581f340ab5d0d9d5",
+      "expected_label": "ALPHA",
+      "label_role": "emphasis",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-mdoc-Q02-link",
+      "source_sha256": "a25c9400123c832279fd913a37d9ed7556ea74b1a2b98e7a53309ebb5b00792a",
+      "expected_label": "ALPHA",
+      "label_role": "emphasis",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-mdoc-Q03-link",
+      "source_sha256": "63ab6ca7a71a4c0e17778c71ba6d81bf199f314aaac577023d7dd6b3028d34cb",
+      "expected_label": "LPHA",
+      "label_role": "emphasis",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-mdoc-Q04-link",
+      "source_sha256": "dde198c14f83235067bfb9fed8f14de398706085a540f5c63dfb907348db3d02",
+      "expected_label": "ALPHA",
+      "label_role": "emphasis",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-mdoc-Q10-link",
+      "source_sha256": "6ec072ccbc0adc5fe146d64998610ec3a576a5ec90815ad48f184473d157df38",
+      "expected_label": "LPHA",
+      "label_role": "emphasis",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T1-mdoc-Q16-link",
+      "source_sha256": "4a1397072242ab2a640b2d1e2719b20bdc1a5ff6ab9fb465391bafa0a15b2bc6",
+      "expected_label": "ALPHA",
+      "label_role": "emphasis",
+      "label_target": {
+        "kind": "external",
+        "uri": "https://example.test"
+      },
+      "BETA_role": "regular",
+      "AFTER_role": "regular",
+      "source_owner": "following Lk or UR BODY, outside original TS/TE source range",
+      "basis": "pristine native overstrike; mdoc_term.c::termp_lk_pre UNDER push/pop, man_term.c pre_UR/print_man_node Roman lifecycle",
+      "md_rounds": "following label remains outside portable table fence; style/typed link asserted through two actual readers"
+    },
+    {
+      "id": "T3-font-register",
+      "source_sha256": "18eef7caa3128bb106303293ef1b3f1b4aa031ff8cd99f76e4c7d2ea1a97870f",
+      "expected_cell": {
+        "value": "CELL",
+        "bold": true,
+        "emphasis": false,
+        "code": false
+      },
+      "expected_label": {
+        "value": "ALPHA",
+        "bold": false,
+        "emphasis": true,
+        "code": false,
+        "target": {
+          "kind": "external",
+          "uri": "https://example.test"
+        }
+      },
+      "expected_plain_suffix_roles": {
+        ":": "bold",
+        "https://example.test": "bold",
+        "BETA": "bold",
+        "AFTER": "bold"
+      },
+      "basis": "saved exact pristine UTF8 has C\\bC E\\bE L\\bL L\\bL; label _\\bA...; colon/URI/BETA/AFTER doubled. term.c:501-533 last/repl/push updates previous even when already Bold; tbl_word CB pushes Bold; first fP restores outer Bold; Lk UNDER stack isolates label. ManT initial fP exits CodeStrong presentation and restores ordinary outer Strong.",
+      "md_rounds": "CELL is inside portable table fence: only text/code role is required after readback, not original cell Strong. Outside ALPHA/BETA/AFTER retain stated roles."
+    },
+    {
+      "id": "T3-short-enhancement",
+      "source_sha256": "2c0c3eb520133b94dd96f158d17db31ecc6b9d9312975201e8b3fa11139c338f",
+      "enhanced_cell": {
+        "value": "CELL",
+        "bold": true,
+        "emphasis": false,
+        "code": false
+      },
+      "native_cell": {
+        "value": "CELL",
+        "bold": false
+      },
+      "basis": "native receives Sy operand and records UNSUPP; optional documented mdoc Sy enrichment supplies Strong on admitted candidate. Preserve first-byte/owner and following Lk effects independently of this explicit enhancement.",
+      "following_roles": {
+        "ALPHA": "emphasis",
+        "BETA": "regular",
+        "AFTER": "regular"
+      }
+    },
+    {
+      "id": "T3-state-enhancement",
+      "source_sha256": "68a7e20a6bf1dc4db07fcf356dd35e405d42d130d8c5fb68b3c1a556f7029f52",
+      "enhanced_cell": {
+        "value": "SAFE",
+        "bold": false,
+        "emphasis": true,
+        "code": false
+      },
+      "native_cell": {
+        "value": "off SAFE",
+        "bold": false,
+        "emphasis": false
+      },
+      "basis": "native raw operands vs explicitly accepted Sm/Em enhancement are distinct. Budget/refusal retains complete off SAFE, and cannot commit Sm off or candidate fonts. Full table exit restores declared spacing policy before following Link/word.",
+      "following_roles": {
+        "ALPHA": "emphasis",
+        "BETA": "regular",
+        "AFTER": "regular"
+      }
+    },
+    {
+      "id": "T3-unsafe-safe-siblings",
+      "source_sha256": "db2cb985d425a891dc2a18e802112f7dc34c7bc5d1d7bf74fbb6fefa97493346",
+      "first_cell": {
+        "value": "UNSAFE",
+        "bold": false,
+        "emphasis": false,
+        "links": 0
+      },
+      "second_cell_enhancement": {
+        "label": "CELL",
+        "emphasis": true,
+        "target": {
+          "kind": "external",
+          "uri": "https://cell.test"
+        }
+      },
+      "basis": "original redefined Sy expansion has no output and source recovery is unsafe for its cell; safe sibling Lk may enrich only independently proven operand stream. Native sees URL CELL and UNSUPP, not an active Link.",
+      "following_roles": {
+        "ALPHA": "emphasis",
+        "BETA": "regular",
+        "AFTER": "regular"
+      }
+    }
+  ]
+}

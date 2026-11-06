@@ -43,7 +43,7 @@ statuses are recorded, not rewritten as clean inputs.
 - codec `mandoc/tests/tables/layout.rs`: native-to-IR edges, widths, spans and
   bounded derived edge expansion.
 - IR/protocol table tests: actual JSON strings, closed wire validation, sparse
-  limits and current schema consistency; published v0.12 remains unchanged.
+  limits and current schema consistency; frozen v0.12/v0.13 wire families remain unchanged.
 - UI `tests/table_layout.rs`: source → actual JSON → plain/ANSI/TUI Buffer,
   responsive widths, complete span-region alignment, physical row receipts,
   real pages, and actual Markdown readback. Private UI and codec tests cover
@@ -57,3 +57,17 @@ endpoints. Portable fenced Markdown may simplify table geometry and active
 links; it must not delete original content or addressable anchors. Minimum-width
 and work-budget fallback preserves all source cells once. It is not evidence
 that every native tbl option, decimal alignment or device geometry is supported.
+
+## Full-page following-content checks
+
+`real_followers.json` binds the same seven complete page hashes and all 104
+native table boundaries. Twelve selected post-table phrase witnesses have
+independent source windows and pristine profile evidence; the other 92 table
+boundaries are topology/source coverage, not additional executed glyph gold.
+`mant-engine/tests/real_table_followers.rs` loads the full pages, validates
+actual JSON strings and checks both Markdown readback rounds without replacing
+the input by isolated snippets. Source catalogs retain distribution licenses.
+
+The additional shared-execution matrix and actual CLI/PTY/UI/query consumers
+are documented beside
+`crates/mant-engine/tests/roff_lowering/table_execution/README.md`.

@@ -115,6 +115,8 @@ run "test table layout source and real-manual fixture identities" \
   python3 -m unittest scripts.roff.tests.test_table_fixture_contract
 run "test literal initial-row source identities and native profiles" \
   python3 -m unittest scripts.roff.tests.test_literal_leading_rows
+run "test native table execution domains and profile bindings" \
+  python3 -m unittest scripts.roff.tests.test_table_execution_fixture
 run "test complete source-sequence receipts and recovery classification" \
   python3 -m unittest scripts.roff.tests.test_source_sequence_fixtures
 run "test incoming word-separator state fixture bindings" \

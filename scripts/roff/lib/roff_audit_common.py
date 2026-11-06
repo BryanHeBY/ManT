@@ -28,7 +28,7 @@ from typing import Sequence
 
 
 MANUAL_SUFFIX = re.compile(
-    r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$"
+    r"\.(?P<section>[0-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$"
 )
 
 # The renderer boundary gives every child a 1 GiB address-space ceiling.  That

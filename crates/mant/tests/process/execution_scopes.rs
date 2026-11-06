@@ -3,7 +3,7 @@
 use super::process_support::run_text_input;
 use serde_json::Value;
 
-fn without_sgr(text: &str) -> String {
+pub(super) fn without_sgr(text: &str) -> String {
     let mut output = String::new();
     let mut chars = text.chars();
     while let Some(character) = chars.next() {
