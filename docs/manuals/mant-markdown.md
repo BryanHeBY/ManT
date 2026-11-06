@@ -555,6 +555,14 @@ flattened fenced-table spelling; column preferences do not add author characters
 or pre-wrap the IR cells. Literal row-hint projection remains the separate policy
 described above.
 
+Flattened tables first form safe reading text according to each content role:
+ordinary Text and labels project CR as U+FFFD while retaining LF, so `A\r\nB`
+reads as `A�\nB`. Genuine Code and Preformatted content keep their documented
+CR/CRLF-to-LF projection. The table fence only frames this accepted payload;
+it does not normalize it again. Owner byte ranges address those final emitted
+bytes, including variable-length UTF-8 replacements. Original IR/JSON retains
+the original scalars; the portable fence is a reading projection.
+
 A table cell's `breakAfter` closes the current physical data row before the next
 cell in the flattened fenced spelling. This format boundary adds no extra empty
 row and does not change the canonical cell body or its scalar ownership. An empty

@@ -2,7 +2,14 @@
 
 pub(in crate::encode) fn fenced_code(value: &str, language: Option<&str>) -> String {
     let value = crate::text_safety::markdown_code_text(value, false);
-    let width = longest_backtick_run(&value).saturating_add(1).max(3);
+    let (opening, closing) = code_fences(&value, language);
+    format!("{opening}{value}{closing}")
+}
+
+/// Syntax framing cannot reinterpret an already accepted payload. Callers
+/// resolve its content role before constructing byte ownership ranges.
+pub(in crate::encode) fn code_fences(value: &str, language: Option<&str>) -> (String, String) {
+    let width = longest_backtick_run(value).saturating_add(1).max(3);
     let fence = "`".repeat(width);
     let language = language
         .map(|language| {
@@ -18,7 +25,7 @@ pub(in crate::encode) fn fenced_code(value: &str, language: Option<&str>) -> Str
     // The reader removes exactly the framing newline before the closing
     // fence (markdown/layout.rs::trim_code_framing_newline). Give that
     // syntax its own byte; an authored final hard row belongs to the value.
-    format!("{fence}{language}\n{value}\n{fence}")
+    (format!("{fence}{language}\n"), format!("\n{fence}"))
 }
 
 pub(crate) fn code_span(value: &str) -> String {

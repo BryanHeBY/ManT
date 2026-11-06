@@ -2,6 +2,7 @@
 use super::blocks;
 
 mod cell_rows;
+mod content_roles;
 mod fixtures;
 mod gap_budget;
 mod nested_rows;

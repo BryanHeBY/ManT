@@ -35,6 +35,8 @@ mod semantic_test_read;
 mod source_admission;
 #[path = "markdown_pipeline/source_contracts.rs"]
 mod source_contracts;
+#[path = "markdown_pipeline/table_content_roles.rs"]
+mod table_content_roles;
 
 // These plain-document fixtures contain no top-level directives. Use the public
 // parser, not an exported internal event/heading helper or a second parser.

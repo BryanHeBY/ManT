@@ -37,6 +37,11 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Form role-aware table reading text before Markdown framing. Preserve Text
+  CR as the terminal-safe replacement glyph without turning it into a hard
+  line; retain genuine code newline rules. Build artifact owner ranges from
+  the final payload bytes so UTF-8 expansion or CRLF contraction cannot shift
+  later owners.
 - Preserve bounded raw-source recovery evidence when admitting Markdown links.
   Reject changed or unprovable target identities without dropping labels,
   including repaired reference IDs and definitions exposed by recovery.

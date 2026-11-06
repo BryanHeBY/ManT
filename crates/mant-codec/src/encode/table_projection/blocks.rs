@@ -1,6 +1,87 @@
 //! Flatten nested content while preserving accepted word and row relations.
 use super::{ParagraphTail, Projection, Tail, join, project_rows};
-use mant_ir::{Block, EntryOwner, InlineContentRef};
+use mant_ir::{Block, EntryOwner, Inline, InlineContentRef};
+
+#[derive(Clone, Copy)]
+enum ContentRole {
+    Reading,
+    Code,
+}
+
+/// Finish role-specific content before a parent records its mapped byte
+/// extent. A table fence is syntax, not permission to reinterpret Text CR.
+fn append_content(
+    output: &mut String,
+    value: &str,
+    role: ContentRole,
+    previous_code_cr: &mut bool,
+) {
+    match role {
+        ContentRole::Reading => {
+            if !value.is_empty() {
+                *previous_code_cr = false;
+            }
+            for character in value.chars() {
+                if character == '\r' {
+                    output.push('\u{fffd}');
+                } else if crate::text_safety::is_safe_source_character(character) {
+                    output.push(character);
+                } else {
+                    // Keep the existing checked hand-IR control projection;
+                    // accepted producer content was already admitted once.
+                    output.extend(std::iter::repeat_n(' ', character.len_utf8()));
+                }
+            }
+        }
+        ContentRole::Code => {
+            let normalized = crate::text_safety::markdown_code_text(value, false);
+            // Styling and Text-node fragmentation do not turn a CRLF in
+            // one literal flow into two lines. An explicit LineBreak below
+            // is instead an independently authored hard-boundary event.
+            output.push_str(if *previous_code_cr && value.starts_with('\n') {
+                &normalized[1..]
+            } else {
+                &normalized
+            });
+            if !value.is_empty() {
+                *previous_code_cr = value.ends_with('\r');
+            }
+        }
+    }
+}
+
+fn inline_content(
+    output: &mut String,
+    nodes: &[Inline],
+    role: ContentRole,
+    previous_code_cr: &mut bool,
+) -> bool {
+    let mut authored = false;
+    for node in nodes {
+        match node {
+            Inline::Text { value } => {
+                authored = true;
+                append_content(output, value, role, previous_code_cr);
+            }
+            Inline::Code { value } | Inline::Equation { value, .. } => {
+                authored = true;
+                append_content(output, value, ContentRole::Code, previous_code_cr);
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => {
+                authored |= inline_content(output, children, role, previous_code_cr);
+            }
+            Inline::LineBreak {} => {
+                authored = true;
+                *previous_code_cr = false;
+                output.push('\n');
+            }
+            Inline::Anchor { .. } => {}
+        }
+    }
+    authored
+}
 
 pub(super) fn plain_blocks(
     blocks: &[Block],
@@ -54,15 +135,17 @@ fn inline_projection(
     shared_first: bool,
 ) -> Projection {
     let mut text = String::new();
-    let mut ends_in_break = false;
-    let mut authored_row = false;
-    mant_ir::visit_inline_plain_text(content.content, |chunk| {
-        authored_row = true;
-        text.push_str(chunk);
-        if let Some(last) = chunk.as_bytes().last() {
-            ends_in_break = *last == b'\n';
-        }
-    });
+    let authored_row = inline_content(
+        &mut text,
+        content.content,
+        if paragraph.is_some() {
+            ContentRole::Reading
+        } else {
+            ContentRole::Code
+        },
+        &mut false,
+    );
+    let ends_in_break = text.ends_with('\n');
     let physical = if paragraph.is_some() {
         !text.is_empty()
     } else {
@@ -79,9 +162,12 @@ fn inline_projection(
         Tail::Open
     };
     let open_row_indent = if ends_in_break && matches!(tail, Tail::Open) {
+        // Code-role CR canonicalization can introduce an accepted LF that
+        // was not an original logical row. Never reuse the previous row's
+        // hint for the newly opened tail just because raw IR counted fewer.
         content
             .layout
-            .row_layout(mant_ir::logical_row_count(content.content) - 1)
+            .row_layout(text.bytes().filter(|byte| *byte == b'\n').count())
             .resolve(0, 0)
             .first_visual_origin
     } else {
@@ -187,12 +273,22 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool, shared_first: bo
         ),
         Block::Table { rows, .. } => join(project_rows(rows, track), "; "),
         Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
-            let text = if matches!(block, Block::Unsupported { .. }) {
+            let value = if matches!(block, Block::Unsupported { .. }) {
                 value.trim_matches('\n')
             } else {
                 value.trim()
-            }
-            .to_owned();
+            };
+            let mut text = String::new();
+            append_content(
+                &mut text,
+                value,
+                if matches!(block, Block::Unsupported { .. }) {
+                    ContentRole::Reading
+                } else {
+                    ContentRole::Code
+                },
+                &mut false,
+            );
             let physical = !text.is_empty();
             Projection::text(text.into(), Tail::Shared, physical)
         }

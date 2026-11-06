@@ -2,7 +2,7 @@
 use super::nonempty;
 use crate::encode::{
     MarkdownOptions,
-    inline::{fenced_code, html_anchor},
+    inline::{code_fences, html_anchor},
     mapped::{BlockSyntax, MappedText},
 };
 use mant_ir::visit::Visit;
@@ -29,14 +29,14 @@ pub(super) fn render_table(
         });
     }
     Some({
-        let mut body = MappedText::join(rows, "\n");
-        let fenced = fenced_code(&body.text, None);
-        let prefix = fenced.find('\n').expect("fence header") + 1;
-        for (_, range) in &mut body.owners {
-            range.start += prefix;
-            range.end += prefix;
-        }
-        body.text = fenced;
+        // Each role has already produced its final reading payload before
+        // owners were recorded. Framing only appends syntax, so text bytes
+        // and owner offsets are composed through the same mapped operation.
+        let payload = MappedText::join(rows, "\n");
+        let (opening, closing) = code_fences(&payload.text, None);
+        let mut body = MappedText::from(opening);
+        body.append(payload);
+        body.text.push_str(&closing);
         // Accepted data rows remain physical even when every cell is empty.
         // Their fence is structure, unlike a navigation-only row filtered above.
         body.contribution.rows = true;

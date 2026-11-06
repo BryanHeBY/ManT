@@ -15,7 +15,7 @@ use context::render_inline_nodes;
 use text::escape_text as escape_plain_text;
 
 pub(crate) use code::code_span;
-pub(super) use code::fenced_code;
+pub(super) use code::{code_fences, fenced_code};
 pub(super) use links::link_destination;
 pub(super) use links::render_uri;
 pub(super) use text::{block_prefix_escape_position, protect_block_prefix};

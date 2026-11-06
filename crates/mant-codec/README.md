@@ -35,8 +35,9 @@ of literal descriptions and examples.
 Markdown admission masks terminal-unsafe controls both in original source
 bytes and in decoded Text, Code and link titles. Decoded findings retain the
 original content-event range or effective reference-definition range, not a
-fabricated decoded-character offset. TAB, LF and CR remain allowed content; Text/label CR is entity-encoded
-on export so it cannot change Markdown source lines. Metadata stays outside
+fabricated decoded-character offset. TAB, LF and CR remain allowed content;
+ordinary phrasing Text/label CR is entity-encoded on export so it cannot change
+Markdown source lines. Metadata stays outside
 visible-row framing. Destinations containing controls remain invalid in IR;
 safe export preserves their labels without creating an activatable wrapper.
 Raw-source masking precedes syntax parsing and is not a destination-identity
@@ -47,10 +48,16 @@ unchanged destination. Only damaged inputs require an extra original-source
 first pass; bounded local checks and callback copies share one explicit quota.
 
 Encoding hand-built IR is a checked projection without mutating that IR:
-unsafe content/title controls are masked, code/fence CR and CRLF become LF,
+unsafe content/title controls are masked, genuine code/fence CR and CRLF become LF,
 and multi-row `Inline::Code` retains its existing LF hard rows. The separate
 `commonmark_code_span` helper encodes one syntax span, whose CR/LF/CRLF become
 spaces. These reductions do not make Markdown a lossless IR transport.
+
+Portable tables project ordinary Text/label CR as U+FFFD and retain LF; code
+and literal content keep their own CR/CRLF-to-LF rule. Fences only frame the
+accepted reading payload. Addressable owner ranges are composed from those
+same final bytes, including growing or shrinking transformations. Original IR
+and JSON remain unchanged.
 
 Routine tests include 13,729 delimiter-risk configurations and 2,720 Markdown
 link-source configurations, each checked twice against original IR. The full
