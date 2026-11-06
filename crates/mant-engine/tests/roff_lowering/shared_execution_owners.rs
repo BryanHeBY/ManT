@@ -68,6 +68,30 @@ fn assert_one_label(query: &ResolvedContent, expected: &str, target: &LinkTarget
     assert_eq!(mant_ir::inline_plain_text(children), expected);
 }
 
+fn portable_owner_roots(query: &ResolvedContent) -> Vec<(&'static str, String)> {
+    let mut roots = Vec::new();
+    for block in &query.document.as_ref().unwrap().sections[0].blocks {
+        match block {
+            Block::Paragraph { children, .. } => {
+                roots.push(("paragraph", mant_ir::inline_plain_text(children)));
+            }
+            Block::Preformatted { children, .. } => {
+                roots.push(("literal", mant_ir::inline_plain_text(children)));
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    let [Block::Paragraph { children, .. }] = item.blocks.as_slice() else {
+                        panic!("one portable item root");
+                    };
+                    roots.push(("list-item", mant_ir::inline_plain_text(children)));
+                }
+            }
+            other => panic!("unexpected portable owner: {other:?}"),
+        }
+    }
+    roots
+}
+
 #[test]
 fn man_links_keep_the_first_label_after_owner_drains() {
     // Every exact source ran pristine CVS UTF-8/ASCII/HTML/tree/lint first.
@@ -100,23 +124,47 @@ fn man_links_keep_the_first_label_after_owner_drains() {
             "{source}"
         );
         let markdown = mant_codec::encode::render_markdown(&query);
-        assert!(
-            markdown.contains("[first](outer)") || markdown.contains("[**first**](outer)"),
-            "{source}\n{markdown}"
-        );
-        assert!(
-            !markdown.contains("[item](outer)") && !markdown.contains("[body](outer)"),
-            "{source}\n{markdown}"
-        );
+        // All ten complete sources reran the five pristine profiles before
+        // this consumer update. The original invalid External("outer") still
+        // identifies only first in IR; checked export retains its label but
+        // cannot turn that invalid identity or visible <outer> into a link.
+        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        assert_eq!(references(&readback).references.records, Vec::new());
+        let prefix = prefix
+            .strip_prefix(".B ")
+            .or_else(|| prefix.strip_prefix(".I "))
+            .unwrap_or(prefix);
+        let mut expected = vec![("paragraph", format!("{prefix} first"))];
+        if body.contains(".PP") {
+            expected.push(("paragraph", "body <outer> after".into()));
+        } else {
+            expected.push(if body.contains(".nf") {
+                ("literal", "body".into())
+            } else {
+                ("list-item", "item\nbody".into())
+            });
+            expected.push(("paragraph", "<outer> after".into()));
+        }
+        assert_eq!(portable_owner_roots(&readback), expected, "{source}");
     }
     let source =
         format!("{MAN}prefix\n.MT user@example.org\nfirst\n.IP item 4\nbody\n.ME\nafter\n");
-    assert_one_label(
-        &load_round_trip(&source),
-        "first",
-        &LinkTarget::Email {
-            address: "user@example.org".into(),
-        },
+    let query = load_round_trip(&source);
+    let target = LinkTarget::Email {
+        address: "user@example.org".into(),
+    };
+    assert_one_label(&query, "first", &target);
+    let readback =
+        mant_loader::load_markdown_text(&mant_codec::encode::render_markdown(&query), None)
+            .unwrap();
+    assert_one_label(&readback, "first", &target);
+    assert_eq!(
+        portable_owner_roots(&readback),
+        [
+            ("paragraph", "prefix first".into()),
+            ("list-item", "item\nbody".into()),
+            ("paragraph", "<user@example.org> after".into()),
+        ]
     );
 }
 

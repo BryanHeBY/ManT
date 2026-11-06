@@ -43,6 +43,7 @@ fn capacity_edges_and_all_styled_seams_survive_wire_reader_and_queries() {
             assert!(!mant_ir::inline_plain_text(&item.terms[0]).contains("BODY"));
             assert_native_rows(case, content);
             assert_owner_ranges(case, content);
+            assert_native_invalid_links(case, content);
             {
                 // The portable reader keeps arbitrary attributed HTML as
                 // literal source. ADDRESSABLE destinations are instead
@@ -56,8 +57,13 @@ fn capacity_edges_and_all_styled_seams_survive_wire_reader_and_queries() {
                     "{}: reader content/rows, {markdown}",
                     case.id
                 );
-                assert_carrier(blocks, &case.head, &case.head_carrier, &case.head);
-                assert_carrier(blocks, "BODY", &case.body_carrier, "BODY");
+                // All 87 unchanged exact sources reran the five pristine
+                // profiles before this update (termp_lk_pre/term_fill rules).
+                // Bare Lk operands name words, not valid External URIs: keep
+                // their original IR identity above and exact styled labels
+                // here, without requiring invalid portable link activation.
+                assert_carrier(blocks, &case.head, &case.head_carrier, None);
+                assert_carrier(blocks, "BODY", &case.body_carrier, None);
             }
             assert_search(content, &case.head, &case.head);
             assert_search(content, "BODY", "BODY");

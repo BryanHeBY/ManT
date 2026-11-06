@@ -180,15 +180,14 @@ fn man_link_identity_uses_html_decoding_while_its_target_word_stays_native() {
             let range = usize::try_from(occurrence.markdown.start_byte).unwrap()
                 ..usize::try_from(occurrence.markdown.end_byte).unwrap();
             assert_eq!(&artifact.text()[range], "LINKLABEL", "{source}");
-            if !invalid {
-                assert_man_link_export(
-                    &query,
-                    start == "MT",
-                    &identity,
-                    &format!("{prefix}{visible_suffix}"),
-                    &source,
-                );
-            }
+            assert_man_link_export(
+                &query,
+                start == "MT",
+                &identity,
+                &format!("{prefix}{visible_suffix}"),
+                invalid,
+                &source,
+            );
         }
     }
 }
@@ -198,6 +197,7 @@ fn assert_man_link_export(
     email: bool,
     identity: &str,
     visible_target: &str,
+    invalid: bool,
     source: &str,
 ) {
     let destination = if email {
@@ -205,23 +205,33 @@ fn assert_man_link_export(
     } else {
         identity.to_owned()
     };
-    let suffix_markdown = if email {
-        format!("\\<{visible_target}\\>")
-    } else {
-        format!("<{visible_target}>")
+    // All sixteen exact sources reran pristine ASCII/UTF-8/HTML/tree/lint
+    // before updating this export expectation. man_term.c::post_UR executes
+    // the visible target in the same word stream; man_html.c::man_UR_pre
+    // supplies only the BODY's typed identity. Ordinary target Text stays
+    // literal on export and cannot invent a second autolink identity.
+    let markdown = mant_codec::encode::render_markdown(query);
+    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let [section] = readback.document.as_ref().unwrap().sections.as_slice() else {
+        panic!("one actual reader section: {markdown}");
+    };
+    let [mant_ir::Block::Paragraph { children, .. }] = section.blocks.as_slice() else {
+        panic!("one actual reader root: {markdown}");
     };
     assert_eq!(
-        mant_codec::encode::render_markdown(query),
-        format!("# TEST\n\n## DESCRIPTION\n\n[LINKLABEL]({destination}) {suffix_markdown} after"),
+        mant_ir::inline_plain_text(children),
+        format!("LINKLABEL <{visible_target}> after"),
         "{source}"
     );
-    // The established encoder preserves a visible <scheme:URI> as CommonMark
-    // autolink syntax. That syntax is separate from the sole typed BODY
-    // identity: device targets prove html href and visible utf8 can differ.
-    let mut parsed_links = vec![(destination, "LINKLABEL".to_owned())];
-    if !email {
-        parsed_links.push((visible_target.to_owned(), visible_target.to_owned()));
-    }
+    let expected_targets: Vec<_> = (!invalid)
+        .then(|| identity.to_owned())
+        .into_iter()
+        .collect();
+    assert_eq!(link_targets(&readback), expected_targets, "{source}");
+    let parsed_links: Vec<_> = (!invalid)
+        .then_some((destination, "LINKLABEL".to_owned()))
+        .into_iter()
+        .collect();
     assert_eq!(markdown_links(query), parsed_links, "{source}");
 }
 

@@ -168,7 +168,54 @@ pub(super) fn assert_ast_owners(case: &Case) {
     );
 }
 
-pub(super) fn assert_carrier(blocks: &[Block], word: &str, carrier: &str, target: &str) {
+pub(super) fn assert_native_invalid_links(case: &Case, content: &ResolvedContent) {
+    use mant_ir::visit::Visit;
+    #[derive(Default)]
+    struct Labels(Vec<(mant_ir::LinkTarget, String)>);
+    impl<'ir> Visit<'ir> for Labels {
+        fn visit_inline(&mut self, node: &'ir Inline) {
+            if let Inline::Link {
+                target, children, ..
+            } = node
+            {
+                self.0
+                    .push((target.clone(), mant_ir::inline_plain_text(children)));
+            }
+            mant_ir::visit::walk_inline(self, node);
+        }
+    }
+    let mut actual = Labels::default();
+    actual.visit_definition_item(definition(content));
+    // Fixed original matrix facts, not a serializer-generated expectation:
+    // these Lk operands are bare XXX/XXXX/XXXXX or BODY, never admitted URIs.
+    // Native IR and JSON retain the original identities; portable export is
+    // separately required to preserve labels without active wrappers.
+    let mut expected: Vec<(mant_ir::LinkTarget, String)> = Vec::new();
+    for (carrier, word) in [
+        (&case.head_carrier, case.head.as_str()),
+        (&case.body_carrier, "BODY"),
+    ] {
+        if carrier == "Lk" {
+            assert!(matches!(word, "XXX" | "XXXX" | "XXXXX" | "BODY"));
+            expected.push((
+                mant_ir::LinkTarget::External { uri: word.into() },
+                word.into(),
+            ));
+        }
+    }
+    assert_eq!(
+        actual.0, expected,
+        "{}: original invalid link identities",
+        case.id
+    );
+}
+
+pub(super) fn assert_carrier(
+    blocks: &[Block],
+    word: &str,
+    carrier: &str,
+    expected_target: Option<&str>,
+) {
     fn collect(
         nodes: &[Inline],
         mask: u8,
@@ -214,17 +261,25 @@ pub(super) fn assert_carrier(blocks: &[Block], word: &str, carrier: &str, target
         "Li" => 4,
         _ => panic!("carrier"),
     };
-    let uri = (carrier == "Lk").then_some(target);
     for (_, actual, actual_uri) in &out[start..start + word.chars().count()] {
         assert_eq!(*actual, mask, "{carrier}: {value}");
-        assert_eq!(actual_uri.as_deref(), uri, "link label scope: {value}");
+        assert_eq!(
+            actual_uri.as_deref(),
+            expected_target,
+            "link label scope: {value}"
+        );
     }
     let links = out
         .iter()
         .filter_map(|(_, _, uri)| uri.as_deref())
         .collect::<std::collections::HashSet<_>>();
-    if carrier == "Lk" {
+    if let Some(target) = expected_target {
         assert!(links.contains(target));
+    } else {
+        assert!(
+            links.is_empty(),
+            "no invalid target is reactivated: {value}"
+        );
     }
 }
 

@@ -1,7 +1,7 @@
 //! Accepted link labels remain addressable across native and portable views.
 
 use mant_codec::encode::{MarkdownOptions, render_addressable_markdown_with_options};
-use mant_ir::{LinkTarget, ReferenceScope, ReferenceTargetType, ResolvedContent};
+use mant_ir::{Block, Inline, LinkTarget, ReferenceScope, ReferenceTargetType, ResolvedContent};
 use mant_protocol::{
     EntryProjection, ReferenceProjection, ReferenceProjectionMode, SearchCase, SearchQuery,
     SearchScope, SearchSyntax,
@@ -10,6 +10,18 @@ use mant_protocol::{
 const HEADER: &str =
     ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
 const ADDRESS: &str = "https://example.com";
+
+struct NoLinks;
+
+impl<'ir> mant_ir::visit::Visit<'ir> for NoLinks {
+    fn visit_inline(&mut self, inline: &'ir Inline) {
+        assert!(
+            !matches!(inline, Inline::Link { .. }),
+            "invalid target reactivated"
+        );
+        mant_ir::visit::walk_inline(self, inline);
+    }
+}
 
 fn source(prefix: &str, label: &str) -> String {
     format!("{HEADER}{prefix}.Lk {ADDRESS} \"{label}\"\n.No AFTER\n.Sh NEXT\n.No END\n")
@@ -197,6 +209,9 @@ fn invalid_identity_keeps_accepted_native_suffix_and_its_closed_head_row() {
     // before asserting this carrier transition. term_fill() accepts X/URI,
     // rejects Z, and termp_it_post closes the HEAD before BodyWord. An invalid
     // href cannot justify hiding the accepted URI in portable output.
+    // All five pristine profiles were rerun before replacing a raw Markdown
+    // substring assertion: ordinary Text's punctuation escaping is syntax,
+    // while the actual reader must keep the exact words and HEAD hard row.
     let source = format!(
         "{HEADER}.Bl -hang -width 4n\n.It Xo\n.Lk \"https://example.org\\p \\p\" X\n.No Z\n.Xc\n.No BodyWord\n.El\n"
     );
@@ -205,7 +220,28 @@ fn invalid_identity_keeps_accepted_native_suffix_and_its_closed_head_row() {
     let body = native.split_once("DESCRIPTION\n").unwrap().1;
     assert_eq!(body, "X: https://example.org\n      BodyWord");
     let portable = mant_codec::encode::render_markdown(&query);
-    assert!(portable.contains("https://example.org"));
+    let readback = mant_loader::load_markdown_text(&portable, None).unwrap();
+    let document = readback.document.as_ref().unwrap();
+    let [Block::List { items, .. }] = document.sections[1].blocks.as_slice() else {
+        panic!("one portable definition: {portable}");
+    };
+    let [Block::Paragraph { children, .. }] = items[0].blocks.as_slice() else {
+        panic!("one portable paragraph: {portable}");
+    };
+    assert_eq!(
+        mant_ir::inline_plain_text(children),
+        "X: https://example.org\nBodyWord"
+    );
+    mant_ir::visit::Visit::visit_document(&mut NoLinks, document);
+    assert!(
+        query
+            .document
+            .as_ref()
+            .unwrap()
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("ir.invalid-external-uri"))
+    );
     assert_eq!(portable.matches("BodyWord").count(), 1);
     assert!(!body.contains('Z'));
 }
