@@ -424,7 +424,6 @@ pub(in crate::mandoc::inline::flow) struct NoBreakField {
     pub(super) flags: super::super::native_field::FieldFlags,
     pub(super) output_end_before_separator: usize,
     pub(super) resumed_output_start: usize,
-    pub(super) resumed_execution_epoch: u64,
     pub(super) field_width: usize,
     pub(super) body_width: usize,
     /// `rmargin - offset` of the head field (term.c:124-125 uses it as the

@@ -6,6 +6,35 @@ const MDOC: &str =
     ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
 
 #[test]
+fn a_bare_backafter_keeps_the_name_body_field_distance() {
+    // The exact source ran all five pristine profiles before this assertion.
+    // termp_nm_pre(BODY) uses the original name width + 1 (mdoc_term.c:986),
+    // while bare BACKAFTER removes p from the HEAD's visible width. The two
+    // remaining columns are field alignment, not two automatic word blanks.
+    let source = b".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.No \\z\n.Nm probe\n.Ft int\n.Sh NEXT\nAFTER.\n";
+    let document =
+        parse_manual_bytes(std::path::Path::new("name-backafter-gap.1"), source).unwrap();
+    let [
+        Block::Paragraph {
+            children, layout, ..
+        },
+    ] = document.sections[1].blocks.as_slice()
+    else {
+        panic!("{document:#?}");
+    };
+    assert_eq!(mant_ir::inline_plain_text(children), "robe  int");
+    assert_eq!(layout.continuation_indent_columns, 6);
+    let Some(Inline::Strong { children: head }) = children.first() else {
+        panic!("{children:#?}");
+    };
+    let Some(Inline::Emphasis { children: body }) = children.last() else {
+        panic!("{children:#?}");
+    };
+    assert_eq!(mant_ir::inline_plain_text(head), "robe");
+    assert_eq!(mant_ir::inline_plain_text(body), "int");
+}
+
+#[test]
 fn an_empty_item_post_preserves_the_unbuffered_backafter_register() {
     // Exact source ran the five pristine profiles before this assertion.
     // term_newln()475-481 does not flush an empty buffer: a bare BACKAFTER

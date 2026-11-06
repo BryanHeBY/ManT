@@ -374,7 +374,6 @@ mod row_origin_tests {
             flags: super::super::super::native_field::FieldFlags::column(false),
             output_end_before_separator: 2,
             resumed_output_start: 3,
-            resumed_execution_epoch: 0,
             field_width: 0,
             body_width: 12,
             field_capacity_columns: 12,

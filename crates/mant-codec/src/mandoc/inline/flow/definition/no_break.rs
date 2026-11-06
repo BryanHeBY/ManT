@@ -112,11 +112,9 @@ impl InlineBuilder {
     pub(super) fn finish_resumed_native_line(&mut self, device: &NativeFieldDevice) {
         self.retire_native_field_with_device(Some(device));
         let start = self.nodes.len();
-        let epoch = self.execution.execution_epoch;
         if let Some(field) = self.definition_state_mut().no_break.as_mut() {
             field.output_end_before_separator = start;
             field.resumed_output_start = start;
-            field.resumed_execution_epoch = epoch;
             field.field_width = 0;
             field.separator_cells = 0;
         }
@@ -132,16 +130,13 @@ impl InlineBuilder {
     /// same line and clears `TERMP_NOSPACE`. Device margin geometry is outside
     /// the IR, so the next word observes one ordinary boundary.
     pub(in crate::mandoc) fn no_break_flush(&mut self) {
-        // roff_term_pre_mc() only calls term_flushln() after the formatter
-        // has advanced the current output column. A completed `\zX` glyph
-        // has entered the buffer; a bare armed `\z` has not.
-        let executed_field_word = self
-            .definition
-            .as_ref()
-            .and_then(|state| state.no_break)
-            .is_some_and(|field| self.execution.execution_epoch != field.resumed_execution_epoch);
+        // roff_term_pre_mc() tests p->col, not viscol or whether a word ran.
+        // Only the live native input proves that cursor advanced: an empty
+        // or font-only word under NOSPACE writes nothing, whereas an actual
+        // automatic blank, NBRZW or cached `\zX` glyph occupies the buffer.
+        // A bare BACKAFTER request has no cell and cannot enter this flush.
         let buffered_cells = !self.execution.word_input().0.is_empty();
-        if !self.has_formatter_cell() && !executed_field_word && !buffered_cells {
+        if !buffered_cells {
             // A rejected unit can already have retired its cells at the
             // preceding real flush. Clear its stale projection facts here;
             // an actually empty MC call does not change the native flag.
@@ -231,21 +226,15 @@ impl InlineBuilder {
             trim_trailing_breakable_spaces(&mut self.nodes, count);
         }
         self.execution.trailing_output = TrailingOutput::None;
-        // An invisible formatter word still advanced `p->col`. Under `.mc`'s
-        // `TERMP_NOBREAK` flush, a continued following word starts after that
-        // cell even though there is no glyph to carry the distance in IR.
-        // A `TERMP_NOBREAK` field owns one committed separator before the next
-        // field.  It is formatter geometry, not a cancellable word boundary:
-        // `.Sm off`, `.Ns`, and delimiter flags may suppress an additional
-        // automatic blank but cannot move the already flushed field back.
-        // `term_fill()` and `term_field()` discard trailing breakable word
-        // padding before committing a NOBREAK field.  The field separator is
-        // different formatter geometry: it survives `.Sm off`, `.Ns`, and
-        // delimiter flags and replaces the next word's automatic boundary.
+        // This is the plain-field path: native trailspace/minbl is zero.
+        // term_flushln() retires unprinted ordinary blanks without creating
+        // a committed separator (term.c:143-146,233-253). MC's explicit
+        // NOSPACE release below lets the next actual term_word write its own
+        // automatic blank; Ns may suppress it. Retaining a second synthetic
+        // cell here duplicates that word boundary after an empty-word flush.
+        // Declared TAG/HANG fields keep their distinct device receipts above.
         self.execution.pending_breakable_spaces = 0;
-        self.execution.pending_field_spaces = 1;
-        self.execution.pending_field_gap_origin =
-            super::state::PendingFieldGapOrigin::AutomaticWord;
+        self.execution.pending_field_spaces = 0;
         // roff_term_pre_mc() clears NOSPACE after resetting the old buffer
         // (roff_term.c:147-150). The next graphless term_word() therefore
         // writes a real automatic blank even on a fresh plain flush unit;
@@ -293,7 +282,6 @@ impl InlineBuilder {
             self.append_field_separator(field.separator_cells);
             self.execution.boundary = PendingBoundary::CommittedField;
             field.resumed_output_start = self.nodes.len();
-            field.resumed_execution_epoch = self.execution.execution_epoch;
             self.definition_state_mut().no_break = Some(field);
             self.reset_after_no_break_field();
             // The complete native field boundary is already represented by
@@ -342,7 +330,6 @@ impl InlineBuilder {
 
         field.output_end_before_separator = output_end_before_separator;
         field.resumed_output_start = self.nodes.len();
-        field.resumed_execution_epoch = self.execution.execution_epoch;
         field.field_width = resumed_width;
         field.separator_cells = separator_cells;
         self.definition_state_mut().no_break = Some(field);
@@ -459,7 +446,6 @@ impl InlineBuilder {
             flags,
             output_end_before_separator,
             resumed_output_start: self.nodes.len(),
-            resumed_execution_epoch: self.execution.execution_epoch,
             field_width: width,
             field_capacity_columns: field_width_columns,
             body_width: usize::from(body),

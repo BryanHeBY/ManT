@@ -129,6 +129,8 @@ run "test ordinary name-body handoff identities and native profiles" \
   python3 -m unittest scripts.roff.tests.test_name_body_handoff_fixture
 run "test name-body source origins and native profiles" \
   python3 -m unittest scripts.roff.tests.test_name_body_origin_fixture
+run "test native margin-flush word and cell fixture bindings" \
+  python3 -m unittest scripts.roff.tests.test_margin_flush_fixture
 run "test exact roff fixture checkout across newline settings" \
   python3 -m unittest scripts.roff.tests.test_fixture_checkout
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test

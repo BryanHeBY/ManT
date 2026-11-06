@@ -37,6 +37,9 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Keep ordinary margin-change flushes tied to live native input cells. Avoid
+  duplicate separators and preserve joined words across empty operands, `Ns`
+  and spacing-mode changes; keep tagged-field alignment independent.
 - Form role-aware table reading text before Markdown framing. Preserve Text
   CR as the terminal-safe replacement glyph without turning it into a hard
   line; retain genuine code newline rules. Build artifact owner ranges from

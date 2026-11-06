@@ -1,0 +1,817 @@
+{
+  "oracle_identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "case_count": 19,
+  "profile_count": 95,
+  "cases": [
+    {
+      "id": "plain-repeated-empty",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\nFIRST\n.mc\n.No \"\"\n.mc\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "documented-mc-empty",
+      "source_sha256": "2bed5a5617054c782e9208f3b626d0197dafa6fa578c953950f381a68151b4cb",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "25f7ec73bbc771c515de2d38aecfcf28b7331bc995d2007737f1a4fd0f9f959f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "d3b494a65010090b16e724919444497a48cf940e309ee61def832ed7d3611540",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "a13079185816e5176bc4c38e6c3569b30bf10346dbab7cf9a5ac9195400ebd48",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-01",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.Sm off\n.Xo Ns\n.No \"\"\n.Xc\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST-.Xo Ns\n.No \"\"\n.Xc\n-off",
+      "source_sha256": "6e9a8528296a9ce43a241989b179c542d32af2cf4f81041818974b1dcc4ce556",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "79a9d59bed3c62d3f865236000a1db3bcf79ea84dcba3902eca22b5af8f2c291",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "ce0b316a56ec8f6cf21bd55680cd214bd3ddb0a1dd8891777dcf11467a6e5bca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "e915f25f7e664964f33f2b8adb3a007cd4b7478f5a8fe1df8337c1aa4493ba74",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "a9430ac53cded7bcb067f789c92dda3234c3a65ce1c734902b6b537f0fed7464",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-02",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.Sm off\n.Xo Ns\n.No \\fB\n.Xc\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST-.Xo Ns\n.No \\fB\n.Xc\n-off",
+      "source_sha256": "4000b983f53208f7ae690604bdeb327bf65f02fd71aaf00dbbc0dcba93ca6837",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "79a9d59bed3c62d3f865236000a1db3bcf79ea84dcba3902eca22b5af8f2c291",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "ce0b316a56ec8f6cf21bd55680cd214bd3ddb0a1dd8891777dcf11467a6e5bca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "7f11122045defea6c96c21fc7bec17d2f680ff17e205478d9d5ecacbdb2989d1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "3c519d201956e8d39826ca533b1b2b640809d311c2a338128cf2725a1059865f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-03",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.Sm on\n.No \"\"\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST-.No \"\"\n-on",
+      "source_sha256": "978cafef8ecee9cd4a1bf9e5fe26f36256f561a2354357114199c7fddd415fa6",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "25f7ec73bbc771c515de2d38aecfcf28b7331bc995d2007737f1a4fd0f9f959f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "520b54e6ba2bd140d961c2277e66ae0175ca2946961c6a835e5439a1819aff6b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "b23dac9d3a6517f1ec1dc8cddfa46b8472c0745100428b653ef75458facbe4e9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-04",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.Sm off\n.No \"\"\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST-.No \"\"\n-off",
+      "source_sha256": "a22a3a3f9b5522bb81ab919ce424ced4ffd191caee3de7c6ef62962a40eb1802",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "25f7ec73bbc771c515de2d38aecfcf28b7331bc995d2007737f1a4fd0f9f959f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "520b54e6ba2bd140d961c2277e66ae0175ca2946961c6a835e5439a1819aff6b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "8c1e562e0d9e09e606ac75055c114ef08050c81faf17b38304301515b757b9dc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-05",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST Ns\n.mc\n.Sm off\n.Xo Ns\n.No \"\"\n.Xc\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST Ns-.Xo Ns\n.No \"\"\n.Xc\n-off",
+      "source_sha256": "84d9b31084ce8d6daf0c824da3a5c1fe0f1d42188c294a47ae67706c4532d6fd",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "79a9d59bed3c62d3f865236000a1db3bcf79ea84dcba3902eca22b5af8f2c291",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "ce0b316a56ec8f6cf21bd55680cd214bd3ddb0a1dd8891777dcf11467a6e5bca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "e915f25f7e664964f33f2b8adb3a007cd4b7478f5a8fe1df8337c1aa4493ba74",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "7734f1ec7045f778a259105e7b631f7bdabfa54ad9b28cccaa314f6f52d42395",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-06",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST Ns\n.mc\n.Sm off\n.Xo Ns\n.No \\fB\n.Xc\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST Ns-.Xo Ns\n.No \\fB\n.Xc\n-off",
+      "source_sha256": "5464e73000c9ceb876103f1e7f52096394787a820777aed48859a92d8956188b",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "79a9d59bed3c62d3f865236000a1db3bcf79ea84dcba3902eca22b5af8f2c291",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "ce0b316a56ec8f6cf21bd55680cd214bd3ddb0a1dd8891777dcf11467a6e5bca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "7f11122045defea6c96c21fc7bec17d2f680ff17e205478d9d5ecacbdb2989d1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "e336fd3dc60fe6efa9566209e36b0835db857398cf6e710f9b414ada014becda",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRSTSECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-07",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST Ns\n.mc\n.Sm on\n.No \"\"\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST Ns-.No \"\"\n-on",
+      "source_sha256": "6dd015ba8528a60fc6e0c02ffc8775fa39b11fa709839d001e1d9faa93748773",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "25f7ec73bbc771c515de2d38aecfcf28b7331bc995d2007737f1a4fd0f9f959f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "520b54e6ba2bd140d961c2277e66ae0175ca2946961c6a835e5439a1819aff6b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "3458eb86cbf547b09af32f1062344d6551743bd1a1431d841d255ee0d891e0b8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "resumed-08",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST Ns\n.mc\n.Sm off\n.No \"\"\n.mc\n.Sm on\nSECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "historical_id": "resumed-FIRST Ns-.No \"\"\n-off",
+      "source_sha256": "99d74d5b3487e7851661343476ec5464778707c4cea4383f779d079aa1c47705",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "25f7ec73bbc771c515de2d38aecfcf28b7331bc995d2007737f1a4fd0f9f959f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "e915f25f7e664964f33f2b8adb3a007cd4b7478f5a8fe1df8337c1aa4493ba74",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "5abc3624b836f990a3cca387f02a751e26600e669485f5b1422defe3e6fa778f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "ordinary-empty-without-flush",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.No \"\"\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "a7e26768ec0e183de204729efbdf673863130d3a25e590652234ea412015e0b5",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "525dd4bc9691b5c1b11d0e90c7484dd89cdcb7c6579502bd4e1f7c73d580c6f5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "b207a664b68609224e900cfd75293ad4cb1767908cd0401bb102401b65f4b5e6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "0350a6135d02d9e8ac8f96e9d495e185d8b7d6727d06f75e1fb98ecb1c8ae6af",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "6cca9f0611907a3416679991925399d0081ee4a654881590ca099b4449220cea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST  SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST  SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "ordinary-empty-before-only-flush",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.No \"\"\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "9a8ceb788fa9e4b5c63b96e1d1d08c165648c86560a5bb880782d7847176800f",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "525dd4bc9691b5c1b11d0e90c7484dd89cdcb7c6579502bd4e1f7c73d580c6f5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "b207a664b68609224e900cfd75293ad4cb1767908cd0401bb102401b65f4b5e6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "0350a6135d02d9e8ac8f96e9d495e185d8b7d6727d06f75e1fb98ecb1c8ae6af",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "c8d29ed0bccae85342c196b10783badc744488021626045e580d21a2884f89a5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST  SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST  SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "empty-flush-preserves-tight-register",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.Sm off\n.No \"\"\n.mc\n.Sm on\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "825b98480dab87cf450a57cc06f461cdd6d529d1aa0cda5c0dc0651d779a5e1d",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "5c7c6c7432ac591a7b31da671c0eb9c478f3ff1a5c29157ba3300382c01b67f0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "efecf2591959029a0d9f103c031cdd63842859341082b9097f2a47f5185a6b76",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "b103228c22e05fb2beba257066cd5ee128f0d0802ae223947081e30322ea1caa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "6dc7bed70e3791ef03a06ba4e81d8fd3383bff05370ae576b209d9aa683ec8ee",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "zero-width-native-graph",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.No \\&\n.mc\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "4e59344c68e7c8ffb7fdaf63fb2cf8dacfe0f876dacb5490bcc5bb49188017d2",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "25f7ec73bbc771c515de2d38aecfcf28b7331bc995d2007737f1a4fd0f9f959f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "0350a6135d02d9e8ac8f96e9d495e185d8b7d6727d06f75e1fb98ecb1c8ae6af",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "ae5891da740bc5a2f679d81c0e195227c135c9e24249ad330eb0e781ea3c2f45",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "breakable-native-blank",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.No \" \"\n.mc\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "6ffdde364e0467c022d0781a1dc244a9a456ea82ba9c4461794e605a9e267516",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "25f7ec73bbc771c515de2d38aecfcf28b7331bc995d2007737f1a4fd0f9f959f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "f904b6b72825398d1ae76679fd7150e108f7c5c6e8704f8cd6b7b71e5b42a6fb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "68ad9066626a0a61b168a0c6a65470a4d0238c2d5ae546b1283fc1bab21fb6f4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "fixed-native-blank",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.No \\~\n.mc\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "1fe17692952eeda485f8719f96fc4ac3fc2a7422cdfdf839a6a360f37df26c4a",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "6ff468fd64e99c0fe337af62288f1abb8dc5ea41350ab3cfc7be57f127c829a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "c17c6a2f16d08511eded5928a2101ef537861595dfff96294616b42106beb8b9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "b8b89ca06ffeec32bed5bb90d98dc51abaae8e84eeb0adf28e9b9620dd0911ec",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "4bfe09b2b5d46e4c1cfeee50794ba14d6f585afb216a7f17f87824602761dfcb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST   SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "unbuffered-backafter",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.Sm off\n.Xo Ns\n.No \\z\n.Xc\n.mc\n.Sm on\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "355334fadc97920d3ae2f4ada28fa7a16d6cb77a18245b4b2575d45c5659abdd",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "303837893be219e7914d96252ba60a823de0b5cf7cc4e7801aa3e664a385e631",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "1a884e5cf6a7d96f2a42f889aa3d50562bd7f806ad11ab553b4789d8692ea5ab",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "69f9f8a1664f66cfe7027842895f8fe579328e9ef8a847d2dbb072aa31c5e3d1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "051d6ade8a79ad1bc7593c874eec679a59243bc3c4d7349261b970f51bd8b13e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRSTECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRSTECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "buffered-backbefore-glyph",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.Sm off\n.Xo Ns\n.No \\zX\n.Xc\n.mc\n.Sm on\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "637be8983b9c5e805ab069d3658bd6c4996498b4081df991c40eab62a8cc4797",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "335b12e92f4a8ea673f93c389ccfb936212a8d0f7d210d9c01249199dd487f6b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "2b40831fbcda2bc0bc653ebcf32c199a179f6d0e6e976b6afbd5bc01be8d7a46",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "f6dfb589209b3f48d41fce5e8d916e70303ba502e7772c9b39c310443ad48492",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "6eddd2ad7a517b52bde39e461572c68990310e959faf55aae59b789de78468f4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRSTX SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRSTX SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "explicit-row-after-blank",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.No FIRST\n.mc\n.No \"\"\n.br\n.No SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "a193d3a3352040f2d8bf8be72b8677898c4c032a564114634a2b351d9a5e9c67",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "d2cd44b3b9cc8b8bb32a038969bf9be8079f0dbba30864e035a2de447282a521",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "c94bdaf7594364d873a66bd3f6ccc04d9da949eae80190b72b9cb21e7027ff54",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "51febb9ff1a1051057be5547fbc4fcbc5f45f304d6bdd8e2bbb26f263a81d6b4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "ca2b737ac1007b0883d2ac9fe57fba8f1c4adee2e6692a4906c8100115ca7faa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST",
+        "SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST",
+        "SECOND",
+        "TAIL"
+      ]
+    },
+    {
+      "id": "styled-word-owners",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd spacing cursor review\n.Sh DESCRIPTION\nORIGIN\n.br\n.Sy FIRST\n.mc\n.No \"\"\n.mc\n.Em SECOND\n.br\nTAIL\n.Sh NEXT\nEND\n",
+      "source_sha256": "4e218026a59d65995892e62dab86c9327835ee16c5cb0cdc5b65e1b5fffe4323",
+      "profiles": {
+        "ascii": {
+          "status": 0,
+          "stdout_sha256": "f9a8e68bb3df43e61c8bfdd14362639cd74d6265348b9e0e8289a9ccf0951e5e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "status": 0,
+          "stdout_sha256": "cb760cc979a0a506e8bcd98ad8fd4e628f8f20a9813ae1e9116e97aed670310b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "f950c2fd41f21a00046e12ee1c54f5b8cbcb5de3f036f6119a3333c44d0c2573",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "65289fafa7bde02c4b77f40157b63f8ceabb17d07ddc9b160611b8befcf4ca00",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "ascii_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ],
+      "utf8_rows": [
+        "ORIGIN",
+        "FIRST SECOND",
+        "TAIL"
+      ]
+    }
+  ]
+}

@@ -189,6 +189,11 @@ register; a real `term_newln` selects NOSPACE even when no output row is active.
 Decoded overstrike joins and field-pass row projection do not execute either
 native flag transition.
 
+The temporary no-break flush used by `.mc` tests live input cells, not the
+presence of previously projected glyphs or an executed empty word. Ordinary
+prose retains native trailing-space distance independently of the next word's
+automatic spacing; a flush does not invent an irrevocable separator.
+
 A native field scope can span multiple paragraph and literal content owners.
 Its explicit source pre/post boundaries protect the live word, separator and
 field registers while an IR drain releases only output indices. Resolved BODY

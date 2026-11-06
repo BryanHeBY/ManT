@@ -388,6 +388,13 @@ cannot be revived by its output wrapper. Later `br`, `sp`, and aligned-line
 requests drain that new field through the same acceptance step before they
 change row ownership.
 
+In ordinary prose, `.mc` only flushes when the native input buffer contains
+cells. An empty request leaves the word-spacing register unchanged; an
+occupied flush restores the native trailing-space distance rather than
+inserting a fixed extra separator. Subsequent `Ns` and `Sm` operations still
+control the automatic word boundary. Resolved tagged-field alignment retains
+its separate layout contract.
+
 The field buffer records native writes while each source or generated word
 executes, including `\&` cells and glyphs still waiting for `\z` resolution.
 An explicit flush result distinguishes an accepted field, a rejected first
