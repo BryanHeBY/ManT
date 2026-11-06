@@ -45,6 +45,7 @@ impl InlineBuilder {
         let state = self.execution.definition.as_ref()?;
         let declared_origin = state
             .column_origin_units
+            .map(|units| i64::try_from(units).unwrap_or(i64::MAX))
             .or(state.declared_body_origin.map(|origin| origin.units))
             .unwrap_or(0);
         let graph = (start..end).find(|cell| {
@@ -85,7 +86,7 @@ impl InlineBuilder {
             // basic units before rounding the relative character position;
             // Euclidean division preserves a half-cell outdent's floor.
             let units = i128::from(row_origin_units)
-                .saturating_sub(i128::try_from(declared_origin).unwrap_or(i128::MAX))
+                .saturating_sub(i128::from(declared_origin))
                 .saturating_add(i128::from(
                     state
                         .column_reading_origin
@@ -100,7 +101,7 @@ impl InlineBuilder {
             // Preserve the established non-column HEAD/BODY projection.
             i32::try_from(
                 row_origin_units
-                    .saturating_sub(i64::try_from(declared_origin).unwrap_or(i64::MAX))
+                    .saturating_sub(declared_origin)
                     .saturating_add(11)
                     .div_euclid(24),
             )
@@ -149,7 +150,11 @@ impl InlineBuilder {
             .filter(|origin| {
                 origin.padding == super::super::state::BodyPaddingPlacement::Structural
             })
-            .map_or(0, |origin| state.hang_row.padding_units(origin.units));
+            .map_or(0, |origin| {
+                state
+                    .hang_row
+                    .padding_units(usize::try_from(origin.units.max(0)).unwrap_or(usize::MAX))
+            });
         let cells = padding_units
             .saturating_sub(declared_padding)
             .saturating_add(11)
@@ -177,8 +182,8 @@ impl InlineBuilder {
         use super::super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
         state.no_break.or(resumed)?;
-        let declared_origin = state.column_origin_units?;
-        if origin_units < i64::try_from(declared_origin).unwrap_or(i64::MAX) {
+        let declared_origin = i64::try_from(state.column_origin_units?).unwrap_or(i64::MAX);
+        if origin_units < declared_origin {
             return None;
         }
         let graph = (start..end).find(|cell| {

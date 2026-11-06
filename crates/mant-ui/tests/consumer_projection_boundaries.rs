@@ -15,6 +15,8 @@ use unicode_width::UnicodeWidthStr;
 
 #[path = "support/reader_actions.rs"]
 mod reader_actions;
+#[path = "support/wrapped_labels.rs"]
+mod wrapped_labels;
 use reader_actions::{click, copied_selections, opened_targets, positions, select_span};
 
 const CASES: &str =
@@ -259,49 +261,6 @@ fn assert_actions(query: &ResolvedContent, label: &str, target: Option<&str>) {
     }
 }
 
-fn wrapped_label_fragments(
-    query: &ResolvedContent,
-    rendered: &RenderedDocument,
-    label: &str,
-) -> Vec<(String, usize, usize)> {
-    assert!(!label.chars().any(char::is_whitespace));
-    let mut cells = Vec::new();
-    for row in body_range(query, rendered) {
-        let text = rendered.text.lines[row].to_string();
-        let mut column = 0;
-        for grapheme in mant_render::cells::graphemes(&text) {
-            if !grapheme.text().chars().all(char::is_whitespace) {
-                cells.push((grapheme.text().to_owned(), row, column));
-            }
-            column += grapheme.columns();
-        }
-    }
-    let length = mant_render::cells::graphemes(label).count();
-    let matches = cells
-        .windows(length)
-        .filter(|window| {
-            window
-                .iter()
-                .map(|cell| cell.0.as_str())
-                .collect::<String>()
-                == label
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(matches.len(), 1, "wrapped body label {label:?}");
-    let mut fragments: Vec<(String, usize, usize)> = Vec::new();
-    for (text, row, column) in matches[0] {
-        if let Some(last) = fragments.last_mut()
-            && last.1 == *row
-        {
-            assert_eq!(last.2 + last.0.width(), *column);
-            last.0.push_str(text);
-        } else {
-            fragments.push((text.clone(), *row, *column));
-        }
-    }
-    fragments
-}
-
 fn assert_wrapped_link_actions(query: &ResolvedContent, label: &str, target: &str) {
     let mut app = App::new(query);
     app.handle_key(KeyEvent::new(KeyCode::Char('B'), KeyModifiers::NONE));
@@ -310,7 +269,7 @@ fn assert_wrapped_link_actions(query: &ResolvedContent, label: &str, target: &st
         terminal.backend_mut().resize(width + 4, 60);
         terminal.draw(|frame| app.draw(frame)).unwrap();
         let rendered = DocumentView::new(query).render(width);
-        let fragments = wrapped_label_fragments(query, &rendered, label);
+        let fragments = wrapped_labels::fragments(&rendered, body_range(query, &rendered), label);
         let hits = rendered
             .search(label)
             .into_iter()

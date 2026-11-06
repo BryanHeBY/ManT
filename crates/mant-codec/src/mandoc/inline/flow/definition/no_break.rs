@@ -310,7 +310,13 @@ impl InlineBuilder {
         let output_end_before_separator = self.nodes.len();
 
         let separator_cells = if field.style == DefinitionFieldStyle::Tag && overrun {
-            self.hard_break();
+            // This real mc flush already consumed its buffer and row.
+            // Deliver that receipt; another conditional term_newln over
+            // empty cells would lose its accepted physical-row boundary.
+            self.hard_break_after_field_projection_with_origin(
+                native.as_ref(),
+                super::super::CompletedRowOrigin::Layout,
+            );
             // `roff_term_pre_mc()` clears NOSPACE after the NOBREAK flush,
             // so the first word on the new device row owns one ordinary
             // boundary. No word has written that cell yet: HEAD post may
@@ -487,7 +493,10 @@ impl InlineBuilder {
         };
         if overrun || native.is_some_and(|field| !field.has_occupied_row()) {
             if overrun {
-                self.hard_break();
+                self.hard_break_after_field_projection_with_origin(
+                    native,
+                    super::super::CompletedRowOrigin::Layout,
+                );
             }
             // Clearing NOSPACE leaves a pending boundary for term_word(),
             // not an occupied row before HEAD post. A marker can leave

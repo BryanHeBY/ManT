@@ -210,7 +210,7 @@ impl InlineBuilder {
         self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::LiteralText)
     }
 
-    fn execute_native_newline_with_origin(
+    pub(in crate::mandoc::inline::flow) fn execute_native_newline_with_origin(
         &mut self,
         origin: super::super::CompletedRowOrigin,
     ) -> bool {

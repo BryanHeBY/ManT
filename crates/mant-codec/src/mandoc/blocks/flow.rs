@@ -185,6 +185,9 @@ impl BlockState {
         formatter
             .execution
             .set_presentation_parent(indent_columns.physical_basic_units());
+        formatter
+            .execution
+            .inherit_output_owner_origin(indent_columns.physical_basic_units());
         Self {
             output,
             formatter,

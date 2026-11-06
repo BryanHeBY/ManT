@@ -377,7 +377,7 @@ impl LiteralFlow {
         crate::mandoc::inline::prepare_inline_output(&mut previous.nodes);
         let layout = previous.adopted_layout.unwrap_or_else(|| layout(indent));
         let mut blocks = origins::literal_blocks(previous.nodes, layout, previous.source);
-        append_completed_rows(&mut blocks, &origins, layout);
+        append_completed_rows(&mut blocks, &origins, layout, previous.source);
         blocks
     }
 }
@@ -389,6 +389,7 @@ fn append_completed_rows(
     blocks: &mut Vec<Block>,
     origins: &[crate::mandoc::inline::CompletedRowOrigin],
     layout: mant_ir::LayoutHint,
+    source: Option<SourceSpan>,
 ) {
     use crate::mandoc::inline::CompletedRowOrigin;
     let mut index = 0;
@@ -428,7 +429,7 @@ fn append_completed_rows(
                         children,
                         language: None,
                         layout,
-                        source: None,
+                        source,
                     });
                 }
             }

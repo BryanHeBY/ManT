@@ -124,6 +124,7 @@ literal displays, lists and table recovery:
 | Text execution | `inline/text_execution/` consumes decoded events in order using borrowed font and zero-advance state; native writes precede presentation. `roff_escape/` owns event types, decoding, pure width measurement and the shared zero-advance machine. |
 | Plain input retirement | `inline/flow/plain_input/` consumes ordinary or authorless input at real native boundaries; presentation is separate from the consumption decision. |
 | Output ownership | `inline/flow/output/` separates checkpoints, scope annotations, physical hard breaks and drains. Draining IR does not consume native input. |
+| Scoped row origins | Content-owner coordinate bases are independent of the live native row. Scope checkpoints restore the base; new owners rebase accepted output only. Private carriers preserve signed origins through annotation and root materialization. |
 | Nested list execution | `inline/scopes/nested.rs` executes nested list and column phases in the caller's existing builder and field state. |
 | Link identities | `inline/links/identity.rs` applies HTML attribute glyph rules independently to each source operand; it never consumes the visible formatter's state. `Xr`/`MR` share this path with `UR`/`MT`/`Lk`/`Mt`/`%U`. |
 | Link annotations | `inline/links/annotation.rs` places typed links around accepted output, keeping preceding glyphs and layout boundaries outside the label without executing another formatter boundary. |

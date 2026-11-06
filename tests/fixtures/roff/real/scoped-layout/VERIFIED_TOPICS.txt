@@ -1,0 +1,12 @@
+# Three complete C-locale manuals from three retained source snapshots,
+# parsed through ManT's bundled libmandoc on 2026-11-06. Verified means no
+# parser failure, not whole-page correctness or clean pristine-CVS lint.
+# NetBSD 11.0 base manuals
+# section 1: 1 page
+printf 1
+# OpenBSD 7.9 base manuals
+# section 4: 1 page
+bpf 4
+# illumos-gate e8f5c080cc0b7997410d860afd787df30ba1cf2d
+# section 8: 1 page
+bhyve 8

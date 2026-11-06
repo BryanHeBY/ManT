@@ -293,7 +293,7 @@ impl InlineBuilder {
     }
 
     /// Execute the actual original mdoc It BODY post, exactly once.
-    pub(in crate::mandoc) fn finish_mdoc_item_body(&mut self) {
+    pub(in crate::mandoc) fn finish_mdoc_item_body(&mut self, origin: super::CompletedRowOrigin) {
         if self
             .execution
             .definition
@@ -302,7 +302,7 @@ impl InlineBuilder {
         {
             self.finish_run_in_field_row();
         } else {
-            self.execute_native_newline();
+            self.execute_native_newline_with_origin(origin);
         }
         self.execution.clear_native_list_part_flags();
     }

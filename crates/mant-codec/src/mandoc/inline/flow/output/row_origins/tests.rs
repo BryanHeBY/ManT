@@ -589,3 +589,31 @@ fn appended_scopes_keep_the_bare_boundary_and_rebase_their_live_start() {
             .is_empty()
     );
 }
+
+#[test]
+fn signed_accepted_origins_survive_root_and_annotated_materialization() {
+    // A private projection contract: accepted native origin deltas use the
+    // existing signed RowLayoutHint, not an unsigned device-column count.
+    // Materializing a negative delta cannot manufacture a maximum indent.
+    for annotated in [false, true] {
+        for later_row in [false, true] {
+            let selected = owner("signed-origin");
+            let content = vec![Inline::anchor(selected.clone()), text("B")];
+            let mut nodes = if later_row {
+                vec![text("A"), Inline::line_break()]
+            } else {
+                Vec::new()
+            };
+            if annotated {
+                nodes.push(Inline::Strong { children: content });
+            } else {
+                nodes.extend(content);
+            }
+            let _ = project_native_positions(&mut nodes, &[(selected, 0, -2, false)], &[], 0, true);
+            let layout = take_inline_layout(&mut nodes);
+            assert_eq!(layout.row_indent(usize::from(later_row)), -2);
+            assert_eq!(plain_text(&nodes), if later_row { "A\nB" } else { "B" });
+            assert_eq!(layout.row_hints.len(), 1);
+        }
+    }
+}

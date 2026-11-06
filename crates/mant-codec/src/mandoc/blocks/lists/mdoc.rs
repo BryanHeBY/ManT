@@ -247,7 +247,10 @@ fn lower_plain_item_body(
         .clear_native_list_part_flags();
     lowerer.state.formatter.execution.declare_list_body_origin();
     lowerer.push_nodes(first_part_children(node, NodeKind::Body));
-    lowerer.finish_into(formatter, flow.row_boundary)
+    // This return is the actual original It BODY post, not a generic
+    // output-owner settle. It must consume the same live input even when
+    // an outer definition keeps the formatter session alive afterwards.
+    lowerer.finish_into(formatter, super::super::FormatterRowBoundary::MdocItemBody)
 }
 
 fn lower_mdoc_definition_list(

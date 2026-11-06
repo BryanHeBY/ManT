@@ -5,7 +5,6 @@
 //! observable routing order live in [`walker`].
 
 use libmandoc_rs::{
-    DisplayKind,
     MacroToken::{Man, Mdoc, Roff},
     ManMacro, MdocMacro, Node, NodeKind, RoffMacro,
 };

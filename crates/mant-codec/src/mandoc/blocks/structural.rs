@@ -1,7 +1,7 @@
 //! Structural payload dispatch; state and output remain caller-owned.
 use super::{
-    Block, DisplayKind, LoweringContext, ManDefinitionState, ManListState, Node, NodeKind,
-    ScopeFlow, TableEmbedding, add_leading_spacing, append_relative_continuation, append_table_row,
+    Block, LoweringContext, ManDefinitionState, ManListState, Node, NodeKind, ScopeFlow,
+    TableEmbedding, add_leading_spacing, append_relative_continuation, append_table_row,
     first_part_children, layout, lower_inline_nodes, lower_man_definition_block, lower_mdoc_list,
     lower_scope, lower_synopsis_head, part_child_groups, plain_text, preformatted_blocks,
     set_block_spacing, source_span,
@@ -83,9 +83,7 @@ impl StructuralLowerer<'_, '_, '_> {
         let scoped_body = if matches!(
             node.macro_token.as_ref(),
             Some(Mdoc(MdocMacro::Bl | MdocMacro::Rs))
-        ) || (node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))
-            && node.display_kind == Some(DisplayKind::Filled))
-        {
+        ) {
             node.children
                 .iter()
                 .find(|part| part.kind == NodeKind::Body)
@@ -316,26 +314,6 @@ impl StructuralLowerer<'_, '_, '_> {
     fn lower_transparent_container(&mut self, node: &Node, next: Option<&Node>) -> bool {
         match node.macro_token.as_ref() {
             Some(Man(ManMacro::Hp)) => self.lower_man_hanging_paragraph(node, next),
-            Some(Mdoc(MdocMacro::Bd)) if node.display_kind == Some(DisplayKind::Filled) => {
-                let has_predecessor = self.has_paragraph_predecessor();
-                let spacing_before = self.execute_mdoc_block_spacing(node, has_predecessor);
-                let nested = super::lower_scope(
-                    first_part_children(node, NodeKind::Body),
-                    self.context,
-                    self.paragraph_distance,
-                    self.formatter,
-                    super::ScopeFlow::body_post_row_end(
-                        self.context.offset_indent(
-                            node,
-                            self.indent_columns,
-                            self.context.display_offset(node),
-                        ),
-                        self.spacing_enabled,
-                        has_predecessor,
-                    ),
-                );
-                extend_blocks_with_spacing(self.output, nested, spacing_before, node);
-            }
             Some(Man(ManMacro::Rs)) => {
                 // mandoc's print_bvspace climbs first-child RS wrappers to
                 // find a predecessor. A detached item-continuation buffer

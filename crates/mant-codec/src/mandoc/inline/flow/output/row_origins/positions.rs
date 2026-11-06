@@ -57,11 +57,11 @@ impl RootProjection {
 
     /// Root carriers are edited in this existing reverse traversal. Nested
     /// carriers change their annotation's children, never a root boundary.
-    pub(super) fn materialize_origins(&mut self, origin: &mut Option<u16>) {
+    pub(super) fn materialize_origins(&mut self, origin: &mut Option<i32>) {
         let mut reversed = Vec::with_capacity(self.nodes.len());
         for (mut node, source) in std::mem::take(&mut self.nodes).into_iter().rev() {
             if let Some(columns) = super::super::native_row_origin(&node) {
-                *origin = Some(u16::try_from(columns).unwrap_or(u16::MAX));
+                *origin = Some(columns);
                 continue;
             }
             match &mut node {

@@ -9,6 +9,7 @@ required by the third-party manuals.
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
 | [`source-adjacency/`](source-adjacency/README.md) | Exact members from the November 2026 audit: Arch tmux, OpenBSD date, DragonFly regex, illumos ksh93 | Original gzip members and exact complete uncompressed sources | Source-sibling execution, spacing controls, complete semantic owners, links and repeated Markdown readback |
+| [`scoped-layout/`](scoped-layout/README.md) | Exact November 2026 audit sources: NetBSD 11.0 printf, OpenBSD 7.9 bpf, immutable illumos bhyve | Exact complete uncompressed release members and repository file | Nested definition origins, scoped literal indentation and column-cell physical rows |
 | [`bsd-closure/`](bsd-closure/README.md) | Official NetBSD 11.0 and DragonFly BSD 6.4.2 release artifacts plus one verified OpenBSD current snapshot member | Exact uncompressed NetBSD/OpenBSD members and original DragonFly gzip members | Named-character fidelity, display-scoped mdoc spacing, continued `.TP` aliases, and signed legacy size escapes |
 | [`archlinux/`](archlinux/README.md) | Immutable Arch Linux Archive packages | Original gzip members and two documented lossless zstd recompressions | Direct gzip input, POSIX `sh(1p)`, zstd input, and broad real-man regression coverage |
 | [`fedora44/`](fedora44/README.md) | Fedora Linux 44 Everything packages | Lossless `*.1.zst` recompressions | zstd decoding, Bash-backed `sh(1)`, and a second current generator corpus |

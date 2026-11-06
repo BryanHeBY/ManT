@@ -239,6 +239,61 @@ impl InlineBuilder {
 }
 
 impl super::super::InlineExecutionState {
+    /// A temporary collector can belong to the current shared inline owner.
+    /// Preserve that explicit seam while its native device row remains open;
+    /// independent structural owners establish their own reading origin.
+    pub(in crate::mandoc) fn inherit_output_owner_origin(&mut self, absolute_units: usize) {
+        if self.has_open_native_device_row()
+            && self.definition.as_ref().is_some_and(|state| {
+                state.declared_body_origin.is_some_and(|origin| {
+                    origin.padding == super::state::BodyPaddingPlacement::Inline
+                })
+            })
+        {
+            return;
+        }
+        self.set_output_owner_origin(absolute_units);
+    }
+
+    /// Original It HEAD pre applies its list offset after preceding siblings.
+    /// Keep the live buffer and independent temporary-indent displacement;
+    /// its semantic label already represents the resolved source origin.
+    pub(in crate::mandoc) fn enter_definition_head_origin(&mut self, absolute_units: usize) {
+        let relative = i64::try_from(absolute_units)
+            .unwrap_or(i64::MAX)
+            .saturating_sub(i64::from(self.row_presentation.parent));
+        self.row_presentation.offset_shift = self
+            .row_presentation
+            .offset_shift
+            .saturating_add(i32::try_from(relative.min(0)).unwrap_or(i32::MIN));
+        if let Some(state) = &mut self.definition {
+            state.field_offset_units = usize::try_from(relative.max(0)).unwrap_or(usize::MAX);
+            state.hang_row.field_offset = state.field_offset_units.saturating_add(11) / 24;
+            // A term's structural origin does not represent minbl between
+            // its own accepted fields. Those native gaps are real words,
+            // unlike a separate BODY owner's structural alignment.
+            state.declared_body_origin = Some(super::state::BodyOriginProjection {
+                units: relative,
+                padding: super::state::BodyPaddingPlacement::RowOrigin,
+            });
+        }
+    }
+
+    /// A new semantic content owner represents its declared source origin.
+    /// Rebase only the accepted-output coordinate system; source offset,
+    /// buffered cells, flags and the live device row keep their lifetimes.
+    pub(in crate::mandoc) fn set_output_owner_origin(&mut self, absolute_units: usize) {
+        let units = i64::try_from(absolute_units)
+            .unwrap_or(i64::MAX)
+            .saturating_sub(i64::from(self.row_presentation.parent));
+        if let Some(definition) = &mut self.definition {
+            definition.declared_body_origin = Some(super::state::BodyOriginProjection {
+                units,
+                padding: super::state::BodyPaddingPlacement::Structural,
+            });
+        }
+    }
+
     /// Apply the native origin selected by a display pre-handler. The IR
     /// display indentation is independent: only field consumption uses this
     /// offset, and the node checkpoint restores it after the real post.
@@ -306,9 +361,11 @@ impl super::super::InlineExecutionState {
             checkpoint.indent_columns = definition.row.indent_columns;
             checkpoint.field_offset = definition.hang_row.field_offset;
             checkpoint.field_offset_units = definition.field_offset_units;
+            checkpoint.column_origin_units = definition.column_origin_units;
             checkpoint.column_reading_origin = definition.column_reading_origin;
             checkpoint.margin_override = definition.margin_override;
             checkpoint.native_margin_units = definition.native_margin_units;
+            checkpoint.declared_body_origin = definition.declared_body_origin;
         }
         Some(checkpoint)
     }
@@ -323,9 +380,11 @@ impl super::super::InlineExecutionState {
             definition.row.indent_columns = checkpoint.indent_columns;
             definition.hang_row.field_offset = checkpoint.field_offset;
             definition.field_offset_units = checkpoint.field_offset_units;
+            definition.column_origin_units = checkpoint.column_origin_units;
             definition.column_reading_origin = checkpoint.column_reading_origin;
             definition.margin_override = checkpoint.margin_override;
             definition.native_margin_units = checkpoint.native_margin_units;
+            definition.declared_body_origin = checkpoint.declared_body_origin;
         }
     }
 }

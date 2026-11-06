@@ -245,6 +245,25 @@ Nested list phases in a definition HEAD borrow that same field and word
 execution state. List pre/post and generated labels execute in source order;
 only their local geometry is saved. Item post clears the native list flags,
 so returning from a nested list cannot resurrect the outer HEAD's old flags.
+Each new column BODY installs its own flags. Ordinary item BODY returns run
+their actual native post even when an enclosing field remains alive.
+
+Accepted row origins use the current semantic owner's coordinate base, not a
+previous sibling BODY's base. Owner changes rebase only this projection;
+they do not move the native device row or consume input. Geometry checkpoints
+restore that base with their source scope. Signed relative origins stay signed
+through private carriers until they become the existing IR row hints, so an
+outdent cannot turn into maximum positive padding.
+Temporary collectors retain an explicitly shared inline owner while its device
+row remains open. The original item HEAD pre installs its source list offset
+after preceding siblings, and column origins return with their paired geometry.
+An owner's row-coordinate base does not imply that structural BODY layout
+already represents the field's minimum blank distance; HEAD word gaps remain
+accepted content. Completed field passes project their captured receipt without
+executing another conditional native newline.
+Filled and literal displays use the same display driver: BODY pre and actual
+post execute before an output drain. Conditional native newlines test live
+input and device occupancy before adopting any simulated flush result.
 
 The private definition modules separate cell consumption, output retirement,
 fill-mode transitions, vertical rows and geometry checkpoints. Their methods

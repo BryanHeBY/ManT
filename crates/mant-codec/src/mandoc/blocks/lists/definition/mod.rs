@@ -136,7 +136,7 @@ pub(super) fn definition_item(
 ) -> DefinitionItem {
     close_pending_definition_prefix(formatter);
     let head = visible_definition_head(node);
-    let head_nodes = definition_head_nodes(node, head, context.macro_set);
+    let head_nodes = definition_head_nodes(node, head, context.macro_set, indent_columns);
     let body = first_part_children(node, NodeKind::Body);
     let (displaced_equations, body) = displaced_definition_equations(head, body);
     let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;

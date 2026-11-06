@@ -3,10 +3,12 @@
 #[derive(Clone, Copy, Default)]
 pub(in crate::mandoc) struct DefinitionGeometryCheckpoint {
     pub(super) native_margin_units: Option<i64>,
+    pub(super) declared_body_origin: Option<super::state::BodyOriginProjection>,
     pub(in crate::mandoc::inline::flow) offset_shift_units: i32,
     pub(in crate::mandoc::inline::flow) indent_columns: u16,
     pub(in crate::mandoc::inline::flow) field_offset: usize,
     pub(in crate::mandoc::inline::flow) field_offset_units: usize,
+    pub(in crate::mandoc::inline::flow) column_origin_units: Option<usize>,
     pub(in crate::mandoc::inline::flow) column_reading_origin:
         Option<super::state::ColumnReadingOrigin>,
     pub(in crate::mandoc::inline::flow) margin_override: Option<usize>,

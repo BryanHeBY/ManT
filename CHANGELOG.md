@@ -37,6 +37,13 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Keep scoped list and display origins relative to their actual content owner,
+  including signed outdents, without restoring consumed device rows or stale
+  column flags. Preserve nested column headings on their original row and run
+  each ordinary item and display BODY post before subsequent paragraph spacing.
+  Apply list offsets at the original HEAD pre, restore column coordinate bases
+  together, and keep temporary indentation alive across empty conditional
+  newlines. Literal completion retains its original source owner.
 - Retain source blank-line spacing after nested Markdown lists even when the
   parser includes the next line's indentation in the preceding list range.
   Keep original source coordinates and literal content unchanged.

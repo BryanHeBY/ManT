@@ -364,7 +364,12 @@ impl BlockState {
             // This is the actual It BODY post, before its node geometry
             // returns. Generic output settlement can follow a display post
             // which already consumed the row; it is not this native event.
-            self.with_active_output_builder(InlineBuilder::finish_mdoc_item_body);
+            let origin = if self.inline_output_is_literal(self.formatter.no_fill) {
+                crate::mandoc::inline::CompletedRowOrigin::LiteralText
+            } else {
+                crate::mandoc::inline::CompletedRowOrigin::Layout
+            };
+            self.with_active_output_builder(|builder| builder.finish_mdoc_item_body(origin));
             self.formatter.no_fill_inline.retire_consumed_cell();
         } else if row_boundary == super::super::FormatterRowBoundary::Settle {
             // The caller identified a native BODY post, not an IR owner

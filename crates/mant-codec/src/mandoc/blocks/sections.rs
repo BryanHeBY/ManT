@@ -129,6 +129,7 @@ fn lower_section(
                 .position(|child| child.kind == NodeKind::Head)
                 .map_or(&[], |head| &node.children[..head]),
             content: head,
+            source_origin_units: None,
         },
         formatter,
         section_context == crate::mandoc::source_context::MdocSectionContext::Authors,

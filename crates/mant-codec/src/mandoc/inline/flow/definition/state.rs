@@ -1,25 +1,28 @@
 use super::super::{InlineBuilder, InlineExecutionState};
 use super::head_row::HeadRowState;
 
-/// Reading placement of a structural BODY, independent of native geometry.
-/// A fresh row always uses this coordinate base. When HEAD's printed row
-/// remains open, one combined paragraph must carry its actual padding too.
+/// Reading placement of one content owner, independent of native geometry.
+/// Its row origin and responsibility for same-row field padding are distinct.
 #[derive(Clone, Copy)]
 pub(in crate::mandoc::inline::flow) struct BodyOriginProjection {
-    pub(super) units: usize,
+    pub(super) units: i64,
     pub(super) padding: BodyPaddingPlacement,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(in crate::mandoc::inline::flow) enum BodyPaddingPlacement {
+    /// Block/definition placement represents normal field padding too.
     Structural,
+    /// Only the row origin is represented; field gaps remain inline words.
+    RowOrigin,
+    /// A shared eventual inline owner retains its native field padding.
     Inline,
 }
 
 impl BodyOriginProjection {
-    pub(super) const fn structural(units: usize) -> Self {
+    pub(super) fn structural(units: usize) -> Self {
         Self {
-            units,
+            units: i64::try_from(units).unwrap_or(i64::MAX),
             padding: BodyPaddingPlacement::Structural,
         }
     }

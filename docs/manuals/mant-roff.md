@@ -445,6 +445,25 @@ column, run-in, measured-label and generated-marker styles. Their HEAD/BODY
 words share the active field and font state. Native item post clears its
 flags before the next item; returning to the outer HEAD restores local
 geometry, without restoring flags that the item already cleared.
+Each column BODY reinstalls its own pad/break flags, so nesting it in a
+definition does not split its first heading from the remaining headings.
+Ordinary item BODY completion executes its native line post before a later
+`Pp`; draining the item's IR is not another physical line or vertical space.
+
+Sibling HEADs and nested displays record row origins against their own content
+owner. A display's block offset and an inline row hint must not count the same
+indentation twice. Source scope restoration retains this owner coordinate base
+separately from the live device row, and negative relative origins remain signed.
+The original item HEAD pre applies its own list offset; a temporary collector
+that still belongs to a shared HEAD/BODY row keeps that inline coordinate base.
+Column source and reading origins restore together on source scope return.
+Filled, ragged and literal displays execute their original BODY pre/post through
+the same driver, before the resulting content owner drains.
+
+An empty conditional `term_newln()` does not flush input or consume `.ti`.
+Invisible native cells and an occupied device row still participate in that
+decision. Unconditional field flushes keep their separate native behavior.
+Completed literal rows retain the source location of their original content.
 
 An empty mdoc operand such as `.No ""` has no `NODE_LINE` and still executes
 an ordinary formatter word; its presence in HEAD does not by itself close

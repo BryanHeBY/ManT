@@ -58,6 +58,7 @@ pub(super) struct RunInDefinitionHead {
 pub(super) struct HeadNodes<'a> {
     pub(super) before: &'a [Node],
     pub(super) content: &'a [Node],
+    pub(super) source_origin_units: Option<usize>,
 }
 
 /// Apply the lexical comment rule that roff executes before handing text to
@@ -238,6 +239,9 @@ impl<'a> LoweringContext<'a> {
             // NOSPACE, the field flags, margin, or diagnostic font.
             inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
         }
+        if let Some(origin) = nodes.source_origin_units {
+            builder.execution.enter_definition_head_origin(origin);
+        }
         builder.enter_definition_head_effect(author_break_effect);
         if preserve_rows && let Some(units) = native_head_field_units {
             builder.set_definition_native_margin(units);
@@ -295,6 +299,9 @@ impl<'a> LoweringContext<'a> {
                 // and NOBREAK field, but remain in its live input buffer.
                 builder.enter_definition_head_effect(inline::AuthorBreakEffect::Line);
                 inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
+            }
+            if let Some(origin) = nodes.source_origin_units {
+                builder.execution.enter_definition_head_origin(origin);
             }
             builder.enter_definition_head_effect(author_break_effect);
             if strong_scope && saved_font.is_none() {

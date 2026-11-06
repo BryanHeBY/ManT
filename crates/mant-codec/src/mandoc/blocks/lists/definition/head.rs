@@ -14,6 +14,7 @@ pub(super) fn definition_head_nodes<'a>(
     node: &'a Node,
     content: &'a [Node],
     macro_set: libmandoc_rs::MacroSet,
+    source_indent: crate::mandoc::layout::SourceIndent,
 ) -> HeadNodes<'a> {
     let before = if macro_set == libmandoc_rs::MacroSet::Mdoc {
         node.children
@@ -23,7 +24,12 @@ pub(super) fn definition_head_nodes<'a>(
     } else {
         &[]
     };
-    HeadNodes { before, content }
+    HeadNodes {
+        before,
+        content,
+        source_origin_units: (macro_set == libmandoc_rs::MacroSet::Mdoc)
+            .then(|| source_indent.physical_basic_units()),
+    }
 }
 
 pub(super) fn lower_definition_head(
@@ -39,6 +45,7 @@ pub(super) fn lower_definition_head(
         std::iter::once(head_nodes).chain(displaced_equations.iter().map(|equation| HeadNodes {
             before: &[],
             content: std::slice::from_ref(*equation),
+            source_origin_units: None,
         }));
     if flow.head.generated_cells().is_some() {
         let generated_cells = usize::from(flow.head.generated_cells().unwrap_or_default());

@@ -66,10 +66,12 @@ fn printed_origin_advances_survive_node_geometry_until_the_real_row_end() {
     builder.begin_column_body(12, 0, false);
     let checkpoint = DefinitionGeometryCheckpoint {
         native_margin_units: builder.definition.as_ref().unwrap().native_margin_units,
+        declared_body_origin: builder.definition.as_ref().unwrap().declared_body_origin,
         offset_shift_units: 0,
         indent_columns: 0,
         field_offset: 0,
         field_offset_units: 0,
+        column_origin_units: builder.definition.as_ref().unwrap().column_origin_units,
         column_reading_origin: None,
         margin_override: None,
     };
@@ -133,10 +135,12 @@ fn accepted_column_reading_origins_preserve_signed_display_offsets_once() {
         let state = builder.definition.as_ref().unwrap();
         let saved = DefinitionGeometryCheckpoint {
             native_margin_units: state.native_margin_units,
+            declared_body_origin: state.declared_body_origin,
             offset_shift_units: 0,
             indent_columns: state.row.indent_columns,
             field_offset: state.hang_row.field_offset,
             field_offset_units: state.field_offset_units,
+            column_origin_units: state.column_origin_units,
             column_reading_origin: state.column_reading_origin,
             margin_override: state.margin_override,
         };

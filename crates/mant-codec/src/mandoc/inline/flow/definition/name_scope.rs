@@ -225,7 +225,7 @@ impl super::super::InlineExecutionState {
         };
         if let Some(state) = &mut self.definition {
             state.declared_body_origin = Some(super::state::BodyOriginProjection {
-                units: state.field_offset_units,
+                units: i64::try_from(state.field_offset_units).unwrap_or(i64::MAX),
                 padding,
             });
         }

@@ -98,6 +98,7 @@ fn typed_completed_rows_keep_content_outside_the_spacing_budget() {
         &mut blocks,
         &[LiteralText, Layout, LiteralText],
         mant_ir::LayoutHint::default(),
+        None,
     );
     assert!(matches!(blocks.as_slice(), [
         Block::Preformatted { children: before, .. },

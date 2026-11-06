@@ -75,7 +75,7 @@ impl OutputNodeEdit {
 /// Update the carrier owned by this delimiter, rather than inserting a
 /// second receipt. An implicit zero origin needs no new node; replacing a
 /// previous nonzero receipt with zero still retires that previous origin.
-fn set_break_origin(nodes: &mut Vec<Inline>, index: usize, origin: u16) -> Option<OutputNodeEdit> {
+fn set_break_origin(nodes: &mut Vec<Inline>, index: usize, origin: i32) -> Option<OutputNodeEdit> {
     for previous in (0..index).rev() {
         let Inline::Anchor { id, .. } = &nodes[previous] else {
             break;
@@ -104,7 +104,9 @@ pub(in crate::mandoc::inline::flow) fn set_last_break_origin(
 ) -> (bool, Option<OutputNodeEdit>) {
     for index in (0..nodes.len()).rev() {
         match &mut nodes[index] {
-            Inline::LineBreak {} => return (true, set_break_origin(nodes, index, origin)),
+            Inline::LineBreak {} => {
+                return (true, set_break_origin(nodes, index, i32::from(origin)));
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {
@@ -268,7 +270,7 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions_with_tabs(
         if let Some(origin) = origin {
             let (applied, insertion) = apply_tail_origin(nodes, origin);
             edit = insertion;
-            if applied.is_none() && origin > 0 {
+            if applied.is_none() && origin != 0 {
                 // The first represented HEAD row can start at a nonzero
                 // restored native offset without a prior row delimiter.
                 // Its accepted print owns this positioning; an empty
@@ -282,7 +284,7 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions_with_tabs(
 
 fn apply_tail_origin(
     nodes: &mut Vec<Inline>,
-    origin: u16,
+    origin: i32,
 ) -> (Option<bool>, Option<OutputNodeEdit>) {
     for index in (0..nodes.len()).rev() {
         match &mut nodes[index] {
@@ -307,11 +309,11 @@ fn apply_tail_origin(
 /// reaches that graph's actual hard row boundary, even through annotations.
 /// A first-row origin has no preceding hard boundary; its pending receipt is
 /// handled by the owner projection after this boundary search completes.
-fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<u16>) {
+fn materialize_origins(nodes: &mut Vec<Inline>, origin: &mut Option<i32>) {
     let mut reversed = Vec::with_capacity(nodes.len());
     for mut node in std::mem::take(nodes).into_iter().rev() {
         if let Some(columns) = super::native_row_origin(&node) {
-            *origin = Some(u16::try_from(columns).unwrap_or(u16::MAX));
+            *origin = Some(columns);
             continue;
         }
         match &mut node {

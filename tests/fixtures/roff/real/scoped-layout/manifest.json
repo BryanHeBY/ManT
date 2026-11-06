@@ -1,0 +1,223 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Three complete unchanged original-audit manuals for scoped row origins and column-cell row closure; selected contracts only, not whole-page equivalence.",
+  "originalManifestSha256": "d28f392f8b45a2ee80772310ce9f20173c6326585d05073f875d01483c774187",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "file": "netbsd-printf.1",
+      "auditNumber": 253,
+      "sourceIdentity": "netbsd-11.0-amd64:man/man1/printf.1",
+      "sourceSha256": "42b7ffd3e1a67324c78e17deba0771c7c37cef8f083c31ec57927170dd3c8d70",
+      "fixtureSha256": "42b7ffd3e1a67324c78e17deba0771c7c37cef8f083c31ec57927170dd3c8d70",
+      "sourceBytes": 13627,
+      "fixtureBytes": 13627,
+      "retrievedFromRetainedCorpusOn": "2026-11-06",
+      "originalAuditDate": "2026-11-03",
+      "originUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.0/amd64/binary/sets/man.tar.xz",
+      "sourceRepository": "https://cvsweb.netbsd.org/bsdweb.cgi/src/usr.bin/printf/printf.1",
+      "revision": "NetBSD 11.0; printf.1 revision 1.41 (2024-11-24)",
+      "archive": "man.tar.xz",
+      "archiveMember": "./usr/share/man/man1/printf.1",
+      "archiveSha256": "31bb8a57b23b0fe6b309e4ff6b3f7a9c3c6aaadae9c8ce4dfc7baefa7c4ffa26",
+      "license": "BSD-3-Clause",
+      "licenseFile": "../LICENSES/BSD-3-Clause.txt",
+      "licenseSha256": "02a66d6af5a4ef501849a33e6d8a0624e2b4284c8bed19ba0b0c24e8ac1add4e",
+      "embeddedNoticeLines": [
+        3,
+        34
+      ],
+      "embeddedNoticeSha256": "1559b37d7019c0768e41deffcd89a43d4a01eab9d1c52d98a2ef32919b2c5460",
+      "transformation": "None; exact complete uncompressed source bytes, including upstream comments and notices.",
+      "selectionReason": "Ordinary nested tag-list BODY ownership and finite resolved row origins; real percent-conversion and escape declarations.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "2fab5b749a1602af903bcb34c9fc7315c727352fad66c17b16060c879a2de9d5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 14238,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "383a9ab833a0df9277d38dae786e92fb0b119f2db0452b41072eb5bf9a060cb4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 14473,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "d42a79838b507898180222e31e0bfe307f3c5cd0d0768ae216fe9f1e21c6b656",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 23990,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "a4ed1e2b2ed288adc99438487df78b8f56334dffcbe2d027d5bb190ad677f9ed",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 54339,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "027e6c32ba2ee00528069b5b1d3695f7af2acbab13435caa959a08877bc45051",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 279,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      },
+      "archiveSha512": "1a0d59ae43d92e1880ea54caae321e3ee5e59d39145a1fbd2a1d700e2b5be63759b0a4df55f9d1834707e48934267b8e77a29878717a7e7085fb7e3c8fbdae33",
+      "provenanceVerification": "Retained release archive hashed on 2026-11-06; exact tar member equals complete audited source and fixture."
+    },
+    {
+      "file": "openbsd-bpf.4",
+      "auditNumber": 689,
+      "sourceIdentity": "openbsd-7.9-amd64:man/man4/bpf.4",
+      "sourceSha256": "be17bd1768ef2ef074d67b1d8a81ae350b8d58ce4125ddce456b45de5c853998",
+      "fixtureSha256": "be17bd1768ef2ef074d67b1d8a81ae350b8d58ce4125ddce456b45de5c853998",
+      "sourceBytes": 28224,
+      "fixtureBytes": 28224,
+      "retrievedFromRetainedCorpusOn": "2026-11-06",
+      "originalAuditDate": "2026-11-03",
+      "originUrl": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/man79.tgz",
+      "sourceRepository": "https://cvsweb.openbsd.org/src/share/man/man4/bpf.4",
+      "revision": "OpenBSD 7.9; bpf.4 revision 1.51 (2025-11-21)",
+      "archive": "man79.tgz",
+      "archiveMember": "./usr/share/man/man4/bpf.4",
+      "archiveSha256": "7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af",
+      "license": "Custom Berkeley/Lawrence Berkeley Laboratory notice with advertising acknowledgement",
+      "licenseFile": "../LICENSES/BPF-MANUAL-LICENSE.txt",
+      "licenseSha256": "e9bdec5ba393dde4e630790fbf91521b25122dcf3401ba06f6e4eac23eeab2c0",
+      "embeddedNoticeLines": [
+        4,
+        25
+      ],
+      "embeddedNoticeSha256": "c317436186eacb34a05bac9e789ffe7d608e8a82f58bf4a9381afe54361981de",
+      "transformation": "None; exact complete uncompressed source bytes, including upstream comments and notices.",
+      "selectionReason": "Nested ioctl definitions followed by complete literal C structs, authored TABs, scoped offsets and finite row origins.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "25eac85aefecbee88d2ad05a91411277fc5b19a87ce281c9391424a876d4b447",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 30629,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "98f4360f4b441bc6fadb269cbbb239099952f3674c6961491306f68f8c69337a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 30679,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "61405dbe6777914a81ea378836d53f2e9a6beb683afbdbc4006fd0b28c45fcc1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 52068,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "ed7ab7c5b73d1a4ff6bba5986aeba78019cb836f6012fc80b11f679121041f9f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 129702,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "cbd98ca8fb344f19209977a80f56388f4e829783fc1a6da002296797b9035373",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 826,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      },
+      "archiveSha512": "d2ba13d6e74fb4b77addcf148bd9775715a84c90a295cf3a702f6b3ca84971aa2e6c0f376ee40cb74a444b4f99e89f5f56780ffd354d7b61ab1bc97dfc1887fa",
+      "provenanceVerification": "Retained release archive hashed on 2026-11-06; exact tar member equals complete audited source and fixture."
+    },
+    {
+      "file": "illumos-bhyve.8",
+      "auditNumber": 904,
+      "sourceIdentity": "illumos-gate-e8f5c080:man/man8/bhyve.8",
+      "sourceSha256": "041ad1e505852a57be0e36e7105b5c80ea9767d457d92c607362519fe788c341",
+      "fixtureSha256": "041ad1e505852a57be0e36e7105b5c80ea9767d457d92c607362519fe788c341",
+      "sourceBytes": 27747,
+      "fixtureBytes": 27747,
+      "retrievedFromRetainedCorpusOn": "2026-11-06",
+      "originalAuditDate": "2026-11-03",
+      "originUrl": "https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man8/bhyve.8",
+      "sourceRepository": "https://github.com/illumos/illumos-gate.git",
+      "revision": "e8f5c080cc0b7997410d860afd787df30ba1cf2d",
+      "archive": null,
+      "archiveMember": "usr/src/man/man8/bhyve.8",
+      "archiveSha256": null,
+      "license": "BSD-2-Clause (complete manual-specific notices retained)",
+      "licenseFile": "../LICENSES/BHYVE-MANUAL-BSD-2-Clause.txt",
+      "licenseSha256": "7a1988099cf129f2d3c367fb2bcae6f800e2795662583f9d9b914b4fde98389f",
+      "embeddedNoticeLines": [
+        1,
+        28
+      ],
+      "embeddedNoticeSha256": "413c779f4637e9adc95acf4c02d4c5f2deec458a0453990df509b35c9b6a7fc7",
+      "transformation": "None; exact complete uncompressed source bytes, including upstream comments and notices.",
+      "selectionReason": "Nested option lists with all three Backend/Path/Description header fields on one source row, plus literal displays and spacing controls.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "c54b5c004808a071aff9ec12ceebe7a1f048637865db3be69ef49eb3c92b1d76",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 39250,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "5372d33c203e747ff53295859c4ac77015487172e03fc7f913c2434d15e96c0a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 39313,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "afd23206e8f15cf883dc500ad520decbc50551cb424f7897b154e0c72459023b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 54321,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "d7692ebca143c6159ebad08d80f5f53749edcb7593e7135f33832d79b6738a46",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 143693,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "31772a565f0874ab1e4915cc03937238880120f775da2b4d3942c3ac7580c3ab",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 432,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      },
+      "gitBlobSha1": "d65d1337d20cce160bdf6771adb054682a7b1341",
+      "provenanceVerification": "GitHub official contents API at the immutable full commit independently fetched on 2026-11-06; decoded complete payload and reported Git blob SHA-1 match retained audit source and fixture.",
+      "officialContentApiUrl": "https://api.github.com/repos/illumos/illumos-gate/contents/usr/src/man/man8/bhyve.8?ref=e8f5c080cc0b7997410d860afd787df30ba1cf2d",
+      "officialResponseSha256": "643c2b7cd7814c4bc3849ef1a72e77492f4f6cdfa273aa715b9671ea9d3b4b7a"
+    }
+  ]
+}

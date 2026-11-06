@@ -22,6 +22,17 @@ impl InlineBuilder {
         // (term.c:475-481). An empty word may have cleared it without
         // buffering a cell, so a no-output return still owns this update.
         self.tighten_next_boundary();
+        if self.execution.definition.is_some()
+            && self.execution.word_input().0.is_empty()
+            && !self.execution.has_open_native_device_row()
+        {
+            // term_newln() tests lastcol/viscol before term_flushln(). An
+            // empty speculative device sweep would consume a pending ti
+            // even though no native endline ran (term.c:475-481).
+            self.reset_native_tab_origin();
+            self.join_projected_boundary();
+            return;
+        }
         self.project_hard_break_with_origin(origin);
         self.tighten_next_boundary();
     }

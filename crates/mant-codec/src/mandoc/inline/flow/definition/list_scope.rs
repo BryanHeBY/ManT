@@ -260,6 +260,11 @@ impl InlineBuilder {
         self.begin_definition_head_consumption();
         self.observe_no_fill_source_lines(true);
         let state = self.definition_state_mut();
+        // This actual column BODY pre installs its pad/break flags even
+        // after an enclosing It post cleared the previous HEAD flags.
+        state.no_break = None;
+        state.no_break_cleared = false;
+        state.head_flags_cleared = false;
         state.field_offset_units = origin.saturating_mul(24);
         state.column_origin_units = Some(state.field_offset_units);
         state.column_reading_origin = Some(super::state::ColumnReadingOrigin::new(
