@@ -25,6 +25,12 @@ Retained links carry the accepted label meaning and original destination/title
 through bracket serialization and final framing. Link metadata has its own
 escaping: literal entities and control whitespace never become visible rows.
 Unrepresentable nested link ownership remains outside the portable subset.
+Ordinary Text is always literal, including angle-bracket URI spellings. Only
+an existing typed Link can emit an active wrapper, after checked serialization;
+invalid external spaces are never repaired into `%20`. Policy-omitted and
+invalid wrappers leave their children in the surrounding inline context.
+Typed tldr `more_information` fields use explicit URI encoding independently
+of literal descriptions and examples.
 
 Markdown admission masks terminal-unsafe controls both in original source
 bytes and in decoded Text, Code and link titles. Decoded findings retain the

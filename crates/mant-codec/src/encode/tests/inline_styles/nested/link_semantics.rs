@@ -70,9 +70,9 @@ fn link_metadata_and_bracket_context_matrix_use_original_ir_for_both_readbacks()
         "https://a.test/&#38;",
         "https://a.test/%26amp%3B",
         "https://a.test/(a)",
-        "https://a.test/\\a",
+        "https://a.test/%5Ca",
         "https://a.test/a&b",
-        "https://a.test/中",
+        "https://a.test/%E4%B8%AD",
     ];
     let labels = ["a", "a  \nb", "_! ***a***_&#32;", r"\!", r"a\[b\]"];
     let mut count = 0;
@@ -113,7 +113,7 @@ fn literal_metadata_entities_backslashes_and_control_rows_keep_their_ir_identity
         "https://a.test/&#x41;",
         "https://a.test/a&b",
         "https://a.test/%26amp%3B",
-        "https://a.test/a(b)\\c",
+        "https://a.test/a(b)%5Cc",
     ] {
         for title in [
             None,

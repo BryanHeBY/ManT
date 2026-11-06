@@ -4,6 +4,7 @@ use super::*;
 
 mod decoded_content;
 mod finalization;
+mod link_admission;
 mod link_semantics;
 mod phrasing_matrix;
 
@@ -125,7 +126,7 @@ fn styled(strong: bool, children: Vec<Inline>) -> Inline {
 fn link(children: Vec<Inline>, title: &str) -> Inline {
     Inline::Link {
         target: mant_ir::LinkTarget::External {
-            uri: "https://example.test/中(a)%25".into(),
+            uri: "https://example.test/%E4%B8%AD(a)%25".into(),
         },
         title: Some(title.into()),
         children,

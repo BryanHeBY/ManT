@@ -355,6 +355,9 @@ fn unusable_or_empty_targets_never_hide_accepted_native_text() {
     // print_encode(norecurse=1) supplies identity only. The native colon and
     // URI still follow termp_lk_pre(), even when central RFC 3986 validation
     // prevents an external destination from being activated or exported.
+    // All six exact sources were rerun with fixed CVS ASCII/UTF-8/HTML/tree/
+    // lint before changing this export assertion. Literal Markdown escaping
+    // is syntax, so compare the actual reader rather than raw URI substrings.
     for (target, label, expected, readable_uri) in [
         (r#""""#, "label", "label:  AFTER", None),
         (r#""""#, r#""""#, ":  AFTER", None),
@@ -387,13 +390,22 @@ fn unusable_or_empty_targets_never_hide_accepted_native_text() {
             crate::encode::MarkdownFragmentOptions::default(),
         );
         if let Some(readable_uri) = readable_uri {
-            assert!(markdown.contains(readable_uri), "{source}\n{markdown}");
+            assert!(inline_text(children).contains(readable_uri));
         } else {
             assert!(
                 links(children).is_empty(),
                 "no identity was decoded: {children:#?}"
             );
         }
+        let restored = crate::parse_markdown(&markdown, None).unwrap().document;
+        let [Block::Paragraph { children, .. }] = restored.blocks.as_slice() else {
+            panic!("one literal export root: {markdown:?}");
+        };
+        assert_eq!(inline_text(children), expected, "{source}\n{markdown}");
+        assert!(
+            links(children).is_empty(),
+            "no invalid target is reactivated"
+        );
         assert_no_private_metadata(&document);
     }
 }

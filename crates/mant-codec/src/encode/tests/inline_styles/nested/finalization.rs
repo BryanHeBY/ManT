@@ -9,7 +9,7 @@ fn external(label: &str, uri: &str, title: Option<&str>) -> Inline {
     }
 }
 
-fn enclosed(nodes: Vec<Inline>, context: &str) -> ResolvedContent {
+pub(super) fn enclosed(nodes: Vec<Inline>, context: &str) -> ResolvedContent {
     let mut document = manual(vec![]);
     let definition = |head: bool| Block::DefinitionList {
         declaration_groups: vec![],
@@ -73,7 +73,7 @@ fn first_nodes(block: &Block) -> &[Inline] {
     }
 }
 
-fn restored_nodes(query: &ResolvedContent, context: &str) -> Vec<Inline> {
+pub(super) fn restored_nodes(query: &ResolvedContent, context: &str) -> Vec<Inline> {
     let document = query.document.as_ref().unwrap();
     if context == "heading" {
         document.sections[0].heading.content.clone()

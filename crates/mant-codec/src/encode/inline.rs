@@ -12,11 +12,12 @@ use mant_ir::{Inline, InlineContentRef, InlineLayout};
 use super::MarkdownOptions;
 use context::render_inline_nodes;
 #[cfg(test)]
-use text::escape_plain_text;
+use text::escape_text as escape_plain_text;
 
 pub(crate) use code::code_span;
 pub(super) use code::fenced_code;
 pub(super) use links::link_destination;
+pub(super) use links::render_uri;
 pub(super) use text::{block_prefix_escape_position, protect_block_prefix};
 pub(crate) use text::{escape_text, html_anchor, html_anchors};
 

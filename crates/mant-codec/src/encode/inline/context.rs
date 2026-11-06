@@ -21,24 +21,6 @@ struct StyleMarkers {
     alternate: &'static str,
 }
 
-/// Ordinary source prose may recognize angle URLs as a convenience. Link
-/// label Text is literal: creating an autolink there would invent a nested
-/// Link that was absent from the original semantic owner.
-#[derive(Clone, Copy)]
-enum TextContext {
-    Ordinary,
-    LinkLabel,
-}
-
-impl TextContext {
-    fn escape(self, source: &str) -> String {
-        match self {
-            Self::Ordinary => escape_text(source),
-            Self::LinkLabel => super::text::escape_plain_text(source),
-        }
-    }
-}
-
 enum AcceptedMeaning {
     Phrasing,
     Link(LinkMeaning),
@@ -98,13 +80,7 @@ impl<'source> InlinePiece<'source> {
 
 #[cfg(test)]
 fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: bool) -> String {
-    render_nodes(
-        nodes.iter(),
-        options,
-        manual_links,
-        Framing::Raw,
-        TextContext::Ordinary,
-    )
+    render_nodes(nodes.iter(), options, manual_links, Framing::Raw)
 }
 
 /// Row protection is part of the accepted representation, rather than an
@@ -124,7 +100,6 @@ pub(super) fn render_inline_nodes<'source>(
             manual_links,
             interruptible,
         },
-        TextContext::Ordinary,
     )
 }
 
@@ -133,19 +108,12 @@ fn render_nodes<'source>(
     options: MarkdownOptions,
     manual_links: bool,
     framing: Framing,
-    text_context: TextContext,
 ) -> String {
     render_inline_pieces(
-        &mut coalesce_code_pieces(inline_pieces(
-            nodes.clone(),
-            options,
-            manual_links,
-            false,
-            text_context,
-        )),
+        &mut coalesce_code_pieces(inline_pieces(nodes.clone(), options, manual_links, false)),
         framing,
     )
-    .unwrap_or_else(|| render_unstyled_framed(nodes, options, manual_links, framing, text_context))
+    .unwrap_or_else(|| render_unstyled_framed(nodes, options, manual_links, framing))
 }
 
 #[cfg(test)]
@@ -154,13 +122,7 @@ fn render_unstyled<'source>(
     options: MarkdownOptions,
     manual_links: bool,
 ) -> String {
-    render_unstyled_framed(
-        nodes,
-        options,
-        manual_links,
-        Framing::Raw,
-        TextContext::Ordinary,
-    )
+    render_unstyled_framed(nodes, options, manual_links, Framing::Raw)
 }
 
 fn render_unstyled_framed<'source>(
@@ -168,18 +130,11 @@ fn render_unstyled_framed<'source>(
     options: MarkdownOptions,
     manual_links: bool,
     framing: Framing,
-    text_context: TextContext,
 ) -> String {
     // Revisit the original borrowed nodes, preserving code coalescing and
     // typed links. Stripping bytes from a rejected Markdown candidate could
     // delete authored marker characters or change destination identities.
-    let mut pieces = coalesce_code_pieces(inline_pieces(
-        nodes,
-        options,
-        manual_links,
-        true,
-        text_context,
-    ));
+    let mut pieces = coalesce_code_pieces(inline_pieces(nodes, options, manual_links, true));
     if let Some(output) = render_inline_pieces(&mut pieces, framing) {
         return output;
     }
@@ -200,21 +155,9 @@ pub(super) fn render_link_label(
     omit_styles: bool,
 ) -> String {
     if omit_styles {
-        render_unstyled_framed(
-            children.iter(),
-            options,
-            manual_links,
-            Framing::Raw,
-            TextContext::LinkLabel,
-        )
+        render_unstyled_framed(children.iter(), options, manual_links, Framing::Raw)
     } else {
-        render_nodes(
-            children.iter(),
-            options,
-            manual_links,
-            Framing::Raw,
-            TextContext::LinkLabel,
-        )
+        render_nodes(children.iter(), options, manual_links, Framing::Raw)
     }
 }
 
@@ -223,7 +166,6 @@ fn inline_pieces<'source>(
     options: MarkdownOptions,
     manual_links: bool,
     omit_styles: bool,
-    text_context: TextContext,
 ) -> Vec<InlinePiece<'source>> {
     let mut nodes = phrasing_nodes(nodes, options, manual_links, omit_styles).peekable();
     let mut pieces = Vec::new();
@@ -238,7 +180,7 @@ fn inline_pieces<'source>(
                     text.to_mut().push_str(value);
                     nodes.next();
                 }
-                pieces.push(InlinePiece::plain(text_context.escape(&text)));
+                pieces.push(InlinePiece::plain(escape_text(&text)));
             }
             PhrasingNode::Node(Inline::Strong { children }) => {
                 let mut segments = vec![children.as_slice()];
@@ -246,13 +188,7 @@ fn inline_pieces<'source>(
                     segments.push(children.as_slice());
                     nodes.next();
                 }
-                pieces.push(render_style(
-                    &segments,
-                    options,
-                    manual_links,
-                    ("**", "__"),
-                    text_context,
-                ));
+                pieces.push(render_style(&segments, options, manual_links, ("**", "__")));
             }
             PhrasingNode::Node(Inline::Emphasis { children }) => {
                 let mut segments = vec![children.as_slice()];
@@ -260,13 +196,7 @@ fn inline_pieces<'source>(
                     segments.push(children.as_slice());
                     nodes.next();
                 }
-                pieces.push(render_style(
-                    &segments,
-                    options,
-                    manual_links,
-                    ("*", "_"),
-                    text_context,
-                ));
+                pieces.push(render_style(&segments, options, manual_links, ("*", "_")));
             }
             PhrasingNode::Node(Inline::Code { value } | Inline::Equation { value, .. }) => {
                 pieces.push(InlinePiece::code(value));
@@ -315,14 +245,12 @@ fn render_style<'source>(
     options: MarkdownOptions,
     manual_links: bool,
     markers: (&'static str, &'static str),
-    text_context: TextContext,
 ) -> InlinePiece<'source> {
     let rendered = render_nodes(
         segments.iter().flat_map(|nodes| nodes.iter()),
         options,
         manual_links,
         Framing::Raw,
-        text_context,
     );
     // Destination-only annotations emit navigation syntax, never an empty
     // emphasis wrapper that can alter the adjacent phrasing delimiters.
@@ -392,6 +320,72 @@ mod tests {
     use pulldown_cmark::{Event, Parser, Tag};
 
     #[test]
+    fn forced_unstyled_target_admission_keeps_literal_labels_without_new_links() {
+        for (uri, expected_target) in [
+            ("https://a.test/a%20b", Some("https://a.test/a%20b")),
+            ("https://a.test/a%1Bb", Some("https://a.test/a%1Bb")),
+            ("https://a.test/a b", None),
+            ("https://a.test/\x0c", None),
+            ("https://a.test/\u{85}", None),
+        ] {
+            let original = vec![
+                Inline::Text { value: "!".into() },
+                Inline::Strong {
+                    children: vec![Inline::Link {
+                        target: mant_ir::LinkTarget::External { uri: uri.into() },
+                        title: Some("original".into()),
+                        children: vec![Inline::Text {
+                            value: "<https://other.test>".into(),
+                        }],
+                    }],
+                },
+                Inline::Code {
+                    value: "END`".into(),
+                },
+            ];
+            let frozen = original.clone();
+            let mut markdown = render_unstyled(original.iter(), MarkdownOptions::default(), false);
+            for _ in 0..2 {
+                assert!(
+                    !Parser::new(&markdown)
+                        .any(|event| matches!(event, Event::Start(Tag::Image { .. })))
+                );
+                let document = crate::parse_markdown(&markdown, None).unwrap().document;
+                let [mant_ir::Block::Paragraph { children, .. }] = document.blocks.as_slice()
+                else {
+                    panic!("one fallback owner")
+                };
+                assert_eq!(
+                    mant_ir::inline_plain_text(children),
+                    "!<https://other.test>END`"
+                );
+                let links = Parser::new(&markdown)
+                    .filter_map(|event| match event {
+                        Event::Start(Tag::Link {
+                            dest_url, title, ..
+                        }) => Some((dest_url.into_string(), title.into_string())),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    links,
+                    expected_target
+                        .map(|target| (target.to_owned(), "original".to_owned()))
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                );
+                assert!(
+                    Parser::new(&markdown).any(
+                        |event| matches!(event, Event::Code(value) if value.as_ref() == "END`")
+                    )
+                );
+                markdown = super::super::render_inline(children, MarkdownOptions::default());
+            }
+            assert_eq!(original, frozen);
+        }
+    }
+
+    #[test]
     fn forced_unstyled_recovery_uses_decoded_admission_and_safe_metadata() {
         for (raw, normalized) in [
             ("\r\n", "\r\n"),
@@ -418,7 +412,6 @@ mod tests {
                     manual_links: false,
                     interruptible: false,
                 },
-                TextContext::Ordinary,
             );
             assert!(
                 markdown
@@ -462,7 +455,7 @@ mod tests {
     fn unstyled_fallback_reencodes_authored_markers_code_and_link_identities() {
         let link = |label: &str| Inline::Link {
             target: mant_ir::LinkTarget::External {
-                uri: "https://example.test/中(a)".into(),
+                uri: "https://example.test/%E4%B8%AD(a)".into(),
             },
             title: Some("original owner".into()),
             children: vec![Inline::Text {
@@ -513,7 +506,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             owners,
-            [("https://example.test/中(a)", "original owner"); 2]
+            [("https://example.test/%E4%B8%AD(a)", "original owner"); 2]
         );
         let parsed = crate::parse_markdown(&markdown, None).unwrap();
         let [mant_ir::Block::Paragraph { children, .. }] = parsed.document.blocks.as_slice() else {

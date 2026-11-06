@@ -10,10 +10,50 @@ use super::{MarkdownOptions, flatten_inline};
 pub(super) enum PhrasingNode<'source> {
     Node(&'source Inline),
     Link {
-        destination: Cow<'source, str>,
+        destination: CheckedDestination,
         title: Option<&'source str>,
         children: &'source [Inline],
     },
+}
+
+/// A reusable URI admitted by the shared typed-target boundary. Label bytes
+/// cannot construct this proof, and serialization never repairs its contents.
+pub(in crate::encode) struct CheckedDestination(String);
+
+impl CheckedDestination {
+    fn from_target(target: &LinkTarget) -> Option<Self> {
+        target.to_uri().map(Self)
+    }
+
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+enum LinkPresentation {
+    Wrapped(CheckedDestination),
+    OmittedByPolicy,
+    Invalid,
+}
+
+/// URI-valued metadata is an explicit semantic caller, unlike ordinary Text.
+/// Reuse the same typed admission and metadata serializer as retained links.
+pub(in crate::encode) fn render_uri(value: &str) -> Option<String> {
+    let target = LinkTarget::from_uri(value);
+    let destination = CheckedDestination::from_target(&target)?;
+    Some(
+        render_link(
+            &destination,
+            None,
+            &[Inline::Text {
+                value: value.into(),
+            }],
+            MarkdownOptions::default(),
+            true,
+            false,
+        )
+        .source,
+    )
 }
 
 /// A link whose target policy emits no wrapper is transparent phrasing.
@@ -69,7 +109,7 @@ pub(super) struct EncodedLink {
 }
 
 pub(super) fn render_link(
-    target: &str,
+    target: &CheckedDestination,
     title: Option<&str>,
     children: &[Inline],
     options: MarkdownOptions,
@@ -102,29 +142,30 @@ pub(super) fn render_link(
     recovered
 }
 
-fn encode_link(target: &str, title: Option<&str>, label: &str, children: &[Inline]) -> EncodedLink {
-    // Preserve the existing representation policy for invalid source URIs
-    // containing SP. Valid typed destinations retain every original scalar.
-    let destination = target.replace(' ', "%20");
+fn encode_link(
+    target: &CheckedDestination,
+    title: Option<&str>,
+    label: &str,
+    children: &[Inline],
+) -> EncodedLink {
+    let destination = target.as_str();
     let normalized_title = title.map(|title| {
         crate::text_safety::mask_terminal_controls(title)
             .0
             .map_or(Cow::Borrowed(title), Cow::Owned)
     });
     let title = normalized_title.as_deref();
-    let meaning = link_meaning(label, &destination, title);
+    let meaning = link_meaning(label, destination, title);
     if title.is_none()
         && !children.is_empty()
         && children
             .iter()
             .all(|node| matches!(node, Inline::Text { .. }))
-        && (target.starts_with("http://") || target.starts_with("https://"))
-        && flatten_inline(children) == target
-        && !target.chars().any(char::is_whitespace)
-        && !target.contains(['<', '>'])
+        && (destination.starts_with("http://") || destination.starts_with("https://"))
+        && flatten_inline(children) == destination
     {
         return EncodedLink {
-            source: format!("<{target}>"),
+            source: format!("<{destination}>"),
             meaning,
         };
     }
@@ -132,7 +173,7 @@ fn encode_link(target: &str, title: Option<&str>, label: &str, children: &[Inlin
     source.push('[');
     source.push_str(label);
     source.push_str("](");
-    append_metadata(&mut source, &destination, false);
+    append_metadata(&mut source, destination, false);
     if let Some(title) = title {
         source.push(' ');
         source.push('"');
@@ -170,20 +211,31 @@ pub(in crate::encode) fn link_destination(
     target: &LinkTarget,
     options: MarkdownOptions,
     manual_links: bool,
-) -> Option<Cow<'_, str>> {
-    let destination = match target {
-        // Keep existing external-source representation policy; invalid source
-        // references remain visible and diagnosed rather than silently erased.
-        LinkTarget::External { uri } => Some(Cow::Borrowed(uri.as_str())),
-        LinkTarget::Manual { .. } if !manual_links => None,
-        LinkTarget::Section { .. } if !options.preserve_anchors => None,
-        _ => target.to_uri().map(Cow::Owned),
-    }?;
-    // A forbidden target remains invalid in the original IR and receives
-    // its ordinary producer/validator diagnostic. Do not wash it into an
-    // activatable URI through lossy escaping or normalization. Only the
-    // label participates in the safe projection of such a target.
-    (!destination.chars().any(char::is_control)).then_some(destination)
+) -> Option<CheckedDestination> {
+    match link_presentation(target, options, manual_links) {
+        LinkPresentation::Wrapped(destination) => Some(destination),
+        LinkPresentation::OmittedByPolicy | LinkPresentation::Invalid => None,
+    }
+}
+
+fn link_presentation(
+    target: &LinkTarget,
+    options: MarkdownOptions,
+    manual_links: bool,
+) -> LinkPresentation {
+    if matches!(target, LinkTarget::Manual { .. }) && !manual_links
+        || matches!(target, LinkTarget::Section { .. }) && !options.preserve_anchors
+    {
+        // Policy omits this wrapper regardless of validity. Do not allocate
+        // a URI/proof that will never participate in the serialized output.
+        return LinkPresentation::OmittedByPolicy;
+    }
+    let Some(destination) = CheckedDestination::from_target(target) else {
+        // Invalid target facts and diagnostics belong to the original IR;
+        // transparent labels preserve content without inventing another URI.
+        return LinkPresentation::Invalid;
+    };
+    LinkPresentation::Wrapped(destination)
 }
 
 #[cfg(test)]
@@ -193,8 +245,13 @@ mod tests {
         let children = [mant_ir::Inline::Text {
             value: "label".into(),
         }];
+        let uri = "https://example.test/%E4%B8%AD(a)%20%25%5Ctail";
+        let target = super::CheckedDestination::from_target(&mant_ir::LinkTarget::External {
+            uri: uri.into(),
+        })
+        .expect("the source URI is valid before serialization");
         let markdown = super::render_link(
-            "https://example.test/中(a) %25\\tail",
+            &target,
             Some("say \"中\""),
             &children,
             super::MarkdownOptions::default(),
@@ -204,7 +261,7 @@ mod tests {
         let markdown = markdown.source;
         assert_eq!(
             markdown,
-            r#"[label](https://example.test/中\(a\)%20%25\\tail "say \"中\"")"#
+            r#"[label](https://example.test/%E4%B8%AD\(a\)%20%25%5Ctail "say \"中\"")"#
         );
         let links: Vec<_> = pulldown_cmark::Parser::new(&markdown)
             .filter_map(|event| match event {
@@ -214,12 +271,6 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(
-            links,
-            [(
-                "https://example.test/中(a)%20%25\\tail".into(),
-                "say \"中\"".into()
-            )]
-        );
+        assert_eq!(links, [(uri.into(), "say \"中\"".into())]);
     }
 }

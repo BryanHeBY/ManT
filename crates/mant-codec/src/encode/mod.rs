@@ -140,15 +140,8 @@ pub fn render_tldr(page: &TldrDocument) -> Vec<String> {
 
 fn render_more_information(value: &str) -> String {
     let value = value.trim();
-    if (value.starts_with("http://") || value.starts_with("https://"))
-        && !value
-            .chars()
-            .any(|character| character.is_whitespace() || character.is_control())
-        && !value.contains(['<', '>'])
-    {
-        return format!("**More information:** <{value}>");
-    }
-    format!("**More information:** {}", escape_text(value))
+    let rendered = inline::render_uri(value).unwrap_or_else(|| escape_text(value));
+    format!("**More information:** {rendered}")
 }
 
 /// Encode a plain heading, clamping its level to the `CommonMark` range 1–6.

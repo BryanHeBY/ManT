@@ -37,6 +37,10 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Export ordinary text literally and activate only checked typed links. Keep
+  invalid link labels in the surrounding inline context without repairing URI
+  spaces or reinterpreting literal angle URLs; encode typed tldr information
+  links explicitly. Preserve already encoded valid destination identities.
 - Normalize Markdown physical LF, CRLF and CR before parsing while retaining
   original byte and line coordinates. Code spans use one space per source line
   ending; preserved unsupported reading fragments no longer expose CRLF as

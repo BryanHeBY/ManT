@@ -89,6 +89,16 @@ no portable CommonMark representation and remains outside this checked subset.
 
 ## Links
 
+Ordinary IR text is always exported literally, including angle-bracket URI
+spellings. Only a typed `Link` can emit an active Markdown link. An invalid
+target keeps its safe label without an active wrapper; export never repairs
+an invalid external URI by replacing spaces with `%20`. Valid existing `%20`
+and `%1B` escapes retain their identity. Encoding logical document, manual and
+section components remains distinct from repairing an invalid external URI.
+Link wrappers omitted by export options are transparent to the surrounding
+inline encoding context. Typed tldr `more_information` URIs use explicit link
+encoding; ordinary descriptions and examples remain literal text.
+
 Markdown links are classified before entering the IR:
 
 | Destination | Link target |
