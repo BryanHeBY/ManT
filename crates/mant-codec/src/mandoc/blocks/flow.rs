@@ -64,12 +64,19 @@ pub(super) struct BlockState {
 #[derive(Clone, Copy)]
 pub(super) struct LinkOutputCursor {
     output: usize,
-    node_id: u32,
+    owner: crate::mandoc::inline::ownership::annotations::AnnotationKey,
 }
 
 impl BlockState {
-    pub(super) fn link_output_cursor(&mut self, node_id: u32) -> LinkOutputCursor {
-        let marker = super::man_links::link_cursor_marker(node_id);
+    pub(super) fn link_output_cursor(
+        &mut self,
+        owner: crate::mandoc::inline::ownership::annotations::AnnotationKey,
+    ) -> LinkOutputCursor {
+        let marker = super::man_links::link_cursor_marker(owner);
+        self.formatter
+            .execution
+            .pending_output_scope_prefixes
+            .push(format!("{marker}:content"));
         if self.inline_output_is_literal(self.formatter.no_fill) {
             self.literal.insert_link_cursor(marker);
         } else {
@@ -77,7 +84,22 @@ impl BlockState {
         }
         LinkOutputCursor {
             output: self.output.len(),
-            node_id,
+            owner,
+        }
+    }
+
+    pub(super) fn close_annotation_root(&mut self, no_fill: bool) {
+        let markers = self
+            .formatter
+            .execution
+            .zero_advance
+            .close_annotation_root();
+        for marker in markers {
+            if self.inline_output_is_literal(no_fill) {
+                self.literal.insert_link_cursor(marker);
+            } else {
+                self.paragraph.insert_link_cursor(marker);
+            }
         }
     }
 
@@ -87,37 +109,21 @@ impl BlockState {
         target: &mant_ir::LinkTarget,
         membership: crate::mandoc::inline::ownership::OutputMembership,
     ) -> bool {
-        let marker = super::man_links::link_cursor_marker(cursor.node_id);
-        let mut started = false;
-        for index in cursor.output..self.output.len() {
-            let block = &mut self.output[index];
-            let wrapped = super::man_links::wrap_first_visible_block(
-                block,
-                target,
-                &marker,
-                &mut started,
-                membership,
+        let marker = super::man_links::link_cursor_marker(cursor.owner);
+        let mut range = super::man_links::LabelRange::default();
+        let mut wrapped = false;
+        for block in &mut self.output[cursor.output..] {
+            wrapped |= super::man_links::wrap_first_visible_block(
+                block, target, &marker, &mut range, membership,
             );
-            if started {
-                // HTML closes the annotation when this output owner closes
-                // (man_html.c::man_IP_pre and html_close_paragraph). A
-                // rejected/empty label cannot migrate to a later list item.
-                if matches!(block, Block::Paragraph { children, .. } | Block::Preformatted { children, .. } if children.is_empty())
-                {
-                    self.literal_assembly.remove(index);
-                    self.output.remove(index);
-                }
-                return wrapped;
-            }
         }
-        let wrapped = self
+        wrapped |= self
             .paragraph
-            .wrap_first_link(target, &marker, &mut started, membership);
-        if started {
-            return wrapped;
-        }
-        self.literal
-            .wrap_first_link(target, &marker, &mut started, membership)
+            .wrap_first_link(target, &marker, &mut range, membership);
+        wrapped |= self
+            .literal
+            .wrap_first_link(target, &marker, &mut range, membership);
+        wrapped
     }
 
     pub(super) fn finish_output_membership(
@@ -125,7 +131,7 @@ impl BlockState {
         cursor: LinkOutputCursor,
         membership: crate::mandoc::inline::ownership::OutputMembership,
     ) {
-        let marker = super::man_links::link_cursor_marker(cursor.node_id);
+        let marker = super::man_links::link_cursor_marker(cursor.owner);
         let mut started = false;
         for block in &mut self.output[cursor.output..] {
             super::man_links::finish_output_membership(block, &marker, &mut started, membership);
@@ -136,12 +142,12 @@ impl BlockState {
             .finish_output_membership(&marker, &mut started, membership);
     }
 
-    pub(super) fn discard_link_cursor(&mut self, cursor: LinkOutputCursor) {
-        let marker = super::man_links::link_cursor_marker(cursor.node_id);
+    pub(super) fn discard_link_cursor(&mut self, cursor: LinkOutputCursor, entry: Option<&str>) {
+        let marker = super::man_links::link_cursor_marker(cursor.owner);
         let mut scoped_output = self.output.split_off(cursor.output);
         let mut index = cursor.output;
         scoped_output.retain_mut(|block| {
-            if super::man_links::remove_link_cursor_block(block, &marker) {
+            if super::man_links::remove_link_cursor_block(block, &marker, entry) {
                 self.literal_assembly.remove(index);
                 false
             } else {
@@ -150,8 +156,8 @@ impl BlockState {
             }
         });
         self.output.extend(scoped_output);
-        self.paragraph.discard_link_cursor(&marker);
-        self.literal.discard_link_cursor(&marker);
+        self.paragraph.discard_link_cursor(&marker, entry);
+        self.literal.discard_link_cursor(&marker, entry);
     }
 
     pub(super) const fn source_indent(&self) -> crate::mandoc::layout::SourceIndent {

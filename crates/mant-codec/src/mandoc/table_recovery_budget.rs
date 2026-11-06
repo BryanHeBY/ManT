@@ -111,11 +111,37 @@ impl TableRecoveryBudget {
     /// without rewalking the candidate just to calculate its allocation.
     pub(super) fn charge_output_with_text_bytes(&mut self, nodes: &[Inline]) -> Option<usize> {
         let mut text_bytes = 0;
-        self.charge_inlines(nodes, &mut text_bytes)
-            .then_some(text_bytes)
+        self.charge_inlines(
+            nodes,
+            &mut text_bytes,
+            None,
+            &mut std::collections::HashSet::new(),
+        )
+        .then_some(text_bytes)
     }
 
-    fn charge_inlines(&mut self, nodes: &[Inline], text_bytes: &mut usize) -> bool {
+    pub(super) fn charge_output_with_annotations(
+        &mut self,
+        nodes: &[Inline],
+        annotations: &super::inline::ownership::annotations::AnnotationPool,
+    ) -> Option<usize> {
+        let mut text_bytes = 0;
+        self.charge_inlines(
+            nodes,
+            &mut text_bytes,
+            Some(annotations),
+            &mut std::collections::HashSet::new(),
+        )
+        .then_some(text_bytes)
+    }
+
+    fn charge_inlines(
+        &mut self,
+        nodes: &[Inline],
+        text_bytes: &mut usize,
+        annotations: Option<&super::inline::ownership::annotations::AnnotationPool>,
+        seen: &mut std::collections::HashSet<String>,
+    ) -> bool {
         for node in nodes {
             if !self.charge(1, Exhaustion::OutputNodes) {
                 return false;
@@ -126,16 +152,16 @@ impl TableRecoveryBudget {
                     self.charge_output_text(value)
                 }
                 Inline::Strong { children } | Inline::Emphasis { children } => {
-                    self.charge_inlines(children, text_bytes)
+                    self.charge_inlines(children, text_bytes, annotations, seen)
                 }
                 Inline::Link {
                     target,
                     title,
                     children,
                 } => {
-                    self.charge_target(target)
+                    self.charge_annotation_target(target, annotations, seen)
                         && self.charge_optional_output(title.as_deref())
-                        && self.charge_inlines(children, text_bytes)
+                        && self.charge_inlines(children, text_bytes, annotations, seen)
                 }
                 Inline::Equation { value, expression } => {
                     *text_bytes = text_bytes.saturating_add(value.len());
@@ -161,6 +187,26 @@ impl TableRecoveryBudget {
             }
         }
         true
+    }
+
+    fn charge_annotation_target(
+        &mut self,
+        target: &LinkTarget,
+        annotations: Option<&super::inline::ownership::annotations::AnnotationPool>,
+        seen: &mut std::collections::HashSet<String>,
+    ) -> bool {
+        if let (Some(annotations), LinkTarget::External { uri }) = (annotations, target)
+            && let Some(result) = annotations.with_destination(uri, |target| {
+                if seen.insert(uri.clone()) {
+                    self.charge_target(target)
+                } else {
+                    true
+                }
+            })
+        {
+            return result;
+        }
+        self.charge_target(target)
     }
 
     fn charge_target(&mut self, target: &LinkTarget) -> bool {

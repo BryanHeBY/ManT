@@ -125,3 +125,46 @@ fn one_output_traversal_retains_exact_visible_copy_bytes_without_destination_mar
     assert_eq!(budget.output_bytes, 12);
     assert_eq!(budget.output_nodes, 5);
 }
+
+#[test]
+fn canonical_target_admission_counts_sources_once_without_short_key_bypasses() {
+    use crate::mandoc::inline::ownership::annotations::AnnotationPool;
+    // This is the admission arithmetic itself. Source-backed candidate
+    // rollback/refusal is exercised separately by the twelve-variant matrix.
+    for occurrences in [1, 2] {
+        for members in [1, 32] {
+            let annotations = AnnotationPool::deferred();
+            let uri = format!("https://example.test/{}", "u".repeat(4096));
+            let mut nodes = Vec::new();
+            for _ in 0..occurrences {
+                let target = annotations
+                    .register(LinkTarget::External { uri: uri.clone() })
+                    .target;
+                for _ in 0..members {
+                    nodes.push(Inline::Link {
+                        target: target.clone(),
+                        title: Some("t".into()),
+                        children: vec![Inline::Text { value: "X".into() }],
+                    });
+                }
+            }
+            let bytes = occurrences * (uri.len() + 2 * members);
+            for limit in [bytes - 1, bytes, bytes + 1] {
+                let mut budget = TableRecoveryBudget::with_limits(Limits {
+                    output_bytes: limit,
+                    ..Limits::default()
+                });
+                assert_eq!(
+                    budget
+                        .charge_output_with_annotations(&nodes, &annotations)
+                        .is_some(),
+                    limit >= bytes
+                );
+                assert_eq!(
+                    budget.exhaustion(),
+                    (limit < bytes).then_some(Exhaustion::OutputBytes)
+                );
+            }
+        }
+    }
+}

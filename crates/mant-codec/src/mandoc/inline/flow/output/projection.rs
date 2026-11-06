@@ -109,7 +109,7 @@ pub(in crate::mandoc) fn trailing_completed_row_origins(
 /// Locate the operand boundary recorded during execution. Styles and nested
 /// semantic owners can surround that marker, but cannot move it past an
 /// authored leading blank or make automatic padding part of a link label.
-pub(super) fn split_output_scope_prefix(
+pub(in crate::mandoc) fn split_output_scope_prefix(
     nodes: Vec<Inline>,
     marker: &str,
 ) -> (Vec<Inline>, Vec<Inline>, bool) {
@@ -361,72 +361,57 @@ pub(in crate::mandoc::inline) fn trailing_ascii_spaces(nodes: &[Inline]) -> usiz
 /// separately. Remove the private split marker after field acceptance has
 /// been decided; matching typed identity does not merge unrelated links.
 fn join_authored_links(nodes: &mut Vec<Inline>) {
-    for node in nodes.iter_mut() {
-        match node {
+    let mut output: Vec<Inline> = Vec::with_capacity(nodes.len());
+    let mut seam = false;
+    let mut between = Vec::new();
+    for mut node in std::mem::take(nodes) {
+        #[cfg(test)]
+        crate::mandoc::inline::ownership::metrics::note(|counts| counts.normalization += 1);
+        match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => join_authored_links(children),
-            Inline::Text { .. }
-            | Inline::Code { .. }
-            | Inline::Equation { .. }
-            | Inline::Anchor { .. }
-            | Inline::LineBreak { .. } => {}
+            _ => {}
         }
-    }
-
-    let mut index = 0;
-    while index < nodes.len() {
-        let marker = matches!(&nodes[index], Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LINK_SPLIT);
-        if !marker {
-            index += 1;
+        if matches!(&node, Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LINK_SPLIT) {
+            seam = true;
             continue;
         }
-        // Native source-owner markers can separate these two projections
-        // when a cached glyph settles at the next word. They are metadata,
-        // not a different authored link or an intervening visible boundary.
-        let is_owner_marker = |at: usize| {
-            matches!(&nodes[at], Inline::Anchor { id, .. }
-                if id.as_str().starts_with(super::INTERNAL_FIELD_WORD)
-                    || id.as_str().strip_prefix(super::INTERNAL_OUTPUT_SCOPE).is_some_and(
-                        |scope| scope.starts_with("lk:") || scope.starts_with("semantic:")))
-        };
-        let left = (0..index).rev().find(|&at| !is_owner_marker(at));
-        let next = (index + 1..nodes.len())
-            .find(|&at| !is_owner_marker(at))
-            .unwrap_or(nodes.len());
-        let prefix = matches!(nodes.get(next), Some(Inline::Text { value }) if value.chars().all(char::is_whitespace));
-        let right = next + usize::from(prefix);
-        let merge = match (left.and_then(|at| nodes.get(at)), nodes.get(right)) {
-            (
+        let metadata = matches!(&node, Inline::Anchor { id, .. } if id.as_str().starts_with(super::INTERNAL_FIELD_WORD) || id.as_str().starts_with(super::INTERNAL_OUTPUT_SCOPE));
+        if metadata
+            || (seam
+                && matches!(&node, Inline::Text { value } if value.chars().all(char::is_whitespace)))
+        {
+            between.push(node);
+            continue;
+        }
+        if seam
+            && let (
                 Some(Inline::Link {
                     target: left,
-                    title: left_title,
-                    ..
+                    title: lt,
+                    children: accepted,
                 }),
-                Some(Inline::Link {
+                Inline::Link {
                     target: right,
-                    title: right_title,
-                    ..
-                }),
-            ) => left == right && left_title == right_title,
-            _ => false,
-        };
-        if merge {
-            let Inline::Link { mut children, .. } = nodes.remove(right) else {
-                unreachable!("checked matching link")
-            };
-            if prefix {
-                children.insert(0, nodes.remove(next));
-            }
-            if let Inline::Link {
-                children: accepted, ..
-            } = &mut nodes[left.unwrap()]
-            {
-                accepted.append(&mut children);
-            }
+                    title: rt,
+                    children,
+                },
+            ) = (output.last_mut(), &mut node)
+            && left == right
+            && lt == rt
+        {
+            accepted.append(&mut between);
+            accepted.append(children);
+            seam = false;
+            continue;
         }
-        nodes.remove(index);
+        output.append(&mut between);
+        output.push(node);
+        seam = false;
     }
+    output.append(&mut between);
+    *nodes = output;
 }
 
 pub(in crate::mandoc) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>, count: usize) {

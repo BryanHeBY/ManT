@@ -268,6 +268,7 @@ pub(super) fn lower_table_cell(
         // native payload. This keeps unrelated document-local macros from
         // disabling recovery without allowing a synthetic parser to replace
         // what the native execution actually produced.
+        let semantic_annotations = context.annotations.transaction();
         if source_recovery_allowed
             && let Some(source_operands) = source_operands.as_deref()
             && let Some(recovered) = lower_source_fragment_with_formatter_state(
@@ -294,9 +295,12 @@ pub(super) fn lower_table_cell(
                 cell.source_recovery_safe,
                 context,
             ) {
+                semantic_annotations.commit();
                 return Some(candidate.commit(context, formatter));
             }
         }
+
+        drop(semantic_annotations);
 
         // The raw fallback is deliberately weaker than semantic recovery: it
         // never replays requests or macro meaning, only the complete operand
@@ -311,6 +315,7 @@ pub(super) fn lower_table_cell(
                 .borrow_mut()
                 .begin_candidate(source.len())
         {
+            let raw_annotations = context.annotations.transaction();
             let mut candidate_state = initial_state.clone();
             let recovered = lower_raw_table_text_block(&source, context, &mut candidate_state);
             // Recovery remains transactional: it can replace native text only
@@ -320,10 +325,12 @@ pub(super) fn lower_table_cell(
             let candidate_diagnostics =
                 context.diagnostics.borrow_mut().split_off(diagnostic_start);
             let output_text_bytes = recovered.as_deref().and_then(|inlines| {
-                context
-                    .table_recovery_budget
-                    .borrow_mut()
-                    .charge_output_with_text_bytes(inlines)
+                let mut budget = context.table_recovery_budget.borrow_mut();
+                if let Some(annotations) = &candidate_state.execution.zero_advance.annotations {
+                    budget.charge_output_with_annotations(inlines, annotations)
+                } else {
+                    budget.charge_output_with_text_bytes(inlines)
+                }
             });
             if let Some(inlines) = recovered
                 && let Some(output_text_bytes) = output_text_bytes
@@ -341,6 +348,7 @@ pub(super) fn lower_table_cell(
                     cell.source_recovery_safe,
                     context,
                 ) {
+                    raw_annotations.commit();
                     return Some(candidate.commit(context, formatter));
                 }
             }

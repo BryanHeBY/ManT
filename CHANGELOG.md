@@ -37,6 +37,15 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Materialize one reference per authored, representable roff annotation after
+  native field acceptance. Keep distinct equal-target occurrences separate,
+  retain authored leading blanks and delayed cells' birth styles, and prevent
+  text born after a real label-root closure from acquiring the old link.
+  Share destination storage and group equivalent runs instead of copying long
+  URIs per delayed glyph or blank. Unrepresentable cross-reference fragments
+  retain all accepted text and report semantic coverage without claiming
+  content loss. Frozen IR and query schemas remain unchanged.
+
 - Preserve delayed recovery text's original annotation and font independently
   of zero-advance glyph survival. New links, include/code spans and generated
   markers no longer absorb preceding recovery; recovery inside a label stays

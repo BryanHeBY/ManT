@@ -23,8 +23,8 @@ impl ParagraphFlow {
         self.nodes.push(Inline::anchor(marker));
     }
 
-    pub(super) fn discard_link_cursor(&mut self, marker: &str) {
-        super::super::man_links::remove_link_cursor(&mut self.nodes, marker);
+    pub(super) fn discard_link_cursor(&mut self, marker: &str, entry: Option<&str>) {
+        super::super::man_links::remove_link_cursor(&mut self.nodes, marker, entry);
     }
 
     pub(super) fn finish_output_membership(
@@ -45,7 +45,7 @@ impl ParagraphFlow {
         &mut self,
         target: &mant_ir::LinkTarget,
         marker: &str,
-        started: &mut bool,
+        started: &mut super::super::man_links::LabelRange,
         membership: crate::mandoc::inline::ownership::OutputMembership,
     ) -> bool {
         super::super::man_links::wrap_first_visible_inline(

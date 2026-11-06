@@ -1171,6 +1171,23 @@ without introducing an extra formatter boundary or changing native field
 acceptance. Refused table enrichment cannot commit speculative annotations
 or change earlier accepted or subsequent ordinary links.
 
+One authored reference produces one typed occurrence when its accepted label
+is representable in one content owner. Different source occurrences remain
+separate even when their targets are equal. Deferred glyphs and surviving
+held blanks retain their birth font, style and annotation; only native
+acceptance decides whether they survive. Generated word separators and leading
+horizontal-motion padding stay outside labels, while authored SP and NBSP
+remain inside. Internal layout motion does not trim authored label content.
+
+For man `UR` and `MT`, a real paragraph, table or fill-mode boundary closes
+the initial label root. Later text stays outside that reference, including
+text released only by its generated closing punctuation. A conditional break
+or unchanged fill-mode request does not create a new label root. When nested
+independent links or distinct content owners make a complete source label
+unrepresentable, ManT retains its initial identity and all accepted text and
+reports `manual.annotation-coverage` as `SemanticCoverage`. It does not report
+content loss, invent another occurrence, or make an invalid target launchable.
+
 Decoded text is never interpreted a second time as roff syntax. In particular, literal font-escape spellings authored with `\e` or `\[rs]` remain visible even when their letters resemble the currently selected font.
 
 ## Tables

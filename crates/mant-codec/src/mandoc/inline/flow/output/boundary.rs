@@ -154,26 +154,16 @@ impl InlineBuilder {
             add_space && projected_separator == 0,
             &projection,
         );
-        // The native word boundary belongs to its surrounding flow. Only
-        // the operand itself belongs to an optional semantic annotation;
-        // authored leading blanks therefore stay inside that owner.
-        if word {
-            // A word containing only a cached glyph has no immediate IR
-            // content. Its already-executed separator still precedes this
-            // content marker (term_word() before encode1()), including when
-            // that separator otherwise waits for the next visible word.
-            self.materialize_boundary_before_pending_glyph();
-            for marker in self.pending_output_scope_prefixes.drain(..) {
-                self.nodes.push(Inline::anchor(marker));
-            }
-        }
         let starts_output_row = incoming_has_line_break
             || projection.split_word.is_some()
             || projection.closes_before > 0;
-        match projection.split_word {
-            Some(split) => self.nodes.extend(split),
-            None => self.nodes.append(incoming),
+        if word {
+            self.materialize_boundary_before_pending_glyph();
         }
+        let payload = projection
+            .split_word
+            .unwrap_or_else(|| std::mem::take(incoming));
+        self.append_source_payload(payload, word);
         if starts_output_row {
             self.note_definition_output_row();
         }
@@ -187,6 +177,31 @@ impl InlineBuilder {
             occupies_row,
             empty_word,
         );
+    }
+
+    fn append_source_payload(&mut self, nodes: Vec<Inline>, word: bool) {
+        if !word || self.execution.pending_output_scope_prefixes.is_empty() {
+            self.nodes.extend(nodes);
+            return;
+        }
+        // term_word() writes the automatic boundary first. ESCAPE_HORIZ
+        // can then generate layout cells before the author's first payload
+        // (term.c:678); its typed receipt keeps those cells outside a label
+        // without classifying identical authored SP/NBSP by character kind.
+        let (prefix, suffix, found) = super::projection::split_output_scope_prefix(
+            nodes,
+            crate::mandoc::inline::text_execution::CONTENT_AFTER_MOTION,
+        );
+        let content = if found {
+            self.nodes.extend(prefix);
+            suffix
+        } else {
+            prefix
+        };
+        for marker in std::mem::take(&mut self.execution.pending_output_scope_prefixes) {
+            self.nodes.push(Inline::anchor(marker));
+        }
+        self.nodes.extend(content);
     }
 
     fn prepare_projection_boundary(

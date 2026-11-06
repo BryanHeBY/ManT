@@ -139,8 +139,16 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
     // term_word's automatic/field prefix precedes the first source operand;
     // only the source spelling belongs to Xr/MR's Link. The shared marker
     // boundary retains authored leading spaces without classifying Text.
+    let registered = builder
+        .zero_advance
+        .new_annotation(mant_ir::LinkTarget::Manual {
+            name: target_name,
+            manual_section: section,
+        });
+    let link_target = registered.target;
     let (annotated, membership) = builder.append_semantic_scope(
-        node.id,
+        registered.key,
+        true,
         |builder| {
             if let Some(first) = first {
                 builder.with_direct_word_operands(|builder| {
@@ -169,10 +177,7 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
                 return children;
             }
             vec![Inline::Link {
-                target: mant_ir::LinkTarget::Manual {
-                    name: target_name.clone(),
-                    manual_section: section.clone(),
-                },
+                target: link_target.clone(),
                 title: None,
                 children,
             }]
@@ -185,10 +190,7 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
         builder.zero_advance.bind_deferred(
             membership,
             &super::ownership::Annotation::Link {
-                target: mant_ir::LinkTarget::Manual {
-                    name: target_name,
-                    manual_section: section,
-                },
+                target: link_target.clone(),
                 title: None,
             },
             annotated,

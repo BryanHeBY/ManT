@@ -126,7 +126,8 @@ impl InlineBuilder {
     /// a cached tail can rejoin only that prefix, never a preceding occurrence.
     pub(in crate::mandoc) fn append_semantic_scope(
         &mut self,
-        owner: u32,
+        owner: crate::mandoc::inline::ownership::annotations::AnnotationKey,
+        retain_empty: bool,
         append: impl FnOnce(&mut Self),
         mut wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) -> (bool, crate::mandoc::inline::ownership::OutputMembership) {
@@ -144,7 +145,7 @@ impl InlineBuilder {
         self.wrap_output_scope(&scope, |children| {
             membership.map_owned(children, |children| {
                 if started {
-                    if !has_annotation_member(&children) {
+                    if !has_annotation_member(&children) && !retain_empty {
                         return children;
                     }
                     let output = wrap(children);
@@ -156,7 +157,7 @@ impl InlineBuilder {
                 let (mut prefix, children, found) =
                     projection::split_output_scope_prefix(children, &content);
                 started = found;
-                if found && has_annotation_member(&children) {
+                if found && (has_annotation_member(&children) || retain_empty) {
                     let output = wrap(children);
                     annotated |= output
                         .iter()
@@ -164,6 +165,13 @@ impl InlineBuilder {
                     prefix.extend(output);
                 } else {
                     prefix.extend(children);
+                    if retain_empty && !annotated {
+                        let output = wrap(Vec::new());
+                        annotated |= output
+                            .iter()
+                            .any(|node| matches!(node, Inline::Link { .. }));
+                        prefix.extend(output);
+                    }
                 }
                 prefix
             })

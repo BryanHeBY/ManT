@@ -36,8 +36,9 @@ pub(in crate::mandoc) use output::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) use output::{
     CompletedRowOrigin, OutputRowEnd, consume_one_row_ending, ends_with_executed_line_break,
     has_rendered_formatter_glyph, native_row_origin, prepare_inline_output,
-    retain_inline_identities, split_row_origin, strip_native_projection_markers,
-    take_definition_term_breaks, take_inline_layout, trailing_completed_row_origins,
+    retain_inline_identities, split_output_scope_prefix, split_row_origin,
+    strip_native_projection_markers, take_definition_term_breaks, take_inline_layout,
+    trailing_completed_row_origins,
 };
 
 /// A stable source-word range plus the device cells its IR owner already
@@ -69,9 +70,6 @@ pub(in crate::mandoc) struct InlineBuilder {
     // A cell executed by this builder, separate from an occupied formatter
     // row inherited from a detached HEAD or a prior output owner.
     produced_formatter_cell: CellProduction,
-    // Semantic annotations begin after the first operand's executed auto
-    // separator, independently of any authored leading blank glyphs.
-    pending_output_scope_prefixes: Vec<String>,
     pub(in crate::mandoc) execution: InlineExecutionState,
     /// A detached definition HEAD occupies the native formatter row even
     /// though its term lives in a different IR output container.
@@ -109,6 +107,7 @@ enum CellProduction {
 // The formatter registers are independent native flags, not a state chart.
 #[allow(clippy::struct_excessive_bools)]
 pub(in crate::mandoc) struct InlineExecutionState {
+    pub(in crate::mandoc) pending_output_scope_prefixes: Vec<String>,
     pub(in crate::mandoc) row_presentation: presentation::RowPresentation,
     pub(in crate::mandoc) text_alignment: mant_ir::TextAlignment,
     /// An accepted aligned field followed earlier printing on the same row.

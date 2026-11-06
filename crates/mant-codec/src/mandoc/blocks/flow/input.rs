@@ -101,7 +101,12 @@ impl BlockState {
             self.consume_hanging_first_line();
         } else {
             self.literal.end_line();
-            self.flush_paragraph_for_line_request();
+            // roff_html_pre_fi/nf emits BR when the mode is unchanged.
+            // pre_br already consumed the native row above; this return
+            // cannot close a still-qualified source annotation's inline root.
+            if !self.formatter.execution.zero_advance.has_qualified_root() {
+                self.flush_paragraph_for_line_request();
+            }
         }
         // .nf/.fi have an authored source position and close the current
         // terminal row. The next no-fill word cannot still consume a pending

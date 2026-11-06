@@ -12,6 +12,7 @@ pub(super) enum MdocSectionContext {
 }
 
 pub(super) struct LoweringContext<'a> {
+    pub(super) annotations: inline::ownership::annotations::AnnotationPool,
     pub(super) macro_set: MacroSet,
     pub(super) native_heads: RefCell<crate::definitions::NativeHeadEvidence>,
     // Immutable source services. Formatter execution is passed separately;
@@ -131,6 +132,7 @@ fn roff_line_without_comment(line: &str, escape: Option<u8>) -> (&str, bool) {
 impl<'a> LoweringContext<'a> {
     pub(super) fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
+            annotations: inline::ownership::annotations::AnnotationPool::deferred(),
             macro_set: MacroSet::None,
             native_heads: RefCell::default(),
             default_name,
@@ -394,6 +396,7 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
     ) -> Vec<mant_ir::Inline> {
         let mut zero_advance = inline::ZeroAdvanceState::new();
+        zero_advance.annotations = Some(self.annotations.clone());
         zero_advance.inherit_armed(formatter.take_zero_advance_armed());
         let record_native_cells = formatter.execution.table_buffer_written.is_some();
         let execution = inline::parse_roff_text_with_zero_advance(

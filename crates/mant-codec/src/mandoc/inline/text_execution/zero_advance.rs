@@ -1,6 +1,7 @@
 use super::{Font, Inline, is_formatter_word_blank};
 use crate::mandoc::inline::font::style::{flush_segment, styled_link, styled_segment};
-use crate::mandoc::inline::ownership::{Annotation, Decoration, OutputMembership, delayed_origin};
+use crate::mandoc::inline::ownership::{Decoration, delayed_origin};
+mod membership;
 use crate::mandoc::roff_escape::ZeroAdvanceMachine;
 use std::sync::Arc;
 
@@ -12,11 +13,15 @@ use std::sync::Arc;
 /// than to the one text node that happened to contain the escape.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct ZeroAdvanceState {
+    pub(in crate::mandoc) annotations:
+        Option<crate::mandoc::inline::ownership::annotations::AnnotationPool>,
     machine: ZeroAdvanceMachine<OwnedGlyph>,
     native_word_owner: Option<u64>,
     fragment_started_pending: bool,
     resolved_preexisting: bool,
-    output_owners: Vec<u64>,
+    output_owners: Vec<(u64, u64)>,
+    semantic_root: u64,
+    active_links: Vec<(u64, mant_ir::LinkTarget)>,
     output_epoch: u64,
     /// The word began with a `\p` marker whose blank the pending glyph's
     /// retreat consumes: the cross-word separator survives in the native
@@ -33,9 +38,12 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct HeldCell {
     character: char,
+    font: Font,
+    link: Option<Arc<str>>,
     owner: Option<u64>,
     recovery_offset: usize,
     epoch: u64,
+    root: u64,
     decoration: Option<Arc<Decoration>>,
     link_continuation: bool,
 }
@@ -43,12 +51,16 @@ struct HeldCell {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct OwnedGlyph {
     value: Inline,
+    decoration: Option<Arc<Decoration>>,
     owner: Option<u64>,
     /// This cached tail and the preceding annotated output are one authored
     /// link. The seam joins only those pieces after native acceptance.
     link_continuation: bool,
     epoch: u64,
+    root: u64,
 }
+
+type ProjectionRun = (Option<u64>, u64, bool, Option<Arc<Decoration>>);
 
 impl ZeroAdvanceState {
     pub(super) fn is_armed(&self) -> bool {
@@ -56,6 +68,7 @@ impl ZeroAdvanceState {
     }
     pub(in crate::mandoc) const fn new() -> Self {
         Self {
+            annotations: None,
             marker_blank_separator: 0,
             held: Vec::new(),
             machine: ZeroAdvanceMachine::new(),
@@ -64,66 +77,8 @@ impl ZeroAdvanceState {
             resolved_preexisting: false,
             output_owners: Vec::new(),
             output_epoch: 0,
-        }
-    }
-
-    /// A semantic wrapper can begin while BACKBEFORE still owns a glyph from
-    /// preceding source. Track that glyph through the shared formatter until
-    /// it is emitted or overstruck, including across nested wrappers.
-    pub(in crate::mandoc) fn begin_output_owner(&mut self) {
-        self.output_epoch = self
-            .output_epoch
-            .checked_add(1)
-            .expect("bounded annotation entries");
-        self.output_owners.push(self.output_epoch);
-    }
-
-    pub(in crate::mandoc) fn end_output_owner(&mut self) -> OutputMembership {
-        let epoch = self.output_owners.pop().expect("balanced annotation owner");
-        OutputMembership {
-            epoch,
-            enclosing: self.output_owners.last().copied(),
-        }
-    }
-
-    /// Annotate this scope's members which remain native input. Birth epochs
-    /// are monotone even after returning from a nested scope, so old deferred
-    /// history is skipped in logarithmic time rather than rescanned per word.
-    pub(in crate::mandoc) fn bind_deferred(
-        &mut self,
-        scope: OutputMembership,
-        annotation: &Annotation,
-        continuation: bool,
-    ) {
-        if let Some(glyph) = self
-            .machine
-            .pending_mut()
-            .filter(|glyph| glyph.epoch >= scope.epoch)
-        {
-            glyph.value = annotation.apply(glyph.value.clone());
-            glyph.link_continuation |= continuation;
-        }
-        let items = self.machine.deferred_projection_mut();
-        let first = items.partition_point(|glyph| glyph.epoch < scope.epoch);
-        for glyph in &mut items[first..] {
-            glyph.value = annotation.apply(glyph.value.clone());
-            glyph.link_continuation |= continuation;
-        }
-        let first = self.held.partition_point(|cell| cell.epoch < scope.epoch);
-        let mut decorations = std::collections::HashMap::new();
-        for cell in &mut self.held[first..] {
-            let key = cell
-                .decoration
-                .as_ref()
-                .map_or(0, |value| Arc::as_ptr(value) as usize);
-            let decoration = decorations.entry(key).or_insert_with(|| {
-                Arc::new(Decoration {
-                    annotation: annotation.clone(),
-                    previous: cell.decoration.clone(),
-                })
-            });
-            cell.decoration = Some(Arc::clone(decoration));
-            cell.link_continuation |= continuation;
+            semantic_root: 0,
+            active_links: Vec::new(),
         }
     }
 
@@ -146,9 +101,11 @@ impl ZeroAdvanceState {
         self.machine
             .project_glyph(OwnedGlyph {
                 value: glyph,
+                decoration: None,
                 owner: self.native_word_owner,
                 link_continuation: false,
                 epoch: self.output_epoch,
+                root: self.semantic_root,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
@@ -157,44 +114,77 @@ impl ZeroAdvanceState {
         self.machine
             .project_fallback(OwnedGlyph {
                 value: glyph,
+                decoration: None,
                 owner: self.native_word_owner,
                 link_continuation: false,
                 epoch: self.output_epoch,
+                root: self.semantic_root,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
 
     fn project_owned(&self, glyphs: Vec<OwnedGlyph>) -> Vec<Inline> {
-        if glyphs.is_empty() {
-            return Vec::new();
-        }
-        let mut output = Vec::with_capacity(glyphs.len().saturating_mul(3));
+        #[cfg(test)]
+        crate::mandoc::inline::ownership::metrics::note(|counts| counts.released += glyphs.len());
+        let mut output = Vec::new();
+        let mut run = Vec::new();
+        let mut key: Option<ProjectionRun> = None;
+        let flush =
+            |key: &mut Option<ProjectionRun>, run: &mut Vec<Inline>, output: &mut Vec<Inline>| {
+                let Some((owner, epoch, continuation, decoration)) = key.take() else {
+                    return;
+                };
+                if let Some(owner) = owner {
+                    output.push(Inline::anchor(format!(
+                        "{}{owner}",
+                        crate::mandoc::inline::flow::INTERNAL_FIELD_WORD
+                    )));
+                }
+                #[cfg(test)]
+                crate::mandoc::inline::ownership::metrics::note(|counts| counts.runs += 1);
+                let mut nodes = std::mem::take(run);
+                if let Some(decoration) = decoration {
+                    nodes = decoration.apply_nodes(nodes);
+                }
+                if continuation {
+                    nodes.insert(
+                        0,
+                        Inline::anchor(crate::mandoc::inline::flow::INTERNAL_LINK_SPLIT),
+                    );
+                }
+                if self
+                    .output_owners
+                    .last()
+                    .is_some_and(|scope| epoch < scope.0)
+                {
+                    output.push(delayed_origin(epoch, nodes));
+                } else {
+                    output.extend(nodes);
+                }
+            };
         for glyph in glyphs {
-            if let Some(owner) = glyph.owner {
-                output.push(Inline::anchor(format!(
-                    "{}{owner}",
-                    crate::mandoc::inline::flow::INTERNAL_FIELD_WORD
-                )));
+            let next = (
+                glyph.owner,
+                glyph.epoch,
+                glyph.link_continuation,
+                glyph.decoration,
+            );
+            if key.as_ref().is_some_and(|key| key != &next) {
+                flush(&mut key, &mut run, &mut output);
             }
-            let mut value = Vec::new();
-            if glyph.link_continuation {
-                value.push(Inline::anchor(
-                    crate::mandoc::inline::flow::INTERNAL_LINK_SPLIT,
-                ));
-            }
-            value.push(glyph.value);
-            if self
-                .output_owners
-                .last()
-                .is_some_and(|scope| glyph.epoch < *scope)
-            {
-                output.push(delayed_origin(glyph.epoch, value));
-            } else {
-                output.extend(value);
+            key = Some(next);
+            match (run.last_mut(), glyph.value) {
+                (Some(Inline::Text { value: before }), Inline::Text { value })
+                | (Some(Inline::Code { value: before }), Inline::Code { value }) => {
+                    before.push_str(&value);
+                }
+                (_, node) => run.push(node),
             }
         }
-        // Resume the current owner for the new source word's following run.
-        if let Some(owner) = self.native_word_owner {
+        flush(&mut key, &mut run, &mut output);
+        if !output.is_empty()
+            && let Some(owner) = self.native_word_owner
+        {
             output.push(Inline::anchor(format!(
                 "{}{owner}",
                 crate::mandoc::inline::flow::INTERNAL_FIELD_WORD
@@ -264,17 +254,25 @@ impl ZeroAdvanceState {
                 .is_some_and(|cell| cell.recovery_offset <= index)
             {
                 let cell = held.next().expect("held cell");
-                let value = Inline::Text {
-                    value: cell.character.to_string(),
-                };
+                let mut value = cell.character.to_string();
+                while held.peek().is_some_and(|next| {
+                    next.recovery_offset == cell.recovery_offset
+                        && next.font == cell.font
+                        && next.link == cell.link
+                        && next.owner == cell.owner
+                        && next.epoch == cell.epoch
+                        && next.root == cell.root
+                        && next.decoration == cell.decoration
+                        && next.link_continuation == cell.link_continuation
+                }) {
+                    value.push(held.next().expect("held run").character);
+                }
                 output.push(OwnedGlyph {
-                    value: if let Some(decoration) = cell.decoration {
-                        decoration.apply(value)
-                    } else {
-                        value
-                    },
+                    value: styled_link(value, cell.font, cell.link.as_deref()),
+                    decoration: cell.decoration,
                     owner: cell.owner,
                     epoch: cell.epoch,
+                    root: cell.root,
                     link_continuation: cell.link_continuation,
                 });
             }
@@ -296,12 +294,24 @@ impl ZeroAdvanceState {
         output.extend(self.take_deferred_with_held());
     }
 
-    fn hold(&mut self, character: char) {
+    fn hold(&mut self, character: char, font: Font, link: Option<&str>) {
+        #[cfg(test)]
+        crate::mandoc::inline::ownership::metrics::note(|counts| counts.held += 1);
+        let link = link.map(|link| {
+            self.held
+                .last()
+                .and_then(|cell| cell.link.as_ref())
+                .filter(|previous| previous.as_ref() == link)
+                .map_or_else(|| Arc::from(link), Arc::clone)
+        });
         self.held.push(HeldCell {
             character,
+            font,
+            link,
             owner: self.native_word_owner,
             recovery_offset: self.machine.deferred_projection().len(),
             epoch: self.output_epoch,
+            root: self.semantic_root,
             decoration: None,
             link_continuation: false,
         });
@@ -309,26 +319,33 @@ impl ZeroAdvanceState {
 
     fn projected_prefix(&self) -> Vec<OwnedGlyph> {
         let recoveries = self.machine.deferred_projection();
-        let mut output = Vec::with_capacity(self.held.len() + recoveries.len());
+        let mut output = Vec::new();
         let mut recovery = 0;
-        for cell in &self.held {
+        let mut held = self.held.iter().peekable();
+        while let Some(cell) = held.next() {
             let end = cell.recovery_offset.min(recoveries.len());
             output.extend_from_slice(&recoveries[recovery..end]);
             recovery = end;
+            let mut value = cell.character.to_string();
+            while held.peek().is_some_and(|next| {
+                next.recovery_offset == cell.recovery_offset
+                    && next.font == cell.font
+                    && next.link == cell.link
+                    && next.owner == cell.owner
+                    && next.epoch == cell.epoch
+                    && next.root == cell.root
+                    && next.decoration == cell.decoration
+                    && next.link_continuation == cell.link_continuation
+            }) {
+                value.push(held.next().expect("held run").character);
+            }
             output.push(OwnedGlyph {
-                value: {
-                    let value = Inline::Text {
-                        value: cell.character.to_string(),
-                    };
-                    if let Some(decoration) = &cell.decoration {
-                        decoration.apply(value)
-                    } else {
-                        value
-                    }
-                },
+                value: styled_link(value, cell.font, cell.link.as_deref()),
+                decoration: cell.decoration.clone(),
                 owner: cell.owner,
-                link_continuation: cell.link_continuation,
                 epoch: cell.epoch,
+                root: cell.root,
+                link_continuation: cell.link_continuation,
             });
         }
         output.extend_from_slice(&recoveries[recovery..]);
@@ -506,7 +523,7 @@ impl ZeroAdvanceState {
                     // glyph until the next graph's retreat decides, by
                     // the last-byte rule (term.c:901-908), which single
                     // held byte dies.
-                    self.hold(character);
+                    self.hold(character, font, None);
                     continue;
                 }
                 if !self.held.is_empty() {
@@ -585,7 +602,7 @@ impl ZeroAdvanceState {
                     // (term.c:901-908), which single held byte dies.  A
                     // `\p` marker between the two redirects the retreat
                     // onto the marker's own blank, and these survive.
-                    self.hold(character);
+                    self.hold(character, font, link);
                     continue;
                 }
                 if !self.held.is_empty() {

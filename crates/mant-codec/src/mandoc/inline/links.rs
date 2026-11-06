@@ -9,7 +9,6 @@ pub(in crate::mandoc::inline) mod identity;
 pub(in crate::mandoc::inline) mod presentation;
 
 mod annotation;
-pub(in crate::mandoc) use annotation::split_boundary_prefix;
 use annotation::{append_external_link, external_link_target};
 use identity::link_identity_text;
 
@@ -24,6 +23,15 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
     // Identity extraction is pure. The formatter executes the label before
     // the generated colon and the visible URI word.
     let address = link_identity_text(first.text.as_deref().unwrap_or_default());
+    let absent_target = address.is_empty();
+    let registered = builder
+        .zero_advance
+        .new_annotation(external_link_target(address, false));
+    let owner = registered.key;
+    let mant_ir::LinkTarget::External { uri } = registered.target else {
+        unreachable!()
+    };
+    let address = if absent_target { String::new() } else { uri };
     let label_end = children
         .iter()
         .rposition(|child| !child.flags.delimiter_close)
@@ -40,7 +48,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         // regardless of source operand order.
         presentation::append_owned_part(
             builder,
-            node.id,
+            owner,
             presentation::Part::Description,
             &address,
             None,
@@ -53,7 +61,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         // CVS termp_lk_pre() always executes this suffix for a syntactically
         // present description. The native receipt accepts or rejects its
         // owned text; all projections retain that accepted result.
-        append_terminal_link_suffix(builder, node.id, first, &address, default_name);
+        append_terminal_link_suffix(builder, owner, first, &address, default_name);
     }
     append_inline_nodes(builder, &children[label_end..], default_name);
 }
@@ -63,7 +71,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
 /// settles a pending glyph merely to decide its typed label.
 fn append_terminal_link_suffix(
     builder: &mut InlineBuilder,
-    owner: u32,
+    owner: super::ownership::annotations::AnnotationKey,
     first: &Node,
     address: &str,
     default_name: Option<&str>,
@@ -207,6 +215,16 @@ pub(in crate::mandoc) fn man_link_identity_text(head: &[Node]) -> String {
     )
 }
 
+/// Build one pure destination without copying its complete source spelling.
+pub(in crate::mandoc) fn man_link_destination(
+    head: &[Node],
+    email: bool,
+) -> (mant_ir::LinkTarget, bool) {
+    let address = man_link_identity_text(head);
+    let present = !address.is_empty();
+    (external_link_target(address, email), present)
+}
+
 /// Execute the spelling normalized by CVS `mdoc_validate.c::post_bx()`.
 ///
 /// Authored operands retain their controls and wording, including lifecycle
@@ -259,31 +277,36 @@ pub(in crate::mandoc) fn append_man_link(
     // term_fontrepl() also updates the independent previous-font register.
     builder.font.select(Font::Regular);
     let head = first_part_children(node, NodeKind::Head);
-    let target = man_link_identity_text(head);
+    let (link_target, has_target) =
+        man_link_destination(head, node.macro_token.as_ref() == Some(&Man(ManMacro::Mt)));
     let body = first_part_children(node, NodeKind::Body);
     builder.font.select(Font::Regular); // HEAD pre
     builder.font.select(Font::Regular); // HEAD post
     builder.font.select(Font::Regular); // BODY pre
-    let link_target = if node.macro_token.as_ref() == Some(&Man(ManMacro::Mt)) {
-        mant_ir::LinkTarget::Email {
-            address: target.clone(),
-        }
-    } else {
-        mant_ir::LinkTarget::External {
-            uri: target.clone(),
-        }
-    };
-    let checkpoint = builder.begin_output_checkpoint();
-    builder.zero_advance.begin_output_owner();
-    append_man_link_body(builder, body, default_name, no_fill);
-    // BODY post resets font before BLOCK post executes its first word. That
-    // word's separator may settle a label-final glyph or pending hard break;
-    // the typed destination never decides whether this native post executes.
-    builder.font.select(Font::Regular);
-    builder.prepare_generated_word();
-    let membership = builder.zero_advance.end_output_owner();
-    let head_is_label = body.is_empty() && !target.is_empty();
-    if !target.is_empty() && !head_is_label {
+    let registered = builder.zero_advance.new_annotation(link_target);
+    let link_target = registered.target;
+    let head_is_label = body.is_empty() && has_target;
+    let (_, membership) = builder.append_semantic_scope(
+        registered.key,
+        true,
+        |builder| {
+            append_man_link_body(builder, body, default_name, no_fill);
+            builder.font.select(Font::Regular);
+            builder.prepare_generated_word();
+        },
+        |children| {
+            if !has_target || head_is_label {
+                children
+            } else {
+                vec![Inline::Link {
+                    target: link_target.clone(),
+                    title: None,
+                    children,
+                }]
+            }
+        },
+    );
+    if has_target && !head_is_label {
         builder.zero_advance.bind_deferred(
             membership,
             &crate::mandoc::inline::ownership::Annotation::Link {
@@ -292,21 +315,6 @@ pub(in crate::mandoc) fn append_man_link(
             },
             true,
         );
-        builder.wrap_output_since(checkpoint, |children| {
-            membership.map_owned(children, |children| {
-                let (mut output, children) = split_boundary_prefix(children);
-                output.push(Inline::Link {
-                    target: link_target.clone(),
-                    title: None,
-                    children,
-                });
-                output
-            })
-        });
-    } else {
-        builder.wrap_output_since(checkpoint, |nodes| {
-            membership.map_owned(nodes, |nodes| nodes)
-        });
     }
     // post_UR always executes <, the original HEAD word, and >, including an
     // empty logical href. man_UR_pre instead chooses HEAD as its label only

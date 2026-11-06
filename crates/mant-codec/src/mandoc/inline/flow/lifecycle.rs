@@ -15,6 +15,7 @@ impl InlineExecutionState {
 
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
+            pending_output_scope_prefixes: Vec::new(),
             text_alignment: mant_ir::TextAlignment::Left,
             partial_row_alignment: false,
             row_presentation: super::presentation::RowPresentation::default(),

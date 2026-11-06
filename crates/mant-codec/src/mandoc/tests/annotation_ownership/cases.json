@@ -1,0 +1,1515 @@
+{
+  "scope": "30 finite execution-side source expectations; body projection targets only; do not treat all HTML glyphs as terminal oracle",
+  "cases": [
+    {
+      "id": "OwnerCut-0002",
+      "source_sha256": "2189afee922bee74040cf0eab0411fe495816a669dc2c3538ed61a0b0087bfc6",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "none",
+        "ordinary",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "BQ",
+      "after_root_text_must_not_link": null,
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "731ceb3e9c2c64ec29163ed49f44908ad02808a955016f185fd75b3fd547ba35",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "731ceb3e9c2c64ec29163ed49f44908ad02808a955016f185fd75b3fd547ba35",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "68ac1fde11c8469f903dae08f45646ba29bb657244c1af00a58d0a2f5f5d9fae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "82425683b97ca1f8684d16e7a22b55b7a13f144d8669dcaa799ea9d87533b422",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0004",
+      "source_sha256": "da9a72473a45415da0caf34d94e1af2002cd67eb45af89751d45967089447398",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "none",
+        "br",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "BQ",
+      "after_root_text_must_not_link": null,
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "731ceb3e9c2c64ec29163ed49f44908ad02808a955016f185fd75b3fd547ba35",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "731ceb3e9c2c64ec29163ed49f44908ad02808a955016f185fd75b3fd547ba35",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "0033893e78c55aed34e8cf5fe2b43a48d6b90e62f43fc59e86f5aab1d296291e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "24a019a97e88be5efd02063bbee3c09b0bbf6d363cd37fc0c8c94806b9be1f42",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n.br\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0006",
+      "source_sha256": "3b11bd4624b52023a3eb20ecdaf9cdf178e2e52ee39c95996bf79ca0b116beb8",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "none",
+        "nf",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "",
+      "after_root_text_must_not_link": "BQ",
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "8be55a3f9aa27839c3cc72cd1a2fee0ceb9227fcf066a0e879046a8d5ddf8731",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "8be55a3f9aa27839c3cc72cd1a2fee0ceb9227fcf066a0e879046a8d5ddf8731",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "824608f6d35d218d00a72eacb2631b11237eb607737e2020649182273f77aff7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "796c726d303f055101804874b1a87b9aacada717e657ce7a6733ec9711ce1ea1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n.nf\nB\\zQ \\c\n.UE\n.fi\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0008",
+      "source_sha256": "2d7001f7bddeaf993f394cdab46fac39d6b7de487d5e2da2a3f84cd97a14f10b",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "none",
+        "IP",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "",
+      "after_root_text_must_not_link": "BQ",
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "509d3c78e810b45e8a193b42b31c454006ad7e5f193d3ea5b02c23657fc619f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "509d3c78e810b45e8a193b42b31c454006ad7e5f193d3ea5b02c23657fc619f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "749b0a04292a0f5f81c265781c73f7caf7c618838f7bbcf3999aa2e6b4a6003b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "fa5c6150c222e98c20f8656a9817727eba0780f20265c423e6c20d642ccccf91",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n.IP TAG 4\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0018",
+      "source_sha256": "2ba0867d9f9c0dbd94d63e0a457477035847519f8c2f4851f72b60b28c1c1a72",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "readable",
+        "ordinary",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "FIRST BQ",
+      "after_root_text_must_not_link": null,
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "5ffc1243ae0928f06007db07c769fda82e619f4f3b5e341fe40086c2af518c00",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "5ffc1243ae0928f06007db07c769fda82e619f4f3b5e341fe40086c2af518c00",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "6237538138bc7b55fba35da482f49be046fb6c881939632e069f3435048b7e63",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "e8e3adb559faee72b8f3494aecb35a412c842770d49d9fa776678bdc267c3da0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0020",
+      "source_sha256": "2931f245c12707feb23650fbe396409da6117f34766bd81c832741cb171d6d5c",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "readable",
+        "br",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "FIRST\nBQ",
+      "after_root_text_must_not_link": null,
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "27af75f65352a7be537485e067354034a904da47575c2d01ee61423deb3ee8d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "27af75f65352a7be537485e067354034a904da47575c2d01ee61423deb3ee8d4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "8a4d76cfa3d80b451029cd118f111042af0c171726e3bcef53478605cb4732c2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "2378b14e3451513f95458fcd4380301fd68f29ff447f0129ee4d3c71eac64deb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.br\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0022",
+      "source_sha256": "df129af2c622e3a958ce4e45e9ec7ad5b917000ff7b39ca779cdfd7dd67e3020",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "readable",
+        "nf",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "FIRST",
+      "after_root_text_must_not_link": "BQ",
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "86bc6b4f04f2ea03291515a427db3d8fdcf33a7bf736cbea99b498aec3bfc383",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "86bc6b4f04f2ea03291515a427db3d8fdcf33a7bf736cbea99b498aec3bfc383",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "d2183831116e86ad585b4f91f777f6cd57eb87bf7dc5c564b2d3282d0d9c894b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "7968c79ab08313256b856ba65d88fd4e082910311c0fe64ccea7f08e0165b409",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.nf\nB\\zQ \\c\n.UE\n.fi\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0024",
+      "source_sha256": "8bc2e4bcec4033c710bf5567d1e00c79d66603632aeebf29cb517448c05407a5",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "readable",
+        "IP",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "FIRST",
+      "after_root_text_must_not_link": "BQ",
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "1e91a459f4913f56b87047b84e615c671a02c136f104484b9e2767c909bbcced",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "1e91a459f4913f56b87047b84e615c671a02c136f104484b9e2767c909bbcced",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "5ae77ca997de1ad50d7d46397959aa423061229ca62cdd23e620e69745316a88",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "08d5507ba5123604401f121b71fc001eb5c595b7584ce68c0b66592391d653b1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.IP TAG 4\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0026",
+      "source_sha256": "ff3b8fdce04c746d1816ff5f7e6e60fe40b88503ea366960afea388498603004",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "pending",
+        "ordinary",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "XBQ",
+      "after_root_text_must_not_link": null,
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "a6d0077cf59f8f1b7e8b0de96b9eb494779716c4a109b2d3c4d2131310e42710",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "a6d0077cf59f8f1b7e8b0de96b9eb494779716c4a109b2d3c4d2131310e42710",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "8ae451426e2af07a768bc89b264e4e854190c9c3f5c129864805876edd30d3e0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "75fa2f64beebf263d843618ba1fa6c29ddb3c804ca6582cc1ca8e7c7673036c1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n\\zX\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0028",
+      "source_sha256": "17c777c55b961b7569b307cf6378d52e6addd7921067f62323f357e28a329135",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "pending",
+        "br",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "X\nBQ",
+      "after_root_text_must_not_link": null,
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "95ebece1c7b3bcd0415a6ace8155ab55e2c282e4fc218007b6e265ed58c1e640",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "95ebece1c7b3bcd0415a6ace8155ab55e2c282e4fc218007b6e265ed58c1e640",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "0033893e78c55aed34e8cf5fe2b43a48d6b90e62f43fc59e86f5aab1d296291e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "552d43bb09bad61b8330a9ea0fa7ab2f27f157e29ab7fa4ee55fa32f954e5820",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n\\zX\n.br\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0030",
+      "source_sha256": "49077ee2b84d9fa34c63dfbc2b2b4913c712510d9754b246dfc07d51e306e1cf",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "pending",
+        "nf",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "X",
+      "after_root_text_must_not_link": "BQ",
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "67dec282ce7987092fbafaaeee4297509ed1ec95447cadc6ea6341ece1e1ed2b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "67dec282ce7987092fbafaaeee4297509ed1ec95447cadc6ea6341ece1e1ed2b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "824608f6d35d218d00a72eacb2631b11237eb607737e2020649182273f77aff7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "7d316dddcd26edd269a73d3f22e34bf5361fcf76cde840372816acd81c8e4d8b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n\\zX\n.nf\nB\\zQ \\c\n.UE\n.fi\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0032",
+      "source_sha256": "efddd4772787f54771d69872bb691ddb3603c39edd7cb46e0d7dae4eeebe47bf",
+      "family": "OwnerCut",
+      "axes": [
+        "UR",
+        "pending",
+        "IP",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "X",
+      "after_root_text_must_not_link": "BQ",
+      "target": {
+        "kind": "external",
+        "uri": "https://outer.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "dcbfdd3568fdd249d5c0ebbe63150168b2f2856fca7972da210a74a8d5108ad4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "dcbfdd3568fdd249d5c0ebbe63150168b2f2856fca7972da210a74a8d5108ad4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "749b0a04292a0f5f81c265781c73f7caf7c618838f7bbcf3999aa2e6b4a6003b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "ce246c8aa609fc2785a9d4f987638bee778d59e7b8cd3c07c07fbdd5ff4ca904",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n\\zX\n.IP TAG 4\nB\\zQ \\c\n.UE\nTAIL\n"
+    },
+    {
+      "id": "Prefix-0002",
+      "source_sha256": "723563f4513f57f1f50d18b052885098b82e1c9f282e43c916844d5413cde7d2",
+      "family": "Prefix",
+      "axes": [
+        "UR",
+        "initial",
+        "nbsp"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": " ALPHA",
+      "leading_author_blank_inside": true,
+      "leading_automatic_separator_outside": false,
+      "style": "plain",
+      "TAIL_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "ee09cdc190d51fb8d4ee9eef67f0e6880fa82e1cd60c93b3034945613172ebc2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "b51399a5d0215b4220ae921f84fbecfaac95e3250a1f8892528ecb144d14b5ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "b6a00870f2ad39e17bbba96a954b438bed4fbcfbd7985e789e5f3c39098be8f1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "a3822acce46c22663f2cd6e0d8d3b92c42d4bcd8f930b76a9a606ef6e2e5de27",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n\\~ALPHA\n.UE\nTAIL\n"
+    },
+    {
+      "id": "Prefix-0005",
+      "source_sha256": "7ba9b2d8947e9d6c2ac4aea6b12f0c458b880081bb1b37f9bedd8cc3dbb2d448",
+      "family": "Prefix",
+      "axes": [
+        "UR",
+        "initial",
+        "styled"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": " ALPHA",
+      "leading_author_blank_inside": true,
+      "leading_automatic_separator_outside": false,
+      "style": "strong",
+      "TAIL_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "ee0a44ed33def20bdbcb9869f218e45f461a01632547fd68b2a78890c9ded5df",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "ee0a44ed33def20bdbcb9869f218e45f461a01632547fd68b2a78890c9ded5df",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "bdcbb399fdf23c4630f0ed4717fbe169055eb50bf7c1fec4b4fc28a71e6ee41f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "48b6b4a05d259cd3faf8cea583e6fa9be4fc1f10a939fc15cf64f0a25c643124",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.UR https://outer.test\n.B \" ALPHA\"\n.UE\nTAIL\n"
+    },
+    {
+      "id": "Prefix-0008",
+      "source_sha256": "1a0b55a69550da448dfbe6a5fdf1c22ee7e308964ea21c0bc9fc36d996a49345",
+      "family": "Prefix",
+      "axes": [
+        "UR",
+        "generated",
+        "nbsp"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": " ALPHA",
+      "leading_author_blank_inside": true,
+      "leading_automatic_separator_outside": true,
+      "style": "plain",
+      "TAIL_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "15c5761195a1757e4a9f5e3a181adb16ae5a41511db79354039b7075087a15d8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "65425e44f3fb26598b1d0aba3d8654df5d89193156ede3688da31cb4c38da0bd",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "7e9f76b0e3c57da7cdb7112fe2997a2a16c48cdf757506825cf420caab94690d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "c6046499206bfea30004bc5240e61a558975c4fb63c296d98d2852d9d96247ef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\nPRE\n.UR https://outer.test\n\\~ALPHA\n.UE\nTAIL\n"
+    },
+    {
+      "id": "Prefix-0011",
+      "source_sha256": "4a973d6a8ff8ff850c6a0425b5a7dc8b552efb5bcee87b940b2a61d6317f6ba5",
+      "family": "Prefix",
+      "axes": [
+        "UR",
+        "generated",
+        "styled"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": " ALPHA",
+      "leading_author_blank_inside": true,
+      "leading_automatic_separator_outside": true,
+      "style": "strong",
+      "TAIL_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "2924abeba9da0888f25fad455b6f15c6196d86a28edb5f3c3294db533b0f1a04",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "2924abeba9da0888f25fad455b6f15c6196d86a28edb5f3c3294db533b0f1a04",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "ad1d5e25b98ff16c94b9c40bb3b93a9d7379ef2b8aec09645e150145269fb335",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "3fbefe23cf4cecf71792ed5658ae18648e778e4c04f19cda945049b9bc1bc2f7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\nPRE\n.UR https://outer.test\n.B \" ALPHA\"\n.UE\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0052",
+      "source_sha256": "da40e0c34b6eee77e2ddd7c91ad0c1742021a09d481d45fd1e8451a4e0aea3aa",
+      "family": "OwnerCut",
+      "axes": [
+        "MT",
+        "readable",
+        "br",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "FIRST\nBQ",
+      "after_root_text_must_not_link": null,
+      "target": {
+        "kind": "email",
+        "address": "y@example.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "f84c1ce973c7780a11748be18bda4114c80e026f8792b66ac0a1130f5091d884",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "f84c1ce973c7780a11748be18bda4114c80e026f8792b66ac0a1130f5091d884",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "be67e53365abc95ac25a3c5e297386a83077405a4e58ac9dcdcd8439ec4da5d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "1798749b9e548bc0f2065e4512afb29b1f928e05a388a7ae87ce60f14657e306",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.MT y@example.test\nFIRST\n.br\nB\\zQ \\c\n.ME\nTAIL\n"
+    },
+    {
+      "id": "OwnerCut-0054",
+      "source_sha256": "ef2ffce590dfaca7a0898517f071208f46a6bf9bac3465ab1673cd71ca189a52",
+      "family": "OwnerCut",
+      "axes": [
+        "MT",
+        "readable",
+        "nf",
+        "continued"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "FIRST",
+      "after_root_text_must_not_link": "BQ",
+      "target": {
+        "kind": "email",
+        "address": "y@example.test"
+      },
+      "body_text": "BQ",
+      "TAIL_outside": true,
+      "reason": "br closes a physical row but not the HTML paragraph/anchor; nf and IP close initial label root; pending accepted X retains original membership even when the HTML printer itself drops X",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "bcd2a6922081ccf7c7bbfe8085a2f2b5795de29cab18b7c6a112e58e3c0e5a78",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "bcd2a6922081ccf7c7bbfe8085a2f2b5795de29cab18b7c6a112e58e3c0e5a78",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "1eb9d8f758e448476f66cb0a680c28b3ad61ebb8286b267209f5086c3b5240b6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "049fe0fd97d73703f6d5c434375c1d1b8f07c930f08bf83008bc7c72eb9974a1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\n.MT y@example.test\nFIRST\n.nf\nB\\zQ \\c\n.ME\n.fi\nTAIL\n"
+    },
+    {
+      "id": "HeldStyle-0007",
+      "source_sha256": "c4c2b1a94013d2bf4433989f55af8ac42057c4e336fe22000f172a3c7861eda7",
+      "family": "HeldStyle",
+      "axes": [
+        "Li",
+        2,
+        "same"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "code"
+        },
+        {
+          "text": "Y",
+          "style": "code"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "0d211dc7cec026b8812a9ed5f6adc75c9283fae946be341d9c8a6c1be5207f24",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "367e362673d80bb20521cb3e724a796f448fb3c24a125fbebd1bc00095dd71ef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "5a4415e700ee7a91abc211b696f7c6268aac3598344fe883f585b84ea8ff73f5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "4ef22523f6a8067af15bb7b648056aaf57821c527aa0861d33412fe0ceb1fe7f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Li \"A\\zX  Y\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "HeldStyle-0008",
+      "source_sha256": "54826770b84d2a496a82b1fab6a2a951f1b81b9231df17a29670308c18d772ef",
+      "family": "HeldStyle",
+      "axes": [
+        "Li",
+        2,
+        "changed-font"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "code"
+        },
+        {
+          "text": "Y",
+          "style": "strong"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "c155baf00ca24ea3e5f4cdf5f1bd3ff64cc3f4883855f4483d513d5ac63629d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "33ad10293aa9e86a980c68c51910ff4936c3ce8242942b9d27e47b3e913451a7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "f811094b4456b75f823eb03ea24c4a00aa440fb157331aed7bea9c1e586b29bf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "ab935a9001ab0219a59b11a4a8d14188baf25fce888dc3e4b29434932061c589",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Li \"A\\zX  \\fBY\\fP\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "HeldStyle-0019",
+      "source_sha256": "318c39738e988d8e427399527b19f57778c0da164f7a996709b86307da7cfb55",
+      "family": "HeldStyle",
+      "axes": [
+        "Em",
+        2,
+        "same"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "emphasis"
+        },
+        {
+          "text": "Y",
+          "style": "emphasis"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "620ffe33b2f6558643a33708ea2dd3870d30116002a4ebc98724c088a46ea649",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "8d746e862c21e0c4f88bf7a7581386df1e31798fa7698e92940ddb529ad1dab2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "74db943808b7ee8f08fd461c0e9a624c605cd8ad15d797f8310d20d1911543ba",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "5c576af26d7caebf4510e1431e93ec44149f3cb923ed9c09ac35c13cbaa622c9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Em \"A\\zX  Y\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "HeldStyle-0020",
+      "source_sha256": "c94343b38cfd79375717e86e56c0e4e8680cef8d5bb05033d6c68d4cd7436157",
+      "family": "HeldStyle",
+      "axes": [
+        "Em",
+        2,
+        "changed-font"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "emphasis"
+        },
+        {
+          "text": "Y",
+          "style": "strong"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "8a12aecd323115ea8d312c38b4b5b940efbede46c6cdabfec71a5ac25543e170",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "63042a4d88577ce7ab50bc3582221e2ca0b765f70ec6c222952b467db649d497",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "f871597bd455cf605e414aec3ec5d69f79508453a92943b691e2a3cf24ea0abb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "60e3c8c9f5abbc16ec1c84f7b5ef76115dc2ce30a1c0929f54361b59ce6361e3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Em \"A\\zX  \\fBY\\fP\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "HeldStyle-0031",
+      "source_sha256": "bc00e7ca75617e567ba0efa0ce539584138dc11c96d77fd22903bafc88b37c39",
+      "family": "HeldStyle",
+      "axes": [
+        "Sy",
+        2,
+        "same"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "strong"
+        },
+        {
+          "text": "Y",
+          "style": "strong"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "31e188650a87172f048bee4ece39b73ff2f84f3ac2827fa97fa52b9ec77465ca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "4fdb8107de63ab42877b1a85652aeb385b84444a3012414ae27ef7f3059c265b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "66202f862ebf70f16f10afd28fa0b4b3c28a891a0d7e72d824ad4f9bb21f63e2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "386ec27cf1b721d84e161ea3b986f12a442c3b49613824eddacc679c16bc171e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Sy \"A\\zX  Y\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "HeldStyle-0032",
+      "source_sha256": "83f091ecf44cb1c8bd27c13fe1630b16bfdf574f2bdc15598a8557abb4c2d624",
+      "family": "HeldStyle",
+      "axes": [
+        "Sy",
+        2,
+        "changed-font"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "strong"
+        },
+        {
+          "text": "Y",
+          "style": "strong"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "31e188650a87172f048bee4ece39b73ff2f84f3ac2827fa97fa52b9ec77465ca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "4fdb8107de63ab42877b1a85652aeb385b84444a3012414ae27ef7f3059c265b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "9de83e9694ef56498e3aaa805b5061ac4f9f5c4552c10742ffb2f034d62cc468",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "7bd9c5f36b9edd7e3509f683435f7d7fe41126f3733696c2b1dc133ce61459bb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Sy \"A\\zX  \\fBY\\fP\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "HeldStyle-0043",
+      "source_sha256": "aed57b9b7abd27ab5dff9eded7d6c700495b61ba7912a5f10bd9a9e758f686da",
+      "family": "HeldStyle",
+      "axes": [
+        "CR",
+        2,
+        "same"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "code"
+        },
+        {
+          "text": "Y",
+          "style": "code"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "0d211dc7cec026b8812a9ed5f6adc75c9283fae946be341d9c8a6c1be5207f24",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "367e362673d80bb20521cb3e724a796f448fb3c24a125fbebd1bc00095dd71ef",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "60b9ead03cf3d718473344e98dfc0e8548ec6940a4af41b46ffa1884b266a025",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "7718b8aecef44ab0a4781031400cd625104108028b36de9d7d99b0a4f40c0ce1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"\\f(CRA\\zX  Y\\fP\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "HeldStyle-0044",
+      "source_sha256": "c2177f601d12b3996b76a6bb1b0c79088ca4ee6cd05c2e3a890120d9d9952f9b",
+      "family": "HeldStyle",
+      "axes": [
+        "CR",
+        2,
+        "changed-font"
+      ],
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "code"
+        },
+        {
+          "text": "Y",
+          "style": "strong"
+        }
+      ],
+      "surviving_authored_blanks": 1,
+      "consumed_last_blank": 1,
+      "AFTER_outside": true,
+      "reason": "ASCII encode buffers both blanks without consuming BACKBEFORE; next graph retreats over exactly last blank; survivor keeps born semantic font/code style, not release font",
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "c155baf00ca24ea3e5f4cdf5f1bd3ff64cc3f4883855f4483d513d5ac63629d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "33ad10293aa9e86a980c68c51910ff4936c3ce8242942b9d27e47b3e913451a7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "f26756b85fd6d23a87a6cbba07852dc0fe1a89edccae001f28b1a4786150451e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "7227dbc559b59e5688f73c1a7e243841b84af2f970577487fc017dd989b67871",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No \"\\f(CRA\\zX  \\fBY\\fP\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "new-owner-authored-blank-close",
+      "source_sha256": "2ed224331bde4f0a14a51d5fabb881ab93baa37f3c74d458709b5e7c93391329",
+      "family": "NewAdjacent",
+      "axes": "new-owner-authored-blank-close",
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "  ALPHA",
+      "scalar_styles": [
+        {
+          "text": " ",
+          "style": "strong"
+        },
+        {
+          "text": " ",
+          "style": "plain"
+        },
+        {
+          "text": "ALPHA",
+          "style": "strong"
+        }
+      ],
+      "after_root_text_must_not_link": "BQ",
+      "TAIL_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "8a64fc330e74d29471c55acddd275cce201233562e7a488e035bc3f7bc3430ca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "8a64fc330e74d29471c55acddd275cce201233562e7a488e035bc3f7bc3430ca",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "9d8098cee0b4cd40c73415c0f7fc0a07c7309be2228b10fea545502a08434ade",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "f5aaef7d98a02eb1900eb2dc1c8383a58e1b9eb8749e1b64431fc781d053c0d8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.UR https://first.test\n.B \" \"\n.B ALPHA\n.nf\nB\\zQ \\c\n.UE\n.fi\nTAIL\n"
+    },
+    {
+      "id": "new-owner-authored-blank-br",
+      "source_sha256": "a7ca081a62c5c0c710588033ffe927c28007481040be715a17c9f0b250afa420",
+      "family": "NewAdjacent",
+      "axes": "new-owner-authored-blank-br",
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "occurrences": 1,
+      "label": "FIRST\n Q R",
+      "scalar_styles": [
+        {
+          "text": "FIRST\n",
+          "style": "plain"
+        },
+        {
+          "text": " Q R",
+          "style": "strong"
+        }
+      ],
+      "TAIL_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "ecc036c8d98f0afec35702e805362fb153317f9ee5dceb7403629c71f47d0319",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "ecc036c8d98f0afec35702e805362fb153317f9ee5dceb7403629c71f47d0319",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "d35aa3ce95099bd0f9ef82ad3a11987c95bb072e37aa1f0b95e72ec2869ab3bf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "09636fa359158ed97d54bbfb6f26c7c01cbebff02c39953034cebea2d6375ba2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.UR https://first.test\nFIRST\n.br\n.B \" \\zQ  R\"\n.UE\nTAIL\n"
+    },
+    {
+      "id": "new-held-font-return",
+      "source_sha256": "e324ed7b20a8ff99e85d2cb4f097893b3f353bd56447a4bb5bedb836e8bedf1c",
+      "family": "NewAdjacent",
+      "axes": "new-held-font-return",
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX YZ",
+      "scalar_styles": [
+        {
+          "text": "AX ",
+          "style": "code"
+        },
+        {
+          "text": "Y",
+          "style": "strong"
+        },
+        {
+          "text": "Z",
+          "style": "code"
+        }
+      ],
+      "AFTER_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "b4d0743a7cf46a086aaf0f7ca2986f0792b14eafe9ad4474c7ddfed7b1123796",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "9269b33664bbbe4349ab34f20ed0148f7ddfaa423a54259070092a2331833927",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "572f05b92f04ac492feb8325fff8e92ad0e9f4030e8718682d5aac72e83daa86",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "3c42e95aff307c8a04fd1ed3bca3311bd76a88dbf6fc9e1a6e664fe0aa5031d9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Li \"A\\zX  \\fBY\\fPZ\"\n.Sh NEXT\nAFTER\n"
+    },
+    {
+      "id": "new-held-space-tab",
+      "source_sha256": "7fb69cdf03a9fa93f87c4388c911104859555b1285ade6ba48281cb0d68aef2c",
+      "family": "NewAdjacent",
+      "axes": "new-held-space-tab",
+      "expectation_authority": "source operand membership + pinned man/mdoc HTML root scope + pinned terminal accepted scalar/row execution + documented ManT Code/recovery contract; never before output",
+      "text": "AX Y",
+      "scalar_styles": [
+        {
+          "text": "AX Y",
+          "style": "emphasis"
+        }
+      ],
+      "consumed_last_tab": 1,
+      "surviving_authored_blanks": 1,
+      "lint_warning_preserved": "tab in filled text",
+      "AFTER_outside": true,
+      "pristine_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "620ffe33b2f6558643a33708ea2dd3870d30116002a4ebc98724c088a46ea649",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "8d746e862c21e0c4f88bf7a7581386df1e31798fa7698e92940ddb529ad1dab2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "233a789853195a01c5a036b8fff3961726b102b8e638d73d4128edd52b334960",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "000c34d5cd83d2586428b8ff11c5738ff94733e4507ca4a0ac5eefe4a5eb8268",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 2,
+          "stdout_sha256": "2a19ac23f93eb578f1b631c372aa4dee83e59a34675ed7c0eb586e37123c9c8d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Em \"A\\zX \tY\"\n.Sh NEXT\nAFTER\n"
+    }
+  ]
+}

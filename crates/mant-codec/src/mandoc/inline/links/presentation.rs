@@ -2,7 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::{Inline, InlineBuilder, external_link_target, split_boundary_prefix};
+use super::{Inline, InlineBuilder, external_link_target};
+use crate::mandoc::inline::ownership::annotations::AnnotationKey;
 
 const OWNER_PREFIX: &str = "\0mant:lk-presentation:";
 
@@ -13,6 +14,7 @@ std::thread_local! {
 
 #[cfg(test)]
 fn note_visit() {
+    crate::mandoc::inline::ownership::metrics::note(|counts| counts.normalization += 1);
     PRESENTATION_VISITS.with(|visits| visits.set(visits.get().saturating_add(1)));
 }
 
@@ -35,11 +37,11 @@ impl Part {
     }
 }
 
-pub(super) fn scope_marker(owner: u32, part: Part) -> String {
+pub(super) fn scope_marker(owner: AnnotationKey, part: Part) -> String {
     format!("\0mant:output-scope:lk:{owner}:{}", part.spelling())
 }
 
-fn placeholder(owner: u32, part: Part, address: &str, children: Vec<Inline>) -> Inline {
+fn placeholder(owner: AnnotationKey, part: Part, address: &str, children: Vec<Inline>) -> Inline {
     // This NUL-prefixed target is an internal, invalid public-IR value. It
     // never passes URI admission or executes as an href: finalization below
     // removes it after native acceptance and before semantic recognition.
@@ -61,17 +63,15 @@ fn placeholder(owner: u32, part: Part, address: &str, children: Vec<Inline>) -> 
 /// the zero-advance receipt retains that operand's owner and original style.
 pub(super) fn append_owned_part(
     builder: &mut InlineBuilder,
-    owner: u32,
+    owner: AnnotationKey,
     part: Part,
     address: &str,
     preceding: Option<Part>,
     append: impl FnOnce(&mut InlineBuilder),
 ) {
-    let marker = scope_marker(owner, part);
-    builder.begin_output_scope(&marker);
-    builder.zero_advance.begin_output_owner();
-    append(builder);
-    let membership = builder.zero_advance.end_output_owner();
+    let (_, membership) = builder.append_semantic_scope(owner, true, append, |children| {
+        vec![placeholder(owner, part, address, children)]
+    });
     let Inline::Link { target, title, .. } = placeholder(owner, part, address, Vec::new()) else {
         unreachable!()
     };
@@ -80,26 +80,17 @@ pub(super) fn append_owned_part(
         &crate::mandoc::inline::ownership::Annotation::Link { target, title },
         false,
     );
-    let mut first_fragment = true;
-    let _ = preceding; // Deferred members already retain their actual part annotation.
-    builder.wrap_output_scope(&marker, |children| {
-        membership.map_owned(children, |children| {
-            let (mut output, children) = if first_fragment {
-                first_fragment = false;
-                split_boundary_prefix(children)
-            } else {
-                (Vec::new(), children)
-            };
-            output.push(placeholder(owner, part, address, children));
-            output
-        })
-    });
+    let _ = preceding;
 }
 
 /// A label glyph released by the colon remains a description. Keep that
 /// prefix outside the suffix owner; the colon and URI still execute in source
 /// order and their accepted native children remain the sole public text.
-pub(super) fn wrap_suffix(owner: u32, address: &str, children: Vec<Inline>) -> Vec<Inline> {
+pub(super) fn wrap_suffix(
+    owner: AnnotationKey,
+    address: &str,
+    children: Vec<Inline>,
+) -> Vec<Inline> {
     let mut prefix = Vec::new();
     let mut suffix = Vec::new();
     for node in children {
@@ -116,7 +107,7 @@ pub(super) fn wrap_suffix(owner: u32, address: &str, children: Vec<Inline>) -> V
     prefix
 }
 
-fn metadata(node: &Inline) -> Option<(u32, Part, &str)> {
+fn metadata(node: &Inline) -> Option<(AnnotationKey, Part, &str)> {
     let Inline::Link {
         target: mant_ir::LinkTarget::External { uri },
         title: Some(title),
@@ -206,8 +197,8 @@ pub(in crate::mandoc::inline) fn finalize_accepted_links(nodes: &mut Vec<Inline>
 
 fn collect_labels(
     nodes: &[Inline],
-    labels: &mut HashMap<u32, AcceptedLabel>,
-    owned: Option<(u32, Part)>,
+    labels: &mut HashMap<AnnotationKey, AcceptedLabel>,
+    owned: Option<(AnnotationKey, Part)>,
 ) {
     for node in nodes {
         #[cfg(test)]
@@ -239,8 +230,8 @@ fn collect_labels(
 
 fn resolve_parts(
     nodes: &mut Vec<Inline>,
-    labels: &HashMap<u32, AcceptedLabel>,
-    bound: &mut HashSet<(u32, Part)>,
+    labels: &HashMap<AnnotationKey, AcceptedLabel>,
+    bound: &mut HashSet<(AnnotationKey, Part)>,
 ) {
     let mut output = Vec::with_capacity(nodes.len());
     for mut node in std::mem::take(nodes) {
@@ -298,17 +289,12 @@ fn bind_accepted_link(
     output: &mut Vec<Inline>,
     children: Vec<Inline>,
     address: String,
-    owner: u32,
+    owner: AnnotationKey,
     part: Part,
-    bound: &mut HashSet<(u32, Part)>,
+    bound: &mut HashSet<(AnnotationKey, Part)>,
 ) {
     if has_readable_text(&children) {
-        let (prefix, children) = if bound.insert((owner, part)) {
-            split_boundary_prefix(children)
-        } else {
-            (Vec::new(), children)
-        };
-        output.extend(prefix);
+        bound.insert((owner, part));
         output.push(Inline::Link {
             target: external_link_target(address, false),
             title: None,
@@ -356,19 +342,19 @@ mod tests {
                         }];
                     }
                     nodes.push(placeholder(
-                        owner,
+                        owner.into(),
                         Part::Description,
                         "https://example.com",
                         description,
                     ));
                     nodes.push(placeholder(
-                        owner,
+                        owner.into(),
                         Part::Suffix,
                         "https://example.com",
                         vec![
                             text(": "),
                             placeholder(
-                                owner,
+                                owner.into(),
                                 Part::Uri,
                                 "https://example.com",
                                 vec![text("https://example.com")],
@@ -398,7 +384,12 @@ mod tests {
 
     #[test]
     fn private_ownership_requires_the_matching_non_authored_scope_title() {
-        let mut node = placeholder(17, Part::Uri, "https://example.com", vec![text("URI")]);
+        let mut node = placeholder(
+            17_u32.into(),
+            Part::Uri,
+            "https://example.com",
+            vec![text("URI")],
+        );
         assert!(metadata(&node).is_some());
         let Inline::Link { title, .. } = &mut node else {
             panic!("private ownership container");
@@ -411,7 +402,7 @@ mod tests {
         let Inline::Link { title, .. } = &mut node else {
             unreachable!();
         };
-        *title = Some(scope_marker(18, Part::Uri));
+        *title = Some(scope_marker(18_u32.into(), Part::Uri));
         assert!(
             metadata(&node).is_none(),
             "another owner cannot lend its proof"

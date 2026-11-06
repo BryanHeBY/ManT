@@ -7,6 +7,10 @@
 use mant_ir::{Inline, LinkTarget};
 use std::sync::Arc;
 
+pub(in crate::mandoc) mod annotations;
+#[cfg(test)]
+pub(in crate::mandoc) mod metrics;
+
 const ORIGIN: &str = "\0mant:deferred-origin:";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,20 +21,6 @@ pub(in crate::mandoc) enum Annotation {
     },
     Code,
 }
-impl Annotation {
-    pub(super) fn apply(&self, value: Inline) -> Inline {
-        match self {
-            Self::Link { target, title } => Inline::Link {
-                target: target.clone(),
-                title: title.clone(),
-                children: vec![value],
-            },
-            Self::Code => Inline::Code {
-                value: mant_ir::inline_plain_text(&[value]),
-            },
-        }
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct Decoration {
@@ -38,19 +28,29 @@ pub(super) struct Decoration {
     pub(super) previous: Option<Arc<Self>>,
 }
 impl Decoration {
-    pub(super) fn apply(&self, value: Inline) -> Inline {
-        let value = if let Some(previous) = &self.previous {
-            previous.apply(value)
+    pub(super) fn apply_nodes(&self, nodes: Vec<Inline>) -> Vec<Inline> {
+        let nodes = if let Some(previous) = &self.previous {
+            previous.apply_nodes(nodes)
         } else {
-            value
+            nodes
         };
-        self.annotation.apply(value)
+        match &self.annotation {
+            Annotation::Link { target, title } => vec![Inline::Link {
+                target: target.clone(),
+                title: title.clone(),
+                children: nodes,
+            }],
+            Annotation::Code => vec![Inline::Code {
+                value: mant_ir::inline_plain_text(&nodes),
+            }],
+        }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct OutputMembership {
     pub(super) epoch: u64,
+    pub(super) root: u64,
     pub(super) enclosing: Option<u64>,
 }
 
@@ -98,6 +98,14 @@ fn add(parts: &mut Vec<Part>, own: bool, nodes: Vec<Inline>) {
 }
 
 impl OutputMembership {
+    pub(in crate::mandoc) fn has_enclosing(self) -> bool {
+        self.enclosing.is_some()
+    }
+
+    pub(in crate::mandoc) fn end_marker(self) -> String {
+        format!("\0mant:annotation-end:{}", self.epoch)
+    }
+
     /// Transform only this receiver's accepted members. Foreign runs remain
     /// in source order with their complete original style/link wrappers.
     pub(in crate::mandoc) fn map_owned(
@@ -208,6 +216,7 @@ mod tests {
             children: vec![text("same")],
         };
         let receipt = OutputMembership {
+            root: 0,
             epoch: 4,
             enclosing: None,
         };
@@ -250,6 +259,7 @@ mod tests {
             children: vec![delayed_origin(1, vec![old.clone()]), text("same")],
         };
         let result = OutputMembership {
+            root: 0,
             epoch: 2,
             enclosing: None,
         }
@@ -268,6 +278,7 @@ mod tests {
     #[test]
     fn nested_receivers_retain_only_the_still_needed_origin() {
         let result = OutputMembership {
+            root: 0,
             epoch: 4,
             enclosing: Some(2),
         }
@@ -284,6 +295,7 @@ mod tests {
         );
         assert_eq!(
             OutputMembership {
+                root: 0,
                 epoch: 2,
                 enclosing: None
             }
@@ -308,6 +320,7 @@ mod tests {
         };
         assert_eq!(
             OutputMembership {
+                root: 0,
                 epoch: 2,
                 enclosing: None
             }

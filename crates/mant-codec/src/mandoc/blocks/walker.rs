@@ -55,6 +55,7 @@ impl BlockLowerer<'_, '_> {
             if follows_inline_equation_punctuation(nodes, index) {
                 self.state.tighten_next_boundary();
             }
+            self.enter_annotation_root(node);
             self.observe_source_fill_mode(node);
             // Both print_man_node() and print_mdoc_node() execute NODE_LINE
             // before visiting a text node or dispatching any request. This
@@ -209,6 +210,9 @@ impl BlockLowerer<'_, '_> {
             return;
         }
         if node.kind == libmandoc_rs::NodeKind::Table && node.flags.table_start {
+            // tbl_html.c::html_tblopen closes the current semantic root.
+            self.state
+                .close_annotation_root(self.state.formatter.no_fill);
             // Both native node dispatchers call term_newln only before a
             // table's first span (man_term.c:966-970; mdoc_term.c:388-392).
             // Settle the live parent input before draining its output owner;
@@ -451,6 +455,35 @@ impl BlockLowerer<'_, '_> {
         }
     }
 
+    fn enter_annotation_root(&mut self, node: &Node) {
+        // man_html.c closes the paragraph in these BLOCK pre handlers;
+        // a Rust output drain and roff .br are not equivalent events.
+        if node.kind == libmandoc_rs::NodeKind::Block
+            && matches!(
+                node.macro_token.as_ref(),
+                Some(Man(ManMacro::P
+                    | ManMacro::Pp
+                    | ManMacro::Lp
+                    | ManMacro::Hp
+                    | ManMacro::Ip
+                    | ManMacro::Tp
+                    | ManMacro::Tq
+                    | ManMacro::Rs
+                    | ManMacro::Sy))
+            )
+        {
+            self.state
+                .close_annotation_root(self.state.formatter.no_fill);
+        }
+        // roff_html_pre_sp closes a filled paragraph even for sp 0 or
+        // negative spacing; in nf it only ends a physical device row.
+        if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Sp)) && !self.state.formatter.no_fill
+        {
+            self.state
+                .close_annotation_root(self.state.formatter.no_fill);
+        }
+    }
+
     fn enter_no_fill_source_line(&mut self, node: &Node) -> bool {
         if self.column_field {
             self.state.enter_column_node(node);
@@ -488,6 +521,9 @@ impl BlockLowerer<'_, '_> {
                 self.state.formatter.no_fill = false;
             }
             _ => {}
+        }
+        if was_no_fill != self.state.formatter.no_fill {
+            self.state.close_annotation_root(was_no_fill);
         }
         if was_no_fill && !self.state.formatter.no_fill {
             self.state.formatter.clear_trailing_literal_row();

@@ -6,6 +6,7 @@ use super::{
 impl WordExecution {
     pub(super) fn new(context: &TextExecutionContext<'_>) -> Self {
         Self {
+            content_prefix: super::ContentPrefix::Empty,
             output: Vec::new(),
             buffer: String::new(),
             font: context.font.display_current(),
@@ -24,6 +25,7 @@ impl WordExecution {
         context: &mut TextExecutionContext<'_>,
         is_last: bool,
     ) {
+        self.observe_source_payload(event);
         match event {
             RoffInlineEvent::NonBreakingWordBlank => {
                 self.text_state.suppress_break_whitespace = false;
@@ -83,10 +85,7 @@ impl WordExecution {
                 context.font.restore();
                 self.font = context.font.display_current();
             }
-            RoffInlineEvent::Link(target) => {
-                self.flush_segment();
-                self.link.clone_from(target);
-            }
+            RoffInlineEvent::Link(target) => self.append_link_event(target.as_deref(), context),
             RoffInlineEvent::EmptyDestination => {
                 if !self.text_state.wiped {
                     append_empty_destination(
@@ -122,6 +121,51 @@ impl WordExecution {
         }
     }
 
+    fn observe_source_payload(&mut self, event: &RoffInlineEvent) {
+        match event {
+            RoffInlineEvent::Text(value) if value.is_empty() => {}
+            RoffInlineEvent::Text(_)
+            | RoffInlineEvent::Glyph(_)
+            | RoffInlineEvent::NonBreakingWordBlank
+            | RoffInlineEvent::Overstrike {
+                terminal: Some(_), ..
+            }
+            | RoffInlineEvent::FallbackGlyph(_)
+            | RoffInlineEvent::DeviceName
+            | RoffInlineEvent::BreakableHyphen
+            | RoffInlineEvent::EmptyDestination
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint
+            | RoffInlineEvent::LineBreak => {
+                self.finish_content_prefix();
+                self.content_prefix = super::ContentPrefix::Authored;
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn finish_content_prefix(&mut self) {
+        if self.content_prefix == super::ContentPrefix::Motion {
+            self.flush_segment();
+            self.output
+                .push(Inline::anchor(super::CONTENT_AFTER_MOTION));
+            self.content_prefix = super::ContentPrefix::Empty;
+        }
+    }
+
+    fn append_link_event(&mut self, target: Option<&str>, context: &mut TextExecutionContext<'_>) {
+        self.flush_segment();
+        self.link = target.map(|target| {
+            let mant_ir::LinkTarget::External { uri } = context
+                .zero_advance
+                .annotation_target(mant_ir::LinkTarget::External { uri: target.into() })
+            else {
+                unreachable!()
+            };
+            uri
+        });
+    }
+
     fn append_horizontal_motion(
         &mut self,
         reading_blank: bool,
@@ -150,6 +194,11 @@ impl WordExecution {
             )
         {
             self.append_glyph(" ", context.zero_advance);
+            if self.content_prefix != super::ContentPrefix::Authored
+                && context.zero_advance.has_annotation_scope()
+            {
+                self.content_prefix = super::ContentPrefix::Motion;
+            }
         }
     }
 

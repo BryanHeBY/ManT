@@ -1,0 +1,3305 @@
+{
+  "cases": [
+    {
+      "id": "filled-sp0",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.sp 0\nB\\zQ \\c\n.UE\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": false
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": -11,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "ef6cb5ce53d3dc3e2bb0937a0be8faba895e6af1ca4ec1249f95ac93e8cf55da",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "filled-sp-negative",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.sp -1\nB\\zQ \\c\n.UE\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": false
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": -11,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "1355e0784e600f8249673f64f0e27b2fd2ac51b54286fb38685251f9292fc1e5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "filled-table",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.TS\nl.\nCELL\n.TE\nB\\zQ \\c\n.UE\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": false
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "cc799d0a8e3f23dd4336fa03de97d60a82d9c1bec88b14cb2e81795cb5b1489c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "cc799d0a8e3f23dd4336fa03de97d60a82d9c1bec88b14cb2e81795cb5b1489c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "a84752afa4eb595e607877370e4c9b4ccf1c14c9bfb4af26f0a8c744fe1623ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "anchors_raw_membership": [
+            {
+              "target": "https://outer.test",
+              "text": "FIRST"
+            }
+          ]
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "bbdc5a27a2b4170ca854a5bbcaf5ccf41c14d625c993f492886762ee712af0a8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "filled-br-control",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.br\nB\\zQ \\c\n.UE\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST\nBQ"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": false
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "5fa835b128c6a7928b08d8b6f60f1a6aa952a36f620588a7f7478f272ee0971a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "anchors_raw_membership": [
+            {
+              "target": "https://outer.test",
+              "text": "FIRST\n  [BR]\n  B "
+            }
+          ]
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "e3ee8146d50827767ee02f9e036a6749e7d6a54cbfb3f07cd4caf10d029f2772",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nofill-sp0-control",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.nf\n.UR https://outer.test\nFIRST\n.sp 0\nB\\zQ \\c\n.UE\n.fi\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST\nBQ"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": false
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "0977bf861e2929dca5798b18a32be83a99d4697c367d310ea8537e7ecacd7f96",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "0977bf861e2929dca5798b18a32be83a99d4697c367d310ea8537e7ecacd7f96",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "269b73a427b00294cb6f31a954e339b21ed1051709ae5e0623b17f1c73981112",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "anchors_raw_membership": [
+            {
+              "target": "https://outer.test",
+              "text": "\nFIRST\n\nB "
+            }
+          ]
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "76e2dba403138d0f5eaa3a86befab353bf995c87867f6a5285405a2dc11e5e7d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nofill-repeat-nf-control",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.nf\n.UR https://outer.test\nFIRST\n.nf\nB\\zQ \\c\n.UE\n.fi\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST\nBQ"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": false
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "0977bf861e2929dca5798b18a32be83a99d4697c367d310ea8537e7ecacd7f96",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "0977bf861e2929dca5798b18a32be83a99d4697c367d310ea8537e7ecacd7f96",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "fa4fffa270ee1ced32ba893fdfdf6347b2df2ac96df6cbb579178db233d5acaf",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "anchors_raw_membership": [
+            {
+              "target": "https://outer.test",
+              "text": "\nFIRST\n[BR]\nB "
+            }
+          ]
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "f43714cfb73ae8ca8ca298a45edc5e1e384f60aef00aeeea266dfa1c40490814",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 1,
+          "stdout_sha256": "60a41f36954e891045861504bf49a8dde1b47fe1fec0b558169af559ca3e7621",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "filled-repeat-fi-control",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.fi\nB\\zQ \\c\n.UE\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST\nBQ"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": false
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "6154c46477f862b24068c9dfb62d31a3a0433f85462555fe745e0b6ddaeaf143",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "5fa835b128c6a7928b08d8b6f60f1a6aa952a36f620588a7f7478f272ee0971a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "anchors_raw_membership": [
+            {
+              "target": "https://outer.test",
+              "text": "FIRST\n  [BR]\n  B "
+            }
+          ]
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "d7a7488693429b1f6db42604262c3f2d5e8936244f708a589d710d08b5ac904e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 1,
+          "stdout_sha256": "3ffe97f4a171be690cf2bf98ca2999637290a5047512a4ba7f80dca8ff20a492",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nested-ur-control",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- root hooks\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.UR https://inner.test\nINNER\n.UE\nB\\zQ \\c\n.UE\nTAIL\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST"
+          },
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://inner.test"
+            },
+            "label": "INNER"
+          }
+        ],
+        "outside_link_literals": [
+          "TAIL"
+        ],
+        "semantic_partial": true
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "33c9343f29643cf3ae1ebc6ef1690b56f3840cffec154c0da542c472a1d0d935",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "33c9343f29643cf3ae1ebc6ef1690b56f3840cffec154c0da542c472a1d0d935",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "1de458914fa70b8424723c58bafc06d751307ffea46926a61896f0aeadd68348",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "anchors_raw_membership": [
+            {
+              "target": "https://inner.test",
+              "text": "INNER"
+            },
+            {
+              "target": "https://outer.test",
+              "text": "FIRST\n    INNER B "
+            }
+          ]
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "a0d83b14a1991aa7ded215ba1e413ebf853f7b6f290770fbf444e47550d5336b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "caller-mr-recovered-name",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- a test\n.SH DESCRIPTION\n.MR \"abc\\zX\\[aaa]\\[bbb]\" 1 !\n.SH NEXT\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "manual",
+              "name": "abc",
+              "manualSection": "1"
+            },
+            "label": "abc\\[aaa]\\[bbb](1)",
+            "payload_style": {
+              "strong": false,
+              "emphasis": false,
+              "code": false
+            }
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "1a23035a78fb8b4d414437e58a47cd6b358208705f29130b316a61f2d5add3e9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "1a23035a78fb8b4d414437e58a47cd6b358208705f29130b316a61f2d5add3e9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "8341ea381fed0b55f2c766650b39a5bece39f99460303ec28097ddb60ac2969a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "8bab96e04b38798a52dbdd9de535161b884cd379965c0ddbbfbd86c5e9aefba6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 3,
+          "stdout_sha256": "f6d7d08e80bcba80ab470625ba72af1aeeda53e157f97fda3c06b58b903575fe",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "caller-mr-two-same",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- a test\n.SH DESCRIPTION\n.MR abc \"1\\z\"\n.MR abc 1\n.SH NEXT\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "manual",
+              "name": "abc",
+              "manualSection": "1"
+            },
+            "label": "abc(1)",
+            "payload_style": {
+              "strong": false,
+              "emphasis": false,
+              "code": false
+            }
+          },
+          {
+            "target": {
+              "kind": "manual",
+              "name": "abc",
+              "manualSection": "1"
+            },
+            "label": "abc(1)",
+            "payload_style": {
+              "strong": false,
+              "emphasis": false,
+              "code": false
+            }
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "9d8a79c7d5edb01a2e02e6e7e43e36adf42eb19d8ed64feceb9bb8ddecb78c60",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "9d8a79c7d5edb01a2e02e6e7e43e36adf42eb19d8ed64feceb9bb8ddecb78c60",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "887a660fa3c5ee6bf3a70deb63a7d44105fa86f9e483d96fbdf5b1b1b21659fc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "1767803bd98b49f02dfcf65cb777f2e5fa3bcb2776bb5adedd05c7785eb6d01a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 1,
+          "stdout_sha256": "3f6e34a68254a5053134206964f2444cc3236a480302ece362d20e9491b18fde",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "caller-bibliography-u-delayed",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd a test\n.Sh DESCRIPTION\n.Rs\n.%U \"https://one.test\\zX\\[aaa]\\[bbb]\"\n.Re\n.Sh NEXT\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://one.test"
+            },
+            "label": "https://one.test\\[aaa]\\[bbb]",
+            "payload_style": {
+              "strong": false,
+              "emphasis": false,
+              "code": false
+            }
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "88ad9364cb815a1e40f22fa25f2ad6928dd552533928c5d76277e87b1ca70353",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "815761d6c37ec003e5661d67186f68806b63f6ba6d3a2d40cb6e201d37fefe0e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "a1e041f81bedd9376b980ce1bafb53a292730458ae3da81d842594f09642de39",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "dfd0129dc73ec4a4c71af27d8afb380f952b840a7456b78f56336c2ecdae87e9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 3,
+          "stdout_sha256": "6bb2cdadfb9502351b1f244e83f2cc1243cb121c2c9649adec74e528d32f0b84",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "caller-bibliography-r-valid",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd a test\n.Sh DESCRIPTION\n.Rs\n.%R \"RFC 1234\"\n.Re\n.Sh NEXT\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://www.rfc-editor.org/rfc/rfc1234.html"
+            },
+            "label": "RFC 1234",
+            "payload_style": {
+              "strong": false,
+              "emphasis": false,
+              "code": false
+            }
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "99970cbfbfa6cd5259cbbae8bc62a528d5738e56fc5f2afac6745a3371e50c53",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "b1925e5ad8c18e8d34a256d0c0bfea0f061a798b8250d6add68b57ce3678dff3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "3add58d4a93b7e0340fc2e012ec874592e778749b5254c8851f12cafddd14341",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "1fd924f9a0f3e71c2e5916ba64ad0035a34133b71a42244b0a16ad02c52f9d19",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "caller-bibliography-r-styled-invalid",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd a test\n.Sh DESCRIPTION\n.Rs\n.%R \"RFC \\fB1234\"\n.Re\n.Sh NEXT\nAFTER\n",
+      "expected": {
+        "links": [],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "8cb958208156f2c28b1359e91cd1c61b22dba4cf9f75067a232d040d03f35098",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "717fe412dbe4232c1898596d4b275abb408ade5f4271d33810114b6b5a562dde",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "2c672dd24a61ffee60c42c0a563ed512e863afeddb333430ec48be7f7318a6f0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "76940a5719403e001d25ee482b7e35b166a969bc12acb62a893eb4d83b4601df",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "caller-mt-two-same-delayed",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd a test\n.Sh DESCRIPTION\n.Mt \"a@example.test\\zX\\[aaa]\" a@example.test\n.Sh NEXT\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "email",
+              "address": "a@example.test"
+            },
+            "label": "a@example.testX\\[aaa]",
+            "payload_style": {
+              "strong": false,
+              "emphasis": true,
+              "code": false
+            }
+          },
+          {
+            "target": {
+              "kind": "email",
+              "address": "a@example.test"
+            },
+            "label": "a@example.test",
+            "payload_style": {
+              "strong": false,
+              "emphasis": true,
+              "code": false
+            }
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "ea42ec3cb074f4b6c10cb4eac91db665967a915cae991239c1fadf7aee1416ae",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "6a0823f9ec530573ea1393ced2a6011ae8172b52646e49c28c3df676936d22b4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "07470f3d05942a11d72e7b8f62d5b052622e1d4310441d80b895bcb3bf6a67a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "47ff1841f88ae42a8b7ddd80c0c22eb8159c892cfebbe1562be0f6c7ae65b905",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 3,
+          "stdout_sha256": "ca6c67294fc9e7cabd1c707e651b19930e58b792e2702c6ac44f179a222189f8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "caller-mt-two-same-clean",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd a test\n.Sh DESCRIPTION\n.Mt a@example.test a@example.test\n.Sh NEXT\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "email",
+              "address": "a@example.test"
+            },
+            "label": "a@example.test",
+            "payload_style": {
+              "strong": false,
+              "emphasis": true,
+              "code": false
+            }
+          },
+          {
+            "target": {
+              "kind": "email",
+              "address": "a@example.test"
+            },
+            "label": "a@example.test",
+            "payload_style": {
+              "strong": false,
+              "emphasis": true,
+              "code": false
+            }
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "327e4e420657fe8f4e0260be905887059338156c715bf772a548345b7ae55e7a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "a2249b02721b5b4651bbad5af5823de208562913b448bc6e44e1022190320c59",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "07470f3d05942a11d72e7b8f62d5b052622e1d4310441d80b895bcb3bf6a67a3",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "313291d443e4d6e9ebc6c0d56061bb73a1861ad3497f6ac8fd7a9c65be06b88a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "cwd": "/home/hby/dev/ManT",
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "one-source-held-two",
+      "source": ".TH TTY 1 \"November 7, 2026\"\n.SH DESCRIPTION\n\\X'tty: link https://example.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'Q\\zX  Y\\X'tty: link'\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "label": "QX Y"
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "46107944183012c844ec13d2606bbe4deaf3dddbfed16752449ffabbe0a5de78",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "46107944183012c844ec13d2606bbe4deaf3dddbfed16752449ffabbe0a5de78",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "c9f341fb484884660789d3a3be8a7eb30901ee886599dd0a10b1cf3a99fd7547",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "8bbddf923b5978640aa0bc36a9244104b58fccec174d0331d9e5ac067328d5e8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "two-real-same-uri",
+      "source": ".TH TTY 1 \"November 7, 2026\"\n.SH DESCRIPTION\n\\X'tty: link https://example.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'Q\\zX  Y\\X'tty: link'\n\\X'tty: link https://example.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'Q\\zX  Y\\X'tty: link'\nAFTER\n",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "label": "QX Y"
+          },
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "label": "QX Y"
+          }
+        ],
+        "outside_link_literals": [
+          "AFTER"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "086d0d35fb242fed1e28ee158ddebe26b79b06359f7c482a283b4351ee1656f2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "086d0d35fb242fed1e28ee158ddebe26b79b06359f7c482a283b4351ee1656f2",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "fb79ddca39a174c741f7ab2de2e02625e1d815ee4cd2b182c9e1609fd0601427",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "9daac1f6033a396da9d829cc30c0707eeb4ac5d3910f82ab5b31f9deceb4e0b5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "empty-target-UR-.nf",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH DESCRIPTION\n.UR \\&\nFIRST\n.nf\nB\\zQ \\c\n.UE\n.fi\nTAIL\n",
+      "expected": {
+        "links": [],
+        "outside_link_literals": [
+          "FIRST",
+          "BQ",
+          "TAIL"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "5a619a905cabf61fd2eb3612dc86cf63dd9150046361aa9ff6973184cf4ca992",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "5a619a905cabf61fd2eb3612dc86cf63dd9150046361aa9ff6973184cf4ca992",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "5bea1464799c04213957a1c3a17e24170af3298ef8a6409d15e1961c25e6127b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "975f619a46274fe7dfd7a9f5c4a93ce05245ad346eeecc29655b4ec714d1b45c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "empty-target-UR-.PP",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH DESCRIPTION\n.UR \\&\nFIRST\n.PP\nB\\zQ \\c\n.UE\n.fi\nTAIL\n",
+      "expected": {
+        "links": [],
+        "outside_link_literals": [
+          "FIRST",
+          "BQ",
+          "TAIL"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "eb6b42a707a094ed7e01a199841fc2779a0a3e62ea51bf2c157dc7e145d3ae76",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "eb6b42a707a094ed7e01a199841fc2779a0a3e62ea51bf2c157dc7e145d3ae76",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": -11,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 1,
+          "stdout_sha256": "53b8877fcf36f6146cbfca0a5adff3b1532f3c4685b60ba3c78ef2260853fd4d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "67d9bacf5ccff3a31affa403354fd349422d833982a8752e31d0ffe2f1732a26",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "empty-target-MT-.nf",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH DESCRIPTION\n.MT \\&\nFIRST\n.nf\nB\\zQ \\c\n.ME\n.fi\nTAIL\n",
+      "expected": {
+        "links": [],
+        "outside_link_literals": [
+          "FIRST",
+          "BQ",
+          "TAIL"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "5a619a905cabf61fd2eb3612dc86cf63dd9150046361aa9ff6973184cf4ca992",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "5a619a905cabf61fd2eb3612dc86cf63dd9150046361aa9ff6973184cf4ca992",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "stdout_sha256": "3ec428c72eaa8bcefe763b5ecd38e54d2a10ce76a75f81693dbf292d37fdc5e8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "1e6652c458469c15ef7affbdad83078467ca01f02a0380f9b43114503d233646",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "empty-target-MT-.PP",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH DESCRIPTION\n.MT \\&\nFIRST\n.PP\nB\\zQ \\c\n.ME\n.fi\nTAIL\n",
+      "expected": {
+        "links": [],
+        "outside_link_literals": [
+          "FIRST",
+          "BQ",
+          "TAIL"
+        ]
+      },
+      "profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "eb6b42a707a094ed7e01a199841fc2779a0a3e62ea51bf2c157dc7e145d3ae76",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "eb6b42a707a094ed7e01a199841fc2779a0a3e62ea51bf2c157dc7e145d3ae76",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": -11,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 1,
+          "stdout_sha256": "53b8877fcf36f6146cbfca0a5adff3b1532f3c4685b60ba3c78ef2260853fd4d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "d452ee2d051767e30d8fddca11de3d8f35a64e9185909cb7ca5ec4ce434017df",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    {
+      "id": "nested-pending-close",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- nested deferred roots\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.UR https://inner.test\n\\zQ\n.nf\nBODY\n.UE\n.UE\n.fi\nTAIL\n",
+      "source_sha256": "40e46d4ee557241feb921553c7d441ab76bf25bc47ef618d8b1070696338efb3",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          },
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://inner.test"
+            },
+            "label": "Q",
+            "scalar_styles": [
+              {
+                "text": "Q",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 2,
+        "distinct_targets": 2,
+        "diagnostics": [
+          {
+            "code": "manual.annotation-coverage",
+            "impact": "semantic-coverage",
+            "count": 1,
+            "reason": "Only outer source initial owner crosses independent inner reference; inner original accepted label remains exactly expressible"
+          }
+        ],
+        "outside_link_literals": [
+          "BODY",
+          "https://inner.test",
+          "https://outer.test",
+          "TAIL"
+        ],
+        "native_description_rows_without_common_margin": [
+          "FIRST Q",
+          "BODY <https://inner.test> <https://outer.test>",
+          "TAIL"
+        ],
+        "private_markers_forbidden": true
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "5140bf3cc87bec51967079d2cb20c2bebc8bf914ac239299b3547a212b846a66",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "5140bf3cc87bec51967079d2cb20c2bebc8bf914ac239299b3547a212b846a66",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": -11,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "44130da25c6454214afe2de0f1d8dc25415ed27b34b07f71c2a2c5c8dcbd8b09",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "authority": "pinned man_html::man_UR_pre opens nested source anchors (no paragraph close at UR); .nf closes semantic root; man_term::print_man_node and term_newln consume accepted Q before BODY, encode1 keeps pending actual font and source order; chosen guide partial-annotation policy retains only initial outer segment while preserving complete inner reference. HTML profile SIGSEGV is Uncovered, not successful semantic gold. Native tree proves original nested AST and glyph birth."
+    },
+    {
+      "id": "nested-held-close",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- nested deferred roots\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.UR https://inner.test\nA\\zQ  R\n.nf\nBODY\n.UE\n.UE\n.fi\nTAIL\n",
+      "source_sha256": "eb32fbf1745df7f4c74904049e812294fa13d1f600f254711b3a0acdbc1c93af",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          },
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://inner.test"
+            },
+            "label": "AQ R",
+            "scalar_styles": [
+              {
+                "text": "AQ R",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 2,
+        "distinct_targets": 2,
+        "diagnostics": [
+          {
+            "code": "manual.annotation-coverage",
+            "impact": "semantic-coverage",
+            "count": 1,
+            "reason": "Only outer source initial owner crosses independent inner reference; inner original accepted label remains exactly expressible"
+          }
+        ],
+        "outside_link_literals": [
+          "BODY",
+          "https://inner.test",
+          "https://outer.test",
+          "TAIL"
+        ],
+        "native_description_rows_without_common_margin": [
+          "FIRST AQ R",
+          "BODY <https://inner.test> <https://outer.test>",
+          "TAIL"
+        ],
+        "private_markers_forbidden": true
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "stdout_sha256": "e9b32bf16602a2af18c0ac5ec22f25443ec635a06333ad3222991f0f47ce5fc5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "stdout_sha256": "e9b32bf16602a2af18c0ac5ec22f25443ec635a06333ad3222991f0f47ce5fc5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": -11,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "stdout_sha256": "cbb420a5b6413802a5199d22f8faa456664ab621a5ec746a256b680c612b0656",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "authority": "pinned man_html::man_UR_pre opens nested source anchors (no paragraph close at UR); .nf closes semantic root; man_term::print_man_node and term_newln consume accepted Q before BODY, encode1 keeps pending actual font and source order; chosen guide partial-annotation policy retains only initial outer segment while preserving complete inner reference. HTML profile SIGSEGV is Uncovered, not successful semantic gold. Native tree proves original nested AST and glyph birth."
+    },
+    {
+      "id": "ur-accepted-bold",
+      "family": "outer-man-table",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.TS\nl.\nT{\n.B CELL\nT}\n.TE\nBODY\n.UE\nTAIL\n.SH NEXT\nAFTER\n",
+      "source_sha256": "2866fb87c912c4d8713b25c597a0f989d97f578958ab83042f1efa6ab2b39cf8",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST",
+            "style": "plain",
+            "role": "initial-outer-label",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "outside_link_literals": [
+          "BODY",
+          "TAIL",
+          "AFTER",
+          "CELL"
+        ],
+        "source_order": [
+          "FIRST",
+          "CELL",
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "outer_label_closed_by_table": true,
+        "outer_syntax_owner_remains_balanced": true,
+        "no_panic": true,
+        "semantic_partial_annotation_expected": false,
+        "content_coverage_diagnostic_expected": false,
+        "no_synthetic_annotation_entry_anchor": true,
+        "table_owners": 1,
+        "cell_candidate": "accepted-closed-language",
+        "cell_style": "strong",
+        "native_cell_text": "CELL",
+        "projection_contract": "Safe complete highlevel source operands equal nativecell payload; accepted enhancement alone executes B/MR semantics. Native does not interpret those macros inside tbl. Declined nativebr retains finalizednativecell.",
+        "cell_accepted_members": [
+          {
+            "text": "CELL",
+            "occurrences": 1,
+            "style": "strong",
+            "owner": "table-cell",
+            "link": null
+          }
+        ]
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e3980035553232d28734ea84d84272e28cd5a923b004830338fed2cf85506b27",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e3980035553232d28734ea84d84272e28cd5a923b004830338fed2cf85506b27",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "stdout_sha256": "5b75a32f507663535918dbb2adebbef3a2eac4cc4b3008d466b2fc661244bb5a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "stdout_sha256": "fcf9e46db7c054b7cac39cea516b982afac2bba353eaf2793780062633b9c1c7",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 4,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "stdout_sha256": "0cf211d4e3235f624ca28b1a01d14e755451a1fd8b430193f6d36f8ce38a6f24",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_ast_witness": {
+        "outer_macro": "UR",
+        "tbl_and_following_BODY_are_children_of_outer_BODY": true,
+        "selected_tree_excerpt": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"November 7, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- test (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      UR (block) *5:2\n        UR (head) 5:2\n            https://outer.test (text) 5:5\n        UR (body) 5:2\n            FIRST (text) *6:1\n            1 (tbl options) 9:1\n            L 0L{CELL} (tbl) 9:1\n            BODY (text) *13:1\n      TAIL (text) *15:1\nSH (block) *16:2\n  SH (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  SH (body) 16:2\n      AFTER (text) *17:1\n",
+        "html_outer_label": "FIRST",
+        "html_description_window": "id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<p class=\"Pp\"><a class=\"Lk\" href=\"https://outer.test\">FIRST</a></p>\n<table class=\"tbl\">\n  <tr>\n    <td>CELL</td>\n  </tr>\n</table>\n<p class=\"Pp\">BODY TAIL</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" "
+      }
+    },
+    {
+      "id": "ur-accepted-manual",
+      "family": "outer-man-table",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.TS\nl.\nT{\n.MR printf 3\nT}\n.TE\nBODY\n.UE\nTAIL\n.SH NEXT\nAFTER\n",
+      "source_sha256": "77c57711810392754b7d6b7d8c0a2932de8c577c0b37cf169abf2920f850e2aa",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST",
+            "style": "plain",
+            "role": "initial-outer-label",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          },
+          {
+            "target": {
+              "kind": "manual",
+              "name": "printf",
+              "manualSection": "3"
+            },
+            "label": "printf(3)",
+            "style": "plain",
+            "role": "independent-recovered-cell-reference",
+            "scalar_styles": [
+              {
+                "text": "printf(3)",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 2,
+        "distinct_targets": 2,
+        "outside_link_literals": [
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "source_order": [
+          "FIRST",
+          "printf(3)",
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "outer_label_closed_by_table": true,
+        "outer_syntax_owner_remains_balanced": true,
+        "no_panic": true,
+        "semantic_partial_annotation_expected": false,
+        "content_coverage_diagnostic_expected": false,
+        "no_synthetic_annotation_entry_anchor": true,
+        "table_owners": 1,
+        "cell_candidate": "accepted-closed-language",
+        "cell_style": "plain",
+        "native_cell_text": "printf 3",
+        "projection_contract": "Safe complete highlevel source operands equal nativecell payload; accepted enhancement alone executes B/MR semantics. Native does not interpret those macros inside tbl. Declined nativebr retains finalizednativecell.",
+        "cell_accepted_members": [
+          {
+            "text": "printf(3)",
+            "occurrences": 1,
+            "style": "plain",
+            "owner": "table-cell",
+            "link": 1
+          }
+        ]
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "a1232701ea16780d6c201b3276bcd5da12a2094ff96a46272d20e6c964a83697",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "a1232701ea16780d6c201b3276bcd5da12a2094ff96a46272d20e6c964a83697",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "stdout_sha256": "5e8185d7f9bc6b3e24d9d65e3f4ba77c89d8569810beba3dd61805429b341f81",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "stdout_sha256": "89aa97da4004cbd3a67c8ccda1725a1990faab5159350c5091262e252c474da8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 4,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "stdout_sha256": "f3156d24d46e7f0936eaaf5cf6e64a2bbd01d7dacae9d0688b8858e8daca3c9a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_ast_witness": {
+        "outer_macro": "UR",
+        "tbl_and_following_BODY_are_children_of_outer_BODY": true,
+        "selected_tree_excerpt": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"November 7, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- test (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      UR (block) *5:2\n        UR (head) 5:2\n            https://outer.test (text) 5:5\n        UR (body) 5:2\n            FIRST (text) *6:1\n            1 (tbl options) 9:1\n            L 0L{printf 3} (tbl) 9:1\n            BODY (text) *13:1\n      TAIL (text) *15:1\nSH (block) *16:2\n  SH (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  SH (body) 16:2\n      AFTER (text) *17:1\n",
+        "html_outer_label": "FIRST",
+        "html_description_window": "id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<p class=\"Pp\"><a class=\"Lk\" href=\"https://outer.test\">FIRST</a></p>\n<table class=\"tbl\">\n  <tr>\n    <td>printf 3</td>\n  </tr>\n</table>\n<p class=\"Pp\">BODY TAIL</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" "
+      }
+    },
+    {
+      "id": "ur-declined-native-br",
+      "family": "outer-man-table",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.UR https://outer.test\nFIRST\n.TS\nl.\nT{\n.br\n.B CELL\nT}\n.TE\nBODY\n.UE\nTAIL\n.SH NEXT\nAFTER\n",
+      "source_sha256": "0da730cd3040065c96ad5391e67388e97cc009f3b6e7eda538e5fc71257c2085",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://outer.test"
+            },
+            "label": "FIRST",
+            "style": "plain",
+            "role": "initial-outer-label",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "outside_link_literals": [
+          "BODY",
+          "TAIL",
+          "AFTER",
+          "CELL"
+        ],
+        "source_order": [
+          "FIRST",
+          "CELL",
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "outer_label_closed_by_table": true,
+        "outer_syntax_owner_remains_balanced": true,
+        "no_panic": true,
+        "semantic_partial_annotation_expected": false,
+        "content_coverage_diagnostic_expected": false,
+        "no_synthetic_annotation_entry_anchor": true,
+        "table_owners": 1,
+        "cell_candidate": "declined-native-request",
+        "cell_style": "plain",
+        "native_cell_text": "CELL",
+        "projection_contract": "Safe complete highlevel source operands equal nativecell payload; accepted enhancement alone executes B/MR semantics. Native does not interpret those macros inside tbl. Declined nativebr retains finalizednativecell.",
+        "cell_accepted_members": [
+          {
+            "text": "CELL",
+            "occurrences": 1,
+            "style": "plain",
+            "owner": "table-cell",
+            "link": null
+          }
+        ]
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e3980035553232d28734ea84d84272e28cd5a923b004830338fed2cf85506b27",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e3980035553232d28734ea84d84272e28cd5a923b004830338fed2cf85506b27",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "stdout_sha256": "5b75a32f507663535918dbb2adebbef3a2eac4cc4b3008d466b2fc661244bb5a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "stdout_sha256": "fe0db2fd131836adb02428ffa76eb4f1eb5d00e7f21ec2ab4cd3a94b3b34929b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 4,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "stdout_sha256": "781e97952ca9ab7e4fa2c1e37d1d82693ec89792b3b241a3d0995d2f6c87b071",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_ast_witness": {
+        "outer_macro": "UR",
+        "tbl_and_following_BODY_are_children_of_outer_BODY": true,
+        "selected_tree_excerpt": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"November 7, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- test (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      UR (block) *5:2\n        UR (head) 5:2\n            https://outer.test (text) 5:5\n        UR (body) 5:2\n            FIRST (text) *6:1\n            1 (tbl options) 9:1\n            L 0L{CELL} (tbl) 9:1\n            BODY (text) *14:1\n      TAIL (text) *16:1\nSH (block) *17:2\n  SH (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  SH (body) 17:2\n      AFTER (text) *18:1\n",
+        "html_outer_label": "FIRST",
+        "html_description_window": "id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<p class=\"Pp\"><a class=\"Lk\" href=\"https://outer.test\">FIRST</a></p>\n<table class=\"tbl\">\n  <tr>\n    <td>CELL</td>\n  </tr>\n</table>\n<p class=\"Pp\">BODY TAIL</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" "
+      }
+    },
+    {
+      "id": "mt-accepted-bold",
+      "family": "outer-man-table",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.MT owner@example.test\nFIRST\n.TS\nl.\nT{\n.B CELL\nT}\n.TE\nBODY\n.ME\nTAIL\n.SH NEXT\nAFTER\n",
+      "source_sha256": "d2500c48560647010f5f667b57b8538a4df92daf552790825ac7980cd884d33b",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "email",
+              "address": "owner@example.test"
+            },
+            "label": "FIRST",
+            "style": "plain",
+            "role": "initial-outer-label",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "outside_link_literals": [
+          "BODY",
+          "TAIL",
+          "AFTER",
+          "CELL"
+        ],
+        "source_order": [
+          "FIRST",
+          "CELL",
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "outer_label_closed_by_table": true,
+        "outer_syntax_owner_remains_balanced": true,
+        "no_panic": true,
+        "semantic_partial_annotation_expected": false,
+        "content_coverage_diagnostic_expected": false,
+        "no_synthetic_annotation_entry_anchor": true,
+        "table_owners": 1,
+        "cell_candidate": "accepted-closed-language",
+        "cell_style": "strong",
+        "native_cell_text": "CELL",
+        "projection_contract": "Safe complete highlevel source operands equal nativecell payload; accepted enhancement alone executes B/MR semantics. Native does not interpret those macros inside tbl. Declined nativebr retains finalizednativecell.",
+        "cell_accepted_members": [
+          {
+            "text": "CELL",
+            "occurrences": 1,
+            "style": "strong",
+            "owner": "table-cell",
+            "link": null
+          }
+        ]
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e0de58933bc7b7ca3a145324abde644e40b55f473f3b6158d6e503300f431f5d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e0de58933bc7b7ca3a145324abde644e40b55f473f3b6158d6e503300f431f5d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "stdout_sha256": "e610935d30a123b9685a8549722692c7f4f4c23698d59a51ab4ed483e9b8808b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "stdout_sha256": "ea9bf447f25589d13dc2adfefbfe30b522f601046946196aefb9390076336c33",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 4,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "stdout_sha256": "0cf211d4e3235f624ca28b1a01d14e755451a1fd8b430193f6d36f8ce38a6f24",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_ast_witness": {
+        "outer_macro": "MT",
+        "tbl_and_following_BODY_are_children_of_outer_BODY": true,
+        "selected_tree_excerpt": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"November 7, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- test (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      MT (block) *5:2\n        MT (head) 5:2\n            owner@example.test (text) 5:5\n        MT (body) 5:2\n            FIRST (text) *6:1\n            1 (tbl options) 9:1\n            L 0L{CELL} (tbl) 9:1\n            BODY (text) *13:1\n      TAIL (text) *15:1\nSH (block) *16:2\n  SH (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  SH (body) 16:2\n      AFTER (text) *17:1\n",
+        "html_outer_label": "FIRST",
+        "html_description_window": "id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<p class=\"Pp\"><a class=\"Mt\" href=\"mailto:owner@example.test\">FIRST</a></p>\n<table class=\"tbl\">\n  <tr>\n    <td>CELL</td>\n  </tr>\n</table>\n<p class=\"Pp\">BODY TAIL</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" "
+      }
+    },
+    {
+      "id": "mt-accepted-manual",
+      "family": "outer-man-table",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.MT owner@example.test\nFIRST\n.TS\nl.\nT{\n.MR printf 3\nT}\n.TE\nBODY\n.ME\nTAIL\n.SH NEXT\nAFTER\n",
+      "source_sha256": "01e3832b00d9676855f6c1f9407e8ab105ec673a57694659a809185b42c55ba4",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "email",
+              "address": "owner@example.test"
+            },
+            "label": "FIRST",
+            "style": "plain",
+            "role": "initial-outer-label",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          },
+          {
+            "target": {
+              "kind": "manual",
+              "name": "printf",
+              "manualSection": "3"
+            },
+            "label": "printf(3)",
+            "style": "plain",
+            "role": "independent-recovered-cell-reference",
+            "scalar_styles": [
+              {
+                "text": "printf(3)",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 2,
+        "distinct_targets": 2,
+        "outside_link_literals": [
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "source_order": [
+          "FIRST",
+          "printf(3)",
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "outer_label_closed_by_table": true,
+        "outer_syntax_owner_remains_balanced": true,
+        "no_panic": true,
+        "semantic_partial_annotation_expected": false,
+        "content_coverage_diagnostic_expected": false,
+        "no_synthetic_annotation_entry_anchor": true,
+        "table_owners": 1,
+        "cell_candidate": "accepted-closed-language",
+        "cell_style": "plain",
+        "native_cell_text": "printf 3",
+        "projection_contract": "Safe complete highlevel source operands equal nativecell payload; accepted enhancement alone executes B/MR semantics. Native does not interpret those macros inside tbl. Declined nativebr retains finalizednativecell.",
+        "cell_accepted_members": [
+          {
+            "text": "printf(3)",
+            "occurrences": 1,
+            "style": "plain",
+            "owner": "table-cell",
+            "link": 1
+          }
+        ]
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "b0b01bca5bd80b706614f41f0dfb9fc53f3425a68853b18994deccafba43d60d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "b0b01bca5bd80b706614f41f0dfb9fc53f3425a68853b18994deccafba43d60d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "stdout_sha256": "7dcc7d0773f4beed6149a72ffa7dd816705abafe053ef37d34f05f2c102b2f05",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "stdout_sha256": "716bbd3b2dce9187cbada487208fcc98d5373fd30b93ee9da47b7bed5e92d5e0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 4,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "stdout_sha256": "f3156d24d46e7f0936eaaf5cf6e64a2bbd01d7dacae9d0688b8858e8daca3c9a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_ast_witness": {
+        "outer_macro": "MT",
+        "tbl_and_following_BODY_are_children_of_outer_BODY": true,
+        "selected_tree_excerpt": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"November 7, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- test (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      MT (block) *5:2\n        MT (head) 5:2\n            owner@example.test (text) 5:5\n        MT (body) 5:2\n            FIRST (text) *6:1\n            1 (tbl options) 9:1\n            L 0L{printf 3} (tbl) 9:1\n            BODY (text) *13:1\n      TAIL (text) *15:1\nSH (block) *16:2\n  SH (head) 16:2 ID=HREF\n      NEXT (text) 16:5\n  SH (body) 16:2\n      AFTER (text) *17:1\n",
+        "html_outer_label": "FIRST",
+        "html_description_window": "id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<p class=\"Pp\"><a class=\"Mt\" href=\"mailto:owner@example.test\">FIRST</a></p>\n<table class=\"tbl\">\n  <tr>\n    <td>printf 3</td>\n  </tr>\n</table>\n<p class=\"Pp\">BODY TAIL</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" "
+      }
+    },
+    {
+      "id": "mt-declined-native-br",
+      "family": "outer-man-table",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\n.MT owner@example.test\nFIRST\n.TS\nl.\nT{\n.br\n.B CELL\nT}\n.TE\nBODY\n.ME\nTAIL\n.SH NEXT\nAFTER\n",
+      "source_sha256": "e8396b0224111cc17509833a91e1e6d648a0a30b0c7867bad41e9522b2e147b6",
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "email",
+              "address": "owner@example.test"
+            },
+            "label": "FIRST",
+            "style": "plain",
+            "role": "initial-outer-label",
+            "scalar_styles": [
+              {
+                "text": "FIRST",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "outside_link_literals": [
+          "BODY",
+          "TAIL",
+          "AFTER",
+          "CELL"
+        ],
+        "source_order": [
+          "FIRST",
+          "CELL",
+          "BODY",
+          "TAIL",
+          "AFTER"
+        ],
+        "outer_label_closed_by_table": true,
+        "outer_syntax_owner_remains_balanced": true,
+        "no_panic": true,
+        "semantic_partial_annotation_expected": false,
+        "content_coverage_diagnostic_expected": false,
+        "no_synthetic_annotation_entry_anchor": true,
+        "table_owners": 1,
+        "cell_candidate": "declined-native-request",
+        "cell_style": "plain",
+        "native_cell_text": "CELL",
+        "projection_contract": "Safe complete highlevel source operands equal nativecell payload; accepted enhancement alone executes B/MR semantics. Native does not interpret those macros inside tbl. Declined nativebr retains finalizednativecell.",
+        "cell_accepted_members": [
+          {
+            "text": "CELL",
+            "occurrences": 1,
+            "style": "plain",
+            "owner": "table-cell",
+            "link": null
+          }
+        ]
+      },
+      "oracle_profiles": {
+        "ascii": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e0de58933bc7b7ca3a145324abde644e40b55f473f3b6158d6e503300f431f5d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "stdout_sha256": "e0de58933bc7b7ca3a145324abde644e40b55f473f3b6158d6e503300f431f5d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "stdout_sha256": "e610935d30a123b9685a8549722692c7f4f4c23698d59a51ab4ed483e9b8808b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "exit": 0,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "stdout_sha256": "9bf8cc6b0aef355f116fb31bbb9a6d687c0050b61c9ebd22ffdd67a0abae036b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "exit": 4,
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "stdout_sha256": "781e97952ca9ab7e4fa2c1e37d1d82693ec89792b3b241a3d0995d2f6c87b071",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_ast_witness": {
+        "outer_macro": "MT",
+        "tbl_and_following_BODY_are_children_of_outer_BODY": true,
+        "selected_tree_excerpt": "title = \"PROBE\"\nsec   = \"1\"\nvol   = \"General Commands Manual\"\ndate  = \"November 7, 2026\"\n\nSH (block) *2:2\n  SH (head) 2:2 ID=HREF\n      NAME (text) 2:5\n  SH (body) 2:2\n      probe \\- test (text) *3:1\nSH (block) *4:2\n  SH (head) 4:2 ID=HREF\n      DESCRIPTION (text) 4:5\n  SH (body) 4:2\n      MT (block) *5:2\n        MT (head) 5:2\n            owner@example.test (text) 5:5\n        MT (body) 5:2\n            FIRST (text) *6:1\n            1 (tbl options) 9:1\n            L 0L{CELL} (tbl) 9:1\n            BODY (text) *14:1\n      TAIL (text) *16:1\nSH (block) *17:2\n  SH (head) 17:2 ID=HREF\n      NEXT (text) 17:5\n  SH (body) 17:2\n      AFTER (text) *18:1\n",
+        "html_outer_label": "FIRST",
+        "html_description_window": "id=\"DESCRIPTION\"><a class=\"permalink\" href=\"#DESCRIPTION\">DESCRIPTION</a></h2>\n<p class=\"Pp\"><a class=\"Mt\" href=\"mailto:owner@example.test\">FIRST</a></p>\n<table class=\"tbl\">\n  <tr>\n    <td>CELL</td>\n  </tr>\n</table>\n<p class=\"Pp\">BODY TAIL</p>\n</section>\n<section class=\"Sh\">\n<h2 class=\"Sh\" "
+      }
+    },
+    {
+      "id": "lk-leading-h",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No PRE\n.Lk https://example.test \"\\h'1n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "018d3dac3e826258d09a1c24ee5377cd9c423f0ab44a2b3e39b925eac91f361a",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "8e78ec71cc9d1774a60279db80468a1028131c1e141ee42279f50660238edd2c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "264bd14087d04b860e977677a948f9f26d8d07b043198bcd24e77dd14763fe7f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "408857f7d0e709ad73153ec410c2d89ac42afa7ce74723b5c2ce09b5556d9578",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "c6bfbd85881cd1b4b98ef6cd852ea3a80eb2805b919aa8afc2f5c9487ae16a70",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 1,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": ": https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE  Y: https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "lk-plus-zero",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No PRE\n.Lk https://example.test \"\\h'+0n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "3a4348270f3d187e7577eb9a032bf316c27d076948dce7fc93856b2df895670f",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "7d599a8ba3970e31d58d703b7bf1047cd944f7c14788f3d06625a86c5d7c94ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "96b4db7644f2adf6ca8349202e6fd39337501f9b676ef544f3ac61190e48ac66",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "408857f7d0e709ad73153ec410c2d89ac42afa7ce74723b5c2ce09b5556d9578",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "ed99a4f5639d8746224a31ac11f056ba4033dd4f1a893d4da725b31d10b4fc05",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": ": https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE Y: https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "lk-minus-zero",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No PRE\n.Lk https://example.test \"\\h'-0n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "d53d0e3df4b291d8b5e64169bed711f2438573e55fac55b49d1056efdd2c4e23",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "7d599a8ba3970e31d58d703b7bf1047cd944f7c14788f3d06625a86c5d7c94ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "96b4db7644f2adf6ca8349202e6fd39337501f9b676ef544f3ac61190e48ac66",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "408857f7d0e709ad73153ec410c2d89ac42afa7ce74723b5c2ce09b5556d9578",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "bdabe458fe8bce221dbd2dd5b720db143e30c410e8fd74afb6905230da1cf1bc",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": ": https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE Y: https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "lk-z-cancelled",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No PRE\n.Lk https://example.test \"\\z\\h'1n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "90c4dec3f6d07ecb0c9c257901a54e2bae6dc60a5e85c4fb016db25211b11b0e",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "7d599a8ba3970e31d58d703b7bf1047cd944f7c14788f3d06625a86c5d7c94ea",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "96b4db7644f2adf6ca8349202e6fd39337501f9b676ef544f3ac61190e48ac66",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "408857f7d0e709ad73153ec410c2d89ac42afa7ce74723b5c2ce09b5556d9578",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "2c344abef4f600a28664eb5ae20b7539c22011697ea86248669dfaded06a7085",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": ": https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE Y: https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "lk-old-z-consumed-motion",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Sm off\n.No \"\\zX\"\n.Lk https://example.test \"\\h'1n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "d3c24cb4c04d0531235f59115f2eb86007a47cf9e569c4f8f088ba3afafef646",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "727a0d0120ff34fc9bfd2a0d8ab9b3ec815a842994e49436d8ad9ff40174594e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e00a6037df9e491cf36f61afc5933f566209b7f78ddc5314c3c928041e7fc624",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "6551c8a36a7e275a05c69083b205303cd5f0c8ce230c6fdb8dd2ce3258b261d0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "4cd93d3392cd224abf0b20b35ed976aaaffdda7e25b0c1a802c2efd5aedf98d1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "X",
+        "old_source_style": "plain",
+        "suffix_outside_label": ":https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "XY:https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "lk-multiple-motion",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No PRE\n.Lk https://example.test \"\\h'1n'\\h'1n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "24e90cb423a20897daad4021ee1a966b370ab16fa7e981b9c98f8ae9f59d4702",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "c2f3fbf840b120fd5fe86be803d0b0f8b21216c1749d6ca5e3a2c31b169b5e12",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "fa48a75847673a7a94298e14a94af3640bb770d662ffbfbd950e433615e41a42",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "408857f7d0e709ad73153ec410c2d89ac42afa7ce74723b5c2ce09b5556d9578",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "d1299f41d7a13f2279453f6d82551d4c3cccff97da39bd96959fb9623de97ae5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 2,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": ": https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE   Y: https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "lk-author-space-before-motion",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No PRE\n.Lk https://example.test \" \\h'1n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "aa4791bac578f90399b856c639ae420696d294b302de18644f38b86746c2958f",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "c2f3fbf840b120fd5fe86be803d0b0f8b21216c1749d6ca5e3a2c31b169b5e12",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "fa48a75847673a7a94298e14a94af3640bb770d662ffbfbd950e433615e41a42",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "abd50f6508c830e9bab8fd60204cf0336a6104265b65afcbae4377f6c3307efa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "ae6ff6cde995032ec8eb6c1b5af00b094afbe2bd59ec5c082029605da4d6cc02",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "  Y",
+            "scalar_styles": [
+              {
+                "text": "  Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": ": https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": true
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE   Y: https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": " Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "lk-author-nbsp-before-motion",
+      "source": ".Dd November 7, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.No PRE\n.Lk https://example.test \"\\~\\h'1n'Y\"\n.Sh NEXT\nAFTER\n",
+      "source_sha256": "5f650f343e8e57a6f8747d1fd6a247f98aebc73e2455cfef6e166cf5078ac141",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "c2f3fbf840b120fd5fe86be803d0b0f8b21216c1749d6ca5e3a2c31b169b5e12",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "b974de70f68e3a9a6a5508b2a4da95dfa418cc8738fc3c3f6ed1b590fe7429ce",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "c37408d2fdae9e86543db29e97b98662c305ed70be48532b66aa51d9637d6c4e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "477b4549f2f92bb338599c8b5c03f59120563354b0c315b200a1b23436643129",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "  Y",
+            "scalar_styles": [
+              {
+                "text": "  Y",
+                "style": "emphasis"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": ": https://example.test",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": true
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE   Y: https://example.test"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": " Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "ur-leading-h",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPRE\n.UR https://example.test\n\\h'1n'Y\n.UE\n.SH NEXT\nAFTER\n",
+      "source_sha256": "98c82a7ae0b45576481f827a0496574dbeefa67c5956db89776995f2a41cc9a4",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "9be710a488c09c1665bd3c5a9bf2fa87295f63c4f9f1640f72f265381c5acce0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "9be710a488c09c1665bd3c5a9bf2fa87295f63c4f9f1640f72f265381c5acce0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "7af913d2b3c89c1d7d598f41d547412c70402a2b6684b8d775936e5c26646dd5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "416f0c5629cdcd408e0eeb9b75ea88bb7edbc6b53448dcb71ef944c84d363706",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 1,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": "<https://example.test>",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE  Y <https://example.test>"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "ur-z-cancelled",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPRE\n.UR https://example.test\n\\z\\h'1n'Y\n.UE\n.SH NEXT\nAFTER\n",
+      "source_sha256": "02faaf0283bd90dd6ba4029c29c5e867e82cc342381911b3969b5ee5aade96a4",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "0d4f87e53c4c1f283080cf316dd3358e5bc63f2cdf537b4814a5c09287ed84a1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "0d4f87e53c4c1f283080cf316dd3358e5bc63f2cdf537b4814a5c09287ed84a1",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "7af913d2b3c89c1d7d598f41d547412c70402a2b6684b8d775936e5c26646dd5",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "b9c3359d9ad4e5d2e1e6e50e0aa94f5273f9c0e4eeeb7c683b8e57bfad1cce05",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "Y",
+            "scalar_styles": [
+              {
+                "text": "Y",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": "<https://example.test>",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": false
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE Y <https://example.test>"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": "Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "ur-bold-author-space-before-motion",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPRE\n.UR https://example.test\n.B \" \\h'1n'Y\"\n.UE\n.SH NEXT\nAFTER\n",
+      "source_sha256": "bcfa8dd4d36004a84a66d35d592c3d1ea9cf3b52f659ce169426ad4b4aa8ba87",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "b5ee40310e9e9b9546010024f9f013f4243e4401a53a592f92ae1f073dd76bb0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "b5ee40310e9e9b9546010024f9f013f4243e4401a53a592f92ae1f073dd76bb0",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "0ca65ad91d18ba5dac8ec5af105db010b3f4bbe442d686c3973a1e06bdad9d6d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "f3d70824867af06f21486b58d1e4fb40a45dab11f3ed67029bd2baf4c3d0f8f9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "  Y",
+            "scalar_styles": [
+              {
+                "text": "  Y",
+                "style": "strong"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": "<https://example.test>",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": true
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE   Y <https://example.test>"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": " Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    },
+    {
+      "id": "ur-author-nbsp-before-motion",
+      "source": ".TH PROBE 1 \"November 7, 2026\"\n.SH NAME\nprobe \\- test\n.SH DESCRIPTION\nPRE\n.UR https://example.test\n\\~\\h'1n'Y\n.UE\n.SH NEXT\nAFTER\n",
+      "source_sha256": "18fb48a6fbbccf7f4367e78f96f1dce11d3979feb9749bb529760aef10e88c09",
+      "profiles": {
+        "ascii": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "cb640a791fbc92343bd2268dc15df0fc366526fea9806db33e1eebf80e47ec0a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf8": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exit": 0,
+          "stdout_sha256": "157c49f8fa523e273cc9a13b00c0d9b2449aabaf8a60c63ff94df2f2e688dcc4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Thtml"
+          ],
+          "exit": 0,
+          "stdout_sha256": "894356b026102da98587bd74c40ed0ae5afa6e5f626f042f01801fefa641dc03",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Ttree"
+          ],
+          "exit": 0,
+          "stdout_sha256": "2af7156a7caf4018e566da23fd0348aef27bd534e68bc2847171bea35be97f7b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "argv": [
+            "/home/hby/dev/ManT/target/mandoc-migration/reference/mandoc",
+            "-Tlint"
+          ],
+          "exit": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected": {
+        "links": [
+          {
+            "target": {
+              "kind": "external",
+              "uri": "https://example.test"
+            },
+            "label": "  Y",
+            "scalar_styles": [
+              {
+                "text": "  Y",
+                "style": "plain"
+              }
+            ]
+          }
+        ],
+        "occurrences": 1,
+        "distinct_targets": 1,
+        "leading_generated_motion_cells_not_in_label": 0,
+        "old_source_outside_label": "PRE",
+        "old_source_style": "plain",
+        "suffix_outside_label": "<https://example.test>",
+        "forbidden_private_namespaces": true,
+        "source_authored_leading_blank_retained": true
+      },
+      "native_independent_witness": {
+        "description_rows_without_common_5_margin": [
+          "PRE   Y <https://example.test>"
+        ],
+        "html_link": {
+          "target": "https://example.test",
+          "label": " Y"
+        },
+        "all_profiles_actual_exit0": true
+      },
+      "basis": "Exact source event kinds + pinned term.c::ESCAPE_HORIZ (clear BACKAFTER/consume BACKBEFORE before writing remaining native fixed blanks), roff_escape.c quoted HORIZ parse, html.c::print_encode HORIZ omission, and selected ManT one-space reading-motion contract. Positive author SP/NBSP before HORIZ starts payload, so that later motion stays internal. Native/HTML visible strings are separately recorded; neither candidate nor before output is read.",
+      "limits": [
+        "Do not assert full consumer row is native fixed device whitespace: selected reading projection approximates positive literal motion by one SP and owns responsive word spacing.",
+        "Code/Link content-start must use typed source event provenance, never trim(char::is_whitespace), visible first char, or forged older source epoch."
+      ]
+    }
+  ]
+}

@@ -73,7 +73,8 @@ pub(in crate::mandoc::inline) use projection::trailing_ascii_spaces;
 pub(in crate::mandoc) use projection::trailing_completed_row_origins;
 pub(in crate::mandoc) use projection::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) use projection::{
-    native_row_origin, prepare_inline_output, strip_native_projection_markers,
+    native_row_origin, prepare_inline_output, split_output_scope_prefix,
+    strip_native_projection_markers,
 };
 pub(in crate::mandoc::inline::flow) mod native_passes;
 mod record;

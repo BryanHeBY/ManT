@@ -196,7 +196,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         Some(Mdoc(MdocMacro::Li)) => builder.with_font_scope(Font::Code, |builder| {
             append_inline_nodes(builder, children, name);
         }),
-        Some(Mdoc(MdocMacro::Sx)) => append_section_reference(builder, node.id, children, name),
+        Some(Mdoc(MdocMacro::Sx)) => append_section_reference(builder, children, name),
         Some(Mdoc(MdocMacro::Nd)) => {
             // mdoc_term.c::termp_nd_pre() prints `\(en` (U+2013), not an em
             // dash. Its next term_word() supplies the separate automatic
@@ -249,28 +249,34 @@ fn append_option(builder: &mut InlineBuilder, children: &[Node], name: Option<&s
     );
 }
 
-fn append_section_reference(
-    builder: &mut InlineBuilder,
-    node_id: u32,
-    children: &[Node],
-    name: Option<&str>,
-) {
+fn append_section_reference(builder: &mut InlineBuilder, children: &[Node], name: Option<&str>) {
     let authored_target = authored_section_phrase(children, name);
+    let registered = builder
+        .zero_advance
+        .new_annotation(mant_ir::LinkTarget::Section {
+            id: authored_target.into(),
+        });
+    let link_target = registered.target;
     let (annotated, membership) = builder.append_semantic_scope(
-        node_id,
+        registered.key,
+        false,
         |builder| {
             builder.with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         },
-        |children| section_reference(authored_target.clone(), children),
+        |children| {
+            vec![Inline::Link {
+                target: link_target.clone(),
+                title: None,
+                children,
+            }]
+        },
     );
     builder.zero_advance.bind_deferred(
         membership,
         &super::ownership::Annotation::Link {
-            target: mant_ir::LinkTarget::Section {
-                id: authored_target.into(),
-            },
+            target: link_target.clone(),
             title: None,
         },
         annotated,
@@ -472,19 +478,6 @@ fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -
         _ => return false,
     }
     true
-}
-
-fn section_reference(authored_target: String, children: Vec<Inline>) -> Vec<Inline> {
-    if children.is_empty() {
-        return children;
-    }
-    vec![Inline::Link {
-        target: mant_ir::LinkTarget::Section {
-            id: authored_target.into(),
-        },
-        title: None,
-        children,
-    }]
 }
 
 fn append_name(builder: &mut InlineBuilder, nodes: &[Node], name: Option<&str>) {

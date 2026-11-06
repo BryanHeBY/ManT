@@ -70,7 +70,7 @@ fn rejected_candidates_cannot_reassign_committed_members_or_later_receivers() {
                 .index_structural_payload(&report.document.root);
             let limits = limits(variant);
             *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
-            let (blocks, sections) = crate::mandoc::blocks::lower_document_structure(
+            let (mut blocks, mut sections) = crate::mandoc::blocks::lower_document_structure(
                 &report.document.root,
                 &mut context,
             );
@@ -93,6 +93,7 @@ fn rejected_candidates_cannot_reassign_committed_members_or_later_receivers() {
                     usize::try_from(count).unwrap()
                 );
             }
+            context.annotations.finish(&mut blocks, &mut sections);
             let mut output = Output::default();
             for block in &blocks {
                 output.visit_block(block);

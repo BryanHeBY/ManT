@@ -503,6 +503,9 @@ impl InlineBuilder {
         } else {
             finalize_inline_output(&mut nodes);
         }
+        if let Some(annotations) = &self.execution.zero_advance.annotations {
+            annotations.finish_local(&mut nodes);
+        }
         nodes
     }
 }

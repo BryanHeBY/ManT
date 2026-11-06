@@ -129,6 +129,7 @@ mod table_source_payloads;
 mod tables;
 mod temporary_indent;
 
+mod annotation_ownership;
 mod basic_inline;
 mod control_boundaries;
 mod declaration_groups;

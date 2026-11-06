@@ -68,11 +68,7 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         return None;
     }
 
-    let fallback = || {
-        let mut recovered = incomplete_fragment(source, &formatter);
-        recovered.output_text_bytes = admit_fragment_output(&recovered.inlines, budget)?;
-        Some(recovered)
-    };
+    let fallback = || admit_recovered_fragment(incomplete_fragment(source, &formatter), budget);
     // A separate parser invocation is intentionally small and finite.  More
     // importantly, strings, registers and macro arguments would otherwise be
     // evaluated against the synthetic document rather than the real session.
@@ -142,21 +138,46 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         .find(|node| node.kind == NodeKind::Body)?;
     let mut formatter = formatter;
     let inlines = lower_body(&body.children, dialect, default_name, &mut formatter);
-    let output_text_bytes = admit_fragment_output(&inlines, budget)?;
-    Some(RecoveredFragment {
-        inlines,
-        complete: true,
-        formatter,
-        output_text_bytes,
-    })
+    admit_recovered_fragment(
+        RecoveredFragment {
+            inlines,
+            complete: true,
+            formatter,
+            output_text_bytes: 0,
+        },
+        budget,
+    )
+}
+
+fn admit_recovered_fragment(
+    mut recovered: RecoveredFragment,
+    budget: Option<&RefCell<TableRecoveryBudget>>,
+) -> Option<RecoveredFragment> {
+    recovered.output_text_bytes = admit_fragment_output(
+        &recovered.inlines,
+        budget,
+        recovered
+            .formatter
+            .execution
+            .zero_advance
+            .annotations
+            .as_ref(),
+    )?;
+    Some(recovered)
 }
 
 fn admit_fragment_output(
     inlines: &[Inline],
     budget: Option<&RefCell<TableRecoveryBudget>>,
+    annotations: Option<&super::ownership::annotations::AnnotationPool>,
 ) -> Option<usize> {
     budget.map_or(Some(0), |budget| {
-        budget.borrow_mut().charge_output_with_text_bytes(inlines)
+        let mut budget = budget.borrow_mut();
+        if let Some(annotations) = annotations {
+            budget.charge_output_with_annotations(inlines, annotations)
+        } else {
+            budget.charge_output_with_text_bytes(inlines)
+        }
     })
 }
 
@@ -295,6 +316,10 @@ fn lower_body(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<Inline> {
     let mut builder = InlineBuilder::with_spacing(formatter.spacing_enabled());
+    builder
+        .zero_advance
+        .annotations
+        .clone_from(&formatter.execution.zero_advance.annotations);
     builder.table_buffer_written = formatter.execution.table_buffer_written;
     builder.table_line_needs_width = formatter.execution.table_line_needs_width;
     builder.escape_coverage = formatter.execution.escape_coverage.clone();

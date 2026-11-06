@@ -84,6 +84,9 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
         output.push(Inline::line_break());
     }
     zero_advance.finish_into(&mut output);
+    if let Some(annotations) = &zero_advance.annotations {
+        annotations.finish_local(&mut output);
+    }
     (output, execution.escape_scan)
 }
 
@@ -157,9 +160,19 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     execution
 }
 
-/// One word's presentation and native-write sink, before the caller receives
-/// its outcome. The borrowed context continues to own persistent registers.
+/// A typed source event separates generated leading motion from payload.
+pub(in crate::mandoc) const CONTENT_AFTER_MOTION: &str = "\0mant:output-scope:content-after-motion";
+
+#[derive(Clone, Copy, PartialEq)]
+enum ContentPrefix {
+    Empty,
+    Motion,
+    Authored,
+}
+
+/// One word's presentation and native writes borrow persistent registers.
 struct WordExecution {
+    content_prefix: ContentPrefix,
     output: Vec<Inline>,
     buffer: String,
     font: Font,
@@ -239,6 +252,7 @@ fn execute_formatter_word_events(
         }
         word.append_source_event(event, &mut context, index + 1 == events.len());
     }
+    word.finish_content_prefix();
     word.flush_segment();
     context.zero_advance.clear_marker_blank_separator();
     finish_text_execution(events, context.zero_advance, word)

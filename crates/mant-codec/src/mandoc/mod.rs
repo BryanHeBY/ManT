@@ -136,6 +136,8 @@ fn lower_mandoc_document_with_source(
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let (mut root_blocks, mut sections) =
         blocks::lower_document_structure(&parsed.root, &mut context);
+    context.annotations.finish(&mut root_blocks, &mut sections);
+    diagnostics.extend(context.annotations.take_diagnostics());
     diagnostics.extend(context.take_diagnostics());
     match initial_code_row {
         InitialCodeRow::OmitSingle => literal_reading::normalize(

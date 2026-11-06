@@ -19,7 +19,6 @@ impl InlineBuilder {
             direct_word_operands: None,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
-            pending_output_scope_prefixes: Vec::new(),
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
         }
@@ -36,7 +35,6 @@ impl InlineBuilder {
             direct_word_operands: None,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
-            pending_output_scope_prefixes: Vec::new(),
             execution,
             external_head_row_pending: false,
         }
