@@ -48,25 +48,37 @@ Markdown parser readback. Row comparison excludes device origins, terminal
 padding and the outer section separator. It retains internal SP, TAB, NBSP,
 scalars and empty rows. It does not use `split_whitespace()`.
 
-## Explicit layout differences
+## Source-bound field geometry and historical receipts
 
-Two bounded existing discrepancies remain outside this repair:
-`pair-tagbody-ft-z` and `pair-target-ft` have native `LABEL` + three SP before
-`call`, while the current reading projection has five SP. Native
-`termp_it_pre` computes a `6n + 2 = 8` field, and LABEL occupies five cells.
-Current IR retains an additional two-SP Fo prefix inside the BODY paragraph.
-The tests verify the original LABEL owner, body indent 8, minimum gap 2, BODY
-source line 10, that exact prefix, and all following text/hard rows. The fixture
-records only that precise three-to-five-SP interval in
-`known_layout_difference`. This is a known column discrepancy, not a claim of
-native column parity or a generic whitespace normalization.
+`pair-tagbody-ft-z` and `pair-target-ft` now preserve native `LABEL` plus three
+SP before `call`. Fresh exact ASCII/UTF-8/HTML/tree/lint runs preceded this
+assertion change. Pinned `termp_it_pre` computes a `6n + 2 = 8` field, and
+LABEL occupies five cells. Ordinary tag BODY does not execute inset/diag's
+fixed blank word; `termp_fo_pre` adds no two-SP word. The original source and
+AST name contain no authored prefix spaces. The three columns are resolved
+field alignment, not three author text cells.
 
-Two intentional Markdown layout projections are separate:
-`pair-tagbody-pf` and `pair-linked-owner` serialize the native three-SP
-HEAD/BODY interval as one SP. `definition_content` canonically joins shared
-prose with one separator. `portable_definition_gap` identifies only that exact
-interval; the original definition owner and every other scalar/space remain
-checked.
+The immutable baseline had duplicate generated `Text("  ")` at the start of
+the BODY, in addition to body indent8/minimum gap2. CLI therefore displayed
+five spaces and portable Markdown retained three. The current producer
+removes that duplicate: original BODY is exactly `call(arg\nint);`, CLI
+uses the reference three-column interval, and portable Markdown uses its
+established one-SP `Separated` seam. The tests keep the native definition
+owner, original LABEL, relation, body indent8, minimum gap2, BODY source10:2,
+all following scalars and hard rows. No general whitespace trimming is used.
+
+Sealed `cases.json` is unchanged, including the old `known_layout_difference`
+three-to-five interval. It remains historical evidence, not an active
+instruction to reproduce the defect. The test restricts the correction to
+these two exact existing case identities and verifies that historical record.
+
+Four intentional Markdown projections now share the same rule:
+`pair-tagbody-pf`, `pair-linked-owner`, `pair-tagbody-ft-z` and `pair-target-ft`
+serialize native three-column HEAD/BODY geometry as one SP.
+`definition_content` canonically joins shared prose with one separator.
+The first two retain their sealed `portable_definition_gap`; the last two
+have a source-bound correction in the test, separately from the native row
+assertion. The original owner and every other scalar/space remain checked.
 
 ## Final terminal consumers
 
