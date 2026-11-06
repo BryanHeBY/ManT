@@ -57,5 +57,42 @@ class DeferredOwnershipFixtureTests(unittest.TestCase):
             self.assertEqual(set(case['profiles']), {'ascii', 'utf8', 'html', 'tree', 'lint'})
 
 
+class AnnotationOwnershipFixtureTests(unittest.TestCase):
+    def test_complete_sources_and_independent_profile_identities(self):
+        root = ROOT / 'crates/mant-codec/src/mandoc/tests/annotation_ownership'
+        for name, count, profile_key in [
+            ('families', 1246, 'native_profile_identity'),
+            ('boundaries', 162, 'oracle_profiles'),
+            ('costs', 52, 'profiles'),
+        ]:
+            cases = json.loads((root / (name + '.json')).read_bytes())['cases']
+            self.assertEqual(len(cases), count)
+            self.assertEqual(len({case['id'] for case in cases}), count)
+            for case in cases:
+                self.assertEqual(hashlib.sha256(case['source'].encode()).hexdigest(), case['source_sha256'])
+                profiles = case[profile_key]
+                self.assertEqual(set(profiles), {'ascii', 'utf8', 'html', 'tree', 'lint'} if name != 'costs' else {'utf8', 'html', 'lint'})
+                for receipt in profiles.values():
+                    self.assertEqual(len(receipt['stdout_sha256']), 64)
+                    self.assertEqual(len(receipt['stderr_sha256']), 64)
+        families = json.loads((root / 'families.json').read_bytes())['cases']
+        self.assertEqual(Counter(c['family'] for c in families), {'Wrapper': 648, 'Pair': 288, 'ManInventory': 310})
+        self.assertEqual(sum(c['family'] in {'Wrapper', 'Pair'} for c in families), 936)
+        self.assertTrue(all(isinstance(c['unknown_members'], list) for c in families))
+
+    def test_supplemental_source_profiles_are_permanent_and_complete(self):
+        root = ROOT / 'crates/mant-codec/src/mandoc/tests/annotation_ownership'
+        cases = json.loads((root / 'misc.json').read_bytes())['cases']
+        self.assertEqual(len(cases), 41)
+        self.assertEqual(len({c['id'] for c in cases}), len(cases))
+        for case in cases:
+            self.assertIn('DESCRIPTION', case['source'])
+            if 'source_sha256' in case:
+                self.assertEqual(hashlib.sha256(case['source'].encode()).hexdigest(), case['source_sha256'])
+            profiles = case.get('profiles', case.get('oracle_profiles'))
+            self.assertEqual(set(profiles), {'ascii', 'utf8', 'html', 'tree', 'lint'})
+            self.assertIn('links', case['expected'])
+
+
 if __name__ == '__main__':
     unittest.main()

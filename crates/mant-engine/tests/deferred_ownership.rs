@@ -11,6 +11,9 @@ mod markdown;
 #[path = "deferred_ownership/queries.rs"]
 mod queries;
 
+#[path = "deferred_ownership/annotations.rs"]
+mod annotation_ownership;
+
 #[test]
 fn original_members_survive_json_two_markdown_readers_and_queries() {
     for (case, _) in cases::consumers() {

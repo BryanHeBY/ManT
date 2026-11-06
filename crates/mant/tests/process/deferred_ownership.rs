@@ -1,6 +1,8 @@
 //! Real CLI color policy never changes source membership or native hard rows.
 use super::process_support::run_text_input;
 use serde_json::Value;
+#[path = "deferred_ownership/annotations.rs"]
+mod annotations;
 #[path = "deferred_ownership/styles.rs"]
 mod styles;
 
@@ -118,12 +120,17 @@ fn real_terminal_widths_preserve_recovery_and_original_label_order() {
         .filter(|case| ids.contains(&case["id"].as_str().unwrap()))
         .collect::<Vec<_>>();
     assert_eq!(cases.len(), 6);
+    check_pty(&cases);
+}
+
+#[cfg(unix)]
+fn check_pty(cases: &[Value]) {
     let mut child = std::process::Command::new("python3")
         .args([
             "-c",
             include_str!("../support/table_execution_pty.py"),
             super::process_support::executable(),
-            &serde_json::to_string(&cases).unwrap(),
+            &serde_json::to_string(cases).unwrap(),
         ])
         .spawn()
         .unwrap();

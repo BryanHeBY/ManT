@@ -93,7 +93,7 @@ pub(super) fn check(content: &ResolvedContent, case: &cases::Case) {
     }
 }
 
-fn check_explanation(content: &ResolvedContent, case: &cases::Case, word: &str) {
+pub(super) fn check_explanation(content: &ResolvedContent, case: &cases::Case, word: &str) {
     // Explanation uses finite executable-name boundaries, unlike substring
     // search. A recovery glued to X/Y is not a standalone full name. Its
     // bracketed/quoted payload is a genuine bounded mention; the full
@@ -177,7 +177,7 @@ fn check_explanation(content: &ResolvedContent, case: &cases::Case, word: &str) 
     }
 }
 
-fn check_occurrence(
+pub(super) fn check_occurrence(
     occurrence: &mant_protocol::SearchOccurrence,
     markdown: &str,
     pattern: &str,

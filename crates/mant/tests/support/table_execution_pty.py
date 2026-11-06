@@ -64,6 +64,9 @@ with tempfile.TemporaryDirectory(prefix='mant-table-pty-') as scratch:
                                  if 'expected_label' in case else ['AFTER']):
                         hits = list(re.finditer(r'(?<![\w-])'+re.escape(word)+r'(?![\w-])', text))
                         assert len(hits) == 1, (case['id'], width, color, word, text)
+                    for fragment in case.get('required_fragments', []):
+                        spelling = fragment['text']
+                        assert text.count(spelling) == fragment['count'], (case['id'], width, color, fragment, text)
                     for recovery in case.get('recoveries', []):
                         assert text.count(recovery['text']) == recovery['occurrences'], (case['id'], width, color, recovery, text)
                     assert 'mant:deferred-origin:' not in text
