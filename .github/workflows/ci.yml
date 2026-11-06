@@ -158,7 +158,9 @@ jobs:
     name: Native (macOS arm64)
     needs: scope
     if: needs.scope.outputs.run_full == 'true'
-    runs-on: macos-14
+    # macOS 14 runners retired on 2026-11-02; retain a versioned arm64 image.
+    # https://github.com/actions/runner-images/issues/13518
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
@@ -175,7 +177,7 @@ jobs:
       - name: Cache compiled Cargo dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          shared-key: macos-arm64-stable
+          shared-key: macos-15-arm64-stable
           cache-bin: false
           save-if: ${{ github.event_name == 'push' }}
 
