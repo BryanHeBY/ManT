@@ -15,7 +15,11 @@ portable viewport geometry is not required to reproduce a native screenshot.
 
 T1 crosses two dialects, 24 table programs and four following owners. T2
 crosses eight programs, ten contexts and three followers. Tree-derived
-expectations verify actual table/HEAD ownership, not just input spelling.
+expectations verify actual table/HEAD ownership, not just input spelling. All
+973 native-table sources assert declared columns, native row kinds and spans;
+the other 72 sources are explicitly table-free SY controls. Complete native
+follower words and no-fill witness rows are checked in their original owner,
+including the legacy GAMMA/DELTA suffixes.
 Seventy-two original SY controls contain no native table and are explicitly
 classified as such. Recovery and warning inputs retain their qualifications;
 a nonzero lint result is not reclassified as a clean source.

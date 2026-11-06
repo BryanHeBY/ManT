@@ -32,7 +32,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from scripts.roff.lib.roff_audit_common import run_jsonl_profile_batch
+from scripts.roff.lib.roff_audit_common import discover_pages, manual_section, run_jsonl_profile_batch
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -61,9 +61,6 @@ FIDELITY_DATABASE_FIELDS = [
     "review_status",
     "note",
 ]
-MANUAL_SUFFIX = re.compile(
-    r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$"
-)
 
 
 @dataclass(frozen=True)
@@ -212,22 +209,6 @@ def positive_integer(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be one or greater")
     return parsed
-
-
-def discover_pages(roots: Sequence[Path]) -> list[Path]:
-    pages: set[Path] = set()
-    for root in roots:
-        if not root.is_dir():
-            raise ValueError(f"manual root is not a directory: {root}")
-        for path in root.rglob("*"):
-            if (path.is_file() or path.is_symlink()) and MANUAL_SUFFIX.search(path.name):
-                pages.add(path)
-    return sorted(pages, key=lambda path: path.as_posix())
-
-
-def manual_section(path: Path) -> str | None:
-    match = MANUAL_SUFFIX.search(path.name)
-    return match.group("section") if match is not None else None
 
 
 def relative_label(path: Path, roots: Sequence[Path]) -> str:

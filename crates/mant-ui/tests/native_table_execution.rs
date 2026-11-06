@@ -97,7 +97,7 @@ fn table_exit_links_and_opposite_controls_keep_copy_reveal_and_same_app_resize()
             1,
             "confirmed search reveals in original 44x5 viewport"
         );
-        for width in [44, 16, 82] {
+        for width in [44, 12, 16, 82] {
             terminal.backend_mut().resize(width, 30);
             terminal.draw(|frame| app.draw(frame)).unwrap();
             let positions =

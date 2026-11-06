@@ -367,6 +367,15 @@ def read_fidelity_identities(path: Path, corpus: str) -> set[tuple[str, str]]:
     return identities
 
 
+def _profile_jsonl_records(output: str) -> list[str]:
+    """JSONL is LF-framed; U+0085/U+2028/U+2029 remain JSON string data.
+
+    Remove only the record terminator, preserving invalid interior blank
+    records for the existing transport validation instead of skipping them.
+    """
+    return output.removesuffix("\n").split("\n") if output else []
+
+
 def run_jsonl_profile_batch(
     profiler: Path,
     requests: dict[str, dict[str, str]],
@@ -413,13 +422,15 @@ def run_jsonl_profile_batch(
         }
 
     responses: dict[str, dict[str, object]] = {}
-    for number, line in enumerate(result.stdout.splitlines(), 1):
+    for number, line in enumerate(_profile_jsonl_records(result.stdout), 1):
         try:
             response = json.loads(line)
         except json.JSONDecodeError as error:
             raise ValueError(
                 f"{profile_name} profiler returned invalid JSON on line {number}"
             ) from error
+        if not isinstance(response, dict):
+            raise ValueError(f"{profile_name} profiler returned a non-object JSON record on line {number}")
         request_id = response.get("id")
         if (
             not isinstance(request_id, str)
@@ -474,7 +485,7 @@ def run_bounded_profile_batch(profiler, requests, timeout):
             return failure(batch, "error", error or f"profiler exit {code}")
         responses = {}
         try:
-            for line in output.decode('utf-8').splitlines():
+            for line in _profile_jsonl_records(output.decode('utf-8')):
                 response = json.loads(line)
                 if not isinstance(response, dict):
                     raise ValueError('response is not an object')

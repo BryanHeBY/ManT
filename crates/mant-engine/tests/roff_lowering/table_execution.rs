@@ -23,13 +23,57 @@ struct NativeSource {
     expected_label: String,
     owner: Owner,
     exit: Exit,
+    follower: Follower,
     #[serde(default)]
     expected_tables: Vec<ExpectedTable>,
 }
 #[derive(Deserialize)]
 struct Owner {
     heading: String,
+    rows: Vec<String>,
 }
+#[derive(Deserialize)]
+struct Follower {
+    rows_range: [usize; 2],
+    native_text_node: String,
+}
+fn witness_words(text: &str) -> Vec<&str> {
+    text.split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '_' | '-'))
+        .filter(|word| !word.is_empty())
+        .collect()
+}
+fn assert_complete_witness(source: &NativeSource, roots: &Roots) {
+    let [start, end] = source.follower.rows_range;
+    let native = source.owner.rows[start..end].join("\n");
+    let expected = witness_words(&native);
+    assert_ne!(expected, Vec::<&str>::new());
+    let actual = roots.0.join("\n");
+    let actual_words = witness_words(&actual);
+    assert_eq!(
+        actual_words
+            .windows(expected.len())
+            .filter(|part| *part == expected)
+            .count(),
+        1,
+        "complete original native follower (not only its first word): {native:?} / {actual:?}"
+    );
+    if source.follower.native_text_node.contains("NOFILL") {
+        // The oracle's NODE_NOFILL source witness establishes hard rows;
+        // viewport wrapping/terminal column padding does not prove them.
+        let expected_rows = source.owner.rows[start..end]
+            .iter()
+            .map(|row| witness_words(row))
+            .collect::<Vec<_>>();
+        let actual_rows = actual.lines().map(witness_words).collect::<Vec<_>>();
+        assert!(
+            actual_rows
+                .windows(expected_rows.len())
+                .any(|part| part == expected_rows),
+            "complete no-fill hard rows: {expected_rows:?} / {actual_rows:?}"
+        );
+    }
+}
+
 #[derive(Deserialize)]
 struct Exit {
     word: String,
@@ -158,6 +202,7 @@ fn verify(source: &NativeSource) {
     for block in &owner.blocks {
         roots.visit_block(block);
     }
+    assert_complete_witness(source, &roots);
     assert_eq!(
         roots
             .0

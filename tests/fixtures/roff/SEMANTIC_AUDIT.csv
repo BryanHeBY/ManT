@@ -28726,6 +28726,7 @@ fixtures,real/archlinux/scanf.3.gz,3,07cbc46be4fd3150bcc3322d3cf1d1db217935e7406
 fixtures,real/archlinux/sh.1p.gz,1p,8caa52a52fcb46e6e4e38105408dac290b66865cf712f6897d81bfa438f16b2d,mant.roff-semantic-profile/v5,clean,not-required,
 fixtures,real/archlinux/sort.1p.gz,1p,32493b693fb79c6637150b465eb262dad4e09e827810b897641d7c2bc7007e5c,mant.roff-semantic-profile/v5,clean,not-required,
 fixtures,real/archlinux/tar.1.gz,1,3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee,mant.roff-semantic-profile/v5,clean,not-required,
+fixtures,real/archlinux/termios.h.0p.gz,0p,6425de9af7722216e2a05bf8eb86668b8e181ea987c2e027e383d679678d9d13,mant.roff-semantic-profile/v5,clean,not-required,"Actual exact-source semantic scan: 91 nonempty term entries; no entry, ordinal, declaration-group or value-domain violations on measured axes."
 fixtures,real/archlinux/zip_source_function.3,3,73a409d297a001c885fc00092a92105f30fe4e6ecca0b57d06c6fecc40b5b898,mant.roff-semantic-profile/v5,clean,not-required,
 fixtures,real/bsd-closure/dragonfly-adduser.8.gz,8,d2c2c09556f74e93bac34e9e3d17032c4f66daea96367854a096fbcc062d733e,mant.roff-semantic-profile/v5,clean,not-required,
 fixtures,real/bsd-closure/dragonfly-gdb.1.gz,1,249b232d42ce6091c61bf1ab85e0e32e9aeb1c30ab73f9ba0d8ef943a55200d2,mant.roff-semantic-profile/v5,clean,not-required,

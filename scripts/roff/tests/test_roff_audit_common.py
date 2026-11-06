@@ -1,8 +1,10 @@
-"""Deterministic resource-planning tests for local roff audit drivers."""
+"""Resource planning and JSONL record boundaries for local audit drivers."""
 
 from __future__ import annotations
 
+import json
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -76,6 +78,54 @@ class AuditParallelismTests(unittest.TestCase):
              patch.object(common, "_read_text", side_effect=lambda path: values.get(path)):
             self.assertEqual(common.audit_cpu_limit(), 3)
             self.assertEqual(common.audit_memory_available(), 2 * AUDIT_WORKER_MEMORY_RESERVE)
+
+
+class ProfileRecordTests(unittest.TestCase):
+    def run_both(self, output, request_id="case"):
+        requests = {request_id: {"id": request_id}}
+        with patch.object(common.subprocess, "run", return_value=SimpleNamespace(
+            returncode=0, stdout=output, stderr=""
+        )):
+            unbounded = common.run_jsonl_profile_batch(Path("unused"), requests, 1, "test")
+        with patch("scripts.roff.lib.roff_reference.run_renderer", return_value=(0, output.encode(), "")):
+            bounded = common.run_bounded_profile_batch(Path("unused"), requests, 1)
+        return unbounded, bounded
+
+    def test_unicode_separators_remain_data_in_both_record_transports(self):
+        # This is a JSONL protocol invariant, not a native formatting oracle.
+        for separator in ["\u0085", "\u2028", "\u2029"]:
+            for ending in ["\n", "\r\n", ""]:
+                for field in ["id", "text"]:
+                    with self.subTest(separator=repr(separator), ending=repr(ending), field=field):
+                        row = {"id": "case", "text": "body"}
+                        row[field] += separator + "suffix"
+                        output = json.dumps(row, ensure_ascii=False) + ending
+                        for actual in self.run_both(output, row["id"]):
+                            self.assertEqual(actual, {row["id"]: row})
+
+    def test_non_object_json_records_fail_as_transport_errors(self):
+        for value in [None, [], 42, 1.5, True, "text"]:
+            with self.subTest(value=value):
+                output = json.dumps(value) + "\n"
+                with patch.object(common.subprocess, "run", return_value=SimpleNamespace(
+                    returncode=0, stdout=output, stderr=""
+                )):
+                    with self.assertRaisesRegex(ValueError, "non-object JSON"):
+                        common.run_jsonl_profile_batch(Path("unused"), {"case": {"id": "case"}}, 1, "test")
+                with patch("scripts.roff.lib.roff_reference.run_renderer", return_value=(0, output.encode(), "")):
+                    response = common.run_bounded_profile_batch(Path("unused"), {"case": {"id": "case"}}, 1)
+                self.assertEqual(response["case"]["_execution"], "error")
+
+    def test_interior_blank_records_still_fail_validation(self):
+        output = '{"id":"case"}\n\n'
+        with patch.object(common.subprocess, "run", return_value=SimpleNamespace(
+            returncode=0, stdout=output, stderr=""
+        )):
+            with self.assertRaisesRegex(ValueError, "invalid JSON"):
+                common.run_jsonl_profile_batch(Path("unused"), {"case": {"id": "case"}}, 1, "test")
+        with patch("scripts.roff.lib.roff_reference.run_renderer", return_value=(0, output.encode(), "")):
+            response = common.run_bounded_profile_batch(Path("unused"), {"case": {"id": "case"}}, 1)
+        self.assertEqual(response["case"]["_execution"], "error")
 
 
 if __name__ == "__main__":

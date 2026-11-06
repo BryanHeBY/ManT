@@ -30,6 +30,7 @@ from typing import Iterable, Sequence
 
 from scripts.roff.oracle import mandoc_oracle
 from scripts.roff.lib.roff_reference import module_command
+from scripts.roff.lib.roff_audit_common import discover_pages, manual_section
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
@@ -40,7 +41,6 @@ DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
 DEFAULT_MANDOC_AUDIT_DB = ROOT / "tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.csv"
 DEFAULT_MANDOC_FIDELITY_DB = ROOT / "tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.csv"
 LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
-MANUAL_SUFFIX = re.compile(r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$")
 DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -234,24 +234,6 @@ def positive_integer(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be one or greater")
     return parsed
-
-
-def manual_section(path: Path) -> str | None:
-    match = MANUAL_SUFFIX.search(path.name)
-    return match.group("section") if match else None
-
-
-def discover_pages(roots: Sequence[Path]) -> list[Path]:
-    pages: set[Path] = set()
-    for root in roots:
-        if not root.is_dir():
-            raise ValueError(f"manual root is not a directory: {root}")
-        pages.update(
-            path
-            for path in root.rglob("*")
-            if (path.is_file() or path.is_symlink()) and MANUAL_SUFFIX.search(path.name)
-        )
-    return sorted(pages, key=lambda path: path.as_posix())
 
 
 def source_bytes(path: Path) -> bytes | None:

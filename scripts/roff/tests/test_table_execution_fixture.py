@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from scripts.roff.lib.roff_audit_common import discover_pages, manual_section
+from scripts.roff.audit import audit_roff_structure, audit_roff_layout
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / 'crates/mant-engine/tests/roff_lowering/table_execution'
 
@@ -14,6 +15,7 @@ class TableExecutionFixtureTests(unittest.TestCase):
         fixture = json.loads((FIXTURES / 'cases.json').read_bytes())
         self.assertEqual(len(fixture['sources']), 1045)
         self.assertEqual(len(fixture['cases']), 1188)
+        self.assertEqual(sum(bool(source.get('expected_tables')) for source in fixture['sources'].values()), 973)
         counts = Counter(case['family'] for case in fixture['cases'])
         self.assertEqual((counts['T1'], counts['T2']), (192, 240))
         for digest, source in fixture['sources'].items():
@@ -40,7 +42,8 @@ class TableExecutionFixtureTests(unittest.TestCase):
 
     def test_section_zero_is_discovered_without_accepting_arbitrary_extensions(self):
         real = ROOT / 'tests/fixtures/roff/real/archlinux/termios.h.0p.gz'
-        self.assertIn(real, discover_pages([real.parent]))
+        for discoverer in [discover_pages, audit_roff_structure.discover_pages, audit_roff_layout.discover_pages]:
+            self.assertIn(real, discoverer([real.parent]))
         self.assertEqual(manual_section(real), '0p')
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
