@@ -7,7 +7,7 @@ mod text;
 
 use std::{borrow::Cow, collections::HashSet};
 
-use mant_ir::{Inline, InlineContentRef, InlineLayout};
+use mant_ir::{Inline, InlineContentRef};
 
 use super::MarkdownOptions;
 use context::render_inline_nodes;
@@ -15,7 +15,7 @@ use context::render_inline_nodes;
 use text::escape_text as escape_plain_text;
 
 pub(crate) use code::code_span;
-pub(super) use code::{code_fences, fenced_code};
+pub(super) use code::{accepted_fenced_code, code_fences, fenced_code};
 pub(super) use links::link_destination;
 pub(super) use links::render_uri;
 pub(super) use text::{block_prefix_escape_position, protect_block_prefix};
@@ -147,27 +147,11 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
 }
 
 pub(super) fn flatten_inline_content(content: InlineContentRef<'_>) -> String {
-    literal_row_layout(&flatten_inline(content.content), content.layout)
-}
-
-pub(super) fn literal_row_layout(text: &str, layout: &InlineLayout) -> String {
-    if layout.is_empty() {
-        return text.to_owned();
-    }
-    let mut output = String::with_capacity(text.len());
-    for (index, row) in text.split('\n').enumerate() {
-        if index > 0 {
-            output.push('\n');
-        }
-        // An empty open tail or anchor-only root cannot become literal text
-        // solely because its addressable row carries a layout correction.
-        if !row.is_empty() {
-            let origin = layout.row_layout(index).resolve(0, 0).first_visual_origin;
-            output.push_str(&" ".repeat(mant_ir::geometry::padding(origin)));
-            output.push_str(row);
-        }
-    }
-    output
+    super::accepted_rows::AcceptedRows::from_inlines(
+        content.content,
+        super::accepted_rows::ContentRole::Code,
+    )
+    .into_layout_text(content.layout, false)
 }
 
 /// Fenced code cannot contain active HTML anchors. Project its zero-width

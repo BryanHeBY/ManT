@@ -2,7 +2,11 @@
 
 pub(in crate::encode) fn fenced_code(value: &str, language: Option<&str>) -> String {
     let value = crate::text_safety::markdown_code_text(value, false);
-    let (opening, closing) = code_fences(&value, language);
+    accepted_fenced_code(&value, language)
+}
+
+pub(in crate::encode) fn accepted_fenced_code(value: &str, language: Option<&str>) -> String {
+    let (opening, closing) = code_fences(value, language);
     format!("{opening}{value}{closing}")
 }
 

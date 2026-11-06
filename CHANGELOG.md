@@ -45,6 +45,9 @@ that crate was not published for that change.
   identity during recovery, including equal-URI/title collisions. Keep proof
   caches isolated and refuse unprovable context-dependent uses with a bounded
   diagnostic before inspecting their metadata.
+- Preserve original logical-row layout when code CR normalization creates
+  exported rows, in ordinary literals and table cells alike. Cross-node CRLF,
+  first-line corrections and artifact byte ranges share one linear projection.
 - Keep scoped list and display origins relative to their actual content owner,
   including signed outdents, without restoring consumed device rows or stale
   column flags. Preserve nested column headings on their original row and run

@@ -1,5 +1,6 @@
 //! Encodes already-loaded, source-neutral IR as deterministic portable `CommonMark`.
 
+mod accepted_rows;
 mod anchors;
 mod artifact;
 mod blocks;

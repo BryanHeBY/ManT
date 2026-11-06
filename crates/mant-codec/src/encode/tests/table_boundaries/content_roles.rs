@@ -220,8 +220,11 @@ fn literal_crlf_fragmentation_does_not_consume_an_explicit_hard_break() {
 }
 
 #[test]
-fn canonicalized_code_tail_never_reuses_the_previous_row_origin() {
-    for (value, hint_row, expected) in [("A\r", 0, "   A\n | B"), ("A\r\n", 1, "A\n    | B")] {
+fn canonicalized_code_tail_keeps_its_original_logical_row_origin() {
+    // A bare CR opens a fragment of row0, so its common origin still applies
+    // when the next cell supplies content. CRLF instead opens original row1.
+    // Neither empty tail is padded before that later content arrives.
+    for (value, hint_row, expected) in [("A\r", 0, "   A\n    | B"), ("A\r\n", 1, "A\n    | B")] {
         let mut first = literal(value);
         let Block::Preformatted { inline_layout, .. } = &mut first else {
             unreachable!();

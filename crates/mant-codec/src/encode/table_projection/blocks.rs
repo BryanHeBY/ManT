@@ -1,87 +1,7 @@
 //! Flatten nested content while preserving accepted word and row relations.
 use super::{ParagraphTail, Projection, Tail, join, project_rows};
-use mant_ir::{Block, EntryOwner, Inline, InlineContentRef};
-
-#[derive(Clone, Copy)]
-enum ContentRole {
-    Reading,
-    Code,
-}
-
-/// Finish role-specific content before a parent records its mapped byte
-/// extent. A table fence is syntax, not permission to reinterpret Text CR.
-fn append_content(
-    output: &mut String,
-    value: &str,
-    role: ContentRole,
-    previous_code_cr: &mut bool,
-) {
-    match role {
-        ContentRole::Reading => {
-            if !value.is_empty() {
-                *previous_code_cr = false;
-            }
-            for character in value.chars() {
-                if character == '\r' {
-                    output.push('\u{fffd}');
-                } else if crate::text_safety::is_safe_source_character(character) {
-                    output.push(character);
-                } else {
-                    // Keep the existing checked hand-IR control projection;
-                    // accepted producer content was already admitted once.
-                    output.extend(std::iter::repeat_n(' ', character.len_utf8()));
-                }
-            }
-        }
-        ContentRole::Code => {
-            let normalized = crate::text_safety::markdown_code_text(value, false);
-            // Styling and Text-node fragmentation do not turn a CRLF in
-            // one literal flow into two lines. An explicit LineBreak below
-            // is instead an independently authored hard-boundary event.
-            output.push_str(if *previous_code_cr && value.starts_with('\n') {
-                &normalized[1..]
-            } else {
-                &normalized
-            });
-            if !value.is_empty() {
-                *previous_code_cr = value.ends_with('\r');
-            }
-        }
-    }
-}
-
-fn inline_content(
-    output: &mut String,
-    nodes: &[Inline],
-    role: ContentRole,
-    previous_code_cr: &mut bool,
-) -> bool {
-    let mut authored = false;
-    for node in nodes {
-        match node {
-            Inline::Text { value } => {
-                authored = true;
-                append_content(output, value, role, previous_code_cr);
-            }
-            Inline::Code { value } | Inline::Equation { value, .. } => {
-                authored = true;
-                append_content(output, value, ContentRole::Code, previous_code_cr);
-            }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => {
-                authored |= inline_content(output, children, role, previous_code_cr);
-            }
-            Inline::LineBreak {} => {
-                authored = true;
-                *previous_code_cr = false;
-                output.push('\n');
-            }
-            Inline::Anchor { .. } => {}
-        }
-    }
-    authored
-}
+use crate::encode::accepted_rows::{AcceptedRows, ContentRole};
+use mant_ir::{Block, EntryOwner, InlineContentRef};
 
 pub(super) fn plain_blocks(
     blocks: &[Block],
@@ -134,65 +54,36 @@ fn inline_projection(
     paragraph: Option<ParagraphTail>,
     shared_first: bool,
 ) -> Projection {
-    let mut text = String::new();
-    let authored_row = inline_content(
-        &mut text,
+    let mut accepted = AcceptedRows::from_inlines(
         content.content,
         if paragraph.is_some() {
             ContentRole::Reading
         } else {
             ContentRole::Code
         },
-        &mut false,
     );
-    let ends_in_break = text.ends_with('\n');
+    let ends_in_break = accepted.ends_in_break();
     let physical = if paragraph.is_some() {
-        !text.is_empty()
+        !accepted.is_empty()
     } else {
-        authored_row
+        accepted.authored()
     };
     let tail = if !ends_in_break {
         Tail::Shared
     } else if matches!(paragraph, Some(ParagraphTail::BlockBoundary)) {
         // Nonfinal paragraphs retire one provisional empty row; their frame
         // closes the retained row. Literal content never retires that tail.
-        text.pop();
+        accepted.retire_open_tail();
         Tail::EndRow
     } else {
         Tail::Open
     };
     let open_row_indent = if ends_in_break && matches!(tail, Tail::Open) {
-        // Code-role CR canonicalization can introduce an accepted LF that
-        // was not an original logical row. Never reuse the previous row's
-        // hint for the newly opened tail just because raw IR counted fewer.
-        content
-            .layout
-            .row_layout(text.bytes().filter(|byte| *byte == b'\n').count())
-            .resolve(0, 0)
-            .first_visual_origin
+        accepted.open_row_origin(content.layout)
     } else {
         0
     };
-    let mut mapped = String::new();
-    for (row, text) in text.split('\n').enumerate() {
-        if row > 0 {
-            mapped.push('\n');
-        }
-        if !text.is_empty() {
-            if row > 0 || !shared_first {
-                mapped.push_str(
-                    &" ".repeat(mant_ir::geometry::padding(
-                        content
-                            .layout
-                            .row_layout(row)
-                            .resolve(0, 0)
-                            .first_visual_origin,
-                    )),
-                );
-            }
-            mapped.push_str(text);
-        }
-    }
+    let mapped = accepted.into_layout_text(content.layout, shared_first);
     Projection {
         literal_tail: paragraph.is_none() && physical,
         open_row_indent,
@@ -278,17 +169,15 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool, shared_first: bo
             } else {
                 value.trim()
             };
-            let mut text = String::new();
-            append_content(
-                &mut text,
+            let text = AcceptedRows::from_text(
                 value,
                 if matches!(block, Block::Unsupported { .. }) {
                     ContentRole::Reading
                 } else {
                     ContentRole::Code
                 },
-                &mut false,
-            );
+            )
+            .into_layout_text(&mant_ir::InlineLayout::default(), false);
             let physical = !text.is_empty();
             Projection::text(text.into(), Tail::Shared, physical)
         }

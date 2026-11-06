@@ -672,6 +672,15 @@ Source-recovery target admission precedes title normalization: a rejected link
 retains its safe label and recovery diagnostic, but does not diagnose unused
 title metadata or consume the definition's first-used diagnostic slot.
 
+Code export resolves row layout against the original inline owner's logical
+rows before recording artifact byte ranges. A bare code CR opens an accepted
+output row without advancing that LF-based identity: its fragments share the
+original row's common indentation, while a first-line correction applies only
+to its first fragment. LF and explicit hard breaks advance the original row;
+CRLF split across inline leaves is normalized once. The same rule applies to
+ordinary literals and literal content inside tables. Layout hints do not add
+cells to an empty open tail, and framing does not normalize the payload again.
+
 CR decoded into ordinary Text or a link label remains a content scalar, not a
 second source-line terminator. Export writes it as `&#13;`; LF alone carries
 the owner's logical hard rows. Title CR, LF and TAB use metadata entities and

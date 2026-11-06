@@ -14,8 +14,8 @@ use definitions::{InlineRoot, render_definition_list, render_roots};
 use mant_ir::{Block, EntryOwner, Inline, InlineContentRef, SourceSpan, content_entries};
 
 use super::inline::{
-    code_span, escape_text, fenced_code, flatten_inline_content, preformatted_anchor_markers,
-    protect_block_prefix,
+    accepted_fenced_code, code_span, escape_text, fenced_code, flatten_inline_content,
+    preformatted_anchor_markers, protect_block_prefix,
 };
 use super::mapped::{BlockSyntax, MappedText};
 use super::{MarkdownInlineProjection, MarkdownOptions};
@@ -223,7 +223,7 @@ fn render_literal(
     if !mant_ir::geometry::has_literal_rows(content.content) {
         return render_phrasing(content, options, locations);
     }
-    let code = fenced_code(&flatten_inline_content(content), language);
+    let code = accepted_fenced_code(&flatten_inline_content(content), language);
     let markers = if options.preserve_anchors {
         preformatted_anchor_markers(content.content)
     } else {
