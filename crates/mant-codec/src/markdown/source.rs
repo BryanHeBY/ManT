@@ -25,6 +25,7 @@ pub(super) fn physical_lines(mut text: &str) -> impl Iterator<Item = &str> {
 }
 
 /// Collect the shared source-preserving event stream for document lowering.
+#[cfg(test)]
 pub(super) fn parser_events(source: &str) -> Vec<super::SpannedEvent<'_>> {
     super::canonical_br::parse_events(source, super::markdown_options()).collect()
 }

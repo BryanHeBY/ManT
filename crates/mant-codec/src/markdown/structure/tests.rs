@@ -11,7 +11,11 @@ fn extracted_heading_keeps_original_unicode_span_and_exact_fragment_alias() {
         let text =
             format!("{title}{newline}Intro.{newline}{newline}### Child{newline}Body.{newline}");
         let source = MarkdownSource::new(&text);
-        let mut parsed = lower_document_structure(parser_events(&text), &source);
+        let mut parsed = lower_document_structure(
+            parser_events(&text),
+            std::collections::BTreeMap::default(),
+            &source,
+        );
         assert_eq!(parsed.diagnostics.len(), 0);
         let mut sections = nest_sections(parsed.flat_sections);
         let (heading, aliases) = extract_document_title(

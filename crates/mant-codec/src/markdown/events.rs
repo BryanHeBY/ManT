@@ -4,6 +4,7 @@ mod tests;
 use pulldown_cmark::{Event, Options, Tag};
 use std::ops::Range;
 pub(super) type SpannedEvent<'a> = (Event<'a>, Range<usize>);
+pub(super) type MetadataOrigins = std::collections::BTreeMap<usize, Range<usize>>;
 
 pub(super) fn markdown_options() -> Options {
     Options::ENABLE_TABLES
@@ -24,6 +25,8 @@ pub(super) struct EventCursor<'a> {
     events: Vec<SpannedEvent<'a>>,
     position: usize,
     depth: usize,
+    pub(super) metadata_origins: MetadataOrigins,
+    pub(super) reported_titles: std::collections::BTreeSet<(usize, usize)>,
 }
 
 /// Recursion budget shared by nested block containers and inline spans.
@@ -39,6 +42,8 @@ impl<'a> EventCursor<'a> {
             events,
             position: 0,
             depth: 0,
+            metadata_origins: MetadataOrigins::default(),
+            reported_titles: std::collections::BTreeSet::new(),
         }
     }
 

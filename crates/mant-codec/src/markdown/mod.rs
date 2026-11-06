@@ -183,11 +183,13 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
 #[cfg(test)]
 fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
     let mut diagnostics = Vec::new();
+    let (events, metadata_origins) = canonical_br::prepare_events(source_text, markdown_options());
     parse_document_with_entries(
         PreparedMarkdown {
             source: source_text,
             display_source: source_text.to_owned(),
-            events: source::parser_events(source_text),
+            events,
+            metadata_origins,
             declarations: directives::SemanticDeclarations::default(),
         },
         source_path,
@@ -204,6 +206,7 @@ fn parse_document_with_entries(
         source: source_text,
         display_source,
         events,
+        metadata_origins,
         mut declarations,
     } = prepared;
     let source = MarkdownSource::new(&display_source);
@@ -213,7 +216,7 @@ fn parse_document_with_entries(
         flat_sections,
         mut ids,
         document_title_id,
-    } = lower_document_structure(events, &source);
+    } = lower_document_structure(events, metadata_origins, &source);
     let mut sections = nest_sections(flat_sections);
     let extracted_title = extract_document_title(
         &mut root_blocks,

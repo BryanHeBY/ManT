@@ -22,9 +22,11 @@ pub(super) struct ParsedDocumentStructure {
 /// Lower the Markdown event stream without imposing final document layout.
 pub(super) fn lower_document_structure(
     events: Vec<SpannedEvent<'_>>,
+    metadata_origins: super::events::MetadataOrigins,
     source: &MarkdownSource<'_>,
 ) -> ParsedDocumentStructure {
     let mut cursor = EventCursor::new(events);
+    cursor.metadata_origins = metadata_origins;
     let mut diagnostics = Vec::new();
     let mut root_blocks = Vec::new();
     let mut flat_sections = Vec::new();

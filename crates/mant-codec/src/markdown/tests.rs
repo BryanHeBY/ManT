@@ -6,6 +6,7 @@ use super::{parse_document, parse_markdown};
 
 mod decoded_content;
 mod entry_forms;
+mod metadata_origins;
 mod source_contracts;
 
 #[test]

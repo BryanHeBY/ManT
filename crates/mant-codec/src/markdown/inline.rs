@@ -119,7 +119,14 @@ fn parse_inline_sequence(
                 end_offset = nested_end;
                 let destination = dest_url.into_string();
                 let title = (!title.is_empty()).then(|| {
-                    super::decoded::normalize(title.into_string(), &range, source, diagnostics)
+                    super::decoded::title(
+                        title.into_string(),
+                        &range,
+                        link_type,
+                        cursor,
+                        source,
+                        diagnostics,
+                    )
                 });
                 output.push(Inline::Link {
                     target: mant_ir::LinkTarget::from_uri(&destination),

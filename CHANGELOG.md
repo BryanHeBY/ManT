@@ -37,6 +37,9 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Locate decoded reference-title diagnostics at the effective definition and
+  report each affected field once, including references following leading hard
+  rows. Labels and inline-link titles retain their individual source ranges.
 - Execute native enclosure operands without conflating empty words, invisible
   cells and escaped content. Preserve `Es`/`En` hard lines, font effects and
   zero-advance state across prose, literals and definition owners.

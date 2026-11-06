@@ -11,6 +11,46 @@ use pulldown_cmark::{
 
 use super::{SpannedEvent, inline::is_html_line_break};
 
+/// Keep only the effective definition span for links actually emitted. The
+/// parser remains responsible for label normalization and first-definition wins.
+pub(super) fn prepare_events(
+    source: &str,
+    options: Options,
+) -> (Vec<SpannedEvent<'_>>, super::events::MetadataOrigins) {
+    if super::source::physical_lines(source).any(|line| line.ends_with('\r')) {
+        let normalized = super::source::physical_lines(source)
+            .map(|line| {
+                line.strip_suffix('\r')
+                    .map_or_else(|| line.to_owned(), |body| format!("{body}\n"))
+            })
+            .collect::<String>();
+        let (events, origins) = prepare_events(&normalized, options);
+        return (
+            events
+                .into_iter()
+                .map(|(event, range)| (event.into_static(), range))
+                .collect(),
+            origins,
+        );
+    }
+    let mut parser = CanonicalEvents::new(source, options);
+    let mut events = Vec::new();
+    let mut origins = super::events::MetadataOrigins::default();
+    while let Some(event) = parser.next() {
+        if let Event::Start(Tag::Link { link_type, id, .. }) = &event.0
+            && matches!(
+                link_type,
+                LinkType::Reference | LinkType::Collapsed | LinkType::Shortcut
+            )
+            && let Some(definition) = parser.events.reference_definitions().get(id)
+        {
+            origins.insert(event.1.start, definition.span.clone());
+        }
+        events.push(event);
+    }
+    (events, origins)
+}
+
 #[cfg(test)]
 mod tests;
 

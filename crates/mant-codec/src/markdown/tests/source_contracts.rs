@@ -157,7 +157,11 @@ fn annotations_preserve_the_original_event_tree_and_every_visible_delimiter() {
             let prepared =
                 super::super::directives::PreparedMarkdown::new(&source, &mut diagnostics);
             let source_map = super::super::source::MarkdownSource::new(&source);
-            let raw = super::super::lower_document_structure(prepared.events, &source_map);
+            let raw = super::super::lower_document_structure(
+                prepared.events,
+                prepared.metadata_origins,
+                &source_map,
+            );
             let mut annotated = raw.root_blocks.clone();
             let mut declarations = prepared.declarations;
             super::super::entries::normalize_entry_lists(

@@ -14,16 +14,18 @@ pub(super) struct PreparedMarkdown<'a> {
     pub(super) source: &'a str,
     pub(super) display_source: String,
     pub(super) events: Vec<super::SpannedEvent<'a>>,
+    pub(super) metadata_origins: super::events::MetadataOrigins,
     pub(super) declarations: SemanticDeclarations,
 }
 impl<'a> PreparedMarkdown<'a> {
     pub(super) fn new(source: &'a str, diagnostics: &mut Vec<Diagnostic>) -> Self {
-        let (events, declarations, display_source) =
+        let (events, metadata_origins, declarations, display_source) =
             extract_semantic_directives(source, diagnostics);
         Self {
             source,
             display_source,
             events,
+            metadata_origins,
             declarations,
         }
     }
@@ -99,7 +101,12 @@ pub(super) enum AttachedValuePolicy {
 fn extract_semantic_directives<'a>(
     source: &'a str,
     diagnostics: &mut Vec<Diagnostic>,
-) -> (Vec<super::SpannedEvent<'a>>, SemanticDeclarations, String) {
+) -> (
+    Vec<super::SpannedEvent<'a>>,
+    super::events::MetadataOrigins,
+    SemanticDeclarations,
+    String,
+) {
     let mut masked = source.as_bytes().to_vec();
     let mut declarations = SemanticDeclarations::default();
     let lines = super::source::physical_lines(source).collect::<Vec<_>>();
@@ -111,7 +118,8 @@ fn extract_semantic_directives<'a>(
             Some(start)
         })
         .collect::<Vec<_>>();
-    let events = super::source::parser_events(source);
+    let (events, metadata_origins) =
+        super::canonical_br::prepare_events(source, super::markdown_options());
     declarations.bindings = ItemBindings::collect(&events);
     declarations.bindings.metadata =
         super::metadata::collect(&events, source, &mut masked, diagnostics);
@@ -165,6 +173,7 @@ fn extract_semantic_directives<'a>(
     }
     (
         output,
+        metadata_origins,
         declarations,
         String::from_utf8(masked).expect("ASCII masking preserves UTF-8"),
     )

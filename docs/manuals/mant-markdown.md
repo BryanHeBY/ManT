@@ -608,6 +608,13 @@ parser treats numeric C1 references as their Unicode scalars: `&#133;` is a
 control and is masked, while `&#8230;` or `&hellip;` is an ordinary ellipsis.
 Double-encoded entities are decoded once, not recursively.
 
+Decoded reference titles use the effective definition's complete original
+source range, including its title. Repeated uses report each affected title
+once; unused and shadowed definitions add no decoded-metadata warning. Inline
+link titles use their complete link range, while labels and ordinary text keep
+their individual event ranges. Canonical leading hard rows use the same
+full-document definition table and expansion budget.
+
 CR decoded into ordinary Text or a link label remains a content scalar, not a
 second source-line terminator. Export writes it as `&#13;`; LF alone carries
 the owner's logical hard rows. Title CR, LF and TAB use metadata entities and
