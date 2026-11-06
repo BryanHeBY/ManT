@@ -43,9 +43,20 @@ impl InlineBuilder {
     ) -> Option<(String, usize, i32, bool)> {
         use super::super::super::field_buffer::FieldCell;
         let state = self.execution.definition.as_ref()?;
+        // A new structural owner has its own resolved reading base even
+        // while the original column's native buffer/stops remain active.
+        // Collected column output retains its original column base instead.
         let declared_origin = state
-            .column_origin_units
-            .map(|units| i64::try_from(units).unwrap_or(i64::MAX))
+            .declared_body_origin
+            .filter(|origin| {
+                origin.padding == super::super::state::BodyPaddingPlacement::OutputOwner
+            })
+            .map(|origin| origin.units)
+            .or_else(|| {
+                state
+                    .column_origin_units
+                    .map(|units| i64::try_from(units).unwrap_or(i64::MAX))
+            })
             .or(state.declared_body_origin.map(|origin| origin.units))
             .unwrap_or(0);
         let graph = (start..end).find(|cell| {
@@ -148,7 +159,11 @@ impl InlineBuilder {
         let declared_padding = state
             .declared_body_origin
             .filter(|origin| {
-                origin.padding == super::super::state::BodyPaddingPlacement::Structural
+                matches!(
+                    origin.padding,
+                    super::super::state::BodyPaddingPlacement::Structural
+                        | super::super::state::BodyPaddingPlacement::OutputOwner
+                )
             })
             .map_or(0, |origin| {
                 state

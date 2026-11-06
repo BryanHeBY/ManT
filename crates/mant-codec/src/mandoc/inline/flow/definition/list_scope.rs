@@ -43,6 +43,52 @@ pub(in crate::mandoc) struct NestedListScope {
 }
 
 impl InlineBuilder {
+    /// The marker belongs to `ListKind`'s source origin, not the BODY vector
+    /// temporarily borrowed for its execution. This changes projection
+    /// ownership only; the offset, word buffer and device columns stay live.
+    pub(in crate::mandoc) fn declare_structural_list_marker_origin(&mut self) {
+        let definition = self.definition_state_mut();
+        definition.declared_body_origin = Some(super::state::BodyOriginProjection::structural(
+            definition.field_offset_units,
+        ));
+    }
+
+    /// The structural BODY owns its source offset. HEAD's native minbl
+    /// remains in the device row, but its prepaid inline padding belonged
+    /// to the retired marker projection and cannot be emitted a second time.
+    pub(in crate::mandoc) fn begin_structural_list_body(
+        &mut self,
+        saved: NestedListScope,
+        width_units: usize,
+        offset_units: i32,
+    ) {
+        self.enter_nested_list_body(saved, width_units, offset_units, 0);
+        self.execution.pending_field_spaces = 0;
+    }
+
+    /// Generated It HEAD words share native input with authored delimiters.
+    /// Their semantic marker is represented by the enclosing `ListKind`.
+    pub(in crate::mandoc) fn append_native_list_marker(
+        &mut self,
+        kind: NormalizedListKind,
+        ordinal: u64,
+    ) {
+        match kind {
+            NormalizedListKind::Bullet => {
+                self.with_font_scope(super::super::Font::Strong, |builder| {
+                    builder.append_text("•");
+                });
+            }
+            NormalizedListKind::Dash => {
+                self.with_font_scope(super::super::Font::Strong, |builder| {
+                    builder.append_text("-");
+                });
+            }
+            NormalizedListKind::Ordered => self.append_text(&format!("{ordinal}.")),
+            _ => {}
+        }
+    }
+
     pub(in crate::mandoc) fn has_definition_list_execution(&self) -> bool {
         self.execution.definition.is_some() && self.execution.author_execution.is_some()
     }
@@ -424,17 +470,6 @@ impl InlineBuilder {
 }
 
 impl super::super::InlineExecutionState {
-    /// The list wrapper carries normal BODY positioning. Keep the actual
-    /// native columns, but do not also materialize that declared placement
-    /// into its text (`termp_it_pre()` BODY offset, term.c:113-116).
-    pub(in crate::mandoc) fn declare_list_body_origin(&mut self) {
-        if let Some(state) = &mut self.definition {
-            state.declared_body_origin = Some(super::state::BodyOriginProjection::structural(
-                state.field_offset_units,
-            ));
-        }
-    }
-
     /// Every non-BLOCK `It` post clears the list pad/break flags and trailspace,
     /// including a plain HEAD that emits nothing and calls no `term_newln`.
     /// This is shared with structural list output; an enclosing column's

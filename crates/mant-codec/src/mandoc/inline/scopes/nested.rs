@@ -145,16 +145,15 @@ fn append_nested_list_head(
 
     let font = builder.font.checkpoint();
     match geometry.kind {
-        NormalizedListKind::Bullet => {
-            // termp_it_pre() feeds decoded \[bu] through term_word;
-            // append_text accepts a decoded generated word.
-            builder.with_font_scope(Font::Strong, |builder| builder.append_text("•"));
+        NormalizedListKind::Bullet
+        | NormalizedListKind::Dash
+        | NormalizedListKind::Ordered
+        | NormalizedListKind::Plain => {
+            builder.append_native_list_marker(
+                geometry.kind,
+                u64::try_from(ordinal).unwrap_or(u64::MAX),
+            );
         }
-        NormalizedListKind::Dash => {
-            builder.with_font_scope(Font::Strong, |builder| builder.append_text("-"));
-        }
-        NormalizedListKind::Ordered => builder.append_text(&format!("{ordinal}.")),
-        NormalizedListKind::Plain => {}
         _ if geometry.style == Some(DefinitionListStyle::Diagnostic) => {
             builder.with_font_scope(Font::Strong, |builder| {
                 append_inline_nodes(builder, &head.children, name);

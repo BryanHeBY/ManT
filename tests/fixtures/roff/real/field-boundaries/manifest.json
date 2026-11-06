@@ -1,0 +1,387 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Four complete unmodified original-audit manuals for source-event, tbl and nested-display boundaries; selected contracts only, not whole-page equivalence.",
+  "originalManifestSha256": "d28f392f8b45a2ee80772310ce9f20173c6326585d05073f875d01483c774187",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "referenceIdentity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "profileRecipe": "ASCII/UTF-8 -Owidth=78; HTML/tree/lint native defaults; exact uncompressed stdin, LC_ALL=C.UTF-8, TZ=UTC.",
+  "groffRecipe": "GNU groff 1.24.2; -t -T{ascii,utf8} -mandoc -rLL=78n -rLT=78n; GROFF_NO_SGR=1, C.UTF-8, UTC; auxiliary only, not a CI dependency.",
+  "cases": [
+    {
+      "file": "debian-chem.1.gz",
+      "auditNumber": 586,
+      "sourceIdentity": "debian-sid-2026-07-21-amd64:groff/usr/share/man/man1/chem.1.gz",
+      "sourceSha256": "a44beb1caf7bbf32571a8e820977b19636359a7bf535c9fdba0758a8c6705c32",
+      "fixtureSha256": "008a9582d4660096f0cb8657d6ca86b5ce363c2e30a684a40a378310daffa7bd",
+      "sourceBytes": 16109,
+      "fixtureBytes": 5940,
+      "archiveSha256": "9d24336c3c37f9ace7dd248fc7ef15ae6c74650f3b9ff6d5957242292cdea564",
+      "archiveMember": "./usr/share/man/man1/chem.1.gz",
+      "archiveContainerMember": "data.tar.xz",
+      "originUrl": "https://deb.debian.org/debian/pool/main/g/groff/groff_1.24.1-1_amd64.deb",
+      "transformation": "None; original gzip package member.",
+      "revision": "groff 1.24.1-1 binary package; man page TH 2026-04-22; FSF 2006-2020",
+      "license": "GPL-3.0-or-later",
+      "licenseFile": "../LICENSES/GPL-3.0-or-later.txt",
+      "embeddedNoticeLines": [
+        12,
+        30
+      ],
+      "embeddedNoticeSha256": "8d0ac3e6dcc3208dd97b7969e33534e755edf182936ab1648f486552652d5d97",
+      "licenseSha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0",
+      "provenanceVerification": "Retained archive independently SHA-256 verified on 2026-11-06; exact named member independently extracted and complete source/transport hashes verified. No source edits or line ending conversion; no network retrieval.",
+      "archive": "groff_1.24.1-1_amd64.deb",
+      "retrievedFromRetainedCorpusOn": "2026-11-06",
+      "originalAuditDate": "2026-11-03",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "8f3452f12d0a4904dc3ba3ff1d37d4d57b4073fd9335fbeb76126e224fc2d0d0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 14647,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "0934f37b2dfcdcda7695eff8b08004a83906b28e4ad35234be874395ab1ca07f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 14728,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "9254679bdf973f63e5f460f21088b7e31507700828bbf4825ac438aace7edfe9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 19383,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "0ae203e946404f2e97786039f5e3606654b0ccf60b8ec47d38e326ea5d8d50e4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 47096,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 4,
+          "stdoutSha256": "97d168c0a1133386a6c30f99d55c212c20ec14d4a678ca88daf20ce7f236c6d9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 462,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics",
+          "diagnostics": "mandoc: <stdin>:33:2: UNSUPP: unsupported roff request: do\nmandoc: <stdin>:939:2: UNSUPP: unsupported roff request: do\nmandoc: <stdin>:1:7: STYLE: lower case character in document title: TH \\%chem\nmandoc: <stdin>:62:2: WARNING: skipping paragraph macro: P empty\nmandoc: <stdin>:72:2: WARNING: skipping paragraph macro: P empty\nmandoc: <stdin>:417:2: WARNING: skipping paragraph macro: P empty\nmandoc: <stdin>:808:2: WARNING: skipping paragraph macro: P after SS\n"
+        }
+      },
+      "groffProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "d9e0b9d0de6cff10a34bd7ee2765262226e6ec26ac6ea6fccb872cf2d6dbeb48",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 14824,
+          "stderrBytes": 0,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "86cb88abdbaa9d32caf1c3f0c7bb8f0f7082327f2db751d99e62f3c33de47b0a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 14880,
+          "stderrBytes": 0,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        }
+      }
+    },
+    {
+      "file": "netbsd-scmdctl.1",
+      "auditNumber": 770,
+      "sourceIdentity": "netbsd-11.0-amd64:man/man1/scmdctl.1",
+      "sourceSha256": "221797315f5081d0982b0b288edefafd51464d66c3017a977ca61f0de615a904",
+      "fixtureSha256": "221797315f5081d0982b0b288edefafd51464d66c3017a977ca61f0de615a904",
+      "sourceBytes": 8995,
+      "fixtureBytes": 8995,
+      "archiveSha256": "31bb8a57b23b0fe6b309e4ff6b3f7a9c3c6aaadae9c8ce4dfc7baefa7c4ffa26",
+      "archiveMember": "./usr/share/man/man1/scmdctl.1",
+      "archiveContainerMember": null,
+      "originUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.0/amd64/binary/sets/man.tar.xz",
+      "transformation": "None; exact complete uncompressed tar member.",
+      "revision": "NetBSD scmdctl.1 revision 1.2 (2025-07-08)",
+      "license": "ISC (complete Brad Spencer 2021 notice)",
+      "licenseFile": "../LICENSES/SCMDCTL-MANUAL-ISC.txt",
+      "embeddedNoticeLines": [
+        3,
+        15
+      ],
+      "embeddedNoticeSha256": "e75ae7ab9be35a4e3873c004cef3c2bc1027e5d453b9d91feffee12eee291910",
+      "licenseSha256": "627c1f2b2bc438d234b440324cfbfd2e14e3ff33fadff2fd7a17978fcf8bf9d3",
+      "provenanceVerification": "Retained archive independently SHA-256 verified on 2026-11-06; exact named member independently extracted and complete source/transport hashes verified. No source edits or line ending conversion; no network retrieval.",
+      "archive": "man.tar.xz",
+      "retrievedFromRetainedCorpusOn": "2026-11-06",
+      "originalAuditDate": "2026-11-03",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "7acb614c659bb14074a811a91db3936cd544bf9c3844b76facb92ae96aa93958",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 13507,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "ff6efc062d2bfc4bf1c66d98155a6d5f090718f62cbd10f6d4694f23f1581fba",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 16399,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "3db9ca4dfc4197e528fe848a0e53c6cb91b2071b4f39abb4a01e2c6a26b2a9ea",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 19400,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "66a3990119a0a4def2a0340381ef5bcf6b681d1d216539f19cd3e1acdfad744a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 32042,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "563ddbe8bfd63a072f21f802d0848f13ef54a17f1ad7ec1536bf1fe5d6258586",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2078,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics",
+          "diagnostics": "mandoc: <stdin>:70:13: STYLE: whitespace at end of input line\nmandoc: <stdin>:76:18: STYLE: whitespace at end of input line\nmandoc: <stdin>:106:18: STYLE: whitespace at end of input line\nmandoc: <stdin>:110:84: STYLE: input text line longer than 80 bytes: utility interacts wi...\nmandoc: <stdin>:128:10: WARNING: new sentence, new line\nmandoc: <stdin>:162:28: WARNING: new sentence, new line\nmandoc: <stdin>:194:28: WARNING: new sentence, new line\nmandoc: <stdin>:198:43: WARNING: new sentence, new line\nmandoc: <stdin>:199:69: WARNING: new sentence, new line\nmandoc: <stdin>:202:13: STYLE: whitespace at end of input line\nmandoc: <stdin>:205:46: WARNING: new sentence, new line\nmandoc: <stdin>:208:77: WARNING: new sentence, new line\nmandoc: <stdin>:213:59: WARNING: new sentence, new line\nmandoc: <stdin>:244:10: WARNING: new sentence, new line\nmandoc: <stdin>:264:32: WARNING: new sentence, new line\nmandoc: <stdin>:266:33: WARNING: new sentence, new line\nmandoc: <stdin>:271:35: WARNING: new sentence, new line\nmandoc: <stdin>:273:17: WARNING: new sentence, new line\nmandoc: <stdin>:279:43: WARNING: new sentence, new line\nmandoc: <stdin>:45:54: STYLE: no blank before trailing delimiter: Ar ... bridge)\nmandoc: <stdin>:46:34: STYLE: no blank before trailing delimiter: Ar invert)\nmandoc: <stdin>:221:2: WARNING: skipping paragraph macro: Pp after Sh\nmandoc: <stdin>:248:2: WARNING: unusual Xr order: scmdi2c after spi\nmandoc: <stdin>:249:15: WARNING: unusual Xr punctuation: , after scmdspi(4)\nmandoc: <stdin>:265:5: WARNING: cross reference to self: Xr scmdctl 1\nmandoc: <stdin>:267:5: WARNING: cross reference to self: Xr scmdctl 1\nmandoc: <stdin>:284:5: WARNING: cross reference to self: Xr scmdctl 1\nmandoc: <stdin>:125:6: STYLE: referenced manual not found: Xr spi 4 (2 times)\nmandoc: <stdin>:127:6: STYLE: referenced manual not found: Xr scmd 4 (2 times)\nmandoc: <stdin>:246:6: STYLE: referenced manual not found: Xr iic 4\nmandoc: <stdin>:248:6: STYLE: referenced manual not found: Xr scmdi2c 4\nmandoc: <stdin>:249:6: STYLE: referenced manual not found: Xr scmdspi 4\n"
+        }
+      },
+      "groffProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "8be5d8578e134a4914194385a1fac3bc5c25d646d7b5f5fb5c601400a4c3cd8c",
+          "stderrSha256": "93e76e624f8a1d7abad7d28910003e32355eec65987fb49287aaa5acd5e277e2",
+          "stdoutBytes": 14075,
+          "stderrBytes": 238,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "073c031268f5580b6e971f177f838907fd42f5fa00f196f84103d3fe7c41a4e0",
+          "stderrSha256": "93e76e624f8a1d7abad7d28910003e32355eec65987fb49287aaa5acd5e277e2",
+          "stdoutBytes": 16989,
+          "stderrBytes": 238,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        }
+      }
+    },
+    {
+      "file": "openbsd-mandoc.1",
+      "auditNumber": 710,
+      "sourceIdentity": "openbsd-7.9-amd64:man/man1/mandoc.1",
+      "sourceSha256": "d5f5e2a732035be13413d22e75cdebc13f50bb2c4eac444cfe42b486883ab643",
+      "fixtureSha256": "d5f5e2a732035be13413d22e75cdebc13f50bb2c4eac444cfe42b486883ab643",
+      "sourceBytes": 61688,
+      "fixtureBytes": 61688,
+      "archiveSha256": "7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af",
+      "archiveMember": "./usr/share/man/man1/mandoc.1",
+      "archiveContainerMember": null,
+      "originUrl": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/man79.tgz",
+      "transformation": "None; exact complete uncompressed tar member.",
+      "revision": "OpenBSD mandoc.1 revision 1.199 (2025-08-22)",
+      "license": "ISC (complete Ingo Schwarze / Kristaps Dzonsons notice)",
+      "licenseFile": "../LICENSES/MANDOC-MANUAL-ISC.txt",
+      "embeddedNoticeLines": [
+        3,
+        16
+      ],
+      "embeddedNoticeSha256": "b4eae7f98ccf8c1413726e161429ca2f6c75d5462a40dad63c18a1b445070e14",
+      "licenseSha256": "98cc094a2de99de2e4340d58aa59c9a4940266c947811d04b8a0bf472d37c801",
+      "provenanceVerification": "Retained archive independently SHA-256 verified on 2026-11-06; exact named member independently extracted and complete source/transport hashes verified. No source edits or line ending conversion; no network retrieval.",
+      "archive": "man79.tgz",
+      "retrievedFromRetainedCorpusOn": "2026-11-06",
+      "originalAuditDate": "2026-11-03",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "3663481115b6e49d9dd310dda178386199acbee16468573600fc3c71e6971783",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 76402,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "66e374826e926f7bc7c2f0641569bd128c98038c41d4cd17f301d2b7ad5f5d6c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 76513,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "cd6c0fb4cf4fd628fa4f919f632129c05def9b1825762dce322421baab3f46e5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 110717,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "fe648d53001d1d57d9b11bd5d0a2ba154c6918f1f8d3a5bb1f477b2eb64992da",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 273624,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 0,
+          "stderrBytes": 0,
+          "status": "Captured",
+          "diagnostics": ""
+        }
+      },
+      "groffProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "3a87311957d54037828bfba987241fd8fd88fe88f4d8d46a0be38f5b9256ce16",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 78465,
+          "stderrBytes": 0,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "6afe95fa86693c6f2ca3f116abae380a62d0eb03ba453c22408fd9d0fa476399",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 78845,
+          "stderrBytes": 0,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        }
+      }
+    },
+    {
+      "file": "openbsd-ksh.1",
+      "auditNumber": 225,
+      "sourceIdentity": "openbsd-7.9-amd64:man/man1/ksh.1",
+      "sourceSha256": "b121bd3bc53876205a5c0f37666e6a5234d899ad0632fdd429fb5d3f598a3fbe",
+      "fixtureSha256": "b121bd3bc53876205a5c0f37666e6a5234d899ad0632fdd429fb5d3f598a3fbe",
+      "sourceBytes": 135857,
+      "fixtureBytes": 135857,
+      "archiveSha256": "7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af",
+      "archiveMember": "./usr/share/man/man1/ksh.1",
+      "archiveContainerMember": null,
+      "originUrl": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/man79.tgz",
+      "transformation": "None; exact complete uncompressed tar member.",
+      "revision": "OpenBSD ksh.1 revision 1.223 (2025-12-31)",
+      "license": "Public Domain (authored declaration preserved; not BSD or ISC)",
+      "licenseFile": "../LICENSES/KSH-MANUAL-PUBLIC-DOMAIN.txt",
+      "embeddedNoticeLines": [
+        1,
+        4
+      ],
+      "embeddedNoticeSha256": "e9fbce9edba60a4da7a53bbdf824834b4e118ca756e6f5173ff525eb33784527",
+      "licenseSha256": "1986af0fe3c9e50426c9b1ecc6097a35292297777f200b1be54c072a525bb374",
+      "provenanceVerification": "Retained archive independently SHA-256 verified on 2026-11-06; exact named member independently extracted and complete source/transport hashes verified. No source edits or line ending conversion; no network retrieval.",
+      "archive": "man79.tgz",
+      "retrievedFromRetainedCorpusOn": "2026-11-06",
+      "originalAuditDate": "2026-11-03",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "f9a046a6d45f47a8e24bbee6c115b5459600fa586b57ef1e95504084b43fb81e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 165865,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "32185b8a9a2033318fb0dfe8ff1aeabaddc1ad166fc259b90083443c3e341a45",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 167405,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "5008ae8948046b036cc7e686bd79f513ba1184e20cc2f9db3bd87927b8bfedd5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 229754,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "effe9f3448b22202535633d8a73680af8e81a754961f5e37cb89c82a4c40c475",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 638121,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "f21ffc749f50b728fdd4e43ae505fc1da88f10464baebc12b0ab599d382c03a3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1414,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics",
+          "diagnostics": "mandoc: <stdin>:777:26: STYLE: no blank before trailing delimiter: No \\&]]\nmandoc: <stdin>:1810:32: STYLE: no blank before trailing delimiter: No ,...,\nmandoc: <stdin>:1906:30: STYLE: no blank before trailing delimiter: No ...|\nmandoc: <stdin>:1919:30: STYLE: no blank before trailing delimiter: No ...|\nmandoc: <stdin>:1931:30: STYLE: no blank before trailing delimiter: No ...|\nmandoc: <stdin>:1943:30: STYLE: no blank before trailing delimiter: No ...|\nmandoc: <stdin>:1953:30: STYLE: no blank before trailing delimiter: No ...|\nmandoc: <stdin>:2539:9: STYLE: verbatim \"--\", maybe consider using \\(em\nmandoc: <stdin>:4779:31: STYLE: no blank before trailing delimiter: No ^W, ^[^?\nmandoc: <stdin>:4897:7: STYLE: no blank before trailing delimiter: No ^[.\nmandoc: <stdin>:5638:8: STYLE: no blank before trailing delimiter: Ql x);;\nmandoc: <stdin>:301:6: STYLE: referenced manual not found: Xr csh 1 (3 times)\nmandoc: <stdin>:897:6: STYLE: referenced manual not found: Xr cc 1\nmandoc: <stdin>:905:6: STYLE: referenced manual not found: Xr mail 1\nmandoc: <stdin>:1716:6: STYLE: referenced manual not found: Xr srand_deterministic 3\nmandoc: <stdin>:3816:6: STYLE: referenced manual not found: Xr sticky 8\nmandoc: <stdin>:3846:6: STYLE: referenced manual not found: Xr unix 4\nmandoc: <stdin>:5554:6: STYLE: referenced manual not found: Xr mg 1\nmandoc: <stdin>:5560:6: STYLE: referenced manual not found: Xr script 7\n"
+        }
+      },
+      "groffProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "fc0b8f778d9149cfd81ca00d17b19744fd64cfa17aeb3d68d7604999eba2844a",
+          "stderrSha256": "bfaed4df4cf6a5929f875e262a46d4fe3f0909bb9aeea410fda3a6cbeb67b4d4",
+          "stdoutBytes": 169855,
+          "stderrBytes": 94,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "c4eabb538774a9497e85b7bd0feef6b987d53f7f59b0ab9c1d78c18877a7eaaa",
+          "stderrSha256": "bfaed4df4cf6a5929f875e262a46d4fe3f0909bb9aeea410fda3a6cbeb67b4d4",
+          "stdoutBytes": 172361,
+          "stderrBytes": 94,
+          "version": "GNU groff 1.24.2",
+          "macroPackage": "andoc (man or mdoc autodetected)",
+          "width": "LL=78n; LT=78n; device default resolution",
+          "status": "AuxiliaryCapturedOnly"
+        }
+      }
+    }
+  ]
+}

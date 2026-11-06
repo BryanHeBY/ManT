@@ -254,7 +254,16 @@ impl BlockState {
     pub(in crate::mandoc::blocks) fn flush_preformatted(&mut self) {
         let output_start = self.output.len();
         let closed_tail = self.literal.closed_graph_tail();
+        let retires_active_owner =
+            self.literal.has_output() && self.inline_output_is_literal(self.formatter.no_fill);
         self.output.extend(self.literal.take(self.indent_columns));
+        if retires_active_owner {
+            // D1/Dl's post already consumed its native row (mdoc_term.c:
+            // termp_bl_post). This Vec's indices cannot address a later
+            // paragraph. Retire only projection ownership, not the native
+            // offset, input cells, NOSPACE or the enclosing Nm BODY scope.
+            self.formatter.execution.retire_output_owner();
+        }
         if self.output.len() > output_start {
             self.closed_output_tail = closed_tail.is_closed().then_some(ClosedOutputTail {
                 output_end: self.output.len(),

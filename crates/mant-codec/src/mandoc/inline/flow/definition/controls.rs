@@ -55,7 +55,6 @@ impl InlineExecutionState {
             state.declared_body_origin = None;
         }
         self.exit_native_field_scope();
-        self.retire_definition_output_owner();
     }
 
     /// `post_SY(HEAD)` clears only NOBREAK after its real field flush

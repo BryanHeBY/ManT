@@ -275,3 +275,6 @@ mod enclosure_operands;
 mod name_body_handoffs;
 #[path = "roff_lowering/name_field_sessions.rs"]
 mod name_field_sessions;
+
+#[path = "roff_lowering/execution_scopes.rs"]
+mod execution_scopes;

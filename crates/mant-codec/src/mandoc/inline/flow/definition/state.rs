@@ -11,6 +11,9 @@ pub(in crate::mandoc::inline::flow) struct BodyOriginProjection {
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(in crate::mandoc::inline::flow) enum BodyPaddingPlacement {
+    /// An independent IR owner represents this origin, including when its
+    /// native execution still belongs to an enclosing declared column.
+    OutputOwner,
     /// Block/definition placement represents normal field padding too.
     Structural,
     /// Only the row origin is represented; field gaps remain inline words.

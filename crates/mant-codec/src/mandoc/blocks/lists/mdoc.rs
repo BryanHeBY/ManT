@@ -114,6 +114,15 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
     block
 }
 
+fn plain_list_kind(node: &Node) -> ListKind {
+    match node.list_kind {
+        Some(NormalizedListKind::Ordered) => ListKind::Ordered { start: Some(1) },
+        Some(NormalizedListKind::Dash) => ListKind::Dash,
+        Some(NormalizedListKind::Plain) => ListKind::Plain,
+        _ => ListKind::Bullet,
+    }
+}
+
 fn lower_mdoc_plain_list(
     node: &Node,
     items: Vec<MdocListItem<'_>>,
@@ -124,12 +133,7 @@ fn lower_mdoc_plain_list(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Block {
     use crate::mandoc::layout::Distance;
-    let kind = match node.list_kind {
-        Some(NormalizedListKind::Ordered) => ListKind::Ordered { start: Some(1) },
-        Some(NormalizedListKind::Dash) => ListKind::Dash,
-        Some(NormalizedListKind::Plain) => ListKind::Plain,
-        _ => ListKind::Bullet,
-    };
+    let kind = plain_list_kind(node);
     let width = node.width.as_deref().map_or(
         Distance::cells(if kind == ListKind::Plain { 0 } else { 2 }),
         |width| {
@@ -139,7 +143,21 @@ fn lower_mdoc_plain_list(
                 .0
         },
     );
-    Block::List {
+    let offset = node
+        .offset
+        .as_deref()
+        .map_or(Distance::default(), |offset| {
+            context.measured_mdoc_distance(node, offset, Distance::default())
+        });
+    // An empty Bl executes only its own conditional newline. With no It
+    // HEAD/BODY there is no field configuration or projection owner to enter.
+    let saved = (!items.is_empty()).then(|| {
+        formatter.execution.enter_native_field_scope();
+        formatter.with_output_builder(&mut Vec::new(), |builder| {
+            builder.enter_nested_list_scope(false)
+        })
+    });
+    let block = Block::List {
         kind,
         compact: node.compact,
         items: items
@@ -187,7 +205,13 @@ fn lower_mdoc_plain_list(
                             paragraph_predecessor,
                         ),
                     ),
-                    kind,
+                    PlainItemGeometry {
+                        kind,
+                        width_units: width.nonnegative_basic_units(),
+                        offset_units: offset.basic_units(),
+                        ordinal: kind.ordinal(index).unwrap_or(u64::MAX),
+                    },
+                    saved.expect("an actual It owns its field scope"),
                 );
                 // BODY post already executed its term_newln() in the scope
                 // driver. Its following generic It flag clear precedes Bl
@@ -205,7 +229,22 @@ fn lower_mdoc_plain_list(
             .collect(),
         layout: layout(list_indent),
         source: source_span(node),
+    };
+    if let Some(saved) = saved {
+        formatter.with_output_builder(&mut Vec::new(), |builder| {
+            builder.exit_nested_list_scope(saved, true);
+        });
+        formatter.execution.exit_native_field_scope();
     }
+    block
+}
+
+#[derive(Clone, Copy)]
+struct PlainItemGeometry {
+    kind: ListKind,
+    width_units: usize,
+    offset_units: i32,
+    ordinal: u64,
 }
 
 /// `blk_full()` may leave authored delimiters before HEAD. Execute them in
@@ -217,7 +256,8 @@ fn lower_plain_item_body(
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
     flow: &ScopeFlow<'_>,
-    kind: ListKind,
+    geometry: PlainItemGeometry,
+    saved: crate::mandoc::inline::NestedListScope,
 ) -> Vec<Block> {
     let mut lowerer = super::super::BlockLowerer::new(
         context,
@@ -235,17 +275,56 @@ fn lower_plain_item_body(
     {
         lowerer.push_nodes(&node.children[..head]);
     }
-    // mdoc_term.c::termp_it_pre() emits the marker but returns 0 for
-    // ordinary list HEAD children. Do not resurrect recovered HEAD text.
-    if kind != ListKind::Plain {
-        lowerer.state.formatter.execute_visible_generated_word();
-    }
-    lowerer
-        .state
-        .formatter
-        .execution
-        .clear_native_list_part_flags();
-    lowerer.state.formatter.execution.declare_list_body_origin();
+    // mdoc_term.c::termp_it_pre/post: HEAD consumes its own real marker
+    // field before BODY changes offset. Only geometry is restored; its
+    // word, device-row and flag effects survive the change of IR owner.
+    lowerer.state.with_active_output_builder(|builder| {
+        if let Some(head) = node
+            .children
+            .iter()
+            .find(|part| part.kind == NodeKind::Head)
+        {
+            builder.begin_executed_node(head);
+            let native_kind = match geometry.kind {
+                ListKind::Plain => NormalizedListKind::Plain,
+                ListKind::Dash => NormalizedListKind::Dash,
+                ListKind::Ordered { .. } => NormalizedListKind::Ordered,
+                ListKind::Bullet => NormalizedListKind::Bullet,
+            };
+            builder.enter_nested_list_head(
+                native_kind,
+                None,
+                geometry.width_units,
+                geometry.offset_units,
+                first_part_children(node, NodeKind::Body).is_empty(),
+            );
+            // The marker is represented by ListKind. Execute it in this
+            // active vector, retaining any earlier delimiter/pending glyph,
+            // then retire only its already-consumed projection.
+            if geometry.kind == ListKind::Plain {
+                builder.finish_nested_list_head(false);
+            } else {
+                builder.declare_structural_list_marker_origin();
+                builder.execute_structural_marker(|builder| {
+                    builder.append_native_list_marker(native_kind, geometry.ordinal);
+                    builder.finish_nested_list_head(true);
+                });
+            }
+            builder.execution.finish_executed_node(head);
+            builder.restore_nested_list_geometry(saved);
+        }
+        if let Some(body) = node
+            .children
+            .iter()
+            .find(|part| part.kind == NodeKind::Body)
+        {
+            builder.begin_executed_node(body);
+        }
+        builder.begin_structural_list_body(saved, geometry.width_units, geometry.offset_units);
+        builder
+            .execution
+            .set_output_owner_origin(flow.indent_columns.physical_basic_units());
+    });
     lowerer.push_nodes(first_part_children(node, NodeKind::Body));
     // This return is the actual original It BODY post, not a generic
     // output-owner settle. It must consume the same live input even when

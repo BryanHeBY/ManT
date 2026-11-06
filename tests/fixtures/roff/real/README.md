@@ -8,6 +8,7 @@ required by the third-party manuals.
 
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
+| [`field-boundaries/`](field-boundaries/README.md) | Exact November 2026 audit sources: Debian chem, NetBSD 11.0 scmdctl, OpenBSD 7.9 mandoc and ksh | Original gzip and complete uncompressed release members | Native field exits, single table owners and nested display origins |
 | [`source-adjacency/`](source-adjacency/README.md) | Exact members from the November 2026 audit: Arch tmux, OpenBSD date, DragonFly regex, illumos ksh93 | Original gzip members and exact complete uncompressed sources | Source-sibling execution, spacing controls, complete semantic owners, links and repeated Markdown readback |
 | [`scoped-layout/`](scoped-layout/README.md) | Exact November 2026 audit sources: NetBSD 11.0 printf, OpenBSD 7.9 bpf, immutable illumos bhyve | Exact complete uncompressed release members and repository file | Nested definition origins, scoped literal indentation and column-cell physical rows |
 | [`bsd-closure/`](bsd-closure/README.md) | Official NetBSD 11.0 and DragonFly BSD 6.4.2 release artifacts plus one verified OpenBSD current snapshot member | Exact uncompressed NetBSD/OpenBSD members and original DragonFly gzip members | Named-character fidelity, display-scoped mdoc spacing, continued `.TP` aliases, and signed legacy size escapes |

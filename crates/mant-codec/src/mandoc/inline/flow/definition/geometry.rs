@@ -288,8 +288,15 @@ impl super::super::InlineExecutionState {
             .saturating_sub(i64::from(self.row_presentation.parent));
         if let Some(definition) = &mut self.definition {
             definition.declared_body_origin = Some(super::state::BodyOriginProjection {
-                units,
-                padding: super::state::BodyPaddingPlacement::Structural,
+                // A cell's structural source coordinates start locally at
+                // zero; native columns retain the original page-relative
+                // base. Translate ownership, never the native field itself.
+                units: units.saturating_add(
+                    definition
+                        .column_origin_units
+                        .map_or(0, |origin| i64::try_from(origin).unwrap_or(i64::MAX)),
+                ),
+                padding: super::state::BodyPaddingPlacement::OutputOwner,
             });
         }
     }

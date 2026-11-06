@@ -37,6 +37,10 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Retire completed synopsis field widths at their native scope exit, consume
+  parent input once at table entry, and run ordinary list HEAD/BODY geometry
+  through the shared field lifecycle. Keep subsequent prose, table topology
+  and nested display origins intact across output owners.
 - Keep scoped list and display origins relative to their actual content owner,
   including signed outdents, without restoring consumed device rows or stale
   column flags. Preserve nested column headings on their original row and run

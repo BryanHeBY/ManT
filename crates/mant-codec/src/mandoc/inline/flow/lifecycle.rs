@@ -122,7 +122,7 @@ impl InlineExecutionState {
 
     /// Retire only indices into a drained IR owner. The native word, row,
     /// and separator registers continue across an mdoc HEAD/BODY split.
-    pub(super) fn retire_output_owner(&mut self) {
+    pub(in crate::mandoc) fn retire_output_owner(&mut self) {
         // These observations were already projected into the detached HEAD.
         // In particular, an An -split term_newln() cannot become a second
         // leading break before the BODY's first word.
@@ -145,6 +145,7 @@ impl InlineExecutionState {
 
     pub(in crate::mandoc) fn exit_column_output_scope(&mut self) {
         self.column_output_depth = self.column_output_depth.saturating_sub(1);
+        self.retire_completed_field_configuration();
         self.retire_definition_output_owner();
     }
 
@@ -161,7 +162,21 @@ impl InlineExecutionState {
         // Every scoped caller exits after its real BODY post consumed the
         // native field. Subsequent ordinary words use the normal input
         // session, while global flags/ti and any occupied device row survive.
+        self.retire_completed_field_configuration();
         self.retire_definition_output_owner();
+    }
+
+    /// A real outermost BODY return ends its finite HEAD configuration.
+    /// The input/word/device registers have independent lifetimes, and an IR
+    /// owner drain is not such an exit. In particular `post_SY(BODY)` restores
+    /// ordinary page geometry (man_term.c:882-885); a later buffer cannot
+    /// reconstruct the completed name field's narrow right margin.
+    fn retire_completed_field_configuration(&mut self) {
+        if !self.has_persistent_native_field_scope()
+            && let Some(author) = &mut self.author_execution
+        {
+            author.break_effect = AuthorBreakEffect::Line;
+        }
     }
 
     pub(super) fn has_persistent_native_field_scope(&self) -> bool {

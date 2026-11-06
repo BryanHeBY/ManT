@@ -152,6 +152,34 @@ impl InlineBuilder {
         }
     }
 
+    /// Consume a generated HEAD field whose visible marker belongs to the
+    /// `ListKind` owner. Keep delayed glyphs from earlier source, but retire
+    /// the marker's own origin/padding and line receipts after its real post.
+    pub(in crate::mandoc) fn execute_structural_marker(&mut self, execute: impl FnOnce(&mut Self)) {
+        let prefix = self.execution.zero_advance.pending_output_prefix();
+        self.execution.zero_advance.begin_output_owner();
+        let marker = format!(
+            "{}list-marker:{}",
+            super::INTERNAL_OUTPUT_SCOPE,
+            self.execution.native_owner_serial
+        );
+        self.begin_output_scope(&marker);
+        execute(self);
+        let emitted = self.execution.zero_advance.end_output_owner();
+        self.wrap_output_scope(&marker, |children| {
+            let (mut previous, mut marker) = Self::split_delayed_glyph_prefix(
+                children,
+                prefix.count,
+                emitted,
+                &prefix.originals,
+                prefix.measure,
+            );
+            super::projection::retain_inline_identities(&mut marker);
+            previous.extend(marker);
+            previous
+        });
+    }
+
     /// Projection-only ownership checkpoint at a semantic wrapper's entry.
     ///
     /// Native wrapper entry executes no `term_word()`: `termp_lk_pre()`

@@ -23,8 +23,8 @@ mod source_fragment;
 pub(in crate::mandoc) mod synopsis;
 pub(in crate::mandoc) use flow::{
     AuthorBreakEffect, CompletedRowOrigin, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags,
-    HeadOperandCapture, InlineExecutionState, NamePartGeometry, NoFillInlineState, OutputRowEnd,
-    PreservedInlineState, RunInBoundaryReceipt, consume_one_row_ending,
+    HeadOperandCapture, InlineExecutionState, NamePartGeometry, NestedListScope, NoFillInlineState,
+    OutputRowEnd, PreservedInlineState, RunInBoundaryReceipt, consume_one_row_ending,
     ends_with_executed_line_break, has_rendered_formatter_glyph,
     lower_no_fill_fragment_with_formatter, native_row_origin, prepare_inline_output,
     retain_inline_identities, split_row_origin, strip_native_projection_markers,

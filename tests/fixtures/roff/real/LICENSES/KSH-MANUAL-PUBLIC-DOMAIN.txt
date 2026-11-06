@@ -1,0 +1,4 @@
+$OpenBSD: ksh.1,v 1.223 2025/12/31 22:12:25 jsg Exp $
+
+Public Domain
+

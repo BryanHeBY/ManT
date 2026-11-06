@@ -27,5 +27,6 @@ pub(in crate::mandoc) use state::PreservedDefinitionField;
 pub(super) use state::{DefinitionFieldState, PendingFieldGapOrigin};
 
 pub(in crate::mandoc) use head_row::DefinitionGeometryCheckpoint;
+pub(in crate::mandoc) use list_scope::NestedListScope;
 pub(in crate::mandoc) use name_scope::NamePartGeometry;
 pub(in crate::mandoc) use run_in::RunInBoundaryReceipt;

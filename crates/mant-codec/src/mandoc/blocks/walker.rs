@@ -208,6 +208,13 @@ impl BlockLowerer<'_, '_> {
             self.push_man_paragraph(node, source.predecessor);
             return;
         }
+        if node.kind == libmandoc_rs::NodeKind::Table && node.flags.table_start {
+            // Both native node dispatchers call term_newln only before a
+            // table's first span (man_term.c:966-970; mdoc_term.c:388-392).
+            // Settle the live parent input before draining its output owner;
+            // pre_br would also change flags and is not this native event.
+            self.state.finish_native_body_line();
+        }
         self.state.flush_preformatted();
         if self.push_mdoc_synopsis_declaration(node) {
             return;

@@ -1,0 +1,10 @@
+# Four complete original-audit sources parsed through ManT's bundled
+# libmandoc on 2026-11-06. Verified means no parser failure, not whole-page
+# rendering equivalence or clean pristine-CVS lint.
+# Debian sid 2026-07-21 amd64, groff 1.24.1-1
+chem 1
+# NetBSD 11.0 amd64 base manuals
+scmdctl 1
+# OpenBSD 7.9 amd64 base manuals
+mandoc 1
+ksh 1

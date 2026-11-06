@@ -29,6 +29,8 @@ crates/libmandoc-rs/LICENSES/** text eol=lf
 *.woff2 binary
 tests/fixtures/roff/real/source-adjacency/*.1 text eol=lf
 tests/fixtures/roff/real/scoped-layout/* text eol=lf
+tests/fixtures/roff/real/field-boundaries/*.1 text eol=lf -whitespace
 # These complete authored notices include their upstream final blank line.
 tests/fixtures/roff/real/LICENSES/BPF-MANUAL-LICENSE.txt text eol=lf whitespace=-blank-at-eof
 tests/fixtures/roff/real/LICENSES/BHYVE-MANUAL-BSD-2-Clause.txt text eol=lf whitespace=-blank-at-eof
+tests/fixtures/roff/real/LICENSES/KSH-MANUAL-PUBLIC-DOMAIN.txt text eol=lf whitespace=-blank-at-eof

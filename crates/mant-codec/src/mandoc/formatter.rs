@@ -485,14 +485,6 @@ impl FormatterState {
         self.execution.take_zero_advance_armed();
     }
 
-    /// Execute a generated formatter word that is also visible in IR.
-    /// Unlike a control-only tbl word, a list marker ends every enclosing
-    /// definition BODY's pending head-row prefix (`mdoc_term.c::termp_it_pre`).
-    pub(super) fn execute_visible_generated_word(&mut self) {
-        self.execute_word();
-        self.note_definition_visible();
-    }
-
     pub(super) fn clear_zero_advance(&mut self) {
         self.execution.take_zero_advance_armed();
     }

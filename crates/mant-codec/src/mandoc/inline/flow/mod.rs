@@ -7,7 +7,7 @@ use mant_ir::{first_visible_character, has_printable_character, last_visible_cha
 mod builder;
 mod definition;
 pub(in crate::mandoc) use definition::{
-    DefinitionGeometryCheckpoint, NamePartGeometry, RunInBoundaryReceipt,
+    DefinitionGeometryCheckpoint, NamePartGeometry, NestedListScope, RunInBoundaryReceipt,
 };
 mod execution;
 pub(in crate::mandoc) mod field_buffer;

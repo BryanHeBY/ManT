@@ -85,6 +85,21 @@ have literal presentation without changing source fill mode: their post ends
 the current row, then following closing punctuation executes with the next
 word rather than being appended to the completed display.
 
+A completed man `SY` BODY retires its finite HEAD field configuration after
+its actual post. Subsequent prose uses the effective page field rather than
+reconstructing the old command-name width. Nested active native or column
+fields keep their own configuration until their scope ends; output drains do
+not end those scopes.
+
+Both native table dispatchers consume preceding parent input at the first
+source table span. Later spans belong to that table's own column execution,
+not to repeated invisible parent rows. Two authored tables retain separate
+owners. Ordinary mdoc list HEAD/BODY phases share the same native geometry
+operations as inline list execution: generated markers execute as words, their
+presentation belongs to the list structure, and BODY placement cannot inherit
+a retired marker's padding. Node returns restore geometry without restoring
+consumed device rows, flags, fonts or continuation state.
+
 An ordinary `Nm` inside an `It` description executes its HEAD and BODY in
 the enclosing live field. Its BODY retains normal block handling; source-line
 entry, field flush and native scope post keep their separate meanings when
