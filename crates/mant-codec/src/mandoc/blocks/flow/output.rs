@@ -143,9 +143,13 @@ impl BlockState {
             return;
         }
         let output_start = self.output.len();
-        let (block, empty_word_end_break, completed_vertical_rows, closed_tail) = self
-            .paragraph
-            .take(&mut self.formatter, self.indent_columns, line_request);
+        let (block, empty_word_end_break, completed_vertical_rows, closed_tail) =
+            self.paragraph.take(
+                &mut self.formatter,
+                self.indent_columns,
+                self.source_origin.offset_from(self.indent_columns),
+                line_request,
+            );
         let mut suppressed_head_row = false;
         if let Some(block) = block {
             match block {
@@ -353,6 +357,12 @@ impl BlockState {
             if let Some(node) = next_column_entry {
                 self.formatter.no_fill = node.flags.no_fill;
             }
+        } else if row_boundary == super::super::FormatterRowBoundary::MdocItemBody {
+            // This is the actual It BODY post, before its node geometry
+            // returns. Generic output settlement can follow a display post
+            // which already consumed the row; it is not this native event.
+            self.with_active_output_builder(InlineBuilder::finish_mdoc_item_body);
+            self.formatter.no_fill_inline.retire_consumed_cell();
         } else if row_boundary == super::super::FormatterRowBoundary::Settle {
             // The caller identified a native BODY post, not an IR owner
             // return. mdoc_term.c::termp_it_post() executes term_newln()

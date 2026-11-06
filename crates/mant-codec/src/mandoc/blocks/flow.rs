@@ -45,6 +45,10 @@ pub(super) struct BlockState {
     // leading distance belongs to the next emitted block, not a Rust return.
     pending_spacing: Option<(u16, Option<mant_ir::SourceSpan>)>,
     indent_columns: crate::mandoc::layout::SourceIndent,
+    // Source scopes can move offset while continuing this same paragraph.
+    // Its IR owner keeps the original base; nested structural handlers use
+    // the current source origin instead (mdoc_term.c::termp_nm_pre(BODY)).
+    source_origin: crate::mandoc::layout::SourceIndent,
     hanging_origin: Option<crate::mandoc::layout::SourceIndent>,
 }
 
@@ -127,13 +131,18 @@ impl BlockState {
     }
 
     pub(super) const fn source_indent(&self) -> crate::mandoc::layout::SourceIndent {
-        self.indent_columns
+        self.source_origin
+    }
+
+    pub(super) fn set_inline_source_origin(&mut self, origin: crate::mandoc::layout::SourceIndent) {
+        self.source_origin = origin;
     }
 
     pub(super) fn set_source_indent(&mut self, indent: crate::mandoc::layout::SourceIndent) {
         self.flush_preformatted();
         self.flush_paragraph();
         self.indent_columns = indent;
+        self.source_origin = indent;
         self.formatter.row_presentation.parent =
             i32::try_from(indent.physical_basic_units()).unwrap_or(i32::MAX);
         self.formatter.row_presentation.offset_shift = 0;
@@ -147,6 +156,7 @@ impl BlockState {
     pub(super) fn consume_hanging_first_line(&mut self) {
         if let Some(origin) = self.hanging_origin.take() {
             self.indent_columns = origin;
+            self.source_origin = origin;
             // The filled field's output adopts its hanging continuation
             // origin. Native no-fill first-child posts are executed by
             // the node driver, independently of these output drains.
@@ -178,6 +188,7 @@ impl BlockState {
             pending_targets: targets::PendingTargets::new(),
             pending_spacing: None,
             indent_columns,
+            source_origin: indent_columns,
             hanging_origin: None,
         }
     }
@@ -236,6 +247,14 @@ impl BlockState {
                 self.formatter.settle_definition_head_rows();
             }
         }
+        // Inset/diag BODY pre writes its separator only after assigning the
+        // source offset; restoring the HEAD's live input is not that pre.
+        self.paragraph
+            .with_inline_builder(&mut self.formatter, |builder| {
+                builder
+                    .execution
+                    .enter_definition_body_origin(self.indent_columns.physical_basic_units());
+            });
         let boundary = self.paragraph.append_run_in_cells(
             &mut self.formatter,
             generated_cells,

@@ -1,0 +1,174 @@
+{
+  "oracle_identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "case_count": 2,
+  "profile_count": 14,
+  "cases": [
+    {
+      "id": "one-leading-row",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Nm probe\n.Ft int\n leading\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "467653a4c5c631aa5e692738b4231bb47b7a89106c6463252c5ce389b4eef734",
+      "profiles": {
+        "ascii40": {
+          "status": 0,
+          "stdout_sha256": "a9f8a23cefeca86d41380f5eed5f73fa5866c82619cdfd60285aa83bdff42989",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii78": {
+          "status": 0,
+          "stdout_sha256": "6c4c7cd17cd80b21db5a5c135d207729f02feeabce5e4b66092cbbbf895e5c71",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf840": {
+          "status": 0,
+          "stdout_sha256": "4fc8a767bcc2796279570ebfe2479a0563dbc1210f57a3b2e307713def7d2e01",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf878": {
+          "status": 0,
+          "stdout_sha256": "e45cd1b29cae6e11718e5d4645e0e02807daf6d7020b4ae967438becb9519cb6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "1a67d6762cc94e8a27245a1a986b4a21a3713c621f5b4dd0d913821218f17cb4",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "fc80ae1aef4aca25bfe813d31426f47a6f1582e8bd2d912d93d58b4b762a9f1d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "probe int",
+        "       leading"
+      ],
+      "native_styles": [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          2,
+          2,
+          2
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "two-leading-rows",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Nm probe\n.Ft int\n leading\n second\n.Sh NEXT\nAFTER.\n",
+      "source_sha256": "ed9bcfa437156b3e180e9f04063569a89413ad07bb1541a8886129008775d0cb",
+      "profiles": {
+        "ascii40": {
+          "status": 0,
+          "stdout_sha256": "3ded29d24b6902895231b8d51366488e641dc68a563987bb955d98f2a36196c9",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "ascii78": {
+          "status": 0,
+          "stdout_sha256": "e012d08acf75d1f4f6f826d46e5a96cf519d9fa9eef8c023a7e749787f77acfa",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf840": {
+          "status": 0,
+          "stdout_sha256": "df478be6b7a0598055ed6bfe4404b3dc0dbf00bce6b6cfcc127ef33a7b4cd4ba",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "utf878": {
+          "status": 0,
+          "stdout_sha256": "ad54ba0adeb1bd48b9cbb1303ca5eea6fd00096dc3c63e90ddd87d36992c875e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "html": {
+          "status": 0,
+          "stdout_sha256": "e9aadadd94be5f021f6b84d19d15aa3b56a41c31581079051ddf420c93ac52c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "tree": {
+          "status": 0,
+          "stdout_sha256": "548f30447faa1de37c91bd9d708049b5252a9194e1668841f1cb81d9054ada86",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "lint": {
+          "status": 0,
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "native_rows": [
+        "probe int",
+        "       leading",
+        "       second"
+      ],
+      "native_styles": [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          2,
+          2,
+          2
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    }
+  ]
+}

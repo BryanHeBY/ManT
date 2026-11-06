@@ -124,6 +124,13 @@ impl InlineBuilder {
             .field_offset_units
             .saturating_add(width.saturating_mul(24));
         state.hang_row.field_offset = state.field_offset_units.saturating_add(11) / 24;
+        // The same BODY pre also moves the next hard row's owner-relative
+        // origin. A later row commit must not overwrite an earlier accepted
+        // BODY origin with the HEAD's old zero (mdoc_term.c:983-991).
+        state.row.indent_columns = state
+            .row
+            .indent_columns
+            .saturating_add(u16::try_from(width).unwrap_or(u16::MAX));
     }
 
     /// Unconditional `term_flushln`, shared by name and synopsis posts:
@@ -178,6 +185,35 @@ impl InlineBuilder {
 }
 
 impl super::super::InlineExecutionState {
+    /// The current BODY owner already represents this resolved origin. A
+    /// nested native field changes source offset, not the owner's base.
+    pub(in crate::mandoc) fn enter_definition_body_origin(&mut self, absolute: usize) {
+        let relative = i64::try_from(absolute)
+            .unwrap_or(i64::MAX)
+            .saturating_sub(i64::from(self.row_presentation.parent));
+        // BODY pre follows its source NODE_LINE. That true endline can
+        // consume ti and change the source offset before this width is added
+        // (mdoc_term.c:314,856-861; term_ascii.c::ascii_endline). Preserve
+        // that independent shift rather than reassigning an earlier origin.
+        self.native_word_spacing = super::super::NativeWordSpacing::NoSpace;
+        self.boundary = super::super::PendingBoundary::Tight;
+        // This owner represents its structural BODY placement. Its native
+        // minbl stays in hang_row; an earlier HEAD's prepaid projection may
+        // not also become a leading BODY scalar.
+        self.pending_field_spaces = 0;
+        if let Some(state) = &mut self.definition {
+            self.row_presentation.offset_shift = self
+                .row_presentation
+                .offset_shift
+                .saturating_add(i32::try_from(relative.min(0)).unwrap_or(i32::MIN));
+            state.field_offset_units = usize::try_from(relative.max(0)).unwrap_or(usize::MAX);
+            state.hang_row.field_offset = state.field_offset_units.saturating_add(11) / 24;
+            state.declared_body_origin = Some(super::state::BodyOriginProjection::structural(
+                state.field_offset_units,
+            ));
+        }
+    }
+
     /// Nm BODY's structural coordinate base survives later native breaks.
     /// Only a real still-open HEAD row needs its padding inside the combined
     /// paragraph (term.c:113-116,233-253,397-434), rather than list placement.
@@ -193,9 +229,5 @@ impl super::super::InlineExecutionState {
                 padding,
             });
         }
-    }
-
-    pub(in crate::mandoc) fn exit_name_block(&mut self) {
-        self.keep.phase = super::super::KeepPhase::Inactive;
     }
 }

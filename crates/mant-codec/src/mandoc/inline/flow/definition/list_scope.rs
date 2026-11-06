@@ -440,6 +440,11 @@ impl super::super::InlineExecutionState {
             definition.no_break = None;
             definition.no_break_cleared = false;
             definition.head_flags_cleared = true;
+            // A request-cleared HEAD filled against its shortened margin.
+            // It post ends that temporary capacity along with BRIND/HANG;
+            // BODY restores the ambient margin before adding its offset
+            // (mdoc_term.c:856-861,936-963,437-439).
+            definition.cleared_field_capacity_columns = 0;
         }
         if let Some(author) = &mut self.author_execution {
             author.break_effect = AuthorBreakEffect::Line;

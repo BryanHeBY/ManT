@@ -49,8 +49,8 @@ impl InlineBuilder {
         authors_section: bool,
     ) {
         // Changing an IR output owner refreshes section/author context, not
-        // the surrounding Column It's live NOBREAK/trailspace device flags.
-        let effect = if self.execution.has_column_output_scope() {
+        // the surrounding field's live NOBREAK/trailspace device flags.
+        let effect = if self.execution.has_persistent_native_field_scope() {
             self.execution
                 .author_execution
                 .map_or(AuthorBreakEffect::Line, |author| author.break_effect)

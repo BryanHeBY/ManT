@@ -141,15 +141,19 @@ impl InlineExecutionState {
         self.column_output_depth > 0
     }
 
-    pub(super) fn enter_native_field_scope(&mut self) {
+    pub(in crate::mandoc) fn enter_native_field_scope(&mut self) {
         self.native_field_scope_depth = self.native_field_scope_depth.saturating_add(1);
     }
 
-    pub(super) fn exit_native_field_scope(&mut self) {
+    pub(in crate::mandoc) fn exit_native_field_scope(&mut self) {
         self.native_field_scope_depth = self.native_field_scope_depth.saturating_sub(1);
+        // Every scoped caller exits after its real BODY post consumed the
+        // native field. Subsequent ordinary words use the normal input
+        // session, while global flags/ti and any occupied device row survive.
+        self.retire_definition_output_owner();
     }
 
-    fn has_persistent_native_field_scope(&self) -> bool {
+    pub(super) fn has_persistent_native_field_scope(&self) -> bool {
         self.has_column_output_scope() || self.native_field_scope_depth > 0
     }
 

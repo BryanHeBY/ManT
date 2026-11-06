@@ -51,7 +51,9 @@ pub(super) fn no_fill_boundary(node: &Node, single_line_literal: bool) -> Format
         // Their pre handlers do not call term_newln(); only the common
         // NODE_LINE gate can close it (mdoc_term.c:314-318,1799,1921).
         || crate::mandoc::containers::is_container(node)
-        || matches!(node.macro_token.as_ref(), Some(Mdoc(MdocMacro::Rs) | Man(ManMacro::Ur | ManMacro::Mt)))
+        // Nm BLOCK only selects PREKEEP; its HEAD pre/post own synopsis
+        // and field boundaries (mdoc_term.c::termp_nm_pre/post).
+        || matches!(node.macro_token.as_ref(), Some(Mdoc(MdocMacro::Rs | MdocMacro::Nm) | Man(ManMacro::Ur | ManMacro::Mt)))
     {
         FormatterBoundary::None
     } else {
@@ -76,7 +78,7 @@ impl super::BlockLowerer<'_, '_> {
         }
         if node.flags.line_start
             && !source_line_entered
-            && !self.state.formatter.no_fill_inline.continues_source_line()
+            && !self.state.formatter.execution.source_row_continues()
         {
             self.settle_no_fill_inline();
         }

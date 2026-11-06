@@ -190,6 +190,13 @@ impl BlockLowerer<'_, '_> {
             }
             return;
         }
+        // Nm's HEAD and BODY consume the current native field. Changing its
+        // IR owner before HEAD post would lose an enclosing It's live row.
+        if self.push_name_block(node, synopsis_previous) {
+            self.state
+                .queue_targets(structural_targets, source_span(node));
+            return;
+        }
         let single_line_literal = self.display_fill == Some(DisplayFillMode::SingleLine);
         if self.push_no_fill_lines(node, siblings, source.line_entered, single_line_literal) {
             self.state
@@ -218,7 +225,7 @@ impl BlockLowerer<'_, '_> {
             return;
         }
         self.state.flush_preformatted();
-        if self.push_mdoc_synopsis_declaration(node, synopsis_previous) {
+        if self.push_mdoc_synopsis_declaration(node) {
             return;
         }
         if node.macro_token.as_ref() == Some(&Roff(RoffMacro::Br)) {
@@ -250,7 +257,6 @@ impl BlockLowerer<'_, '_> {
                 man_list_state: &mut self.man_list_state,
                 ip_run,
                 spacing_enabled,
-                synopsis_previous: synopsis_previous.map(synopsis::SynopsisToken::from_node),
                 formatter: &mut self.state.formatter,
             }
             .push(node, next, table_embedding);
@@ -457,8 +463,8 @@ impl BlockLowerer<'_, '_> {
             return false;
         }
         self.resume_no_fill_row();
-        if !self.state.formatter.no_fill_inline.continues_source_line() {
-            if self.settle_no_fill_inline() {
+        if !self.state.formatter.execution.source_row_continues() {
+            if self.state.settle_no_fill_row(true) {
                 self.state
                     .formatter
                     .execution

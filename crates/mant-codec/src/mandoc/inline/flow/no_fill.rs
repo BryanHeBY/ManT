@@ -11,7 +11,6 @@ use mant_ir::Inline;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::mandoc) struct NoFillInlineState {
     active: bool,
-    continued: bool,
     formatter_cell: NoFillFormatterCell,
 }
 
@@ -26,7 +25,6 @@ impl NoFillInlineState {
     pub(in crate::mandoc) fn new() -> Self {
         Self {
             active: false,
-            continued: false,
             formatter_cell: NoFillFormatterCell::Origin,
         }
     }
@@ -115,10 +113,6 @@ impl NoFillInlineState {
                 || execution.zero_advance.has_buffered_glyph()
                 || execution.word_end_break == WordEndBreak::Pending)
     }
-
-    pub(in crate::mandoc) const fn continues_source_line(&self) -> bool {
-        self.continued
-    }
 }
 
 impl InlineExecutionState {
@@ -155,7 +149,6 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     finishes_row: bool,
     append: impl FnOnce(&mut InlineBuilder),
 ) -> (bool, bool) {
-    let continued = formatter.no_fill_inline.continued;
     let native_no_fill = formatter.no_fill;
     // A no-fill BODY word's NODE_LINE gate reads TERMP_NONEWLINE as it
     // stands at this fragment's entry (mdoc_term.c:314-317), before the
@@ -168,9 +161,6 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
         produced_formatter_cell,
         asserted_vertical_row,
     ) = formatter.with_output_builder(output, |builder| {
-        if continued {
-            builder.continue_source_line(true);
-        }
         // mdoc_term.c:314-318: the NODE_NOFILL subtree prints under
         // TERMP_BRNEVER.
         let was_no_fill_word = builder.execution.no_fill_word_active;
@@ -193,7 +183,6 @@ pub(in crate::mandoc) fn lower_no_fill_fragment_with_formatter(
     // active literal sink even when it is the last node produced here.
     let row = &mut formatter.no_fill_inline;
     row.active = true;
-    row.continued = continues_line;
     // The output owner can retain earlier completed rows. They cannot make
     // a new bare BACKAFTER word an occupied native row: term_newln() only
     // flushes the current native buffer (term.c:475-481).

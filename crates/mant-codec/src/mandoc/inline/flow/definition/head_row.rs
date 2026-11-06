@@ -2,6 +2,7 @@
 /// device position survive output drains; only a source scope restores them.
 #[derive(Clone, Copy, Default)]
 pub(in crate::mandoc) struct DefinitionGeometryCheckpoint {
+    pub(super) native_margin_units: Option<i64>,
     pub(in crate::mandoc::inline::flow) offset_shift_units: i32,
     pub(in crate::mandoc::inline::flow) indent_columns: u16,
     pub(in crate::mandoc::inline::flow) field_offset: usize,

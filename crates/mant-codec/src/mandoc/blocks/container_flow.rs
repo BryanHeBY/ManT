@@ -82,7 +82,7 @@ impl super::BlockLowerer<'_, '_> {
         if self.state.formatter.no_fill || self.state.single_line_display_owner {
             // Generated words are their own term_word() calls. They consume
             // the preceding authored `\c`; only state-only events inherit it.
-            let continuation = self.state.formatter.no_fill_inline.continues_source_line();
+            let continuation = self.state.formatter.execution.source_row_continues();
             self.push_no_fill_generated(source, continuation, false, false, |builder| {
                 append_generated_event(builder, event);
             });
@@ -204,8 +204,8 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 .lowerer
                 .state
                 .formatter
-                .no_fill_inline
-                .continues_source_line()
+                .execution
+                .source_row_continues()
         {
             let entered = self
                 .lowerer
@@ -213,7 +213,7 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 .formatter
                 .execution
                 .take_no_fill_source_line_entered(source.id);
-            if !entered && self.lowerer.settle_no_fill_inline() {
+            if !entered && self.lowerer.state.settle_no_fill_row(true) {
                 self.lowerer
                     .state
                     .formatter

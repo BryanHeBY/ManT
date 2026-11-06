@@ -25,6 +25,7 @@ include = [
   "/tests/support/table_content_roles.rs",
   "/tests/support/source_admission.rs",
   "/tests/support/name_field_sessions.rs",
+  "/tests/support/name_body_handoffs.rs",
   "/tests/support/oracle_receipt.rs", "/tests/support/json_roundtrip.rs",
   "/tests/support/case_failures.rs",
   "/tests/report_composition.rs", "/tests/report_composition/**",

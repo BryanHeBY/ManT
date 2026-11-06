@@ -271,5 +271,7 @@ mod synopsis_execution;
 #[path = "roff_lowering/enclosure_operands.rs"]
 mod enclosure_operands;
 
+#[path = "roff_lowering/name_body_handoffs.rs"]
+mod name_body_handoffs;
 #[path = "roff_lowering/name_field_sessions.rs"]
 mod name_field_sessions;

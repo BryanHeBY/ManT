@@ -2,26 +2,47 @@
 use super::{BlockState, InlineBuilder};
 
 impl BlockState {
+    pub(in crate::mandoc::blocks) fn note_inline_source(
+        &mut self,
+        source: Option<mant_ir::SourceSpan>,
+    ) {
+        self.adopt_no_fill_owner();
+        if self.formatter.no_fill || self.uses_literal_output() {
+            self.literal.note_source(source);
+        } else {
+            self.paragraph.note_source(source);
+        }
+    }
+
+    /// Native operations borrow the active destination and its one input
+    /// session. The walker dispatches source entry independently of owners.
+    pub(in crate::mandoc::blocks) fn with_active_output_builder<R>(
+        &mut self,
+        operation: impl FnOnce(&mut InlineBuilder) -> R,
+    ) -> R {
+        self.adopt_no_fill_owner();
+        let visible_before = self.formatter.execution.visible_content_checkpoint();
+        let result = if self.formatter.no_fill || self.uses_literal_output() {
+            self.literal
+                .with_inline_builder(&mut self.formatter, operation)
+        } else {
+            self.paragraph
+                .with_inline_builder(&mut self.formatter, operation)
+        };
+        self.observe_inline_source_effects(visible_before);
+        result
+    }
+
     pub(in crate::mandoc::blocks) fn enter_name_body_node(
         &mut self,
         node: &libmandoc_rs::Node,
         width: usize,
     ) -> crate::mandoc::inline::names::NameBodyScope {
         self.formatter.no_fill = node.flags.no_fill;
-        self.paragraph
-            .with_inline_builder(&mut self.formatter, |builder| {
-                builder.observe_no_fill_source_lines(true);
-                let saved = crate::mandoc::inline::names::enter_body(builder, node, width);
-                // BlockLowerer settles its preceding literal fragment and
-                // owns the IR row boundary. Ordinary inline node entry is
-                // the actual NODE_LINE native gate, including a first BODY
-                // child when only the detached HEAD's printed row is open.
-                // Always retain the structural BODY coordinate base. Its
-                // real open-row receipt independently decides whether the
-                // combined HEAD/BODY paragraph owns same-row padding.
-                builder.execution.declare_name_body_origin();
-                saved
-            })
+        self.with_active_output_builder(|builder| {
+            builder.observe_no_fill_source_lines(true);
+            crate::mandoc::inline::names::enter_body(builder, node, width)
+        })
     }
 
     pub(in crate::mandoc::blocks) fn finish_name_body_node(
@@ -40,6 +61,12 @@ impl BlockState {
                 .with_inline_builder(&mut self.formatter, finish);
         }
         self.formatter.no_fill_inline.retire_consumed_cell();
+        if !self.formatter.no_fill && !self.uses_literal_output() {
+            // The actual Nm BODY post has already flushed the native field.
+            // Its completed owner can now retain the BODY's resolved wrap
+            // origin before print_mdoc_node restores the source scope.
+            self.flush_paragraph();
+        }
     }
 
     /// A display changes the active IR destination, not its native field.

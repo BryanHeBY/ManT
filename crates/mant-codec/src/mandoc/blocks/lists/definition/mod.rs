@@ -112,8 +112,8 @@ mod head;
 mod layout;
 
 use body::{
-    close_pending_definition_prefix, definition_body_flow, enter_definition_body,
-    finish_definition_body_execution,
+    DefinitionSession, close_pending_definition_prefix, definition_body_flow,
+    enter_definition_body, finish_definition_body_execution,
 };
 pub(super) use head::visible_definition_head;
 use head::{definition_head_nodes, displaced_definition_equations, lower_definition_head};
@@ -145,7 +145,7 @@ pub(super) fn definition_item(
         // pre_IP/pre_TP(HEAD) assign mt->offset after BLOCK print_bvspace.
         super::super::reset_man_macro_offset(formatter, indent_columns);
     }
-    let head_offset_shift = formatter.row_presentation.offset_shift;
+    let session = DefinitionSession::enter(node, formatter, man_node);
     let (finished, run_in_execution) = lower_definition_head(
         head_nodes,
         &displaced_equations,
@@ -156,11 +156,7 @@ pub(super) fn definition_item(
     )
     .into_parts();
     let completed_head_rows = formatter.definition_head_completed_empty_rows();
-    if !man_node {
-        // print_mdoc_node() restores HEAD offset after It post. It does not
-        // restore ti; an open HANG row can consume that register at BODY entry.
-        formatter.row_presentation.offset_shift = head_offset_shift;
-    }
+    session.restore_head(formatter);
     // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
     // evidence that the first no-fill BODY row still belongs on that line.
     let head_source_continues = formatter.execution.source_row_continues();
@@ -194,6 +190,7 @@ pub(super) fn definition_item(
         node,
         formatter,
         flow,
+        body_origin,
         context.macro_set,
         &terms,
         !closed_head_row && !finished.definition_field_exited,
@@ -240,11 +237,7 @@ pub(super) fn definition_item(
     );
     let layout = geometry.layout(indent_columns, body_origin, &terms);
     let item = assemble_definition_item(terms, description, layout, node, head, context);
-    if !man_node {
-        // The It BLOCK returns after BODY post, restoring offset while
-        // keeping whatever independent ti register that real post left.
-        formatter.row_presentation.offset_shift = head_offset_shift;
-    }
+    session.finish(formatter);
     item
 }
 

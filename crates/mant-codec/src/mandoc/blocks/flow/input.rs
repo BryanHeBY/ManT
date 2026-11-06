@@ -120,6 +120,33 @@ impl BlockState {
             });
     }
 
+    /// A filled-to-literal destination change does not flush native cells.
+    /// Inset BODY's generated word can still be owned by `ParagraphFlow` when
+    /// the next source node enters no-fill execution. A real `NODE_LINE`
+    /// consumes the original owner first; only a still-live destination
+    /// change transfers the complete vector and its native anchor ranges.
+    pub(in crate::mandoc::blocks) fn adopt_no_fill_owner(&mut self) {
+        if self.formatter.no_fill
+            && self.formatter.execution.has_native_definition_field()
+            && self.literal.is_empty()
+            && !self.paragraph.is_empty()
+        {
+            let (nodes, source) = self.paragraph.take_active_output();
+            let occupied = self.formatter.execution.has_formatter_cell()
+                || self.formatter.execution.has_open_native_device_row();
+            self.literal.adopt_active_output(nodes, source, occupied);
+        }
+    }
+
+    fn consume_active_invisible_head_row(&mut self) -> bool {
+        if self.paragraph.is_empty() && (self.formatter.no_fill || self.uses_literal_output()) {
+            self.literal.consume_invisible_head_row(&mut self.formatter)
+        } else {
+            self.paragraph
+                .consume_invisible_head_row(&mut self.formatter)
+        }
+    }
+
     #[cfg(test)]
     pub(in crate::mandoc::blocks) fn push_inline(
         &mut self,
@@ -169,7 +196,7 @@ impl BlockState {
         self.observe_inline_source_effects(visible_before);
     }
 
-    fn observe_inline_source_effects(&mut self, visible_before: (u64, bool)) {
+    pub(super) fn observe_inline_source_effects(&mut self, visible_before: (u64, bool)) {
         let visible = self.formatter.definition_before_visible()
             && self
                 .formatter
@@ -187,9 +214,7 @@ impl BlockState {
             }
             self.formatter.note_definition_boundary();
             if self.formatter.definition_head_row_pending()
-                && self
-                    .paragraph
-                    .consume_invisible_head_row(&mut self.formatter)
+                && self.consume_active_invisible_head_row()
             {
                 self.formatter.consume_definition_head_row();
             }
@@ -216,10 +241,7 @@ impl BlockState {
     /// Its BODY owner consumes that same row once, before another word
     /// writes cells; request dispatch must not bypass this ownership seam.
     pub(super) fn settle_definition_line_boundary(&mut self) {
-        if self.formatter.definition_head_row_pending()
-            && self
-                .paragraph
-                .consume_invisible_head_row(&mut self.formatter)
+        if self.formatter.definition_head_row_pending() && self.consume_active_invisible_head_row()
         {
             self.formatter.consume_definition_head_row();
         }
@@ -244,38 +266,54 @@ impl BlockState {
         finishes_row: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
-        if self.literal.execute_fragment(
-            &mut self.formatter,
-            source,
-            fallback,
-            finishes_row,
-            append,
-        ) {
-            self.formatter.note_definition_visible();
-        }
+        let visible_before = self.formatter.execution.visible_content_checkpoint();
+        self.literal
+            .execute_fragment(&mut self.formatter, source, fallback, finishes_row, append);
+        // Inherited HEAD cells can occupy the native row without this
+        // source fragment writing a glyph. Visibility, unlike occupancy,
+        // decides when the BODY's leading-boundary observation freezes.
+        self.observe_inline_source_effects(visible_before);
     }
 
-    pub(in crate::mandoc::blocks) fn settle_no_fill_row(&mut self) -> bool {
+    pub(in crate::mandoc::blocks) fn settle_no_fill_row(&mut self, source_line: bool) -> bool {
+        let paragraph_owns_row = !self.paragraph.is_empty() && self.literal.is_empty();
         let executed_native_newline = self.formatter.execution.has_native_definition_field()
-            && self
-                .formatter
-                .no_fill_inline
-                .has_pending_formatter_cell(&self.formatter.execution);
+            && (source_line
+                && (self.formatter.execution.has_formatter_cell()
+                    || self.formatter.execution.has_open_native_device_row())
+                || self
+                    .formatter
+                    .no_fill_inline
+                    .has_pending_formatter_cell(&self.formatter.execution));
         if executed_native_newline {
             // NODE_LINE calls term_newln on the shared tcol buffer. Nm's
             // BODY retains a definition field after HEAD post; the plain
             // no-fill retire path intentionally cannot consume that buffer.
-            // Only an active literal fragment owns this buffer. A detached
-            // HEAD or a filled paragraph can keep the same field alive, but
-            // must never be consumed against an empty literal destination.
-            self.literal.with_inline_builder(
-                &mut self.formatter,
-                InlineBuilder::execute_native_literal_newline,
-            );
+            // Filled-to-no-fill entry still consumes the old destination:
+            // the generated inset BODY word can be buffered there. Its
+            // native anchors must not be applied to an empty literal Vec.
+            if paragraph_owns_row {
+                self.paragraph.with_inline_builder(
+                    &mut self.formatter,
+                    InlineBuilder::execute_native_newline,
+                );
+            } else {
+                self.literal.with_inline_builder(
+                    &mut self.formatter,
+                    InlineBuilder::execute_native_literal_newline,
+                );
+            }
             // The native print receipt already delivered every completed
             // row to this literal owner. Retire the old cell classification
             // even if a buffered zero-advance glyph only printed at flush.
             self.formatter.no_fill_inline.retire_consumed_cell();
+            self.settle_definition_line_boundary();
+            if paragraph_owns_row {
+                // The actual source event already consumed this row. Drain
+                // its original owner without requesting a second newline;
+                // later no-fill words can now start their literal owner.
+                self.flush_paragraph();
+            }
         }
         self.literal.settle_native_row(&mut self.formatter);
         executed_native_newline

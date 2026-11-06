@@ -125,6 +125,10 @@ run "test native enclosure operand identities and profile admission" \
   python3 -m unittest scripts.roff.tests.test_enclosure_operands
 run "test complete name-field session identities and profile admission" \
   python3 -m unittest scripts.roff.tests.test_name_field_session_fixture
+run "test ordinary name-body handoff identities and native profiles" \
+  python3 -m unittest scripts.roff.tests.test_name_body_handoff_fixture
+run "test name-body source origins and native profiles" \
+  python3 -m unittest scripts.roff.tests.test_name_body_origin_fixture
 run "test exact roff fixture checkout across newline settings" \
   python3 -m unittest scripts.roff.tests.test_fixture_checkout
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test

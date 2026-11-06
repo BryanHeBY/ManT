@@ -23,7 +23,6 @@ pub(super) struct StructuralLowerer<'a, 'source, 'state> {
     pub(super) man_list_state: &'state mut ManListState,
     pub(super) ip_run: Option<super::lists::man::IpRun>,
     pub(super) spacing_enabled: bool,
-    pub(super) synopsis_previous: Option<super::synopsis::SynopsisToken>,
     pub(super) formatter: &'state mut crate::mandoc::formatter::FormatterState,
 }
 
@@ -192,14 +191,13 @@ impl StructuralLowerer<'_, '_, '_> {
                 }
                 self.output.extend(nested);
             }
-            Some(Man(ManMacro::Sy) | Mdoc(MdocMacro::Nm)) => lower_synopsis_head(
+            Some(Man(ManMacro::Sy)) => lower_synopsis_head(
                 self.output,
                 node,
                 self.context,
                 super::synopsis::SynopsisFlow {
                     origin: self.indent_columns,
                     spacing_enabled: self.spacing_enabled,
-                    previous: self.synopsis_previous,
                 },
                 self.paragraph_distance,
                 self.formatter,

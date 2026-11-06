@@ -45,6 +45,7 @@ use synopsis::lower_synopsis_head;
 mod flow;
 mod man_links;
 mod man_nofill;
+mod names;
 use flow::BlockState;
 mod lists;
 mod man_macros;
@@ -250,6 +251,8 @@ const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
 pub(super) enum FormatterRowBoundary {
     Preserve,
     Settle,
+    /// The original mdoc It BODY has not executed its `term_newln` post yet.
+    MdocItemBody,
     Column {
         width: u16,
         origin: usize,
@@ -341,7 +344,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn settle_no_fill_inline(&mut self) -> bool {
-        self.state.settle_no_fill_row()
+        self.state.settle_no_fill_row(false)
     }
 
     fn finish_into(

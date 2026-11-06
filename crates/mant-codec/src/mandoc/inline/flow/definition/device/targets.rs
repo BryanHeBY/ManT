@@ -81,9 +81,8 @@ impl InlineBuilder {
         force_no_break
             || flags.contains(FieldFlag::NoBreak) && !state.no_break_cleared
                 && state.no_break.is_none() && resumed.is_none()
-                // It HEAD post clears NOBREAK before the shared BODY executes
-                // (mdoc_term.c:961-963). Owner transfer preserves cells only.
-                && !state.run_in_continuation
+                // A later native pre can install NOBREAK again on that live
+                // input (Nm HEAD). Run-in output ownership cannot veto flags.
                 && self.execution.author_execution.as_ref().is_some_and(|author| matches!(author.break_effect, AuthorBreakEffect::Field { .. }))
     }
 

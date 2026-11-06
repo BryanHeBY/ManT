@@ -308,6 +308,7 @@ impl super::super::InlineExecutionState {
             checkpoint.field_offset_units = definition.field_offset_units;
             checkpoint.column_reading_origin = definition.column_reading_origin;
             checkpoint.margin_override = definition.margin_override;
+            checkpoint.native_margin_units = definition.native_margin_units;
         }
         Some(checkpoint)
     }
@@ -324,6 +325,7 @@ impl super::super::InlineExecutionState {
             definition.field_offset_units = checkpoint.field_offset_units;
             definition.column_reading_origin = checkpoint.column_reading_origin;
             definition.margin_override = checkpoint.margin_override;
+            definition.native_margin_units = checkpoint.native_margin_units;
         }
     }
 }

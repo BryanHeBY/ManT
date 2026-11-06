@@ -64,6 +64,10 @@ that crate was not published for that change.
 - Establish complete local word and name-field sessions for admitted table
   fragments, preserving genuine `Nm` HEAD/BODY boundaries and transactional
   fallback without expanding recovery limits.
+- Keep ordinary `It` and nested `Nm` HEAD/BODY parts in one live native field.
+  Preserve their word boundaries, hard lines, pending glyphs and resolved BODY
+  origins across paragraph and literal owners, including continuation layout
+  and authored leading spaces.
 - Normalize forbidden entity-decoded controls on the first Markdown read with
   original source-range diagnostics. Safely serialize permitted CR, content
   BOM scalars and metadata through repeated readback; apply the same checked

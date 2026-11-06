@@ -267,6 +267,11 @@ impl InlineBuilder {
         };
         self.flush_zero_advance();
         self.retire_native_field_with_device(native.as_ref());
+        // term_flushln() consumed every old input cell, including the
+        // automatic separator after an empty HEAD operand. The persistent
+        // native ledger retains viscol/minbl; this old IR projection debt
+        // must not be replayed as a scalar in the next BODY owner.
+        self.execution.pending_breakable_spaces = 0;
         if native_tail_end || invisible_native_row_end {
             self.nodes.push(Inline::line_break());
             self.note_definition_output_row();
@@ -287,7 +292,22 @@ impl InlineBuilder {
         (output, self.execution, occupied_head_row)
     }
 
-    /// Execute the native BODY post selected by `FormatterRowBoundary::Settle`.
+    /// Execute the actual original mdoc It BODY post, exactly once.
+    pub(in crate::mandoc) fn finish_mdoc_item_body(&mut self) {
+        if self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.run_in_continuation)
+        {
+            self.finish_run_in_field_row();
+        } else {
+            self.execute_native_newline();
+        }
+        self.execution.clear_native_list_part_flags();
+    }
+
+    /// Settle run-in output after the caller's native post.
     /// An IR paragraph drain or a Preserve return must not invoke this.
     pub(in crate::mandoc) fn finish_run_in_field_row(&mut self) {
         // This entry represents the real BODY post, including the ordinary

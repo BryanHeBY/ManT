@@ -193,6 +193,13 @@ A native field scope can span multiple paragraph and literal content owners.
 Its explicit source pre/post boundaries protect the live word, separator and
 field registers while an IR drain releases only output indices. Resolved BODY
 placement remains a layout fact; it does not establish an execution lifetime.
+Ordinary `It` and `Nm` parts use that same session: `Nm` HEAD pre/post and
+BODY pre/post run against the surrounding field, with normal block traversal
+inside BODY. Changing an IR owner neither flushes that field nor reinstalls
+the enclosing HEAD configuration. Source-line entry runs against the active
+output before choosing paragraph or literal presentation. Native source
+origins and relative IR owner origins stay distinct; accepted hard-row and
+soft-wrap origins use the existing layout fields.
 
 HEAD/BODY selectors borrow structural views, not an exhaustive content stream.
 Macro drivers execute their direct siblings in order and apply fonts, field

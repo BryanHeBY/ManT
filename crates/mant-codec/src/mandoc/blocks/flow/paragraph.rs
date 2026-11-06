@@ -10,6 +10,15 @@ pub(super) struct ParagraphFlow {
 }
 
 impl ParagraphFlow {
+    pub(super) fn note_source(&mut self, source: Option<SourceSpan>) {
+        if self.source.is_none() {
+            self.source = source;
+        }
+        if source.is_some() {
+            self.last_line = source.map(|span| span.line);
+        }
+    }
+
     pub(super) fn insert_link_cursor(&mut self, marker: String) {
         self.nodes.push(Inline::anchor(marker));
     }
@@ -159,6 +168,7 @@ impl ParagraphFlow {
         &mut self,
         formatter: &mut FormatterState,
         indent: crate::mandoc::layout::SourceIndent,
+        continuation_indent: i32,
         line_request: bool,
     ) -> (
         Option<Block>,
@@ -170,14 +180,34 @@ impl ParagraphFlow {
             .with_inline_builder(formatter, |builder| {
                 builder.take_paragraph_segment(line_request)
             });
-        let inline_layout = crate::mandoc::inline::take_inline_layout(&mut children);
+        let mut inline_layout = crate::mandoc::inline::take_inline_layout(&mut children);
+        let mut layout = layout(indent);
+        if continuation_indent != 0 {
+            // Nm BODY and HEAD execute in one owner. Its resolved BODY
+            // origin governs visual wraps, while accepted hard-row origins
+            // already use the old owner base. Rebase those facts once;
+            // changing the paragraph continuation cannot indent them twice.
+            inline_layout.row_hints = (0..mant_ir::logical_row_count(&children))
+                .map(|row| {
+                    let mut hint = inline_layout.row_layout(row);
+                    hint.row = u32::try_from(row).unwrap_or(u32::MAX);
+                    if row > 0 {
+                        hint.indent_columns =
+                            hint.indent_columns.saturating_sub(continuation_indent);
+                    }
+                    hint
+                })
+                .filter(|hint| !hint.is_empty())
+                .collect();
+            layout.continuation_indent_columns = continuation_indent;
+        }
         let source = self.source.take();
         self.last_line = None;
         (
-            (!children.is_empty()).then(|| Block::Paragraph {
+            (!children.is_empty()).then_some(Block::Paragraph {
                 inline_layout,
                 children,
-                layout: layout(indent),
+                layout,
                 source,
             }),
             empty_word_end_break,

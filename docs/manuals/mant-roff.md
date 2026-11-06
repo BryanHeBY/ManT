@@ -85,6 +85,14 @@ have literal presentation without changing source fill mode: their post ends
 the current row, then following closing punctuation executes with the next
 word rather than being appended to the completed display.
 
+An ordinary `Nm` inside an `It` description executes its HEAD and BODY in
+the enclosing live field. Its BODY retains normal block handling; source-line
+entry, field flush and native scope post keep their separate meanings when
+output moves between paragraphs and literals. This preserves the selected
+mandoc word boundaries and hard lines without frontend joins. Resolved BODY
+origins also retain continuation indentation and authored leading spaces;
+relative content layout does not replace the native source origin.
+
 The same source-sibling entry rules apply inside admitted table-cell macro
 recovery and bibliography bodies. Unsupported whole-table execution and an
 independently valid recovered fragment remain separate compatibility cases;

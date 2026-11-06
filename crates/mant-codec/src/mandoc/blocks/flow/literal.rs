@@ -27,6 +27,25 @@ enum TrailingRow {
 }
 
 impl LiteralFlow {
+    pub(super) fn note_source(&mut self, source: Option<SourceSpan>) {
+        if self.source.is_none() {
+            self.source = source;
+        }
+        if source.is_some() {
+            self.last_filled_line = source.map(|span| span.line);
+        }
+    }
+
+    pub(super) fn consume_invisible_head_row(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) -> bool {
+        self.with_inline_builder(
+            formatter,
+            crate::mandoc::inline::InlineBuilder::consume_invisible_head_row,
+        )
+    }
+
     pub(super) fn has_output(&self) -> bool {
         !self.nodes.is_empty()
     }
@@ -117,7 +136,7 @@ impl LiteralFlow {
         fallback: bool,
         finishes_row: bool,
         append: impl FnOnce(&mut crate::mandoc::inline::InlineBuilder),
-    ) -> bool {
+    ) {
         let (continued, asserted) = crate::mandoc::inline::lower_no_fill_fragment_with_formatter(
             formatter,
             &mut self.nodes,
@@ -142,7 +161,6 @@ impl LiteralFlow {
         } else {
             TrailingRow::Ordinary
         };
-        occupied
     }
 
     pub(super) fn settle_native_row(

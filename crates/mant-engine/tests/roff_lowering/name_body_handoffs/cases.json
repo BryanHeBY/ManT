@@ -1,0 +1,3704 @@
+{
+  "oracle_identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "case_count": 45,
+  "profile_count": 225,
+  "cases": [
+    {
+      "id": "core-tag",
+      "cohort": "core",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "5bc7dfbc99e575333cdce8812e41c079df6be162d7f1ba48ebf0858eb24bfc78",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "505460c1485484eee041e183c40ae8efda224ccb52a4f1add48ff7ca4eb2ff4a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "ebdd124300d6b8be481f9d1663f4b9dd0b6ed79abd7cdaa77542e73cfcf15d3a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "8f6c71f788dfcd0224983faa873e013ff542afcc89f404f4488f55c3ab8628b4",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "57dd4099273a740410cee36ed6f9c7e10a1c8255b5207a0b47cf0e76b87e39f1",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "core-hang",
+      "cohort": "core",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -hang -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "568b2ba5ca170d1c628ed9cedfe625992f383d95cea72e7fc513a01dd34147e5",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "505460c1485484eee041e183c40ae8efda224ccb52a4f1add48ff7ca4eb2ff4a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "ebdd124300d6b8be481f9d1663f4b9dd0b6ed79abd7cdaa77542e73cfcf15d3a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "01e19aab0dbaefac6fe25c365ffe04203ed7d829bdcd978245de46f64a76c61d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "b4d3ee8e191a3c277fb119c1f2cb9a96391d8a6baa07396e59f2a9c631fe419a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "core-inset",
+      "cohort": "core",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -inset\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "0fffc1e921f1c1db9544537881abbd2e9e997956de7f85b7de6abe13f92b7457",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "94705e0d801c5f2b8df75c3186a16a01a81992ed810ecee6681cacdf71a86035",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "db3b74b95df6aee26028ddcf3a6cd013a1dd390a6ab1e1562956dfd6e2a03c63",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "1dc08f21305775f9365f06dd512d9dcd81a5520b889646ce25f1a77c62db2125",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "8527584b9348dc78921a69a36df53066cb4f397279fe949fc9edd9b92efe82c1",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key probe",
+          "      int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-diag",
+      "cohort": "control",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -diag\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "d17da3232b0218b7d9a99472fe92780a704075aa8e09abe8ecd5c1bd0f819629",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "03000ef544cf4e0474b66ad8b38e4f5768de6c7c1f994a31cd661ad3bc31d4be",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "78d5300399dc4caa233685cc7f1a0cd283df04661a8256747159afdf01db3d4b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "883cf26c6145f61eec9e8dd257bf67003a8db1fc009383a052b9fd8aff1a4968",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "1c2e632fb1f3030ce64dd513fb69b42806b20f17ef912fd1f20af303566bcfca",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key  probe",
+          "      int"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-ohang",
+      "cohort": "control",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -ohang\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "ca282a1bc5ccc36f1c1844fdd9158e90fbefafeaf25edc88bdf7a3fdef8941c6",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "001ad0974db78bf874a22b3e73227b91fab7d54aa2fa6acc7938739d23499f5a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "67d36b65702e3175cecc476f81d523ff2cb7abc9d25b5591fcef53ebe11a576b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "293d949638670dfba288812f36b99d05a1521d2f9ec99bd3b80da70fc22d19cd",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "f67f782cec21bf5a9bc7a6d42f1048e5b88ca22b3192c8a7305e80a59ea6e6ac",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key",
+          "probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-item",
+      "cohort": "control",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -item\n.It\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "b2867df95ee2cc1ee18b68954380e76c2badab6b1018f163c4cd802c314b1dfd",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "d12590a16d27128f19f42eb5dc0e7f8e447f9a80b4bc54504cd807a53b666a56",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "c07a81367b796c05fcbd802355501e2be624fefdda05fc2b72ff099978ce69ba",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "bcb261d127aed662d2e9ab5e7b9e4f5385818cd4ffb1f1df9c82573b74c07faf",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "7e0b33244227848f343d81833a5009f4c199e6e82b72ac2edad7472d5b190bce",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "probe int"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-column",
+      "cohort": "control",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -column abc def\n.It key Ta\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "ac7e872a6dfb768ba7b002e756c9980be192a58ba2e697426eca43b128cef5d5",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "725a8e2ad60b716d7f1bdcec227b5afc4bbb98aec59f3c6f57a94298f0bb7909",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "98d9c2af8e5248510d5ca0052413fd4bd0d62d2f6f289ee4e1dc48baa9dfc2a6",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "401e5c392723365dac205a369edd27d581b430431afe8690c4cd21a5526a2aca",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "b4a0201cec42d8c2f2560c0df6cc3a7f0254ae01bc8286ef6d5f8fc37a4c2f0e",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key    probe int",
+          ""
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ],
+          []
+        ]
+      }
+    },
+    {
+      "id": "control-top",
+      "cohort": "control",
+      "context": "top",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Nm probe\n.Ft int\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "885b1013c0b0d9d919d1752a84c0a20d2f52a7e298578e787a62708cce6280a3",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "d12590a16d27128f19f42eb5dc0e7f8e447f9a80b4bc54504cd807a53b666a56",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "c07a81367b796c05fcbd802355501e2be624fefdda05fc2b72ff099978ce69ba",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "bf35a7d891794c1c8ffa9aebd97ea82317fc698fedb0580d65fcfabc5a60d6ef",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "d5dd8001886e90f1dd6ae40f77d8d4dfe8de88745cbbec2f9a679de615296aa4",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "probe int"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-table",
+      "cohort": "control",
+      "context": "table",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.TS\nl.\nT{\n.Nm probe\n.Ft int\nT}\n.TE\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "259d1e82c02d6cc3408e7a5d171dfa15286ac644b142b315d6952755ecab5441",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "5ca60ce3e40a1f48e420884206e9ae78cba75547e74330d2b46456fa40a5be91",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "110810abe5a5066399569e5c595733f95c887bc14662bb6c9cc3fc98f214eca1",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "a7185c6d893b66c270e93138e9dd3425e047715449a0e5bfe071d0ab9cbee929",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "fade369f68ee986a87cec3c79a44e5b85a580c28b75bed7a733355188f7a155a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 4,
+            "stdout_sha256": "55a973a09bcd045613bb3ac7a0e8ccc7fe9721464bd8806a45be7d5cffabe499",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": "mandoc: <stdin>:11:2: UNSUPP: ignoring macro in table: Nm probe\nmandoc: <stdin>:12:2: UNSUPP: ignoring macro in table: Ft int\n"
+          }
+        },
+        "rows": [
+          "probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-head-0",
+      "cohort": "control",
+      "context": "head",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It Xo\n.Nm\n.Ft int\n.Xc\nBODY\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "eec917db420be2d03089d93646f30b1a448c305bf58a793a3f040719350d0263",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "181b30a0e9d401cf0f4fab3047cec05bc5554f5c6094ec96662f1ee9dca6ee28",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "83277d52ade62824940fdc38717406d92e2ad13d92c53c11d39dcae8b8420d9a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "e41139eb0d0d04196fc7fb0ceb7bbf6a57f1c7f0638fea0f237b1a0d9973720b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "f45e1b385bc1f32cfd4471b9e984bf15cf9c5f3c9e33f6938d08897400b579ee",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "probe int",
+          "                      BODY"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-function-0",
+      "cohort": "control",
+      "context": "function",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Fo func\n.Nm\n.Ft int\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "53a51f588a71405ca2fa70d5bd6a098e5e1869903e4fadd0c5e88d2e98b7179f",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "3c5aceab84b721f408ecf77d0f8f49274642eb3c909d0644ddc9d58ce2de6176",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "89f44682dbe42eac4e8d6cd4f0b593bca663a475410dcc52165127f085f35279",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "1e99636d51f1475e62d1ba655370dda1b748bf57d41167d03d0025ebafb196de",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "d84e9723e11c032879364ac31a475b0da6ce877e496581dece2d0630e295150e",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "func(probe",
+          "          int",
+          "    );"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-head-1",
+      "cohort": "control",
+      "context": "head",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It Xo\n.Nm probe\n.Ft int\n.Xc\nBODY\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "50b59d8fc95c616f3edbe66ba2d4cd4c1b287019f29d5605aa4753aea64c9049",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "181b30a0e9d401cf0f4fab3047cec05bc5554f5c6094ec96662f1ee9dca6ee28",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "83277d52ade62824940fdc38717406d92e2ad13d92c53c11d39dcae8b8420d9a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "e41139eb0d0d04196fc7fb0ceb7bbf6a57f1c7f0638fea0f237b1a0d9973720b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "7f5eb07aaff94b490a332eebe5fee9289bd4b14a373839c0653f7d307896edaf",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "probe int",
+          "                      BODY"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-function-1",
+      "cohort": "control",
+      "context": "function",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Fo func\n.Nm probe\n.Ft int\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "4a0ee14c48f540afd3b0b8f14676696f9bfafa6fd1fa9a7dc888b95717b5a220",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "3c5aceab84b721f408ecf77d0f8f49274642eb3c909d0644ddc9d58ce2de6176",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "89f44682dbe42eac4e8d6cd4f0b593bca663a475410dcc52165127f085f35279",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "1e99636d51f1475e62d1ba655370dda1b748bf57d41167d03d0025ebafb196de",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "33e4d5335037559ac4c47149e49c2523e44f8b2c73e51dc3f88672f8ffb5abd5",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "func(probe",
+          "          int",
+          "    );"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-head-2",
+      "cohort": "control",
+      "context": "head",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It Xo\n.Nm probe tail\n.Xc\nBODY\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "7e4d3e0529a47131e241b313aa2e814cdde28aba76ca303ee5c819ab51e9fba4",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "7161085463d24972f67938def0b6bea8fefcaa0b17121adf25c9ee4e516d188d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "217ed6997dddd69774607af0e67b61c29d12733fd082eec5aff5a4996d58caea",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "7d2407c3e52f888f89adc1b3f9b7c8d0aa76aa87a519a389353956e76e89fc1c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "3631ad56de119237f7469e707a5f77c8eabff6faabc9296dfb119a23976f50f5",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "probe tail            BODY"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-function-2",
+      "cohort": "control",
+      "context": "function",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Fo func\n.Nm probe tail\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "14736707367d9972deed62bfb5b021c97527cded014a6d3239ec1524ec57e5af",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "17cfcb1b3d23e17e5b97033169ce8abaea8ffe26c765fcaee31293c78bf319f9",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "ba24ee16e89a1c9a4f774add237bedc0d8da9362ea7d7c6372e8627e73b95dd7",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "bcc224861bdb524cce73aba04edc1bb326800efb25f5aa3f0c3944aebb52fa97",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "e8699445970e953004bd541a31eebee10f7b7ecd35ff0fe0288b5526f970f6c7",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "func(probe tail);"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-head-3",
+      "cohort": "control",
+      "context": "head",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It Xo\n.Nm probe\n.Ft \"int\\z\"\n.No NEXT\n.Xc\nBODY\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "eb3e5451a29fa40e8534973c6024727c6c0911a737e48abe89def80577aade94",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "b07bed4627bc7e449eaf1623f1e9e1e4cc4bbf98a7f98bb83028c2b62752cbc6",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "93050d27f89cbb0ee41930215cbed56ceaea67d922e87c583036d0aead5e7931",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "242ef4b5fddad0243b13348343b1869b7e49d5fd10f95acef0cc0e6e20f2122d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "b419092af7630e3604d585dd060b5d409213dabe998246e1a3b4daa75361863a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "probe int EXT",
+          "                      BODY"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "control-function-3",
+      "cohort": "control",
+      "context": "function",
+      "head": "",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Fo func\n.Nm probe\n.Ft \"int\\z\"\n.No NEXT\n.Fc\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "e0157065384ba2cc02ad53c731ed819e3ec5350af93c60116e1ade075e53275d",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "380990ba576a57e1a3dbc36314f7fc796c0f848e53427f3972c4c5e24475463c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "254d347b93cc9a13bb549168e2f329c00e248f1e3ae16c013207df5f0e3e03dd",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "f864d03744bb7ddf83e248e1c3c898a86c91f4a61cf64ab9a64456f42b7c7993",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "fd6410440b7b411abebe38f939c0906ad848b728ecaf7f850883c610e1a1a33f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "func(probe",
+          "          int EXT",
+          "    );"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-tag-empty",
+      "cohort": "head",
+      "context": "body",
+      "head": "\"\"",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It \"\"\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "5909819b24f7f95c167ffde765f4843a90ee20357cafd383329a66e2012d24e5",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "2d06292bbf45441e868db1162df535882bc5921c4655cf6083264bf21fb6d3fb",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "2c4946d46ba76746b4900048868c6f3c18ce9a2e343a5873f82512cf1bbf6717",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "81f6aeeffbef9d8a0688237a69e359980bdb2de33953917e8f54b40fe4d63d9c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "e667dab05f70ecc52caf368696f93662316c6b6b847fb243de6000cc37216a97",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "                      probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-hang-short",
+      "cohort": "head",
+      "context": "body",
+      "head": "k",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -hang -width 20n\n.It k\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "324cc24577b73b21cb48fca56f3bba77dce6707e14ec24fe524293c059b7709f",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "97d4258ff556897da195779ff11f2cc6da34547ac74f040e7b56937198d039db",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "337789d21eb860f6e47db7b6041f22137ea0398fe4b9a30945723f8132a838c3",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "b66a4e5a3f872efa5912ab2128ab16e0056d67deb502d2b6721938a11bc342d4",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "9600d066aa4eaa77663beae482d8d1554f74b702a4e9b4933628182a1b3fd5d6",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "k                     probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-inset-multi",
+      "cohort": "head",
+      "context": "body",
+      "head": "key extra",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -inset\n.It key extra\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "96246df5633ce9ac82487c34a6cda12f492f1d3e6a180d5c3f4c78c33464ab63",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "4883a4d42772bb7537506d974a9ddf7e66a7fa935a2d51452aa58a32a143ffc1",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "1a82ddd330e0f367966629c39d5aae68905680ab072c8c6ab28ac6c2a0ba9aff",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "25b330b3793383371b9f2b256dc3c4436c0674ab1bbfb7a1cbfd88b8a395523f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "3c9be2b6118300b30548ebc3b4695a49b8f8bf6aad3f5c8d57429d307146674a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key extra probe",
+          "      int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-tag-overlong",
+      "cohort": "head",
+      "context": "body",
+      "head": "longlonglonglonglonglong",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It longlonglonglonglonglong\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "a59b828b0f2e510d4f8be19d1d657e738e8c262d2d3a881561a64efbf9b03762",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "01d10f0e54d4f3fa9a789abfe706359029d5fb3c867ad84e113894c59a7e731a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "2a131e9b9f7e543814cacbc7e2467d1f1fda15ad7fbce119130384f16ad8b5ac",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "f8e07c0cc4e472d8f15efd178c3f5765451e023d3b1a46451d665535cc2a136b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "98eb80d31fc4af8063c8f31dbcd53e7404b60db3ea4013304cce1b8e4ddfcd26",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "longlonglonglonglonglong",
+          "                      probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-hang-invisible",
+      "cohort": "head",
+      "context": "body",
+      "head": "\\&",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -hang -width 20n\n.It \\&\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "5f61e86aba82b7072bdf93184b3eb69bd254818e3ba4cad66420612a3bf30515",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "2d06292bbf45441e868db1162df535882bc5921c4655cf6083264bf21fb6d3fb",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "2c4946d46ba76746b4900048868c6f3c18ce9a2e343a5873f82512cf1bbf6717",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "f28b7a965082c6275022f51c3c2e919064d74b1c1d87c07affdeadda9f1e6bed",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "8655b6ca74a223319d68b425d263ead8f735e6d05775ce51a0b0baea15b76360",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "                      probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-inset-bare-zero",
+      "cohort": "head",
+      "context": "body",
+      "head": "\\z",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -inset\n.It \\z\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "ffc78a4c34f322b10f3aa5ad2a778200f187107419edef7aab115d33e1c05bb1",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "507e3ded1b5765568b407a44ccc95bdcdbd425709b53f01340b48d840414779b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "574f272e434b5edd5d8531a1e5b8e8253911eebaf35b1627fd142b806dbc1167",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "b228a3f7bb74a9fe20e5a8d782157a5b9719e8c62aa8373d5531903869b03d40",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "c0f4984dbd808c3c312e7504c2992705cffeb8ffcc3928471ff8d3f97ce12500",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "probe",
+          "      int"
+        ],
+        "styles": [
+          [
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-tag-cached-zero",
+      "cohort": "head",
+      "context": "body",
+      "head": "\\zX",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It \\zX\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "877aa87649de9726bf913650b40b28fd7b2d457a7585faaac83ac5cd7ddc7409",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "c799c96b09739653868472c464cc7fedfedbb955d665c6da2fb07bd5097e9957",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "7f4335724db698aee87e562a68393a215f9263a32ec40657c282d49173faf0fc",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "81f6aeeffbef9d8a0688237a69e359980bdb2de33953917e8f54b40fe4d63d9c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "5d1a69dce69bce8a4e769d74803b9096c379aa7f1c773bb28085139daa24c281",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "X                     probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-hang-break",
+      "cohort": "head",
+      "context": "body",
+      "head": "key\\p",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -hang -width 20n\n.It key\\p\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "755ea0014bce209be72cc19bce9b3bec47d7a6ff4615c3503a59966432b52903",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "505460c1485484eee041e183c40ae8efda224ccb52a4f1add48ff7ca4eb2ff4a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "ebdd124300d6b8be481f9d1663f4b9dd0b6ed79abd7cdaa77542e73cfcf15d3a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "01e19aab0dbaefac6fe25c365ffe04203ed7d829bdcd978245de46f64a76c61d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "a2db259dd23f8ab8a8edf3bcac77c2172593a962f821c80e4d825c669219a4ba",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "head-inset-continuation",
+      "cohort": "head",
+      "context": "body",
+      "head": "key\\c",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -inset\n.It key\\c\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "430ea3437658aa23c2dee3e673a895789d521ba4d1e859bfbb5e27398a9e75b5",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "94705e0d801c5f2b8df75c3186a16a01a81992ed810ecee6681cacdf71a86035",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "db3b74b95df6aee26028ddcf3a6cd013a1dd390a6ab1e1562956dfd6e2a03c63",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "1dc08f21305775f9365f06dd512d9dcd81a5520b889646ce25f1a77c62db2125",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "96293ee647b22381d529825fbd646aff1b21ba2cf8c2581a24c479f84b27542c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key probe",
+          "      int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "body-tag-empty",
+      "cohort": "body",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "ff85d19986f78256d95c36d26e25f661e5367dc2e981c194d4b00000fed21610",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "42869ebeefbc9af75606f8d42ce0160e99de7af4e7ad350784fded30ee8f6d12",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "0e1a4b849ad462d7fe35560c9d3cd10a07ffa1531ddd5683fadf557f19b0f72e",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "fc000640ed52b1b59a25b5012773ae2fb22e1c4a666f32febe82d8a2e465b64c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "c342ac64c6081d99b0ae10946df84eac5d0e91c825fc617bb2220e6a5e490349",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "id": "body-hang-plain",
+      "cohort": "body",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -hang -width 20n\n.It key\n.Nm probe\nint\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "53db71b6d045ce6697ec16845fac203184901a96a158f865563142373ea9814e",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "0ecea826fc588ba576098a6c20bfa427728915c60a3f2a7548dbd2199249e9a2",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "d6ec650e99dc981d00dafcdbafcc4433293222fe8f56b2b30f560335a572fe52",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "2833ba12863a4c2d47c7c142fe690fa9d5c9305484bc4cc187ce0ebc23849f0a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "b56e921ae513f85c7c9f26a22644be104383a8ac594eac24159f3a7d31f6036c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "body-inset-argument",
+      "cohort": "body",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -inset\n.It key\n.Nm probe\n.Fa int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "d03df34236adca56dde77805f5771cd73ce9826a7d41634823321e7841d37d65",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "94705e0d801c5f2b8df75c3186a16a01a81992ed810ecee6681cacdf71a86035",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "db3b74b95df6aee26028ddcf3a6cd013a1dd390a6ab1e1562956dfd6e2a03c63",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "b671a369a79a3eafcaa121181d075d6172568a3a11c99593c2c5fdf62f0017e2",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "2a1e74be3dd7c1835a343d69a11ab4c20c6b48ffdc20927de07884b523fcff03",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key probe",
+          "      int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "body-tag-external",
+      "cohort": "body",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.Lk https://example.test LABEL\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "ec6cbb0ec23a215a2f378692e800ba641b497a01bf94ad7c6c0f7b84525347b0",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "efff7eb3212d3cc8b3da86f8bc1d64344bc9819929d7ada916123301943203d7",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "680afed47a7d1617423363fd74b736c66cda36132f8327af73b672c47d7a0a12",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "15642f48787bb6533d8b05d2129e86bd522eeb1cb978baf3f85b6cd3728d7ff1",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "3a0124135d7449a872ab38e4d152eb2b201fa4021752d5ce5f9798d0aae1f41e",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe LABEL: https://example.test"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "body-hang-manual",
+      "cohort": "body",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -hang -width 20n\n.It key\n.Nm probe\n.Xr printf 3\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "6bc5d3afafcac774a7a1525f4e3f8cd421dcca7143dccbfd3be696010bdc3d14",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "b156d45e29ee7ff82091b831aa39a088be9d396a28d6f5d02ac34cd39bc74e13",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "8aebae9ef1d28c779e5243b7ffc0c2e4141773422f133ceefd3e7dcc2e59c53e",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "4bdadfd4108a6909d7fe49fd98cf06dc9f512df029aa4b6dc3e164ab6e1c676f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "07f2b07766f5a615acd757a3b8d384ca31ff7852baf4a4daf50e506d1613bf35",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe printf(3)"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "id": "body-inset-next-name",
+      "cohort": "body",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -inset\n.It key\n.Nm probe\n.Ft int\n.Nm next\n.Ar FILE\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "641231658a131bf6c882e208e49de240df557c1937df163d7fe50d2f7237a97d",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "d5c8f6d32be3c6f2d12d057ba0712fac9f4f1615879ecab4f88b61fa65519641",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "f6cc91ca104709aa8ec79949813da79dc4d00a2ff20b7da717120cb1f4ee02b4",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "0cd991aca6fed6dcf9e9ceb8b2ee22bf5e74231fceab19f12b8797fbd9b6dd58",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "713c55e161de2ab23b347f5245b5c6d92e871cbfe1a44aad4daeabc3a94b7775",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key probe",
+          "      int",
+          "next FILE"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ],
+          [
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "body-tag-structure",
+      "cohort": "body",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.Ft int\n.Bl -item -compact\n.It\nBODY\n.El\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "37a66c5ec2fa1c9afc71f46b5ab144437b27d0e85cbae57fe33d4d320482df01",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "2df02006cc522add1d5d295a6c0cf995cb977a5decba672a1dc6db634021a895",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "dcc6c4444606a8ee7ce09d8d326c2788a3a7541590c67aa1d19b36a8362601a7",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "820e9a165a0303cffaad3f3c8f94ae47df0da77cf4b07e7ede4c812cbf9b4f8f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "00a2645d5857c73c058ea0684cf5a11f224dbedd95d98057fc5d537a4c621c5f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe int",
+          "                            BODY",
+          ""
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          []
+        ]
+      }
+    },
+    {
+      "id": "state-0-tag-filled-on",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm on\n.No PREFIX\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "b4c24a956ba437a4c509b0fae5cdc6a16c804f8037bdc90ec50212ddd533be7a",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "00f4a65034a583a35b5e2e0d84dd819e582c2fe5a5ae058d945cec97a9348fb3",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "4e1f52d1d6666712cafbc3a5a3464eb5d63cec6b21b1542666e8c50f2486b3b5",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "1f7df6cf8d9eb8977a444789fb497c37530f2322f49da5738c416cffac63b3e8",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "6f7c0b1dde87268ab485279934db098f77485c288d07d6ce7b889f99c4907801",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "PREFIX",
+          "",
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-1-hang-filled-off",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm off\n.No PREFIX\n.Bl -hang -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "e09d5d2799e532d3f5c7975fd4d8fa3b755ba3f93e9999c6a6ca7bcc991c6d30",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "00f4a65034a583a35b5e2e0d84dd819e582c2fe5a5ae058d945cec97a9348fb3",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "4e1f52d1d6666712cafbc3a5a3464eb5d63cec6b21b1542666e8c50f2486b3b5",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "c570f019e8618854fa0ee4e8071e7bb6367e44e5515744a9efb847c6ebfec566",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "e1e37a80fc9ba5818c8c356117c2390dbe95d15f051d0654ba493d1e6d5114b4",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "PREFIX",
+          "",
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-2-inset-no-fill-on",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm on\n.nf\n\n.Bl -inset\n.It key\n.Nm probe\n.Ft int\n.El\n.fi\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "ba36a95b20e72e25756a74775c9c54e89ca7e493b09bd54a1d8c2b8d56e46ed1",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "3912b999627599d896da754c6c42b7aed98be808ea8b528de02a9077ed45a2a3",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "d82528e2e44f4d4a9f0a0236b064e319b9dd1cbc67e56051da63c6bb65ea7fd8",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "026f3bbfedfa186b7b2e1f74a485515b7fc05be0cecf236e6e747d6a11cbe5b2",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "e629ed3fd8e80bcb7c435d100104f1cedcb4340a7dbc91e6f535356722ee7dc4",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "",
+          "",
+          "key ",
+          "probe",
+          "      int"
+        ],
+        "styles": [
+          [],
+          [],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-3-tag-no-fill-off",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm off\n.nf\n\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.fi\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "64eff7dc235cbbfd9b15635c81be050b7c0327f422f7242533e1051a46ef5140",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "9cf156c0f8277dc6e341ea665df666f5c109d21e87d93597f73ef1ad9cb03c83",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "b37664cd9752f88d615ac2b48b7c8b9dbf7e077b2c8cf20846a0753b58fd095c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "5816e8e2b2e00e3ae67554b2461152a36e857214e95c6e4c101fbf29a709b097",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "55513e4e7dd27a2d7ce60be552f218d4914a2c01bd7c42eb3efbf0eb4b52230a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "",
+          "",
+          "key",
+          "                      probe",
+          "                            int"
+        ],
+        "styles": [
+          [],
+          [],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-4-hang-filled-on",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm on\n.ft I\n.Bl -hang -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "bfca03954a4b80d918506b8318f390e4d09290c7f348ce081cb223e1c684fb26",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "42e43b4330e3f96f2719eed9957dbf2ba7135ff705b494354db668b0cd458734",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "fccf9cea529a20c55253c2f6db97474152ffaf2e025844a5e12ca9d02e435c80",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "727957836c1ef77fc110672df7c4012a6bb58d8bd0b4f596ef6e4e7aecae7792",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "5eb69efc2f6a4959c7a6f01ebdfc5117088c39bbb84e73f856a7dc3456e5fcce",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-5-inset-no-fill-off",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm off\n.nf\n.ft B\n.Bl -inset\n.It key\n.Nm probe\n.Ft int\n.El\n.fi\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "cc92eca2373a630210541b10488bc3f5fc354b78cdd0396d2cffcd8a12a343d4",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "5d05db475f56c7f3eeb8c6d0ad7cbe72e733a28ce0266d93af92376a19f789db",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "c0138482dd89782655f51e79c331b435577708c692227e9c9e4d2dcb6d480961",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "15023c985acbbc5e1109acddd4190af26e54baa90f25354a2ce92c462dbbda7a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "436ca3c3152bfea522a8828c1daa9d86cffd797764b5b3dacabfbb2fa027ce52",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "",
+          "key ",
+          "probe",
+          "      int"
+        ],
+        "styles": [
+          [],
+          [
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-6-tag-filled-off",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm off\n.No \"\"\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "c280d38513f1a21fea2f5b232c0ab926e9da06f1ca8062cbf7b09174309fdf06",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "92ca1d398dd4fd3c5fb6b4f480a3a427da81b5183627e24035c3e2ee26de9edb",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "49d06520f1e5506870b73fb98949fd5444a810f96a729eebbe89da673b8bfdb6",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "ed1cac3a3b31557be06c20aa29585281299da09167b82c1e958e0a30620e7e8f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "204ed983bf50eff084232346ee831c4a3fcdbf388e2a4315ff5a20f7ec52aabd",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "",
+          "key                   probe int"
+        ],
+        "styles": [
+          [],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-7-hang-no-fill-on",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm on\n.nf\n.No \\&\n.Bl -hang -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.fi\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "b7b02941aa2b8512a7efc04ae00292d64751e7c1196470853137f974db706ffb",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "9cf156c0f8277dc6e341ea665df666f5c109d21e87d93597f73ef1ad9cb03c83",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "b37664cd9752f88d615ac2b48b7c8b9dbf7e077b2c8cf20846a0753b58fd095c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "bbb1a2d84728367aa7bc553057ae1891d704134508397fd8b2fc2e6290095a00",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "fc0906c1794920c8945748c82cac532a27929c96ae9984b6195508f6c0de0e3d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "",
+          "",
+          "key",
+          "                      probe",
+          "                            int"
+        ],
+        "styles": [
+          [],
+          [],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-8-inset-filled-on",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm on\n.No \\zX\n.Bl -inset\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "2d844aaadcfbd59e2bf825fd2388282612566079e566857ec211de897f004475",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "decd3a67158e20206a9dc834db0591219e46b5da2422ed71769c08d089061292",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "c0132f88771321c4f86259a2b70d9a0c539882a0a9636091add9f1c225e01f85",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "19f2aa0e35a6c75b760a6e394b97c9c2851f3414d7c4256740a5b74438aca9aa",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "95c77921b679e46683fba253fedd99b275b3234a38fba312ec5b55679a48ad1e",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "X",
+          "",
+          "key probe",
+          "      int"
+        ],
+        "styles": [
+          [
+            0
+          ],
+          [],
+          [
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-9-tag-no-fill-on",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm on\n.nf\n.No X\\c\n.Bl -tag -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.fi\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "6193b1ab2546b3904d3476ae7029eabc7c11c1ff402a20bb5c68102f63b90251",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "2a599879d7e2a5408f7cdc6ce068e1a5e489a892522b9d8da6a569f4f7272d28",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "f0f4fdb3c1151a88f6cdf3c51c459ec52e3b8d49e75125ebe581c063c981bfa4",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "8ee243b9a77171c6272c9454585efdb5b7d6d1a28509d7e8ae03289e1519cb90",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "293a603a5c059f8ed9529b54416b42b1bfdf301a834e7c1443088fe286fda91f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "X",
+          "",
+          "key",
+          "                      probe",
+          "                            int"
+        ],
+        "styles": [
+          [
+            0
+          ],
+          [],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-10-hang-filled-off",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm off\n.No X\\p\n.Bl -hang -width 20n\n.It key\n.Nm probe\n.Ft int\n.El\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "2071d59ec5b3dda2961eeb09b8e5feba12c572b4bf80343f9be78b766f297a08",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "c4167fcc338375c204777b7ac881a47b703257b5226864cf865e5a029ecd06ae",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "bd70bfa236e543cda8a2d26627e817de6cecd0b2f345d2642df2b517da2d49bc",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "ccbf4fdd3a2e541423602a0089807f529b25906e0abd1826babff22d886e5703",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "7d01be57e706285e468776452da17ffe32d5a1ff90ea734fd06ce52b4ca94991",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "X",
+          "",
+          "key                   probe int"
+        ],
+        "styles": [
+          [
+            0
+          ],
+          [],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "state-11-inset-no-fill-off",
+      "cohort": "state",
+      "context": "body",
+      "head": "key",
+      "source": ".Dd November 5, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh SYNOPSIS\n.Sm off\n.nf\n.No \\z\n.Bl -inset\n.It key\n.Nm probe\n.Ft int\n.El\n.fi\n.Sh NEXT\nAFTER.\n",
+      "oracle": {
+        "source_sha256": "d491241098c570c5ec9aa614399df728b644ac1c03c6c4ab5f4ea62058eb6596",
+        "profiles": {
+          "ascii": {
+            "status": 0,
+            "stdout_sha256": "cddc326eca2d2d2f053ad6ec3eda9993bf27dd489e253e08f25fae7ddc14694c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "utf8": {
+            "status": 0,
+            "stdout_sha256": "d6726d7eedbca080f5260d3516bf56ca5965e2f2c37ccb511f94bc6902d4c819",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "html": {
+            "status": 0,
+            "stdout_sha256": "52b39cba518a47c149a4ccb9b76177465a46187a6988671503db2c657ff10b0d",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "tree": {
+            "status": 0,
+            "stdout_sha256": "3a5a8c3c5a26730d72e8df28979988446d91d558d5270ddaa9420675d1fe3df2",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          },
+          "lint": {
+            "status": 0,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "diagnostics": ""
+          }
+        },
+        "rows": [
+          "",
+          "ey ",
+          "probe",
+          "      int"
+        ],
+        "styles": [
+          [],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            2,
+            2
+          ]
+        ]
+      }
+    }
+  ]
+}
