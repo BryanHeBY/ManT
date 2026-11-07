@@ -382,3 +382,5 @@ fn wrapped_positions(buffer: &ratatui::buffer::Buffer, value: &str) -> Vec<Vec<(
 
 #[path = "annotation_ownership/cells.rs"]
 mod annotation_ownership;
+#[path = "annotation_ownership/publication.rs"]
+mod annotation_publication;

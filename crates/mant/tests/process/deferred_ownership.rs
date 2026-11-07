@@ -3,6 +3,8 @@ use super::process_support::run_text_input;
 use serde_json::Value;
 #[path = "deferred_ownership/annotations.rs"]
 mod annotations;
+#[path = "deferred_ownership/publication.rs"]
+mod publication;
 #[path = "deferred_ownership/styles.rs"]
 mod styles;
 

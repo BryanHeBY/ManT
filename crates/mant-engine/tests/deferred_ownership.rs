@@ -13,6 +13,8 @@ mod queries;
 
 #[path = "deferred_ownership/annotations.rs"]
 mod annotation_ownership;
+#[path = "deferred_ownership/publication.rs"]
+mod publication;
 
 #[test]
 fn original_members_survive_json_two_markdown_readers_and_queries() {
