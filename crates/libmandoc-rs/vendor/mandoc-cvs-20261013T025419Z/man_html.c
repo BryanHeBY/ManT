@@ -227,8 +227,7 @@ print_man_node(MAN_ARGS)
 		t->refcnt++;
 		if (n->tok < ROFF_MAX) {
 			roff_html_pre(h, n);
-			t->refcnt--;
-			print_stagq(h, t);
+			html_unwind_node(h, t);
 			return;
 		}
 		assert(n->tok >= MAN_TH && n->tok < MAN_MAX);
@@ -242,9 +241,9 @@ print_man_node(MAN_ARGS)
 		print_man_nodelist(man, n->child, h);
 
 	/* This will automatically close out any font scope. */
-	t->refcnt--;
 	if (n->type == ROFFT_BLOCK &&
 	    (n->tok == MAN_IP || n->tok == MAN_TP || n->tok == MAN_TQ)) {
+		html_tag_unref(t);
 		t = h->tag;
 		while (t->tag != TAG_DL && t->tag != TAG_UL)
 			t = t->next;
@@ -252,13 +251,12 @@ print_man_node(MAN_ARGS)
 		 * Close the list if no further item of the same type
 		 * follows; otherwise, close the item only.
 		 */
-		if (list_continues(n, roff_node_next(n)) == '\0') {
+		if (list_continues(n, roff_node_next(n)) == '\0')
 			print_tagq(h, t);
-			t = NULL;
-		}
-	}
-	if (t != NULL)
-		print_stagq(h, t);
+		else
+			print_stagq(h, t);
+	} else
+		html_unwind_node(h, t);
 }
 
 static void

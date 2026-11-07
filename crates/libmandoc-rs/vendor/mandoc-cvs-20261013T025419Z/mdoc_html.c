@@ -414,8 +414,7 @@ print_mdoc_node(MDOC_ARGS)
 		t->refcnt++;
 		if (n->tok < ROFF_MAX) {
 			roff_html_pre(h, n);
-			t->refcnt--;
-			print_stagq(h, t);
+			html_unwind_node(h, t);
 			return;
 		}
 		assert(n->tok >= MDOC_Dd && n->tok < MDOC_MAX);
@@ -434,8 +433,7 @@ print_mdoc_node(MDOC_ARGS)
 	if (child && n->child != NULL)
 		print_mdoc_nodelist(meta, n->child, h);
 
-	t->refcnt--;
-	print_stagq(h, t);
+	html_unwind_node(h, t);
 
 	switch (n->type) {
 	case ROFFT_TEXT:

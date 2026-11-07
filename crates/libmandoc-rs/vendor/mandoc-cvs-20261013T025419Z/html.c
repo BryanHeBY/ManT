@@ -133,6 +133,7 @@ static	void	 print_endword(struct html *);
 static	void	 print_indent(struct html *);
 static	void	 print_word(struct html *, const char *);
 
+static	void	 detach_tag(struct tag **);
 static	void	 print_ctag(struct html *, struct tag *);
 static	int	 print_escape(struct html *, char);
 static	int	 print_encode(struct html *, const char *, const char *, int);
@@ -323,10 +324,10 @@ html_close_paragraph(struct html *h)
 enum roff_tok
 html_fillmode(struct html *h, enum roff_tok want)
 {
-	struct tag	*t;
-	enum roff_tok	 had;
+	struct tag	**slot, *t;
+	enum roff_tok	  had;
 
-	for (t = h->tag; t != NULL; t = t->next)
+	for (slot = &h->tag; (t = *slot) != NULL; slot = &t->next)
 		if (t->tag == TAG_PRE)
 			break;
 
@@ -335,7 +336,15 @@ html_fillmode(struct html *h, enum roff_tok want)
 	if (want != had) {
 		switch (want) {
 		case ROFF_fi:
-			print_tagq(h, t);
+			/*
+			 * A closed PRE can stand below new flow elements,
+			 * for example a list before its first filled head.
+			 * Retire its fill state without closing those tags.
+			 */
+			if (t->state == TAG_CLOSED)
+				detach_tag(slot);
+			else
+				print_tagq(h, t);
 			break;
 		case ROFF_nf:
 			html_close_paragraph(h);
@@ -649,7 +658,7 @@ print_otag(struct html *h, enum htmltag tag, const char *fmt, ...)
 
 	if ((tflags & HTML_INPHRASE) == 0) {
 		for (t = h->tag; t != NULL; t = t->next) {
-			if (t->closed)
+			if (t->state != TAG_OPEN)
 				continue;
 			assert((htmltags[t->tag].flags & HTML_TOPHRASE) == 0);
 			break;
@@ -671,7 +680,7 @@ print_otag(struct html *h, enum htmltag tag, const char *fmt, ...)
 		t->tag = tag;
 		t->next = h->tag;
 		t->refcnt = 0;
-		t->closed = 0;
+		t->state = TAG_OPEN;
 		h->tag = t;
 	} else
 		t = NULL;
@@ -850,8 +859,8 @@ print_ctag(struct html *h, struct tag *tag)
 {
 	int	 tflags;
 
-	if (tag->closed == 0) {
-		tag->closed = 1;
+	if (tag->state == TAG_OPEN) {
+		tag->state = TAG_CLOSED;
 		if (tag == h->metaf)
 			h->metaf = NULL;
 		if (tag == h->tblt)
@@ -873,9 +882,47 @@ print_ctag(struct html *h, struct tag *tag)
 			print_endline(h);
 	}
 	if (tag->refcnt == 0) {
+		/*
+		 * Closed tags can still be held by a node. In particular,
+		 * an attached closed PRE preserves the fill state during
+		 * a nested block pre-handler. When we free its enclosing
+		 * tag, detach the held tags skipped by the stack pop.
+		 */
+		while (h->tag != tag)
+			detach_tag(&h->tag);
 		h->tag = tag->next;
 		free(tag);
 	}
+}
+
+static void
+detach_tag(struct tag **slot)
+{
+	struct tag *tag = *slot;
+
+	assert(tag->state == TAG_CLOSED);
+	*slot = tag->next;
+	tag->next = NULL;
+	tag->state = TAG_DETACHED;
+	if (tag->refcnt == 0)
+		free(tag);
+}
+
+void
+html_tag_unref(struct tag *tag)
+{
+	assert(tag->refcnt > 0);
+	if (--tag->refcnt == 0 && tag->state == TAG_DETACHED)
+		free(tag);
+}
+
+void
+html_unwind_node(struct html *h, struct tag *saved)
+{
+	/* A detached boundary no longer delimits the active stack. */
+	if (saved->state != TAG_DETACHED)
+		print_stagq(h, saved);
+	html_tag_unref(saved);
 }
 
 void

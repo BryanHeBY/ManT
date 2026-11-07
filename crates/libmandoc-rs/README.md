@@ -377,6 +377,11 @@ accessible document structure. These native reference bytes are distinct from
 source, include, output-budget, and session-isolation contracts are unchanged
 by the baseline selection. `LIBMANDOC_VERSION` reports `cvs-20261013T025419Z`.
 
+The vendored HTML renderer releases saved node boundaries after a paragraph
+or fill request closes them. Content that follows a closed link stays inside
+its original section. The separately built pristine CVS audit reference
+retains its original behavior.
+
 ```rust,no_run
 # #[cfg(feature = "render")]
 # {
@@ -531,9 +536,10 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree is the pinned pristine source subset plus the
-32 ordered patches in `patches/series`. The stack follows build prerequisites,
-parser safety, embedding, execution evidence, compatibility, rendering, and
-allocation performance. Patch numbers identify this stack, not Cargo features.
+33 ordered patches in `patches/series`. The stack follows build prerequisites,
+parser safety, embedding, execution evidence, compatibility, rendering,
+allocation performance, and HTML scope lifetime. Patch numbers identify the
+patch stack. Cargo features select compiled capabilities.
 See [the patch guide](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/patches/README.md) for dependencies and the previous
 number mapping. `Historical-Replaces` headers refer to older superseded stacks;
 they never refer to a patch number in the current series.
@@ -674,6 +680,11 @@ they never refer to a patch number in the current series.
   each translated source and logarithmic reserves for long translated words.
   This bounds storage growth, not translation-table lookup or whole-parser
   complexity. Inactive translation still takes the upstream duplicate path.
+
+- `0033-release-closed-html-scopes.patch` distinguishes saved tags that have
+  detached from the HTML stack from those still delimiting a scope. Retire
+  the fill state of a closed literal block without closing a list that opened
+  after it.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

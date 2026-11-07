@@ -75,10 +75,16 @@ enum	htmltag {
 	TAG_MAX
 };
 
+enum tag_state {
+	TAG_OPEN,
+	TAG_CLOSED,
+	TAG_DETACHED
+};
+
 struct	tag {
 	struct tag	 *next;
 	int		  refcnt;
-	int		  closed;
+	enum tag_state	  state;
 	enum htmltag	  tag;
 };
 
@@ -139,6 +145,8 @@ void		  print_eqn(struct html *, const struct eqn_box *);
 void		  print_endline(struct html *);
 
 void		  html_close_paragraph(struct html *);
+void		  html_tag_unref(struct tag *);
+void		  html_unwind_node(struct html *, struct tag *);
 enum roff_tok	  html_fillmode(struct html *, enum roff_tok);
 char		 *html_make_id(const struct roff_node *, int);
 int		  html_setfont(struct html *, enum mandoc_esc);

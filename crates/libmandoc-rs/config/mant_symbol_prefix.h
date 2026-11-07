@@ -28,6 +28,8 @@
 #define html_mdoc mant_vendored_html_mdoc
 #define html_reset mant_vendored_html_reset
 #define html_setfont mant_vendored_html_setfont
+#define html_tag_unref mant_vendored_html_tag_unref
+#define html_unwind_node mant_vendored_html_unwind_node
 #define locale_alloc mant_vendored_locale_alloc
 #define man_breakscope mant_vendored_man_breakscope
 #define man_descope mant_vendored_man_descope

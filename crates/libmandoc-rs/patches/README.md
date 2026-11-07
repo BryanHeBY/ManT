@@ -41,6 +41,11 @@ It follows `0030` for the helper and leaves translation rules and malformed
 escapes unchanged. Maintenance-only counters retire at each local word return.
 The normal build retains no capacity state outside that call.
 
+Patch `0033` tracks when closing a paragraph or literal block detaches a tag
+that a man or mdoc node still references. Returning from that node releases
+the saved tag without closing its surviving ancestors. A fill transition can
+retire an attached closed `PRE` while leaving later list tags open.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

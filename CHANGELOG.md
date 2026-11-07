@@ -208,6 +208,10 @@ that crate was not published for that change.
 
 ### libmandoc-rs
 
+- Keep native HTML sections and link boundaries intact when a paragraph
+  or fill request closes a tag still held by an enclosing node. Release
+  the saved tag on return without unwinding the active ancestors.
+
 - Reserve cumulative owned-transfer bytes before copying enclosure strings,
   source spellings, tags, metadata, diagnostics and table storage. Charge each
   actual owned copy while retaining shared-layout and separate equation limits;
