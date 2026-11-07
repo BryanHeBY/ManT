@@ -214,6 +214,9 @@ fn execute_block_control(
                 // an empty term_newln's TAB reset. The owner drain below
                 // cannot replace that actual request (term.c:475-481).
                 state.pre_break_request_in_source_mode(node.flags.no_fill);
+            } else {
+                // man_term.c::pre_literal calls term_newln directly.
+                state.finish_native_line_in_source_mode(node.flags.no_fill);
             }
             // roff_term_pre_br and man pre_literal end the current line and
             // switch HP from its temporary first-line origin to its permanent

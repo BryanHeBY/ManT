@@ -225,16 +225,11 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
                 value: format!("{name}({section})"),
             }],
         });
-        // Alternating-font macros can split the label and suffix across
-        // libmandoc nodes. The roff decoder therefore cannot consume a legacy
-        // Sphinx empty destination in this one case; once the styled pair has
-        // established an unambiguous manual reference, remove the same exact
-        // empty suffix here.
-        let remainder = remainder.strip_prefix(" <>").unwrap_or(&remainder);
+        // A styled reference proves the name and section only. Publication
+        // may have consumed an independently witnessed Sphinx marker; any
+        // suffix still present here is authored visible text.
         if !remainder.is_empty() {
-            promoted.push(Inline::Text {
-                value: remainder.to_owned(),
-            });
+            promoted.push(Inline::Text { value: remainder });
         }
     }
     *nodes = promoted;
@@ -567,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn removes_empty_sphinx_destination_after_styled_reference() {
+    fn preserves_literal_suffix_after_styled_reference() {
         let mut nodes = vec![
             Inline::Strong {
                 children: vec![Inline::Text {
@@ -586,7 +581,7 @@ mod tests {
             Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
                 if name == "btrfs" && manual_section == "5"
         ));
-        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+        assert!(matches!(&nodes[1], Inline::Text { value } if value == " <>, next"));
     }
 
     #[test]

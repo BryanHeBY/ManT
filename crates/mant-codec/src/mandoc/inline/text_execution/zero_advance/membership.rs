@@ -3,10 +3,6 @@ use super::{Arc, Decoration, ZeroAdvanceState};
 use crate::mandoc::inline::ownership::{Annotation, OutputMembership};
 
 impl ZeroAdvanceState {
-    pub(in crate::mandoc) fn has_annotation_scope(&self) -> bool {
-        !self.output_owners.is_empty()
-    }
-
     pub(in crate::mandoc) fn new_annotation(
         &mut self,
         target: mant_ir::LinkTarget,
@@ -31,6 +27,24 @@ impl ZeroAdvanceState {
             scope.1 == self.semantic_root
                 && self.active_links.iter().any(|(owner, _)| *owner == scope.0)
         })
+    }
+
+    pub(in crate::mandoc) fn note_unrepresentable_annotation_member(
+        &self,
+        source: Option<mant_ir::SourceSpan>,
+    ) {
+        let Some(annotations) = &self.annotations else {
+            return;
+        };
+        for (epoch, target) in &self.active_links {
+            if self
+                .output_owners
+                .iter()
+                .any(|scope| scope.0 == *epoch && scope.1 == self.semantic_root)
+            {
+                annotations.note_unrepresentable_member(target, source);
+            }
+        }
     }
 
     pub(in crate::mandoc) fn close_annotation_root(&mut self) -> Vec<String> {

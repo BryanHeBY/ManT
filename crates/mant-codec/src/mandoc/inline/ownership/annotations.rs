@@ -6,7 +6,11 @@ use std::{
     rc::Rc,
 };
 
-use mant_ir::{Block, Inline, LinkTarget, Section};
+use mant_ir::{Block, Inline, LinkTarget, Section, SourceSpan};
+
+use crate::mandoc::inline::{
+    SOURCE_CANDIDATE_PREFIX, finish_source_candidates, protect_source_label_candidates,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(in crate::mandoc) struct AnnotationKey(u32);
@@ -70,9 +74,10 @@ pub(in crate::mandoc) struct AnnotationPool(Rc<RefCell<Destinations>>);
 struct Destinations {
     deferred: bool,
     next: usize,
+    source_candidates: usize,
     targets: HashMap<String, Destination>,
     published: HashSet<String>,
-    reduced: HashSet<String>,
+    reduced: HashMap<AnnotationKey, Option<SourceSpan>>,
 }
 
 pub(in crate::mandoc) struct AnnotationTransaction {
@@ -166,72 +171,91 @@ impl AnnotationPool {
     }
 
     pub(in crate::mandoc) fn finish_local(&self, nodes: &mut Vec<Inline>) {
-        if !self.0.borrow().deferred {
-            self.resolve(nodes);
+        let destinations = self.0.borrow();
+        let deferred = destinations.deferred;
+        let has_source_candidates = destinations.source_candidates > 0;
+        drop(destinations);
+        if !deferred {
+            self.finish_inline_root(nodes, has_source_candidates);
         }
     }
 
-    pub(in crate::mandoc) fn finish(&self, blocks: &mut [Block], sections: &mut [Section]) {
-        if self.0.borrow().targets.is_empty() {
+    pub(in crate::mandoc) fn register_source_candidate(&self) -> LinkTarget {
+        let mut destinations = self.0.borrow_mut();
+        let id = destinations.source_candidates;
+        destinations.source_candidates += 1;
+        LinkTarget::External {
+            uri: format!("{SOURCE_CANDIDATE_PREFIX}{id}"),
+        }
+    }
+
+    pub(in crate::mandoc) fn note_unrepresentable_member(
+        &self,
+        target: &LinkTarget,
+        source: Option<SourceSpan>,
+    ) {
+        let LinkTarget::External { uri } = target else {
+            return;
+        };
+        let mut destinations = self.0.borrow_mut();
+        if let Some(key) = destinations
+            .targets
+            .get(uri)
+            .map(|destination| destination.key)
+        {
+            let first = destinations.reduced.entry(key).or_insert(None);
+            *first = first.or(source);
+        }
+    }
+
+    pub(in crate::mandoc) fn finish(
+        &self,
+        blocks: &mut [Block],
+        sections: &mut [Section],
+        evidence: &mut crate::definitions::NativeHeadEvidence,
+    ) {
+        let has_source_candidates = self.0.borrow().source_candidates > 0;
+        if self.0.borrow().targets.is_empty() && !has_source_candidates {
             return;
         }
-        self.blocks(blocks);
-        for section in sections {
-            self.resolve(&mut section.heading.content);
-            self.blocks(&mut section.blocks);
-            self.finish(&mut [], &mut section.children);
+        evidence.publish_annotations(blocks, sections, |nodes| {
+            self.finish_inline_root(nodes, has_source_candidates)
+        });
+    }
+
+    fn finish_inline_root(&self, nodes: &mut Vec<Inline>, has_source_candidates: bool) -> bool {
+        let changed = self.resolve(nodes, has_source_candidates);
+        if has_source_candidates {
+            finish_source_candidates(nodes) || changed
+        } else {
+            changed
         }
     }
 
-    fn blocks(&self, blocks: &mut [Block]) {
-        for block in blocks {
-            match block {
-                Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                    self.resolve(children);
-                }
-                Block::List { items, .. } => {
-                    for item in items {
-                        self.blocks(&mut item.blocks);
-                    }
-                }
-                Block::DefinitionList { items, .. } => {
-                    for item in items {
-                        for term in &mut item.terms {
-                            self.resolve(&mut term.content);
-                        }
-                        self.blocks(&mut item.description);
-                    }
-                }
-                Block::Table { rows, .. } => {
-                    for row in rows {
-                        for cell in &mut row.cells {
-                            self.blocks(&mut cell.blocks);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn resolve(&self, nodes: &mut Vec<Inline>) {
+    fn resolve(&self, nodes: &mut Vec<Inline>, has_source_candidates: bool) -> bool {
         if !has_annotation(nodes) {
-            return;
+            return false;
         }
         let mut nonempty = HashSet::new();
         collect_nonempty(nodes, &mut nonempty);
         prune_provisional_identities(nodes, &nonempty);
         coalesce(nodes);
+        if has_source_candidates {
+            protect_source_label_candidates(nodes);
+        }
         self.publish(nodes, false, &nonempty);
+        true
     }
 
     pub(in crate::mandoc) fn take_diagnostics(&self) -> Vec<mant_ir::Diagnostic> {
-        self.0.borrow_mut().reduced.drain().map(|_| mant_ir::Diagnostic {
+        let mut reduced: Vec<_> = self.0.borrow_mut().reduced.drain().collect();
+        reduced.sort_unstable_by_key(|(key, _)| key.0);
+        reduced.into_iter().map(|(_, source)| mant_ir::Diagnostic {
             level: mant_ir::DiagnosticLevel::Warning,
             impact: mant_ir::DiagnosticImpact::SemanticCoverage,
             code: Some("manual.annotation-coverage".into()),
-            message: "a source annotation crossed an independent reference or content root; its initial identity and all accepted text were retained".into(),
-            source: None,
+            message: "a source annotation could not include all its accepted members in one owner; its initial identity and all accepted content were retained".into(),
+            source,
         }).collect()
     }
 
@@ -272,8 +296,9 @@ impl AnnotationPool {
                 let mut tail = cut.map_or_else(Vec::new, |at| children.split_off(at));
                 self.publish(children, true, nonempty);
                 let mut destinations = self.0.borrow_mut();
+                let key = destinations.targets.get(uri).expect("live annotation").key;
                 if foreign.is_some() {
-                    destinations.reduced.insert(uri.clone());
+                    destinations.reduced.entry(key).or_insert(None);
                 }
                 if destinations.published.insert(uri.clone()) {
                     let target = destinations
@@ -294,7 +319,7 @@ impl AnnotationPool {
                     });
                 } else {
                     if has_content {
-                        destinations.reduced.insert(uri.clone());
+                        destinations.reduced.entry(key).or_insert(None);
                     }
                     output.append(children);
                 }

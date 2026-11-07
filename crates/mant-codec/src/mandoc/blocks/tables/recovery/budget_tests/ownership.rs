@@ -93,7 +93,11 @@ fn rejected_candidates_cannot_reassign_committed_members_or_later_receivers() {
                     usize::try_from(count).unwrap()
                 );
             }
-            context.annotations.finish(&mut blocks, &mut sections);
+            context.annotations.finish(
+                &mut blocks,
+                &mut sections,
+                &mut context.native_heads.borrow_mut(),
+            );
             let mut output = Output::default();
             for block in &blocks {
                 output.visit_block(block);

@@ -715,7 +715,7 @@ ManT retains explicit manual-reference semantics and recognizes two conservative
 | Traditional styled `name` immediately followed by `(section)`, such as `.BR printf (3)` | Typed link when the font and punctuation structure is unambiguous |
 | Legacy Sphinx `name(section) \%<>` | Typed link with the empty destination marker removed after validation |
 
-The legacy Sphinx rule matches formatter evidence rather than rendered prose. It applies to discovered manuals and direct roff `--input` alike; it does not depend on a filename extension, MANPATH location, or a surrounding `SEE ALSO` section. Recognition is limited to filled, non-code text that is not already inside an external link. Invalid candidates keep their visible `<>` marker instead of silently losing source text.
+The legacy Sphinx rule matches formatter evidence rather than rendered prose. It applies to discovered manuals and direct roff `--input` alike; it does not depend on a filename extension, MANPATH location, or a surrounding `SEE ALSO` section. Recognition is limited to filled, non-code text outside an authored link. An ordinary literal `<>` suffix remains visible, including after a traditional styled manual reference.
 
 For this compatibility form, a manual name must contain 1–256 bytes of ASCII letters, digits, `.`, `_`, `+`, `:`, or `-`. A section must be a single `l` or `n`, or begin with `1` through `9` and continue with ASCII letters or digits, with a maximum length of 16 bytes. Path-like and email-like prefixes are rejected. These rules retain names such as `g++(1)` and `systemd.slice(5)` while rejecting ambiguous text such as `group(qgroup)`, `function(0)`, `/tmp/tool(1)`, and `user@tool(1)`.
 
@@ -1182,11 +1182,18 @@ remain inside. Internal layout motion does not trim authored label content.
 For man `UR` and `MT`, a real paragraph, table or fill-mode boundary closes
 the initial label root. Later text stays outside that reference, including
 text released only by its generated closing punctuation. A conditional break
-or unchanged fill-mode request does not create a new label root. When nested
-independent links or distinct content owners make a complete source label
+or unchanged fill-mode request does not create a new label root. An executed
+hard break can remain inside that root. Leading no-fill spacing stays outside
+the literal until a physical line belongs to it. When nested independent links,
+distinct content owners or a display formula make a complete source label
 unrepresentable, ManT retains its initial identity and all accepted text and
 reports `manual.annotation-coverage` as `SemanticCoverage`. It does not report
 content loss, invent another occurrence, or make an invalid target launchable.
+
+Native declaration roles, operands, groups and hanging owners follow the
+same verified source owner through link publication. A linked declaration
+keeps its name bindings and shared description when the native evidence
+remains valid.
 
 Decoded text is never interpreted a second time as roff syntax. In particular, literal font-escape spellings authored with `\e` or `\[rs]` remain visible even when their letters resemble the currently selected font.
 

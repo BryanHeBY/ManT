@@ -110,7 +110,7 @@ fn assemble(blocks: Vec<Block>, output: &mut Vec<Block>) {
             }
             Block::Preformatted { .. } => {
                 if let Some(previous) = &mut owner {
-                    append_literal(previous, block, &mut gaps);
+                    append_literal(previous, block, &mut gaps, output);
                 } else {
                     // A leading gap can precede any accepted literal content;
                     // retain it outside the block instead of inventing a row.
@@ -178,7 +178,12 @@ impl AssembledLiteral {
     }
 }
 
-fn append_literal(previous: &mut AssembledLiteral, incoming: Block, gaps: &mut Vec<Block>) {
+fn append_literal(
+    previous: &mut AssembledLiteral,
+    mut incoming: Block,
+    gaps: &mut Vec<Block>,
+    output: &mut Vec<Block>,
+) {
     let Block::Preformatted {
         children,
         inline_layout,
@@ -190,21 +195,30 @@ fn append_literal(previous: &mut AssembledLiteral, incoming: Block, gaps: &mut V
         unreachable!("literal assembly only appends to literal owners")
     };
     let Block::Preformatted {
-        children: incoming,
+        children: incoming_children,
         inline_layout: incoming_hints,
         layout: incoming_layout,
         language: incoming_language,
         ..
-    } = incoming
+    } = &mut incoming
     else {
         unreachable!("literal assembly only accepts literal fragments")
     };
-    debug_assert_eq!(*language, incoming_language);
-    let has_after = mant_ir::geometry::has_literal_rows(&incoming);
-    if !has_after {
+    debug_assert_eq!(language, incoming_language);
+    if !mant_ir::geometry::has_literal_rows(incoming_children) {
         // Targets do not occupy a content row or consume pending spacing.
         // Guarded above, this fragment owns no independent layout metadata.
-        children.extend(incoming);
+        children.append(incoming_children);
+        return;
+    }
+    if !previous.has_rows {
+        // The earlier fragment contributed only destinations. Preserve
+        // them without making it the source of the first physical row or
+        // folding preceding executed vertical space into that row.
+        output.append(gaps);
+        children.append(incoming_children);
+        *incoming_children = std::mem::take(children);
+        *previous = AssembledLiteral::new(incoming);
         return;
     }
     let mut gap = mant_ir::geometry::GapPlan::default();
@@ -212,32 +226,23 @@ fn append_literal(previous: &mut AssembledLiteral, incoming: Block, gaps: &mut V
         gap.append_resolved(mant_ir::geometry::block_gap(&block));
     }
     gap.append_resolved(incoming_layout.spacing_before_lines);
-    let incoming_rows = mant_ir::logical_row_count(&incoming);
-    let gap_rows = usize::from(gap.rows(0));
-    let separator = if previous.has_rows && has_after {
-        children.extend(std::iter::repeat_n(Inline::line_break(), gap_rows + 1));
-        gap_rows + 1
-    } else if gap_rows > 0 {
-        children.extend(std::iter::repeat_n(Inline::line_break(), gap_rows));
-        gap_rows
-    } else {
-        0
-    };
+    let incoming_rows = mant_ir::logical_row_count(incoming_children);
+    let separator = usize::from(gap.rows(0)) + 1;
+    children.extend(std::iter::repeat_n(Inline::line_break(), separator));
     let row_offset = previous.rows.saturating_add(separator).saturating_sub(1);
     rebase_hints(
         inline_layout,
-        incoming_hints,
-        &incoming,
+        std::mem::take(incoming_hints),
+        incoming_children,
         row_offset,
         *layout,
-        incoming_layout,
+        *incoming_layout,
     );
-    children.extend(incoming);
+    children.append(incoming_children);
     previous.rows = previous
         .rows
         .saturating_add(separator)
         .saturating_add(incoming_rows.saturating_sub(1));
-    previous.has_rows |= has_after || separator > 0;
 }
 
 fn rebase_hints(

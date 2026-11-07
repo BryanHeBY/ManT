@@ -5,6 +5,11 @@ use std::rc::Rc;
 
 use mant_ir::{DefinitionItem, Inline, SourceSpan};
 
+#[cfg(feature = "roff")]
+mod publication;
+#[cfg(feature = "roff")]
+pub(super) use publication::retain_unchanged_operands;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeHeadRole {
     Option,
@@ -176,22 +181,43 @@ pub(super) fn head_matches(actual: &[impl AsRef<[Inline]>], expected: &[Vec<Inli
         && actual
             .iter()
             .zip(expected)
-            .all(|(a, e)| inline_matches(a.as_ref(), e))
+            .all(|(a, e)| inline_matches(a.as_ref(), e, false))
 }
 
-fn inline_matches(actual: &[Inline], expected: &[Inline]) -> bool {
+#[cfg(feature = "roff")]
+pub(super) fn publication_matches(
+    actual: &[impl AsRef<[Inline]>],
+    expected: &[Vec<Inline>],
+) -> bool {
+    actual.len() == expected.len()
+        && actual
+            .iter()
+            .zip(expected)
+            .all(|(a, e)| inline_matches(a.as_ref(), e, true))
+}
+
+fn retained_in_proof(node: &Inline, retain_owner: bool) -> bool {
+    match node {
+        Inline::Anchor { id, .. } => {
+            retain_owner && super::groups::is_internal_definition_owner_marker(id.as_str())
+        }
+        _ => true,
+    }
+}
+
+pub(super) fn inline_matches(actual: &[Inline], expected: &[Inline], retain_owner: bool) -> bool {
     let mut actual = actual
         .iter()
-        .filter(|node| !matches!(node, Inline::Anchor { .. }));
+        .filter(|node| retained_in_proof(node, retain_owner));
     let mut expected = expected
         .iter()
-        .filter(|node| !matches!(node, Inline::Anchor { .. }));
+        .filter(|node| retained_in_proof(node, retain_owner));
     loop {
         match (actual.next(), expected.next()) {
             (None, None) => return true,
             (Some(Inline::Strong { children: a }), Some(Inline::Strong { children: e }))
             | (Some(Inline::Emphasis { children: a }), Some(Inline::Emphasis { children: e })) => {
-                if !inline_matches(a, e) {
+                if !inline_matches(a, e, retain_owner) {
                     return false;
                 }
             }
@@ -207,7 +233,7 @@ fn inline_matches(actual: &[Inline], expected: &[Inline]) -> bool {
                     title: ei,
                 }),
             ) => {
-                if at != et || ai != ei || !inline_matches(a, e) {
+                if at != et || ai != ei || !inline_matches(a, e, retain_owner) {
                     return false;
                 }
             }
@@ -222,39 +248,42 @@ fn inline_matches(actual: &[Inline], expected: &[Inline]) -> bool {
 pub(super) type HeadSnapshot = Rc<[Vec<Inline>]>;
 
 pub(super) fn head_snapshot(terms: &[impl AsRef<[Inline]>]) -> HeadSnapshot {
-    head_content(terms).into()
+    copy_head(terms, true).into()
 }
 
+#[cfg(feature = "roff")]
 pub(super) fn head_content(terms: &[impl AsRef<[Inline]>]) -> Vec<Vec<Inline>> {
-    fn without_anchors(inlines: &[Inline]) -> Vec<Inline> {
+    copy_head(terms, false)
+}
+
+fn copy_head(terms: &[impl AsRef<[Inline]>], retain_owner: bool) -> Vec<Vec<Inline>> {
+    fn copy_inlines(inlines: &[Inline], retain_owner: bool) -> Vec<Inline> {
         inlines
             .iter()
-            .filter_map(|inline| {
-                Some(match inline {
-                    Inline::Anchor { .. } => return None,
-                    Inline::Strong { children } => Inline::Strong {
-                        children: without_anchors(children),
-                    },
-                    Inline::Emphasis { children } => Inline::Emphasis {
-                        children: without_anchors(children),
-                    },
-                    Inline::Link {
-                        children,
-                        target,
-                        title,
-                    } => Inline::Link {
-                        children: without_anchors(children),
-                        target: target.clone(),
-                        title: title.clone(),
-                    },
-                    _ => inline.clone(),
-                })
+            .filter(|inline| retained_in_proof(inline, retain_owner))
+            .map(|inline| match inline {
+                Inline::Strong { children } => Inline::Strong {
+                    children: copy_inlines(children, retain_owner),
+                },
+                Inline::Emphasis { children } => Inline::Emphasis {
+                    children: copy_inlines(children, retain_owner),
+                },
+                Inline::Link {
+                    children,
+                    target,
+                    title,
+                } => Inline::Link {
+                    children: copy_inlines(children, retain_owner),
+                    target: target.clone(),
+                    title: title.clone(),
+                },
+                _ => inline.clone(),
             })
             .collect()
     }
     terms
         .iter()
-        .map(|term| without_anchors(term.as_ref()))
+        .map(|term| copy_inlines(term.as_ref(), retain_owner))
         .collect()
 }
 
@@ -485,5 +514,99 @@ mod tests {
         };
         assert_eq!(evidence.role(&changed), None);
         assert_eq!(evidence.role(&original), Some(NativeHeadRole::Environment));
+    }
+
+    #[test]
+    #[cfg(feature = "roff")]
+    fn publication_rebinds_only_the_proved_owner_once() {
+        use mant_ir::{Block, LinkTarget};
+        let (mut original, mut evidence) = recorded_owner();
+        let source = original.source;
+        let link = Inline::Link {
+            target: LinkTarget::External {
+                uri: "private".into(),
+            },
+            title: None,
+            children: vec![Inline::Text {
+                value: " proof".into(),
+            }],
+        };
+        original.terms[0].content.push(link);
+        evidence.groups.record(&original, 10);
+        evidence.record(&original, NativeHeadRole::Environment);
+        evidence.capture_operands(
+            20,
+            CapturedHeadOperands {
+                text: "PATH proof".into(),
+                operands: vec![NativeOperand {
+                    bytes: 0..4,
+                    role: NativeOperandRole::Literal,
+                }],
+            },
+        );
+        evidence.record_operands(&original, 20);
+
+        let mut invalid = original.clone();
+        super::super::remove_native_definition_owner_markers_from_items(std::slice::from_mut(
+            &mut invalid,
+        ));
+        super::super::groups::mark_native_definition_owner(&mut invalid, 30);
+        evidence.groups.record(&invalid, 30);
+        evidence.record(&invalid, NativeHeadRole::Environment);
+        let Inline::Link { title, .. } = &mut invalid.terms[0].content[2] else {
+            unreachable!()
+        };
+        *title = Some("changed before publication".into());
+
+        let mut block = Block::DefinitionList {
+            items: vec![original, invalid],
+            declaration_groups: Vec::new(),
+            compact: false,
+            source,
+            layout: mant_ir::LayoutHint::default(),
+        };
+        let mut calls = 0;
+        evidence.publish_annotations(std::slice::from_mut(&mut block), &mut [], |nodes| {
+            calls += 1;
+            let Some(Inline::Link { target, title, .. }) = nodes.last_mut() else {
+                return false;
+            };
+            *target = LinkTarget::External {
+                uri: "https://example.test".into(),
+            };
+            *title = None;
+            true
+        });
+        assert_eq!(calls, 2);
+        let Block::DefinitionList { items, .. } = &block else {
+            unreachable!()
+        };
+        assert_eq!(evidence.role(&items[0]), Some(NativeHeadRole::Environment));
+        assert_eq!(evidence.operands(&items[0]).unwrap()[0][0].bytes, 0..4);
+        assert!(evidence.groups.shared_head(&items[0]).is_some());
+        assert_eq!(evidence.role(&items[1]), None);
+        assert!(evidence.groups.shared_head(&items[1]).is_none());
+    }
+
+    #[test]
+    #[cfg(feature = "roff")]
+    fn publication_refuses_duplicated_owner_markers() {
+        let (original, mut evidence) = recorded_owner();
+        let mut block = mant_ir::Block::DefinitionList {
+            items: vec![original.clone(), original],
+            declaration_groups: Vec::new(),
+            compact: false,
+            source: None,
+            layout: mant_ir::LayoutHint::default(),
+        };
+        evidence.publish_annotations(std::slice::from_mut(&mut block), &mut [], |_| false);
+        let mant_ir::Block::DefinitionList { items, .. } = &block else {
+            unreachable!()
+        };
+        for item in items {
+            assert_eq!(evidence.role(item), None);
+            assert!(evidence.operands(item).is_none());
+            assert!(evidence.groups.shared_head(item).is_none());
+        }
     }
 }

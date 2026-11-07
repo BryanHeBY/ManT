@@ -419,31 +419,35 @@ fn append_completed_rows(
                 source: None,
             }),
             CompletedRowOrigin::LiteralText => {
-                if let Some(Block::Preformatted { children, .. }) = blocks.last_mut() {
-                    children.extend(std::iter::repeat_n(Inline::line_break(), rows));
-                    children.push(Inline::Text {
-                        value: String::new(),
-                    });
-                } else {
-                    let mut children = vec![Inline::Text {
-                        value: String::new(),
-                    }];
-                    children.extend(std::iter::repeat_n(Inline::line_break(), rows - 1));
-                    if rows > 1 {
-                        // Every completed empty TEXT row is literal content
-                        // (term_vspace, term.c:489-497). A typed delimiter
-                        // closes the preceding row; keep the last empty row
-                        // witness distinct from a block's ordinary close.
-                        children.push(Inline::Text {
-                            value: String::new(),
-                        });
-                    }
+                if !matches!(blocks.last(), Some(Block::Preformatted { .. })) {
                     blocks.push(Block::Preformatted {
                         inline_layout: mant_ir::InlineLayout::default(),
-                        children,
+                        children: Vec::new(),
                         language: None,
                         layout,
                         source,
+                    });
+                }
+                let Some(Block::Preformatted { children, .. }) = blocks.last_mut() else {
+                    unreachable!("completed literal rows have a literal owner");
+                };
+                // A link cursor can preserve a fragment with no physical
+                // rows. The first completed row starts here, without a
+                // delimiter from an earlier row the cursor never occupied.
+                let separators = if mant_ir::geometry::has_literal_rows(children) {
+                    rows
+                } else {
+                    children.push(Inline::Text {
+                        value: String::new(),
+                    });
+                    rows - 1
+                };
+                children.extend(std::iter::repeat_n(Inline::line_break(), separators));
+                if separators > 0 {
+                    // term_vspace() completes every empty TEXT row
+                    // (term.c:489-497), including this final empty row.
+                    children.push(Inline::Text {
+                        value: String::new(),
                     });
                 }
             }

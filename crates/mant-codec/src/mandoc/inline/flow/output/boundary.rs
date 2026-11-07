@@ -147,7 +147,7 @@ impl InlineBuilder {
         projection.native_separator = projection
             .native_separator
             .saturating_sub(projected_separator);
-        self.append_recorded_word_boundary(
+        let layout_start = self.append_recorded_word_boundary(
             boundary,
             word,
             empty_word,
@@ -163,7 +163,7 @@ impl InlineBuilder {
         let payload = projection
             .split_word
             .unwrap_or_else(|| std::mem::take(incoming));
-        self.append_source_payload(payload, word);
+        self.append_source_payload(payload, word, layout_start);
         if starts_output_row {
             self.note_definition_output_row();
         }
@@ -179,8 +179,13 @@ impl InlineBuilder {
         );
     }
 
-    fn append_source_payload(&mut self, nodes: Vec<Inline>, word: bool) {
-        if !word || self.execution.pending_output_scope_prefixes.is_empty() {
+    fn append_source_payload(&mut self, nodes: Vec<Inline>, word: bool, layout_start: usize) {
+        let motion_origin = word
+            .then(|| self.execution.zero_advance.leading_motion_origin())
+            .flatten();
+        if !word
+            || (motion_origin.is_none() && self.execution.pending_output_scope_prefixes.is_empty())
+        {
             self.nodes.extend(nodes);
             return;
         }
@@ -192,14 +197,43 @@ impl InlineBuilder {
             nodes,
             crate::mandoc::inline::text_execution::CONTENT_AFTER_MOTION,
         );
+        let mut motion = None;
         let content = if found {
-            self.nodes.extend(prefix);
+            if let Some(origin) = motion_origin {
+                // An earlier invisible word may already have opened the
+                // range. Give this word's leading motion and its positioning
+                // cells their own origin so they remain outside the label
+                // without moving intervening native line closures.
+                let mut cells = self.nodes.split_off(layout_start);
+                cells.extend(prefix);
+                motion = Some((origin, cells));
+            } else {
+                self.nodes.extend(prefix);
+            }
             suffix
         } else {
             prefix
         };
+        // An NBRZW word opens the annotation range for its native internal
+        // separators and hard boundaries, but it does not turn a later
+        // word's leading motion into authored label content.
+        if !self.execution.current_native_word_is_rejected()
+            && (has_printable_character(&content)
+                || self
+                    .execution
+                    .zero_advance
+                    .buffered_glyph_belongs_to_current_word())
+        {
+            self.execution.zero_advance.note_authored_member();
+        }
         for marker in std::mem::take(&mut self.execution.pending_output_scope_prefixes) {
             self.nodes.push(Inline::anchor(marker));
+        }
+        if let Some((origin, cells)) = motion {
+            self.nodes
+                .extend(crate::mandoc::inline::ownership::mark_layout_origin(
+                    origin, cells,
+                ));
         }
         self.nodes.extend(content);
     }
@@ -299,10 +333,11 @@ impl InlineBuilder {
         empty_word: bool,
         add_space: bool,
         projection: &super::record::WordPassProjection,
-    ) {
+    ) -> usize {
         let accepted_row_break = projection.closes_before;
         let leading_cells = projection.leading_cells;
         let native_separator = projection.native_separator;
+        let mut layout_start = self.nodes.len();
         // Plain MC's one projected next-word blank is an advance reservation,
         // unlike a definition field's minbl. Once an empty word actually
         // buffers that blank, transfer ownership to the word cells. The
@@ -353,6 +388,7 @@ impl InlineBuilder {
                 let row_indent = self.take_definition_row_indent();
                 super::push_row_break(&mut self.nodes, row_indent);
             }
+            layout_start = self.nodes.len();
             if leading_cells > 0 {
                 push_text(&mut self.nodes, " ".repeat(leading_cells));
             }
@@ -396,6 +432,7 @@ impl InlineBuilder {
                 self.nodes.push(Inline::anchor(marker));
             }
         }
+        layout_start
     }
 
     fn recorded_spacing_boundary(

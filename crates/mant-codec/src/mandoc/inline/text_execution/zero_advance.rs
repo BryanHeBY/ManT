@@ -23,6 +23,7 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     semantic_root: u64,
     active_links: Vec<(u64, mant_ir::LinkTarget)>,
     output_epoch: u64,
+    authored_member_epoch: u64,
     /// The word began with a `\p` marker whose blank the pending glyph's
     /// retreat consumes: the cross-word separator survives in the native
     /// buffer (term.c:573-576 with 901-908) and must print after the glyph.
@@ -77,6 +78,7 @@ impl ZeroAdvanceState {
             resolved_preexisting: false,
             output_owners: Vec::new(),
             output_epoch: 0,
+            authored_member_epoch: 0,
             semantic_root: 0,
             active_links: Vec::new(),
         }
@@ -410,6 +412,32 @@ impl ZeroAdvanceState {
     /// when another `\z` has already armed BACKAFTER for the next glyph.
     pub(in crate::mandoc) const fn has_buffered_glyph(&self) -> bool {
         self.machine.has_pending()
+    }
+
+    /// A glyph buffered by this word can still become the first member of
+    /// its annotation when a later word releases it.
+    pub(in crate::mandoc) fn buffered_glyph_belongs_to_current_word(&self) -> bool {
+        self.native_word_owner.is_some()
+            && self
+                .machine
+                .pending_ref()
+                .is_some_and(|glyph| glyph.owner == self.native_word_owner)
+    }
+
+    /// Positive leading motion is emitted outside all active annotations
+    /// which have yet to receive an authored member. Older enclosing labels
+    /// may already own the same space as an internal separator.
+    pub(in crate::mandoc) fn leading_motion_origin(&self) -> Option<u64> {
+        self.output_owners
+            .iter()
+            .find(|(epoch, root)| {
+                *epoch > self.authored_member_epoch && *root == self.semantic_root
+            })
+            .map(|(epoch, _)| epoch - 1)
+    }
+
+    pub(in crate::mandoc) fn note_authored_member(&mut self) {
+        self.authored_member_epoch = self.output_epoch;
     }
 
     pub(in crate::mandoc) fn has_printable_pending_glyph(&self) -> bool {

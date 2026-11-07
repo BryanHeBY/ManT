@@ -89,11 +89,14 @@ impl WordExecution {
             RoffInlineEvent::EmptyDestination => {
                 if !self.text_state.wiped {
                     append_empty_destination(
-                        &mut self.output,
-                        &mut self.buffer,
-                        self.font,
-                        self.link.as_deref(),
-                        context.policy.recognize_generated_references,
+                        &mut WordOutput {
+                            output: &mut self.output,
+                            buffer: &mut self.buffer,
+                            font: self.font,
+                            link: self.link.as_deref(),
+                            zero_advance: context.zero_advance,
+                        },
+                        context.policy,
                         &mut self.text_state,
                     );
                 }
@@ -133,10 +136,10 @@ impl WordExecution {
             | RoffInlineEvent::FallbackGlyph(_)
             | RoffInlineEvent::DeviceName
             | RoffInlineEvent::BreakableHyphen
-            | RoffInlineEvent::EmptyDestination
-            | RoffInlineEvent::ZeroWidthGlyph
-            | RoffInlineEvent::Breakpoint
-            | RoffInlineEvent::LineBreak => {
+            | RoffInlineEvent::EmptyDestination => {
+                // NBRZW, ASCII_BREAK and a pending \p have native cell
+                // effects without beginning the author's visible label.
+                // term_word() still executes those writes independently.
                 self.finish_content_prefix();
                 self.content_prefix = super::ContentPrefix::Authored;
             }
@@ -195,7 +198,7 @@ impl WordExecution {
         {
             self.append_glyph(" ", context.zero_advance);
             if self.content_prefix != super::ContentPrefix::Authored
-                && context.zero_advance.has_annotation_scope()
+                && context.zero_advance.leading_motion_origin().is_some()
             {
                 self.content_prefix = super::ContentPrefix::Motion;
             }

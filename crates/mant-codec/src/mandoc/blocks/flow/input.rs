@@ -92,18 +92,15 @@ impl BlockState {
         }
     }
     pub(in crate::mandoc::blocks) fn literal_mode_boundary(&mut self) {
-        // Native fi/nf execute term_newln even when the requested mode is
-        // already active. Keep adjacent literal blocks coalesced while ending
-        // their pending row (including a continued word), not adding a gap.
+        // The request's native pre already executed term_newln, even when
+        // the mode was already active. Keep adjacent literal blocks coalesced
+        // without ending a still-qualified annotation's inline root.
         if self.hanging_origin.is_some() {
             self.flush_preformatted();
             self.flush_paragraph_for_line_request();
             self.consume_hanging_first_line();
         } else {
             self.literal.end_line();
-            // roff_html_pre_fi/nf emits BR when the mode is unchanged.
-            // pre_br already consumed the native row above; this return
-            // cannot close a still-qualified source annotation's inline root.
             if !self.formatter.execution.zero_advance.has_qualified_root() {
                 self.flush_paragraph_for_line_request();
             }
@@ -443,14 +440,20 @@ impl BlockState {
 
     /// Execute a real BODY post's `term_newln` while its output owner is live.
     pub(in crate::mandoc::blocks) fn finish_native_body_line(&mut self) {
+        self.finish_native_line_in_source_mode(self.formatter.no_fill);
+    }
+
+    /// `man_term.c::pre_literal` executes `term_newln` in the request's source
+    /// mode, including when the next output mode has already been selected.
+    pub(in crate::mandoc::blocks) fn finish_native_line_in_source_mode(&mut self, no_fill: bool) {
         // A one-line display uses a literal destination without setting
         // NODE_NOFILL. Its rejected row is resolved layout, not authored text.
-        let finish: fn(&mut InlineBuilder) = if self.formatter.no_fill {
+        let finish: fn(&mut InlineBuilder) = if no_fill {
             InlineBuilder::execute_native_literal_newline
         } else {
             InlineBuilder::execute_native_newline
         };
-        if self.inline_output_is_literal(self.formatter.no_fill) {
+        if self.inline_output_is_literal(no_fill) {
             self.literal
                 .with_inline_builder(&mut self.formatter, finish);
         } else {

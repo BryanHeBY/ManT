@@ -75,6 +75,7 @@ pub(super) fn record_native_event(
             writes.push(FieldWrite::Cell(FieldCell::Breakpoint));
         }
         RoffInlineEvent::EmptyDestination => {
+            writes.push(FieldWrite::Cell(FieldCell::ZeroWidthGraph));
             FieldWrite::append_literal(writes, "<>");
         }
         _ => {}

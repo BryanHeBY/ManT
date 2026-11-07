@@ -168,6 +168,43 @@ pub(crate) struct GroupEvidence {
 }
 
 impl GroupEvidence {
+    #[cfg(feature = "roff")]
+    pub(super) fn publication_witness(&self, owner: usize, item: &DefinitionItem) -> Option<usize> {
+        let source = item.source?;
+        let mut matches = self
+            .items
+            .get(&owner)?
+            .iter()
+            .enumerate()
+            .filter(|(_, witness)| {
+                witness.source == source
+                    && super::evidence::publication_matches(&item.terms, &witness.head)
+            });
+        let (index, first) = matches.next()?;
+        matches
+            .all(|(_, witness)| witness.last_key == first.last_key)
+            .then_some(index)
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn rebase_publication(
+        &mut self,
+        owner: usize,
+        index: Option<usize>,
+        head: Option<&HeadSnapshot>,
+    ) {
+        if let (Some(index), Some(witnesses)) = (index, self.items.get_mut(&owner)) {
+            let mut witness = witnesses.swap_remove(index);
+            if let Some(head) = head {
+                witness.head = head.clone();
+            }
+            witnesses.clear();
+            witnesses.push(witness);
+        } else {
+            self.items.remove(&owner);
+        }
+    }
+
     /// Only the current complete source/head proof can share storage. Older
     /// continuation versions remain immutable for matching and rejection.
     pub(super) fn shared_head(&self, item: &DefinitionItem) -> Option<HeadSnapshot> {

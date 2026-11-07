@@ -82,6 +82,27 @@ pub(in crate::mandoc) fn is_delayed_origin(node: &Inline) -> bool {
     origin(node).is_some()
 }
 
+/// Word positioning and a leading motion are layout, while a cached
+/// predecessor glyph released at that boundary keeps its original birth.
+pub(in crate::mandoc) fn mark_layout_origin(epoch: u64, nodes: Vec<Inline>) -> Vec<Inline> {
+    let mut output = Vec::new();
+    let mut layout = Vec::new();
+    for node in nodes {
+        if is_delayed_origin(&node) {
+            if !layout.is_empty() {
+                output.push(delayed_origin(epoch, std::mem::take(&mut layout)));
+            }
+            output.push(node);
+        } else {
+            layout.push(node);
+        }
+    }
+    if !layout.is_empty() {
+        output.push(delayed_origin(epoch, layout));
+    }
+    output
+}
+
 struct Part {
     own: bool,
     nodes: Vec<Inline>,

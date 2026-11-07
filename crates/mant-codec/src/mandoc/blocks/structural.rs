@@ -211,7 +211,8 @@ impl StructuralLowerer<'_, '_, '_> {
                 self.formatter,
             ),
             _ if node.kind == NodeKind::Equation => {
-                self.output.push(equation_block(node, self.indent_columns));
+                self.output
+                    .push(equation_block(node, self.indent_columns, self.formatter));
             }
             _ => lower_structural_fallback(
                 self.output,
@@ -438,7 +439,19 @@ pub(super) fn parts_have_visible_text(nodes: &[Node], default_name: Option<&str>
 }
 
 /// Retain display equation content with decoded glyphs and source geometry.
-fn equation_block(node: &Node, indent_columns: crate::mandoc::layout::SourceIndent) -> Block {
+fn equation_block(
+    node: &Node,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+    formatter: &crate::mandoc::formatter::FormatterState,
+) -> Block {
+    let source = source_span(node);
+    // man_html.c::print_man_node() emits MathML within the active UR/MT
+    // anchor. The equation keeps its block identity, so record the missing
+    // label membership before projecting it.
+    formatter
+        .execution
+        .zero_advance
+        .note_unrepresentable_annotation_member(source);
     let expression = node
         .equation
         .as_ref()
@@ -455,7 +468,7 @@ fn equation_block(node: &Node, indent_columns: crate::mandoc::layout::SourceInde
         expression,
         display: true,
         layout: layout(indent_columns),
-        source: source_span(node),
+        source,
     }
 }
 

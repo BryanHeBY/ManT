@@ -37,6 +37,12 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Carry proven roff declaration names, groups and hanging owners through
+  link publication. Preserve no-fill spacing and hard lines inside active
+  labels, keep generated leading padding outside links, and retain literal
+  reference suffixes. Report partial annotation coverage when a display
+  formula belongs to a label but cannot be represented inside it.
+
 - Materialize one reference per authored, representable roff annotation after
   native field acceptance. Keep distinct equal-target occurrences separate,
   retain authored leading blanks and delayed cells' birth styles, and prevent

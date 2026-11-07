@@ -1,6 +1,7 @@
 //! Authored annotation membership is independent of native buffer settlement.
 use super::*;
 mod native_members;
+mod publication_boundaries;
 
 #[derive(Default)]
 struct Links(Vec<(mant_ir::LinkTarget, Vec<Inline>)>);
@@ -14,6 +15,56 @@ impl<'a> Visit<'a> for Links {
         }
         visit::walk_inline(self, inline);
     }
+}
+
+#[test]
+fn reduced_equation_label_does_not_admit_a_generated_reference() {
+    // man_html.c::man_UR_pre traverses the BODY in one anchor, including
+    // print_man_node's MathML and the text after it. Splitting a public
+    // owner at the display block cannot turn those glyphs into a candidate.
+    let source = b".TH PROBE 1 \"2026-11-07\"\n.SH DESCRIPTION\n.UR https://one.test\nFIRST\n.EQ\nx sup 2\n.EN\nprintf(3) \\%<>\n.UE\nTAIL\n";
+    let document = parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+    let section = &document.sections[0];
+    let mut links = Links::default();
+    links.visit_section(section);
+    assert_eq!(links.0.len(), 1);
+    assert!(
+        matches!(&links.0[0].0, mant_ir::LinkTarget::External { uri } if uri == "https://one.test")
+    );
+    assert_eq!(mant_ir::inline_plain_text(&links.0[0].1), "FIRST");
+    assert!(projected_document_text(&document).contains("printf(3) <>"));
+    assert!(section.blocks.iter().any(|block| matches!(
+        block,
+        Block::Equation {
+            expression: Some(_),
+            display: true,
+            ..
+        }
+    )));
+    assert_eq!(
+        document
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.impact == mant_ir::DiagnosticImpact::SemanticCoverage
+                    && diagnostic.code.as_deref() == Some("manual.annotation-coverage")
+            })
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn empty_destination_marker_uses_the_same_overstrike_as_other_glyphs() {
+    // term.c::term_word buffers the ignored \% as a zero-width graph.
+    // encode1 then writes '<', backspace and '>'; the later A is intact.
+    let source = b".TH PROBE 1 \"2026-11-07\"\n.SH DESCRIPTION\n.UR https://one.test\n\\z\\%<> AFTER\n.UE\nTAIL\n";
+    let document = parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
+    let mut links = Links::default();
+    links.visit_section(&document.sections[0]);
+    assert_eq!(links.0.len(), 1);
+    assert_eq!(mant_ir::inline_plain_text(&links.0[0].1), "> AFTER");
+    assert!(projected_document_text(&document).contains("> AFTER <https://one.test> TAIL"));
 }
 
 fn styled_scalars(nodes: &[Inline], inherited: u8, output: &mut Vec<(char, u8)>) {

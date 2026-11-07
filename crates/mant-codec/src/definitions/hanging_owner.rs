@@ -8,7 +8,9 @@ use std::collections::HashMap;
 
 use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, SourceSpan};
 
-use super::{evidence::head_content, groups::native_inline_owner};
+#[cfg(feature = "roff")]
+use super::evidence::head_content;
+use super::groups::native_inline_owner;
 
 struct HeadWitness {
     key: usize,
@@ -34,6 +36,28 @@ pub(crate) struct HangingOwnerEvidence {
 }
 
 impl HangingOwnerEvidence {
+    #[cfg(feature = "roff")]
+    pub(super) fn receiver_of_proved_head(&self, key: usize, block: &Block) -> Option<usize> {
+        let witness = self.pairs.get(&key)?;
+        witness.head.matches(block).then_some(witness.body_key)
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn discard_pair(&mut self, key: usize) {
+        self.pairs.remove(&key);
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn rebase_published_head(&mut self, key: usize, children: &[Inline]) {
+        if let Some(pair) = self.pairs.get_mut(&key) {
+            super::evidence::retain_unchanged_operands(
+                &mut pair.head.operands,
+                &pair.head.children,
+                children,
+            );
+            pair.head.children = head_content(&[children]).pop().unwrap_or_default();
+        }
+    }
     /// Preserve only an already matching execution proof through a producer
     /// reading transform. A changed/mismatching head cannot acquire evidence
     /// merely because its normalized text resembles a captured head.
@@ -217,7 +241,7 @@ impl HeadWitness {
             && matches!(block, Block::Preformatted { .. }) == self.literal
             && *source == self.source
             && *layout == self.layout
-            && head_content(std::slice::from_ref(children))[0] == self.children
+            && super::evidence::inline_matches(children, &self.children, false)
     }
 }
 
