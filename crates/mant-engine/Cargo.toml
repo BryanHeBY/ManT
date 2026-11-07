@@ -14,6 +14,7 @@ categories = ["parser-implementations", "text-processing"]
 include = [
   "/Cargo.toml", "/LICENSE", "/README.md", "/src/**",
   "/tests/deferred_ownership.rs", "/tests/deferred_ownership/**",
+  "/tests/support/annotation_publication.rs",
   "/tests/support/deferred_ownership.rs", "/tests/support/deferred_ownership/**", "/tests/support/explanation_ranges.rs",
   "/tests/native_table_execution.rs", "/tests/native_table_execution/**",
   "/tests/support/table_execution.rs",

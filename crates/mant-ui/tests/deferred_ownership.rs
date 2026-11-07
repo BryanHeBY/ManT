@@ -384,3 +384,5 @@ fn wrapped_positions(buffer: &ratatui::buffer::Buffer, value: &str) -> Vec<Vec<(
 mod annotation_ownership;
 #[path = "annotation_ownership/publication.rs"]
 mod annotation_publication;
+#[path = "../../mant-engine/tests/support/annotation_publication.rs"]
+pub mod publication_fixture;

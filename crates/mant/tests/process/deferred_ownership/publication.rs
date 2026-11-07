@@ -1,6 +1,5 @@
 //! Execute every publication source and explicit query through the shipped CLI.
 use crate::process_support::{executable, run_text_command};
-use serde::Deserialize;
 use serde_json::Value;
 use std::process::Command;
 
@@ -11,17 +10,9 @@ mod members;
 #[path = "publication/mutations.rs"]
 mod mutations;
 
-const CASES: &str =
-    include_str!("../../../../mant-engine/tests/roff_lowering/annotation_publication/cases.jsonl");
-
-#[derive(Deserialize)]
-struct Case<'a> {
-    id: &'a str,
-    family: &'a str,
-    axes: Vec<&'a str>,
-    source: String,
-    queries: Vec<&'a str>,
-}
+#[path = "../../../../mant-engine/tests/support/annotation_publication.rs"]
+mod fixture;
+use fixture::{Case, cases};
 
 impl Case<'_> {
     fn output(&self, binary: &str, format: &str, arguments: &[&str]) -> Vec<u8> {
@@ -204,12 +195,6 @@ fn inline_text(value: &Value) -> String {
     }
 }
 
-fn cases() -> impl Iterator<Item = Case<'static>> {
-    CASES
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-}
-
 fn check_families(families: &[&str], expected: usize) {
     let mut count = 0;
     for case in cases().filter(|case| families.contains(&case.family)) {
@@ -239,6 +224,6 @@ fn publication_manual_references_and_equation_coverage() {
 fn publication_frozen_case() {
     let binary = std::env::var("MANT_PUBLICATION_REPLAY").unwrap();
     let case_id = std::env::var("MANT_PUBLICATION_CASE").unwrap();
-    let case = cases().find(|case| case.id == case_id).unwrap();
+    let case = fixture::case(&case_id);
     case.check(&binary);
 }

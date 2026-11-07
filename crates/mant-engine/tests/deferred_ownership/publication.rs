@@ -1,18 +1,8 @@
-use crate::{cases, json_roundtrip};
+use crate::{cases, json_roundtrip, publication_fixture};
 use mant_codec::encode::{
     MarkdownOptions, render_addressable_markdown_with_options, render_markdown_with_options,
 };
 use mant_ir::{LinkTarget, ResolvedContent};
-use serde_json::Value;
-
-fn fixture(id: &str) -> Value {
-    include_str!("../roff_lowering/annotation_publication/cases.jsonl")
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .find(|case| case["id"] == id)
-        .unwrap()
-}
-
 #[test]
 fn published_labels_and_literal_suffixes_survive_two_markdown_rounds() {
     // CVS man_html.c keeps both terms within the original anchor while
@@ -38,9 +28,9 @@ fn published_labels_and_literal_suffixes_survive_two_markdown_rounds() {
         ("E12/raw/BR/plain", "printf(3) <>\n", None),
         ("E12/exact/word/plain", "printf(3)\n", None),
     ] {
-        let input = fixture(id);
+        let input = publication_fixture::case(id);
         let original = json_roundtrip::json_string_roundtrip(
-            &mant_loader::load_roff_bytes(input["source"].as_str().unwrap().as_bytes()).unwrap(),
+            &mant_loader::load_roff_bytes(input.source.as_bytes()).unwrap(),
         );
         let native = cases::snapshot(&original);
         assert_eq!(native.text(), text, "{id} original");

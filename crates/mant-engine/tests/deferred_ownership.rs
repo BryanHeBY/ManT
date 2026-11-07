@@ -15,6 +15,8 @@ mod queries;
 mod annotation_ownership;
 #[path = "deferred_ownership/publication.rs"]
 mod publication;
+#[path = "support/annotation_publication.rs"]
+pub mod publication_fixture;
 
 #[test]
 fn original_members_survive_json_two_markdown_readers_and_queries() {
