@@ -1,0 +1,29 @@
+PROBE(1) - General Commands Manual
+
+# NAME
+
+**probe** - native Markdown probe
+
+# DESCRIPTION
+
+*alpha*
+[LABEL](https://example.org/%25%28x%29)
+printf(3)
+Unicode &#945; and nonbreaking&#160;space.
+kept&nbsp;together
+before  
+after
+
+1.	First item
+
+	*	Nested item
+
+2.	Second item
+
+	code <alpha>
+
+# SEE ALSO
+
+[RFC 9110](http://www.rfc-editor.org/rfc/rfc9110.html).
+
+ManT - November 7, 2026 - PROBE(1)

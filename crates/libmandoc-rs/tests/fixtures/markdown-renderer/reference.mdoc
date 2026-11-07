@@ -1,0 +1,32 @@
+.Dd November 7, 2026
+.Dt PROBE 1
+.Os ManT
+.Sh NAME
+.Nm probe
+.Nd native Markdown probe
+.Sh DESCRIPTION
+.Em alpha
+.Lk "https://example.org/%(x)" LABEL
+.Xr printf 3
+Unicode \[u03B1] and nonbreaking\~space.
+.Bk -words
+.No kept together
+.Ek
+before\p after
+.Bl -enum -compact
+.It
+First item
+.Bl -bullet -compact
+.It
+Nested item
+.El
+.It
+Second item
+.El
+.Bd -literal
+code \[u03B1]
+.Ed
+.Sh SEE ALSO
+.Rs
+.%R RFC 9110
+.Re

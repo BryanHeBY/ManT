@@ -46,3 +46,6 @@
 
 # Native HTML scope lifetime
 0033-release-closed-html-scopes.patch
+
+# Optional native Markdown renderer
+0034-embed-native-markdown-renderer.patch

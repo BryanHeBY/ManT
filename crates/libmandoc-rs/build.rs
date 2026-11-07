@@ -63,6 +63,7 @@ const RENDER_SOURCES: &[&str] = &[
     "html.c",
     "man_html.c",
     "mdoc_html.c",
+    "mdoc_markdown.c",
     "tbl_html.c",
     "eqn_html.c",
 ];

@@ -27,13 +27,21 @@ see [the oracle guide](https://github.com/BryanHeBY/ManT/blob/main/crates/libman
 - Top-level uncompressed, gzip, and zstd manual sources.
 - Concurrent parser calls with thread-local upstream and shim state.
 - An optional `render` feature exposing bounded upstream ASCII, deterministic
-  UTF-8, and HTML reference output without writing to process standard output.
+  UTF-8, HTML and mdoc Markdown reference output through an isolated sink.
 
 The default crate remains a parser layer only. It intentionally does not
 locate system manual pages, interpret application-specific section models, or
 run a pager. The optional reference renderers format the native tree in the
 same call that parses it; they do not turn the owned Rust AST into a second
 document model, and `ManT`'s existing engine integration remains unchanged.
+
+## Upgrading from 0.13
+
+Version 0.14 adds `RenderFormat::Markdown` under the existing `render` feature.
+Update exhaustive matches on `RenderFormat` to handle the new variant.
+Native Markdown renders `mdoc(7)` input and shares the existing byte budget,
+transport and diagnostic APIs. The owned AST and its serialization keep the
+same shape.
 
 ## Upgrading from 0.12
 
@@ -63,7 +71,7 @@ to select compatibility independently:
 | `compat-pandoc` (default) | `MANT_MANDOC_COMPAT_PANDOC` | Accept `C`, `V`, `VB`, `VI` font aliases. |
 | `compat-libbsd` (default) | `MANT_MANDOC_COMPAT_LIBBSD` | Expand `.Lb libbsd` from the native library catalogue. |
 | `compat-gnu-eqn` (default) | `MANT_MANDOC_COMPAT_GNU_EQN` | Expose qualified complete, unquoted `ldots` tokens for readable normalization. |
-| `render` | `MANT_MANDOC_RENDER` | Compile native ASCII, UTF-8 and HTML renderers. |
+| `render` | `MANT_MANDOC_RENDER` | Compile native ASCII, UTF-8, HTML and mdoc Markdown renderers. |
 | `serde` | None | Derive serialization for public Rust values. |
 
 The build script defines enabled macros consistently for upstream and shim C
@@ -370,6 +378,14 @@ a per-thread native sink, so concurrent calls neither share renderer state nor
 write to the process's `stdout`. `render_file`, `render_bytes`, and
 `render_bundle` retain the corresponding parser transport and `.so` policies.
 
+`RenderFormat::Markdown` uses the pinned mandoc `-Tmarkdown` formatter. It
+produces a complete Markdown document with header and footer, and reports
+`RenderErrorKind::Unsupported` for resolved `man(7)` input. Embedded `tbl(7)`
+tables and `eqn(7)` formulas produce explanatory placeholders and diagnostics.
+Non-ASCII prose uses character entities and literal text uses ASCII
+approximations. Terminal width and HTML fragment options apply to their
+respective formats.
+
 Reference output follows the pinned CVS formatter: its default terminal body
 indent is five columns, and HTML uses semantic section containers and
 accessible document structure. These native reference bytes are distinct from
@@ -536,7 +552,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree is the pinned pristine source subset plus the
-33 ordered patches in `patches/series`. The stack follows build prerequisites,
+34 ordered patches in `patches/series`. The stack follows build prerequisites,
 parser safety, embedding, execution evidence, compatibility, rendering,
 allocation performance, and HTML scope lifetime. Patch numbers identify the
 patch stack. Cargo features select compiled capabilities.
@@ -685,6 +701,10 @@ they never refer to a patch number in the current series.
   detached from the HTML stack from those still delimiting a scope. Retire
   the fill state of a closed literal block without closing a list that opened
   after it.
+
+- `0034-embed-native-markdown-renderer.patch` captures upstream Markdown
+  output in the bounded renderer sink and resets formatting state and
+  indentation storage per call.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

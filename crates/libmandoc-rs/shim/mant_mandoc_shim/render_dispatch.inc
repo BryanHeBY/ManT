@@ -81,6 +81,11 @@ render_tree_within_limit(const struct roff_node *node, unsigned int depth)
 	return 1;
 }
 
+enum {
+	MANT_RENDER_MARKDOWN = 4,
+	MANT_RENDER_UNSUPPORTED_INPUT = 4
+};
+
 static int
 render_document(struct mant_mandoc_document *document,
     const struct roff_meta *meta, int format, size_t width,
@@ -89,6 +94,14 @@ render_document(struct mant_mandoc_document *document,
 	struct manoutput options;
 	void		*renderer;
 	int		 status;
+
+	if (format == MANT_RENDER_MARKDOWN &&
+	    meta->macroset != MACROSET_MDOC) {
+		document->render_status = MANT_RENDER_UNSUPPORTED_INPUT;
+		document->error = copy_string(
+		    "native Markdown rendering requires mdoc(7) input");
+		return 0;
+	}
 
 	/* A bounded preflight precedes every recursive native renderer; the
 	 * owned Rust snapshot and output byte budget do not guard this path. */
@@ -132,6 +145,9 @@ render_document(struct mant_mandoc_document *document,
 		else
 			terminal_man(renderer, meta);
 		ascii_free(renderer);
+		break;
+	case MANT_RENDER_MARKDOWN:
+		markdown_mdoc(NULL, meta);
 		break;
 	default:
 		mant_mandoc_output_end();

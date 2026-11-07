@@ -38,6 +38,7 @@
 #define man_parseln mant_vendored_man_parseln
 #define man_unscope mant_vendored_man_unscope
 #define man_validate mant_vendored_man_validate
+#define markdown_mdoc mant_vendored_markdown_mdoc
 #define mandoc_a2msec mant_vendored_mandoc_a2msec
 #define mandoc_append_test_read mant_vendored_mandoc_append_test_read
 #define mandoc_append_test_reset mant_vendored_mandoc_append_test_reset

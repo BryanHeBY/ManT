@@ -208,6 +208,11 @@ that crate was not published for that change.
 
 ### libmandoc-rs
 
+- Add `RenderFormat::Markdown` in 0.14.0. Native `mdoc(7)` rendering uses
+  the existing bounded `Renderer` API and returns diagnostics for omitted
+  `tbl(7)` tables and `eqn(7)` formulas. Resolved `man(7)` input returns
+  `Unsupported`. Update exhaustive format matches for the new variant.
+
 - Keep native HTML sections and link boundaries intact when a paragraph
   or fill request closes a tag still held by an enclosing node. Release
   the saved tag on return without unwinding the active ancestors.

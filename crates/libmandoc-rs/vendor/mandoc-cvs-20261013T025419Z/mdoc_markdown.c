@@ -22,6 +22,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +32,8 @@
 #include "roff.h"
 #include "mdoc.h"
 #include "main.h"
+#include "mant_mandoc_output.h"
+#include "mant_thread_local.h"
 
 struct	md_act {
 	int		(*cond)(struct roff_node *);
@@ -235,7 +238,7 @@ static	const struct md_act md_acts[MDOC_MAX - MDOC_Dd] = {
 };
 static const struct md_act *md_act(enum roff_tok);
 
-static	int	 outflags;
+MANT_THREAD_LOCAL int outflags;
 #define	MD_spc		 (1 << 0)  /* Blank character before next word. */
 #define	MD_spc_force	 (1 << 1)  /* Even before trailing punctuation. */
 #define	MD_nonl		 (1 << 2)  /* Prevent linebreak in markdown code. */
@@ -247,7 +250,7 @@ static	int	 outflags;
 #define	MD_An_split	 (1 << 8)  /* Author mode is "split". */
 #define	MD_An_nosplit	 (1 << 9)  /* Author mode is "nosplit". */
 
-static	int	 escflags; /* Escape in generated markdown code: */
+MANT_THREAD_LOCAL int escflags; /* Escape in generated markdown code: */
 #define	ESC_BOL	 (1 << 0)  /* "#*+-" near the beginning of a line. */
 #define	ESC_NUM	 (1 << 1)  /* "." after a leading number. */
 #define	ESC_HYP	 (1 << 2)  /* "(" immediately after "]". */
@@ -255,8 +258,13 @@ static	int	 escflags; /* Escape in generated markdown code: */
 #define	ESC_FON	 (1 << 5)  /* "*" immediately after unrelated "*". */
 #define	ESC_EOL	 (1 << 6)  /* " " at the and of a line. */
 
-static	int	 code_blocks, quote_blocks, list_blocks;
-static	int	 outcount;
+MANT_THREAD_LOCAL int code_blocks, quote_blocks, list_blocks;
+MANT_THREAD_LOCAL int outcount;
+MANT_THREAD_LOCAL struct {
+	char	*text;
+	size_t	 size;
+	size_t	 depth;
+} indentation;
 
 
 static const struct md_act *
@@ -266,10 +274,32 @@ md_act(enum roff_tok tok)
 	return md_acts + (tok - MDOC_Dd);
 }
 
+static void
+md_putc(unsigned char c)
+{
+	mant_mandoc_output_write(&c, 1);
+}
+
+static void
+md_puts(const char *text)
+{
+	mant_mandoc_output_write(text, strlen(text));
+}
+
+static void
+md_decimal(int value)
+{
+	char number[sizeof(int) * CHAR_BIT + 2];
+
+	(void)snprintf(number, sizeof(number), "%d", value);
+	md_puts(number);
+}
+
 void
 markdown_mdoc(void *arg, const struct roff_meta *mdoc)
 {
 	outflags = MD_Sm;
+	escflags = code_blocks = quote_blocks = list_blocks = outcount = 0;
 	md_word(mdoc->title);
 	if (mdoc->msec != NULL) {
 		outflags &= ~MD_spc;
@@ -300,7 +330,9 @@ markdown_mdoc(void *arg, const struct roff_meta *mdoc)
 		md_word(mdoc->msec);
 		md_word(")");
 	}
-	putchar('\n');
+	md_putc('\n');
+	free(indentation.text);
+	memset(&indentation, 0, sizeof(indentation));
 }
 
 static void
@@ -396,27 +428,24 @@ md_node(struct roff_node *n)
 static const char *
 md_stack(char c)
 {
-	static char	*stack;
-	static size_t	 sz;
-	static size_t	 cur;
-
 	switch (c) {
 	case '\0':
 		break;
 	case (char)-1:
-		assert(cur);
-		stack[--cur] = '\0';
+		assert(indentation.depth);
+		indentation.text[--indentation.depth] = '\0';
 		break;
 	default:
-		if (cur + 1 >= sz) {
-			sz += 8;
-			stack = mandoc_realloc(stack, sz);
+		if (indentation.depth + 1 >= indentation.size) {
+			indentation.size += 8;
+			indentation.text = mandoc_realloc(indentation.text,
+			    indentation.size);
 		}
-		stack[cur] = c;
-		stack[++cur] = '\0';
+		indentation.text[indentation.depth] = c;
+		indentation.text[++indentation.depth] = '\0';
 		break;
 	}
-	return stack == NULL ? "" : stack;
+	return indentation.text == NULL ? "" : indentation.text;
 }
 
 /*
@@ -446,21 +475,21 @@ md_preword(void)
 	 */
 
 	if (outflags & MD_sp)
-		putchar('\n');
+		md_putc('\n');
 	else if (outflags & MD_br) {
-		putchar(' ');
-		putchar(' ');
+		md_putc(' ');
+		md_putc(' ');
 	} else if (outflags & MD_nl && escflags & ESC_EOL)
 		md_named("zwnj");
 
 	/* Start a new line if necessary. */
 
 	if (outflags & (MD_nl | MD_br | MD_sp)) {
-		putchar('\n');
+		md_putc('\n');
 		for (cp = md_stack('\0'); *cp != '\0'; cp++) {
-			putchar(*cp);
+			md_putc(*cp);
 			if (*cp == '>')
-				putchar(' ');
+				md_putc(' ');
 		}
 		outflags &= ~(MD_nl | MD_br | MD_sp);
 		escflags = ESC_BOL;
@@ -470,9 +499,9 @@ md_preword(void)
 
 	} else if (outflags & MD_spc) {
 		if (outflags & MD_Bk)
-			fputs("&nbsp;", stdout);
+			md_puts("&nbsp;");
 		else
-			putchar(' ');
+			md_putc(' ');
 		escflags &= ~ESC_FON;
 		outcount++;
 	}
@@ -500,7 +529,7 @@ md_rawword(const char *s)
 	if (escflags & ESC_FON) {
 		escflags &= ~ESC_FON;
 		if (*s == '*' && !code_blocks)
-			fputs("&zwnj;", stdout);
+			md_puts("&zwnj;");
 	}
 
 	while (*s != '\0') {
@@ -677,10 +706,12 @@ md_word(const char *s)
 					uc = 0xFFFD;
 				if (code_blocks) {
 					seq = mchars_uc2str(uc);
-					fputs(seq, stdout);
+					md_puts(seq);
 					outcount += strlen(seq);
 				} else {
-					printf("&#%d;", uc);
+					md_puts("&#");
+					md_decimal(uc);
+					md_putc(';');
 					outcount++;
 				}
 				escflags &= ~ESC_FON;
@@ -695,11 +726,11 @@ md_word(const char *s)
 			break;
 		}
 		if (bs)
-			putchar('\\');
+			md_putc('\\');
 		md_char(c);
 		if (breakline &&
 		    (*s == '\0' || *s == ' ' || *s == ASCII_NBRSP)) {
-			printf("  \n");
+			md_puts("  \n");
 			breakline = 0;
 			while (*s == ' ' || *s == ASCII_NBRSP)
 				s++;
@@ -720,7 +751,9 @@ md_word(const char *s)
 static void
 md_named(const char *s)
 {
-	printf("&%s;", s);
+	md_putc('&');
+	md_puts(s);
+	md_putc(';');
 	escflags &= ~(ESC_FON | ESC_EOL);
 	outcount++;
 }
@@ -732,7 +765,7 @@ static void
 md_char(unsigned char c)
 {
 	if (c != '\0') {
-		putchar(c);
+		md_putc(c);
 		if (c == '*')
 			escflags |= ESC_FON;
 		else
@@ -1264,7 +1297,8 @@ md_pre_It(struct roff_node *n)
 			md_preword();
 			if (bln->norm->Bl.count < 99)
 				bln->norm->Bl.count++;
-			printf("%d.\t", bln->norm->Bl.count);
+			md_decimal(bln->norm->Bl.count);
+			md_puts(".\t");
 			escflags &= ~ESC_FON;
 			break;
 		case LIST_column:
@@ -1347,7 +1381,7 @@ md_post_It(struct roff_node *n)
 		if (i < 1)
 			i = 1;
 		while (i-- > 0)
-			putchar(' ');
+			md_putc(' ');
 
 		outflags &= ~MD_spc;
 		escflags &= ~ESC_FON;
@@ -1371,10 +1405,14 @@ md_uri(const char *s)
 {
 	while (*s != '\0') {
 		if (strchr("%()<>", *s) != NULL) {
-			printf("%%%2.2hhX", *s);
+			char escaped[4];
+
+			(void)snprintf(escaped, sizeof(escaped), "%%%02X",
+			    (unsigned int)(unsigned char)*s);
+			md_puts(escaped);
 			outcount += 3;
 		} else {
-			putchar(*s);
+			md_putc(*s);
 			outcount++;
 		}
 		s++;
@@ -1435,7 +1473,7 @@ md_pre_Mt(struct roff_node *n)
 	for (nch = n->child; nch != NULL; nch = nch->next) {
 		md_uri(nch->string);
 		if (nch->next != NULL) {
-			putchar(' ');
+			md_putc(' ');
 			outcount++;
 		}
 	}
@@ -1616,7 +1654,8 @@ md_pre__R(struct roff_node *n)
 
 	if (strncmp(arg, "RFC ", 4) != 0)
 		return 1;
-	cp = arg += 4;
+	arg += 4;
+	cp = (const unsigned char *)arg;
 	while (isdigit(*cp))
 		cp++;
 	if (*cp != '\0')

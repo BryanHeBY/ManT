@@ -40,6 +40,9 @@ pub enum RenderFormat {
     Utf8,
     /// UTF-8 HTML, either a full document or a caller-selected fragment.
     Html,
+    /// Native mandoc Markdown for mdoc(7) sources. Tables and equations
+    /// produce explanatory placeholders and renderer diagnostics.
+    Markdown,
 }
 
 /// Successful bounded reference rendering and non-fatal parser findings.
@@ -47,7 +50,7 @@ pub enum RenderFormat {
 pub struct RenderReport {
     /// Complete rendered output. Limit failures never return a partial value.
     pub output: String,
-    /// Non-fatal findings emitted while parsing the source.
+    /// Non-fatal findings emitted while parsing or rendering the source.
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -60,7 +63,7 @@ pub enum RenderErrorKind {
     Read,
     /// Compressed source bytes could not be decoded.
     Decompression,
-    /// The parser configuration is unavailable on this platform.
+    /// The parser configuration or input dialect is unsupported for this call.
     Unsupported,
     /// A width or output limit is outside the documented range.
     InvalidOptions,
@@ -91,7 +94,7 @@ impl fmt::Display for RenderError {
 
 impl std::error::Error for RenderError {}
 
-/// Bounded, thread-safe access to libmandoc's ASCII, UTF-8, and HTML renderers.
+/// Bounded, thread-safe access to libmandoc's ASCII, UTF-8, HTML and Markdown renderers.
 ///
 /// Rendering reparses the source and formats the native tree in one call;
 /// it does not reconstruct private libmandoc state from the owned Rust AST.
@@ -360,10 +363,10 @@ impl Renderer {
     ) -> Result<RenderReport, RenderError> {
         let raw = rendered.map_err(|error| RenderError {
             path: path.to_path_buf(),
-            kind: if error.status == 1 {
-                RenderErrorKind::OutputLimit
-            } else {
-                RenderErrorKind::Render
+            kind: match error.status {
+                1 => RenderErrorKind::OutputLimit,
+                4 => RenderErrorKind::Unsupported,
+                _ => RenderErrorKind::Render,
             },
             message: error.message,
         })?;
@@ -379,7 +382,7 @@ impl Renderer {
     }
 
     fn validate(&self, path: &Path) -> Result<(), RenderError> {
-        if self.format != RenderFormat::Html
+        if matches!(self.format, RenderFormat::Ascii | RenderFormat::Utf8)
             && !(MIN_RENDER_WIDTH..=MAX_RENDER_WIDTH).contains(&self.width)
         {
             return Err(RenderError {
@@ -426,6 +429,7 @@ const fn format_code(format: RenderFormat) -> i32 {
         RenderFormat::Ascii => 1,
         RenderFormat::Html => 2,
         RenderFormat::Utf8 => 3,
+        RenderFormat::Markdown => 4,
     }
 }
 

@@ -46,6 +46,10 @@ that a man or mdoc node still references. Returning from that node releases
 the saved tag without closing its surviving ancestors. A fill transition can
 retire an attached closed `PRE` while leaving later list tags open.
 
+Patch `0034` connects the optional mdoc Markdown renderer to the bounded sink
+introduced by `0028`. It isolates mutable formatting state and releases
+indentation storage when rendering returns.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

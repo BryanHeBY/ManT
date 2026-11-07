@@ -1,0 +1,17 @@
+OMISSIONS(1) - General Commands Manual
+
+# NAME
+
+**omissions** - native renderer coverage probe
+
+# DESCRIPTION
+
+BEFORE
+
+The **-T markdown** output mode does not support tbl(7) input.
+
+The **-T markdown** output mode does not support eqn(7) input.
+
+AFTER
+
+ManT - November 7, 2026 - OMISSIONS(1)
