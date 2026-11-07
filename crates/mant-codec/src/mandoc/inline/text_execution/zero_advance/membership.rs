@@ -1,6 +1,28 @@
 //! Born membership and actual root qualification, independent of native words.
 use super::{Arc, Decoration, ZeroAdvanceState};
-use crate::mandoc::inline::ownership::{Annotation, OutputMembership};
+use crate::mandoc::inline::ownership::{Annotation, OutputMembership, markers};
+
+/// The live annotation roots and their monotone member identities.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct MembershipState {
+    pub(super) output_owners: Vec<(u64, u64)>,
+    pub(super) semantic_root: u64,
+    pub(super) active_links: Vec<(u64, mant_ir::LinkTarget)>,
+    pub(super) output_epoch: u64,
+    pub(super) authored_member_epoch: u64,
+}
+
+impl MembershipState {
+    pub(super) const fn new() -> Self {
+        Self {
+            output_owners: Vec::new(),
+            output_epoch: 0,
+            authored_member_epoch: 0,
+            semantic_root: 0,
+            active_links: Vec::new(),
+        }
+    }
+}
 
 impl ZeroAdvanceState {
     pub(in crate::mandoc) fn new_annotation(
@@ -18,14 +40,23 @@ impl ZeroAdvanceState {
         self.new_annotation(target).target
     }
     pub(in crate::mandoc) fn qualify_current_link(&mut self, target: mant_ir::LinkTarget) {
-        let epoch = self.output_owners.last().expect("active man annotation").0;
-        self.active_links.push((epoch, target));
+        let epoch = self
+            .membership
+            .output_owners
+            .last()
+            .expect("active man annotation")
+            .0;
+        self.membership.active_links.push((epoch, target));
     }
 
     pub(in crate::mandoc) fn has_qualified_root(&self) -> bool {
-        self.output_owners.iter().any(|scope| {
-            scope.1 == self.semantic_root
-                && self.active_links.iter().any(|(owner, _)| *owner == scope.0)
+        self.membership.output_owners.iter().any(|scope| {
+            scope.1 == self.membership.semantic_root
+                && self
+                    .membership
+                    .active_links
+                    .iter()
+                    .any(|(owner, _)| *owner == scope.0)
         })
     }
 
@@ -36,11 +67,12 @@ impl ZeroAdvanceState {
         let Some(annotations) = &self.annotations else {
             return;
         };
-        for (epoch, target) in &self.active_links {
+        for (epoch, target) in &self.membership.active_links {
             if self
+                .membership
                 .output_owners
                 .iter()
-                .any(|scope| scope.0 == *epoch && scope.1 == self.semantic_root)
+                .any(|scope| scope.0 == *epoch && scope.1 == self.membership.semantic_root)
             {
                 annotations.note_unrepresentable_member(target, source);
             }
@@ -49,11 +81,16 @@ impl ZeroAdvanceState {
 
     pub(in crate::mandoc) fn close_annotation_root(&mut self) -> Vec<String> {
         let scopes: Vec<_> = self
+            .membership
             .output_owners
             .iter()
             .filter(|scope| {
-                scope.1 == self.semantic_root
-                    && self.active_links.iter().any(|(owner, _)| *owner == scope.0)
+                scope.1 == self.membership.semantic_root
+                    && self
+                        .membership
+                        .active_links
+                        .iter()
+                        .any(|(owner, _)| *owner == scope.0)
             })
             .copied()
             .collect();
@@ -61,7 +98,12 @@ impl ZeroAdvanceState {
         // root close must build the same decoration order for still-pending
         // cells, so an outer partial annotation cannot erase the inner label.
         for &(epoch, root) in scopes.iter().rev() {
-            if let Some((_, target)) = self.active_links.iter().find(|(owner, _)| *owner == epoch) {
+            if let Some((_, target)) = self
+                .membership
+                .active_links
+                .iter()
+                .find(|(owner, _)| *owner == epoch)
+            {
                 let annotation = Annotation::Link {
                     target: target.clone(),
                     title: None,
@@ -79,35 +121,62 @@ impl ZeroAdvanceState {
                 );
             }
         }
-        self.semantic_root = self
+        self.membership.semantic_root = self
+            .membership
             .semantic_root
             .checked_add(1)
             .expect("bounded annotation roots");
         scopes
             .into_iter()
-            .map(|scope| format!("\0mant:annotation-end:{}", scope.0))
+            .map(|scope| markers::end_marker(scope.0))
             .collect()
     }
     /// A semantic wrapper can begin while BACKBEFORE still owns a glyph from
     /// preceding source. Track that glyph through the shared formatter until
     /// it is emitted or overstruck, including across nested wrappers.
     pub(in crate::mandoc) fn begin_output_owner(&mut self) {
-        self.output_epoch = self
+        self.membership.output_epoch = self
+            .membership
             .output_epoch
             .checked_add(1)
             .expect("bounded annotation entries");
-        self.output_owners
-            .push((self.output_epoch, self.semantic_root));
+        self.membership
+            .output_owners
+            .push((self.membership.output_epoch, self.membership.semantic_root));
     }
 
     pub(in crate::mandoc) fn end_output_owner(&mut self) -> OutputMembership {
-        let (epoch, root) = self.output_owners.pop().expect("balanced annotation owner");
-        self.active_links.retain(|(owner, _)| *owner != epoch);
+        let (epoch, root) = self
+            .membership
+            .output_owners
+            .pop()
+            .expect("balanced annotation owner");
+        self.membership
+            .active_links
+            .retain(|(owner, _)| *owner != epoch);
         OutputMembership {
             epoch,
             root,
-            enclosing: self.output_owners.last().map(|scope| scope.0),
+            enclosing: self.membership.output_owners.last().map(|scope| scope.0),
         }
+    }
+
+    /// Positive leading motion is emitted outside all active annotations
+    /// which have yet to receive an authored member. Older enclosing labels
+    /// may already own the same space as an internal separator.
+    pub(in crate::mandoc) fn leading_motion_origin(&self) -> Option<u64> {
+        self.membership
+            .output_owners
+            .iter()
+            .find(|(epoch, root)| {
+                *epoch > self.membership.authored_member_epoch
+                    && *root == self.membership.semantic_root
+            })
+            .map(|(epoch, _)| epoch - 1)
+    }
+
+    pub(in crate::mandoc) fn note_authored_member(&mut self) {
+        self.membership.authored_member_epoch = self.membership.output_epoch;
     }
 
     /// Annotate this scope's members which remain native input. Birth epochs

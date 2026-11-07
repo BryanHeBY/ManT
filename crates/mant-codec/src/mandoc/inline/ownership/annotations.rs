@@ -8,9 +8,10 @@ use std::{
 
 use mant_ir::{Block, Inline, LinkTarget, Section, SourceSpan};
 
-use crate::mandoc::inline::{
-    SOURCE_CANDIDATE_PREFIX, finish_source_candidates, protect_source_label_candidates,
-};
+use super::markers;
+
+mod candidates;
+use candidates::{finish_source_candidates, protect_source_label_candidates};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(in crate::mandoc) struct AnnotationKey(u32);
@@ -50,23 +51,6 @@ use projection::{
     prune_provisional_identities,
 };
 
-const ENTRY: &str = "\0mant:annotation-entry:";
-
-fn is_annotation_marker(id: &str) -> bool {
-    [ENTRY, "\0mant:link-scope:", "\0mant:annotation-end:"]
-        .iter()
-        .any(|prefix| id.starts_with(prefix))
-}
-
-pub(in crate::mandoc) fn entry_marker(target: &LinkTarget) -> Option<String> {
-    match target {
-        LinkTarget::External { uri } if uri.starts_with(PREFIX) => Some(format!("{ENTRY}{uri}")),
-        _ => None,
-    }
-}
-
-const PREFIX: &str = "\0mant:annotation:";
-
 #[derive(Clone, Debug, Default)]
 pub(in crate::mandoc) struct AnnotationPool(Rc<RefCell<Destinations>>);
 
@@ -97,7 +81,7 @@ impl Drop for AnnotationTransaction {
         if !self.committed {
             let mut destinations = self.pool.0.borrow_mut();
             for key in self.first..destinations.next {
-                destinations.targets.remove(&format!("{PREFIX}{key}"));
+                destinations.targets.remove(&markers::target_key(key));
             }
         }
     }
@@ -151,7 +135,7 @@ impl AnnotationPool {
         }
         let id =
             AnnotationKey(u32::try_from(destinations.next).expect("bounded source occurrences"));
-        let key = format!("{PREFIX}{id}");
+        let key = markers::target_key(id);
         destinations.next = destinations
             .next
             .checked_add(1)
@@ -184,9 +168,7 @@ impl AnnotationPool {
         let mut destinations = self.0.borrow_mut();
         let id = destinations.source_candidates;
         destinations.source_candidates += 1;
-        LinkTarget::External {
-            uri: format!("{SOURCE_CANDIDATE_PREFIX}{id}"),
-        }
+        markers::candidate_target(id)
     }
 
     pub(in crate::mandoc) fn note_unrepresentable_member(
@@ -270,7 +252,8 @@ impl AnnotationPool {
             // Entry receipts serve foreign-source cuts only. Consume them
             // here, after the enclosing cut was located, before public anchor
             // normalization can give them a document navigation identity.
-            if matches!(&node, Inline::Anchor { id, .. } if is_annotation_marker(id.as_str())) {
+            if matches!(&node, Inline::Anchor { id, .. } if markers::is_annotation_marker(id.as_str()))
+            {
                 continue;
             }
             if let Inline::Link {
@@ -287,10 +270,10 @@ impl AnnotationPool {
                     output.append(children);
                     continue;
                 }
-                let foreign = children.iter().position(|child| matches!(child, Inline::Link { target: LinkTarget::External { uri: other }, .. } if other.starts_with(PREFIX) && other != uri));
+                let foreign = children.iter().position(|child| matches!(child, Inline::Link { target: LinkTarget::External { uri: other }, .. } if markers::is_target(other) && other != uri));
                 let cut = foreign.map(|at| {
                     let Inline::Link { target, .. } = &children[at] else { unreachable!() };
-                    let marker = entry_marker(target);
+                    let marker = markers::entry_marker(target);
                     marker.and_then(|marker| children[..at].iter().rposition(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str() == marker))).unwrap_or(at)
                 });
                 let mut tail = cut.map_or_else(Vec::new, |at| children.split_off(at));

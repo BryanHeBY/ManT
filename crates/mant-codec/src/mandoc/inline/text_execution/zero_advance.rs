@@ -19,11 +19,7 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     native_word_owner: Option<u64>,
     fragment_started_pending: bool,
     resolved_preexisting: bool,
-    output_owners: Vec<(u64, u64)>,
-    semantic_root: u64,
-    active_links: Vec<(u64, mant_ir::LinkTarget)>,
-    output_epoch: u64,
-    authored_member_epoch: u64,
+    membership: membership::MembershipState,
     /// The word began with a `\p` marker whose blank the pending glyph's
     /// retreat consumes: the cross-word separator survives in the native
     /// buffer (term.c:573-576 with 901-908) and must print after the glyph.
@@ -76,11 +72,7 @@ impl ZeroAdvanceState {
             native_word_owner: None,
             fragment_started_pending: false,
             resolved_preexisting: false,
-            output_owners: Vec::new(),
-            output_epoch: 0,
-            authored_member_epoch: 0,
-            semantic_root: 0,
-            active_links: Vec::new(),
+            membership: membership::MembershipState::new(),
         }
     }
 
@@ -106,8 +98,8 @@ impl ZeroAdvanceState {
                 decoration: None,
                 owner: self.native_word_owner,
                 link_continuation: false,
-                epoch: self.output_epoch,
-                root: self.semantic_root,
+                epoch: self.membership.output_epoch,
+                root: self.membership.semantic_root,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
@@ -119,8 +111,8 @@ impl ZeroAdvanceState {
                 decoration: None,
                 owner: self.native_word_owner,
                 link_continuation: false,
-                epoch: self.output_epoch,
-                root: self.semantic_root,
+                epoch: self.membership.output_epoch,
+                root: self.membership.semantic_root,
             })
             .map(|(glyph, replaced)| (glyph.value, replaced))
     }
@@ -155,6 +147,7 @@ impl ZeroAdvanceState {
                     );
                 }
                 if self
+                    .membership
                     .output_owners
                     .last()
                     .is_some_and(|scope| epoch < scope.0)
@@ -312,8 +305,8 @@ impl ZeroAdvanceState {
             link,
             owner: self.native_word_owner,
             recovery_offset: self.machine.deferred_projection().len(),
-            epoch: self.output_epoch,
-            root: self.semantic_root,
+            epoch: self.membership.output_epoch,
+            root: self.membership.semantic_root,
             decoration: None,
             link_continuation: false,
         });
@@ -422,22 +415,6 @@ impl ZeroAdvanceState {
                 .machine
                 .pending_ref()
                 .is_some_and(|glyph| glyph.owner == self.native_word_owner)
-    }
-
-    /// Positive leading motion is emitted outside all active annotations
-    /// which have yet to receive an authored member. Older enclosing labels
-    /// may already own the same space as an internal separator.
-    pub(in crate::mandoc) fn leading_motion_origin(&self) -> Option<u64> {
-        self.output_owners
-            .iter()
-            .find(|(epoch, root)| {
-                *epoch > self.authored_member_epoch && *root == self.semantic_root
-            })
-            .map(|(epoch, _)| epoch - 1)
-    }
-
-    pub(in crate::mandoc) fn note_authored_member(&mut self) {
-        self.authored_member_epoch = self.output_epoch;
     }
 
     pub(in crate::mandoc) fn has_printable_pending_glyph(&self) -> bool {

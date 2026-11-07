@@ -1,5 +1,8 @@
 //! Group only accepted members of one private source occurrence.
-use super::{HashSet, Inline, LinkTarget, PREFIX, is_annotation_marker};
+use super::{
+    HashSet, Inline, LinkTarget,
+    markers::{is_annotation_marker, is_target},
+};
 
 /// Join by source key, not destination equality. This forward pass moves
 /// accepted children once and does not rescan or remove a growing prefix.
@@ -19,7 +22,7 @@ pub(super) fn coalesce(nodes: &mut Vec<Inline>) {
             children,
             ..
         } = &mut node
-            && uri.starts_with(PREFIX)
+            && is_target(uri)
         {
             let mut flat = Vec::with_capacity(children.len());
             for child in std::mem::take(children) {
@@ -59,7 +62,7 @@ pub(super) fn coalesce(nodes: &mut Vec<Inline>) {
                     mut children,
                     ..
                 },
-            ) if previous.starts_with(PREFIX) && *previous == uri => {
+            ) if is_target(previous) && *previous == uri => {
                 before.append(&mut anchors);
                 before.append(&mut children);
             }
@@ -88,7 +91,7 @@ fn lift_style(children: Vec<Inline>, strong: bool, output: &mut Vec<Inline>) {
                 target: LinkTarget::External { uri },
                 title,
                 children,
-            } if uri.starts_with(PREFIX) => {
+            } if is_target(&uri) => {
                 if !ordinary.is_empty() {
                     output.push(wrap(std::mem::take(&mut ordinary)));
                 }
@@ -133,7 +136,7 @@ pub(super) fn collect_nonempty(nodes: &[Inline], output: &mut HashSet<String>) {
                 target: LinkTarget::External { uri },
                 children,
                 ..
-            } if uri.starts_with(PREFIX) => {
+            } if is_target(uri) => {
                 if has_scalar(children) {
                     output.insert(uri.clone());
                 }
@@ -216,7 +219,7 @@ pub(super) fn has_annotation(nodes: &[Inline]) -> bool {
             Inline::Link {
                 target: LinkTarget::External { uri },
                 ..
-            } if uri.starts_with(PREFIX) => true,
+            } if is_target(uri) => true,
             Inline::Link { children, .. }
             | Inline::Strong { children }
             | Inline::Emphasis { children } => has_annotation(children),

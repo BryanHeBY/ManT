@@ -8,9 +8,6 @@ mod native_writes;
 mod references;
 mod word;
 mod zero_advance;
-pub(in crate::mandoc) use references::{
-    SOURCE_CANDIDATE_PREFIX, finish_source_candidates, protect_source_label_candidates,
-};
 pub(in crate::mandoc) use zero_advance::ZeroAdvanceState;
 
 use event_state::append_text_event;

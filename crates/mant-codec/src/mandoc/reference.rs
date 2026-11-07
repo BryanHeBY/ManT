@@ -1,5 +1,12 @@
 //! Conservative recognition shared by explicit and generated manual links.
 
+pub(super) const SPHINX_EMPTY_DESTINATION: &str = " <>";
+
+pub(super) fn manual_section_operand(value: &str) -> Option<&str> {
+    let section = value.strip_prefix('(')?.strip_suffix(')')?;
+    is_manual_section(section).then_some(section)
+}
+
 /// One conventional manual reference immediately before a legacy Sphinx
 /// empty destination marker.
 pub(super) struct TrailingManualReference<'a> {

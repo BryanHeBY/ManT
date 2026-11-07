@@ -112,7 +112,7 @@ impl super::BlockLowerer<'_, '_> {
             .retain(|marker| marker != &content_marker);
         let entry = membership
             .has_enclosing()
-            .then(|| crate::mandoc::inline::ownership::annotations::entry_marker(&target))
+            .then(|| crate::mandoc::inline::ownership::markers::entry_marker(&target))
             .flatten();
         self.state
             .discard_link_cursor(output_start, entry.as_deref());
@@ -366,7 +366,7 @@ pub(super) fn finish_inline_membership(
 pub(super) fn link_cursor_marker(
     owner: crate::mandoc::inline::ownership::annotations::AnnotationKey,
 ) -> String {
-    format!("\0mant:link-scope:{owner}")
+    crate::mandoc::inline::ownership::markers::link_scope(owner)
 }
 
 fn is_link_cursor(node: &Inline, marker: &str) -> bool {

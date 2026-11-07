@@ -15,9 +15,6 @@ mod font;
 mod generated;
 mod text_execution;
 pub(in crate::mandoc) use generated::function_argument;
-pub(in crate::mandoc) use text_execution::{
-    SOURCE_CANDIDATE_PREFIX, finish_source_candidates, protect_source_label_candidates,
-};
 mod links;
 pub(in crate::mandoc) mod names;
 pub(in crate::mandoc) mod ownership;

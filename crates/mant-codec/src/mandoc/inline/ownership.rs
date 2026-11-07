@@ -8,6 +8,7 @@ use mant_ir::{Inline, LinkTarget};
 use std::sync::Arc;
 
 pub(in crate::mandoc) mod annotations;
+pub(in crate::mandoc) mod markers;
 #[cfg(test)]
 pub(in crate::mandoc) mod metrics;
 
@@ -124,7 +125,7 @@ impl OutputMembership {
     }
 
     pub(in crate::mandoc) fn end_marker(self) -> String {
-        format!("\0mant:annotation-end:{}", self.epoch)
+        markers::end_marker(self.epoch)
     }
 
     /// Transform only this receiver's accepted members. Foreign runs remain
