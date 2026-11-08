@@ -1,4 +1,5 @@
 //! Canonical Markdown bytes and borrowed source-coordinate maps.
+use super::math_markdown::RenderOptions;
 use super::{
     MarkdownOptions,
     anchors::anchor_markers,
@@ -153,9 +154,17 @@ pub fn render_addressable_markdown_with_options(
 
 pub(super) fn render_markdown_artifact(
     query: &ResolvedContent,
-    mut options: MarkdownOptions,
+    options: MarkdownOptions,
     track: bool,
 ) -> MarkdownArtifact<'_> {
+    render_markdown_with_context(query, RenderOptions::portable(options), track)
+}
+
+pub(super) fn render_markdown_with_context<'src>(
+    query: &'src ResolvedContent,
+    mut options: RenderOptions<'_>,
+    track: bool,
+) -> MarkdownArtifact<'src> {
     let heading_links = query.document.as_ref().is_some_and(|document| {
         document
             .heading
@@ -359,7 +368,7 @@ fn render_artifact_sections<'src>(
     parent: &[usize],
     parent_slot: Option<usize>,
     depth: usize,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
 ) {
     for (index, section) in sections.iter().enumerate() {
         let rendered_heading = if options.preserve_anchors {

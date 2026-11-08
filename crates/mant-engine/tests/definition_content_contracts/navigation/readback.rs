@@ -115,7 +115,8 @@ fn assert_body_type(blocks: &[Block], body: Body) {
             let expected = match body {
                 Body::Literal => ("Body中\nLiteralTail", Some("txt")),
                 Body::Table => ("Body中 | CellEnd", None),
-                Body::Equation => (BODY, Some("math")),
+                // A readable equation projects to an unlabelled literal fence.
+                Body::Equation => (BODY, None),
                 _ => unreachable!(),
             };
             assert_eq!(payloads, [(expected.0.into(), expected.1)]);

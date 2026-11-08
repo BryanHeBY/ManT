@@ -200,7 +200,7 @@ relative to the resulting snapshot.
 
 An equation expression retains mathematical structure, not parser boxes or
 argument counters. `EquationKind` distinguishes `Text`, `Operation`, `Sequence`,
-`Group`, `Pile`, `Matrix`, and `Opaque`: a sequence orders expressions without introducing
+`Group`, `Pile`, `Matrix`, and `Opaque`. A sequence orders expressions without introducing
 an operation boundary; a group supplies that boundary. `EquationOperator`
 describes fractions, square roots, scripts and limits independently from screen
 position. Resolved fonts, visible fences/decorations and ordered
@@ -227,29 +227,35 @@ unusual remaining structure still exceeds it. These reductions leave
 already truncated, its separate `content-coverage` diagnostic still reports
 missing source content.
 
-The v0.14 formula model adds `atomRole`: `identifier`, `number`, `operator`,
+The v0.14 formula model adds `atomRole` with `identifier`, `number`, `operator`,
 `function`, `literal`, or the omitted default `unknown`. These are source-neutral
-roles, not parser token names. A literal is one complete mathematical atom;
+roles, not parser token names. A literal is one complete mathematical atom.
 quoting in eqn does not automatically make it ordinary prose or a function.
 Opaque content is explicitly distinct from a text atom, and keeps its atomic
 or compound operand scope without pretending that its interior was parsed.
+
+Expression fonts select mathematical text and inherit through child atoms.
+Fences, accents and generated operation glyphs retain their mathematical glyph
+behavior independently of that text selection. `mant-codec::math` consumes
+resolved structure for `MathML` Core and restricted LaTeX output. Conversion
+losses belong to the output artifact, separately from source diagnostics.
 
 Expression decoding checks local shape and operation arity. All formula owners
 also require `value` to equal the structure's readable projection, including
 formulas returned inside excerpts and explanations. Operation, decoration and
 matrix views borrow existing authoritative content rather than duplicating it.
-Matrix interpretation can fail for a retained nonstandard payload; it never
+Matrix interpretation can fail for a retained nonstandard payload. It never
 authorizes dropping operands or truncating later columns to the first column.
 
 The former formula `size` field is retired and rejected in the v0.14 wire.
-Native eqn size integers were not executed font sizes: root zero, inherited
-global values and local size wrappers cannot be treated as resolved points or
-pixels. `libmandoc-rs::EquationBox` retains the original numeric evidence;
-unsupported selections become bounded producer semantic-coverage diagnostics.
+Native size snapshots combine root allocation zero, inherited global values
+and local wrappers. Native HTML and terminal renderers ignore these values.
+`libmandoc-rs::EquationBox` retains the original numeric evidence.
+Unsupported selections become bounded producer semantic-coverage diagnostics.
 Neither the IR nor its consumers replay native size requests.
 
 The new native family deliberately does not accept a v0.13 formula merely by
-changing its marker. Published v0.13 schemas remain frozen; migrate formula
+changing its marker. Published v0.13 schemas remain frozen. Migrate formula
 fields and exact request/response identifiers together.
 
 In the `0.13.0` API, migrate `EquationPosition`/`position` to

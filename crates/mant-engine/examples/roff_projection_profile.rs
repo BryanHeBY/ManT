@@ -294,16 +294,14 @@ fn collect_blocks(
                 owner_depth: owner_items.len(),
                 language: language.clone(),
             }),
-            Block::Table { .. } => topology.fences.push(FenceTopology {
-                section: section.to_vec(),
-                owner_depth: owner_items.len(),
-                language: None,
-            }),
-            Block::Equation { display: true, .. } => topology.fences.push(FenceTopology {
-                section: section.to_vec(),
-                owner_depth: owner_items.len(),
-                language: Some("math".to_owned()),
-            }),
+            // Portable tables and readable equations share an unlabelled fence.
+            Block::Table { .. } | Block::Equation { display: true, .. } => {
+                topology.fences.push(FenceTopology {
+                    section: section.to_vec(),
+                    owner_depth: owner_items.len(),
+                    language: None,
+                });
+            }
             Block::List { kind, items, .. } => {
                 let kind = match kind {
                     ListKind::Ordered { .. } => ProjectedListKind::Ordered,

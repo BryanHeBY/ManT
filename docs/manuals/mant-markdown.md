@@ -442,6 +442,29 @@ The Rust renderer's `MarkdownOptions.preserve_semantics` opt-in emits list decla
 
 Documents with native definition owners, inferred or mixed/partly rejected lists, invalid IR facts, or an entry-set reference without a representable document destination fall back to ordinary portable Markdown without semantic comments. The same whole-document fallback applies when valid IR metadata exceeds the authoring limits: 32 alias groups, 32 members per group, 512 characters per explicit ID, or 8192 bytes of escaped JSON per item. Import and export share these checks; they are Markdown representation limits, not general IR limits. Roff shared names never manufacture alias groups. Except for the heading-local-link fallback described above, semantic export takes precedence over raw HTML anchor export when both options are set: entry IDs are carried by metadata, not injected into the head. Heading IDs, arbitrary native layout, unsupported containers and exact source bytes are outside this subset. Use IR JSON for a complete facts/bindings serialization; Markdown is not a lossless semantic round trip.
 
+## Mathematical Export
+
+Resolved IR formulas have an explicit mathematical export path. Use
+`mant --input ./formula.1 --markdown-math latex` to emit `$...$` inline formulas
+and `$$...$$` display formulas in full-document Markdown. The output renderer
+needs mathematical/amsmath support. Source atom text is escaped as content,
+while fractions, roots, scripts, limits, accents and matrices use a fixed
+LaTeX subset. This conversion works from the resolved expression tree.
+
+Default Markdown export uses the shared readable text. Display formulas use
+unlabelled code fences. Literal blocks, portable reading tables and legacy
+formulas without structure keep readable content even with mathematical
+export enabled, accompanied by conversion warnings on stderr. Unsupported
+symbols, fonts and fences also produce conversion warnings. Invalid structure
+or exhausted work/output limits fail the complete export.
+
+Library consumers use `mant_codec::encode::render_math_markdown` with strict or
+best-effort policy. The returned artifact contains final-byte source ranges,
+bounded issue details and complete counts. Producer diagnostics describe
+source coverage independently of target-format conversion issues. Semantic
+reimport declarations require the portable export path. Markdown math input
+continues to retain its delimiters as unsupported reading content.
+
 ## Preserved Unsupported Syntax
 
 The parser recognizes several CommonMark or GFM extensions that ManT does not assign semantic IR nodes. Their source remains visible in an `unsupported` block or text run with a diagnostic:

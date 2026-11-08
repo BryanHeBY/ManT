@@ -98,7 +98,7 @@ fn retained_link_witnesses_have_linear_local_and_final_parse_work() {
         WHOLE_PARSES.with(|work| work.set(0));
         let markdown = super::super::render_inline_nodes(
             nodes.iter(),
-            crate::encode::MarkdownOptions::default(),
+            crate::encode::MarkdownOptions::default().into(),
             false,
             true,
         );

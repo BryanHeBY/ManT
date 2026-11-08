@@ -1,7 +1,8 @@
 //! Borrow effective BODY content, navigation carriers and resolved boundaries.
 use super::phrasing::{DefinitionHead, InlineRoot, render_roots};
+use crate::encode::math_markdown::RenderOptions;
 use crate::encode::{
-    MarkdownInlineProjection, MarkdownOptions,
+    MarkdownInlineProjection,
     blocks::render_block,
     mapped::{BlockSyntax, MappedText},
 };
@@ -25,7 +26,7 @@ impl<'a> DefinitionBody<'a> {
         &mut self,
         destinations: Vec<InlineRoot<'a>>,
         head: &DefinitionHead<'_>,
-        options: MarkdownOptions,
+        options: RenderOptions<'_>,
     ) {
         if self.blocks.is_empty() || head.has_output {
             self.navigation.extend(destinations);
@@ -42,7 +43,7 @@ impl<'a> DefinitionBody<'a> {
 pub(super) fn definition_body<'a>(
     item: &'a DefinitionItem,
     start: Option<DefinitionBodyRef<'a>>,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
     head: &DefinitionHead<'_>,

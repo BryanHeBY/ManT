@@ -203,7 +203,9 @@ fn choice_is_valid(
     let mut full_span = false;
     let mut strong = 0;
     let mut emphasis = 0;
-    for (event, range) in Parser::new(&probe).into_offset_iter() {
+    for (event, range) in
+        Parser::new_ext(&probe, pulldown_cmark::Options::ENABLE_MATH).into_offset_iter()
+    {
         full_span |=
             range == (start..end) && matches!(&event, Event::Start(Tag::Strong | Tag::Emphasis));
         match event {
@@ -213,7 +215,7 @@ fn choice_is_valid(
             Event::End(TagEnd::Emphasis) => emphasis -= 1,
             // ***word*** may reverse Strong/Emphasis nesting while
             // retaining both styles on exactly the original scalars.
-            Event::Text(_) | Event::Code(_)
+            Event::Text(_) | Event::Code(_) | Event::InlineMath(_) | Event::DisplayMath(_)
                 if range.start < end - marker.len()
                     && range.end > start + marker.len()
                     && if marker.len() == 2 {

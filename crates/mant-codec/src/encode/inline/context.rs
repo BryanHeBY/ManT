@@ -1,4 +1,6 @@
 //! One borrowed phrasing stream for source-owned fragments and transparent labels.
+use crate::encode::MarkdownMathIssueKind;
+use crate::encode::math_markdown::RenderOptions;
 
 mod projection;
 mod serialization;
@@ -11,7 +13,7 @@ use std::borrow::Cow;
 use mant_ir::Inline;
 
 use super::links::{PhrasingNode, phrasing_nodes, render_link};
-use super::{MarkdownOptions, code_span, escape_text, html_anchor};
+use super::{code_span, escape_text, html_anchor};
 pub(super) use projection::{LinkMeaning, link_meaning, matches_link};
 use serialization::{Framing, append_safe_piece, render_inline_pieces};
 
@@ -79,7 +81,12 @@ impl<'source> InlinePiece<'source> {
 }
 
 #[cfg(test)]
-fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: bool) -> String {
+fn render_inline_raw<'ctx>(
+    nodes: &[Inline],
+    options: impl Into<RenderOptions<'ctx>>,
+    manual_links: bool,
+) -> String {
+    let options = options.into();
     render_nodes(nodes.iter(), options, manual_links, Framing::Raw)
 }
 
@@ -88,7 +95,7 @@ fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions, manual_links: b
 /// reaches this boundary once; recursively accepted children remain phrasing.
 pub(super) fn render_inline_nodes<'source>(
     nodes: impl Iterator<Item = &'source Inline> + Clone,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
     interruptible: bool,
 ) -> String {
@@ -105,7 +112,7 @@ pub(super) fn render_inline_nodes<'source>(
 
 fn render_nodes<'source>(
     nodes: impl Iterator<Item = &'source Inline> + Clone,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
     framing: Framing,
 ) -> String {
@@ -117,26 +124,45 @@ fn render_nodes<'source>(
 }
 
 #[cfg(test)]
-fn render_unstyled<'source>(
-    nodes: impl Iterator<Item = &'source Inline>,
-    options: MarkdownOptions,
+fn render_unstyled<'source, 'ctx>(
+    nodes: impl Iterator<Item = &'source Inline> + Clone,
+    options: impl Into<RenderOptions<'ctx>>,
     manual_links: bool,
 ) -> String {
+    let options = options.into();
     render_unstyled_framed(nodes, options, manual_links, Framing::Raw)
 }
 
 fn render_unstyled_framed<'source>(
-    nodes: impl Iterator<Item = &'source Inline>,
-    options: MarkdownOptions,
+    nodes: impl Iterator<Item = &'source Inline> + Clone,
+    options: RenderOptions<'_>,
     manual_links: bool,
     framing: Framing,
 ) -> String {
     // Revisit the original borrowed nodes, preserving code coalescing and
     // typed links. Stripping bytes from a rejected Markdown candidate could
     // delete authored marker characters or change destination identities.
-    let mut pieces = coalesce_code_pieces(inline_pieces(nodes, options, manual_links, true));
+    let mut pieces =
+        coalesce_code_pieces(inline_pieces(nodes.clone(), options, manual_links, true));
     if let Some(output) = render_inline_pieces(&mut pieces, framing) {
         return output;
+    }
+    if let Some(context) = options.math {
+        for node in nodes.clone() {
+            context.reading_inlines(
+                std::slice::from_ref(node),
+                MarkdownMathIssueKind::DelimiterContext,
+            );
+        }
+        if context.failed() {
+            return String::new();
+        }
+        return render_unstyled_framed(
+            nodes,
+            RenderOptions::portable(options.options),
+            manual_links,
+            framing,
+        );
     }
     // Unsupported phrasing (notably nested active Link wrappers, which
     // CommonMark cannot express) retains the established best-effort source
@@ -150,7 +176,7 @@ fn render_unstyled_framed<'source>(
 
 pub(super) fn render_link_label(
     children: &[Inline],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
     omit_styles: bool,
 ) -> String {
@@ -163,7 +189,7 @@ pub(super) fn render_link_label(
 
 fn inline_pieces<'source>(
     nodes: impl Iterator<Item = &'source Inline>,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
     omit_styles: bool,
 ) -> Vec<InlinePiece<'source>> {
@@ -198,8 +224,17 @@ fn inline_pieces<'source>(
                 }
                 pieces.push(render_style(&segments, options, manual_links, ("*", "_")));
             }
-            PhrasingNode::Node(Inline::Code { value } | Inline::Equation { value, .. }) => {
+            PhrasingNode::Node(Inline::Code { value }) => {
                 pieces.push(InlinePiece::code(value));
+            }
+            PhrasingNode::Node(Inline::Equation { value, expression }) => {
+                if let Some(context) = options.math {
+                    if let Some(body) = context.latex(expression, value) {
+                        pieces.push(InlinePiece::plain(format!("${body}$")));
+                    }
+                } else {
+                    pieces.push(InlinePiece::code(value));
+                }
             }
             PhrasingNode::Link {
                 destination,
@@ -242,7 +277,7 @@ fn inline_pieces<'source>(
 
 fn render_style<'source>(
     segments: &[&'source [Inline]],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
     markers: (&'static str, &'static str),
 ) -> InlinePiece<'source> {
@@ -344,7 +379,7 @@ mod tests {
                 },
             ];
             let frozen = original.clone();
-            let mut markdown = render_unstyled(original.iter(), MarkdownOptions::default(), false);
+            let mut markdown = render_unstyled(original.iter(), RenderOptions::default(), false);
             for _ in 0..2 {
                 assert!(
                     !Parser::new(&markdown)
@@ -379,7 +414,7 @@ mod tests {
                         |event| matches!(event, Event::Code(value) if value.as_ref() == "END`")
                     )
                 );
-                markdown = super::super::render_inline(children, MarkdownOptions::default());
+                markdown = super::super::render_inline(children, RenderOptions::default());
             }
             assert_eq!(original, frozen);
         }
@@ -406,7 +441,7 @@ mod tests {
             }];
             let markdown = render_unstyled_framed(
                 source.iter(),
-                MarkdownOptions::default(),
+                RenderOptions::default(),
                 false,
                 Framing::Rows {
                     manual_links: false,
@@ -477,7 +512,7 @@ mod tests {
             Inline::Text { value: "!".into() },
             link("NEXT"),
         ];
-        let markdown = render_unstyled(nodes.iter(), MarkdownOptions::default(), false);
+        let markdown = render_unstyled(nodes.iter(), RenderOptions::default(), false);
         let events = Parser::new(&markdown).collect::<Vec<_>>();
         assert!(!events.iter().any(|event| matches!(
             event,

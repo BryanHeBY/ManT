@@ -37,6 +37,13 @@ pub(crate) enum QueryFormat {
     Json,
 }
 
+/// Mathematical representation selected explicitly for full Markdown output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum MarkdownMathMode {
+    Readable,
+    Latex,
+}
+
 /// Source family selected by document-catalog commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum CatalogKindMode {
@@ -63,6 +70,8 @@ pub(crate) struct OutputOptions {
     pub(crate) color: ColorMode,
     /// Fixed to Direct/Pager/Tui by process policy before execution.
     pub(crate) display: DisplayMode,
+    /// An explicit selection also opts into full-document Markdown output.
+    pub(crate) markdown_math: Option<MarkdownMathMode>,
 }
 
 impl OutputOptions {
@@ -758,6 +767,20 @@ struct Cli {
         help_heading = "Output"
     )]
     preserve_anchors: bool,
+
+    /// Formula output in full-document Markdown. Defaults to readable text.
+    #[arg(
+        long,
+        value_name = "MODE",
+        value_enum,
+        conflicts_with_all = capabilities::argument_ids([
+            "list", "find", "doctor", "mcp", "update_docs", "prune_docs",
+            "update_tldr", "protocol_version", "schema", "outline", "node",
+            "explain", "search", "document", "follow_links"
+        ]),
+        help_heading = "Output"
+    )]
+    markdown_math: Option<MarkdownMathMode>,
 
     /// Print help.
     #[arg(short = 'h', long, action = ArgAction::Help, help_heading = "General")]

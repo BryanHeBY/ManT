@@ -104,6 +104,7 @@ mod tests {
             preserve_anchors: false,
             color: true,
             target: super::super::OutputTarget::Terminal,
+            markdown_math: None,
         };
         let style =
             super::super::terminal::terminal_style(super::super::terminal::TerminalRole::Document);

@@ -414,7 +414,36 @@ const fn options(format: QueryFormat, color: bool, target: OutputTarget) -> Rend
         preserve_anchors: false,
         color,
         target,
+        markdown_math: None,
     }
+}
+
+#[test]
+fn mathematical_heading_survives_terminal_identity_sanitization() {
+    let mut query = load_markdown_text("# Formula\n\nBody.\n", None).unwrap();
+    let expression: mant_ir::EquationExpression = serde_json::from_value(serde_json::json!({
+        "kind": "text", "font": "none", "operator": "none",
+        "atomRole": "identifier", "text": "x", "children": []
+    }))
+    .unwrap();
+    let heading = query.document.as_mut().unwrap().heading.as_mut().unwrap();
+    heading
+        .content
+        .push(mant_ir::Inline::Text { value: " ".into() });
+    heading.content.push(mant_ir::Inline::Equation {
+        value: expression.readable_text(),
+        expression,
+    });
+    let result = mant_engine::QueryViewResult::Full(Box::new(query));
+    let mut stream = options(QueryFormat::Markdown, false, OutputTarget::Stream);
+    stream.markdown_math = Some(crate::arguments::MarkdownMathMode::Latex);
+    let terminal = RenderOptions {
+        target: OutputTarget::Terminal,
+        ..stream
+    };
+    let expected = render_query_result(&result, stream).unwrap();
+    assert!(expected.contains("${x}$"), "{expected}");
+    assert_eq!(render_query_result(&result, terminal).unwrap(), expected);
 }
 
 fn strip_ansi(value: &str) -> String {

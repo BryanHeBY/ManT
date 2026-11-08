@@ -118,3 +118,32 @@ fn decoded_control_witness_agrees_with_actual_reader_not_only_bare_parser() {
     assert!(!compare("[a&#13;  \nb](https://other.test \"t u\")"));
     assert!(!compare("[a&#13;  \nb](https://a.test \"t x\")"));
 }
+
+#[test]
+fn mathematical_witness_keeps_event_boundaries_styles_and_link_owners() {
+    assert!(equivalent(["$a$", "$b$"].into_iter(), "$a$$b$"));
+    assert!(!equivalent(["$a$", "$b$"].into_iter(), "$ab$"));
+    assert!(!equivalent(["$a$"].into_iter(), "a"));
+    assert!(!equivalent(["$a$"].into_iter(), "$$a$$"));
+    assert!(super::equivalent(
+        [("$a$", Some(super::Style::Strong))].into_iter(),
+        "**$a$**"
+    ));
+    assert!(!super::equivalent(
+        [("$a$", Some(super::Style::Strong))].into_iter(),
+        "$a$"
+    ));
+    let meaning = super::link_meaning("$a$$b$", "https://example.com", None).unwrap();
+    assert!(super::matches_link(
+        &meaning,
+        "[$a$$b$](https://example.com)"
+    ));
+    assert!(!super::matches_link(
+        &meaning,
+        "[$ab$](https://example.com)"
+    ));
+    assert!(!super::matches_link(
+        &meaning,
+        "[$a$](https://example.com)$b$"
+    ));
+}

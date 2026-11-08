@@ -1,4 +1,5 @@
 //! Assemble definition HEAD/BODY owners using one projected inline context.
+use crate::encode::math_markdown::RenderOptions;
 
 mod body;
 mod phrasing;
@@ -8,15 +9,15 @@ pub(super) use phrasing::{InlineRoot, render_roots};
 
 use mant_ir::{Block, DefinitionItem, EntryOwner};
 
+use super::super::MarkdownInlineProjection;
 use super::super::inline::block_prefix_escape_position;
 use super::super::mapped::{BlockSyntax, MappedText};
-use super::super::{MarkdownInlineProjection, MarkdownOptions};
 use super::{assembly, join_definition_items};
 
 pub(super) fn render_definition_list(
     items: &[DefinitionItem],
     compact: bool,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> Option<MappedText> {
@@ -77,7 +78,7 @@ fn mapped_terms(terms: Vec<(Vec<usize>, String)>, roots: &[InlineRoot<'_>]) -> M
 
 fn definition_content(
     item: &DefinitionItem,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> DefinitionContent {

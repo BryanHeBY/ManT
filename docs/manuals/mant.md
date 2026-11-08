@@ -1237,6 +1237,7 @@ mant tar --explain=--exclude
 - `--display MODE`: Select `auto`, `direct`, `pager`, or `tui`, independently of the content format.
 - `--compact`: Omit JSON indentation.
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
+- `--markdown-math MODE`: Select `readable` or `latex` formulas for full-document Markdown output.
 
 Clean Markdown output normally omits internal HTML anchors. A heading with a
 document-local link automatically retains addressable anchors so its target is
@@ -1251,6 +1252,17 @@ automatically. Select `--format markdown` when Markdown structure is useful;
 JSON must be selected explicitly for document queries. Maintenance reports,
 schemas, and protocol descriptions retain their JSON output. `--compact` removes indentation from
 JSON queries, schemas, protocol descriptions, doctor reports, and update reports.
+
+Formulas use their shared readable text by default. `--markdown-math latex`
+explicitly selects full-document Markdown with `$...$` inline and `$$...$$`
+display formulas. It also selects `--format markdown` when no format is given.
+For example, `mant --input ./formula.1 --markdown-math latex` converts resolved
+roff formulas using the bounded mathematical/amsmath subset. The destination
+renderer needs math support. Conversion warnings go to stderr, including any
+formula retained as readable text inside a literal or table. Invalid formula
+structure and resource exhaustion fail the export. Use `--markdown-math
+readable` to select ordinary readable Markdown explicitly. This option applies
+to one complete document, including a full `--request-json` query.
 
 ### Display Policy
 

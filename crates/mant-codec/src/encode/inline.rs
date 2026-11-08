@@ -1,4 +1,5 @@
 //! Converts renderer-neutral inline nodes to safe `CommonMark` phrasing.
+use crate::encode::math_markdown::RenderOptions;
 
 mod code;
 mod context;
@@ -9,7 +10,6 @@ use std::{borrow::Cow, collections::HashSet};
 
 use mant_ir::{Inline, InlineContentRef};
 
-use super::MarkdownOptions;
 use context::render_inline_nodes;
 #[cfg(test)]
 use text::escape_text as escape_plain_text;
@@ -21,14 +21,19 @@ pub(super) use links::render_uri;
 pub(super) use text::{block_prefix_escape_position, protect_block_prefix};
 pub(crate) use text::{escape_text, html_anchor, html_anchors};
 
-pub(crate) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
+pub(crate) fn render_inline<'ctx>(
+    children: &[Inline],
+    options: impl Into<RenderOptions<'ctx>>,
+) -> String {
+    let options = options.into();
     render_inline_segments(&[children], options)
 }
 
-pub(crate) fn render_inline_content(
+pub(crate) fn render_inline_content<'ctx>(
     content: InlineContentRef<'_>,
-    options: MarkdownOptions,
+    options: impl Into<RenderOptions<'ctx>>,
 ) -> String {
+    let options = options.into();
     // Ordinary CommonMark carries author content and hard rows. Exceptional
     // reading origins remain on the IR owner and never become text cells.
     render_inline(content.content, options)
@@ -37,39 +42,56 @@ pub(crate) fn render_inline_content(
 /// Encode source-owned fragments with one delimiter and escaping context.
 /// A Joined seam belongs to the same inline stream even when its IR roots
 /// remain separate for semantic ownership or report decoration.
-pub(super) fn render_inline_segments(segments: &[&[Inline]], options: MarkdownOptions) -> String {
+pub(super) fn render_inline_segments<'ctx>(
+    segments: &[&[Inline]],
+    options: impl Into<RenderOptions<'ctx>>,
+) -> String {
+    let options = options.into();
     render_inline_content_segments(segments, options, false)
 }
 
 /// Encode borrowed node selections without changing their source roots or
 /// splitting the delimiter context at invisible metadata fragments.
 #[cfg(test)]
-pub(super) fn render_inline_node_refs(nodes: &[&Inline], options: MarkdownOptions) -> String {
+pub(super) fn render_inline_node_refs<'ctx>(
+    nodes: &[&Inline],
+    options: impl Into<RenderOptions<'ctx>>,
+) -> String {
+    let options = options.into();
     render_inline_nodes(nodes.iter().copied(), options, false, false)
 }
 
 /// A block root must be interruptible by the following fence, list or rule.
 /// The newline entity carries the actual leading hard row without opening
 /// an HTML block that would consume the following structural syntax.
-pub(super) fn render_inline_block_refs(nodes: &[&Inline], options: MarkdownOptions) -> String {
+pub(super) fn render_inline_block_refs<'ctx>(
+    nodes: &[&Inline],
+    options: impl Into<RenderOptions<'ctx>>,
+) -> String {
+    let options = options.into();
     render_inline_nodes(nodes.iter().copied(), options, false, true)
 }
 
 #[cfg(test)]
-pub(super) fn render_heading_inline(children: &[Inline], options: MarkdownOptions) -> String {
+pub(super) fn render_heading_inline<'ctx>(
+    children: &[Inline],
+    options: impl Into<RenderOptions<'ctx>>,
+) -> String {
+    let options = options.into();
     render_inline_content_segments(&[children], options, true)
 }
 
-pub(super) fn render_heading_content(
+pub(super) fn render_heading_content<'ctx>(
     content: InlineContentRef<'_>,
-    options: MarkdownOptions,
+    options: impl Into<RenderOptions<'ctx>>,
 ) -> String {
+    let options = options.into();
     render_inline_content_segments(&[content.content], options, true)
 }
 
 fn render_inline_content_segments(
     segments: &[&[Inline]],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
 ) -> String {
     render_inline_nodes(
@@ -239,7 +261,7 @@ mod tests {
         };
         assert_eq!(super::flatten_inline_content(content), "Alpha\n   Beta");
         assert_eq!(
-            super::render_inline_content(content, super::MarkdownOptions::default()),
+            super::render_inline_content(content, super::RenderOptions::default()),
             "Alpha  \n**Beta**"
         );
         assert_eq!(mant_ir::inline_plain_text(&nodes), "Alpha\nBeta");

@@ -44,13 +44,13 @@ transport and diagnostic APIs.
 
 `EquationBox` adds `atom_role: EquationAtomRole`, retaining complete named
 function and literal mathematical atom identities after definition expansion.
-Update explicit struct literals; older serialized boxes default this field to
+Update explicit struct literals. Older serialized boxes default this field to
 `Unknown`. `Literal` does not imply prose, a roman font, or a function inferred
 from spelling. The evidence is available independently of compatibility
 features and changes neither native parsing nor reference rendering.
-The native `size` snapshot remains available for audit, but it is not a resolved
-point size: the root's zero is an allocation default and signed selections can
-already be conflated. Native HTML and terminal renderers do not execute it.
+The native `size` snapshot remains available for audit. Its root zero is an
+allocation default, and signed selections can already be conflated. Native
+HTML and terminal renderers ignore these values.
 
 ## Upgrading from 0.12
 

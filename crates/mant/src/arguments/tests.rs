@@ -81,7 +81,8 @@ fn noninteractive_input_modes_share_the_text_default() {
                     presentation: OutputOptions {
                         format: None,
                         color: ColorMode::Auto,
-                        display: DisplayMode::Auto
+                        display: DisplayMode::Auto,
+                        markdown_math: None,
                     },
                     ..
                 }
@@ -106,7 +107,8 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Text),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
         }
@@ -145,7 +147,8 @@ fn parses_grouped_lists_and_grep_like_catalog_searches() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: false,
         }
@@ -252,7 +255,8 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
             policy: LoadPolicy::Combined,
@@ -330,7 +334,8 @@ fn dispatches_explicit_files_and_direct_stdin_without_embedding_content() {
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             ..
         }
@@ -352,12 +357,61 @@ fn preserves_markdown_anchors_only_when_requested() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Markdown),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             preserve_anchors: true,
             ..
         }
     ));
+}
+
+#[test]
+fn mathematical_markdown_requires_a_full_single_document() {
+    for (mode, expected) in [
+        ("readable", super::MarkdownMathMode::Readable),
+        ("latex", super::MarkdownMathMode::Latex),
+    ] {
+        assert!(matches!(
+            parse(&args(&["git", "--markdown-math", mode])).unwrap(),
+            Command::Query {
+                presentation: OutputOptions {
+                    format: Some(QueryFormat::Markdown),
+                    markdown_math: Some(selected),
+                    ..
+                },
+                ..
+            } if selected == expected
+        ));
+        for arguments in [
+            vec!["git", "--format", "json"],
+            vec!["git", "--format", "text"],
+            vec!["git", "--outline"],
+            vec!["git", "--node", "1"],
+            vec!["git", "--search", "foo"],
+            vec!["git", "--explain", "foo"],
+            vec!["--document", "git"],
+            vec!["--list"],
+            vec!["--find", "git"],
+            vec!["--doctor"],
+            vec!["--schema", "all"],
+            vec!["--protocol-version"],
+            #[cfg(feature = "update")]
+            vec!["--update-docs"],
+            #[cfg(feature = "update")]
+            vec!["--update-tldr"],
+            #[cfg(feature = "update")]
+            vec!["--prune-docs"],
+            #[cfg(feature = "mcp")]
+            vec!["--mcp"],
+        ] {
+            let mut values = arguments;
+            values.extend(["--markdown-math", mode]);
+            assert!(parse(&args(&values)).is_err(), "{values:?}");
+        }
+    }
+    assert!(parse(&args(&["--request-json", "--markdown-math", "latex"])).is_ok());
+    assert!(parse(&args(&["git", "--markdown-math", "tex"])).is_err());
 }
 
 #[test]
@@ -386,7 +440,8 @@ fn parses_format_man_section_and_compact_json_options() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: false,
             policy: LoadPolicy::Combined,
@@ -475,7 +530,8 @@ fn color_policy_is_global_without_changing_deterministic_presentations() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Always,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             ..
         }
@@ -603,7 +659,8 @@ fn tldr_joins_multiword_topics_and_keeps_explicit_formats() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             ..
         }
@@ -659,7 +716,8 @@ fn parses_the_closed_stdin_request_mode_used_by_the_tui() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: false,
             policy: LoadPolicy::Combined,
@@ -713,7 +771,8 @@ fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
             policy: LoadPolicy::Combined,
@@ -807,7 +866,8 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
             policy: LoadPolicy::Combined,
@@ -843,7 +903,8 @@ fn parses_filtered_outlines_and_repeatable_nodes() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Text),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
             policy: LoadPolicy::Combined,
@@ -877,7 +938,8 @@ fn parses_explain_as_a_first_class_semantic_view() {
                 presentation: OutputOptions {
                     format: None,
                     color: ColorMode::Auto,
-                    display: DisplayMode::Auto
+                    display: DisplayMode::Auto,
+                    markdown_math: None,
                 },
                 pretty: true,
                 policy: LoadPolicy::Combined,
@@ -900,7 +962,8 @@ fn defaults_all_partial_document_views_to_text() {
                 presentation: OutputOptions {
                     format: None,
                     color: ColorMode::Auto,
-                    display: DisplayMode::Auto
+                    display: DisplayMode::Auto,
+                    markdown_math: None,
                 },
                 ..
             }
@@ -934,7 +997,8 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
             policy: LoadPolicy::Combined,
@@ -984,7 +1048,8 @@ fn parses_literal_and_regex_searches_with_text_as_the_default() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
             policy: LoadPolicy::Combined,
@@ -1001,7 +1066,8 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Text),
                 color: ColorMode::Auto,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: true,
         }
@@ -1020,7 +1086,8 @@ fn parses_long_option_actions_without_ad_hoc_subcommands() {
             presentation: OutputOptions {
                 format: Some(QueryFormat::Json),
                 color: ColorMode::Always,
-                display: DisplayMode::Auto
+                display: DisplayMode::Auto,
+                markdown_math: None,
             },
             pretty: false,
         }

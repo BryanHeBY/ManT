@@ -1,11 +1,12 @@
 //! Typed destinations and transparent label traversal for Markdown links.
+use crate::encode::math_markdown::RenderOptions;
 
 use std::borrow::Cow;
 
 use mant_ir::{Inline, LinkTarget};
 
 use super::context::{LinkMeaning, link_meaning, matches_link, render_link_label};
-use super::{MarkdownOptions, flatten_inline};
+use super::flatten_inline;
 
 pub(super) enum PhrasingNode<'source> {
     Node(&'source Inline),
@@ -48,7 +49,7 @@ pub(in crate::encode) fn render_uri(value: &str) -> Option<String> {
             &[Inline::Text {
                 value: value.into(),
             }],
-            MarkdownOptions::default(),
+            RenderOptions::default(),
             true,
             false,
         )
@@ -61,7 +62,7 @@ pub(in crate::encode) fn render_uri(value: &str) -> Option<String> {
 /// chosen, preserving source order and visible link boundaries.
 pub(super) fn phrasing_nodes<'source>(
     mut roots: impl Iterator<Item = &'source Inline>,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
     omit_styles: bool,
 ) -> impl Iterator<Item = PhrasingNode<'source>> {
@@ -112,7 +113,7 @@ pub(super) fn render_link(
     target: &CheckedDestination,
     title: Option<&str>,
     children: &[Inline],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
     omit_styles: bool,
 ) -> EncodedLink {
@@ -209,7 +210,7 @@ fn append_metadata(output: &mut String, source: &str, title: bool) {
 /// No target is recovered from visible label text.
 pub(in crate::encode) fn link_destination(
     target: &LinkTarget,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
 ) -> Option<CheckedDestination> {
     match link_presentation(target, options, manual_links) {
@@ -220,7 +221,7 @@ pub(in crate::encode) fn link_destination(
 
 fn link_presentation(
     target: &LinkTarget,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     manual_links: bool,
 ) -> LinkPresentation {
     if matches!(target, LinkTarget::Manual { .. }) && !manual_links
@@ -254,7 +255,7 @@ mod tests {
             &target,
             Some("say \"中\""),
             &children,
-            super::MarkdownOptions::default(),
+            super::RenderOptions::default(),
             true,
             false,
         );

@@ -165,6 +165,12 @@ fn unqualified_manual_navigation_preserves_native_resolution_without_a_default_s
 
 #[test]
 fn terminal_capabilities_resolve_interactivity_and_text_colour() {
+    let terminal = TerminalCapabilities {
+        input: true,
+        output: true,
+        color: true,
+        kind: TerminalKind::Capable,
+    };
     let full_display = if cfg!(feature = "tui") {
         DisplayMode::Tui
     } else if cfg!(feature = "pager") {
@@ -178,16 +184,7 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
         DisplayMode::Direct
     };
     let mut terminal_query = arguments::parse(&["git".to_owned()]).expect("automatic query");
-    resolve_process_presentation(
-        &mut terminal_query,
-        TerminalCapabilities {
-            input: true,
-            output: true,
-            color: true,
-            kind: TerminalKind::Capable,
-        },
-    )
-    .expect("terminal query");
+    resolve_process_presentation(&mut terminal_query, terminal).expect("terminal query");
     assert!(matches!(
         terminal_query,
         Command::Query {
@@ -203,10 +200,8 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
     resolve_process_presentation(
         &mut redirected_query,
         TerminalCapabilities {
-            input: true,
             output: false,
-            color: true,
-            kind: TerminalKind::Capable,
+            ..terminal
         },
     )
     .expect("redirected query");
@@ -216,7 +211,8 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Never,
-                display: DisplayMode::Direct
+                display: DisplayMode::Direct,
+                markdown_math: None,
             },
             ..
         }
@@ -224,39 +220,22 @@ fn terminal_capabilities_resolve_interactivity_and_text_colour() {
 
     let mut outline =
         arguments::parse(&["git".to_owned(), "--outline".to_owned()]).expect("outline query");
-    resolve_process_presentation(
-        &mut outline,
-        TerminalCapabilities {
-            input: true,
-            output: true,
-            color: true,
-            kind: TerminalKind::Capable,
-        },
-    )
-    .expect("outline remains non-interactive");
+    resolve_process_presentation(&mut outline, terminal).expect("outline remains non-interactive");
     assert!(matches!(
         outline,
         Command::Query {
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Always,
-                display
+                display,
+                markdown_math: None,
             },
             ..
         } if display == partial_display
     ));
 
     let mut tldr = arguments::parse(&["git".to_owned(), "--tldr".to_owned()]).expect("tldr query");
-    resolve_process_presentation(
-        &mut tldr,
-        TerminalCapabilities {
-            input: true,
-            output: true,
-            color: true,
-            kind: TerminalKind::Capable,
-        },
-    )
-    .expect("tldr remains non-interactive");
+    resolve_process_presentation(&mut tldr, terminal).expect("tldr remains non-interactive");
     assert!(matches!(
         tldr,
         Command::Query {
@@ -322,7 +301,8 @@ fn dumb_term_uses_copyable_output_for_automatic_queries() {
             presentation: OutputOptions {
                 format: None,
                 color: ColorMode::Never,
-                display: DisplayMode::Direct
+                display: DisplayMode::Direct,
+                markdown_math: None,
             },
             ..
         }
@@ -846,6 +826,42 @@ fn stdin_protocol_emits_only_compact_query_json() {
         "{\"schema\":\"mant.query/v0.14\",\"label\":\"git\"}\n"
     );
     assert_eq!(diagnostics.len(), 0);
+    assert_eq!(host.query_calls.get(), 1);
+}
+
+#[test]
+fn mathematical_markdown_rejects_partial_and_scope_json_before_loading() {
+    for input in [
+        br#"{"schema":"mant.request/v0.14","input":{"kind":"document","selector":"git"},"view":{"kind":"outline"}}"#.as_slice(),
+        br#"{"schema":"mant.request/v0.14","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":[{"kind":"path","path":"1"}]}}"#.as_slice(),
+        br#"{"schema":"mant.scope-request/v0.14","scope":{"documents":[{"selector":"git"}]},"view":{"kind":"search","pattern":"x"}}"#.as_slice(),
+    ] {
+        let host = FakeHost::new();
+        let (status, output, diagnostics) = invoke(
+            &["--request-json", "--markdown-math", "latex"], input, &host,
+        );
+        assert_eq!(status, 2, "{diagnostics}");
+        assert_eq!(output, "");
+        assert!(diagnostics.contains("--markdown-math applies only to full single-document"), "{diagnostics}");
+        assert_eq!(host.query_calls.get(), 0);
+    }
+    #[cfg(feature = "roff")]
+    {
+        let host = FakeHost::new();
+        let (status, output, diagnostics) =
+            invoke(&["git", "--tldr", "--markdown-math", "latex"], &[], &host);
+        assert_eq!(status, 2, "{diagnostics}");
+        assert_eq!(output, "");
+        assert_eq!(host.query_calls.get(), 0);
+    }
+    let host = FakeHost::new();
+    let (status, _, diagnostics) = invoke(
+        &["--request-json", "--markdown-math", "latex"],
+        br#"{"schema":"mant.request/v0.14","input":{"kind":"document","selector":"git"},"view":{"kind":"full"}}"#,
+        &host,
+    );
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(diagnostics.is_empty(), "{diagnostics}");
     assert_eq!(host.query_calls.get(), 1);
 }
 

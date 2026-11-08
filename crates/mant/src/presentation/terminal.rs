@@ -1,6 +1,9 @@
 //! CLI-only style and terminal safety over shared semantic renderers.
 use super::RenderOptions;
-use crate::{arguments::QueryFormat, error::Failure};
+use crate::{
+    arguments::{MarkdownMathMode, QueryFormat},
+    error::Failure,
+};
 use anstyle::{AnsiColor, Style};
 use mant_ir::{DocumentMeta, EntryKind, ResolvedContent, SourceFormat};
 use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch};
@@ -255,12 +258,17 @@ pub(super) fn render_full_query(
     match format {
         QueryFormat::Markdown => {
             let terminal_copy = output_terminal.then(|| terminal_content(query));
+            let query = terminal_copy.as_ref().unwrap_or(query);
+            let markdown_options = mant_codec::encode::MarkdownOptions {
+                preserve_anchors,
+                ..Default::default()
+            };
+            if options.markdown_math == Some(MarkdownMathMode::Latex) {
+                return render_mathematical_markdown(query, markdown_options);
+            }
             Ok(mant_codec::encode::render_markdown_with_options(
-                terminal_copy.as_ref().unwrap_or(query),
-                mant_codec::encode::MarkdownOptions {
-                    preserve_anchors,
-                    ..Default::default()
-                },
+                query,
+                markdown_options,
             ))
         }
         QueryFormat::Text => {
@@ -293,4 +301,35 @@ pub(super) fn render_full_query(
             mant_render::render_query_json(query, pretty).map_err(Failure::operational)
         }
     }
+}
+
+fn render_mathematical_markdown(
+    query: &ResolvedContent,
+    options: mant_codec::encode::MarkdownOptions,
+) -> Result<String, Failure> {
+    let artifact = mant_codec::encode::render_math_markdown(
+        query,
+        options,
+        mant_codec::math::MathPolicy::BestEffort,
+    )
+    .map_err(Failure::operational)?;
+    let summary = artifact.summary();
+    if summary.issues > 0 {
+        eprintln!(
+            "mant: warning: mathematical Markdown contains {} conversion issues across {} formulas ({} readable fallbacks)",
+            summary.issues, summary.formulas, summary.fallback_formulas,
+        );
+        let retained = artifact.issues().len().min(8);
+        for issue in artifact.issues().iter().take(retained) {
+            eprintln!(
+                "mant: warning: formula {} at {:?}: {:?}",
+                issue.formula, issue.path, issue.kind
+            );
+        }
+        let omitted = summary.issues.saturating_sub(retained);
+        if omitted > 0 {
+            eprintln!("mant: warning: {omitted} additional conversion issues omitted");
+        }
+    }
+    Ok(artifact.into_text())
 }

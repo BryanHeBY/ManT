@@ -3,9 +3,10 @@
 use super::{
     CatalogKindMode, CatalogQuery, Cli, ColorMode, Command, CommandFactory, ContentSelector,
     DisplayMode, DocumentScope, DocumentSelector, DocumentTraversal, EntryProjection, ErrorKind,
-    InputFormat, InputFormatMode, LoadPolicy, OutputOptions, QueryFormat, QueryInput, QueryRequest,
-    QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope, SearchSyntax,
-    default_search_limit, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
+    InputFormat, InputFormatMode, LoadPolicy, MarkdownMathMode, OutputOptions, QueryFormat,
+    QueryInput, QueryRequest, QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase,
+    SearchScope, SearchSyntax, default_search_limit, is_manual_section, normalize_tldr_topic,
+    parenthesized_manual_reference,
 };
 
 pub(super) fn normalize(parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
@@ -66,6 +67,7 @@ fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap:
         parsed.compact,
         parsed.format,
         parsed.preserve_anchors,
+        parsed.markdown_math,
         &view,
         color,
     )?;
@@ -90,9 +92,11 @@ fn normalize_command(mut parsed: Cli, color: ColorMode) -> Result<Command, clap:
     let presentation = OutputOptions {
         format: parsed
             .format
-            .or(parsed.preserve_anchors.then_some(QueryFormat::Markdown)),
+            .or((parsed.preserve_anchors || parsed.markdown_math.is_some())
+                .then_some(QueryFormat::Markdown)),
         color: parsed.color.unwrap_or_default(),
         display: parsed.display.unwrap_or_default(),
+        markdown_math: parsed.markdown_math,
     };
 
     Ok(Command::Query {
@@ -183,6 +187,7 @@ fn normalize_doctor(parsed: &Cli, color: ColorMode) -> Result<Command, clap::Err
             format: Some(format),
             color: parsed.color.unwrap_or_default(),
             display: parsed.display.unwrap_or_default(),
+            markdown_math: None,
         },
         pretty: !parsed.compact,
     })
@@ -256,6 +261,7 @@ fn normalize_catalog(parsed: Cli, color: ColorMode) -> Result<Command, clap::Err
             format: Some(format),
             color: parsed.color.unwrap_or_default(),
             display: parsed.display.unwrap_or_default(),
+            markdown_math: None,
         },
         pretty: !parsed.compact,
     })
@@ -372,6 +378,7 @@ fn validate_output_options(
     compact: bool,
     format: Option<QueryFormat>,
     preserve_anchors: bool,
+    markdown_math: Option<MarkdownMathMode>,
     view: &QueryView,
     color: ColorMode,
 ) -> Result<(), clap::Error> {
@@ -405,6 +412,13 @@ fn validate_output_options(
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--format man applies only to full documents",
+            color,
+        ));
+    }
+    if markdown_math.is_some() && format.is_some_and(|format| format != QueryFormat::Markdown) {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--markdown-math requires Markdown output",
             color,
         ));
     }

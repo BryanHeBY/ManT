@@ -38,6 +38,7 @@ pub(super) fn render_inline_pieces(
             && !pieces
                 .iter()
                 .any(|piece| matches!(piece.accepted, super::AcceptedMeaning::UnsupportedLink))
+            && !pieces.iter().any(|piece| piece.rendered.contains('$'))
         {
             return Some(output);
         }

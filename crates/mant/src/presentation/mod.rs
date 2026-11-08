@@ -5,7 +5,10 @@ mod terminal;
 #[cfg(test)]
 mod tests;
 
-use crate::{arguments::QueryFormat, error::Failure};
+use crate::{
+    arguments::{MarkdownMathMode, QueryFormat},
+    error::Failure,
+};
 use mant_engine::QueryViewResult;
 pub(super) use scope::render_scope_query_result;
 use serde::Serialize;
@@ -31,6 +34,7 @@ pub(super) struct RenderOptions {
     pub(super) preserve_anchors: bool,
     pub(super) color: bool,
     pub(super) target: OutputTarget,
+    pub(super) markdown_math: Option<MarkdownMathMode>,
 }
 
 impl RenderOptions {
@@ -43,6 +47,13 @@ pub(super) fn render_query_result(
     result: &QueryViewResult,
     options: RenderOptions,
 ) -> Result<String, Failure> {
+    if options.markdown_math.is_some()
+        && (options.format != QueryFormat::Markdown || !matches!(result, QueryViewResult::Full(_)))
+    {
+        return Err(Failure::usage(
+            "--markdown-math applies only to full single-document Markdown output",
+        ));
+    }
     let RenderOptions {
         format,
         pretty,

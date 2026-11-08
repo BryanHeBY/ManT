@@ -36,11 +36,23 @@ struct Run {
     link: Option<usize>,
 }
 
+/// Mathematical events retain their boundaries even when adjacent text runs
+/// share styles. Two neighboring formulas must never certify one merged event.
+#[derive(Clone, Eq, PartialEq)]
+struct MathRun {
+    offset: usize,
+    body: String,
+    display: bool,
+    styles: u8,
+    link: Option<usize>,
+}
+
 #[derive(Clone, Default, Eq, PartialEq)]
 struct Projection {
     runs: Vec<Run>,
     html: Vec<(usize, String)>,
     links: Vec<(String, String)>,
+    math: Vec<MathRun>,
     bytes: usize,
 }
 
@@ -66,6 +78,14 @@ pub(in crate::encode::inline) fn link_meaning(
             normalized_content(title.unwrap_or_default()).into_owned(),
         )],
         html: meaning.html,
+        math: meaning
+            .math
+            .into_iter()
+            .map(|mut math| {
+                math.link = Some(0);
+                math
+            })
+            .collect(),
         ..Projection::default()
     };
     for run in meaning.runs {
@@ -104,6 +124,11 @@ impl Projection {
     fn append(&mut self, other: Self) {
         let owners = self.links.len();
         self.links.extend(other.links);
+        self.math.extend(other.math.into_iter().map(|mut math| {
+            math.offset += self.bytes;
+            math.link = math.link.map(|link| link + owners);
+            math
+        }));
         self.html.extend(
             other
                 .html
@@ -126,6 +151,16 @@ impl Projection {
         let mut output = Self {
             html: self.html,
             links: self.links,
+            math: self
+                .math
+                .into_iter()
+                .map(|mut math| {
+                    if (leading..end).contains(&math.offset) {
+                        math.styles |= style.bit();
+                    }
+                    math
+                })
+                .collect(),
             ..Self::default()
         };
         let mut offset = 0;
@@ -243,7 +278,7 @@ fn project_rows(source: &str) -> Option<Projection> {
     let (safe, _) = crate::text_safety::mask_terminal_controls(source);
     let source = safe.as_deref().unwrap_or(source);
     project_events(
-        crate::markdown::canonical_br::parse_events(source, pulldown_cmark::Options::empty())
+        crate::markdown::canonical_br::parse_events(source, pulldown_cmark::Options::ENABLE_MATH)
             .map(|(event, _)| event),
     )
 }
@@ -269,7 +304,10 @@ fn project(source: &str) -> Option<Projection> {
     framed.push_str(" Z");
     #[cfg(test)]
     super::work::PARSED_BYTES.with(|bytes| bytes.set(bytes.get() + framed.len()));
-    let mut result = project_events(Parser::new(&framed))?;
+    let mut result = project_events(Parser::new_ext(
+        &framed,
+        pulldown_cmark::Options::ENABLE_MATH,
+    ))?;
     let first = result.runs.first_mut()?;
     if first.styles != 0 || first.link.is_some() || !first.text.starts_with("X ") {
         return None;
@@ -285,6 +323,9 @@ fn project(source: &str) -> Option<Projection> {
     for (offset, _) in &mut result.html {
         *offset = offset.checked_sub(2)?;
     }
+    for math in &mut result.math {
+        math.offset = math.offset.checked_sub(2)?;
+    }
     Some(result)
 }
 
@@ -295,6 +336,7 @@ fn project_events<'a>(events: impl Iterator<Item = Event<'a>>) -> Option<Project
     let mut owners = Vec::new();
     for event in events {
         let code = u8::from(matches!(&event, Event::Code(_))) << 2;
+        let display = matches!(&event, Event::DisplayMath(_));
         match event {
             Event::Start(Tag::Strong) => strong += 1,
             Event::End(TagEnd::Strong) => strong -= 1,
@@ -317,6 +359,18 @@ fn project_events<'a>(events: impl Iterator<Item = Event<'a>>) -> Option<Project
                 // must never be confused with generated style punctuation.
                 let styles = u8::from(strong > 0) | (u8::from(emphasis > 0) << 1) | code;
                 result.text(&normalized_content(&text), styles, owners.last().copied());
+            }
+            Event::InlineMath(body) | Event::DisplayMath(body) => {
+                let styles = u8::from(strong > 0) | (u8::from(emphasis > 0) << 1) | 8;
+                let link = owners.last().copied();
+                result.math.push(MathRun {
+                    offset: result.bytes,
+                    body: body.to_string(),
+                    display,
+                    styles,
+                    link,
+                });
+                result.text(&body, styles, link);
             }
             Event::InlineHtml(html) if matches!(html.as_ref(), "<br>" | "<br />") => {
                 result.text("\n", 0, None);

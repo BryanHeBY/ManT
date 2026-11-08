@@ -1,7 +1,10 @@
 //! Maps source-neutral IR blocks to portable `CommonMark` block constructs.
+use crate::encode::MarkdownMathIssueKind;
+use crate::encode::math_markdown::RenderOptions;
 
 mod assembly;
 mod definitions;
+mod equations;
 mod lists;
 mod table;
 use lists::{join_definition_items, render_list};
@@ -13,12 +16,12 @@ use definitions::{InlineRoot, render_definition_list, render_roots};
 
 use mant_ir::{Block, EntryOwner, Inline, InlineContentRef, SourceSpan, content_entries};
 
+use super::MarkdownInlineProjection;
 use super::inline::{
-    accepted_fenced_code, code_span, escape_text, fenced_code, flatten_inline_content,
-    preformatted_anchor_markers, protect_block_prefix,
+    accepted_fenced_code, escape_text, flatten_inline_content, preformatted_anchor_markers,
+    protect_block_prefix,
 };
 use super::mapped::{BlockSyntax, MappedText};
-use super::{MarkdownInlineProjection, MarkdownOptions};
 
 pub(super) struct RenderedBlocks<'src> {
     pub(super) text: String,
@@ -34,12 +37,16 @@ pub(super) struct RenderedEntry<'src> {
     pub(super) source: Option<SourceSpan>,
 }
 
-pub(crate) fn render_blocks(blocks: &[Block], options: MarkdownOptions) -> Vec<String> {
+pub(crate) fn render_blocks<'ctx>(
+    blocks: &[Block],
+    options: impl Into<RenderOptions<'ctx>>,
+) -> Vec<String> {
+    let options = options.into();
     render_located_blocks(blocks, options, None)
 }
 pub(crate) fn render_located_blocks(
     blocks: &[Block],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
 ) -> Vec<String> {
     mapped_blocks(blocks, options, locations, false)
@@ -49,11 +56,12 @@ pub(crate) fn render_located_blocks(
         .collect()
 }
 
-pub(super) fn render_blocks_with_entries(
+pub(super) fn render_blocks_with_entries<'ctx>(
     blocks: &[Block],
-    options: MarkdownOptions,
+    options: impl Into<RenderOptions<'ctx>>,
     track: bool,
 ) -> RenderedBlocks<'_> {
+    let options = options.into();
     let rendered = mapped_blocks(blocks, options, None, track);
     let entries = if track {
         let ranges = rendered.owner_ranges();
@@ -84,7 +92,7 @@ pub(super) fn render_blocks_with_entries(
 
 fn mapped_blocks(
     blocks: &[Block],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> MappedText {
@@ -95,7 +103,7 @@ fn mapped_blocks(
 
 fn mapped_sequence(
     blocks: &[Block],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> Vec<MappedText> {
@@ -108,10 +116,16 @@ fn mapped_sequence(
 
 fn render_block(
     block: &Block,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> Option<MappedText> {
+    if options
+        .math
+        .is_some_and(super::math_markdown::MathContext::failed)
+    {
+        return None;
+    }
     let rendered = match block {
         Block::Paragraph {
             children,
@@ -148,18 +162,19 @@ fn render_block(
         Block::DefinitionList { items, compact, .. } => {
             render_definition_list(items, *compact, options, locations, track)
         }
-        Block::Table { rows, .. } => render_table(rows, options, track),
-        Block::Equation { value, display, .. } => {
-            if *display {
-                Some(
-                    MappedText::from(fenced_code(value, Some("math")))
-                        .syntax_site(BlockSyntax::Fence)
-                        .tail_grammar(BlockSyntax::Fence, false),
-                )
-            } else {
-                nonempty(format!("Equation: {}", code_span(value)))
+        Block::Table { rows, .. } => {
+            if let Some(context) = options.math {
+                context.reading_blocks(
+                    std::slice::from_ref(block),
+                    MarkdownMathIssueKind::TableContext,
+                );
+                if context.failed() {
+                    return None;
+                }
             }
+            render_table(rows, options, track)
         }
+        Block::Equation { .. } => equations::render(block, options),
         Block::VerticalSpace { .. } => {
             Some(MappedText::default().syntax_site(BlockSyntax::Phrasing))
         }
@@ -200,7 +215,7 @@ fn render_block(
 
 fn render_phrasing(
     content: InlineContentRef<'_>,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
 ) -> MappedText {
     let root = InlineRoot::project(content, locations);
@@ -215,13 +230,19 @@ fn render_phrasing(
 fn render_literal(
     content: InlineContentRef<'_>,
     language: Option<&str>,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
 ) -> MappedText {
     // Empty roots and targets alone own no authored literal row at any address.
     // Text("") and explicit hard breaks do, even without a visible scalar.
     if !mant_ir::geometry::has_literal_rows(content.content) {
         return render_phrasing(content, options, locations);
+    }
+    if let Some(context) = options.math {
+        context.reading_inlines(content.content, MarkdownMathIssueKind::LiteralContext);
+        if context.failed() {
+            return MappedText::default();
+        }
     }
     let code = accepted_fenced_code(&flatten_inline_content(content), language);
     let markers = if options.preserve_anchors {

@@ -2,6 +2,7 @@
 
 use mant_ir::{Block, Heading, Inline, InlineContentRef, Section};
 
+use super::math_markdown::RenderOptions;
 use super::{MarkdownInlineProjection, MarkdownOptions};
 
 /// Presentation controls for detached report fragments.
@@ -16,11 +17,11 @@ pub struct MarkdownFragmentOptions {
 }
 
 impl MarkdownFragmentOptions {
-    fn document_options(self) -> MarkdownOptions {
-        MarkdownOptions {
+    fn document_options(self) -> RenderOptions<'static> {
+        RenderOptions::portable(MarkdownOptions {
             preserve_anchors: self.preserve_anchors,
             preserve_semantics: false,
-        }
+        })
     }
 }
 

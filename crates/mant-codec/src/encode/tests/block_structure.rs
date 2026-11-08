@@ -175,7 +175,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
     assert!(markdown.contains("````\nbefore ``` marker\nafter\n````"));
     assert!(!markdown.contains("**after**"));
     assert!(markdown.contains("```\nleft | right\n```"));
-    assert!(markdown.contains("```math\nx = y + 1\n```"));
+    assert!(markdown.contains("```\nx = y + 1\n```"));
 }
 
 #[test]

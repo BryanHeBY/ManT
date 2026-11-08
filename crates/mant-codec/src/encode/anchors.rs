@@ -11,7 +11,9 @@ pub(crate) struct AnchorMarker {
 /// composed independently by the renderer. Code fences/spans are not markers.
 pub(crate) fn anchor_markers(markdown: &str) -> Vec<AnchorMarker> {
     let mut markers = Vec::new();
-    for (event, range) in Parser::new(markdown).into_offset_iter() {
+    for (event, range) in
+        Parser::new_ext(markdown, pulldown_cmark::Options::ENABLE_MATH).into_offset_iter()
+    {
         match event {
             Event::Html(_) | Event::InlineHtml(_) => {
                 let mut cursor = range.start;

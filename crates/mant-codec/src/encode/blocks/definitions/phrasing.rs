@@ -1,7 +1,8 @@
 //! Borrow projected owner roots into one phrasing context and group HEAD rows.
+use super::super::super::MarkdownInlineProjection;
 use super::super::super::inline::{link_destination, render_inline_block_refs};
-use super::super::super::{MarkdownInlineProjection, MarkdownOptions};
 use super::super::project_inline;
+use crate::encode::math_markdown::RenderOptions;
 use mant_ir::{DefinitionTerm, Inline, InlineContentRef};
 use std::borrow::Cow;
 
@@ -29,7 +30,11 @@ impl<'a> InlineRoot<'a> {
         }
     }
 
-    fn append_nodes<'root>(&'root self, output: &mut Vec<&'root Inline>, options: MarkdownOptions) {
+    fn append_nodes<'root>(
+        &'root self,
+        output: &mut Vec<&'root Inline>,
+        options: RenderOptions<'_>,
+    ) {
         if self.has_output {
             output.extend(self.nodes.iter());
         } else {
@@ -41,7 +46,7 @@ impl<'a> InlineRoot<'a> {
 fn append_destinations<'a>(
     nodes: &'a [Inline],
     output: &mut Vec<&'a Inline>,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
 ) {
     for node in nodes {
         match node {
@@ -67,7 +72,7 @@ fn append_destinations<'a>(
 
 pub(in crate::encode::blocks) fn render_roots<'a>(
     roots: impl Iterator<Item = &'a InlineRoot<'a>>,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
 ) -> String {
     let mut nodes = Vec::new();
     for root in roots {
@@ -110,7 +115,7 @@ pub(super) struct DefinitionHead<'a> {
 impl<'a> DefinitionHead<'a> {
     pub(super) fn project(
         terms: &'a [DefinitionTerm],
-        options: MarkdownOptions,
+        options: RenderOptions<'_>,
         locations: Option<&dyn MarkdownInlineProjection>,
     ) -> Self {
         let roots = terms

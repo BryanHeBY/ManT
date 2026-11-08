@@ -17,21 +17,27 @@ that crate was not published for that change.
 
 - Preserve explicit mathematical atom roles and distinguish opaque formula
   content from parsed atoms. Validate expression shape and operator arity at
-  shared decoding boundaries; retain malformed native operands through an
+  shared decoding boundaries. Retain malformed native operands through an
   explicit, diagnosed readable fallback instead of dropping the document.
   Checked operation, decoration and matrix views borrow the original tree.
-- Retire `EquationExpression::size` and its wire field: native eqn size values
+- Retire `EquationExpression::size` and its wire field. Native eqn size values
   were not executed font sizes and must not be treated as points or pixels.
-  Native snapshots retain the numeric evidence; unsupported selections report
+  Native snapshots retain the numeric evidence. Unsupported selections report
   bounded semantic coverage without changing terminal reading text.
-- Advance the complete native request/response family to `v0.14`; migrate
+- Advance the complete native request/response family to `v0.14` and migrate
   formula payloads and all exact discriminators together, rather than replacing
   only version strings. Published v0.13 schemas and examples remain frozen.
   Independent doctor, tldr-update and Markdown-coordinate families are unchanged.
 - Add dependency-free, bounded MathML Core and restricted LaTeX formula
   encoders in `mant-codec::math`. Callers select strict rejection or reported
-  best effort for unsupported mathematical facts; malformed expressions and
+  best effort for unsupported mathematical facts. Malformed expressions and
   resource exhaustion always fail without returning partial markup.
+- Add explicit mathematical Markdown export with bounded conversion reports
+  and source ranges into the final bytes. `mant --markdown-math latex` opts
+  into inline/display LaTeX for one full document. The default remains the
+  shared readable projection. Literal/table contexts retain readable formulas
+  with reported losses. Readable display equations now use unlabelled code
+  fences so their text cannot be mistaken for LaTeX source.
 
 ### Dependency maintenance
 
@@ -231,8 +237,8 @@ that crate was not published for that change.
 - Retain recognized function and complete literal mathematical atom roles in
   owned equation snapshots before native font splitting erases their identity.
   Add `EquationBox::atom_role` without changing native parsing, font selection
-  or HTML/terminal rendering. Quoted mathematical atoms are not ordinary prose;
-  original native size integers remain available for auditing.
+  or HTML/terminal rendering. Preserve quoted mathematical atoms as literals
+  and retain original native size integers for auditing.
 
 - Add `RenderFormat::Markdown` in 0.14.0. Native `mdoc(7)` rendering uses
   the existing bounded `Renderer` API and returns diagnostics for omitted

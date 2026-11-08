@@ -1,7 +1,8 @@
 //! Ordinary list markers and shared item-boundary assembly.
 use super::{assembly, mapped_sequence};
+use crate::encode::math_markdown::RenderOptions;
 use crate::encode::{
-    MarkdownInlineProjection, MarkdownOptions,
+    MarkdownInlineProjection,
     inline::html_anchor,
     mapped::{BlockSyntax, MappedText},
 };
@@ -11,7 +12,7 @@ pub(super) fn render_list(
     kind: ListKind,
     compact: bool,
     items: &[ListItem],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> Option<MappedText> {
@@ -93,7 +94,7 @@ pub(super) fn render_list(
 
 fn list_item_blocks(
     blocks: &[Block],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> Vec<MappedText> {

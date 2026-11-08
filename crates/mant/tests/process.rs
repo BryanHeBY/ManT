@@ -14,6 +14,10 @@ mod command_surface;
 #[path = "process/display_output.rs"]
 mod display_output;
 
+#[cfg(feature = "roff")]
+#[path = "process/mathematical_markdown.rs"]
+mod mathematical_markdown;
+
 #[path = "process/markdown_links.rs"]
 mod markdown_links;
 

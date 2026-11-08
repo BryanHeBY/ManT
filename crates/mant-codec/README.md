@@ -91,6 +91,7 @@ target/title changes or a shifted link range.
 | Encode complete document content | `encode::render_markdown`, `encode::render_markdown_with_options` |
 | Encode canonical bytes and source-bound coordinates | `encode::render_addressable_markdown` |
 | Encode one resolved formula as `MathML` Core or restricted LaTeX | `math::encode_equation` |
+| Export full mathematical Markdown with conversion reports | `encode::render_math_markdown` |
 
 `TldrPageLocation` and roff `Path` arguments carry source identity, not loading
 authority. `MarkdownParseError`, `TldrParseError`, and native
@@ -137,7 +138,7 @@ radicals, scripts, limits, decorations and checked rectangular matrix views
 directly. Fences use explicit `mo` children. Text and fixed attributes are
 escaped independently, with font selections expressed by fixed styles.
 The element vocabulary follows [MathML Core](https://www.w3.org/TR/mathml-core/).
-Expression fonts select inherited mathematical text styling; fences, accents
+Expression fonts select inherited mathematical text styling. Fences, accents
 and generated operation glyphs retain their mathematical glyph behavior.
 
 LaTeX returns a mathematical body without dollar delimiters. Its fixed command
@@ -160,6 +161,26 @@ operation permits 16,384 expression nodes, depth 64 with the root counted as
 one, 1 MiB of source text/decorations, 16,384 expanded matrix slots and 2 MiB
 of encoded output. Preflight bounds the whole input before recursive encoding
 or readable fallback. Errors return no partial markup.
+
+`encode::render_math_markdown` explicitly selects LaTeX Markdown and returns a
+fallible `MathMarkdownArtifact`. Its `markdown()` accessor exposes the final
+bytes and source-bound ranges, while `issues()` and `summary()` describe the
+accepted conversion branches. Strict policy rejects conversion losses or a
+context requiring readable fallback. Best effort reports these approximations.
+Invalid expressions, inconsistent readable caches and resource limits fail
+under both policies.
+
+Formula delimiters are checked in their final inline, style and link contexts.
+Literal blocks and portable reading tables keep readable formulas with context
+issues. Legacy display formulas without an expression retain their readable
+payload with a missing-structure issue. Whole-operation formula, node, input,
+output and issue-detail allowances are public constants in `encode`.
+
+The existing Markdown rendering APIs use readable text, with unlabelled fences
+for display formulas. The mathematical API rejects `preserve_semantics` because
+its output has a different reimport contract. Markdown parsing preserves math
+delimiters as unsupported reading content. Native request/search coordinates
+continue to use the portable `mant.markdown/v1` projection.
 
 TLDR `More information:` metadata retains the destination of one explicit
 `CommonMark` autolink or Markdown link, not its label or surrounding sentence

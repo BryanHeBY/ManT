@@ -7,6 +7,7 @@ mod blocks;
 mod fragments;
 mod inline;
 mod mapped;
+mod math_markdown;
 mod semantic;
 mod table_projection;
 
@@ -25,6 +26,13 @@ pub use fragments::{
     MarkdownFragmentOptions, commonmark_code_span, escape_commonmark, html_anchor,
     render_blocks_fragment, render_heading_fragment, render_inline_content_fragment,
     render_inline_fragment, render_located_blocks_fragment, render_sections_fragment,
+};
+use math_markdown::RenderOptions;
+pub use math_markdown::{
+    MAX_MARKDOWN_MATH_FORMULAS, MAX_MARKDOWN_MATH_INPUT_BYTES, MAX_MARKDOWN_MATH_ISSUES,
+    MAX_MARKDOWN_MATH_NODES, MAX_MARKDOWN_MATH_OUTPUT_BYTES, MarkdownMathError, MarkdownMathIssue,
+    MarkdownMathIssueKind, MarkdownMathLimit, MarkdownMathSummary, MathMarkdownArtifact,
+    render_math_markdown,
 };
 
 /// Optional report decoration expressed only as source-neutral inline IR.
@@ -68,11 +76,11 @@ pub fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOp
     render_markdown_artifact(query, options, false).into_text()
 }
 
-pub(super) fn render_sections(
+fn render_sections(
     output: &mut Vec<String>,
     sections: &[Section],
     depth: usize,
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
 ) {
     for section in sections {
         if options.preserve_anchors {
@@ -183,11 +191,12 @@ pub fn section_headings_have_local_links(sections: &[Section]) -> bool {
     })
 }
 
-pub(super) fn render_heading(
+fn render_heading<'ctx>(
     depth: usize,
     heading: &mant_ir::Heading,
-    options: MarkdownOptions,
+    options: impl Into<RenderOptions<'ctx>>,
 ) -> String {
+    let options = options.into();
     let content = inline::render_heading_content(
         mant_ir::InlineContentRef {
             content: &heading.content,

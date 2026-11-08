@@ -158,11 +158,11 @@ identifiers. Current clients negotiate `v0.14` and reject mixed family markers.
 
 The v0.14 formula contract adds explicit atom roles and opaque mathematical
 content, validates expression shape at every deserialization boundary, and
-retires the former `size` field. Native size integers were not executed font
-sizes: the original evidence remains in `libmandoc-rs`, while unsupported
+retires the former `size` field. Native renderers ignore the stored size
+selections. The original evidence remains in `libmandoc-rs`, while unsupported
 selections are producer semantic-coverage findings. They must not be interpreted
-as points or pixels. Published v0.13 schemas and fixtures remain frozen;
-changing only their marker does not migrate an old formula payload.
+as points or pixels. Published v0.13 schemas and fixtures remain frozen.
+Changing only their marker does not migrate an old formula payload.
 
 The v0.13 document envelope retains authoritative heading inlines:
 `Document.heading` is optional, `Section.heading` is required, and a plain

@@ -1,7 +1,7 @@
 //! Fence the accepted portable table rows and retain mapped owners.
 use super::nonempty;
+use crate::encode::math_markdown::RenderOptions;
 use crate::encode::{
-    MarkdownOptions,
     inline::{code_fences, html_anchor},
     mapped::{BlockSyntax, MappedText},
 };
@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 pub(super) fn render_table(
     rows: &[TableRow],
-    options: MarkdownOptions,
+    options: RenderOptions<'_>,
     track: bool,
 ) -> Option<MappedText> {
     // Empty data rows and native rules are authored structure, not fence

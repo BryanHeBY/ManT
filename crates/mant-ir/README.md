@@ -287,19 +287,19 @@ remain transparent, while a row-local authored column edge is physical output.
 `EquationExpression` contains mathematical text, operations, sequences, groups,
 piles and matrices. Producers resolve native counters into scope boundaries;
 readers never replay parser rules. A `Group` establishes an operation boundary,
-not visible parentheses; independently authored `left` and `right` fences remain
+not visible parentheses. Independently authored `left` and `right` fences remain
 literal content, including one-sided and explicitly empty fences.
 
 `EquationKind::Text` is one mathematical atom. Its optional `atomRole` is
 `identifier`, `number`, `operator`, `function`, `literal` or the omitted default
-`unknown`. Roles are independent from font: roman text alone does not prove a
+`unknown`. Roles are independent from font. Roman text alone does not prove a
 function, and a literal atom is not automatically ordinary prose or a `MathML`
 `mtext`. Producers retain proven token identity before source execution erases
-it; consumers do not run macro or symbol lookup on the stored spelling.
+it. Consumers do not run macro or symbol lookup on the stored spelling.
 
 `font` selects mathematical text presentation and is inherited by descendant
 atoms that select `None`. Fences, accents and generated operation glyphs keep
-their own mathematical glyph behavior; this field does not select one uniform
+their own mathematical glyph behavior. This field does not select one uniform
 font for every glyph of a composed expression. Target encoders document any
 unsupported text font and report it separately from source diagnostics.
 
@@ -312,15 +312,15 @@ reinterpreted as trusted TeX. Source reductions carry diagnostics separately.
 `operator` names fractions, roots, scripts and limits. `operation_view()` gives
 checked, named borrowed operands without flattening their original group, font
 or fence wrappers. Scripts remain distinct from upper/lower limits. Exact
-`top`/`bottom` strings are authoritative; `top_decoration()` and
+`top`/`bottom` strings are authoritative. `top_decoration()` and
 `bottom_decoration()` expose recognized accent meanings plus the original
 symbol, or `Custom`, without storing a second editable representation.
 
 Matrices retain column order, including columns with unequal row counts.
-`matrix_view()` borrows the original columns group, piles and expression rows;
-axis fonts remain available, and individual rows retain their own fences and
+`matrix_view()` borrows the original columns group, piles and expression rows.
+Axis fonts remain available, and individual rows retain their own fences and
 decorations. A columns group or whole column with a fence or decoration is not
-transparent row-major layout: the view returns `None` and the readable fallback
+transparent row-major layout. The view returns `None` and the readable fallback
 visits original operands, preserving those symbols instead of discarding them
 or repeating them per cell. Alternative recovered operands remain
 owned children even when the standard matrix view is unavailable. The view
@@ -331,7 +331,7 @@ cells. Consumers budget any row-major expansion independently.
 arity without recursively visiting its children. Deserialization applies these
 same local rules once per node, and JSON Schema advertises their expressible
 conditions. `validate(EquationValidationLimits)` additionally walks the complete
-tree iteratively: defaults are 65,536 nodes, depth 256 (root depth one), and
+tree iteratively. Defaults are 65,536 nodes, depth 256 (root depth one), and
 4 MiB of total stored UTF-8 atom, opaque, fence and decoration bytes. It does not
 generate text, expand a matrix or copy the tree. Aggregate limits are a bounded
 validation policy, not mathematical content or a promise that a JSON reader
@@ -339,18 +339,17 @@ accepts every such depth. Formula block and inline decoding checks the shared
 readable cache after bounded validation, including formulas embedded directly
 inside excerpts and explanation forms rather than a full document envelope.
 
-`readable_text()` supplies one shared reading projection for text consumers;
-it is not `MathML`, LaTeX, another editable body, or a substitute for structured
-math-capable output. Encoders must use the structure directly and distinguish
-source coverage findings from target-format conversion losses.
+`readable_text()` supplies one shared reading projection for text consumers.
+Structured math-capable output uses the expression tree directly. Encoders
+distinguish source coverage findings from target-format conversion losses.
 
 In 0.13, equation enums began using kebab-case, `EquationOperator` replaced
 `EquationPosition`, and parser counters/`summarizedOperandGroup` were retired.
 The v0.14 model adds atom roles and explicit opaque content, checks node
 combinations and operation arity, and removes the former bare `size` field.
-That number was not a resolved font size: the native renderer did not execute
-it, and relative syntax was already conflated. Native `EquationBox.size` keeps
-the original evidence; producer diagnostics disclose unsupported selections
+That number combined allocation defaults and native size selections, with
+relative syntax already conflated. Native `EquationBox.size` keeps
+the original evidence. Producer diagnostics disclose unsupported selections
 instead of forwarding an unexecuted request as IR geometry. Frozen v0.13 and
 older wire snapshots remain unchanged.
 
