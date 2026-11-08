@@ -28,6 +28,10 @@ that crate was not published for that change.
   formula payloads and all exact discriminators together, rather than replacing
   only version strings. Published v0.13 schemas and examples remain frozen.
   Independent doctor, tldr-update and Markdown-coordinate families are unchanged.
+- Add dependency-free, bounded MathML Core and restricted LaTeX formula
+  encoders in `mant-codec::math`. Callers select strict rejection or reported
+  best effort for unsupported mathematical facts; malformed expressions and
+  resource exhaustion always fail without returning partial markup.
 
 ### Dependency maintenance
 

@@ -90,6 +90,7 @@ target/title changes or a shifted link range.
 | Recognize standalone alias syntax without resolving it | `redirect_target` with `roff` |
 | Encode complete document content | `encode::render_markdown`, `encode::render_markdown_with_options` |
 | Encode canonical bytes and source-bound coordinates | `encode::render_addressable_markdown` |
+| Encode one resolved formula as `MathML` Core or restricted LaTeX | `math::encode_equation` |
 
 `TldrPageLocation` and roff `Path` arguments carry source identity, not loading
 authority. `MarkdownParseError`, `TldrParseError`, and native
@@ -98,6 +99,67 @@ remain with the loading caller. The native-witness API parses once; lowering an
 existing report performs no second parse. `encode::MarkdownFragmentOptions`
 deliberately excludes semantic declaration metadata because detached fragments
 have not passed whole-document representability checks.
+
+## Mathematical encoding
+
+`math::encode_equation` borrows one `EquationExpression` and returns a complete
+`MathArtifact` with target-local losses. `MathOptions` selects `Mathml` or
+`Latex`, inline/display presentation, and `Strict` or `BestEffort` policy.
+Defaults select strict, inline `MathML`. Conversion never changes the source
+expression, its readable cache, or document diagnostics.
+
+```rust
+use mant_codec::math::{MathOptions, encode_equation};
+use mant_ir::{EquationAtomRole, EquationExpression, EquationFont,
+    EquationKind, EquationOperandScope, EquationOperator};
+
+let expression = EquationExpression {
+    kind: EquationKind::Text,
+    font: EquationFont::None,
+    operator: EquationOperator::None,
+    operand_scope: EquationOperandScope::Atomic,
+    text: Some("x".into()),
+    atom_role: EquationAtomRole::Identifier,
+    left: None,
+    right: None,
+    top: None,
+    bottom: None,
+    children: Vec::new(),
+};
+let artifact = encode_equation(&expression, MathOptions::default())?;
+assert!(artifact.text.contains("<mi>x</mi>"));
+assert!(artifact.losses.is_empty());
+# Ok::<(), mant_codec::math::MathError>(())
+```
+
+`MathML` returns a namespaced `math` element. The encoder emits fractions,
+radicals, scripts, limits, decorations and checked rectangular matrix views
+directly. Fences use explicit `mo` children. Text and fixed attributes are
+escaped independently, with font selections expressed by fixed styles.
+The element vocabulary follows [MathML Core](https://www.w3.org/TR/mathml-core/).
+Expression fonts select inherited mathematical text styling; fences, accents
+and generated operation glyphs retain their mathematical glyph behavior.
+
+LaTeX returns a mathematical body without dollar delimiters. Its fixed command
+subset includes `frac`, `sqrt`, scripts, `overset`/`underset`, `matrix`, common
+accents, mathematical alphabets, literal-text wrappers and an explicit symbol
+table. A renderer needs mathematical/amsmath support and Unicode-capable text
+handling for fallback text. Source backslashes, braces, dollars and other
+special characters remain literal content. Consumers choose the enclosing
+Markdown or document syntax.
+
+Unknown atom roles, opaque structure, unsupported target symbols/fonts,
+custom LaTeX fences/decorations, irregular matrices and unrepresentable
+characters or whitespace produce expression-local loss paths. Strict policy
+returns an error at the first loss. Best effort retains safe readable content
+and reports the loss. This profile preserves mathematical structure without
+promising source eqn reconstruction or identical glyph metrics.
+
+Both policies reject invalid expressions and resource exhaustion. A single
+operation permits 16,384 expression nodes, depth 64 with the root counted as
+one, 1 MiB of source text/decorations, 16,384 expanded matrix slots and 2 MiB
+of encoded output. Preflight bounds the whole input before recursive encoding
+or readable fallback. Errors return no partial markup.
 
 TLDR `More information:` metadata retains the destination of one explicit
 `CommonMark` autolink or Markdown link, not its label or surrounding sentence

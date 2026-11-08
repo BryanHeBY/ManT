@@ -297,6 +297,12 @@ function, and a literal atom is not automatically ordinary prose or a `MathML`
 `mtext`. Producers retain proven token identity before source execution erases
 it; consumers do not run macro or symbol lookup on the stored spelling.
 
+`font` selects mathematical text presentation and is inherited by descendant
+atoms that select `None`. Fences, accents and generated operation glyphs keep
+their own mathematical glyph behavior; this field does not select one uniform
+font for every glyph of a composed expression. Target encoders document any
+unsupported text font and report it separately from source diagnostics.
+
 `EquationKind::Opaque` explicitly retains readable content whose internal
 mathematical structure is unavailable. `operand_scope` preserves its atomic or
 compound operand boundary independently from why the structure is missing.

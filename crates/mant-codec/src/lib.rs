@@ -9,6 +9,8 @@ mod mandoc;
 mod markdown;
 /// Source-coordinate mapping for parsed CommonMark inline events.
 pub mod markdown_mapping;
+/// Bounded MathML Core and restricted LaTeX encoding of resolved formula IR.
+pub mod math;
 mod producer_identity;
 mod text_safety;
 mod tldr;
