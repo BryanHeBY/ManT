@@ -59,6 +59,22 @@ pub enum EquationPosition {
     Sqrt,
 }
 
+/// Post-substitution identity of one complete native mathematical text atom.
+///
+/// These roles retain distinctions that text and font alone cannot recover.
+/// They do not change the pinned parser's native formatting behavior.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum EquationAtomRole {
+    /// General atom, including symbols and font-split text fragments.
+    #[default]
+    Unknown,
+    /// Complete token recognized by the parser as a named function.
+    Function,
+    /// Complete literal mathematical atom, not automatically ordinary prose.
+    Literal,
+}
+
 /// Self-contained equation box copied from the parser before it is freed.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,6 +93,9 @@ pub struct EquationBox {
     pub actual_args: usize,
     /// Atom spelling, when present.
     pub text: Option<String>,
+    /// Complete mathematical text identity retained before font splitting.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub atom_role: EquationAtomRole,
     /// Whether enabled GNU compatibility applies to this complete unquoted
     /// `ldots` token after macro expansion. Native snapshots set this false
     /// when `compat-gnu-eqn` is off; public values may retain a foreign flag.
@@ -236,12 +255,14 @@ impl EquationBox {
                     // CVS eqn_term.c::eqn_box supplies the sqrt operand's
                     // outer delimiters itself; the readable sqrt(...) does too.
                     ProjectionContext::Root
-                } else if index == 0 && (self.top.is_some() || self.bottom.is_some()) {
-                    ProjectionContext::Operand
                 } else if self.kind == EquationKind::Pile {
                     // CVS eqn_term.c::eqn_box skips a singleton row List and
-                    // groups only rows containing multiple expressions.
+                    // groups only rows containing multiple expressions. An
+                    // owned decoration on the whole Pile does not turn its
+                    // first singleton row into a separate operand boundary.
                     ProjectionContext::PileRow
+                } else if index == 0 && (self.top.is_some() || self.bottom.is_some()) {
+                    ProjectionContext::Operand
                 } else {
                     ProjectionContext::Sequence {
                         has_sibling: self.children.len() > 1,
@@ -277,8 +298,17 @@ impl EquationBox {
             self.children.len() == 1
                 && list.kind == EquationKind::List
                 && list.expected_args != 1
+                // Native matrix renderers skip these header owners. The
+                // readable contract must retain their visible content;
+                // use ordinary child traversal when flattening would lose it.
+                && !list.has_fence()
+                && list.top.is_none()
+                && list.bottom.is_none()
                 && list.children.iter().all(|column| {
                     column.kind == EquationKind::Pile
+                        && !column.has_fence()
+                        && column.top.is_none()
+                        && column.bottom.is_none()
                         && column
                             .children
                             .iter()

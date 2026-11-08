@@ -154,7 +154,7 @@ fn execute_scope_arguments(
         ));
     }
     let request = ScopeQueryRequest {
-        schema: ScopeRequestSchema::V0Dot13,
+        schema: ScopeRequestSchema::V0Dot14,
         scope,
         view,
     };

@@ -1,0 +1,30 @@
+Subject: retain resolved function and literal equation atom identities
+Upstream-Status: ManT-owned equation snapshot evidence
+
+eqn_next() already distinguishes named functions and complete quoted atoms
+after expanding definitions. Preserve that identity before eqn_parse() leaves
+only text and font in the box. This evidence does not change parsing, fonts,
+tree ownership, or any native renderer; consumers must not infer ordinary
+prose from a complete literal mathematical atom.
+
+--- a/eqn.h
++++ b/eqn.h
+@@ -58,6 +58,7 @@
+ 	struct eqn_box	 *first;   /* First child node. */
+ 	struct eqn_box	 *last;    /* Last child node. */
+ 	char		 *text;    /* Text (or NULL). */
++	int		  text_role; /* 0: general, 1: function, 2: literal. */
+ 	int		  gnu_ldots; /* Complete unquoted ldots token. */
+ 	char		 *left;    /* Left-hand fence. */
+ 	char		 *right;   /* Right-hand fence. */
+--- a/eqn.c
++++ b/eqn.c
+@@ -1043,6 +1043,8 @@
+ 		cur = eqn_box_alloc(ep, parent);
+ 		cur->type = EQN_TEXT;
+ 		cur->text = p;
++		cur->text_role = tok == EQN_TOK_FUNC ? 1 :
++		    tok == EQN_TOK_QUOTED ? 2 : 0;
+ 		/* Check the whole post-substitution token before font splitting. */
+ 		cur->gnu_ldots = tok == EQN_TOK__MAX &&
+ 		    strcmp(p, "ldots") == 0;

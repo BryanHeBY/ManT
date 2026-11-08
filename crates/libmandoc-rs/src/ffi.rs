@@ -233,6 +233,7 @@ mod tests {
                 expected_args,
                 actual_args,
                 text,
+                text_role,
                 gnu_ldots,
                 left,
                 right,

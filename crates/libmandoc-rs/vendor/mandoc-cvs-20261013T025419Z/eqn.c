@@ -1043,6 +1043,8 @@ next_tok:
 		cur = eqn_box_alloc(ep, parent);
 		cur->type = EQN_TEXT;
 		cur->text = p;
+		cur->text_role = tok == EQN_TOK_FUNC ? 1 :
+		    tok == EQN_TOK_QUOTED ? 2 : 0;
 		/* Check the whole post-substitution token before font splitting. */
 		cur->gnu_ldots = tok == EQN_TOK__MAX &&
 		    strcmp(p, "ldots") == 0;

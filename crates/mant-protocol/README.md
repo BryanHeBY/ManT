@@ -77,14 +77,14 @@ does not execute another query or load content.
 
 | Family | Current discriminator | Purpose |
 | --- | --- | --- |
-| Process framing | `mant.cli/v0.13` | Advertised by the `mant` executable |
-| Request | `mant.request/v0.13` | Closed input accepted by `--request-json` |
-| Scope request/result | `mant.scope-request/v0.13`, `mant.scope-query/v0.13` | Bounded multi-document search and explanation |
-| Full query | `mant.query/v0.13` | Document plus optional tldr content |
-| Document | `mant.document/v0.13` | Versioned projection of the normalized document |
-| Catalog | `mant.catalog/v0.13` | Registered Markdown and native-manual discovery |
-| Outline, excerpt, search | `mant.outline/v0.13`, `mant.excerpt/v0.13`, `mant.search/v0.13` | Focused query projections |
-| Explanation | `mant.explanation/v0.13` | Bounded independent name/form/content/relationship evidence |
+| Process framing | `mant.cli/v0.14` | Advertised by the `mant` executable |
+| Request | `mant.request/v0.14` | Closed input accepted by `--request-json` |
+| Scope request/result | `mant.scope-request/v0.14`, `mant.scope-query/v0.14` | Bounded multi-document search and explanation |
+| Full query | `mant.query/v0.14` | Document plus optional tldr content |
+| Document | `mant.document/v0.14` | Versioned projection of the normalized document |
+| Catalog | `mant.catalog/v0.14` | Registered Markdown and native-manual discovery |
+| Outline, excerpt, search | `mant.outline/v0.14`, `mant.excerpt/v0.14`, `mant.search/v0.14` | Focused query projections |
+| Explanation | `mant.explanation/v0.14` | Bounded independent name/form/content/relationship evidence |
 | Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
 | tldr update | `mant.tldr-update/v1` | Explicit native cache-maintenance result |
 
@@ -110,7 +110,7 @@ use mant_protocol::{
 };
 
 let request = QueryRequest {
-    schema: RequestSchema::V0Dot13,
+    schema: RequestSchema::V0Dot14,
     input: QueryInput::Document {
         selector: "git".to_owned(),
         source: None,
@@ -123,14 +123,16 @@ let request = QueryRequest {
     },
 };
 
-assert_eq!(NATIVE_API_VERSION, "0.13");
-assert_eq!(request.schema, RequestSchema::V0Dot13);
+assert_eq!(NATIVE_API_VERSION, "0.14");
+assert_eq!(request.schema, RequestSchema::V0Dot14);
 let _schema = query_request_json_schema();
 ```
 
 The native query family follows `ManT`'s pre-stable minor release line: `ManT`
-0.13.x uses `v0.13`, and patch releases remain backward compatible. They may
-add documented optional response fields, but never change requests, required
+0.14.x uses `v0.14`, and patch releases remain backward compatible. Optional
+additions are compatible only at an already open extension point: adding a
+field to a closed object or a variant to a closed enum needs a new family,
+even if the field is optional. Patch releases never change requests, required
 fields, tagged unions, or existing field semantics. The former
 bare `v1` through `v7` schemas were experimental and are intentionally not
 accepted by the current native API. Historical tags preserve those contracts; the first stable
@@ -152,7 +154,15 @@ zero and left, with all-default hints omitted canonically. These preferences
 never create text or navigation regions, and unbounded text/CommonMark outputs
 do not invent a viewport for alignment. Existing `v0.12` schemas reject the
 new fields, so their snapshots and examples remain frozen under their released
-identifiers. Clients must negotiate `v0.13` and reject mixed family markers.
+identifiers. Current clients negotiate `v0.14` and reject mixed family markers.
+
+The v0.14 formula contract adds explicit atom roles and opaque mathematical
+content, validates expression shape at every deserialization boundary, and
+retires the former `size` field. Native size integers were not executed font
+sizes: the original evidence remains in `libmandoc-rs`, while unsupported
+selections are producer semantic-coverage findings. They must not be interpreted
+as points or pixels. Published v0.13 schemas and fixtures remain frozen;
+changing only their marker does not migrate an old formula payload.
 
 The v0.13 document envelope retains authoritative heading inlines:
 `Document.heading` is optional, `Section.heading` is required, and a plain
@@ -218,7 +228,7 @@ occurrence/domain and 1,024 fragments per owner, all within the copy budget.
 `EntryFacts`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a
 Serde change to any of them is also a protocol change. CI compares every
-generated structural schema with the checked-in v0.13 snapshot, so an accidental
+generated structural schema with the checked-in v0.14 snapshot, so an accidental
 IR representation change fails until compatibility is restored or the
 affected protocol discriminator is advanced explicitly. Rustdoc descriptions
 and schema titles are excluded from that structural comparison.

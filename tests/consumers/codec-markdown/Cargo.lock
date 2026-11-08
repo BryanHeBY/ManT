@@ -80,7 +80,7 @@ checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "mant-codec"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "mant-ir",
  "pulldown-cmark",
@@ -98,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ir"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "schemars",
  "serde",

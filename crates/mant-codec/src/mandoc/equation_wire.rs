@@ -1,9 +1,9 @@
 //! Bound recursive source structure by its position in the final JSON document.
 
 use mant_ir::{
-    Block, Diagnostic, DiagnosticImpact, DiagnosticLevel, Document, EquationExpression,
-    EquationFont, EquationKind, EquationOperandScope, EquationOperator, Inline, LayoutHint,
-    Section, SourceSpan,
+    Block, Diagnostic, DiagnosticImpact, DiagnosticLevel, Document, EquationAtomRole,
+    EquationExpression, EquationFont, EquationKind, EquationOperandScope, EquationOperator, Inline,
+    LayoutHint, Section, SourceSpan,
 };
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 
@@ -336,10 +336,10 @@ fn wire_probe(document: &Document) -> bool {
         version: &'static str,
     }
     let query = ProbeQuery {
-        schema: "mant.query/v0.13",
+        schema: "mant.query/v0.14",
         label: "",
         document: ProbeDocument {
-            schema: "mant.document/v0.13",
+            schema: "mant.document/v0.14",
             producer: ProbeProducer {
                 name: "mant",
                 version: "0.12.0",
@@ -422,10 +422,10 @@ impl<'de> Visitor<'de> for JsonDepthVisitor {
 
 fn readable_leaf(text: String, compound_operand: bool) -> EquationExpression {
     EquationExpression {
-        kind: EquationKind::Text,
+        kind: EquationKind::Opaque,
         font: EquationFont::None,
         operator: EquationOperator::None,
-        size: None,
+        atom_role: EquationAtomRole::Unknown,
         operand_scope: if compound_operand {
             EquationOperandScope::Compound
         } else {
@@ -470,7 +470,7 @@ mod tests {
             MAX_SAFE_CONTAINER_DEPTH - 2,
             &value
         ));
-        assert_eq!(expression.kind, EquationKind::Text);
+        assert_eq!(expression.kind, EquationKind::Opaque);
         assert_eq!(expression.operand_scope, EquationOperandScope::Compound);
         assert_eq!(expression.children, []);
         assert_eq!(expression.readable_text(), value);

@@ -134,6 +134,7 @@ fn lower_mandoc_document_with_source(
     declaration_groups::record(&parsed.root, &mut context.native_heads.borrow_mut());
     context.reserve_section_ids(explicit_targets);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
+    diagnostics.extend(equations::diagnostics(&parsed.root));
     let (mut root_blocks, mut sections) =
         blocks::lower_document_structure(&parsed.root, &mut context);
     context.annotations.finish(

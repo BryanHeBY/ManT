@@ -9,14 +9,14 @@ use serde::{Deserialize, Serialize};
 /// Exact schema marker for a normalized structured document response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
-    /// Version 0.13 of the pre-stable structured-document protocol.
-    #[serde(rename = "mant.document/v0.13")]
-    V0Dot13,
+    /// Version 0.14 of the pre-stable structured-document protocol.
+    #[serde(rename = "mant.document/v0.14")]
+    V0Dot14,
 }
 
 impl DocumentSchema {
     /// Serialized identifier of the current document contract.
-    pub const ID: &'static str = "mant.document/v0.13";
+    pub const ID: &'static str = "mant.document/v0.14";
 }
 
 /// Identifies `ManT` and the parser used to build a wire document.
@@ -42,7 +42,7 @@ pub struct Engine {
     pub version: String,
 }
 
-/// Serializable v0.13 envelope around `ManT`'s protocol-independent document IR.
+/// Serializable v0.14 envelope around `ManT`'s protocol-independent document IR.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     rename_all = "camelCase",
@@ -178,7 +178,7 @@ impl Producer {
 impl From<&IrDocument> for DocumentResponse {
     fn from(document: &IrDocument) -> Self {
         Self {
-            schema: DocumentSchema::V0Dot13,
+            schema: DocumentSchema::V0Dot14,
             producer: Producer::for_document(document),
             source: document.source.clone(),
             meta: document.meta.clone(),
@@ -219,7 +219,7 @@ mod tests {
             kind: mant_ir::EquationKind::Text,
             font: mant_ir::EquationFont::None,
             operator: mant_ir::EquationOperator::None,
-            size: None,
+            atom_role: mant_ir::EquationAtomRole::Unknown,
             operand_scope: mant_ir::EquationOperandScope::Atomic,
             text: Some("x".into()),
             left: None,

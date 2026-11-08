@@ -13,6 +13,22 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.14.0
+
+- Preserve explicit mathematical atom roles and distinguish opaque formula
+  content from parsed atoms. Validate expression shape and operator arity at
+  shared decoding boundaries; retain malformed native operands through an
+  explicit, diagnosed readable fallback instead of dropping the document.
+  Checked operation, decoration and matrix views borrow the original tree.
+- Retire `EquationExpression::size` and its wire field: native eqn size values
+  were not executed font sizes and must not be treated as points or pixels.
+  Native snapshots retain the numeric evidence; unsupported selections report
+  bounded semantic coverage without changing terminal reading text.
+- Advance the complete native request/response family to `v0.14`; migrate
+  formula payloads and all exact discriminators together, rather than replacing
+  only version strings. Published v0.13 schemas and examples remain frozen.
+  Independent doctor, tldr-update and Markdown-coordinate families are unchanged.
+
 ### Dependency maintenance
 
 - Update zip to 9.3.0 and install-action to its verified 2.88.0 release
@@ -206,7 +222,13 @@ that crate was not published for that change.
   repeated long-line copies for skipped pages and capped occurrences without
   changing grouping, pagination, context or source positions.
 
-### libmandoc-rs
+### libmandoc-rs 0.14.0
+
+- Retain recognized function and complete literal mathematical atom roles in
+  owned equation snapshots before native font splitting erases their identity.
+  Add `EquationBox::atom_role` without changing native parsing, font selection
+  or HTML/terminal rendering. Quoted mathematical atoms are not ordinary prose;
+  original native size integers remain available for auditing.
 
 - Add `RenderFormat::Markdown` in 0.14.0. Native `mdoc(7)` rendering uses
   the existing bounded `Renderer` API and returns diagnostics for omitted

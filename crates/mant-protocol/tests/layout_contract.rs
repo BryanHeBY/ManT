@@ -3,7 +3,7 @@ use mant_ir::LayoutHint;
 #[test]
 fn all_inline_owners_preserve_row_presentation_in_the_current_golden_wire() {
     use mant_ir::{Block, TextAlignment};
-    let original = include_str!("../../../tests/contracts/row-presentation-v0.13.json");
+    let original = include_str!("../../../tests/contracts/row-presentation-v0.14.json");
     let query: mant_protocol::QueryBundle = serde_json::from_str(original).unwrap();
     let wire = serde_json::to_string(&query).unwrap();
     let restored: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
@@ -139,9 +139,9 @@ fn definition_rows_round_trip_through_actual_current_query_json() {
         ),
     ] {
         let input = serde_json::json!({
-            "schema":"mant.query/v0.13", "label":"rows",
+            "schema":"mant.query/v0.14", "label":"rows",
             "document":{
-                "schema":"mant.document/v0.13",
+                "schema":"mant.document/v0.14",
                 "producer":{"name":"test","version":"0"},
                 "source":{"format":"mdoc"}, "meta":{}, "sections":[],
                 "blocks":[{"type":"definition-list","items":[{
@@ -163,7 +163,7 @@ fn definition_rows_round_trip_through_actual_current_query_json() {
         let restored: mant_protocol::QueryBundle =
             serde_json::from_str(&serialized).expect("real JSON round trip");
         let serialized: serde_json::Value = serde_json::to_value(restored).unwrap();
-        assert_eq!(serialized["schema"], "mant.query/v0.13");
+        assert_eq!(serialized["schema"], "mant.query/v0.14");
         let item = &serialized["document"]["blocks"][0]["items"][0];
         let restored_relation = item
             .get("headBodyRelation")

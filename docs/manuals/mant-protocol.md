@@ -45,18 +45,18 @@ The current descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v0.13",
-  "nativeApiVersion": "0.13",
-  "requestSchema": "mant.request/v0.13",
-  "querySchema": "mant.query/v0.13",
-  "documentSchema": "mant.document/v0.13",
-  "outlineSchema": "mant.outline/v0.13",
-  "excerptSchema": "mant.excerpt/v0.13",
-  "explanationSchema": "mant.explanation/v0.13",
-  "searchSchema": "mant.search/v0.13",
-  "scopeRequestSchema": "mant.scope-request/v0.13",
-  "scopeQuerySchema": "mant.scope-query/v0.13",
-  "catalogSchema": "mant.catalog/v0.13"
+  "protocol": "mant.cli/v0.14",
+  "nativeApiVersion": "0.14",
+  "requestSchema": "mant.request/v0.14",
+  "querySchema": "mant.query/v0.14",
+  "documentSchema": "mant.document/v0.14",
+  "outlineSchema": "mant.outline/v0.14",
+  "excerptSchema": "mant.excerpt/v0.14",
+  "explanationSchema": "mant.explanation/v0.14",
+  "searchSchema": "mant.search/v0.14",
+  "scopeRequestSchema": "mant.scope-request/v0.14",
+  "scopeQuerySchema": "mant.scope-query/v0.14",
+  "catalogSchema": "mant.catalog/v0.14"
 }
 ```
 
@@ -67,24 +67,26 @@ query the manual database, read tldr data, or start the TUI.
 
 | Identifier | Scope | Where it appears |
 | --- | --- | --- |
-| `mant.cli/v0.13` | One-shot process invocation and stream behavior | `--protocol-version` |
-| `0.13` | Native API release line negotiated by process clients | `nativeApiVersion` |
-| `mant.request/v0.13` | Closed request accepted by `--request-json` | Request `schema` |
-| `mant.query/v0.13` | Complete document plus optional quick reference | Full response `schema` |
-| `mant.document/v0.13` | Source-neutral document response | `QueryBundle.document.schema` |
-| `mant.outline/v0.13` | Block-free addressable tree | Outline response `schema` |
-| `mant.excerpt/v0.13` | One or more selected nodes | Excerpt response `schema` |
-| `mant.explanation/v0.13` | Independent bounded semantic evidence | Explanation response `schema` |
-| `mant.search/v0.13` | Search results and pagination | Search response `schema` |
-| `mant.scope-request/v0.13` | Bounded document-set search or explanation | Scope request `schema` |
-| `mant.scope-query/v0.13` | Resolved graph and grouped projection | Scope response `schema` |
-| `mant.catalog/v0.13` | Local Markdown and manual-page discovery | Catalog response `schema` |
+| `mant.cli/v0.14` | One-shot process invocation and stream behavior | `--protocol-version` |
+| `0.14` | Native API release line negotiated by process clients | `nativeApiVersion` |
+| `mant.request/v0.14` | Closed request accepted by `--request-json` | Request `schema` |
+| `mant.query/v0.14` | Complete document plus optional quick reference | Full response `schema` |
+| `mant.document/v0.14` | Source-neutral document response | `QueryBundle.document.schema` |
+| `mant.outline/v0.14` | Block-free addressable tree | Outline response `schema` |
+| `mant.excerpt/v0.14` | One or more selected nodes | Excerpt response `schema` |
+| `mant.explanation/v0.14` | Independent bounded semantic evidence | Explanation response `schema` |
+| `mant.search/v0.14` | Search results and pagination | Search response `schema` |
+| `mant.scope-request/v0.14` | Bounded document-set search or explanation | Scope request `schema` |
+| `mant.scope-query/v0.14` | Resolved graph and grouped projection | Scope response `schema` |
+| `mant.catalog/v0.14` | Local Markdown and manual-page discovery | Catalog response `schema` |
 | `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
 | `mant.doctor/v1` | Read-only local installation diagnostics | Doctor report `schema` |
 
 The native query family follows ManT's pre-stable minor release line:
-ManT 0.13.x uses `v0.13`, and patch releases remain backward compatible. They
-may add documented optional response fields, but never change requests,
+ManT 0.14.x uses `v0.14`, and patch releases remain backward compatible.
+Optional additions are compatible only at existing open extension points;
+new fields in closed objects and new closed-enum variants need a new family.
+Patch releases never change requests,
 required fields, tagged unions, or existing field semantics. The
 independent Markdown coordinate and doctor contracts remain
 `mant.markdown/v1` and `mant.doctor/v1`. Clients must still compare complete
@@ -152,15 +154,15 @@ document schemas. `--compact` is accepted by all schema commands.
 
 | `--schema` value | Root title | Root `$id` |
 | --- | --- | --- |
-| `request` | `QueryRequest` | `urn:mant:request:v0.13` |
-| `query` | `QueryBundle` | `urn:mant:query:v0.13` |
-| `outline` | `QueryOutline` | `urn:mant:outline:v0.13` |
-| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v0.13` |
-| `explanation` | `QueryExplanation` | `urn:mant:explanation:v0.13` |
-| `search` | `QuerySearch` | `urn:mant:search:v0.13` |
-| `scope-request` | `ScopeQueryRequest` | `urn:mant:scope-request:v0.13` |
-| `scope-query` | `ScopeQueryResponse` | `urn:mant:scope-query:v0.13` |
-| `catalog` | `DocumentCatalog` | `urn:mant:catalog:v0.13` |
+| `request` | `QueryRequest` | `urn:mant:request:v0.14` |
+| `query` | `QueryBundle` | `urn:mant:query:v0.14` |
+| `outline` | `QueryOutline` | `urn:mant:outline:v0.14` |
+| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v0.14` |
+| `explanation` | `QueryExplanation` | `urn:mant:explanation:v0.14` |
+| `search` | `QuerySearch` | `urn:mant:search:v0.14` |
+| `scope-request` | `ScopeQueryRequest` | `urn:mant:scope-request:v0.14` |
+| `scope-query` | `ScopeQueryResponse` | `urn:mant:scope-query:v0.14` |
+| `catalog` | `DocumentCatalog` | `urn:mant:catalog:v0.14` |
 | `doctor` | `DoctorReport` | `urn:mant:doctor:v1` |
 | `tldr-update` | `TldrCacheUpdate` | `urn:mant:tldr-update:v1` |
 
@@ -243,7 +245,7 @@ part of the read-only MCP surface. Its schema is available with
 ## Document Catalog
 
 The native CLI and MCP server share one catalog query and logical projection.
-Structured CLI JSON serializes it as `mant.catalog/v0.13`; MCP renders a bounded
+Structured CLI JSON serializes it as `mant.catalog/v0.14`; MCP renders a bounded
 text view of the same canonical identities:
 
 ```sh
@@ -316,7 +318,7 @@ findings belong to `document.diagnostics`, `outline.diagnostics`, or
 Manual pages have one parser path: ManT performs bounded reads, decompression,
 and constrained redirect-only `.so` alias resolution, then gives plain roff
 bytes to `libmandoc-rs` with includes denied. Renderer selection is
-deliberately absent from `mant.request/v0.13`. This native-manual source family is
+deliberately absent from `mant.request/v0.14`. This native-manual source family is
 available on Linux, macOS, and Windows through the same owned IR boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
@@ -340,7 +342,7 @@ Every request has three required fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema` | Exact string | Must be `mant.request/v0.13` |
+| `schema` | Exact string | Must be `mant.request/v0.14` |
 | `input` | `QueryInput` union | Logical document selector or explicit local input file |
 | `view` | `QueryView` union | Full, outline, excerpt, explain, or search projection |
 
@@ -448,11 +450,11 @@ does not follow redirect-only `.so` pages.
 
 | `kind` | Additional fields | Defaults and bounds | Response |
 | --- | --- | --- | --- |
-| `full` | None | None | `mant.query/v0.13` |
-| `outline` | `entries`, `root`, `references` | Independent entry/reference summaries by default; optional projection and root selector | `mant.outline/v0.13` |
-| `excerpt` | `selectors` | Non-empty node-selector array | `mant.excerpt/v0.13` |
-| `explain` | `entry`, optional `options` | Bounded name/form/entry-coordinate/literal evidence | `mant.explanation/v0.13` |
-| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v0.13` |
+| `full` | None | None | `mant.query/v0.14` |
+| `outline` | `entries`, `root`, `references` | Independent entry/reference summaries by default; optional projection and root selector | `mant.outline/v0.14` |
+| `excerpt` | `selectors` | Non-empty node-selector array | `mant.excerpt/v0.14` |
+| `explain` | `entry`, optional `options` | Bounded name/form/entry-coordinate/literal evidence | `mant.explanation/v0.14` |
+| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v0.14` |
 
 `entries` is a tagged projection. `{"kind":"none"}` emits only section
 topology, `{"kind":"summary"}` is the default, and `{"kind":"all"}` emits
@@ -496,7 +498,7 @@ Request a full manual:
 
 ```json
 {
-  "schema": "mant.request/v0.13",
+  "schema": "mant.request/v0.14",
   "input": {
     "kind": "document",
     "selector": "printf",
@@ -512,7 +514,7 @@ Discover all sections and semantic entries:
 
 ```json
 {
-  "schema": "mant.request/v0.13",
+  "schema": "mant.request/v0.14",
   "input": {
     "kind": "document",
     "selector": "tar"
@@ -532,7 +534,7 @@ for the illustrative `command-set` below:
 
 ```json
 {
-  "schema": "mant.request/v0.13",
+  "schema": "mant.request/v0.14",
   "input": {
     "kind": "document",
     "selector": "bash"
@@ -557,7 +559,7 @@ records, offset zero and a 1 MiB forms/facts/previews/body copy budget:
 
 ```json
 {
-  "schema": "mant.request/v0.13",
+  "schema": "mant.request/v0.14",
   "input": {
     "kind": "document",
     "selector": "tar"
@@ -573,7 +575,7 @@ Retrieve a section and one option by selectors returned from an outline:
 
 ```json
 {
-  "schema": "mant.request/v0.13",
+  "schema": "mant.request/v0.14",
   "input": {
     "kind": "document",
     "selector": "tar"
@@ -592,7 +594,7 @@ Search a Markdown document:
 
 ```json
 {
-  "schema": "mant.request/v0.13",
+  "schema": "mant.request/v0.14",
   "input": {
     "kind": "file",
     "path": "README.md",
@@ -616,19 +618,19 @@ A shell client can send a request without a temporary file:
 
 ```sh
 printf '%s\n' \
-  '{"schema":"mant.request/v0.13","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"all"}}}' \
+  '{"schema":"mant.request/v0.14","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","entries":{"kind":"all"}}}' \
   | mant --request-json --format json --compact
 ```
 
 ## Bounded Document Scope Contract
 
-`mant.scope-request/v0.13` is a separate closed request rather than an array-valued variant of `mant.request/v0.13`. The separation keeps full, outline, node, tldr, and direct-file queries unambiguously single-document while allowing search and semantic explanation to operate over a linked set.
+`mant.scope-request/v0.14` is a separate closed request rather than an array-valued variant of `mant.request/v0.14`. The separation keeps full, outline, node, tldr, and direct-file queries unambiguously single-document while allowing search and semantic explanation to operate over a linked set.
 
 The request has three fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema` | Exact string | `mant.scope-request/v0.13` |
+| `schema` | Exact string | `mant.scope-request/v0.14` |
 | `scope` | `DocumentScope` | Ordered initial documents plus traversal policy |
 | `view` | `ScopeQueryView` | `search` or `explain` |
 
@@ -670,7 +672,7 @@ Example:
 
 ```json
 {
-  "schema": "mant.scope-request/v0.13",
+  "schema": "mant.scope-request/v0.14",
   "scope": {
     "documents": [
       { "selector": "git" },
@@ -696,11 +698,11 @@ Example:
 }
 ```
 
-The response uses `mant.scope-query/v0.13`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, `matches`, optional `diagnostics`, and `contentComplete` when false; it has no local pagination fields or nested `mant.search/v0.13` envelope. The search-level `contentComplete` covers all readable scope documents, even those with no hit on this page. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not source content loss. Limit and offset apply globally, not once per document.
+The response uses `mant.scope-query/v0.14`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. For `result.kind = "search"`, pagination lives under `result.search`: consumers read `result.search.total`, `returned`, `offset`, `truncated`, `nextOffset`, and `documents`. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, `matches`, optional `diagnostics`, and `contentComplete` when false; it has no local pagination fields or nested `mant.search/v0.14` envelope. The search-level `contentComplete` covers all readable scope documents, even those with no hit on this page. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not source content loss. Limit and offset apply globally, not once per document.
 
 ```json
 {
-  "schema": "mant.scope-query/v0.13",
+  "schema": "mant.scope-query/v0.14",
   "scope": {
     "query": { "documents": [{ "selector": "git" }], "traversal": { "followLinks": false } },
     "documents": [],
@@ -746,7 +748,7 @@ Example scope request (response shape is generated by `--schema scope-query`):
 
 ```json
 {
-  "schema": "mant.scope-request/v0.13",
+  "schema": "mant.scope-request/v0.14",
   "scope": {
     "documents": [{ "selector": "git" }],
     "traversal": { "followLinks": false }
@@ -763,10 +765,10 @@ The CLI constructs the same contract with repeated `--document`, or with one pos
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `schema` | Yes | `mant.query/v0.13` |
+| `schema` | Yes | `mant.query/v0.14` |
 | `label` | Yes | Human-readable source label |
 | `address` | No | Exact registered Markdown source or manual name and section |
-| `document` | No | Normalized `mant.document/v0.13` document |
+| `document` | No | Normalized `mant.document/v0.14` document |
 | `tldr` | No | Normalized external or embedded quick reference |
 
 A successful runtime result contains useful `document`, `tldr`, or both. The
@@ -792,10 +794,10 @@ An abbreviated but structurally valid Markdown result is:
 
 ```json
 {
-  "schema": "mant.query/v0.13",
+  "schema": "mant.query/v0.14",
   "label": "guide.md",
   "document": {
-    "schema": "mant.document/v0.13",
+    "schema": "mant.document/v0.14",
     "producer": {
       "name": "mant",
       "version": "0.13.0",
@@ -821,7 +823,7 @@ hard-code the illustrative value above.
 
 ## Document Response and IR Projection
 
-`DocumentResponse` is the v0.13 wire projection of ManT's renderer-neutral
+`DocumentResponse` is the v0.14 wire projection of ManT's renderer-neutral
 `mant-ir::Document`. It describes semantics and normalized layout without
 exposing libmandoc pointers, roff macro nodes, internal indexes, HTML, or TUI
 components. Schema and producer metadata belong to the response envelope, not
@@ -831,7 +833,7 @@ to the reusable in-memory IR.
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | Exact `mant.document/v0.13` marker |
+| `schema` | Exact `mant.document/v0.14` marker |
 | `producer` | ManT version and parser engine |
 | `source` | Original source format and path |
 | `meta` | Normalized title, section, date, volume, OS, architecture, names, and alias target |
@@ -959,8 +961,8 @@ content-sized frame. Omission retains automatic placement, including the final
 cell's remaining-parent alignment area; explicit `left` is not omitted.
 These optional fields accept null as absence and reject duplicate fields,
 unknown alignments, zero/negative/fractional counts and ranges smaller than
-actual topology. Regenerate current v0.13 clients after adding them to Rust
-constructors; the published v0.12 schemas remain frozen.
+actual topology. Regenerate current v0.14 clients after adding them to Rust
+constructors; the published v0.12 and v0.13 schemas remain frozen.
 
 Table `columnPreferences` is a closed object containing optional reading
 preferences. `widths` defaults to `[]` and contains preferred content widths,
@@ -999,12 +1001,19 @@ link, span, or author-scalar ownership.
 
 Equation blocks carry `expression`, a source-neutral mathematical tree with
 `kind`, `font`, `operator`, visible text/fences/decorations and ordered children.
-Kinds are `text`, `operation`, `sequence`, `group`, `pile` and `matrix`; groups
+Kinds are `text`, `opaque`, `operation`, `sequence`, `group`, `pile` and `matrix`; groups
 retain operation boundaries, while sequences only order their children.
 Operators include `fraction`, `square-root`, `upper-limit`, `lower-limit`,
 `lower-upper-limits`, `superscript`, `subscript` and `subscript-superscript`,
 or `none`. All equation enums use kebab-case, including font names.
-Optional fields are omitted when absent; omitted `size` inherits presentation.
+Optional fields are omitted when absent. `atomRole` identifies a text atom as
+`identifier`, `number`, `operator`, `function`, `literal`, or the omitted default
+`unknown`. A literal stays one mathematical atom; it is not automatically prose
+or a named function. `opaque` retains readable content without claiming parsed
+internal structure. Shape and operation arity are validated at decoding.
+The retired `size` field is rejected: native eqn integers did not represent
+executed point sizes. Raw native evidence remains in `libmandoc-rs`, with
+unsupported selections reported by bounded producer semantic-coverage findings.
 Parser arity counters and native box names are resolved by the producer.
 `value` is the checked readable projection of that tree. The wire
 reader rejects a conflicting `value`. Inline equations use
@@ -1013,12 +1022,12 @@ prose nodes; their `expression` is required. Matrix children retain
 column order, while the readable projection visits every retained row.
 The roff producer budgets recursive JSON from each expression's final position
 inside the complete query response. Formula subtrees that exceed the remaining
-budget become readable text leaves and report
+budget become readable opaque leaves and report
 `manual.equation-structure-depth-summarized` with `semantic-coverage`.
 `operandScope: "compound"` retains an opaque operand's mathematical scope,
 independently of why its structure is unavailable; default `"atomic"` is omitted.
 The retired `expectedArgs`, `actualArgs`, `summarizedOperandGroup` and `position`
-fields are rejected by the v0.13 family. Published v0.12
+fields are rejected by the current v0.14 family. Published v0.12 and v0.13
 snapshots stay frozen. Deep surrounding lists, definitions, tables, or inline
 wrappers can themselves be reduced to readable text with
 `manual.document-structure-depth-summarized`, even without an equation. A final
@@ -1228,8 +1237,9 @@ It never becomes author spaces or a fixed page width.
 
 The new row-hint fields require the `v0.13` family because the published
 `v0.12` row-hint objects reject additional fields. Its frozen snapshots and
-examples remain available for historical consumers. Send `v0.13` request
-markers to a `v0.13` executable; mixed query/document families are rejected.
+examples remain available for historical consumers. Current clients send
+`v0.14` request markers to a `v0.14` executable; mixed query/document families
+are rejected.
 Independent `mant.markdown/v1`, `mant.doctor/v1` and `mant.tldr-update/v1`
 identifiers remain unchanged.
 
@@ -1300,7 +1310,7 @@ before an agent requests content:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.outline/v0.13` |
+| `schema` | `mant.outline/v0.14` |
 | `entries` | Echoed `none`, `summary`, `all`, or role-filtered projection |
 | `root` | Optional selector used as the returned tree root |
 | `label` | Query label |
@@ -1400,7 +1410,7 @@ An illustrative response is:
 
 ```json
 {
-  "schema": "mant.outline/v0.13",
+  "schema": "mant.outline/v0.14",
   "references": {
     "policy": {"mode": "none", "targetTypes": ["document", "manual"], "offset": 0, "limit": 100},
     "coverage": {"steps": 0, "bytes": 0, "status": {"kind": "not-scanned"}},
@@ -1554,7 +1564,7 @@ Complete reference inventory example (registered as `documents/linked`):
 
 ```json
 {
-  "schema": "mant.outline/v0.13",
+  "schema": "mant.outline/v0.14",
   "entries": {
     "kind": "all"
   },
@@ -1857,12 +1867,12 @@ destination is only namespace-resolved, with its fragment still unchecked.
 
 ## Excerpt Projection
 
-`mant.excerpt/v0.13` returns complete selected content without returning unrelated
+`mant.excerpt/v0.14` returns complete selected content without returning unrelated
 sections:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.excerpt/v0.13` |
+| `schema` | `mant.excerpt/v0.14` |
 | `label` | Query label |
 | `address` | Optional logical namespace for references in selected content |
 | `semanticsComplete` | Same document-wide completeness signal as outline; omitted when true |
@@ -1932,7 +1942,7 @@ previous path point somewhere else; this release has no cross-call stale check.
 
 ## Explanation Evidence
 
-`mant.explanation/v0.13` is independent of strict selection. CLI `--explain`,
+`mant.explanation/v0.14` is independent of strict selection. CLI `--explain`,
 request JSON and MCP `mant_explain` collect the same immutable IR evidence.
 They do not call the unique selector resolver or turn ambiguity errors into
 results. There is no strict-explain mode.
@@ -2129,14 +2139,14 @@ examples, expands real environment values or requests additional authority.
 
 ## Search Projection
 
-`mant.search/v0.13` searches one canonical full CommonMark render and returns
+`mant.search/v0.14` searches one canonical full CommonMark render and returns
 both structural locations and rendered coordinates.
 
 ### Result Envelope
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.search/v0.13` |
+| `schema` | `mant.search/v0.14` |
 | `label`, `source`, `meta` | Source identity |
 | `query` | Fully normalized search settings |
 | `render` | Coordinate-space descriptor |
@@ -2227,7 +2237,7 @@ A complete no-match response is:
 
 ```json
 {
-  "schema": "mant.search/v0.13",
+  "schema": "mant.search/v0.14",
   "label": "tar",
   "query": {
     "pattern": "definitely-not-present",
@@ -2260,7 +2270,7 @@ A complete no-match response is:
 `mant --mcp` is a long-running Model Context Protocol server over standard
 input and output. It is a compact agent presentation over the same
 `mant-engine` queries and `mant-protocol` logical projections. It is not
-`mant.cli/v0.13` framing, does not serialize the native response envelopes, and
+`mant.cli/v0.14` framing, does not serialize the native response envelopes, and
 does not introduce a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
@@ -2595,7 +2605,7 @@ schema.
 2. Run `mant --protocol-version --compact` and require compatible identifiers.
 3. Obtain `mant --schema request` and the expected response schema, or use a
    schema catalog pinned with the executable.
-4. Construct a closed `mant.request/v0.13` object.
+4. Construct a closed `mant.request/v0.14` object.
 5. Spawn `mant --request-json --format json --compact`.
 6. Write one UTF-8 request and close stdin.
 7. Drain stdout and stderr concurrently and apply a timeout.

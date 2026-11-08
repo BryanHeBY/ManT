@@ -7,7 +7,7 @@ fn rejects_equation_text_caches_that_disagree_with_the_structure() {
         kind: crate::EquationKind::Text,
         font: crate::EquationFont::None,
         operator: crate::EquationOperator::None,
-        size: None,
+        atom_role: crate::EquationAtomRole::Unknown,
         operand_scope: crate::EquationOperandScope::Atomic,
         text: Some("x".into()),
         left: None,
@@ -37,9 +37,11 @@ fn rejects_equation_text_caches_that_disagree_with_the_structure() {
             },
         ],
     );
-    let restored: Document =
-        serde_json::from_str(&serde_json::to_string(&document).unwrap()).unwrap();
-    let findings = validate_document(&restored);
+    // Runtime validation diagnoses independently constructed invalid IR;
+    // every local equation wire owner rejects it before consumers receive it.
+    let wire = serde_json::to_string(&document).unwrap();
+    assert!(serde_json::from_str::<Document>(&wire).is_err());
+    let findings = validate_document(&document);
     assert_eq!(
         findings
             .iter()

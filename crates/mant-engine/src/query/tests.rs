@@ -9,7 +9,7 @@ use mant_protocol::{
 };
 fn request() -> QueryRequest {
     QueryRequest {
-        schema: RequestSchema::V0Dot13,
+        schema: RequestSchema::V0Dot14,
         input: QueryInput::Document {
             selector: " tool ".to_owned(),
             source: None,

@@ -44,8 +44,8 @@ grep -Fxq 'ManT manual:' <<<"$help"
 grep -Fq -- '--display' <<<"$help"
 
 query=$("$mant" --input README.md --format json --compact)
-grep -Fq '"schema":"mant.query/v0.13"' <<<"$query"
-grep -Fq '"schema":"mant.document/v0.13"' <<<"$query"
+grep -Fq '"schema":"mant.query/v0.14"' <<<"$query"
+grep -Fq '"schema":"mant.document/v0.14"' <<<"$query"
 
 printf '\nproduct build succeeded\n'
 printf '  executable: %s\n' "$mant"

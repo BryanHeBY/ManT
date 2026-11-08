@@ -30,7 +30,7 @@ fn equation(value: &str) -> Inline {
             kind: crate::EquationKind::Text,
             font: crate::EquationFont::None,
             operator: crate::EquationOperator::None,
-            size: None,
+            atom_role: crate::EquationAtomRole::Unknown,
             operand_scope: crate::EquationOperandScope::Atomic,
             text: Some(value.into()),
             left: None,

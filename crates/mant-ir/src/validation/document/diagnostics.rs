@@ -7,6 +7,7 @@ pub(super) fn is_semantic_completeness_diagnostic(code: &str) -> bool {
     matches!(
         code,
         "ir.empty-identity"
+            | "ir.invalid-equation"
             | "ir.invalid-declaration-group"
             | "ir.invalid-entry-content"
             | "ir.invalid-entry-name-binding"

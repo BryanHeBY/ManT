@@ -10,7 +10,7 @@ use super::{
     },
     strings::borrowed_string,
 };
-use crate::{EquationBox, EquationFont, EquationKind, EquationPosition};
+use crate::{EquationAtomRole, EquationBox, EquationFont, EquationKind, EquationPosition};
 #[cfg(test)]
 use std::ptr::NonNull;
 
@@ -136,6 +136,12 @@ unsafe fn copy_equation_shallow(
             expected_args: view.expected_args,
             actual_args: view.actual_args,
             text: text.map(str::to_owned),
+            atom_role: match view.text_role {
+                0 => EquationAtomRole::Unknown,
+                1 => EquationAtomRole::Function,
+                2 => EquationAtomRole::Literal,
+                _ => return Err("libmandoc returned an unknown equation atom role".to_owned()),
+            },
             gnu_ldots: match view.gnu_ldots {
                 0 => false,
                 1 => true,

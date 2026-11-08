@@ -99,7 +99,7 @@ fn content() -> ResolvedContent {
 
 fn outline() -> QueryOutline {
     QueryOutline {
-        schema: OutlineSchema::V0Dot13,
+        schema: OutlineSchema::V0Dot14,
         entries: EntryProjection::None,
         root: None,
         references: Default::default(),
@@ -123,7 +123,7 @@ fn outline() -> QueryOutline {
 
 fn excerpt() -> QueryExcerpt {
     QueryExcerpt {
-        schema: ExcerptSchema::V0Dot13,
+        schema: ExcerptSchema::V0Dot14,
         label: "specimen".into(),
         display_title: Some("Render specimen".into()),
         address: None,

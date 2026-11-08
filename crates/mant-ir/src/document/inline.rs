@@ -4,8 +4,10 @@ use crate::NodeId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+mod wire;
+
 /// Inline content shared by prose, terms, and styled preformatted runs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",

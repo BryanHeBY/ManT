@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 fn query_with_owner(owner: &str, content: &Value, layout: &Value) -> Value {
     let mut document = json!({
-        "schema":"mant.document/v0.13", "producer":{"name":"test","version":"0"},
+        "schema":"mant.document/v0.14", "producer":{"name":"test","version":"0"},
         "source":{"format":"markdown"}, "meta":{}, "sections":[]
     });
     match owner {
@@ -31,7 +31,7 @@ fn query_with_owner(owner: &str, content: &Value, layout: &Value) -> Value {
         }
         _ => unreachable!("test owner"),
     }
-    json!({"schema":"mant.query/v0.13","label":"rows","document":document})
+    json!({"schema":"mant.query/v0.14","label":"rows","document":document})
 }
 
 const OWNERS: [&str; 5] = [

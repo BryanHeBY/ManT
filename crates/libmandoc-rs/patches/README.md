@@ -50,6 +50,11 @@ Patch `0034` connects the optional mdoc Markdown renderer to the bounded sink
 introduced by `0028`. It isolates mutable formatting state and releases
 indentation storage when rendering returns.
 
+Patch `0035` retains the existing parser's post-substitution function and
+complete literal atom identities for the owned equation snapshot. It changes
+neither native parsing nor formatting. A literal remains a mathematical atom,
+not automatically prose or an inferred function.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

@@ -40,8 +40,17 @@ document model, and `ManT`'s existing engine integration remains unchanged.
 Version 0.14 adds `RenderFormat::Markdown` under the existing `render` feature.
 Update exhaustive matches on `RenderFormat` to handle the new variant.
 Native Markdown renders `mdoc(7)` input and shares the existing byte budget,
-transport and diagnostic APIs. The owned AST and its serialization keep the
-same shape.
+transport and diagnostic APIs.
+
+`EquationBox` adds `atom_role: EquationAtomRole`, retaining complete named
+function and literal mathematical atom identities after definition expansion.
+Update explicit struct literals; older serialized boxes default this field to
+`Unknown`. `Literal` does not imply prose, a roman font, or a function inferred
+from spelling. The evidence is available independently of compatibility
+features and changes neither native parsing nor reference rendering.
+The native `size` snapshot remains available for audit, but it is not a resolved
+point size: the root's zero is an allocation default and signed selections can
+already be conflated. Native HTML and terminal renderers do not execute it.
 
 ## Upgrading from 0.12
 

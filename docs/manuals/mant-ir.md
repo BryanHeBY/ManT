@@ -200,10 +200,10 @@ relative to the resulting snapshot.
 
 An equation expression retains mathematical structure, not parser boxes or
 argument counters. `EquationKind` distinguishes `Text`, `Operation`, `Sequence`,
-`Group`, `Pile`, and `Matrix`: a sequence orders expressions without introducing
+`Group`, `Pile`, `Matrix`, and `Opaque`: a sequence orders expressions without introducing
 an operation boundary; a group supplies that boundary. `EquationOperator`
 describes fractions, square roots, scripts and limits independently from screen
-position. Resolved fonts, optional size, visible fences/decorations and ordered
+position. Resolved fonts, visible fences/decorations and ordered
 children remain available to math-capable consumers. Matrix children retain
 their columns and rows. `EquationExpression::readable_text()` supplies
 the shared, source-neutral text projection; a block's `value` is a compatibility
@@ -213,7 +213,7 @@ readable text, not a math layout or a second independently editable source.
 The roff producer counts JSON container depth from the final document position,
 including enclosing sections, lists, definitions, tables, and styled inlines.
 When a complete formula exceeds the remaining reader budget, the affected
-subtree becomes a text leaf retaining its complete readable text.
+subtree becomes an opaque leaf retaining its complete readable text.
 `operandScope: "compound"` retains the mathematical scope of an opaque compound
 operand; the default `"atomic"` is omitted. This is independent of the reason
 structure is unavailable, rather than an execution or summarization flag.
@@ -226,6 +226,31 @@ unusual remaining structure still exceeds it. These reductions leave
 `contentComplete` true and `semanticsComplete` false. If the owned tree was
 already truncated, its separate `content-coverage` diagnostic still reports
 missing source content.
+
+The v0.14 formula model adds `atomRole`: `identifier`, `number`, `operator`,
+`function`, `literal`, or the omitted default `unknown`. These are source-neutral
+roles, not parser token names. A literal is one complete mathematical atom;
+quoting in eqn does not automatically make it ordinary prose or a function.
+Opaque content is explicitly distinct from a text atom, and keeps its atomic
+or compound operand scope without pretending that its interior was parsed.
+
+Expression decoding checks local shape and operation arity. All formula owners
+also require `value` to equal the structure's readable projection, including
+formulas returned inside excerpts and explanations. Operation, decoration and
+matrix views borrow existing authoritative content rather than duplicating it.
+Matrix interpretation can fail for a retained nonstandard payload; it never
+authorizes dropping operands or truncating later columns to the first column.
+
+The former formula `size` field is retired and rejected in the v0.14 wire.
+Native eqn size integers were not executed font sizes: root zero, inherited
+global values and local size wrappers cannot be treated as resolved points or
+pixels. `libmandoc-rs::EquationBox` retains the original numeric evidence;
+unsupported selections become bounded producer semantic-coverage diagnostics.
+Neither the IR nor its consumers replay native size requests.
+
+The new native family deliberately does not accept a v0.13 formula merely by
+changing its marker. Published v0.13 schemas remain frozen; migrate formula
+fields and exact request/response identifiers together.
 
 In the `0.13.0` API, migrate `EquationPosition`/`position` to
 `EquationOperator`/`operator`, `Subexpression` to `Operation`, and parser `List`

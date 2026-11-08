@@ -17,6 +17,17 @@ pub(super) struct InvariantCollector {
 }
 
 impl InvariantCollector {
+    fn validate_equation(&mut self, expression: &crate::EquationExpression, value: &str) {
+        if let Err(error) = expression.validate(crate::EquationValidationLimits::default()) {
+            self.diagnostics
+                .push(invariant("ir.invalid-equation", error.to_string()));
+        } else if expression.readable_text() != value {
+            self.diagnostics.push(invariant(
+                "ir.equation-projection-mismatch",
+                "equation text does not match its owned expression".to_owned(),
+            ));
+        }
+    }
     fn validate_inline_layout(&mut self, content: &[Inline], layout: &crate::InlineLayout) {
         if let Err(message) = layout.validate(content) {
             self.diagnostics
@@ -176,12 +187,8 @@ impl<'ir> Visit<'ir> for InvariantCollector {
             expression: Some(expression),
             ..
         } = block
-            && *value != expression.readable_text()
         {
-            self.diagnostics.push(invariant(
-                "ir.equation-projection-mismatch",
-                "equation text does not match its owned expression".to_owned(),
-            ));
+            self.validate_equation(expression, value);
         }
         if let Block::DefinitionList {
             items,
@@ -237,13 +244,8 @@ impl<'ir> Visit<'ir> for InvariantCollector {
     }
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
-        if let Inline::Equation { value, expression } = inline
-            && *value != expression.readable_text()
-        {
-            self.diagnostics.push(invariant(
-                "ir.equation-projection-mismatch",
-                "inline equation text does not match its owned expression".to_owned(),
-            ));
+        if let Inline::Equation { value, expression } = inline {
+            self.validate_equation(expression, value);
         }
         match inline {
             Inline::Link {

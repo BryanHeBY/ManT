@@ -132,6 +132,7 @@ pub(super) struct CEquationBoxView {
     pub(super) expected_args: usize,
     pub(super) actual_args: usize,
     pub(super) text: *const c_char,
+    pub(super) text_role: i32,
     pub(super) gnu_ldots: i32,
     pub(super) left: *const c_char,
     pub(super) right: *const c_char,

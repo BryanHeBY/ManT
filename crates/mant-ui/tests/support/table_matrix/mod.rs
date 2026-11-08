@@ -20,7 +20,7 @@ pub fn cell(value: &str) -> Value {
 
 pub fn query(block: Value) -> ResolvedContent {
     let mut value: Value = serde_json::from_str(include_str!(
-        "../../../../../tests/contracts/minimal-query-v0.13.json"
+        "../../../../../tests/contracts/minimal-query-v0.14.json"
     ))
     .unwrap();
     value.as_object_mut().unwrap().remove("tldr");

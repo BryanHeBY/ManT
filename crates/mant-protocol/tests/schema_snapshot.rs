@@ -7,6 +7,7 @@ use mant_protocol::{
 use serde_json::Value;
 
 const V0_13_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.13.json");
+const V0_14_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.14.json");
 const V0_12_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v0.12.json");
 
 fn remove_non_structural_metadata(value: &mut Value) {
@@ -29,9 +30,9 @@ fn remove_non_structural_metadata(value: &mut Value) {
 
 #[test]
 fn current_structural_schemas_match_the_registered_contract() {
-    assert_eq!(NATIVE_API_VERSION, "0.13");
+    assert_eq!(NATIVE_API_VERSION, "0.14");
 
-    let mut expected: Value = serde_json::from_str(V0_13_SNAPSHOT).expect("v0.13 schema snapshot");
+    let mut expected: Value = serde_json::from_str(V0_14_SNAPSHOT).expect("v0.14 schema snapshot");
     let mut actual = serde_json::to_value(query_json_schema_catalog()).expect("generated schemas");
     remove_non_structural_metadata(&mut expected);
     remove_non_structural_metadata(&mut actual);
@@ -40,6 +41,37 @@ fn current_structural_schemas_match_the_registered_contract() {
         actual, expected,
         "the structural contract changed; review compatibility, version published contracts when necessary, and update current consumers and the matching snapshot; never overwrite published snapshots"
     );
+}
+
+#[test]
+fn v0_14_formula_contract_is_distinct_from_the_frozen_v0_13_shape() {
+    let released: Value = serde_json::from_str(V0_13_SNAPSHOT).unwrap();
+    let current: Value = serde_json::from_str(V0_14_SNAPSHOT).unwrap();
+    for family in ["query", "excerpt", "explanation", "scope-query"] {
+        assert_eq!(released[family]["$id"], format!("urn:mant:{family}:v0.13"));
+        assert_eq!(current[family]["$id"], format!("urn:mant:{family}:v0.14"));
+        let old = &released[family]["$defs"]["EquationExpression"];
+        let new = &current[family]["$defs"]["EquationExpression"];
+        assert!(old["properties"].get("size").is_some());
+        assert!(old["properties"].get("atomRole").is_none());
+        assert!(new["properties"].get("size").is_none());
+        assert!(new["properties"].get("atomRole").is_some());
+        assert_eq!(new["additionalProperties"], false);
+        assert_eq!(new["allOf"].as_array().unwrap().len(), 7);
+        let kinds = &current[family]["$defs"]["EquationKind"]["oneOf"];
+        assert!(
+            kinds
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|kind| kind["const"] == "opaque")
+        );
+        let roles = &current[family]["$defs"]["EquationAtomRole"]["oneOf"];
+        assert_eq!(roles.as_array().unwrap().len(), 6);
+    }
+    for family in ["doctor", "tldr-update"] {
+        assert_eq!(released[family], current[family]);
+    }
 }
 
 #[test]

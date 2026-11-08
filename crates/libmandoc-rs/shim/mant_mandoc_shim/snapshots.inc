@@ -258,6 +258,7 @@ mant_mandoc_eqn_box_snapshot(const struct mant_mandoc_document *document,
 	view->expected_args = source->expectargs;
 	view->actual_args = source->args;
 	view->text = source->text;
+	view->text_role = source->text_role;
 #ifdef MANT_MANDOC_COMPAT_GNU_EQN
 	view->gnu_ldots = source->gnu_ldots;
 #else

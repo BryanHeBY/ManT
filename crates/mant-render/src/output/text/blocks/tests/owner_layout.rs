@@ -21,7 +21,7 @@ fn signed_owner_hints_follow_all_hard_rows_without_changing_authored_text() {
         kind: mant_ir::EquationKind::Text,
         font: mant_ir::EquationFont::None,
         operator: mant_ir::EquationOperator::None,
-        size: None,
+        atom_role: mant_ir::EquationAtomRole::Unknown,
         operand_scope: mant_ir::EquationOperandScope::Atomic,
         text: Some("E\nF".into()),
         left: None,

@@ -49,3 +49,6 @@
 
 # Optional native Markdown renderer
 0034-embed-native-markdown-renderer.patch
+
+# Source-neutral equation atom evidence
+0035-retain-equation-text-roles.patch

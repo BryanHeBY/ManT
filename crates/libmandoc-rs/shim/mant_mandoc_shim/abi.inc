@@ -170,6 +170,7 @@ mant_mandoc_eqn_box_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_eqn_box_view, expected_args),
 		offsetof(struct mant_mandoc_eqn_box_view, actual_args),
 		offsetof(struct mant_mandoc_eqn_box_view, text),
+		offsetof(struct mant_mandoc_eqn_box_view, text_role),
 		offsetof(struct mant_mandoc_eqn_box_view, gnu_ldots),
 		offsetof(struct mant_mandoc_eqn_box_view, left),
 		offsetof(struct mant_mandoc_eqn_box_view, right),

@@ -232,7 +232,7 @@ fn native_citation_click_loads_the_selected_extension_through_the_request_bounda
         assert_eq!(name, "ed");
         assert_eq!(manual_section.as_deref(), Some("1"));
         let request = mant_protocol::QueryRequest {
-            schema: mant_protocol::RequestSchema::V0Dot13,
+            schema: mant_protocol::RequestSchema::V0Dot14,
             input: mant_protocol::QueryInput::Document {
                 selector: name.clone(),
                 source: None,
