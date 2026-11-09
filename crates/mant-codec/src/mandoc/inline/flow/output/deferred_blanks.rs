@@ -1,6 +1,6 @@
 //! Restore authored blanks only where the accepted field printed them.
 
-use super::super::field_buffer::{FieldBuffer, FillPass};
+use super::super::field_buffer::{DeferredSourceBlank, FieldBuffer, FillPass};
 use super::super::{Font, Inline};
 use crate::mandoc::inline::font::style::styled_segment;
 use std::collections::BTreeMap;
@@ -14,15 +14,33 @@ pub(in crate::mandoc::inline::flow) fn project(
     if !buffer.has_deferred_blanks() {
         return;
     }
+    let receipts = buffer.printed_deferred_blanks(passes);
+    project_from(nodes, start, &receipts);
+}
+
+pub(in crate::mandoc::inline::flow) fn project_from(
+    nodes: &mut Vec<Inline>,
+    start: usize,
+    receipts: &[(DeferredSourceBlank, usize)],
+) {
+    if !receipts.is_empty() {
+        let mut suffix = nodes.split_off(start.min(nodes.len()));
+        apply(std::slice::from_mut(&mut suffix), receipts);
+        nodes.extend(suffix);
+    }
+}
+
+pub(in crate::mandoc::inline::flow) fn apply(
+    terms: &mut [Vec<Inline>],
+    receipts: &[(DeferredSourceBlank, usize)],
+) {
     let mut printed = BTreeMap::new();
-    for (blank, count) in buffer.printed_deferred_blanks(passes) {
+    for &(blank, count) in receipts {
         let entry = printed.entry(blank.marker()).or_insert((blank.font, 0));
         entry.1 += count;
     }
-    if !printed.is_empty() {
-        let mut suffix = nodes.split_off(start.min(nodes.len()));
-        resolve(&mut suffix, &mut printed);
-        nodes.extend(suffix);
+    for term in terms {
+        resolve(term, &mut printed);
     }
 }
 

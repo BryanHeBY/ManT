@@ -5,7 +5,9 @@ use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 use mant_ir::{Inline, RowLayoutHint};
 
 use super::super::NativeWordAnchor;
+use super::super::field_buffer::DeferredSourceBlank;
 use super::super::output::tab_projection::{self, TabExpansion};
+use super::super::output::{INTERNAL_FIELD_WORD, deferred_blanks};
 
 type RowReceipt = (String, usize, RowLayoutHint);
 
@@ -13,12 +15,13 @@ struct PendingRows {
     owners: BTreeSet<String>,
     receipts: Vec<RowReceipt>,
     tabs: Vec<TabExpansion>,
+    blanks: Vec<(DeferredSourceBlank, usize)>,
     operands: Option<Rc<RefCell<super::super::HeadOperandCapture>>>,
 }
 
 /// One definition's HEAD/BODY ownership seam, never execution history.
 /// The formatter still owns the sole buffer and decides at the actual flush;
-/// this receiver records only accepted layout for the already detached HEAD.
+/// this receiver records only accepted projection for the already detached HEAD.
 pub(in crate::mandoc) struct DeferredHeadProjection(Rc<RefCell<PendingRows>>);
 
 impl Clone for DeferredHeadProjection {
@@ -30,6 +33,7 @@ impl Clone for DeferredHeadProjection {
             owners: source.owners.clone(),
             receipts: source.receipts.clone(),
             tabs: source.tabs.clone(),
+            blanks: source.blanks.clone(),
             operands: source
                 .operands
                 .as_ref()
@@ -47,6 +51,7 @@ impl DeferredHeadProjection {
             owners: anchors.iter().map(|anchor| anchor.owner.clone()).collect(),
             receipts: Vec::new(),
             tabs: Vec::new(),
+            blanks: Vec::new(),
             operands,
         })))
     }
@@ -71,6 +76,7 @@ impl DeferredHeadProjection {
         let mut pending = self.0.borrow_mut();
         let receipts = std::mem::take(&mut pending.receipts);
         let tabs = std::mem::take(&mut pending.tabs);
+        let blanks = std::mem::take(&mut pending.blanks);
         let operands = pending.operands.clone();
         drop(pending);
         if let Some(capture) = &operands {
@@ -82,6 +88,7 @@ impl DeferredHeadProjection {
                 super::super::output::row_origins::project_row_presentations(term, &receipts, 0);
         }
         tab_projection::apply(terms, &tabs);
+        deferred_blanks::apply(terms, &blanks);
         for term in terms {
             if let Some(capture) = &operands {
                 capture.borrow_mut().observe_accepted_output(term);
@@ -95,6 +102,21 @@ impl DeferredHeadProjection {
         for tab in tabs {
             if pending.owners.contains(&tab.owner) {
                 pending.tabs.push(tab.clone());
+            }
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn accept_blanks(
+        &self,
+        blanks: &[(DeferredSourceBlank, usize)],
+    ) {
+        let mut pending = self.0.borrow_mut();
+        for &(blank, count) in blanks {
+            if pending
+                .owners
+                .contains(&format!("{INTERNAL_FIELD_WORD}{}", blank.owner))
+            {
+                pending.blanks.push((blank, count));
             }
         }
     }

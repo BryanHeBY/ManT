@@ -123,6 +123,8 @@ that crate was not published for that change.
   breaks preserve authored spaces, accepted glyphs, link ownership and
   completed hard rows in reading output and Markdown round trips. Keep
   accepted empty passes before a following word, at EOF and in no-fill.
+- Return printed roff spaces to their original definition term when the
+  definition body flushes its shared field, including spaces in link labels.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

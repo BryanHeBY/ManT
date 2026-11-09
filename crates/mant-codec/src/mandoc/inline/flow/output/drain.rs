@@ -406,11 +406,12 @@ impl InlineBuilder {
             .row_presentation
             .has_pending_layout(self.execution.text_alignment)
             || self.execution.definition.as_ref().is_some_and(|state| {
-                state
-                    .field_buffer
-                    .cells()
-                    .iter()
-                    .any(|cell| matches!(cell, super::super::field_buffer::FieldCell::Tab))
+                state.field_buffer.has_deferred_blanks()
+                    || state
+                        .field_buffer
+                        .cells()
+                        .iter()
+                        .any(|cell| matches!(cell, super::super::field_buffer::FieldCell::Tab))
             });
         if deferred_head && let Some(definition) = &mut self.execution.definition {
             definition.deferred_head_projection = Some(
@@ -458,7 +459,7 @@ impl InlineBuilder {
         self.execution.word_end_break = WordEndBreak::Clear;
         // Run-in HEAD post does not flush (mdoc_term.c:939-945). Keep
         // only its private word coordinates until the real BODY flush can
-        // return accepted layout to this already detached semantic owner.
+        // return accepted layout and text to this already detached owner.
         let output = self.drain_ir_nodes_with_native_owners(deferred_head);
         if !deferred_head && let Some(field) = &mut state.definition_field {
             field.state.field_word_anchors.clear();

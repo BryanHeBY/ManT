@@ -135,7 +135,12 @@ impl InlineBuilder {
             if !owner_boundary {
                 self.project_accepted_field_passes(passes);
                 self.project_unprinted_accepted_field_padding(passes);
-                self.project_deferred_field_blanks(passes);
+                let start = self
+                    .execution
+                    .author_execution
+                    .as_ref()
+                    .map_or(0, |author| author.field_output_start);
+                self.project_deferred_field_blanks(passes, start, true);
             }
             self.definition_state_mut().hang_row.field_discarded = false;
             self.project_completed_empty_passes(&empty_pass_ends);
@@ -160,7 +165,7 @@ impl InlineBuilder {
         if owner_boundary && !*definitive {
             return false;
         }
-        self.project_rejected_field_prefix(passes, *rejected_from);
+        self.project_rejected_field_prefix(passes, *rejected_from, !owner_boundary);
         self.project_completed_empty_passes(&empty_pass_ends);
         self.finish_rejected_field_state(
             owner_boundary,
@@ -173,6 +178,7 @@ impl InlineBuilder {
         &mut self,
         passes: &[super::super::field_buffer::FillPass],
         rejected_from: usize,
+        return_to_head: bool,
     ) {
         let definition = self.execution.definition.as_mut().expect("native field");
         definition.hang_row.field_discarded = true;
@@ -206,12 +212,7 @@ impl InlineBuilder {
             retain_unprinted_field_targets(&mut pending_output);
         }
         self.nodes.extend(pending_output);
-        super::super::output::deferred_blanks::project(
-            &mut self.nodes,
-            &definition.field_buffer,
-            passes,
-            current_field_start,
-        );
+        self.project_deferred_field_blanks(passes, current_field_start, return_to_head);
         if accepted_owned_prefix
             && !super::super::output::ends_with_executed_line_break(&self.nodes)
         {
@@ -226,19 +227,21 @@ impl InlineBuilder {
         }
     }
 
-    fn project_deferred_field_blanks(&mut self, passes: &[super::super::field_buffer::FillPass]) {
+    fn project_deferred_field_blanks(
+        &mut self,
+        passes: &[super::super::field_buffer::FillPass],
+        start: usize,
+        return_to_head: bool,
+    ) {
+        use super::super::output::deferred_blanks;
         let definition = self.execution.definition.as_ref().expect("native field");
-        let start = self
-            .execution
-            .author_execution
-            .as_ref()
-            .map_or(0, |author| author.field_output_start);
-        super::super::output::deferred_blanks::project(
-            &mut self.nodes,
-            &definition.field_buffer,
-            passes,
-            start,
-        );
+        if return_to_head && let Some(receiver) = &definition.deferred_head_projection {
+            let receipts = definition.field_buffer.printed_deferred_blanks(passes);
+            receiver.accept_blanks(&receipts);
+            deferred_blanks::project_from(&mut self.nodes, start, &receipts);
+        } else {
+            deferred_blanks::project(&mut self.nodes, &definition.field_buffer, passes, start);
+        }
     }
 
     /// Acceptance by `term_fill` leaves `term_field`'s deferred tail unprinted.

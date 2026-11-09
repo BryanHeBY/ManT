@@ -130,6 +130,50 @@ fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
 }
 
 #[test]
+fn body_flush_returns_only_printed_blanks_to_a_detached_linked_term() {
+    // Both exact inputs ran fixed CVS. mdoc_term.c::termp_it_post() leaves
+    // inset HEAD cells live until the BODY flush; term_field() advances
+    // authored spaces only when the accepted pass prints them.
+    let source = r#".Dd November 10, 2026
+.Dt CHECK 1
+.Os
+.Sh NAME
+.Nm check
+.Nd word audit
+.Sh DESCRIPTION
+.Bl -inset -compact
+.It Xo
+.No "ALPHA\zX"
+.Lk https://x.io "\&\p\: \zY\p \&\p\: \p BETA"
+.No ""
+.Xc
+.br
+.No OMEGA
+.El
+"#;
+    let overwritten = source.replace(r"\&\p\: \p BETA", r"\&\p\:\fB \p\fIBETA");
+    for (input, word) in [(source, " BETA"), (&overwritten, "BETA")] {
+        let label = format!("\nY\n\n{word}");
+        assert_link(input, "roff", &label);
+        let direct = render(input, "roff", "text", "never", false);
+        assert_eq!(
+            description(&direct),
+            format!("ALPHAX\nY\n\n{word}:\nhttps://x.io\nOMEGA")
+        );
+        assert_eq!(
+            without_sgr(&render(input, "roff", "text", "always", false)),
+            direct
+        );
+        for addressable in [false, true] {
+            let markdown = render(input, "roff", "markdown", "never", addressable);
+            assert_link(&markdown, "markdown", &label);
+            let reexport = render(&markdown, "markdown", "markdown", "never", addressable);
+            assert_link(&reexport, "markdown", &label);
+        }
+    }
+}
+
+#[test]
 fn accepted_empty_word_passes_keep_hard_rows_before_a_successor_or_eof() {
     // These exact inputs ran all five pristine profiles. term.c:205–220
     // closes each accepted loop pass, including NBRZW with no printed
