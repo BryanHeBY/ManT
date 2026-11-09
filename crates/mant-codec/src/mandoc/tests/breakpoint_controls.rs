@@ -144,7 +144,12 @@ fn projected_recovery_and_held_cells_keep_their_actual_source_order() {
     for (initial, middle, expected) in [
         (r"X\zY\p\:\[unknown] ", "", "XY\n\\[unknown] Z"),
         (r"X\zY\p\: \[unknown]", "", "XY\n \\[unknown]Z"),
+        (r"X\zY\p\:\[unknown] ", ".No \"\"\n", "XY\n\\[unknown]  Z"),
+        (r"X\zY\p\: \[unknown]", ".No \"\"\n", "XY\n \\[unknown] Z"),
+        (r"X\zY\p\: ", "", "XY\n Z"),
+        (r"X\zY\p\: ", ".No \"\"\n", "XY\n  Z"),
         (r"X\zY\p\: ", ".No \\fB\n", "XY\n  Z"),
+        (r"X\zY\p\: ", ".No \"\"\n.No \\fB\n", "XY\n   Z"),
     ] {
         let document = parse(MDOC_HEADER, &format!(".No \"{initial}\"\n{middle}.No Z\n"));
         assert_eq!(

@@ -165,22 +165,24 @@ impl InlineBuilder {
         projection.native_separator = projection
             .native_separator
             .saturating_sub(projected_separator);
+        let starts_output_row = incoming_has_line_break
+            || projection.split_word.is_some()
+            || projection.closes_before > 0;
+        let mut payload = projection
+            .split_word
+            .take()
+            .unwrap_or_else(|| std::mem::take(incoming));
         let layout_start = self.append_recorded_word_boundary(
             boundary,
             word,
             empty_word,
             add_space && projected_separator == 0,
             &projection,
+            &mut payload,
         );
-        let starts_output_row = incoming_has_line_break
-            || projection.split_word.is_some()
-            || projection.closes_before > 0;
         if word {
             self.materialize_boundary_before_pending_glyph();
         }
-        let payload = projection
-            .split_word
-            .unwrap_or_else(|| std::mem::take(incoming));
         self.append_source_payload(payload, word, layout_start);
         if starts_output_row {
             self.note_definition_output_row();
@@ -351,11 +353,11 @@ impl InlineBuilder {
         empty_word: bool,
         add_space: bool,
         projection: &super::record::WordPassProjection,
+        payload: &mut Vec<Inline>,
     ) -> usize {
         let accepted_row_break = projection.closes_before;
-        let leading_cells = projection.leading_cells;
         let native_separator = projection.native_separator;
-        let mut layout_start = self.nodes.len();
+        let layout_start = self.nodes.len();
         // Plain MC's one projected next-word blank is an advance reservation,
         // unlike a definition field's minbl. Once an empty word actually
         // buffers that blank, transfer ownership to the word cells. The
@@ -401,25 +403,12 @@ impl InlineBuilder {
             self.nodes.push(Inline::anchor(marker.clone()));
         }
         if accepted_row_break > 0 {
-            // A consumed \p separator closes the already accepted prefix.
-            // Its blank is part of the break, not a new formatter word cell.
-            trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
-            for _ in 0..accepted_row_break {
-                let row_indent = self.take_definition_row_indent();
-                super::push_row_break(&mut self.nodes, row_indent);
-            }
-            layout_start = self.nodes.len();
-            // The pass can stop skipping ordinary blanks at TABREF.
-            // Only cells before the restarted cursor were consumed.
-            if !empty_word
-                && self.materialize_pending_word_spaces() > 0
-                && let Some(marker) = native_anchor_marker.as_ref()
-            {
-                self.nodes.push(Inline::anchor(marker.clone()));
-            }
-            if leading_cells > 0 {
-                push_text(&mut self.nodes, " ".repeat(leading_cells));
-            }
+            self.append_restarted_word_padding(
+                projection,
+                empty_word,
+                native_anchor_marker.as_deref(),
+                payload,
+            )
         } else {
             // Literal rows preserve the actual buffered separator even
             // after a zero-width or empty word. An IR character predicate
@@ -467,6 +456,53 @@ impl InlineBuilder {
                 // The word's accepted scalar interval begins after that pad.
                 self.nodes.push(Inline::anchor(marker));
             }
+            layout_start
+        }
+    }
+
+    fn append_restarted_word_padding(
+        &mut self,
+        projection: &super::record::WordPassProjection,
+        empty_word: bool,
+        native_anchor_marker: Option<&str>,
+        payload: &mut Vec<Inline>,
+    ) -> usize {
+        // A consumed \p separator closes the already accepted prefix.
+        // Its blank is part of the break, not a new formatter word cell.
+        trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
+        for _ in 0..projection.closes_before {
+            let row_indent = self.take_definition_row_indent();
+            super::push_row_break(&mut self.nodes, row_indent);
+        }
+        if matches!(
+            projection.leading_padding,
+            super::record::RestartedPadding::WithEarlierOwners(_)
+        ) && !self.execution.pending_word_spaces.is_empty()
+            && let Some(marker) = native_anchor_marker
+        {
+            // The borrowed payload is older than the queued empty
+            // words. Its held source blanks and recovery text retain
+            // their place before those independently owned separators.
+            self.nodes.extend(take_word_prefix(payload, marker));
+        }
+        let layout_start = self.nodes.len();
+        // The pass can stop skipping ordinary blanks at TABREF.
+        // Only cells before the restarted cursor were consumed.
+        let earlier_cells = if empty_word {
+            0
+        } else {
+            self.materialize_pending_word_spaces()
+        };
+        if earlier_cells > 0
+            && let Some(marker) = native_anchor_marker
+        {
+            self.nodes.push(Inline::anchor(marker));
+        }
+        // A borrowed glyph can put older separators in the same native
+        // range. The deferred receipts already printed their owners.
+        let leading_cells = projection.leading_padding.remaining(earlier_cells);
+        if leading_cells > 0 {
+            push_text(&mut self.nodes, " ".repeat(leading_cells));
         }
         layout_start
     }
@@ -693,4 +729,15 @@ impl InlineBuilder {
             push_text(&mut self.nodes, spaces);
         }
     }
+}
+
+fn take_word_prefix(payload: &mut Vec<Inline>, owner: &str) -> Vec<Inline> {
+    let Some(index) = payload
+        .iter()
+        .position(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str() == owner))
+    else {
+        return Vec::new();
+    };
+    let suffix = payload.split_off(index);
+    std::mem::replace(payload, suffix)
 }

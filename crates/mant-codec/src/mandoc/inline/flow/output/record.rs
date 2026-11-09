@@ -7,12 +7,53 @@ use std::collections::BTreeMap;
 #[derive(Default)]
 pub(super) struct WordPassProjection {
     pub(super) closes_before: usize,
-    pub(super) leading_cells: usize,
+    pub(super) leading_padding: RestartedPadding,
     pub(super) native_separator: usize,
     pub(super) preserve_retreated_separator: bool,
     pub(super) consumed_initial_separator: bool,
     pub(super) prints_padding: bool,
     pub(super) split_word: Option<Vec<Inline>>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum RestartedPadding {
+    CurrentWord(usize),
+    WithEarlierOwners(usize),
+}
+
+impl Default for RestartedPadding {
+    fn default() -> Self {
+        Self::CurrentWord(0)
+    }
+}
+
+impl RestartedPadding {
+    fn before_word(
+        buffer: &super::super::field_buffer::FieldBuffer,
+        boundary: usize,
+        word_start: usize,
+        word_first_cell: usize,
+        borrowed: Option<&BorrowedPrefix>,
+    ) -> Self {
+        if let Some(prefix) = borrowed
+            && prefix.offset(buffer, boundary) == 0
+        {
+            Self::WithEarlierOwners(
+                buffer
+                    .projection_length(boundary, word_first_cell)
+                    .saturating_sub(prefix.count),
+            )
+        } else {
+            Self::CurrentWord(buffer.projection_length(boundary.max(word_start), word_first_cell))
+        }
+    }
+
+    pub(super) fn remaining(self, earlier_cells: usize) -> usize {
+        match self {
+            Self::CurrentWord(cells) => cells,
+            Self::WithEarlierOwners(cells) => cells.saturating_sub(earlier_cells),
+        }
+    }
 }
 
 impl WordPassProjection {
@@ -284,7 +325,7 @@ impl InlineBuilder {
         let anchor_count = anchors.len();
         let mut inside_splits: BTreeMap<String, Vec<usize>> = BTreeMap::new();
         let mut closes_before = 0;
-        let mut leading_cells = 0;
+        let mut leading_padding = RestartedPadding::default();
         let starts_earlier_owner = starts_with_borrowed_output(incoming, anchors.last());
         // Borrowed output need not precede this pass: a projected glyph's
         // held cells can follow its breakpoint. Recover their exact native
@@ -362,23 +403,20 @@ impl InlineBuilder {
                     // non-blank byte (term.c:205-207). A NODE_LINE TABREF
                     // stops that sweep, leaving this word's real separator
                     // at the new row origin even after an empty operand.
-                    leading_cells = if let Some(prefix) = &borrowed
-                        && prefix.offset(buffer, boundary) == 0
-                    {
-                        buffer
-                            .projection_length(boundary, word_first_cell)
-                            .saturating_sub(prefix.count)
-                    } else {
-                        buffer.projection_length(
-                            boundary.max(anchors[anchor_count - 1].start),
-                            word_first_cell,
-                        )
-                    };
+                    leading_padding = RestartedPadding::before_word(
+                        buffer,
+                        boundary,
+                        anchors[anchor_count - 1].start,
+                        word_first_cell,
+                        borrowed.as_ref(),
+                    );
                     restore_restarted_separator(
                         anchors,
                         boundary,
                         word_first_cell,
-                        closes_before > 0 && leading_cells > 0 && !starts_earlier_owner,
+                        closes_before > 0
+                            && leading_padding.remaining(0) > 0
+                            && !starts_earlier_owner,
                     );
                 } else if boundary < word_end && !represented_in_ir {
                     inside_splits
@@ -395,7 +433,7 @@ impl InlineBuilder {
         let split_word = split_recorded_word(incoming, anchors.last(), &inside_splits);
         WordPassProjection {
             closes_before,
-            leading_cells,
+            leading_padding,
             split_word,
             native_separator: 0,
             preserve_retreated_separator: false,
