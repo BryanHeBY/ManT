@@ -199,6 +199,7 @@ impl FieldBuffer {
         self.cells.clear();
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
+        self.zero_width_retreats.clear();
         self.backline_projection_target = None;
         self.resume = 0;
         self.backbefore_armed = false;
@@ -520,22 +521,7 @@ impl FieldBuffer {
                 }
                 Some(_) => {
                     if let Some(cell) = target.filter(|&cell| cell >= self.resume) {
-                        // term_field() advances to the blank and then
-                        // rewinds over it before printing the new graph
-                        // (term.c:420-434,901-908). Its latent projection
-                        // is overwritten just like an already visible cell.
-                        self.retire_deferred_blank_at(cell);
-                        let contribution = self.projection_length(cell, cell + 1);
-                        // An arm can cross invisible controls, but the next
-                        // arm starts with a newly appended glyph. Each
-                        // overwrite adjusts only its still-live suffix.
-                        for prefix in &mut self.projection_prefix[cell + 1..] {
-                            #[cfg(test)]
-                            {
-                                self.projection_work += 1;
-                            }
-                            *prefix = prefix.saturating_sub(contribution);
-                        }
+                        self.project_backline_retreat(cell, width);
                     }
                     self.push_cell(FieldCell::Backline);
                 }
@@ -553,6 +539,39 @@ impl FieldBuffer {
             if run.start == run.end {
                 self.deferred_blanks.pop();
             }
+        }
+    }
+
+    fn project_backline_retreat(&mut self, cell: usize, incoming_width: usize) {
+        if matches!(self.cells[cell], FieldCell::Graph { width: 0, .. }) {
+            // A cached zero-width graph was emitted by term_field() and
+            // its backline also has zero width. The new graph cannot cover it.
+            return;
+        }
+        if incoming_width == 0
+            && matches!(
+                self.cells[cell],
+                FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen
+            )
+        {
+            // encode1() still writes the backline before the mark. A mark
+            // emits no advancing cell at term_field()421-439. Keep the
+            // old scalar quota until the accepted pass proves a cover.
+            self.zero_width_retreats.push((cell, self.cells.len() + 1));
+            return;
+        }
+        // term_field() advances to a pending blank and can rewind over it
+        // before printing the new graph (term.c:420-434,901-908).
+        self.retire_deferred_blank_at(cell);
+        let contribution = self.projection_length(cell, cell + 1);
+        // An arm can cross invisible controls, but the next arm starts
+        // with a newly appended glyph. Adjust only its still-live suffix.
+        for prefix in &mut self.projection_prefix[cell + 1..] {
+            #[cfg(test)]
+            {
+                self.projection_work += 1;
+            }
+            *prefix = prefix.saturating_sub(contribution);
         }
     }
 

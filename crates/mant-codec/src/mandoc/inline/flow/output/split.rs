@@ -275,23 +275,23 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
                         // establish it (term.c:340-349,475-481).
                         return limits.get(owner).is_some_and(|range| range.native_cells);
                     }
-                    let (position, next_padding) = positions.entry(owner.clone()).or_default();
+                    let (position, next_omission) = positions.entry(owner.clone()).or_default();
                     let accepted = limits.get(owner);
                     let scalars = accepted.map_or(0, |range| range.scalars);
-                    let padding =
-                        accepted.map_or(&[][..], |range| range.unprinted_padding.as_slice());
+                    let omissions =
+                        accepted.map_or(&[][..], |range| range.omitted_scalars.as_slice());
                     value.retain(|_| {
                         let scalar = *position;
                         *position = position.saturating_add(1);
-                        while padding
-                            .get(*next_padding)
+                        while omissions
+                            .get(*next_omission)
                             .is_some_and(|range| range.end <= scalar)
                         {
-                            *next_padding += 1;
+                            *next_omission += 1;
                         }
                         scalar < scalars
-                            && !padding
-                                .get(*next_padding)
+                            && !omissions
+                                .get(*next_omission)
                                 .is_some_and(|range| range.contains(&scalar))
                     });
                     !value.is_empty()

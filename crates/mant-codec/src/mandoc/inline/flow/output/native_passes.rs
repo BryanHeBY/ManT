@@ -11,9 +11,30 @@ pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
     /// The first accepted interval printed this word's deferred device pad.
     /// An accepted NBRZW prefix alone cannot print it (term.c:389-427).
     pub(in crate::mandoc::inline::flow) prefix_printed: bool,
-    /// Accepted source scalars belonging to deferred native padding which
-    /// no subsequent graph printed. Recovery spellings remain independent.
-    pub(in crate::mandoc::inline::flow) unprinted_padding: Vec<std::ops::Range<usize>>,
+    /// Source scalars in an accepted pass with no surviving device cell.
+    /// They can be unprinted padding or covered glyphs.
+    pub(in crate::mandoc::inline::flow) omitted_scalars: Vec<std::ops::Range<usize>>,
+}
+
+impl OwnerAcceptance {
+    fn omit_cell(
+        &mut self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        start: usize,
+        cell: usize,
+    ) {
+        let first = self.scalars + buffer.projection_length(start, cell);
+        let last = self.scalars + buffer.projection_length(start, cell + 1);
+        if first < last {
+            if let Some(previous) = self.omitted_scalars.last_mut()
+                && previous.end == first
+            {
+                previous.end = last;
+            } else {
+                self.omitted_scalars.push(first..last);
+            }
+        }
+    }
 }
 
 /// Accepted projection range of each stable source word. A delayed glyph
@@ -28,6 +49,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     use super::super::field_buffer::FieldCell;
 
     let mut lengths = BTreeMap::new();
+    let covered = buffer.covered_zero_width_retreats(passes);
     let mut previous_end = 0;
     let printed_ends: Vec<_> = passes
         .iter()
@@ -92,6 +114,13 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             let (printed_end, printed, projected_end) = printed_ends[pass_index];
             if start < accepted_end {
                 let projected_end = projected_end.min(accepted_end);
+                let covered_start = covered.partition_point(|&cell| cell < start);
+                for &cell in covered[covered_start..]
+                    .iter()
+                    .take_while(|&&cell| cell < projected_end)
+                {
+                    acceptance.omit_cell(buffer, start, cell);
+                }
                 let padding_start = if preserve_literal_whitespace
                     && anchor.projection
                         == super::super::WordProjectionPolicy::SourceLiteralWhitespace
@@ -109,17 +138,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                         buffer.cells()[cell],
                         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
                     ) {
-                        let first = acceptance.scalars + buffer.projection_length(start, cell);
-                        let last = acceptance.scalars + buffer.projection_length(start, cell + 1);
-                        if first < last {
-                            if let Some(previous) = acceptance.unprinted_padding.last_mut()
-                                && previous.end == first
-                            {
-                                previous.end = last;
-                            } else {
-                                acceptance.unprinted_padding.push(first..last);
-                            }
-                        }
+                        acceptance.omit_cell(buffer, start, cell);
                     }
                 }
                 acceptance.scalars += buffer.projection_length(start, projected_end);

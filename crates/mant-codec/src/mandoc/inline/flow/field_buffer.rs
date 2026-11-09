@@ -162,6 +162,10 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// graphs remain native graph cells but contribute no projected glyph.
     projection_prefix: Vec<usize>,
     deferred_blanks: Vec<cells::DeferredBlankRun>,
+    /// A zero-width graph can retreat onto an earlier advancing graph
+    /// without covering it. A later advancing write in that accepted
+    /// pass decides whether the earlier graph remains in reading text.
+    zero_width_retreats: Vec<(usize, usize)>,
     /// Latest occupied cell that an emitted backline could overwrite in
     /// this projection interval. Native BACKBEFORE can survive its retirement.
     backline_projection_target: Option<usize>,

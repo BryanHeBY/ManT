@@ -131,6 +131,8 @@ that crate was not published for that change.
   its remaining input.
 - Keep leading literal horizontal motion in native word acceptance when
   it consumes generated padding or clears a pending backstep.
+- Preserve a zero-advance base and its combining marks until the accepted
+  native pass shows whether a later glyph covers the base.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

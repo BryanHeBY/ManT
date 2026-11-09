@@ -130,6 +130,49 @@ fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
 }
 
 #[test]
+fn combining_overstrike_uses_the_accepted_field_to_keep_or_cover_its_base() {
+    let header = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    // Fixed CVS UTF-8 writes the base, a backspace and the non-advancing
+    // accent (term.c::encode1 and term_field). The portable reading stream
+    // keeps their source order. A later cell on the same native pass can
+    // cover the base, while a subsequent physical line cannot.
+    for (input, expected) in [
+        (r#".No "ALPHA\zé""#, "ALPHAe\u{301}"),
+        (r#".No "ALPHA\ze\[u0301]""#, "ALPHAe\u{301}"),
+        (r#".No "ALPHA\zé̀""#, "ALPHAe\u{301}\u{300}"),
+        (r#".No "ALPHA\zéTAIL""#, "ALPHA\u{301}TAIL"),
+        (r#".No "ALPHA\ze\[u0301]TAIL""#, "ALPHA\u{301}TAIL"),
+        (r#".No "ALPHA\ze\źTAIL""#, "ALPHA\u{301}TAIL"),
+        (r#".No "ALPHA\zé" Ns No TAIL"#, "ALPHA\u{301}TAIL"),
+        (".No \"ALPHA\\zé\"\n.No \"TAIL\"", "ALPHA\u{301} TAIL"),
+        (r#".No "ALPHA\ze ́TAIL""#, "ALPHAe\u{301}TAIL"),
+        (".No \"ALPHA\\zé\"\n.br\n.No TAIL", "ALPHAe\u{301}\nTAIL"),
+    ] {
+        assert_readbacks(&format!("{header}{input}\n"), expected, None);
+    }
+
+    let styled = format!("{header}.No \"ALPHA\\fB\\ze\\fÍ\"\n");
+    let bundle: mant_protocol::QueryBundle =
+        serde_json::from_str(&render(&styled, "roff", "json", "never", false)).unwrap();
+    let document = bundle.document.unwrap();
+    let mant_ir::Block::Paragraph { children, .. } = &document.sections.last().unwrap().blocks[0]
+    else {
+        panic!("expected the combining glyph's paragraph");
+    };
+    let [
+        Inline::Text { value },
+        Inline::Strong { children: base },
+        Inline::Emphasis { children: mark },
+    ] = children.as_slice()
+    else {
+        panic!("expected separate base and mark styles: {children:?}");
+    };
+    assert_eq!(value, "ALPHA");
+    assert_eq!(inline_plain_text(base), "e");
+    assert_eq!(inline_plain_text(mark), "\u{301}");
+}
+
+#[test]
 fn rejected_kept_suffix_does_not_repeat_its_accepted_prefix_endline() {
     // Exact rejected, accepted and unkept controls ran fixed CVS in all
     // five profiles. term.c::term_flushln() ends the accepted field at

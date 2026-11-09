@@ -343,6 +343,7 @@ pub(super) fn retain_accepted_unit_output(
         unprinted
     });
     if unprinted_padding
+        || buffer.has_zero_width_retreats()
         || passes
             .last()
             .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)

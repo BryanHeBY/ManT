@@ -68,6 +68,16 @@ impl<T> ZeroAdvanceMachine<T> {
         }
     }
 
+    /// Stage the pending projection in source order before the next graph.
+    /// The native field still owns acceptance of the staged glyph.
+    pub(in crate::mandoc) fn stage_pending_projection(&mut self) {
+        if let Some(PendingGlyph::Buffered(glyph)) = self.pending.take() {
+            self.recoveries
+                .insert(self.recoveries_before_pending, glyph);
+            self.recoveries_before_pending = self.recoveries.len();
+        }
+    }
+
     /// Borrow the buffered glyph and its source-order slot among recoveries.
     pub(in crate::mandoc) fn pending_projection(&self) -> Option<(usize, &T)> {
         self.pending_ref()

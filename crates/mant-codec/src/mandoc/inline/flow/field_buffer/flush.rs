@@ -142,6 +142,7 @@ impl FieldBuffer {
             blank_positions: self.blank_positions.clone(),
             projection_prefix: Vec::new(),
             deferred_blanks: Vec::new(),
+            zero_width_retreats: Vec::new(),
             backline_projection_target: None,
             backbefore_armed: false,
             backafter_armed: false,
@@ -208,6 +209,49 @@ impl FieldBuffer {
                     FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
                 )
             })
+    }
+
+    pub(in crate::mandoc::inline::flow) fn has_zero_width_retreats(&self) -> bool {
+        !self.zero_width_retreats.is_empty()
+    }
+
+    pub(in crate::mandoc::inline::flow) fn covered_zero_width_retreats(
+        &self,
+        passes: &[FillPass],
+    ) -> Vec<usize> {
+        let mut retreats = self.zero_width_retreats.iter().peekable();
+        let mut covered = Vec::new();
+        let mut start = 0;
+        for pass in passes {
+            let Some(&&(target, _)) = retreats.peek() else {
+                break;
+            };
+            if target < pass.end {
+                let printed_end = self.printed_content_end(start, pass.end);
+                let last_advance = self.cells[start.min(printed_end)..printed_end]
+                    .iter()
+                    .rposition(|cell| {
+                        matches!(
+                            cell,
+                            FieldCell::Graph { width: 1.., .. }
+                                | FieldCell::Hyphen
+                                | FieldCell::BreakableBlank
+                                | FieldCell::NonBreakingBlank
+                                | FieldCell::Tab
+                        )
+                    })
+                    .map(|index| start + index);
+                while let Some(&&(target, mark)) = retreats.peek().filter(|pair| pair.0 < pass.end)
+                {
+                    if target >= start && last_advance.is_some_and(|advance| advance > mark) {
+                        covered.push(target);
+                    }
+                    retreats.next();
+                }
+            }
+            start = self.after_break_blanks(pass.end);
+        }
+        covered
     }
 
     /// Count the projected cells in a padding range that can still print.

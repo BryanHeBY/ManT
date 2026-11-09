@@ -91,6 +91,17 @@ impl ZeroAdvanceState {
     }
 
     fn project_glyph(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
+        if self.machine.pending_ref().is_some_and(|pending| {
+            pending.owner.is_some()
+                && (is_nonadvancing_graph(&pending.value) || is_nonadvancing_graph(&glyph))
+        }) {
+            // term.c::encode1() writes BS before a non-advancing graph.
+            // This cannot erase the combining glyph. Keep both in source
+            // order until term_field's accepted pass proves that another
+            // graph or printed space occupies the base's column.
+            self.machine.stage_pending_projection();
+            self.resolved_preexisting |= self.fragment_started_pending;
+        }
         self.machine
             .project_glyph(OwnedGlyph {
                 value: glyph,
@@ -797,5 +808,17 @@ impl ZeroAdvanceState {
 impl Default for ZeroAdvanceState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn is_nonadvancing_graph(inline: &Inline) -> bool {
+    match inline {
+        Inline::Text { value } | Inline::Code { value } => {
+            !value.is_ascii() && mant_ir::geometry::text_width(value) == 0
+        }
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => children.first().is_some_and(is_nonadvancing_graph),
+        _ => false,
     }
 }

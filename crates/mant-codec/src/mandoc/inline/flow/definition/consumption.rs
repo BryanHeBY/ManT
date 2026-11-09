@@ -134,7 +134,7 @@ impl InlineBuilder {
         if let FlushReceipt::Accepted { passes, .. } = receipt {
             if !owner_boundary {
                 self.project_accepted_field_passes(passes);
-                self.project_unprinted_accepted_field_padding(passes);
+                self.project_accepted_field_omissions(passes);
                 let start = self
                     .execution
                     .author_execution
@@ -244,9 +244,9 @@ impl InlineBuilder {
         }
     }
 
-    /// Acceptance by `term_fill` leaves `term_field`'s deferred tail unprinted.
-    /// Consume that same native scalar receipt on real field flushes.
-    fn project_unprinted_accepted_field_padding(
+    /// Project `term_field`'s unprinted padding and covered glyphs at the
+    /// native flush, using the same source owner intervals as rejection.
+    fn project_accepted_field_omissions(
         &mut self,
         passes: &[super::super::field_buffer::FillPass],
     ) {
@@ -259,7 +259,7 @@ impl InlineBuilder {
             pass_start = pass.end;
             unprinted
         });
-        if !unprinted_padding {
+        if !unprinted_padding && !definition.field_buffer.has_zero_width_retreats() {
             return;
         }
         let accepted = super::super::output::native_passes::accepted_owner_lengths(
