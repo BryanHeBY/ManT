@@ -306,3 +306,71 @@ fn empty_mdoc_sibling_remains_a_word_while_visited_empty_lines_remain_vertical()
         }
     }
 }
+
+#[path = "support/terminal_cells.rs"]
+mod terminal_cells;
+
+#[test]
+fn hanging_alignment_retains_the_live_paragraph_and_its_viewport_origins() {
+    // Both exact sources ran with the pristine five profiles. pre_HP sets
+    // the hanging width; roff_term_pre_ce calls pre_br, then closes the
+    // two aligned rows without requesting new paragraph spacing.
+    let cases = [
+        (
+            include_str!(
+                "../../mant-engine/tests/roff_lowering/grouped_line_flush/hanging-wrap-ce.1"
+            ),
+            true,
+        ),
+        (
+            include_str!(
+                "../../mant-engine/tests/roff_lowering/grouped_line_flush/hanging-wrap-rj.1"
+            ),
+            false,
+        ),
+    ];
+    for (source, centered) in cases {
+        visit_projections(source, |content, readback| {
+            for width in [20, 40, 78] {
+                let rendered = DocumentView::new(content).render(width);
+                let buffer = terminal_cells::paint(&rendered, width);
+                let first = rendered.anchor_row("description").unwrap() + 1;
+                let origin = 3; // top-level section body margin
+                let hanging = origin + if readback { 0 } else { 4 };
+                let width_usize = usize::from(width);
+                let aligned = if readback {
+                    origin
+                } else if centered {
+                    hanging + (width_usize - hanging - "ROWONE".len()) / 2
+                } else {
+                    width_usize - "ROWONE".len()
+                };
+                let mut rows = vec![(origin, "FIRSTMARK second continuation")];
+                if width == 20 {
+                    rows = vec![(origin, "FIRSTMARK second"), (hanging, "continuation")];
+                }
+                rows.extend([
+                    (aligned, "ROWONE"),
+                    (aligned, "ROWTWO"),
+                    (hanging, "AFTERMARK"),
+                ]);
+                for (offset, (origin, text)) in rows.into_iter().enumerate() {
+                    terminal_cells::assert_row(
+                        &buffer,
+                        first + offset,
+                        origin,
+                        text,
+                        &format!("{width}/{centered}/{readback}"),
+                    );
+                }
+                assert_eq!(rendered.search("AFTERMARK").len(), 1);
+                let (mut app, terminal) = paint(content, width);
+                copy_span(
+                    &mut app,
+                    position(terminal.backend().buffer(), "AFTERMARK"),
+                    "AFTERMARK",
+                );
+            }
+        });
+    }
+}

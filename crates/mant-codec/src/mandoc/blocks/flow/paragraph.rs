@@ -1,11 +1,13 @@
 //! Filled IR content and its source positions; text registers live in the formatter.
 use super::{InlineBuilder, layout};
 use crate::mandoc::formatter::FormatterState;
+use crate::mandoc::layout::SourceIndent;
 use mant_ir::{Block, Inline, SourceSpan};
 
 pub(super) struct ParagraphFlow {
     nodes: Vec<Inline>,
     source: Option<SourceSpan>,
+    hanging_first_line: Option<SourceIndent>,
 }
 
 impl ParagraphFlow {
@@ -57,6 +59,13 @@ impl ParagraphFlow {
         Self {
             nodes: Vec::new(),
             source: None,
+            hanging_first_line: None,
+        }
+    }
+
+    pub(super) fn remember_hanging_first_line(&mut self, origin: SourceIndent) {
+        if crate::mandoc::inline::ends_with_executed_line_break(&self.nodes) {
+            self.hanging_first_line = Some(origin);
         }
     }
 
@@ -78,6 +87,7 @@ impl ParagraphFlow {
     /// Move the live projection destination without executing `term_newln`.
     /// Native cell and owner offsets address this same ordered node vector.
     pub(super) fn take_active_output(&mut self) -> (Vec<Inline>, Option<SourceSpan>) {
+        self.hanging_first_line = None;
         (std::mem::take(&mut self.nodes), self.source.take())
     }
 
@@ -163,7 +173,7 @@ impl ParagraphFlow {
     pub(super) fn take(
         &mut self,
         formatter: &mut FormatterState,
-        indent: crate::mandoc::layout::SourceIndent,
+        indent: SourceIndent,
         continuation_indent: i32,
         line_request: bool,
     ) -> (
@@ -177,8 +187,14 @@ impl ParagraphFlow {
                 builder.take_paragraph_segment(line_request)
             });
         let mut inline_layout = crate::mandoc::inline::take_inline_layout(&mut children);
-        let mut layout = layout(indent);
-        if continuation_indent != 0 {
+        let first_line = self.hanging_first_line.take();
+        let mut layout = layout(first_line.unwrap_or(indent));
+        if let Some(first_line) = first_line {
+            // HP changes the native presentation base at pre_br. Hints
+            // already use the first-line base for row zero and the hanging
+            // base for later rows, so the layout must retain both bases.
+            layout.continuation_indent_columns = indent.offset_from(first_line);
+        } else if continuation_indent != 0 {
             // Nm BODY and HEAD execute in one owner. Its resolved BODY
             // origin governs visual wraps, while accepted hard-row origins
             // already use the old owner base. Rebase those facts once;

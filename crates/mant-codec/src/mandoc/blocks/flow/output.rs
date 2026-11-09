@@ -307,15 +307,17 @@ impl BlockState {
     }
 
     pub(in crate::mandoc::blocks) fn finish_aligned_row_output(&mut self) {
-        let needs_owner_boundary =
-            self.inline_output_is_literal(self.formatter.no_fill) || self.hanging_origin.is_some();
         self.flush_preformatted();
-        if needs_owner_boundary {
+        if self.inline_output_is_literal(self.formatter.no_fill) {
             self.flush_paragraph();
+        } else if self.hanging_origin.is_some() {
+            // roff_term_pre_ce() calls pre_br() before the aligned rows.
+            // In a filled HP, BRIND moves the source offset to the hanging
+            // margin without executing another print_bvspace(). Keep the
+            // completed first row and its layout in the same paragraph.
+            self.paragraph
+                .remember_hanging_first_line(self.indent_columns);
         }
-        // A filled roff_term_pre_ce() endline closes a physical row.
-        // Keep its hard break and row hint in the live paragraph; starting
-        // another paragraph would add portable Markdown paragraph spacing.
         self.consume_hanging_first_line();
     }
 

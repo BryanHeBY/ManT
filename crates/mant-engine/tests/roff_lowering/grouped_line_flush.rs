@@ -178,3 +178,6 @@ fn grouped_hard_rows_survive_both_markdown_profiles() {
         }
     }
 }
+
+#[path = "grouped_line_flush/hanging_alignment.rs"]
+mod hanging_alignment;
