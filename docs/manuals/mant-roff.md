@@ -207,8 +207,9 @@ fill mode, including when the old native buffer is empty but TAB state remains.
 
 An empty native TEXT node follows the pinned CVS text visitor: man uses
 `term_vspace()` for every visited empty TEXT, while mdoc does so only for a
-`NODE_LINE` text node. This consumes negative `.sp` debt as vertical space in
-filled and no-fill flow. A preceding `\c` takes the visitor's `term_newln()`
+`NODE_LINE` text node. Other empty mdoc TEXT nodes, including inline siblings
+of `In`, execute as formatter words. A vertical-space visit consumes negative
+`.sp` debt in filled and no-fill flow. A preceding `\c` takes the visitor's `term_newln()`
 branch and remains active across successive empty TEXT nodes. Direct formatter
 words remain distinct: `\&` clears the debt, and
 `BR` operands call `term_word()` from their macro handler even when empty.
@@ -227,7 +228,8 @@ operand does not assert an empty TEXT row.
 Successive empty mdoc formatter words can still write an automatic separator
 cell on the second `term_word()` call. It occupies one native row when a later
 source line or control request closes it; a single empty word or an `Ns` join
-does not create that cell.
+does not create that cell. When a later glyph prints deferred separators,
+each separator remains in the native word's acceptance range.
 Once a completed row and its invisible cell have moved to block spacing, that
 cell is not projected again by the paragraph's empty-word fallback.
 Native `term_newln()` and `term_flushln()` can close a physical row without
@@ -558,7 +560,7 @@ Paragraph distance is resolved at its source boundary. A first paragraph inside 
 
 Document and section text facades consume the same source gaps, including spacing before subsections and explicit spacing at the end of a node. The page title has a separate one-line presentation separator. Preformatted content retains trailing, internal and entirely blank rows; an explicit empty text row is content, unlike an anchor-only block. The initial-row exception below applies only to a complete roff code owner. Executed spacing requests remain bounded layout events rather than being converted into unbounded literal rows.
 
-`OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis; it does not create a separate IR variant. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
+`OP` retains its optional-argument brackets, bold option name, and emphasized metavariable both inside and outside a `SY` synopsis. Its formatter executes the first two operands, including empty ones. Excess operands are diagnosed without affecting the brackets or later text. `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size.
 
 ## Code-block Initial Rows
 
@@ -1063,6 +1065,10 @@ words, their joined or separated boundaries, and actual hard row endings;
 the reduction does not mark document content incomplete.
 
 Inside these captured groups, `br`, `fi`, `nf` and the break preceding `ti` execute immediately before the unconditional group-end flush, independently of the surrounding fill mode. This follows mandoc's `roff_term_pre_ce` execution order: an embedded break after text can therefore leave a blank row that groff does not emit. Ordinary `br` outside a captured group does not gain that blank row, and fill/font state changes still apply normally.
+
+The group-end flush clears both stages of `\z`, even when no glyph has been
+buffered. An authored literal TAB row retains its source whitespace and is
+counted once at its executed boundary.
 
 Man's `.in` state is applied by lowering, not assumed to have been executed by parsing. Following the pinned mandoc CVS formatter, repeated argument-less `.in` requests restore the same current macro base (including an enclosing `RS`); they do not swap previous requested positions as groff does. Ordinary paragraph and structural macro boundaries restore their own geometry. `HP` records a distinct continuation displacement and updates the prevailing tag width. ManT retains explicit source hard breaks as well as that hanging displacement: it does not reproduce the character renderer's `HP` short-line flush artifact that can place text after `br` on the same row. Soft wrapping remains a view concern, and the deterministic unbounded text renderer does not invent soft breaks.
 

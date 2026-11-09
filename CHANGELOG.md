@@ -104,6 +104,14 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Keep deferred native word spaces in their original acceptance ranges,
+  including empty operands, retained link labels, and grouped word breaks.
+  Preserve complete inline code owners when execution splits their words.
+- Execute empty roff text according to its native visit. Reset zero-advance
+  state at unconditional alignment flushes and close authored TAB rows once.
+  Recover man `OP` from its first two operands and retain the native diagnostic
+  for excess arguments.
+
 - Carry proven roff declaration names, groups and hanging owners through
   link publication. Preserve no-fill spacing and hard lines inside active
   labels, keep generated leading padding outside links, and retain literal
