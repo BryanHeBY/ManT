@@ -237,7 +237,6 @@ fn source_annotation_matrix_survives_json_inventory_queries_and_two_markdown_rea
             expected,
             false,
             &std::collections::BTreeMap::new(),
-            0,
         );
         check_inventory(&original, expected, id);
         check_queries(&original, case);
@@ -245,7 +244,13 @@ fn source_annotation_matrix_survives_json_inventory_queries_and_two_markdown_rea
             let expected = expected_portable(&snapshot, case, options);
             for direct in [false, true] {
                 let mut current = original.clone();
+                let mut navigation = std::collections::BTreeMap::new();
                 for round in 1..=2 {
+                    if options.preserve_anchors {
+                        for literal in navigation_literals(&current) {
+                            *navigation.entry(literal).or_default() += 1;
+                        }
+                    }
                     let markdown = render_markdown_with_options(&current, options);
                     let artifact = render_addressable_markdown_with_options(&current, options);
                     assert_eq!(artifact.text(), markdown, "{id} round{round}");
@@ -268,12 +273,7 @@ fn source_annotation_matrix_survives_json_inventory_queries_and_two_markdown_rea
                         mant_loader::load_markdown_text(&markdown, None).unwrap()
                     };
                     current = json_roundtrip::json_string_roundtrip(&current);
-                    let navigation = if options.preserve_anchors {
-                        navigation_literals(&original)
-                    } else {
-                        std::collections::BTreeMap::new()
-                    };
-                    check_content(&current, case, &expected, true, &navigation, round);
+                    check_content(&current, case, &expected, true, &navigation);
                     check_inventory(
                         &current,
                         &expected,
@@ -291,8 +291,7 @@ fn check_content(
     case: &Value,
     links: &[Value],
     portable: bool,
-    navigation: &std::collections::BTreeMap<String, bool>,
-    round: usize,
+    navigation: &std::collections::BTreeMap<String, usize>,
 ) {
     let snapshot = cases::snapshot(content);
     for (index, expected) in links.iter().enumerate() {
@@ -321,7 +320,7 @@ fn check_content(
                 "fixture payload must not alias a generated raw anchor"
             );
         }
-        let cells = payload_cells(cells, navigation, round, case);
+        let cells = payload_cells(cells, navigation, case);
         assert_eq!(
             cells.iter().map(|cell| cell.value).collect::<String>(),
             text,
@@ -404,14 +403,14 @@ fn check_styles(cells: &[cases::Cell], spans: &[Value], case: &Value, portable: 
     assert_eq!(actual, expected, "{} original scalar style", case["id"]);
 }
 
-fn navigation_literals(content: &ResolvedContent) -> std::collections::BTreeMap<String, bool> {
+fn navigation_literals(content: &ResolvedContent) -> Vec<String> {
     use mant_ir::visit::{self, Visit};
     #[derive(Default)]
     struct Anchors(Vec<String>);
     impl<'a> Visit<'a> for Anchors {
         fn visit_inline(&mut self, node: &'a mant_ir::Inline) {
             if let mant_ir::Inline::Anchor { id, .. } = node {
-                self.0.push(id.to_string());
+                self.0.push(mant_codec::encode::html_anchor(id.as_str()));
             }
             visit::walk_inline(self, node);
         }
@@ -426,37 +425,38 @@ fn navigation_literals(content: &ResolvedContent) -> std::collections::BTreeMap<
         .position(|section| section.id == cases::description(content).id)
         .unwrap();
     if let Some(next) = sections.get(at + 1) {
-        anchors.0.push(next.id.to_string());
+        // Consecutive anchor lines for a heading and its aliases become one
+        // literal fallback paragraph. Its soft separators belong to that
+        // exact generated block. A readback can derive a new heading ID, so
+        // record the contribution at each export rather than assuming it
+        // will repeat the original native ID.
+        let block = std::iter::once(next.id.as_str())
+            .chain(
+                next.fragment_aliases
+                    .iter()
+                    .map(mant_ir::FragmentAlias::as_str)
+                    .filter(|alias| *alias != next.id.as_str()),
+            )
+            .map(mant_codec::encode::html_anchor)
+            .collect::<Vec<_>>()
+            .join(" ");
+        anchors.0.push(block);
     }
-    anchors
-        .0
-        .into_iter()
-        .map(|id| {
-            let stable = content
-                .document
-                .as_ref()
-                .unwrap()
-                .sections
-                .iter()
-                .any(|section| section.id.as_str() == id);
-            (mant_codec::encode::html_anchor(&id), stable)
-        })
-        .collect()
+    anchors.0
 }
 
 fn payload_cells<'a>(
     cells: Vec<&'a cases::Cell>,
-    navigation: &std::collections::BTreeMap<String, bool>,
-    round: usize,
+    navigation: &std::collections::BTreeMap<String, usize>,
     case: &Value,
 ) -> Vec<&'a cases::Cell> {
     let text: String = cells.iter().map(|cell| cell.value).collect();
     let mut excluded = std::collections::BTreeSet::new();
-    for (literal, stable_heading) in navigation {
+    for (literal, count) in navigation {
         let positions = cases::positions(&text, literal);
         assert_eq!(
             positions.len(),
-            if *stable_heading { round } else { 1 },
+            *count,
             "{} explicit generated raw-anchor contribution {literal}",
             case["id"]
         );
