@@ -28,6 +28,7 @@ enum Comparison {
     Exact,
     DeviceTab,
     DeviceField,
+    NativeField,
     ReadingOneInitialRow,
 }
 
@@ -129,9 +130,29 @@ fn field_spacing(row: &str) -> String {
     format!("HEAD{}{text}", " ".repeat(width))
 }
 
-fn fixture() -> Matrix {
-    let bytes = include_bytes!("word_receipts/cases.json.gz");
-    serde_json::from_reader(GzDecoder::new(bytes.as_slice())).unwrap()
+fn native_field_content(row: &str) -> String {
+    // These probes use HEAD and BODY as field boundaries. Ignore only
+    // their device columns, leaving the complete text and spaces between
+    // the probe operands in place.
+    let row = row.trim_start_matches([' ', '\u{a0}']);
+    let mut content = row.to_owned();
+    if let Some(after) = row.strip_prefix("HEAD") {
+        let word = after.trim_start_matches([' ', '\u{a0}']);
+        if word != after {
+            content = format!("HEAD {word}");
+        }
+    }
+    if let Some(before) = content.strip_suffix("BODY") {
+        let word = before.trim_end_matches([' ', '\u{a0}']);
+        if word != before {
+            content = format!("{word} BODY");
+        }
+    }
+    content
+}
+
+fn fixture(bytes: &[u8]) -> Matrix {
+    serde_json::from_reader(GzDecoder::new(bytes)).unwrap()
 }
 
 #[test]
@@ -141,8 +162,20 @@ fn word_receipts_match_the_pristine_text_visits_and_accepted_rows_after_json() {
     // ensuing term_flushln() emits the accepted row (term.c:289-305,
     // 573-589, 901-908, 205-220). The fixture seals all five profiles for
     // every exact source, independently of the IR under test.
+    verify_matrix(fixture(include_bytes!("word_receipts/cases.json.gz")));
+}
+
+#[test]
+fn word_projection_preserves_native_cell_identity_and_printed_separators() {
+    // term.c::term_word() writes separators before encode1() establishes
+    // the overwritten cell. term_fill() accepts buffer ranges, while
+    // term_field() prints an advance only before an actual output cell.
+    verify_matrix(fixture(include_bytes!("word_projection/cases.json.gz")));
+}
+
+fn verify_matrix(matrix: Matrix) {
     verify_cases(
-        fixture().cases,
+        matrix.cases,
         |case| &case.id,
         |case| {
             let parsed = Parser::default()
@@ -187,6 +220,15 @@ fn word_receipts_match_the_pristine_text_visits_and_accepted_rows_after_json() {
                         .map(|row| field_spacing(row))
                         .collect::<Vec<_>>()
                 ),
+                Comparison::NativeField => assert_eq!(
+                    rows.iter()
+                        .map(|row| native_field_content(row))
+                        .collect::<Vec<_>>(),
+                    case.rows
+                        .iter()
+                        .map(|row| native_field_content(row))
+                        .collect::<Vec<_>>()
+                ),
             }
         },
     );
@@ -198,7 +240,7 @@ fn source_label_can_represent_a_surviving_separator_until_the_word_rearms() {
     // automatic separator before the authored operand. When encode1()
     // retracts the lead blank, its surviving equivalent can stay styled
     // inside the label. A second \z instead overstrikes B with E.
-    let cases = fixture().cases;
+    let cases = fixture(include_bytes!("word_receipts/cases.json.gz")).cases;
     for (id, expected) in [
         ("W5/link-authored-space", " BETA"),
         ("W5/link-rearm", "ETA"),

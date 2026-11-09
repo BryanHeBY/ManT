@@ -357,7 +357,6 @@ impl InlineBuilder {
     ) -> usize {
         let accepted_row_break = !projection.closes_before.is_empty();
         let native_separator = projection.native_separator;
-        let layout_start = self.nodes.len();
         // Plain MC's one projected next-word blank is an advance reservation,
         // unlike a definition field's minbl. Once an empty word actually
         // buffers that blank, transfer ownership to the word cells. The
@@ -386,6 +385,15 @@ impl InlineBuilder {
             self.execution.plain_input.anchors.last()
         }
         .map(|anchor| anchor.owner.clone());
+        if !accepted_row_break && native_separator > 0 {
+            // term_word() appends this word's separator after earlier
+            // buffered glyphs, even when their projection arrives late.
+            self.nodes.extend(take_borrowed_word_prefix(
+                payload,
+                native_anchor_marker.as_deref(),
+            ));
+        }
+        let layout_start = self.nodes.len();
         let earlier_spaces = if !accepted_row_break && !empty_word {
             self.materialize_pending_word_spaces()
         } else {
@@ -705,16 +713,12 @@ impl InlineBuilder {
                 .start
                 .saturating_add(pending.count)
                 .min(buffer.cells().len());
-            let width = buffer
-                .cells()
-                .get(start..end)
-                .unwrap_or_default()
-                .iter()
-                .filter(|cell| {
+            let width = (start..end)
+                .filter(|&cell| {
                     matches!(
-                        cell,
+                        buffer.cells()[cell],
                         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
-                    )
+                    ) && buffer.projection_length(cell, cell + 1) > 0
                 })
                 .count();
             if width == 0 {
@@ -754,6 +758,19 @@ impl InlineBuilder {
             push_text(&mut self.nodes, spaces);
         }
     }
+}
+
+fn take_borrowed_word_prefix(payload: &mut Vec<Inline>, owner: Option<&str>) -> Vec<Inline> {
+    if let (Some(first), Some(owner)) = (
+        payload
+            .first()
+            .and_then(super::native_passes::native_word_marker),
+        owner,
+    ) && first != owner
+    {
+        return take_word_prefix(payload, owner);
+    }
+    Vec::new()
 }
 
 fn take_word_prefix(payload: &mut Vec<Inline>, owner: &str) -> Vec<Inline> {

@@ -147,13 +147,13 @@ impl<T> ZeroAdvanceMachine<T> {
     /// Assign the glyph to an accepted pass while retaining BACKBEFORE for
     /// the next `encode1()` write. Projection ownership and retreat state are
     /// independent even though they normally advance together.
-    pub(in crate::mandoc) fn commit_pending_projection(&mut self) -> Option<Vec<T>> {
-        if !matches!(self.pending, Some(PendingGlyph::Buffered(_))) {
-            return None;
+    pub(in crate::mandoc) fn commit_pending_projection(&mut self) -> (Option<(usize, T)>, Vec<T>) {
+        let had_pending = self.has_pending();
+        let parts = self.take_projection_parts();
+        if had_pending {
+            self.pending = Some(PendingGlyph::Projected);
         }
-        let output = self.take_pending();
-        self.pending = Some(PendingGlyph::Projected);
-        output
+        parts
     }
 
     pub(in crate::mandoc) fn discard_pending(&mut self) {

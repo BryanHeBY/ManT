@@ -1,6 +1,7 @@
 //! Stable source owners and accepted rows reach the reader's actual cells.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 use mant_ir::ResolvedContent;
 use mant_ui::{App, CopyRequest, DocumentView};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
@@ -20,6 +21,21 @@ const HARD_ROW: &str =
 const LINK: &str =
     include_str!("../../mant-engine/tests/roff_lowering/word_receipts/accepted-unicode-link.1");
 const LABEL: &str = "界e\u{301}字";
+const BACKLINE: &str = include_str!(
+    "../../mant-engine/tests/roff_lowering/word_projection/backline-after-zero-width.1"
+);
+const UNPRINTED: &str = include_str!(
+    "../../mant-engine/tests/roff_lowering/word_projection/source-prefix-cross-pass.1"
+);
+const REARM: &str =
+    include_str!("../../mant-engine/tests/roff_lowering/word_projection/rearm-prefix-space.1");
+const LINK_REARM: &str =
+    include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-rearm.1");
+const LINK_SPACES: [&str; 3] = [
+    include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-source-spaces-1.1"),
+    include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-source-spaces-2.1"),
+    include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-source-spaces-3.1"),
+];
 
 fn only_position(buffer: &Buffer, text: &str) -> (u16, u16) {
     let hits = positions(buffer, text);
@@ -48,7 +64,13 @@ fn copy(app: &mut App, at: (u16, u16), expected: &str) {
     );
 }
 
-fn assert_rows(content: &ResolvedContent, width: u16, expected: &[&str], word: &str) {
+fn assert_rows(
+    content: &ResolvedContent,
+    width: u16,
+    expected: &[&str],
+    word: &str,
+    link_blanks: Option<u16>,
+) {
     let (mut app, terminal) = paint(content, width);
     let buffer = terminal.backend().buffer();
     let (origin, first) = only_position(buffer, expected[0]);
@@ -73,24 +95,23 @@ fn assert_rows(content: &ResolvedContent, width: u16, expected: &[&str], word: &
         usize::from(row - only_position(buffer, "DESCRIPTION").1)
     );
     assert_eq!(hits[0].end_column - hits[0].start_column, word.width());
-    if word == LABEL {
-        // The first blank belongs to the earlier empty word. The second is
-        // the equivalent separator in the original styled link label.
-        assert_eq!(column - origin, 8);
-        for (cell, expected) in [
-            (column - 2, None),
-            (column - 1, Some("https://x.io")),
-            (column, Some("https://x.io")),
-            (column + u16::try_from(word.width()).unwrap(), None),
-        ] {
+    if let Some(link_blanks) = link_blanks {
+        let first = column - link_blanks;
+        let after = column + u16::try_from(word.width()).unwrap();
+        for cell in first - 1..=after {
+            let expected = (first..after).contains(&cell).then_some("https://x.io");
             click(&mut app, cell, row);
             assert_eq!(
                 opened_targets(&mut app),
-                expected.into_iter().collect::<Vec<_>>()
+                expected.into_iter().collect::<Vec<_>>(),
+                "click at column {cell}, visible link at {first}..{after}"
             );
         }
+        let label = format!("{}{word}", " ".repeat(usize::from(link_blanks)));
+        copy(&mut app, (first, row), &label);
+    } else {
+        copy(&mut app, (column, row), word);
     }
-    copy(&mut app, (column, row), word);
 }
 
 #[test]
@@ -98,20 +119,82 @@ fn accepted_source_rows_survive_json_at_two_actual_reader_widths() {
     // Exact .1 sources ran against all five pristine profiles. The two
     // columns of lead space come from distinct term_word() writes. In the
     // delayed case term_flushln() ends ALPHA before X is published.
-    for (source, expected, word) in [
-        (WORD, &["ALPHAX  BETA", "OMEGA"][..], "BETA"),
-        (HARD_ROW, &["ALPHA", "XBETA", "OMEGA"][..], "XBETA"),
+    for (source, expected, word, blanks) in [
+        (WORD, &["ALPHAX  BETA", "OMEGA"][..], "BETA", None),
+        (HARD_ROW, &["ALPHA", "XBETA", "OMEGA"][..], "XBETA", None),
         (
             LINK,
             &["ALPHAX  界e\u{301}字: https://x.io", "OMEGA"][..],
             LABEL,
+            Some(1),
         ),
     ] {
         let content = json_roundtrip::json_string_roundtrip(
             &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
         );
         for width in [40, 78] {
-            assert_rows(&content, width, expected, word);
+            assert_rows(&content, width, expected, word, blanks);
         }
     }
+}
+
+fn visit_readbacks(source: &str, mut visit: impl FnMut(&ResolvedContent)) {
+    let original = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+    );
+    visit(&original);
+    for options in [MarkdownOptions::default(), MarkdownOptions::ADDRESSABLE] {
+        let mut content = original.clone();
+        for _ in 0..2 {
+            let markdown = render_markdown_with_options(&content, options);
+            content = json_roundtrip::json_string_roundtrip(
+                &mant_loader::load_markdown_text(&markdown, None).unwrap(),
+            );
+            visit(&content);
+        }
+    }
+}
+
+#[test]
+fn overwritten_cells_and_hard_rows_remain_searchable_after_reader_readbacks() {
+    // Pinned term_field() prints advances only before real output cells.
+    // These exact sources ran all five pristine reference profiles.
+    for (source, expected, word) in [
+        (BACKLINE, &["ALPHAXBETA", "OMEGA"][..], "ALPHAXBETA"),
+        (UNPRINTED, &["ALPHAX", "BETA", "OMEGA"][..], "BETA"),
+        (REARM, &["ALPHAX  ETA", "OMEGA"][..], "ETA"),
+    ] {
+        visit_readbacks(source, |content| {
+            for width in [32, 40, 78] {
+                assert_rows(content, width, expected, word, None);
+            }
+        });
+    }
+}
+
+#[test]
+fn printed_link_blanks_keep_their_click_and_copy_ranges_after_reader_readbacks() {
+    // An automatic term_word() advance can represent one retreated raw
+    // blank in its original link. Other automatic advances stay outside
+    // that label. The click probe includes both neighbors of each label.
+    for (index, source) in LINK_SPACES.into_iter().enumerate() {
+        let line = format!("ALPHAX{}{LABEL}: https://x.io", " ".repeat(index + 1));
+        let link_blanks = u16::try_from(index.max(1)).unwrap();
+        visit_readbacks(source, |content| {
+            for width in [32, 40, 78] {
+                assert_rows(content, width, &[&line, "OMEGA"], LABEL, Some(link_blanks));
+            }
+        });
+    }
+    visit_readbacks(LINK_REARM, |content| {
+        for width in [32, 40, 78] {
+            assert_rows(
+                content,
+                width,
+                &["ALPHAX ETA: https://x.io", "OMEGA"],
+                "ETA",
+                Some(0),
+            );
+        }
+    });
 }

@@ -1191,6 +1191,13 @@ acceptance decides whether they survive. Generated word separators and leading
 horizontal-motion padding stay outside labels, while authored SP and NBSP
 remain inside. Internal layout motion does not trim authored label content.
 
+When native zero advance consumes the single ordinary space at the start of
+a label, a surviving automatic separator can represent that space inside
+the label. This equivalence applies at offset zero only, without rearming
+zero advance, and the space is represented once. When earlier authored
+spaces survive, those spaces stay in the label and the automatic separator
+stays outside. Independently buffered empty words keep their own spacing.
+
 For man `UR` and `MT`, a real paragraph, table or fill-mode boundary closes
 the initial label root. Later text stays outside that reference, including
 text released only by its generated closing punctuation. A conditional break

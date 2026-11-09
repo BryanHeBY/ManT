@@ -231,6 +231,14 @@ impl ZeroAdvanceState {
     /// so the held bytes survive and print after the settled glyph.
     fn take_deferred_with_held(&mut self) -> Vec<Inline> {
         let (pending, recoveries) = self.machine.take_projection_parts();
+        self.project_with_held(pending, recoveries)
+    }
+
+    fn project_with_held(
+        &mut self,
+        pending: Option<(usize, OwnedGlyph)>,
+        recoveries: Vec<OwnedGlyph>,
+    ) -> Vec<Inline> {
         let mut pending = pending;
         let mut held = std::mem::take(&mut self.held).into_iter().peekable();
         let mut output =
@@ -762,19 +770,26 @@ impl ZeroAdvanceState {
         buffer: &mut String,
         font: Font,
         link: Option<&str>,
+        field_authoritative: bool,
     ) {
         flush_segment(output, buffer, font, link);
-        if let Some(glyph) = self.machine.commit_pending_projection() {
-            // Recoveries before this breakpoint have just been projected;
-            // older held cells precede every recovery in the new suffix.
-            for cell in &mut self.held {
-                cell.recovery_offset = 0;
-            }
-            if self.fragment_started_pending {
-                self.resolved_preexisting = true;
-            }
-            output.extend(self.project_owned(glyph));
+        if !self.machine.has_pending() {
+            return;
         }
+        let (pending, recoveries) = self.machine.commit_pending_projection();
+        if self.fragment_started_pending && pending.is_some() {
+            self.resolved_preexisting = true;
+        }
+        if !field_authoritative {
+            // With no field receipt, the local marker path already owns
+            // this row end; term_field() would drop its deferred blanks.
+            self.held.clear();
+        }
+        // Held blanks precede ASCII_BREAK. They must reach the earlier
+        // pass's scalar cursor so it can remove the unprinted padding
+        // there. The next encode1() sees the breakpoint byte and writes
+        // a backline on the new pass instead of consuming a held blank.
+        output.extend(self.project_with_held(pending, recoveries));
     }
 
     pub(in crate::mandoc) fn finish_into(&mut self, output: &mut Vec<Inline>) {

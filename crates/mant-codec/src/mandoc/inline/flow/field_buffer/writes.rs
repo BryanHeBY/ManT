@@ -56,6 +56,11 @@ impl FieldBuffer {
                 | FieldCell::NonBreakingBlank
                 | FieldCell::Tab
         ));
+        if self.backbefore_armed && projection > 0 {
+            // term_field() flushes queued SP/TAB/NBRSP before it emits a
+            // backspace, skipping zero-width controls (term.c:389-439).
+            self.backline_projection_target = Some(self.cells.len());
+        }
         if self.projection_prefix.is_empty() {
             self.projection_prefix.push(0);
         }
@@ -103,13 +108,11 @@ impl FieldBuffer {
             .take_while(|offset| {
                 #[cfg(test)]
                 SEPARATOR_CELLS_VISITED.with(|count| count.set(count.get() + 1));
+                let cell = start + *offset;
                 matches!(
-                    self.cells.get(start + *offset),
+                    self.cells.get(cell),
                     Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank)
-                ) && !matches!(
-                    self.cells.get(start + *offset + 1),
-                    Some(FieldCell::Backline)
-                )
+                ) && self.projection_length(cell, cell + 1) > 0
             })
             .count()
     }
@@ -195,7 +198,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn clear(&mut self) {
         self.cells.clear();
         self.projection_prefix.clear();
-        self.pending_projection_graph = None;
+        self.backline_projection_target = None;
         self.resume = 0;
         self.backbefore_armed = false;
         self.backafter_armed = false;
@@ -203,6 +206,7 @@ impl FieldBuffer {
         self.normalized_until = 0;
         self.word_scan = WordScanPolicy::Incremental;
         self.last_break_marker = None;
+        self.last_breakpoint_fence = 0;
         self.projected_pass_ends.clear();
         self.word_first_content = None;
         self.completed_empty_pass_end = None;
@@ -268,16 +272,8 @@ impl FieldBuffer {
                 FieldWrite::Cell(cell) => {
                     if matches!(cell, FieldCell::BreakMarker) {
                         self.last_break_marker = Some(self.cells.len());
-                    } else if matches!(cell, FieldCell::Breakpoint)
-                        && self.has_pending_break_markers()
-                    {
-                        // term_fill(): pending breakline stops at ASCII_BREAK
-                        // before the next graph. BACKBEFORE still writes its
-                        // actual backline after this cell (encode1()), but
-                        // cannot retract the glyph in the earlier output
-                        // pass. Preserve native registers and seal only that
-                        // glyph's projection ownership (X\zY\p\:Z).
-                        self.pending_projection_graph = None;
+                    } else if matches!(cell, FieldCell::Breakpoint) {
+                        self.fence_backline_at_breakpoint();
                     }
                     self.push_cell(cell.clone());
                 }
@@ -293,7 +289,7 @@ impl FieldBuffer {
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
                 FieldWrite::CancelBackbefore => {
                     self.backbefore_armed = false;
-                    self.pending_projection_graph = None;
+                    self.backline_projection_target = None;
                 }
             }
         }
@@ -326,6 +322,19 @@ impl FieldBuffer {
         !self.projected_pass_ends.is_empty()
     }
 
+    fn fence_backline_at_breakpoint(&mut self) {
+        // term_fill() restarts breakline after the first ASCII_BREAK
+        // following the marker (term.c:276-305). Later breakpoints cannot
+        // fence the newly buffered target on behalf of that same marker.
+        if self
+            .last_break_marker
+            .is_some_and(|marker| marker >= self.resume.max(self.last_breakpoint_fence))
+        {
+            self.last_breakpoint_fence = self.cells.len();
+            self.backline_projection_target = None;
+        }
+    }
+
     fn encode_graph(
         &mut self,
         text: char,
@@ -344,7 +353,7 @@ impl FieldBuffer {
         if self.backafter_armed {
             self.backafter_armed = false;
             self.backbefore_armed = true;
-            self.pending_projection_graph = self.cells.len().checked_sub(1);
+            self.backline_projection_target = self.cells.len().checked_sub(1);
         }
         leading_retreat
     }
@@ -355,16 +364,28 @@ impl FieldBuffer {
         }
         let start = self.word_first_content?;
         let last = self.cells.len().checked_sub(1)?;
-        let character = match self.cells.get(last)? {
+        let affected = if matches!(self.cells[last], FieldCell::BreakableBlank | FieldCell::Tab) {
+            last
+        } else {
+            // encode1() emits Backline across intervening controls.
+            // term_field() skips those controls and prints its deferred
+            // advance before the backspace (term.c:389-439, 901-908).
+            self.backline_projection_target
+                .filter(|&cell| cell >= self.resume)?
+        };
+        if affected < start {
+            return None;
+        }
+        let character = match self.cells.get(affected)? {
             FieldCell::BreakableBlank => ' ',
             FieldCell::Tab => '\t',
             _ => return None,
         };
-        // Only encode1() pops this cell. The source prefix is examined
-        // once, before the first graph, and excludes term_word() padding.
+        // Examine the authored prefix once, before its first graph.
+        // The leading term_word() padding has its own cell receipt.
         if !self
             .cells
-            .get(start..last)?
+            .get(start..affected)?
             .iter()
             .enumerate()
             .all(|(offset, cell)| match cell {
@@ -380,12 +401,12 @@ impl FieldBuffer {
                 }
                 _ => false,
             })
-            || self.projection_length(last, last + 1) == 0
         {
             return None;
         }
         Some(LeadingBlankRetreat {
-            offset: self.projection_length(start, last),
+            offset: (self.projection_length(affected, affected + 1) > 0)
+                .then(|| self.projection_length(start, affected)),
             character,
             rearmed: self.backafter_armed,
         })
@@ -394,7 +415,7 @@ impl FieldBuffer {
     /// A drained IR owner is immutable. Backtracking remains native state,
     /// but cannot revoke a glyph already assigned to the previous owner.
     pub(in crate::mandoc::inline::flow) fn detach_projection_owner(&mut self) {
-        self.pending_projection_graph = None;
+        self.backline_projection_target = None;
     }
 
     pub(in crate::mandoc::inline::flow) fn push_separator_blank(&mut self) {
@@ -420,6 +441,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn push_graph(&mut self, text: char, width: usize) {
         if self.backbefore_armed {
             self.backbefore_armed = false;
+            let target = self.backline_projection_target.take();
             match self.cells.last() {
                 // A literal tab occupies a buffer byte exactly like a
                 // blank (term.c:944-964) and the retreat pops it the same
@@ -435,25 +457,14 @@ impl FieldBuffer {
                     self.cells.pop();
                     self.normalized_until = self.normalized_until.min(self.cells.len());
                     self.projection_prefix.pop();
-                    self.pending_projection_graph = None;
                 }
-                Some(previous) => {
-                    let pending = self.pending_projection_graph.take();
-                    // ASCII_NBRSP prints its queued advance before the
-                    // backspace. The replacement occupies that blank, not
-                    // the graph that originally armed BACKBEFORE (term.c:389-435).
-                    let overwritten = if matches!(previous, FieldCell::NonBreakingBlank) {
-                        self.cells.len().checked_sub(1)
-                    } else {
-                        pending
-                    };
-                    if let Some(graph) = overwritten {
-                        // A glyph can stay pending across invisible controls.
-                        // Each replacement advances the pending graph, so
-                        // these adjusted suffixes are disjoint over a field.
-                        let contribution = self.projection_prefix[graph + 1]
-                            .saturating_sub(self.projection_prefix[graph]);
-                        for prefix in &mut self.projection_prefix[graph + 1..] {
+                Some(_) => {
+                    if let Some(cell) = target.filter(|&cell| cell >= self.resume) {
+                        let contribution = self.projection_length(cell, cell + 1);
+                        // An arm can cross invisible controls, but the next
+                        // arm starts with a newly appended glyph. Each
+                        // overwrite adjusts only its still-live suffix.
+                        for prefix in &mut self.projection_prefix[cell + 1..] {
                             #[cfg(test)]
                             {
                                 self.projection_work += 1;
@@ -480,6 +491,7 @@ impl FieldBuffer {
     /// (term.c:235-237).
     pub(in crate::mandoc::inline::flow) fn clear_backtracking(&mut self) {
         self.backbefore_armed = false;
+        self.backline_projection_target = None;
     }
 }
 

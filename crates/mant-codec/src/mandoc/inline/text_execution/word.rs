@@ -216,6 +216,7 @@ impl WordExecution {
                 &mut self.buffer,
                 self.font,
                 self.link.as_deref(),
+                context.policy.field_authoritative,
             );
             let state = &mut self.text_state;
             if !context.policy.field_authoritative {

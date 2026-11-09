@@ -13,16 +13,17 @@ pub(super) fn take_retreated_source_blank(
     receipt: Option<LeadingBlankRetreat>,
 ) -> Option<Inline> {
     let receipt = receipt?;
+    let offset = receipt.offset?;
     let mut cursor = PrefixCursor {
         owner,
         active: true,
-        remaining: Some(receipt.offset),
+        remaining: Some(offset),
         character: receipt.character,
     };
     let authored = cursor.take(nodes);
     // A tab has different width. A rearm changes the next graph's column.
     // For a longer prefix, retain the still-authored runs in source order.
-    if receipt.character == ' ' && !receipt.rearmed && receipt.offset == 0 {
+    if receipt.character == ' ' && !receipt.rearmed && offset == 0 {
         authored
     } else {
         None

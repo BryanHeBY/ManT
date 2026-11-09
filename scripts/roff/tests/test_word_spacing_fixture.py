@@ -6,6 +6,7 @@ import json
 import unittest
 
 from scripts.roff.fixtures import record_word_spacing as recorder
+from scripts.roff.fixtures import record_word_projection as projection
 from scripts.roff.fixtures import record_word_receipts as receipts
 
 
@@ -73,6 +74,33 @@ class WordSpacingFixtureTests(unittest.TestCase):
                 for profile, (status, stdout, stderr) in actual["profiles"].items():
                     expected_status = int(profile == "lint" and actual["comparison"] == "device-tab") * 2
                     self.assertEqual(status, expected_status)
+                    self.assertRegex(stdout, r"^[0-9a-f]{64}$")
+                    self.assertRegex(stderr, r"^[0-9a-f]{64}$")
+
+    def test_word_projection_matrix_keeps_its_native_witnesses_and_comparison_axes(self):
+        fixture = json.loads(gzip.decompress(projection.FIXTURE.read_bytes()))
+        self.assertEqual(fixture["terminal_width"], 160)
+        self.assertEqual(
+            fixture["oracle_sha256"],
+            "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e")
+        cases = fixture["cases"]
+        self.assertEqual(Counter(case["cohort"] for case in cases), {
+            "reported-prefixes": 576, "core": 1638, "scope": 42, "field": 21,
+            "separator": 138, "separator-suffix": 20, "separator-sentence": 10,
+            "tight-empty": 18, "consumer": 7,
+        })
+        self.assertEqual(len({case["source_sha256"] for case in cases}), len(cases))
+        self.assertEqual(Counter(case["profiles"]["lint"][0] for case in cases),
+                         {0: 2265, 1: 4, 2: 201})
+        for expected, actual in zip(projection.specifications(), cases, strict=True):
+            with self.subTest(case=actual["id"]):
+                self.assertEqual(expected, {key: actual[key] for key in expected})
+                self.assertEqual(receipts.digest(actual["source"].encode()), actual["source_sha256"])
+                self.assertEqual(set(actual["profiles"]), set(receipts.PROFILES))
+                self.assertTrue(actual["tree_words"])
+                for profile, (status, stdout, stderr) in actual["profiles"].items():
+                    if profile != "lint":
+                        self.assertEqual(status, 0)
                     self.assertRegex(stdout, r"^[0-9a-f]{64}$")
                     self.assertRegex(stderr, r"^[0-9a-f]{64}$")
 

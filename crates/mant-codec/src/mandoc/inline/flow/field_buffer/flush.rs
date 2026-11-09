@@ -104,12 +104,13 @@ impl FieldBuffer {
             nonbreaking_positions: self.nonbreaking_positions.clone(),
             blank_positions: self.blank_positions.clone(),
             projection_prefix: Vec::new(),
-            pending_projection_graph: None,
+            backline_projection_target: None,
             backbefore_armed: false,
             backafter_armed: false,
             committed_passes: Vec::new(),
             word_scan: super::WordScanPolicy::Incremental,
             last_break_marker: None,
+            last_breakpoint_fence: 0,
             projected_pass_ends: BTreeSet::new(),
             scan: None,
             word_first_content: None,
@@ -169,6 +170,46 @@ impl FieldBuffer {
                     FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
                 )
             })
+    }
+
+    /// Count the projected cells in a padding range that can still print.
+    /// A committed `term_field()` pass drops its deferred tail, and
+    /// `term_flushln()` skips ordinary blanks before the next pass (205-207).
+    pub(in crate::mandoc::inline::flow) fn projectable_padding(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> usize {
+        if start >= self.resume || start >= end {
+            return self.projection_length(start, end);
+        }
+        let index = self
+            .committed_passes
+            .partition_point(|pass| pass.end <= start);
+        let mut pass_start = index.checked_sub(1).map_or(0, |previous| {
+            self.after_break_blanks(self.committed_passes[previous].end)
+        });
+        let mut count = 0;
+        for pass in &self.committed_passes[index..] {
+            let first = start.max(pass_start);
+            let last = end.min(pass.end);
+            if first < last {
+                count += self
+                    .projection_length(first, self.printed_content_end(first, pass.end).min(last));
+            }
+            if pass.end >= end {
+                break;
+            }
+            pass_start = self.after_break_blanks(pass.end);
+        }
+        count + self.projection_length(start.max(self.resume), end)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn after_break_blanks(&self, mut cell: usize) -> usize {
+        while matches!(self.cells.get(cell), Some(FieldCell::BreakableBlank)) {
+            cell += 1;
+        }
+        cell
     }
 
     /// The same accepted `term_field` scan can record how literal TAB cells

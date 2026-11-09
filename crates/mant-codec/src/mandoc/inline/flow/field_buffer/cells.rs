@@ -146,7 +146,8 @@ pub(in crate::mandoc::inline::flow) struct WordWriteReceipt {
 /// prefix. A rearm can change which later graph occupies the column.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::mandoc::inline::flow) struct LeadingBlankRetreat {
-    pub(in crate::mandoc::inline::flow) offset: usize,
+    /// Only a blank the text projector retained needs a scalar edit.
+    pub(in crate::mandoc::inline::flow) offset: Option<usize>,
     pub(in crate::mandoc::inline::flow) character: char,
     pub(in crate::mandoc::inline::flow) rearmed: bool,
 }

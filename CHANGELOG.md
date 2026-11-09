@@ -104,6 +104,9 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Preserve word and link content across roff zero-width controls and accepted
+  line breaks. Keep the spaces that print and the original ownership of
+  surviving label text.
 - Keep a single projected separator when native zero advance consumes an
   authored blank. Preserve surviving word ranges and link styles through
   restarted rows, and emit accepted hard breaks before delayed glyphs.

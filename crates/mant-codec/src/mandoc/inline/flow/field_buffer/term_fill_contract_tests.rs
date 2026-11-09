@@ -16,6 +16,105 @@
 use super::{FieldBuffer, FieldCell};
 
 #[test]
+fn backline_overwrites_the_occupied_cell_behind_zero_width_controls() {
+    use super::FieldWrite;
+
+    // Pinned term.c:573-589 writes the automatic separator before each
+    // operand; term_field():389-439 writes queued blanks before '\b'.
+    // In the pinned ALPHA\zX cases, tight operands emit X\bB while an
+    // ordinary, authored or KEEP blank makes the same controls emit X \bB.
+    for control in [
+        FieldCell::Breakpoint,
+        FieldCell::ZeroWidthGraph,
+        FieldCell::BreakMarker,
+    ] {
+        for (authored, automatic, kept) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, true, true),
+        ] {
+            let mut buffer = FieldBuffer::default();
+            let mut writes = FieldWrite::literal("ALPHA");
+            writes.push(FieldWrite::ArmBackafter);
+            FieldWrite::append_literal(&mut writes, "X");
+            buffer.apply_writes(&writes);
+            let word_start = buffer.cells().len();
+            let separator = buffer.begin_word(!automatic, kept);
+
+            let mut writes = FieldWrite::literal(if authored { " " } else { "" });
+            writes.push(FieldWrite::Cell(control.clone()));
+            FieldWrite::append_literal(&mut writes, "BETA");
+            let receipt = buffer.apply_writes(&writes);
+            assert_eq!(
+                buffer.projection_length(word_start - 1, word_start),
+                usize::from(authored || automatic),
+                "cached glyph: {control:?}, authored={authored}, automatic={automatic}, kept={kept}"
+            );
+            assert_eq!(buffer.surviving_word_separator(word_start, separator), 0);
+            assert_eq!(buffer.projection_length(word_start, receipt.end_cell), 4);
+            assert!(buffer.cells().contains(&FieldCell::Backline));
+        }
+    }
+}
+
+#[test]
+fn backline_projection_work_is_bounded_by_newly_buffered_cells() {
+    use super::FieldWrite;
+
+    let mut buffer = FieldBuffer::default();
+    for _ in 0..4096 {
+        let writes = [
+            FieldWrite::ArmBackafter,
+            FieldWrite::Cell(FieldCell::Graph {
+                text: 'X',
+                width: 1,
+            }),
+            FieldWrite::Cell(FieldCell::BreakableBlank),
+            FieldWrite::Cell(FieldCell::ZeroWidthGraph),
+            FieldWrite::Cell(FieldCell::Graph {
+                text: 'Y',
+                width: 1,
+            }),
+        ];
+        buffer.apply_writes(&writes);
+    }
+    assert_eq!(buffer.projection_length(0, buffer.cells().len()), 2 * 4096);
+    assert_eq!(buffer.projection_work, 2 * 4096);
+}
+
+#[test]
+fn an_unprojected_source_blank_still_receives_the_first_retreat() {
+    use super::FieldWrite;
+
+    // rearm-prefix-space.1: term.c:901-927 consumes the marker's raw
+    // space before B, then E overwrites B. The earlier automatic and
+    // authored spaces both print. The projector already omitted the
+    // consumed space, but native ownership still owes this retreat.
+    let mut buffer = FieldBuffer::default();
+    let mut writes = FieldWrite::literal("ALPHA");
+    writes.push(FieldWrite::ArmBackafter);
+    FieldWrite::append_literal(&mut writes, "X");
+    buffer.apply_writes(&writes);
+    let word_start = buffer.cells().len();
+    let separator = buffer.begin_word(false, false);
+    let mut writes = vec![
+        FieldWrite::ArmBackafter,
+        FieldWrite::Cell(FieldCell::BreakableBlank),
+        FieldWrite::Cell(FieldCell::BreakMarker),
+        FieldWrite::UnprojectedBlank,
+    ];
+    FieldWrite::append_literal(&mut writes, "BETA");
+    let receipt = buffer.apply_writes(&writes);
+    let retreat = receipt.leading_retreat.expect("source blank retreat");
+    assert_eq!(retreat.offset, None);
+    assert_eq!(retreat.character, ' ');
+    assert!(retreat.rearmed);
+    assert_eq!(buffer.surviving_word_separator(word_start, separator), 1);
+    assert_eq!(buffer.projection_length(word_start, receipt.end_cell), 5);
+}
+
+#[test]
 fn breakpoint_retreat_cannot_revoke_a_glyph_from_an_earlier_pass() {
     // Exact X\zY\p\:Z source first ran on the new pristine five profiles:
     // XY belongs to pass one, Z to pass two. encode1() keeps BACKBEFORE and

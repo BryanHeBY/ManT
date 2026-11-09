@@ -160,7 +160,9 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Scalar ownership attached to each native write. Replaced zero-advance
     /// graphs remain native graph cells but contribute no projected glyph.
     projection_prefix: Vec<usize>,
-    pending_projection_graph: Option<usize>,
+    /// Latest occupied cell that an emitted backline could overwrite in
+    /// this projection interval. Native BACKBEFORE can survive its retirement.
+    backline_projection_target: Option<usize>,
     /// `p->tcol->col`: the next pass resumes here (`term_field` advances it
     /// by `nbr`; 205-207 then consumes break blanks; 235 resets it).
     resume: usize,
@@ -178,6 +180,9 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Repeated .ta/word pairs must not replay their growing field history.
     word_scan: WordScanPolicy,
     last_break_marker: Option<usize>,
+    /// The last breakpoint already considered for this buffer's backline
+    /// fence. A marker can reach only one such fence before scanning resumes.
+    last_breakpoint_fence: usize,
     /// Accepted native row events already projected. A .ta change restarts
     /// width scanning, but cannot execute the same marker pass twice.
     projected_pass_ends: std::collections::BTreeSet<usize>,

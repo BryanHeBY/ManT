@@ -1,5 +1,4 @@
 use super::super::WordProjectionPolicy;
-use super::super::field_buffer::FieldCell;
 use super::super::{Inline, InlineBuilder, PendingBoundary};
 use super::native_passes::{RecordedRowSplit, split_recorded_native_passes};
 use super::source_blanks::take_retreated_source_blank;
@@ -37,13 +36,13 @@ impl RestartedPadding {
         word_first_cell: usize,
         borrowed: Option<&BorrowedPrefix>,
     ) -> Self {
-        let current = buffer.projection_length(boundary.max(word_start), word_first_cell);
+        let current = buffer.projectable_padding(boundary.max(word_start), word_first_cell);
         if let Some(prefix) = borrowed
             && prefix.offset(buffer, boundary) == 0
         {
             Self::WithEarlierOwners {
                 total: buffer
-                    .projection_length(boundary, word_first_cell)
+                    .projectable_padding(boundary, word_first_cell)
                     .saturating_sub(prefix.count),
                 current,
             }
@@ -74,18 +73,18 @@ impl WordPassProjection {
         written: usize,
         surviving: usize,
     ) {
-        self.native_separator = surviving;
+        self.native_separator = buffer.projectable_padding(word_start, word_start + surviving);
         self.preserve_retreated_separator = written == 2 && surviving == 1;
-        let content = word_start.saturating_add(surviving);
-        self.consumed_initial_separator = surviving > 0
-            && buffer
-                .cells()
-                .get(content..buffer.resume_offset())
-                .is_some_and(|prefix| {
-                    prefix.iter().all(|cell| {
-                        matches!(cell, FieldCell::BreakableBlank | FieldCell::TabReference)
-                    })
-                });
+        self.consumed_initial_separator = surviving > 0 && self.native_separator == 0;
+    }
+
+    fn align_separator_owner(&self, anchor: &mut super::super::NativeWordAnchor, content: usize) {
+        if self.consumed_initial_separator {
+            // The accepted range is traversed with the same scalar
+            // coordinates as its projected payload. The skipped prefix
+            // must not reserve a slot in the current word.
+            anchor.content = anchor.content.max(content);
+        }
     }
 }
 
@@ -193,6 +192,14 @@ impl InlineBuilder {
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
         let (buffer, _) = self.execution.word_input();
         projection.record_separator(buffer, native_word_start, separator, native_separator);
+        if let Some(anchor) = self
+            .execution
+            .definition
+            .as_mut()
+            .and_then(|definition| definition.field_word_anchors.last_mut())
+        {
+            projection.align_separator_owner(anchor, receipt.first_content_cell);
+        }
         projection.preserve_retreated_separator |=
             receipt.leading_retreat.is_some() || projected_keep;
         projection.prints_padding = receipt.prints_padding;
@@ -283,6 +290,9 @@ impl InlineBuilder {
             cached_glyph,
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
+        if let Some(anchor) = unit.anchors.last_mut() {
+            result.align_separator_owner(anchor, receipt.first_content_cell);
+        }
         result.preserve_retreated_separator |= receipt.leading_retreat.is_some() || projected_keep;
         result.prints_padding = receipt.prints_padding;
         result.authored_separator = authored_separator;
@@ -339,7 +349,7 @@ impl InlineBuilder {
         let anchor_count = anchors.len();
         let mut inside_splits: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
         let mut closes_before = Vec::new();
-        let mut leading_padding = RestartedPadding::default();
+        let mut restart = None;
         let starts_earlier_owner = starts_with_borrowed_output(incoming, anchors.last());
         // Borrowed output need not precede this pass: a projected glyph's
         // held cells can follow its breakpoint. Recover their exact native
@@ -356,13 +366,7 @@ impl InlineBuilder {
                     break;
                 }
                 let pass_start = buffer.resume_offset();
-                let mut boundary = pass.end;
-                while matches!(
-                    buffer.cells().get(boundary),
-                    Some(super::super::field_buffer::FieldCell::BreakableBlank)
-                ) {
-                    boundary += 1;
-                }
+                let boundary = buffer.after_break_blanks(pass.end);
                 // An unbounded target can never stop at a device-width
                 // guess (term.c:134,143-144): every accepted pass there is
                 // marker-driven, even when the marker sits exactly at the
@@ -419,23 +423,7 @@ impl InlineBuilder {
                             closes_before.push(pass.end);
                         }
                     }
-                    // term_flushln() consumes blanks only until the first
-                    // non-blank byte (term.c:205-207). A NODE_LINE TABREF
-                    // stops that sweep, leaving this word's real separator
-                    // at the new row origin even after an empty operand.
-                    leading_padding = RestartedPadding::before_word(
-                        buffer,
-                        boundary,
-                        anchors[anchor_count - 1].start,
-                        word_first_cell,
-                        borrowed.as_ref(),
-                    );
-                    restore_restarted_separator(
-                        anchors,
-                        boundary,
-                        word_first_cell,
-                        !closes_before.is_empty() && leading_padding.current_word_cells() > 0,
-                    );
+                    restart = Some(boundary);
                 } else if boundary < word_end && !represented_in_ir {
                     record_row_split(
                         &mut inside_splits,
@@ -451,6 +439,25 @@ impl InlineBuilder {
                 first_pass = false;
             }
         }
+        // A NODE_LINE TABREF can stop term_flushln()'s blank sweep.
+        // Use the completed passes here: another pass in the same word
+        // may accept only invisible cells and never print that padding.
+        let leading_padding = restart.map_or_else(RestartedPadding::default, |boundary| {
+            let padding = RestartedPadding::before_word(
+                buffer,
+                boundary,
+                anchors[anchor_count - 1].start,
+                word_first_cell,
+                borrowed.as_ref(),
+            );
+            restore_restarted_separator(
+                anchors,
+                boundary,
+                word_first_cell,
+                !closes_before.is_empty() && padding.current_word_cells() > 0,
+            );
+            padding
+        });
         let split_word = split_recorded_word(incoming, anchors.last(), inside_splits, buffer);
         WordPassProjection {
             closes_before,
