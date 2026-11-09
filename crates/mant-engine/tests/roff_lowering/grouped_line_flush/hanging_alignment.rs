@@ -53,6 +53,136 @@ fn without_origin(row: &str) -> &str {
     row.trim_start_matches(' ')
 }
 
+const MAN_HEADER: &str = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH DESCRIPTION\n";
+const MAN_END: &str = ".SH END\nENDMARK\n";
+
+fn assert_man_rows(source: &str, expected: &[&str]) {
+    let original = load(source);
+    let plain = mant_render::render_query_man(&original);
+    let rows = plain
+        .split_once("\nDESCRIPTION\n")
+        .unwrap()
+        .1
+        .split('\n')
+        .map(without_origin)
+        .collect::<Vec<_>>();
+    assert_eq!(rows, expected, "{source}");
+}
+
+#[test]
+fn invisible_flushes_close_the_existing_hanging_row_only_once() {
+    // Pristine ASCII, UTF-8, tree and lint ran for every source. The HP
+    // tail test in term.c:250-253 ends BEFOREMARK at 275u but keeps that
+    // device row open at 276u. An embedded pre_br may then close the
+    // existing row; only a subsequent empty flush adds a blank.
+    for request in ["ce", "rj"] {
+        for width in ["275u", "276u", "277u", "16"] {
+            for word in ["\\&", "\\z", "\\&\\c"] {
+                for (control, spacing) in [("", 0), (".sp 0\n", 0), (".br\n", 0), (".sp 1\n", 1)] {
+                    let blanks = if width == "275u" {
+                        1 + usize::from(!control.is_empty() && word != "\\z")
+                    } else {
+                        usize::from(!control.is_empty())
+                    } + spacing;
+                    let source = format!(
+                        "{MAN_HEADER}.HP {width}\nBEFOREMARK\n.{request} 1\n{word}\n{control}AFTERMARK\n{MAN_END}"
+                    );
+                    let mut rows = vec!["BEFOREMARK"];
+                    rows.extend(std::iter::repeat_n("", blanks));
+                    rows.extend(["AFTERMARK", "", "END", "ENDMARK"]);
+                    assert_man_rows(&source, &rows);
+                }
+            }
+        }
+    }
+
+    // A break marker can be rejected without printing a fresh row.
+    // In these exact fixed-CVS cases, the pre_br/group/paragraph boundary
+    // closes the hanging prefix and only explicit spacing adds one blank.
+    for (body, blanks) in [
+        (".HP 276u\nBEFOREMARK\n.rj -1\n\\p\n.sp 0\n", 0),
+        (".HP 277u\nBEFOREMARK\n.rj -1\n\\p\n.sp 1\n", 1),
+        (".HP 24n\nBEFOREMARK\n.rj 2\n\\p\n.PP\n", 1),
+        (".HP 16\nBEFOREMARK\n.rj -1\n\\z\n\\z\n.PP\n", 1),
+    ] {
+        let mut rows = vec!["BEFOREMARK"];
+        rows.extend(std::iter::repeat_n("", blanks));
+        rows.extend(["AFTERMARK", "", "END", "ENDMARK"]);
+        assert_man_rows(&format!("{MAN_HEADER}{body}AFTERMARK\n{MAN_END}"), &rows);
+    }
+}
+
+#[test]
+fn man_structural_boundaries_close_an_invisible_tail_before_spacing() {
+    // Exact sources were verified on pristine ASCII/UTF-8/tree/lint.
+    // Zero/negative count leaves these words outside roff_term_pre_ce().
+    // print_bvspace() first closes their occupied row, then adds PD.
+    for request in ["ce", "rj"] {
+        for count in ["-1", "0"] {
+            for words in [
+                "\\z\n\\z\n",
+                "\\&\n\\&\n",
+                "\\&\\c\n\\&\n",
+                ".de AA\n\\&\n\\&\n..\n.AA\n",
+            ] {
+                for (boundary, body) in [
+                    (".PP\n", "AFTERMARK"),
+                    (".P\n", "AFTERMARK"),
+                    (".LP\n", "AFTERMARK"),
+                    (".HP 9\n", "AFTERMARK"),
+                    (".IP TAG 9\n", "TAG      AFTERMARK"),
+                    (".TP 9\nTAG\n", "TAG      AFTERMARK"),
+                    (".SY command\n", "command AFTERMARK"),
+                ] {
+                    let suffix = if boundary.starts_with(".SY") {
+                        ".YS\n"
+                    } else {
+                        ""
+                    };
+                    let source = format!(
+                        "{MAN_HEADER}BEFOREMARK\n.{request} {count}\n{words}{boundary}AFTERMARK\n{suffix}{MAN_END}"
+                    );
+                    assert_man_rows(&source, &["BEFOREMARK", "", "", body, "", "END", "ENDMARK"]);
+                }
+            }
+        }
+    }
+
+    // post_SH() closes the BODY at the next section or EOF. In the middle
+    // of a BODY, pre_SS() only closes an invisible predecessor when PD
+    // executes term_vspace(); PD 0 carries that row into the heading.
+    for (tail, rows) in [
+        (
+            ".SS AFTER\nAFTERMARK\n",
+            &["", "", "AFTER", "AFTERMARK"][..],
+        ),
+        (".SH AFTER\nAFTERMARK\n", &["", "", "AFTER", "AFTERMARK"]),
+        ("", &["", ""]),
+    ] {
+        for prior in [".ce 0\n\\&\n", ".rj 0\n\\p\n"] {
+            let expected = ["BEFOREMARK"]
+                .into_iter()
+                .chain(rows.iter().copied())
+                .collect::<Vec<_>>();
+            assert_man_rows(&format!("{MAN_HEADER}BEFOREMARK\n{prior}{tail}"), &expected);
+        }
+    }
+    for (tail, rows) in [
+        (".SS AFTER\nAFTERMARK\n", &["AFTER", "AFTERMARK"][..]),
+        (".SH AFTER\nAFTERMARK\n", &["", "AFTER", "AFTERMARK"]),
+        ("", &["", ""]),
+    ] {
+        let expected = ["BEFOREMARK"]
+            .into_iter()
+            .chain(rows.iter().copied())
+            .collect::<Vec<_>>();
+        assert_man_rows(
+            &format!("{MAN_HEADER}BEFOREMARK\n.PD 0\n.ce 0\n\\&\n{tail}"),
+            &expected,
+        );
+    }
+}
+
 fn heading_anchor(round: usize) -> String {
     // The Markdown loader preserves raw heading IDs as authored HTML text.
     // The only unsupported source-generated HTML in this cohort is the END

@@ -37,8 +37,28 @@ impl BlockLowerer<'_, '_> {
         self.state.materialize_idle_spacing();
     }
 
-    pub(super) fn prepare_man_synopsis_spacing(&mut self, node: &Node, source: NodeSourceContext) {
-        if node.macro_token.as_ref() != Some(&Man(ManMacro::Sy)) {
+    pub(super) fn prepare_man_block_spacing(&mut self, node: &Node, source: NodeSourceContext) {
+        if node.kind != NodeKind::Block {
+            return;
+        }
+        let syntax = node.macro_token.as_ref();
+        let synopsis = syntax == Some(&Man(ManMacro::Sy));
+        if matches!(
+            syntax,
+            Some(Man(ManMacro::Pp
+                | ManMacro::P
+                | ManMacro::Lp
+                | ManMacro::Hp
+                | ManMacro::Ip
+                | ManMacro::Tp))
+        ) || synopsis && !source.previous_is_sy
+        {
+            // man_term.c::print_bvspace() starts with term_newln(), even
+            // for a zero paragraph distance. The old output owner still
+            // needs the receipt of an accepted invisible or rejected row.
+            self.state.finish_native_body_line();
+        }
+        if !synopsis {
             return;
         }
         self.state.flush_preformatted();

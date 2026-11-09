@@ -160,28 +160,32 @@ impl InlineBuilder {
         // still settles through the ordinary flush.
         self.flush_zero_advance();
         self.external_head_row_pending = false;
-        let completed_unprinted_row = plain_flush_rejection
-            || unprinted_field_tail
-            || plain_flush.closes_unprinted_row()
-            || !self.in_definition_field()
-                && self.execution.completed_vertical_rows > 0
-                && self.execution.formatter_column == FormatterColumn::Advanced
-                && !self
-                    .nodes
-                    .iter()
-                    .rev()
-                    .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-                    .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node)));
+        let closes_preceding_printed_row = captured
+            .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row);
+        let completed_unprinted_row = !closes_preceding_printed_row
+            && (plain_flush_rejection
+                || unprinted_field_tail
+                || plain_flush.closes_unprinted_row()
+                || !self.in_definition_field()
+                    && self.execution.completed_vertical_rows > 0
+                    && self.execution.formatter_column == FormatterColumn::Advanced
+                    && !self
+                        .nodes
+                        .iter()
+                        .rev()
+                        .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
+                        .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node))));
         let current_row_has_printable = self
             .nodes
             .iter()
             .rev()
             .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
             .any(|node| has_printable_character(std::slice::from_ref(node)));
-        if (had_native_buffer
-            || self.execution.formatter_column == FormatterColumn::Advanced
-            || (self.execution.word_end_break == WordEndBreak::Pending
-                && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))))
+        if !closes_preceding_printed_row
+            && (had_native_buffer
+                || self.execution.formatter_column == FormatterColumn::Advanced
+                || (self.execution.word_end_break == WordEndBreak::Pending
+                    && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))))
             && !current_row_has_printable
         {
             // ESCAPE_IGNORE (`\&`) and ESCAPE_BREAK (`\p`) can occupy a
@@ -200,17 +204,18 @@ impl InlineBuilder {
             // that content. A separate empty-row receipt would replay it.
             self.record_completed_rows(1, plain_flush.row_origin(origin));
         }
-        // An empty native buffer can end an already projected device row
-        // (term_newln's viscol guard). Its zero-width word owner cannot hide
-        // the existing reading delimiter and invent another empty row.
-        let has_projected_end = if exited_definition_row && !had_native_buffer {
-            super::ends_with_executed_line_break(&self.nodes)
-        } else {
-            matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
-        };
+        // An empty or invisible field can end an already projected device
+        // row. term_field() skips NBRZW and unprinted padding (term.c:389-427),
+        // so these cells do not start a blank row after the reading break.
+        let has_projected_end =
+            if closes_preceding_printed_row || exited_definition_row && !had_native_buffer {
+                super::ends_with_executed_line_break(&self.nodes)
+            } else {
+                matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
+            };
         let project_delimiter = (exited_discarded_buffer && !exited_definition_row)
             || !has_projected_end
-            || retiring_rejection;
+            || retiring_rejection && !closes_preceding_printed_row;
         self.finish_hard_break_projection(project_delimiter);
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }

@@ -263,6 +263,13 @@ impl NativeFieldDevice {
         self.ends_row && self.printed_row.is_none()
     }
 
+    pub(in crate::mandoc::inline::flow) fn closes_preceding_printed_row(&self) -> bool {
+        self.ends_row
+            && self.printed_row.is_some()
+            && self.emission == NativeFieldEmission::Unprinted
+            && self.loop_rows.is_empty()
+    }
+
     /// The consumed field left a printed device row open for BODY.
     /// `term_flushln()`250-253 can retain that row after its cells retire.
     pub(in crate::mandoc::inline::flow) fn has_occupied_row(&self) -> bool {

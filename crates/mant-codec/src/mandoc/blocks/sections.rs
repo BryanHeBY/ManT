@@ -1,7 +1,8 @@
 //! Section/root ownership and source-ordered heading reconstruction.
 use super::{
-    Block, LoweringContext, Node, NodeKind, ScopeFlow, Section, first_part_children, lower_scope,
-    section_spacing, source_span, update_paragraph_distance,
+    Block, FormatterRowBoundary, LoweringContext, Node, NodeKind, ScopeFlow, Section,
+    first_part_children, is_native_transparent_sibling, lower_scope, section_spacing, source_span,
+    update_paragraph_distance,
 };
 use crate::mandoc::inline::authored_section_phrase;
 use libmandoc_rs::{
@@ -155,15 +156,25 @@ fn lower_section(
         formatter.enter_authors_section();
     }
     let spacing_enabled = formatter.spacing_enabled();
+    let before_subsection = first_subsection < body.len();
+    let mut flow = ScopeFlow::settled(
+        crate::mandoc::layout::SourceIndent::default(),
+        spacing_enabled,
+    );
+    if context.macro_set == libmandoc_rs::MacroSet::Man
+        && (!before_subsection
+            || body[..first_subsection]
+                .iter()
+                .any(|node| !is_native_transparent_sibling(node)))
+    {
+        flow.row_boundary = FormatterRowBoundary::ManSection { before_subsection };
+    }
     let blocks = lower_scope(
         &body[..first_subsection],
         context,
         paragraph_distance,
         formatter,
-        ScopeFlow::settled(
-            crate::mandoc::layout::SourceIndent::default(),
-            spacing_enabled,
-        ),
+        flow,
     );
     let mut has_preceding_content = !blocks.is_empty();
     let mut children = Vec::new();

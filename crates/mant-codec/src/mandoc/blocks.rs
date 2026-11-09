@@ -245,6 +245,11 @@ const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
 pub(super) enum FormatterRowBoundary {
     Preserve,
     Settle,
+    /// man SH/SS BODY post, or the first SS's leading paragraph distance
+    /// while the enclosing BODY still owns the preceding row.
+    ManSection {
+        before_subsection: bool,
+    },
     /// The original mdoc It BODY has not executed its `term_newln` post yet.
     MdocItemBody,
     Column {
@@ -378,6 +383,15 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         row_boundary: FormatterRowBoundary,
         next_column_entry: Option<&Node>,
     ) -> (Vec<Block>, bool, flow::LiteralAssembly) {
+        if let FormatterRowBoundary::ManSection { before_subsection } = row_boundary
+            && (!before_subsection || *self.paragraph_distance > 0)
+        {
+            // man_term.c::post_SH/post_SS call term_newln() on BODY
+            // return; pre_SS calls it through term_vspace() when PD
+            // requests spacing. A preceding PD can change that distance
+            // during this scope, so consult it only after lowering.
+            self.state.finish_native_body_line();
+        }
         if row_boundary == FormatterRowBoundary::Settle {
             // Native BODY posts settle the field before its IR owner drains.
             // In a column, NOBREAK may leave the device row occupied afterwards.

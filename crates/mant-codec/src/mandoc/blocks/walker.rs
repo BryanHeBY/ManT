@@ -287,7 +287,7 @@ impl BlockLowerer<'_, '_> {
         if self.consume_font_request(node) {
             return true;
         }
-        self.prepare_man_synopsis_spacing(node, source);
+        self.prepare_man_block_spacing(node, source);
         // The container callback returns child execution to this same driver.
         if self.push_container(node) {
             return true;
