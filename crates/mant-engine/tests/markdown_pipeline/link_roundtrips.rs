@@ -72,6 +72,7 @@ fn actual_links_keep_their_original_scalars_metadata_and_query_ranges_after_two_
                     let markdown = render_markdown_with_options(
                         &decoded,
                         MarkdownOptions {
+                            math: mant_codec::encode::MarkdownMath::Latex,
                             preserve_anchors: false,
                             preserve_semantics: semantics,
                         },

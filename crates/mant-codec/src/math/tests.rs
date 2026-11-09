@@ -596,6 +596,23 @@ fn custom_identifiers_numbers_and_operator_labels_are_not_reparsed_as_operations
 }
 
 #[test]
+fn ascii_operator_ellipsis_has_the_same_target_as_the_unicode_operator() {
+    assert_eq!(
+        render(&atom("...", Role::Operator), MathFormat::Latex).text,
+        "\\ldots{}"
+    );
+    assert_eq!(
+        render(&atom("…", Role::Operator), MathFormat::Latex).text,
+        "\\ldots{}"
+    );
+    assert!(
+        render(&atom("...", Role::Literal), MathFormat::Latex)
+            .text
+            .contains("\\textrm{...}")
+    );
+}
+
+#[test]
 fn ascii_angle_fences_are_not_silently_rewritten_to_different_glyphs() {
     let mut expression = operation(
         Operator::Fraction,

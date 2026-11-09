@@ -234,6 +234,7 @@ fn trailing_empty_references_keep_prose_and_independent_term_groups_on_two_readb
                             assert_snapshot(&original, &restored, navigation);
                             for preserve_anchors in [false, true] {
                                 let options = MarkdownOptions {
+                                    math: mant_codec::encode::MarkdownMath::Latex,
                                     preserve_anchors,
                                     preserve_semantics: false,
                                 };

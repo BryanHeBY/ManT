@@ -17900,9 +17900,9 @@
         "description": "Markdown contract used as the coordinate space for every search format.",
         "oneOf": [
           {
-            "description": "Version 1 of `ManT`'s deterministic Markdown rendering contract.",
+            "description": "Version 2 explicitly declares the mathematical coordinate projection.",
             "type": "string",
-            "const": "mant.markdown/v1"
+            "const": "mant.markdown/v2"
           }
         ]
       },
@@ -19154,6 +19154,10 @@
             "format": "uint32",
             "minimum": 0
           },
+          "math": {
+            "description": "Formula representation to select when reproducing these coordinates.",
+            "$ref": "#/$defs/SearchRenderMath"
+          },
           "schema": {
             "description": "Coordinate-space schema discriminator.",
             "$ref": "#/$defs/MarkdownSchema"
@@ -19164,6 +19168,7 @@
           }
         },
         "required": [
+          "math",
           "schema",
           "format",
           "scope",
@@ -19179,6 +19184,16 @@
             "description": "Generated `CommonMark` text.",
             "type": "string",
             "const": "markdown"
+          }
+        ]
+      },
+      "SearchRenderMath": {
+        "description": "Formula representation in the canonical, visible-text coordinate space.",
+        "oneOf": [
+          {
+            "description": "Readable formulas preserve the symbols matched by visible-text search.",
+            "type": "string",
+            "const": "readable"
           }
         ]
       },
@@ -20404,9 +20419,9 @@
         "description": "Markdown contract used as the coordinate space for every search format.",
         "oneOf": [
           {
-            "description": "Version 1 of `ManT`'s deterministic Markdown rendering contract.",
+            "description": "Version 2 explicitly declares the mathematical coordinate projection.",
             "type": "string",
-            "const": "mant.markdown/v1"
+            "const": "mant.markdown/v2"
           }
         ]
       },
@@ -20947,6 +20962,10 @@
             "format": "uint32",
             "minimum": 0
           },
+          "math": {
+            "description": "Formula representation to select when reproducing these coordinates.",
+            "$ref": "#/$defs/SearchRenderMath"
+          },
           "schema": {
             "description": "Coordinate-space schema discriminator.",
             "$ref": "#/$defs/MarkdownSchema"
@@ -20957,6 +20976,7 @@
           }
         },
         "required": [
+          "math",
           "schema",
           "format",
           "scope",
@@ -20972,6 +20992,16 @@
             "description": "Generated `CommonMark` text.",
             "type": "string",
             "const": "markdown"
+          }
+        ]
+      },
+      "SearchRenderMath": {
+        "description": "Formula representation in the canonical, visible-text coordinate space.",
+        "oneOf": [
+          {
+            "description": "Readable formulas preserve the symbols matched by visible-text search.",
+            "type": "string",
+            "const": "readable"
           }
         ]
       },

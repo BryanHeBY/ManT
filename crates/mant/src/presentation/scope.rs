@@ -14,11 +14,17 @@ pub(crate) fn render_scope_query_result(
             "--format man applies only to one full native manual",
         )),
         QueryFormat::Markdown => Ok(if options.terminal() {
-            mant_render::render_scope_query_markdown_with(response, |text| {
-                sanitize_terminal_text(text).into_owned()
-            })
+            mant_render::render_scope_query_markdown_with_options(
+                response,
+                options.fragments(),
+                |text| sanitize_terminal_text(text).into_owned(),
+            )
         } else {
-            mant_render::render_scope_query_markdown(response)
+            mant_render::render_scope_query_markdown_with_options(
+                response,
+                options.fragments(),
+                str::to_owned,
+            )
         }),
         QueryFormat::Text => Ok(mant_render::render_scope_query_text_with(
             response,
@@ -55,7 +61,7 @@ mod tests {
             "label": " odd\u{1b} ",
             "query": {"pattern": "needle"},
             "render": {
-                "schema": "mant.markdown/v1", "format": "markdown", "scope": "full",
+                "schema": "mant.markdown/v2", "math": "readable", "format": "markdown", "scope": "full",
                 "lineBase": 1, "columnBase": 1, "lineCount": 1
             },
             "total": 0, "returned": 0, "offset": 0, "truncated": false, "matches": []

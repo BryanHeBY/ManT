@@ -2,7 +2,7 @@
 #![warn(missing_docs)]
 
 mod definitions;
-/// Portable document encoding and source-bound Markdown artifacts.
+/// Mathematical/readable document encoding and source-bound Markdown artifacts.
 pub mod encode;
 #[cfg(feature = "roff")]
 mod mandoc;

@@ -266,7 +266,10 @@ pub(super) fn next(value: &ResolvedContent, preserve_anchors: bool) -> (Resolved
     // policy; no source HTML, inline node or authored LF is stripped here.
     let blocks = render_blocks_fragment(
         scope_blocks(value),
-        MarkdownFragmentOptions { preserve_anchors },
+        MarkdownFragmentOptions {
+            math: mant_codec::encode::MarkdownMath::Latex,
+            preserve_anchors,
+        },
     );
     let markdown = format!("# Probe\n\n{}", blocks.join("\n\n"));
     let parsed = mant_loader::load_markdown_text(&markdown, None).unwrap();

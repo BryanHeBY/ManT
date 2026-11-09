@@ -10,6 +10,7 @@ pub(super) enum EmptyTable {
 
 pub(super) const fn options(preserve_anchors: bool) -> MarkdownOptions {
     MarkdownOptions {
+        math: mant_codec::encode::MarkdownMath::Latex,
         preserve_anchors,
         preserve_semantics: false,
     }
@@ -29,7 +30,10 @@ pub(super) fn import_root_fragment(
     // stripping source HTML or inventing an expectation from rendered output.
     let blocks = mant_codec::encode::render_blocks_fragment(
         &value.document.as_ref().unwrap().blocks,
-        mant_codec::encode::MarkdownFragmentOptions { preserve_anchors },
+        mant_codec::encode::MarkdownFragmentOptions {
+            math: mant_codec::encode::MarkdownMath::Latex,
+            preserve_anchors,
+        },
     );
     let markdown = format!("# Probe\n\n{}", blocks.join("\n\n"));
     mant_loader::load_markdown_text(&markdown, None).unwrap()

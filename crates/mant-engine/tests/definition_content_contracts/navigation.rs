@@ -72,6 +72,7 @@ fn empty_link_prefixes_preserve_body_types_gaps_identity_and_tail_on_actual_read
                         addresses::assert_original(&restored, &baseline, case);
                         for preserve_anchors in [false, true] {
                             let options = MarkdownOptions {
+                                math: mant_codec::encode::MarkdownMath::Latex,
                                 preserve_anchors,
                                 preserve_semantics: false,
                             };

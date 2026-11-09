@@ -94,13 +94,6 @@ pub(super) fn execute_query(
         }
         source => {
             let request = read_query_request(source, input)?;
-            if output.presentation.markdown_math.is_some()
-                && !matches!(request.view, mant_protocol::QueryView::Full {})
-            {
-                return Err(Failure::usage(
-                    "--markdown-math applies only to full single-document Markdown output",
-                ));
-            }
             application::execute_query(&request, policy, host)?
         }
     };
@@ -174,11 +167,6 @@ fn execute_scope_request(
     output: QueryOutput,
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
-    if output.presentation.markdown_math.is_some() {
-        return Err(Failure::usage(
-            "--markdown-math applies only to full single-document Markdown output",
-        ));
-    }
     let response = application::execute_scope_query(request, host)?;
     let content_complete = match &response.result {
         mant_protocol::ScopeQueryResult::Search { search } => search.content_complete,

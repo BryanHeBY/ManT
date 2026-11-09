@@ -298,6 +298,7 @@ fn navigation_between_blocks_inside_lists_and_at_literal_eof_keeps_physical_boun
                 assert_snapshot(&original, &restored, navigation);
                 for preserve_anchors in [false, true] {
                     let options = MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     };

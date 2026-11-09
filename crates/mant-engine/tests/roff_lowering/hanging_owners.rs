@@ -521,6 +521,7 @@ fn hanging_owner_queries_and_portable_export_borrow_the_retained_content() {
             let markdown = render_markdown_with_options(
                 &content,
                 MarkdownOptions {
+                    math: mant_codec::encode::MarkdownMath::Latex,
                     preserve_anchors: false,
                     preserve_semantics,
                 },

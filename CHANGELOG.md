@@ -27,17 +27,24 @@ that crate was not published for that change.
 - Advance the complete native request/response family to `v0.14` and migrate
   formula payloads and all exact discriminators together, rather than replacing
   only version strings. Published v0.13 schemas and examples remain frozen.
-  Independent doctor, tldr-update and Markdown-coordinate families are unchanged.
+  Doctor and tldr-update retain their independent families.
 - Add dependency-free, bounded MathML Core and restricted LaTeX formula
   encoders in `mant-codec::math`. Callers select strict rejection or reported
   best effort for unsupported mathematical facts. Malformed expressions and
   resource exhaustion always fail without returning partial markup.
-- Add explicit mathematical Markdown export with bounded conversion reports
-  and source ranges into the final bytes. `mant --markdown-math latex` opts
-  into inline/display LaTeX for one full document. The default remains the
-  shared readable projection. Literal/table contexts retain readable formulas
-  with reported losses. Readable display equations now use unlabelled code
-  fences so their text cannot be mistaken for LaTeX source.
+- Default Markdown documents and fragments to inline/display LaTeX with
+  readable best-effort fallback. Add `MarkdownOptions::math` and
+  `MarkdownFragmentOptions::math`, and support `--markdown-math readable|latex`
+  across full documents, excerpts and explanation reports. Individual formula
+  errors and aggregate mathematical budgets preserve readable document content.
+  Addressable artifacts expose bounded conversion reports and final-byte ranges.
+- Introduce `mant.markdown/v2` search descriptors with required
+  `math: "readable"`. Reproduce them using `READABLE_ADDRESSABLE` or
+  `--preserve-anchors --markdown-math readable`, preserving mathematical symbols
+  in visible search. Published v0.13 and older protocol snapshots stay frozen.
+  The checked mathematical export API exposes strict conversion/resource errors.
+- Encode ASCII operator ellipses as `\ldots`, including normalized GNU `ldots`
+  from native manuals. Quoted literal dots retain their literal representation.
 
 ### Dependency maintenance
 

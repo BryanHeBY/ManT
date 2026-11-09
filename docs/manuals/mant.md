@@ -1215,11 +1215,12 @@ Structured results retain coordinates in the canonical Markdown artifact.
 Plain-text
 visible searches show columns in the displayed text instead, while
 Markdown-scope text searches show canonical Markdown columns. Reproduce the
-portable addressable `mant.markdown/v1` text for `--scope markdown` with
-`mant SELECTOR --format markdown --preserve-anchors`. Both scopes use the same
+readable addressable `mant.markdown/v2` text for `--scope markdown` with
+`mant SELECTOR --format markdown --preserve-anchors --markdown-math readable`.
+Both scopes use the same
 accepted glyphs and definition word boundaries; visible scope excludes syntax
 from matching. API consumers reproduce the artifact with
-`MarkdownOptions::ADDRESSABLE`. Literal descriptions remain fenced code within
+`MarkdownOptions::READABLE_ADDRESSABLE`. Literal descriptions remain fenced code within
 their list item, so fence formatting lines can differ from native shared rows.
 
 Use the `=` form when a value begins with a hyphen:
@@ -1237,7 +1238,7 @@ mant tar --explain=--exclude
 - `--display MODE`: Select `auto`, `direct`, `pager`, or `tui`, independently of the content format.
 - `--compact`: Omit JSON indentation.
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
-- `--markdown-math MODE`: Select `readable` or `latex` formulas for full-document Markdown output.
+- `--markdown-math MODE`: Select `latex` (default) or `readable` formulas for Markdown documents, excerpts and reports.
 
 Clean Markdown output normally omits internal HTML anchors. A heading with a
 document-local link automatically retains addressable anchors so its target is
@@ -1253,16 +1254,27 @@ JSON must be selected explicitly for document queries. Maintenance reports,
 schemas, and protocol descriptions retain their JSON output. `--compact` removes indentation from
 JSON queries, schemas, protocol descriptions, doctor reports, and update reports.
 
-Formulas use their shared readable text by default. `--markdown-math latex`
-explicitly selects full-document Markdown with `$...$` inline and `$$...$$`
-display formulas. It also selects `--format markdown` when no format is given.
-For example, `mant --input ./formula.1 --markdown-math latex` converts resolved
+Markdown formulas default to `$...$` inline and `$$...$$` display LaTeX.
+For example, `mant --input ./formula.1 --format markdown` converts resolved
 roff formulas using the bounded mathematical/amsmath subset. The destination
-renderer needs math support. Conversion warnings go to stderr, including any
-formula retained as readable text inside a literal or table. Invalid formula
-structure and resource exhaustion fail the export. Use `--markdown-math
-readable` to select ordinary readable Markdown explicitly. This option applies
-to one complete document, including a full `--request-json` query.
+renderer needs math support. `--markdown-math readable` selects shared readable
+formulas in code spans and unlabelled fences. Either explicit math mode also
+selects `--format markdown` when no format is given. The same mode applies to
+full documents, selected nodes, explanations and cross-document reports,
+including requests supplied through `--request-json`.
+
+Literal and table surfaces retain readable formulas. A formula that exceeds
+the mathematical profile falls back individually. Exhausting aggregate
+mathematical budgets makes further formulas readable. Full-document exports
+report conversion findings on stderr. Plain report titles and search previews
+retain their supplied text representation. Markdown math input preserves its
+source spelling as unsupported reading content.
+
+Search JSON declares its coordinate projection as `mant.markdown/v2` with
+`math: "readable"`, preserving literal mathematical symbols for visible search.
+Reproduce its complete Markdown using `--format markdown --preserve-anchors
+--markdown-math readable`. Format and math choices are CLI presentation options
+outside the native request JSON object.
 
 ### Display Policy
 
@@ -1418,7 +1430,7 @@ required fields, tagged unions, or existing field semantics. The
 former experimental bare v1 through v7 query schemas are no longer accepted.
 Excerpt and search results now share a complete outline trail, so both human
 output and structured consumers receive the same ancestor chain and terminal
-node. Independent contracts such as the unchanged `mant.markdown/v1`
+node. Independent contracts such as `mant.markdown/v2`
 search-coordinate schema keep their own identifiers. Consumers must compare
 every exact schema identifier; generated JSON Schema Draft 2020-12 definitions
 remain authoritative.

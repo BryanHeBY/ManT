@@ -262,8 +262,12 @@ fn symbolic_atom(
             EquationFont::Bold | EquationFont::Fat => "\\mathbf{",
         })?;
     }
-    for character in text.chars() {
-        math_character(encoder, character)?;
+    if role == EquationAtomRole::Operator && text == "..." {
+        encoder.push("\\ldots{}")?;
+    } else {
+        for character in text.chars() {
+            math_character(encoder, character)?;
+        }
     }
     if unwrapped_operator {
         Ok(())
@@ -281,6 +285,9 @@ fn simple_spelling(text: &str, role: EquationAtomRole) -> bool {
             .chars()
             .all(|character| character.is_ascii_digit() || character == '.'),
         EquationAtomRole::Operator => {
+            if text == "..." {
+                return true;
+            }
             let mut characters = text.chars();
             characters.next().is_some_and(|character| {
                 !character.is_alphanumeric()

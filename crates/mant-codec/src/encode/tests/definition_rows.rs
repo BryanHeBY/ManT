@@ -73,7 +73,10 @@ fn independent_link_roots_preserve_author_spaces_under_each_target_policy() {
                     let before = original.clone();
                     let markdown = render_blocks_fragment(
                         std::slice::from_ref(&original),
-                        MarkdownFragmentOptions { preserve_anchors },
+                        MarkdownFragmentOptions {
+                            math: crate::encode::MarkdownMath::Latex,
+                            preserve_anchors,
+                        },
                     )
                     .join("\n\n");
                     let expected: Vec<String> = if in_head {
@@ -100,9 +103,14 @@ fn independent_link_roots_preserve_author_spaces_under_each_target_policy() {
                 spaced_link(kind, vec![text(" ")]),
                 text("BODY"),
             ]);
-            let markdown =
-                render_blocks_fragment(&[block], MarkdownFragmentOptions { preserve_anchors })
-                    .join("\n\n");
+            let markdown = render_blocks_fragment(
+                &[block],
+                MarkdownFragmentOptions {
+                    math: crate::encode::MarkdownMath::Latex,
+                    preserve_anchors,
+                },
+            )
+            .join("\n\n");
             let parsed = crate::parse_markdown(&markdown, None).unwrap();
             let Block::Paragraph { children, .. } = &parsed.document.blocks[0] else {
                 panic!("{markdown}");
@@ -160,7 +168,10 @@ fn transparent_root_selection_keeps_fixed_code_spacing_and_nested_destinations()
     for preserve_anchors in [false, true] {
         let markdown = render_blocks_fragment(
             std::slice::from_ref(&block),
-            MarkdownFragmentOptions { preserve_anchors },
+            MarkdownFragmentOptions {
+                math: crate::encode::MarkdownMath::Latex,
+                preserve_anchors,
+            },
         )
         .join("\n\n");
         assert_eq!(
@@ -269,7 +280,10 @@ fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
                     for preserve_anchors in [false, true] {
                         let markdown = render_blocks_fragment(
                             &blocks,
-                            MarkdownFragmentOptions { preserve_anchors },
+                            MarkdownFragmentOptions {
+                                math: crate::encode::MarkdownMath::Latex,
+                                preserve_anchors,
+                            },
                         )
                         .join("\n\n");
                         let anchor = if preserve_anchors && has_anchor {
@@ -392,9 +406,14 @@ fn destinations_and_zero_output_head_roots_do_not_fabricate_term_rows() {
                     DefinitionBodyAlignment::AfterTerm,
                 ),
             )];
-            let markdown =
-                render_blocks_fragment(&blocks, MarkdownFragmentOptions { preserve_anchors })
-                    .join("\n\n");
+            let markdown = render_blocks_fragment(
+                &blocks,
+                MarkdownFragmentOptions {
+                    math: crate::encode::MarkdownMath::Latex,
+                    preserve_anchors,
+                },
+            )
+            .join("\n\n");
             let visible = Parser::new(&markdown)
                 .filter_map(|event| match event {
                     Event::Text(value) => Some(value.into_string()),
@@ -454,7 +473,10 @@ fn joined_last_term_uses_original_roots_once_and_keeps_prior_hard_rows() {
         let roots = Roots(RefCell::new(Vec::new()));
         let markdown = render_located_blocks_fragment(
             &blocks,
-            MarkdownFragmentOptions { preserve_anchors },
+            MarkdownFragmentOptions {
+                math: crate::encode::MarkdownMath::Latex,
+                preserve_anchors,
+            },
             Some(&roots),
         )
         .join("\n\n");

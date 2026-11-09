@@ -44,7 +44,8 @@
           "address": { "kind": "manual", "name": "git", "manualSection": "1" },
           "depth": 0,
           "render": {
-            "schema": "mant.markdown/v1",
+            "schema": "mant.markdown/v2",
+            "math": "readable",
             "format": "markdown",
             "scope": "full",
             "lineBase": 1,
@@ -88,7 +89,8 @@
           "address": { "kind": "manual", "name": "git-add", "manualSection": "1" },
           "depth": 1,
           "render": {
-            "schema": "mant.markdown/v1",
+            "schema": "mant.markdown/v2",
+            "math": "readable",
             "format": "markdown",
             "scope": "full",
             "lineBase": 1,

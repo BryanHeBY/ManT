@@ -100,9 +100,17 @@ impl SearchSchema {
 /// Markdown contract used as the coordinate space for every search format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum MarkdownSchema {
-    /// Version 1 of `ManT`'s deterministic Markdown rendering contract.
-    #[serde(rename = "mant.markdown/v1")]
-    V1,
+    /// Version 2 explicitly declares the mathematical coordinate projection.
+    #[serde(rename = "mant.markdown/v2")]
+    V2,
+}
+
+/// Formula representation in the canonical, visible-text coordinate space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum SearchRenderMath {
+    /// Readable formulas preserve the symbols matched by visible-text search.
+    Readable,
 }
 
 /// Canonical render format used for search coordinates.
@@ -125,6 +133,8 @@ pub enum SearchRenderScope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchRender {
+    /// Formula representation to select when reproducing these coordinates.
+    pub math: SearchRenderMath,
     /// Coordinate-space schema discriminator.
     pub schema: MarkdownSchema,
     /// Rendered text format.

@@ -133,7 +133,8 @@ fn search_rejects_a_complete_summary_after_known_content_loss() {
         }],
         "query": {"pattern": "x"},
         "render": {
-            "schema": "mant.markdown/v1",
+            "schema": "mant.markdown/v2",
+            "math": "readable",
             "format": "markdown",
             "scope": "full",
             "lineBase": 1,

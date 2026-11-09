@@ -21,6 +21,31 @@ fn required(schema: &Value) -> Vec<&str> {
 }
 
 #[test]
+fn markdown_coordinates_require_their_explicit_mathematical_projection() {
+    let schema = value(query_search_json_schema());
+    assert_eq!(
+        schema["$defs"]["MarkdownSchema"]["oneOf"][0]["const"],
+        "mant.markdown/v2"
+    );
+    assert_eq!(
+        schema["$defs"]["SearchRenderMath"]["oneOf"][0]["const"],
+        "readable"
+    );
+    assert!(required(&schema["$defs"]["SearchRender"]).contains(&"math"));
+    let descriptor = serde_json::json!({
+        "schema": "mant.markdown/v2", "math": "readable", "format": "markdown",
+        "scope": "full", "lineBase": 1, "columnBase": 1, "lineCount": 1
+    });
+    assert!(serde_json::from_value::<mant_protocol::SearchRender>(descriptor.clone()).is_ok());
+    let mut missing = descriptor.clone();
+    missing.as_object_mut().unwrap().remove("math");
+    assert!(serde_json::from_value::<mant_protocol::SearchRender>(missing).is_err());
+    let mut old = descriptor;
+    old["schema"] = "mant.markdown/v1".into();
+    assert!(serde_json::from_value::<mant_protocol::SearchRender>(old).is_err());
+}
+
+#[test]
 fn request_schema_is_closed_versioned_and_deserialization_oriented() {
     let schema = value(query_request_json_schema());
     let encoded = serde_json::to_string(&schema).expect("schema JSON");

@@ -1,4 +1,4 @@
-//! Encodes already-loaded, source-neutral IR as deterministic portable `CommonMark`.
+//! Encodes source-neutral IR as deterministic Markdown with mathematical export.
 
 mod accepted_rows;
 mod anchors;
@@ -45,9 +45,21 @@ pub trait MarkdownInlineProjection {
     fn project<'a>(&self, nodes: &'a [mant_ir::Inline]) -> Cow<'a, [mant_ir::Inline]>;
 }
 
+/// Formula representation selected by Markdown document and fragment exports.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MarkdownMath {
+    /// Encode structured formulas as LaTeX with readable best-effort fallback.
+    #[default]
+    Latex,
+    /// Use the shared readable projection in code spans and plain fences.
+    Readable,
+}
+
 /// Markdown serialization controls that do not alter the query IR.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MarkdownOptions {
+    /// Mathematical representation for structured formulas.
+    pub math: MarkdownMath,
     /// Emit stable raw-HTML destinations and links for document-local references.
     pub preserve_anchors: bool,
     /// Emit nonvisible declarations for the supported ordinary-list subset.
@@ -57,8 +69,23 @@ pub struct MarkdownOptions {
 }
 
 impl MarkdownOptions {
-    /// Addressable Markdown used by consumers of `mant.markdown/v1`.
+    /// Addressable Markdown using the default mathematical export policy.
     pub const ADDRESSABLE: Self = Self {
+        math: MarkdownMath::Latex,
+        preserve_anchors: true,
+        preserve_semantics: false,
+    };
+
+    /// Readable Markdown with ordinary code spans and unlabelled formula fences.
+    pub const READABLE: Self = Self {
+        math: MarkdownMath::Readable,
+        preserve_anchors: false,
+        preserve_semantics: false,
+    };
+
+    /// Addressable readable projection used by visible-text search coordinates.
+    pub const READABLE_ADDRESSABLE: Self = Self {
+        math: MarkdownMath::Readable,
         preserve_anchors: true,
         preserve_semantics: false,
     };

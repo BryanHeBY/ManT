@@ -44,6 +44,15 @@ pub(crate) enum MarkdownMathMode {
     Latex,
 }
 
+impl From<MarkdownMathMode> for mant_codec::encode::MarkdownMath {
+    fn from(mode: MarkdownMathMode) -> Self {
+        match mode {
+            MarkdownMathMode::Readable => Self::Readable,
+            MarkdownMathMode::Latex => Self::Latex,
+        }
+    }
+}
+
 /// Source family selected by document-catalog commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum CatalogKindMode {
@@ -768,15 +777,14 @@ struct Cli {
     )]
     preserve_anchors: bool,
 
-    /// Formula output in full-document Markdown. Defaults to readable text.
+    /// Formula output in Markdown documents and reports. Defaults to latex.
     #[arg(
         long,
         value_name = "MODE",
         value_enum,
         conflicts_with_all = capabilities::argument_ids([
             "list", "find", "doctor", "mcp", "update_docs", "prune_docs",
-            "update_tldr", "protocol_version", "schema", "outline", "node",
-            "explain", "search", "document", "follow_links"
+            "update_tldr", "protocol_version", "schema"
         ]),
         help_heading = "Output"
     )]

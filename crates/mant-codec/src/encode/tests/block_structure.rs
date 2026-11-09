@@ -380,9 +380,15 @@ fn detached_fragment_export_accepts_ir_beyond_markdown_metadata_limits() {
     };
     items[0].entry.as_mut().unwrap().alias_groups = vec![names.clone()];
     assert_eq!(mant_ir::validate_document(document).len(), 0);
-    assert!(!super::semantic::supported(document));
+    assert!(!super::semantic::supported(
+        document,
+        crate::encode::MarkdownMath::Latex
+    ));
     for preserve_anchors in [false, true] {
-        let options = super::MarkdownFragmentOptions { preserve_anchors };
+        let options = super::MarkdownFragmentOptions {
+            math: crate::encode::MarkdownMath::Latex,
+            preserve_anchors,
+        };
         let plain = super::render_blocks_fragment(&document.blocks, options).join("\n\n");
         let located =
             super::render_located_blocks_fragment(&document.blocks, options, None).join("\n\n");

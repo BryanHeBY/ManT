@@ -276,6 +276,7 @@ fn nested_navigation_only_carriers_preserve_their_real_sibling_footer() {
                         assert_start(&restored, footer, position, relation);
                         for preserve_anchors in [false, true] {
                             let options = MarkdownOptions {
+                                math: mant_codec::encode::MarkdownMath::Latex,
                                 preserve_anchors,
                                 preserve_semantics: false,
                             };
@@ -317,6 +318,7 @@ fn entirely_zero_outer_carrier_omits_its_marker_before_root_footer() {
             assert_eq!(link_addresses(&restored), link_addresses(&original));
             for preserve_anchors in [false, true] {
                 let options = MarkdownOptions {
+                    math: mant_codec::encode::MarkdownMath::Latex,
                     preserve_anchors,
                     preserve_semantics: false,
                 };

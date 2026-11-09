@@ -131,6 +131,7 @@ fn decoded_entities_keep_original_link_scalars_diagnostics_and_search_ranges() {
                     let markdown = render_markdown_with_options(
                         &content,
                         MarkdownOptions {
+                            math: mant_codec::encode::MarkdownMath::Latex,
                             preserve_semantics: semantics,
                             preserve_anchors: false,
                         },

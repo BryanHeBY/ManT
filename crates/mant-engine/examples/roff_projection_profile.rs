@@ -9,12 +9,12 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
-use mant_codec::encode::render_markdown;
+use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 use mant_codec::parse_markdown;
 use mant_ir::{Block, Document, Inline, ListKind, ResolvedContent, Section};
 use mant_loader::{ManualPage, parse_manual_page};
 use mant_query::select_excerpt;
-use mant_render::render_excerpt_markdown;
+use mant_render::render_excerpt_markdown_with_options;
 use pulldown_cmark::{Event, Parser};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -107,7 +107,9 @@ fn profile_request(line: &str) -> Result<Value, String> {
     };
 
     let expected = projection_topology(&document);
-    let markdown = render_markdown(&query);
+    // This audit checks the readable CommonMark reimport contract. Mathematical
+    // LaTeX export has independent math-event and actual-renderer checks.
+    let markdown = render_markdown_with_options(&query, MarkdownOptions::READABLE);
     let reparsed = parse_markdown(&markdown, None).map_err(|error| error.to_string())?;
     let observed = projection_topology(&reparsed.document);
     let mut violations = compare_topology("full", &expected, &observed);
@@ -550,7 +552,13 @@ fn check_section_excerpts(
             &[mant_protocol::ContentSelector::path(selector.as_str())],
         )
         .map_err(|error| error.to_string())?;
-        let markdown = render_excerpt_markdown(&excerpt);
+        let markdown = render_excerpt_markdown_with_options(
+            &excerpt,
+            mant_codec::encode::MarkdownFragmentOptions {
+                math: mant_codec::encode::MarkdownMath::Readable,
+                preserve_anchors: false,
+            },
+        );
         let reparsed = parse_markdown(&markdown, None).map_err(|error| error.to_string())?;
         let expected_document = Document {
             heading: None,

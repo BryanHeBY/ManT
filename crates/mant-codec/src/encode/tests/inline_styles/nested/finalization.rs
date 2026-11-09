@@ -116,10 +116,12 @@ const CONTEXTS: [&str; 5] = [
 ];
 const OPTIONS: [MarkdownOptions; 2] = [
     MarkdownOptions {
+        math: crate::encode::MarkdownMath::Latex,
         preserve_anchors: false,
         preserve_semantics: false,
     },
     MarkdownOptions {
+        math: crate::encode::MarkdownMath::Latex,
         preserve_anchors: false,
         preserve_semantics: true,
     },
@@ -430,6 +432,7 @@ fn addressable_anchors_keep_commonmark_targets_and_the_explicit_native_html_poli
     let markdown = render_inline_fragment(
         &nodes,
         MarkdownFragmentOptions {
+            math: crate::encode::MarkdownMath::Latex,
             preserve_anchors: true,
         },
     );

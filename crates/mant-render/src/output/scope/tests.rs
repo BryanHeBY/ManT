@@ -75,7 +75,8 @@ fn search() -> ScopeSearch {
                 content_complete: true,
                 matches: vec![],
                 render: SearchRender {
-                    schema: MarkdownSchema::V1,
+                    math: mant_protocol::SearchRenderMath::Readable,
+                    schema: MarkdownSchema::V2,
                     format: SearchRenderFormat::Markdown,
                     scope: SearchRenderScope::Full,
                     line_base: 1,

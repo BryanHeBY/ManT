@@ -41,18 +41,23 @@ impl RenderOptions {
     const fn terminal(self) -> bool {
         matches!(self.target, OutputTarget::Terminal)
     }
+
+    fn fragments(self) -> mant_codec::encode::MarkdownFragmentOptions {
+        mant_codec::encode::MarkdownFragmentOptions {
+            math: self
+                .markdown_math
+                .map_or(mant_codec::encode::MarkdownMath::Latex, Into::into),
+            preserve_anchors: self.preserve_anchors,
+        }
+    }
 }
 
 pub(super) fn render_query_result(
     result: &QueryViewResult,
     options: RenderOptions,
 ) -> Result<String, Failure> {
-    if options.markdown_math.is_some()
-        && (options.format != QueryFormat::Markdown || !matches!(result, QueryViewResult::Full(_)))
-    {
-        return Err(Failure::usage(
-            "--markdown-math applies only to full single-document Markdown output",
-        ));
+    if options.markdown_math.is_some() && options.format != QueryFormat::Markdown {
+        return Err(Failure::usage("--markdown-math requires Markdown output"));
     }
     let RenderOptions {
         format,
@@ -80,7 +85,10 @@ pub(super) fn render_query_result(
         QueryViewResult::Explanation(explanation) => match format {
             QueryFormat::Json => render_json(explanation, pretty),
             QueryFormat::Text => Ok(render_terminal_explanation(explanation, color)),
-            QueryFormat::Markdown => Ok(mant_render::render_explanation_markdown(explanation)),
+            QueryFormat::Markdown => Ok(mant_render::render_explanation_markdown_with_options(
+                explanation,
+                options.fragments(),
+            )),
             QueryFormat::Man => Err(Failure::usage(
                 "--format man applies only to full documents",
             )),
@@ -108,7 +116,6 @@ fn render_excerpt(
     let RenderOptions {
         format,
         pretty,
-        preserve_anchors,
         color,
         ..
     } = options;
@@ -118,7 +125,7 @@ fn render_excerpt(
             let terminal_copy = output_terminal.then(|| terminal_excerpt(excerpt));
             Ok(mant_render::render_excerpt_markdown_with_options(
                 terminal_copy.as_ref().unwrap_or(excerpt),
-                mant_codec::encode::MarkdownFragmentOptions { preserve_anchors },
+                options.fragments(),
             ))
         }
         QueryFormat::Text => Ok(render_terminal_excerpt(excerpt, color)),

@@ -48,6 +48,11 @@ budgets remain explicit in the result, including partial coverage.
 
 ## Search work and pagination
 
+Search coordinates declare `mant.markdown/v2` with `math: "readable"` so visible
+matching retains the document's mathematical symbols. Reproduce the source
+with `mant_codec::encode::MarkdownOptions::READABLE_ADDRESSABLE`. Ordinary
+Markdown export defaults to LaTeX through its independent presentation option.
+
 Search validates each occurrence against anchors, trimmed visible content and
 its original owner before counting result groups. Fine scalar ranges and
 presented-line copies are built lazily for retained results, with a reusable

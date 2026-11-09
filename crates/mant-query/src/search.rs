@@ -91,7 +91,8 @@ fn search_with_matcher(
 ) -> Result<QuerySearch, SearchError> {
     // Both scopes address one artifact with the accepted definition word
     // boundaries. Scope controls whether Markdown syntax is searchable.
-    let artifact = render_addressable_markdown_with_options(query, MarkdownOptions::ADDRESSABLE);
+    let artifact =
+        render_addressable_markdown_with_options(query, MarkdownOptions::READABLE_ADDRESSABLE);
     let markdown = artifact.text();
     let lines = LineIndex::with_anchors(markdown, artifact.anchor_ranges().to_vec());
     let owners = OwnerIndex::new(&artifact);
@@ -138,7 +139,8 @@ fn search_with_matcher(
             .is_none_or(|document| mant_ir::content_complete(&document.diagnostics)),
         query: request.clone(),
         render: SearchRender {
-            schema: MarkdownSchema::V1,
+            math: mant_protocol::SearchRenderMath::Readable,
+            schema: MarkdownSchema::V2,
             format: SearchRenderFormat::Markdown,
             scope: SearchRenderScope::Full,
             line_base: 1,

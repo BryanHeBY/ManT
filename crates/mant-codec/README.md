@@ -162,13 +162,28 @@ one, 1 MiB of source text/decorations, 16,384 expanded matrix slots and 2 MiB
 of encoded output. Preflight bounds the whole input before recursive encoding
 or readable fallback. Errors return no partial markup.
 
-`encode::render_math_markdown` explicitly selects LaTeX Markdown and returns a
+Document and fragment exports default to `MarkdownMath::Latex`. Set the `math`
+field of `MarkdownOptions` or `MarkdownFragmentOptions` to `Readable` for code
+spans and unlabelled display fences. `MarkdownOptions::READABLE` provides that
+policy for ordinary full-document exports.
+
+Default exports recover individual malformed, oversized or unrepresentable
+formulas through their readable payload. Mathematical tracking and encoding
+budgets apply to formulas independently of ordinary document traversal. When
+the aggregate budget is exhausted, further formulas use readable output.
+`MarkdownArtifact::math_issues()` exposes bounded details and `math_summary()`
+reports tracked counts plus `budget_exhausted`. String-returning APIs consume
+the artifact and its report. Located fragments avoid memoizing temporary
+projected expression addresses.
+
+`encode::render_math_markdown` provides checked export and returns a
 fallible `MathMarkdownArtifact`. Its `markdown()` accessor exposes the final
 bytes and source-bound ranges, while `issues()` and `summary()` describe the
 accepted conversion branches. Strict policy rejects conversion losses or a
 context requiring readable fallback. Best effort reports these approximations.
-Invalid expressions, inconsistent readable caches and resource limits fail
-under both policies.
+For LaTeX mode, invalid expressions, inconsistent readable caches and resource
+limits fail under both policies. An explicit `Readable` option selects ordinary
+readable export.
 
 Formula delimiters are checked in their final inline, style and link contexts.
 Literal blocks and portable reading tables keep readable formulas with context
@@ -176,11 +191,12 @@ issues. Legacy display formulas without an expression retain their readable
 payload with a missing-structure issue. Whole-operation formula, node, input,
 output and issue-detail allowances are public constants in `encode`.
 
-The existing Markdown rendering APIs use readable text, with unlabelled fences
-for display formulas. The mathematical API rejects `preserve_semantics` because
-its output has a different reimport contract. Markdown parsing preserves math
-delimiters as unsupported reading content. Native request/search coordinates
-continue to use the portable `mant.markdown/v1` projection.
+Checked LaTeX export rejects `preserve_semantics`. Ordinary semantic export
+omits declarations when mathematical output prevents the supported reimport
+contract. Markdown parsing preserves math delimiters as unsupported reading
+content. Search coordinates declare `mant.markdown/v2` and `math: "readable"`.
+Use `MarkdownOptions::READABLE_ADDRESSABLE` to reproduce that symbol-preserving
+coordinate projection. `ADDRESSABLE` uses the default LaTeX policy.
 
 TLDR `More information:` metadata retains the destination of one explicit
 `CommonMark` autolink or Markdown link, not its label or surrounding sentence

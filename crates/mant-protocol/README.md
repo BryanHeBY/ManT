@@ -137,10 +137,16 @@ fields, tagged unions, or existing field semantics. The former
 bare `v1` through `v7` schemas were experimental and are intentionally not
 accepted by the current native API. Historical tags preserve those contracts; the first stable
 native protocol will use a `v1.0` release line. Independent contracts such as
-`mant.doctor/v1` and `mant.markdown/v1` keep their own identifiers. Clients
+`mant.doctor/v1` and `mant.markdown/v2` use independent identifiers. Clients
 must therefore compare complete discriminators. The `mant-protocol` crate has
 its own semver; upgrading that Rust package does not by itself select a new
 wire discriminator.
+
+Search render descriptors use `mant.markdown/v2` and require `math: "readable"`.
+This coordinate profile preserves literal mathematical symbols for visible
+matching. Reproduce it with `MarkdownOptions::READABLE_ADDRESSABLE`, or CLI
+`--format markdown --preserve-anchors --markdown-math readable`. Ordinary
+Markdown exports default to LaTeX. Frozen v0.13 schemas retain the v1 descriptor.
 
 Adding or changing a Rust field does not by itself authorize a wire change.
 The native discriminator must advance whenever its serialized contract

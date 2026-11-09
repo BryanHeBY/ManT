@@ -219,7 +219,10 @@ fn assert_projection(block: &Block, expected: &str) {
         };
         let fragment = render_blocks_fragment(
             std::slice::from_ref(block),
-            MarkdownFragmentOptions { preserve_anchors },
+            MarkdownFragmentOptions {
+                math: crate::encode::MarkdownMath::Latex,
+                preserve_anchors,
+            },
         )
         .join("\n\n");
         assert_raw_fence_payload(&fragment, expected);

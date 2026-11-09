@@ -15,6 +15,7 @@ fn no_fill_function_target_survives_addressable_markdown_export() {
     let markdown = render_markdown_with_options(
         &query,
         MarkdownOptions {
+            math: mant_codec::encode::MarkdownMath::Latex,
             preserve_anchors: true,
             preserve_semantics: false,
         },
@@ -40,6 +41,7 @@ fn literal_display_target_survives_addressable_markdown_export() {
     let markdown = render_markdown_with_options(
         &query,
         MarkdownOptions {
+            math: mant_codec::encode::MarkdownMath::Latex,
             preserve_anchors: true,
             preserve_semantics: false,
         },
@@ -97,6 +99,7 @@ fn ordinary_declared_entries_reimport_names_groups_relations_and_domains() {
         let markdown = render_markdown_with_options(
             &query,
             MarkdownOptions {
+                math: mant_codec::encode::MarkdownMath::Latex,
                 preserve_anchors,
                 preserve_semantics: true,
             },
@@ -249,6 +252,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
             let markdown = render_markdown_with_options(
                 &query,
                 MarkdownOptions {
+                    math: mant_codec::encode::MarkdownMath::Latex,
                     preserve_anchors,
                     preserve_semantics: true,
                 },
@@ -274,6 +278,7 @@ fn metadata_representation_limits_are_shared_by_import_and_export() {
                 let ordinary = render_markdown_with_options(
                     &query,
                     MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     },

@@ -184,6 +184,7 @@ fn actual_markdown_links_preserve_phrasing_styles_and_typed_target_policies() {
                         let markdown = render_markdown_with_options(
                             &decoded,
                             MarkdownOptions {
+                                math: mant_codec::encode::MarkdownMath::Latex,
                                 preserve_anchors,
                                 preserve_semantics: false,
                             },

@@ -260,7 +260,24 @@ fn assert_cell_references(content: &ResolvedContent) {
 
 fn assert_reader(case: &Value, content: &ResolvedContent) {
     use visit::Visit as _;
-    let markdown = mant_codec::encode::render_markdown(content);
+    if text(case, "kind") != "tbl" {
+        // eqn_html.c::eqn_box publishes one mathematical root for these
+        // exact sources, rerun through the pinned tree/HTML reference.
+        let mathematical = mant_codec::encode::render_markdown(content);
+        let formulas =
+            pulldown_cmark::Parser::new_ext(&mathematical, pulldown_cmark::Options::ENABLE_MATH)
+                .filter(|event| {
+                    matches!(
+                        event,
+                        pulldown_cmark::Event::InlineMath(_)
+                            | pulldown_cmark::Event::DisplayMath(_)
+                    )
+                })
+                .count();
+        assert_eq!(formulas, 1, "{}: default mathematical export", case["id"]);
+    }
+    let markdown =
+        mant_codec::encode::render_markdown_with_options(content, MarkdownOptions::READABLE);
     let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
     let mut observed = ReaderPayloads::default();
     observed.visit_document(readback.document.as_ref().unwrap());
@@ -283,7 +300,8 @@ fn assert_reader(case: &Value, content: &ResolvedContent) {
 }
 
 fn assert_search(case: &Value, content: &ResolvedContent) {
-    let artifact = render_addressable_markdown_with_options(content, MarkdownOptions::ADDRESSABLE);
+    let artifact =
+        render_addressable_markdown_with_options(content, MarkdownOptions::READABLE_ADDRESSABLE);
     for scope in [SearchScope::Visible, SearchScope::Markdown] {
         let result = mant_query::search_query(
             content,

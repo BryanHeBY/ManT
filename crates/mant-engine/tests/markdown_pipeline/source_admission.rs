@@ -48,6 +48,7 @@ fn source_admission_keeps_ir0_meaning_and_search_after_json_and_two_readers() {
                 let markdown = render_markdown_with_options(
                     &current,
                     MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_semantics,
                         preserve_anchors: false,
                     },

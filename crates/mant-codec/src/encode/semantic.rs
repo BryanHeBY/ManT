@@ -5,14 +5,17 @@ use mant_ir::{
     visit::{self, Visit},
 };
 
-pub(super) fn supported(document: &Document) -> bool {
-    struct Check(bool);
+pub(super) fn supported(document: &Document, math: super::MarkdownMath) -> bool {
+    struct Check(bool, super::MarkdownMath);
     impl<'a> Visit<'a> for Check {
         fn visit_definition_item(&mut self, item: &'a DefinitionItem) {
             self.0 &= item.entry.is_none();
             visit::walk_definition_item(self, item);
         }
         fn visit_block(&mut self, block: &'a Block) {
+            if matches!(block, Block::Equation { .. }) && self.1 == super::MarkdownMath::Latex {
+                self.0 = false;
+            }
             if let Block::List { items, .. } = block
                 && let Some(first) = items.iter().find_map(|item| item.entry.as_ref())
             {
@@ -37,10 +40,19 @@ pub(super) fn supported(document: &Document) -> bool {
             }
             visit::walk_block(self, block);
         }
+        fn visit_inline(&mut self, inline: &'a mant_ir::Inline) {
+            if matches!(inline, mant_ir::Inline::Equation { .. })
+                && self.1 == super::MarkdownMath::Latex
+            {
+                self.0 = false;
+            }
+            visit::walk_inline(self, inline);
+        }
     }
     let mut check = Check(
         mant_ir::validate_document(document).is_empty()
             && mant_ir::semantics_complete(&document.diagnostics),
+        math,
     );
     check.visit_document(document);
     check.0

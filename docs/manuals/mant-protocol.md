@@ -79,7 +79,7 @@ query the manual database, read tldr data, or start the TUI.
 | `mant.scope-request/v0.14` | Bounded document-set search or explanation | Scope request `schema` |
 | `mant.scope-query/v0.14` | Resolved graph and grouped projection | Scope response `schema` |
 | `mant.catalog/v0.14` | Local Markdown and manual-page discovery | Catalog response `schema` |
-| `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
+| `mant.markdown/v2` | Canonical readable Markdown coordinate space | Search `render.schema` |
 | `mant.doctor/v1` | Read-only local installation diagnostics | Doctor report `schema` |
 
 The native query family follows ManT's pre-stable minor release line:
@@ -88,8 +88,8 @@ Optional additions are compatible only at existing open extension points;
 new fields in closed objects and new closed-enum variants need a new family.
 Patch releases never change requests,
 required fields, tagged unions, or existing field semantics. The
-independent Markdown coordinate and doctor contracts remain
-`mant.markdown/v1` and `mant.doctor/v1`. Clients must still compare complete
+independent Markdown coordinate and doctor contracts use
+`mant.markdown/v2` and `mant.doctor/v1`. Clients compare complete
 identifiers rather than infer compatibility between independent families.
 The `mant-protocol` Rust crate has its own semver; upgrading that package does
 not by itself select a new wire discriminator.
@@ -1240,8 +1240,9 @@ The new row-hint fields require the `v0.13` family because the published
 examples remain available for historical consumers. Current clients send
 `v0.14` request markers to a `v0.14` executable; mixed query/document families
 are rejected.
-Independent `mant.markdown/v1`, `mant.doctor/v1` and `mant.tldr-update/v1`
-identifiers remain unchanged.
+The row-hint migration retained the then-current independent v1 contracts.
+Current search coordinates use `mant.markdown/v2`, declaring the readable
+mathematical profile explicitly. Doctor and tldr-update use their v1 families.
 
 Proven native first-row positioning padding is now a row-0 hint rather than
 generated body text. Authored spaces, NBSP, fixed blanks and word separators
@@ -2168,7 +2169,8 @@ The render descriptor is currently:
 
 ```json
 {
-  "schema": "mant.markdown/v1",
+  "schema": "mant.markdown/v2",
+  "math": "readable",
   "format": "markdown",
   "scope": "full",
   "lineBase": 1,
@@ -2184,6 +2186,15 @@ covering source span: it can include a backslash escape, code-span padding, or
 the spaces that encode a hard line break.
 `startLine`, `startColumn`, `endLine`, and `endColumn` are one-based human
 coordinates. Columns count Unicode scalar values rather than UTF-8 bytes.
+
+The required `math` value is `readable`. The canonical addressable document
+keeps formulas in code spans and plain fences, preserving symbols such as `λ`
+for visible matching. Reproduce it with
+`MarkdownOptions::READABLE_ADDRESSABLE` or CLI
+`--format markdown --preserve-anchors --markdown-math readable`. Ordinary
+Markdown documents and fragments default to LaTeX through their presentation
+options. Native request JSON describes source selection and queries, while CLI
+format/math options choose the human-readable presentation.
 
 `scope = "visible"` changes what can match, but coordinates still point into
 the canonical Markdown. `scope = "markdown"` searches the generated source,
@@ -2250,7 +2261,8 @@ A complete no-match response is:
     "offset": 0
   },
   "render": {
-    "schema": "mant.markdown/v1",
+    "schema": "mant.markdown/v2",
+    "math": "readable",
     "format": "markdown",
     "scope": "full",
     "lineBase": 1,
@@ -2613,8 +2625,8 @@ schema.
    response discriminator.
 9. Use typed outline paths and IDs only within their current source document;
    aliases belong to explain, not read or outline-root selection.
-10. For search, interpret offsets against `mant.markdown/v1`, not the original
-    roff or Markdown input.
+10. Interpret search offsets against the `mant.markdown/v2` readable projection.
+    Reproduce it with `MarkdownOptions::READABLE_ADDRESSABLE`.
 
 For long-lived agent integration, use `mant --mcp`, perform standard MCP
 initialization, consume the generated input schemas from `tools/list`, discover

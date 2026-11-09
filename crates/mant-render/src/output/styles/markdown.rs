@@ -187,6 +187,7 @@ mod tests {
                 layout: inline_layout,
             },
             mant_codec::encode::MarkdownFragmentOptions {
+                math: mant_codec::encode::MarkdownMath::Latex,
                 preserve_anchors: true,
             },
         );
@@ -197,6 +198,7 @@ mod tests {
             styles.markdown_inline(
                 InlineContentRef::unpositioned(children),
                 mant_codec::encode::MarkdownFragmentOptions {
+                    math: mant_codec::encode::MarkdownMath::Latex,
                     preserve_anchors: true,
                 },
             ),

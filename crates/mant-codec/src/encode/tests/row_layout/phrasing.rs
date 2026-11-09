@@ -104,6 +104,7 @@ fn ordinary_link_label_keeps_author_nbsp_and_one_wrapper_without_generated_cells
             layout: &rows,
         },
         MarkdownFragmentOptions {
+            math: crate::encode::MarkdownMath::Latex,
             preserve_anchors: true,
         },
     );

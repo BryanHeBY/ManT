@@ -430,6 +430,7 @@ fn check_source(
             let markdown = render_markdown_with_options(
                 content,
                 MarkdownOptions {
+                    math: mant_codec::encode::MarkdownMath::Latex,
                     preserve_anchors,
                     preserve_semantics: false,
                 },

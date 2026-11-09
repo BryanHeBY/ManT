@@ -16,8 +16,9 @@ pub const MAX_MARKDOWN_MATH_FORMULAS: usize = 4096;
 pub const MAX_MARKDOWN_MATH_NODES: usize = 65_536;
 /// Maximum cumulative stored mathematical UTF-8 bytes charged by one operation.
 pub const MAX_MARKDOWN_MATH_INPUT_BYTES: usize = 4 * 1024 * 1024;
-/// Maximum cached LaTeX bodies and conservatively reserved portable framing.
-/// Readable reservations cover eight bytes per input byte and 32 framing bytes.
+/// Maximum cached LaTeX bodies and mathematical framing.
+/// Checked export also reserves eight bytes per readable input byte and 32
+/// framing bytes. Default best effort emits readable payloads independently.
 pub const MAX_MARKDOWN_MATH_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 /// Maximum retained issue details; the summary still reports omitted details.
 pub const MAX_MARKDOWN_MATH_ISSUES: usize = 256;
@@ -35,6 +36,12 @@ pub enum MarkdownMathIssueKind {
     TableContext,
     /// The final phrasing could not preserve the mathematical delimiters.
     DelimiterContext,
+    /// The expression or its readable cache violates the mathematical contract.
+    InvalidEquation,
+    /// A per-expression encoding allowance requires readable fallback.
+    EncodingLimit(crate::math::MathLimit),
+    /// The operation's mathematical allowance requires readable fallback.
+    BudgetLimit(MarkdownMathLimit),
 }
 
 /// One issue at an artifact-local formula and expression-local child path.
@@ -48,9 +55,12 @@ pub struct MarkdownMathIssue {
     pub kind: MarkdownMathIssueKind,
 }
 
-/// Complete counts independent from bounded issue-detail retention.
+/// Tracked formula counts and bounded conversion-detail accounting.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct MarkdownMathSummary {
+    /// Further formula owners use readable output after the mathematical budget.
+    /// Counts describe tracked owners when this flag is true.
+    pub budget_exhausted: bool,
     /// Distinct original formula owners visited by the renderer.
     pub formulas: usize,
     /// Formula owners emitted as mathematical Markdown.
@@ -137,8 +147,6 @@ impl Error for MarkdownMathError {}
 /// Final Markdown bytes, matching source-coordinate maps and conversion issues.
 pub struct MathMarkdownArtifact<'src> {
     markdown: MarkdownArtifact<'src>,
-    issues: Vec<MarkdownMathIssue>,
-    summary: MarkdownMathSummary,
 }
 
 impl<'src> MathMarkdownArtifact<'src> {
@@ -151,13 +159,13 @@ impl<'src> MathMarkdownArtifact<'src> {
     /// Mathematical issues retained under the bounded detail allowance.
     #[must_use]
     pub fn issues(&self) -> &[MarkdownMathIssue] {
-        &self.issues
+        self.markdown.math_issues()
     }
 
     /// Complete issue and formula counts for the final accepted branches.
     #[must_use]
     pub fn summary(&self) -> MarkdownMathSummary {
-        self.summary
+        self.markdown.math_summary()
     }
 
     /// Consume the artifact when no borrowed source-coordinate map is needed.
@@ -167,13 +175,14 @@ impl<'src> MathMarkdownArtifact<'src> {
     }
 }
 
-/// Encode explicit LaTeX Markdown, never reinterpreting the readable text cache.
+/// Encode checked mathematical Markdown without reinterpreting readable caches.
 ///
-/// Portable APIs remain unchanged. This API's formula identities borrow original
+/// This API's formula identities borrow original
 /// immutable IR: the document-artifact route has no presentation projection,
 /// and definition/list root assembly only borrows or moves original roots.
 /// Code and portable table surfaces retain readable formulas with context issues.
-/// Native request/search Markdown coordinates continue using the portable APIs.
+/// Selecting `MarkdownMath::Readable` delegates to ordinary readable export.
+/// Search coordinates use `MarkdownOptions::READABLE_ADDRESSABLE` separately.
 ///
 /// # Errors
 /// Rejects semantic reimport options, malformed expressions, any resource limit,
@@ -184,12 +193,17 @@ pub fn render_math_markdown(
     options: MarkdownOptions,
     policy: MathPolicy,
 ) -> Result<MathMarkdownArtifact<'_>, MarkdownMathError> {
+    if options.math == super::MarkdownMath::Readable {
+        return Ok(MathMarkdownArtifact {
+            markdown: super::artifact::render_markdown_artifact(query, options, true),
+        });
+    }
     if options.preserve_semantics {
         return Err(MarkdownMathError::PreserveSemantics);
     }
     preflight::check(query)?;
     let context = MathContext::new(policy);
-    let markdown = super::artifact::render_markdown_with_context(
+    let mut markdown = super::artifact::render_markdown_with_context(
         query,
         RenderOptions {
             options,
@@ -198,9 +212,7 @@ pub fn render_math_markdown(
         true,
     );
     let (issues, summary) = context.finish()?;
-    Ok(MathMarkdownArtifact {
-        markdown,
-        issues,
-        summary,
-    })
+    markdown.math_issues = issues;
+    markdown.math_summary = summary;
+    Ok(MathMarkdownArtifact { markdown })
 }

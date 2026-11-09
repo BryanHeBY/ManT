@@ -231,6 +231,8 @@ fn inline_pieces<'source>(
                 if let Some(context) = options.math {
                     if let Some(body) = context.latex(expression, value) {
                         pieces.push(InlinePiece::plain(format!("${body}$")));
+                    } else {
+                        pieces.push(InlinePiece::code(value));
                     }
                 } else {
                     pieces.push(InlinePiece::code(value));

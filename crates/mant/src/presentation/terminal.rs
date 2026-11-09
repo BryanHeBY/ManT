@@ -1,9 +1,6 @@
 //! CLI-only style and terminal safety over shared semantic renderers.
 use super::RenderOptions;
-use crate::{
-    arguments::{MarkdownMathMode, QueryFormat},
-    error::Failure,
-};
+use crate::{arguments::QueryFormat, error::Failure};
 use anstyle::{AnsiColor, Style};
 use mant_ir::{DocumentMeta, EntryKind, ResolvedContent, SourceFormat};
 use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch};
@@ -248,28 +245,18 @@ pub(super) fn render_full_query(
     query: &ResolvedContent,
     options: RenderOptions,
 ) -> Result<String, Failure> {
-    let RenderOptions {
-        format,
-        pretty,
-        preserve_anchors,
-        ..
-    } = options;
+    let RenderOptions { format, pretty, .. } = options;
     let output_terminal = options.terminal();
     match format {
         QueryFormat::Markdown => {
             let terminal_copy = output_terminal.then(|| terminal_content(query));
             let query = terminal_copy.as_ref().unwrap_or(query);
             let markdown_options = mant_codec::encode::MarkdownOptions {
-                preserve_anchors,
+                preserve_anchors: options.preserve_anchors,
+                math: options.fragments().math,
                 ..Default::default()
             };
-            if options.markdown_math == Some(MarkdownMathMode::Latex) {
-                return render_mathematical_markdown(query, markdown_options);
-            }
-            Ok(mant_codec::encode::render_markdown_with_options(
-                query,
-                markdown_options,
-            ))
+            Ok(render_document_markdown(query, markdown_options))
         }
         QueryFormat::Text => {
             let decorate = |style, text: &str| super::content::decorate(style, text, options.color);
@@ -303,24 +290,19 @@ pub(super) fn render_full_query(
     }
 }
 
-fn render_mathematical_markdown(
+fn render_document_markdown(
     query: &ResolvedContent,
     options: mant_codec::encode::MarkdownOptions,
-) -> Result<String, Failure> {
-    let artifact = mant_codec::encode::render_math_markdown(
-        query,
-        options,
-        mant_codec::math::MathPolicy::BestEffort,
-    )
-    .map_err(Failure::operational)?;
-    let summary = artifact.summary();
-    if summary.issues > 0 {
+) -> String {
+    let artifact = mant_codec::encode::render_addressable_markdown_with_options(query, options);
+    let summary = artifact.math_summary();
+    if summary.issues > 0 || summary.budget_exhausted {
         eprintln!(
             "mant: warning: mathematical Markdown contains {} conversion issues across {} formulas ({} readable fallbacks)",
             summary.issues, summary.formulas, summary.fallback_formulas,
         );
-        let retained = artifact.issues().len().min(8);
-        for issue in artifact.issues().iter().take(retained) {
+        let retained = artifact.math_issues().len().min(8);
+        for issue in artifact.math_issues().iter().take(retained) {
             eprintln!(
                 "mant: warning: formula {} at {:?}: {:?}",
                 issue.formula, issue.path, issue.kind
@@ -330,6 +312,11 @@ fn render_mathematical_markdown(
         if omitted > 0 {
             eprintln!("mant: warning: {omitted} additional conversion issues omitted");
         }
+        if summary.budget_exhausted {
+            eprintln!(
+                "mant: warning: mathematical export budget exhausted. Further formulas use readable output."
+            );
+        }
     }
-    Ok(artifact.into_text())
+    artifact.into_text()
 }

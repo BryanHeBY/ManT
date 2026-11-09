@@ -117,6 +117,7 @@ fn checked_fragment_rounds(original: &[Inline], expected: &[Inline], anchors: bo
     let mut current = original.to_vec();
     for round in 1..=2 {
         let options = MarkdownFragmentOptions {
+            math: crate::encode::MarkdownMath::Latex,
             preserve_anchors: anchors,
         };
         let markdown = if heading {

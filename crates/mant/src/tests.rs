@@ -830,29 +830,27 @@ fn stdin_protocol_emits_only_compact_query_json() {
 }
 
 #[test]
-fn mathematical_markdown_rejects_partial_and_scope_json_before_loading() {
+fn mathematical_markdown_accepts_full_partial_and_scope_json() {
     for input in [
         br#"{"schema":"mant.request/v0.14","input":{"kind":"document","selector":"git"},"view":{"kind":"outline"}}"#.as_slice(),
         br#"{"schema":"mant.request/v0.14","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","selectors":[{"kind":"path","path":"1"}]}}"#.as_slice(),
-        br#"{"schema":"mant.scope-request/v0.14","scope":{"documents":[{"selector":"git"}]},"view":{"kind":"search","pattern":"x"}}"#.as_slice(),
     ] {
-        let host = FakeHost::new();
+        let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--markdown-math", "latex"], input, &host,
         );
-        assert_eq!(status, 2, "{diagnostics}");
-        assert_eq!(output, "");
-        assert!(diagnostics.contains("--markdown-math applies only to full single-document"), "{diagnostics}");
-        assert_eq!(host.query_calls.get(), 0);
+        assert_eq!(status, 0, "{diagnostics}");
+        assert_ne!(output, "");
+        assert_eq!(diagnostics, "");
+        assert_eq!(host.query_calls.get(), 1);
     }
     #[cfg(feature = "roff")]
     {
-        let host = FakeHost::new();
+        let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) =
             invoke(&["git", "--tldr", "--markdown-math", "latex"], &[], &host);
-        assert_eq!(status, 2, "{diagnostics}");
-        assert_eq!(output, "");
-        assert_eq!(host.query_calls.get(), 0);
+        assert_eq!(status, 0, "{diagnostics}");
+        assert_ne!(output, "");
     }
     let host = FakeHost::new();
     let (status, _, diagnostics) = invoke(
@@ -863,6 +861,16 @@ fn mathematical_markdown_rejects_partial_and_scope_json_before_loading() {
     assert_eq!(status, 0, "{diagnostics}");
     assert!(diagnostics.is_empty(), "{diagnostics}");
     assert_eq!(host.query_calls.get(), 1);
+    let (status, _, diagnostics) = invoke(
+        &["--request-json", "--markdown-math", "readable"],
+        br#"{"schema":"mant.scope-request/v0.14","scope":{"documents":[{"selector":"git"}]},"view":{"kind":"search","pattern":"x"}}"#,
+        &host,
+    );
+    assert_ne!(status, 0);
+    assert!(
+        diagnostics.contains("document scope queries are unavailable"),
+        "{diagnostics}"
+    );
 }
 
 #[test]

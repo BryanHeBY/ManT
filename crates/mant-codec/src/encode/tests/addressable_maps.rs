@@ -39,7 +39,10 @@ fn navigation_only_tables_emit_targets_without_empty_fences() {
     for preserve_anchors in [false, true] {
         let output = super::render_blocks_fragment(
             &[table(vec![navigation.clone()])],
-            super::MarkdownFragmentOptions { preserve_anchors },
+            super::MarkdownFragmentOptions {
+                math: crate::encode::MarkdownMath::Latex,
+                preserve_anchors,
+            },
         )
         .join("\n\n");
         if preserve_anchors {

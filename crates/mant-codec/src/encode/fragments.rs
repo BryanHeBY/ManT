@@ -2,8 +2,9 @@
 
 use mant_ir::{Block, Heading, Inline, InlineContentRef, Section};
 
+use super::math_markdown::MathContext;
 use super::math_markdown::RenderOptions;
-use super::{MarkdownInlineProjection, MarkdownOptions};
+use super::{MarkdownInlineProjection, MarkdownMath, MarkdownOptions};
 
 /// Presentation controls for detached report fragments.
 ///
@@ -12,23 +13,31 @@ use super::{MarkdownInlineProjection, MarkdownOptions};
 /// visible content even when they cannot be reimported as semantic Markdown.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MarkdownFragmentOptions {
+    /// Mathematical representation shared with full-document exports.
+    pub math: MarkdownMath,
     /// Preserve document-local destinations and typed links in the fragment.
     pub preserve_anchors: bool,
 }
 
 impl MarkdownFragmentOptions {
-    fn document_options(self) -> RenderOptions<'static> {
-        RenderOptions::portable(MarkdownOptions {
+    fn document_options(self, math: &MathContext) -> RenderOptions<'_> {
+        let options = MarkdownOptions {
+            math: self.math,
             preserve_anchors: self.preserve_anchors,
             preserve_semantics: false,
-        })
+        };
+        RenderOptions {
+            options,
+            math: (self.math == MarkdownMath::Latex).then_some(math),
+        }
     }
 }
 
 /// Encode a detached inline root without semantic declaration metadata.
 #[must_use]
 pub fn render_inline_fragment(children: &[Inline], options: MarkdownFragmentOptions) -> String {
-    super::inline::render_inline(children, options.document_options())
+    let math = MathContext::export(true);
+    super::inline::render_inline(children, options.document_options(&math))
 }
 
 /// Encode a detached owner root as ordinary Markdown phrasing.
@@ -38,7 +47,8 @@ pub fn render_inline_content_fragment(
     content: InlineContentRef<'_>,
     options: MarkdownFragmentOptions,
 ) -> String {
-    super::inline::render_inline_content(content, options.document_options())
+    let math = MathContext::export(true);
+    super::inline::render_inline_content(content, options.document_options(&math))
 }
 
 /// Encode detached blocks without semantic declaration metadata.
@@ -46,7 +56,8 @@ pub fn render_inline_content_fragment(
 /// Returned fragments can be joined with a blank Markdown source line.
 #[must_use]
 pub fn render_blocks_fragment(blocks: &[Block], options: MarkdownFragmentOptions) -> Vec<String> {
-    super::blocks::render_blocks(blocks, options.document_options())
+    let math = MathContext::export(true);
+    super::blocks::render_blocks(blocks, options.document_options(&math))
 }
 
 /// Encode report blocks with optional decoration of their original inline roots.
@@ -59,7 +70,10 @@ pub fn render_located_blocks_fragment(
     options: MarkdownFragmentOptions,
     projection: Option<&dyn MarkdownInlineProjection>,
 ) -> Vec<String> {
-    super::blocks::render_located_blocks(blocks, options.document_options(), projection)
+    // A projected root can own temporary expression copies. Their addresses
+    // remain valid only for that root, so this route avoids pointer memoization.
+    let math = MathContext::export(projection.is_none());
+    super::blocks::render_located_blocks(blocks, options.document_options(&math), projection)
 }
 
 /// Append a detached section forest as Markdown blocks, starting at `depth`.
@@ -69,7 +83,8 @@ pub fn render_sections_fragment(
     depth: usize,
     options: MarkdownFragmentOptions,
 ) {
-    super::render_sections(output, sections, depth, options.document_options());
+    let math = MathContext::export(true);
+    super::render_sections(output, sections, depth, options.document_options(&math));
 }
 
 /// Encode a rich heading without semantic declaration metadata.
@@ -79,7 +94,8 @@ pub fn render_heading_fragment(
     heading: &Heading,
     options: MarkdownFragmentOptions,
 ) -> String {
-    super::render_heading(depth, heading, options.document_options())
+    let math = MathContext::export(true);
+    super::render_heading(depth, heading, options.document_options(&math))
 }
 
 /// Encode literal text as a `CommonMark` code span with safe delimiters.

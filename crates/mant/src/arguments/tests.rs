@@ -367,7 +367,7 @@ fn preserves_markdown_anchors_only_when_requested() {
 }
 
 #[test]
-fn mathematical_markdown_requires_a_full_single_document() {
+fn mathematical_markdown_uses_the_same_policy_for_documents_and_reports() {
     for (mode, expected) in [
         ("readable", super::MarkdownMathMode::Readable),
         ("latex", super::MarkdownMathMode::Latex),
@@ -386,11 +386,6 @@ fn mathematical_markdown_requires_a_full_single_document() {
         for arguments in [
             vec!["git", "--format", "json"],
             vec!["git", "--format", "text"],
-            vec!["git", "--outline"],
-            vec!["git", "--node", "1"],
-            vec!["git", "--search", "foo"],
-            vec!["git", "--explain", "foo"],
-            vec!["--document", "git"],
             vec!["--list"],
             vec!["--find", "git"],
             vec!["--doctor"],
@@ -408,6 +403,16 @@ fn mathematical_markdown_requires_a_full_single_document() {
             let mut values = arguments;
             values.extend(["--markdown-math", mode]);
             assert!(parse(&args(&values)).is_err(), "{values:?}");
+        }
+        for mut values in [
+            vec!["git", "--outline"],
+            vec!["git", "--node", "1"],
+            vec!["git", "--search", "foo"],
+            vec!["git", "--explain", "foo"],
+            vec!["--document", "git", "--search", "foo"],
+        ] {
+            values.extend(["--markdown-math", mode]);
+            assert!(parse(&args(&values)).is_ok(), "{values:?}");
         }
     }
     assert!(parse(&args(&["--request-json", "--markdown-math", "latex"])).is_ok());

@@ -74,6 +74,116 @@ fn math_events(source: &str) -> Vec<(bool, String)> {
 }
 
 #[test]
+fn default_documents_and_fragments_share_latex_and_readable_policies() {
+    let nodes = vec![inline(atom("x")), inline(atom("y"))];
+    let source = query(vec![paragraph(nodes.clone())]);
+    let document = super::super::render_markdown(&source);
+    let fragment = super::super::render_inline_fragment(
+        &nodes,
+        super::super::MarkdownFragmentOptions::default(),
+    );
+    assert_eq!(math_events(&document), math_events(&fragment));
+    assert_eq!(math_events(&document).len(), 2);
+    let readable = super::super::render_inline_fragment(
+        &nodes,
+        super::super::MarkdownFragmentOptions {
+            math: super::super::MarkdownMath::Readable,
+            preserve_anchors: false,
+        },
+    );
+    assert_eq!(readable, "`xy`");
+}
+
+#[test]
+fn default_export_recovers_one_large_formula_and_keeps_later_math() {
+    let mut expression = atom("x");
+    for _ in 0..crate::math::MAX_MATH_DEPTH {
+        expression = Expr {
+            kind: EquationKind::Operation,
+            operator: EquationOperator::SquareRoot,
+            text: None,
+            atom_role: Role::Unknown,
+            children: vec![expression],
+            ..atom("")
+        };
+    }
+    let source = query(vec![paragraph(vec![inline(expression), inline(atom("y"))])]);
+    let artifact = super::super::render_addressable_markdown(&source);
+    assert_eq!(math_events(artifact.text()), [(false, "{y}".into())]);
+    assert_eq!(artifact.math_summary().fallback_formulas, 1);
+    assert_eq!(
+        artifact.math_issues()[0].kind,
+        MarkdownMathIssueKind::EncodingLimit(crate::math::MathLimit::Depth)
+    );
+    assert!(!artifact.math_summary().budget_exhausted);
+}
+
+#[test]
+fn default_export_does_not_apply_math_tree_limits_to_ordinary_documents() {
+    let source = query(vec![paragraph(
+        (0..=MAX_MARKDOWN_MATH_NODES)
+            .map(|_| Inline::Text { value: "x".into() })
+            .collect(),
+    )]);
+    let artifact = super::super::render_addressable_markdown(&source);
+    assert_eq!(artifact.math_summary(), MarkdownMathSummary::default());
+    assert!(
+        artifact
+            .text()
+            .ends_with(&"x".repeat(MAX_MARKDOWN_MATH_NODES + 1))
+    );
+}
+
+#[test]
+fn default_export_retains_all_content_when_formula_tracking_fills() {
+    let mut nodes = (0..=MAX_MARKDOWN_MATH_FORMULAS)
+        .map(|_| inline(atom("x")))
+        .collect::<Vec<_>>();
+    nodes.push(Inline::Text {
+        value: " END".into(),
+    });
+    let source = query(vec![paragraph(nodes)]);
+    let artifact = super::super::render_addressable_markdown(&source);
+    assert_eq!(
+        math_events(artifact.text()).len(),
+        MAX_MARKDOWN_MATH_FORMULAS
+    );
+    assert!(
+        artifact.text().ends_with("`x` END"),
+        "tracking exhaustion preserves the trailing source"
+    );
+    assert!(artifact.math_summary().budget_exhausted);
+}
+
+#[test]
+fn temporary_projection_owners_never_reuse_a_previous_expression_cache() {
+    let context = MathContext::export(false);
+    let mut expression = atom("x");
+    assert_eq!(context.latex(&expression, "x"), Some("{x}".into()));
+    expression.text = Some("y".into());
+    assert_eq!(context.latex(&expression, "y"), Some("{y}".into()));
+}
+
+#[test]
+fn exhausted_tracking_still_updates_known_owners_in_the_final_readable_branch() {
+    let nodes = (0..=MAX_MARKDOWN_MATH_FORMULAS)
+        .map(|_| inline(atom("x")))
+        .collect::<Vec<_>>();
+    let context = MathContext::export(true);
+    for node in &nodes {
+        let Inline::Equation { expression, value } = node else {
+            unreachable!("equation fixture");
+        };
+        context.latex(expression, value);
+    }
+    context.reading_inlines(&nodes, MarkdownMathIssueKind::DelimiterContext);
+    let (_, summary) = context.finish().unwrap();
+    assert_eq!(summary.encoded_formulas, 0);
+    assert_eq!(summary.fallback_formulas, MAX_MARKDOWN_MATH_FORMULAS);
+    assert!(summary.budget_exhausted);
+}
+
+#[test]
 fn adjacent_formulas_stay_distinct_without_visible_seams() {
     // pulldown-cmark consumes one closer at a time for neighboring $ spans.
     assert_eq!(
@@ -90,7 +200,14 @@ fn adjacent_formulas_stay_distinct_without_visible_seams() {
     assert!(artifact.markdown().text().contains("${a}$${b}$"));
     assert_eq!(artifact.summary().encoded_formulas, 2);
     assert_eq!(artifact.issues(), []);
-    assert!(super::super::render_markdown(&source).contains("`ab`"));
+    assert_eq!(
+        math_events(&super::super::render_markdown(&source)),
+        math_events(artifact.markdown().text())
+    );
+    assert!(
+        super::super::render_markdown_with_options(&source, MarkdownOptions::READABLE)
+            .contains("`ab`")
+    );
 }
 
 #[test]
@@ -135,7 +252,7 @@ fn display_math_uses_an_actual_math_event_and_portable_mode_has_no_math_label() 
         math_events(artifact.markdown().text()),
         [(true, "{x}".into())]
     );
-    let portable = super::super::render_markdown(&source);
+    let portable = super::super::render_markdown_with_options(&source, MarkdownOptions::READABLE);
     assert!(portable.contains("```\nx\n```"));
     assert!(!portable.contains("```math"));
 }

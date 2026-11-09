@@ -14,6 +14,49 @@ mod compatibility;
 mod row_layout;
 mod workload;
 
+#[test]
+fn mathematical_exports_and_readable_search_coordinates_declare_their_policy() {
+    let expression: mant_ir::EquationExpression = serde_json::from_value(serde_json::json!({
+        "kind": "text", "operator": "none", "font": "none", "atomRole": "identifier",
+        "text": "λ", "children": []
+    }))
+    .unwrap();
+    let mut content = query();
+    content
+        .document
+        .as_mut()
+        .unwrap()
+        .blocks
+        .push(Block::Paragraph {
+            children: vec![Inline::Equation {
+                value: expression.readable_text(),
+                expression,
+            }],
+            inline_layout: mant_ir::InlineLayout::default(),
+            layout: LayoutHint::default(),
+            source: None,
+        });
+    let exported = mant_codec::encode::render_markdown(&content);
+    assert!(exported.contains("\\lambda{}"));
+    let result = search_query(&content, &request("λ")).unwrap();
+    assert_eq!(result.total, 1);
+    assert_eq!(result.render.schema, mant_protocol::MarkdownSchema::V2);
+    assert_eq!(
+        result.render.math,
+        mant_protocol::SearchRenderMath::Readable
+    );
+    let canonical = mant_codec::encode::render_addressable_markdown_with_options(
+        &content,
+        mant_codec::encode::MarkdownOptions::READABLE_ADDRESSABLE,
+    );
+    assert!(canonical.text().contains("`λ`"));
+    assert!(!canonical.text().contains("\\lambda{}"));
+    let occurrence = &result.matches[0].occurrences[0];
+    let start = usize::try_from(occurrence.markdown.start_byte).unwrap();
+    let end = usize::try_from(occurrence.markdown.end_byte).unwrap();
+    assert_eq!(&canonical.text()[start..end], "λ");
+}
+
 fn query() -> ResolvedContent {
     ResolvedContent {
         address: None,

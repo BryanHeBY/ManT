@@ -1,7 +1,7 @@
 //! Pure reports over an already resolved scope; no loading or query execution.
 use super::{
-    SearchTextRole, render_scope_explanation_markdown, render_scope_explanation_text_with,
-    render_search_markdown, render_search_text_with,
+    SearchTextRole, render_scope_explanation_markdown_with_options,
+    render_scope_explanation_text_with, render_search_markdown, render_search_text_with,
 };
 use crate::{TextPresentation, TextRole, sanitize_terminal_text};
 use mant_ir::DocumentMeta;
@@ -107,9 +107,23 @@ pub fn render_scope_query_markdown_with(
     response: &ScopeQueryResponse,
     identity: impl Fn(&str) -> String,
 ) -> String {
+    render_scope_query_markdown_with_options(
+        response,
+        mant_codec::encode::MarkdownFragmentOptions::default(),
+        identity,
+    )
+}
+
+/// Render a scope report using explicit formulas and identity transformation.
+#[must_use]
+pub fn render_scope_query_markdown_with_options(
+    response: &ScopeQueryResponse,
+    options: mant_codec::encode::MarkdownFragmentOptions,
+    identity: impl Fn(&str) -> String,
+) -> String {
     let mut output = match &response.result {
         ScopeQueryResult::Explain { explanation } => {
-            let mut output = render_scope_explanation_markdown(explanation);
+            let mut output = render_scope_explanation_markdown_with_options(explanation, options);
             write_coverage(&mut output, response, explanation.documents.len());
             for failure in &explanation.failures {
                 if !output.is_empty() {

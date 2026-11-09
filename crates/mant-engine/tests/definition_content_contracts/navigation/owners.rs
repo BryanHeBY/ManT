@@ -57,6 +57,7 @@ fn ancestor_navigation_does_not_become_child_artifact_or_search_content() {
                         }
                         for preserve_anchors in [false, true] {
                             let options = MarkdownOptions {
+                                math: mant_codec::encode::MarkdownMath::Latex,
                                 preserve_anchors,
                                 preserve_semantics: false,
                             };
@@ -109,6 +110,7 @@ fn zero_link_term_after_hard_head_keeps_open_tail_and_independent_terms() {
                 );
                 for preserve_anchors in [false, true] {
                     let options = MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     };

@@ -56,6 +56,7 @@ fn zero_line_and_authored_empty_literal_contributions_remain_distinct() {
                 );
                 for preserve_anchors in [false, true] {
                     let options = MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     };
@@ -110,6 +111,7 @@ fn positive_boundaries_inside_zero_body_carriers_reach_the_next_physical_block()
                 assert_queries(&restored, context, true, true);
                 for preserve_anchors in [false, true] {
                     let options = MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     };
@@ -147,6 +149,7 @@ fn separate_opaque_rows_and_thematic_rules_keep_their_physical_block_boundaries(
                 assert_queries(&restored, context, true, true);
                 for preserve_anchors in [false, true] {
                     let options = MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     };
@@ -187,6 +190,7 @@ fn root_and_section_rules_do_not_become_setext_headings_beside_navigation() {
                 }
                 for preserve_anchors in [false, true] {
                     let options = MarkdownOptions {
+                        math: mant_codec::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     };

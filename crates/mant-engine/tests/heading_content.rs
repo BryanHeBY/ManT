@@ -261,6 +261,7 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
         mant_codec::encode::MarkdownOptions::default(),
         mant_codec::encode::MarkdownOptions::ADDRESSABLE,
         mant_codec::encode::MarkdownOptions {
+            math: mant_codec::encode::MarkdownMath::Latex,
             preserve_semantics: true,
             preserve_anchors: false,
         },

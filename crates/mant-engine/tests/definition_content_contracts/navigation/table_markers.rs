@@ -176,6 +176,7 @@ fn empty_references_use_table_markers_or_fences_without_extra_rows() {
                         assert_snapshot(&original, &restored, Navigation::External);
                         for preserve_anchors in [false, true] {
                             let options = MarkdownOptions {
+                                math: mant_codec::encode::MarkdownMath::Latex,
                                 preserve_anchors,
                                 preserve_semantics: false,
                             };

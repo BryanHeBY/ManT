@@ -298,7 +298,8 @@ mod tests {
                 offset: 0,
             },
             render: SearchRender {
-                schema: MarkdownSchema::V1,
+                math: mant_protocol::SearchRenderMath::Readable,
+                schema: MarkdownSchema::V2,
                 format: SearchRenderFormat::Markdown,
                 scope: SearchRenderScope::Full,
                 line_base: 1,

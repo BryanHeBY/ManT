@@ -10,6 +10,7 @@ mod tests;
 
 pub(super) struct Report<'a> {
     pub(super) markdown: bool,
+    pub(super) options: mant_codec::encode::MarkdownFragmentOptions,
     pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
 }
 
@@ -123,7 +124,7 @@ impl Report<'_> {
                     let text = if self.markdown {
                         mant_codec::encode::render_located_blocks_fragment(
                             std::slice::from_ref(block),
-                            mant_codec::encode::MarkdownFragmentOptions::default(),
+                            self.options,
                             Some(&locations),
                         )
                         .join("\n\n")
@@ -271,10 +272,7 @@ impl Report<'_> {
                     layout: &layout,
                 };
                 let text = if self.markdown {
-                    locations.markdown_inline(
-                        content,
-                        mant_codec::encode::MarkdownFragmentOptions::default(),
-                    )
+                    locations.markdown_inline(content, self.options)
                 } else {
                     locations.inline(content, TextRole::Body, &|p, t| {
                         (self.decorate)(p, &metadata::safe(t))
@@ -335,7 +333,7 @@ impl Report<'_> {
                 let body = if self.markdown {
                     mant_codec::encode::render_located_blocks_fragment(
                         std::slice::from_ref(block),
-                        mant_codec::encode::MarkdownFragmentOptions::default(),
+                        self.options,
                         Some(locations),
                     )
                     .join("\n\n")

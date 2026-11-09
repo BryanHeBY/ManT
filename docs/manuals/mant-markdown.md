@@ -445,24 +445,28 @@ Documents with native definition owners, inferred or mixed/partly rejected lists
 ## Mathematical Export
 
 Resolved IR formulas have an explicit mathematical export path. Use
-`mant --input ./formula.1 --markdown-math latex` to emit `$...$` inline formulas
-and `$$...$$` display formulas in full-document Markdown. The output renderer
+`mant --input ./formula.1 --format markdown` to emit `$...$` inline formulas
+and `$$...$$` display formulas in Markdown documents and report fragments. The output renderer
 needs mathematical/amsmath support. Source atom text is escaped as content,
 while fractions, roots, scripts, limits, accents and matrices use a fixed
 LaTeX subset. This conversion works from the resolved expression tree.
 
-Default Markdown export uses the shared readable text. Display formulas use
-unlabelled code fences. Literal blocks, portable reading tables and legacy
+Default Markdown export selects LaTeX with readable best-effort fallback.
+`--markdown-math readable` selects code spans and unlabelled display fences.
+Literal blocks, portable reading tables and legacy
 formulas without structure keep readable content even with mathematical
 export enabled, accompanied by conversion warnings on stderr. Unsupported
-symbols, fonts and fences also produce conversion warnings. Invalid structure
-or exhausted work/output limits fail the complete export.
+symbols, fonts and fences also produce conversion findings. Invalid or
+oversized formulas use their readable payload. Exhausting the mathematical
+budget makes further formulas readable while retaining the document content.
 
-Library consumers use `mant_codec::encode::render_math_markdown` with strict or
-best-effort policy. The returned artifact contains final-byte source ranges,
-bounded issue details and complete counts. Producer diagnostics describe
+Library consumers select `MarkdownOptions::math` or `MarkdownFragmentOptions::math`
+for the same document and fragment policy. Addressable artifacts expose
+final-byte source ranges, bounded mathematical findings and tracked counts.
+The fallible `render_math_markdown` API provides checked strict/best-effort
+conversion, including hard resource errors. Producer diagnostics describe
 source coverage independently of target-format conversion issues. Semantic
-reimport declarations require the portable export path. Markdown math input
+reimport declarations require `--markdown-math readable`. Markdown math input
 continues to retain its delimiters as unsupported reading content.
 
 ## Preserved Unsupported Syntax

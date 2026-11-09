@@ -100,6 +100,7 @@ fn assert_two_reads(document: &Document, text: &str, links: usize) {
     for options in [
         crate::encode::MarkdownOptions::default(),
         crate::encode::MarkdownOptions {
+            math: crate::encode::MarkdownMath::Latex,
             preserve_anchors: false,
             preserve_semantics: true,
         },

@@ -63,6 +63,7 @@ fn margin_flush_word_seams_survive_json_search_and_two_markdown_readbacks() {
                     let markdown = mant_codec::encode::render_markdown_with_options(
                         &current,
                         mant_codec::encode::MarkdownOptions {
+                            math: mant_codec::encode::MarkdownMath::Latex,
                             preserve_semantics,
                             preserve_anchors: false,
                         },

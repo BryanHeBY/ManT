@@ -20,9 +20,22 @@ pub struct MarkdownArtifact<'src> {
     pub(super) nodes: Vec<MarkdownNodeRange<'src>>,
     pub(super) sections: Vec<MarkdownSection<'src>>,
     pub(super) anchors: std::sync::OnceLock<Vec<Range<usize>>>,
+    pub(super) math_issues: Vec<super::MarkdownMathIssue>,
+    pub(super) math_summary: super::MarkdownMathSummary,
 }
 
 impl<'src> MarkdownArtifact<'src> {
+    /// Bounded conversion details for the final accepted formula branches.
+    #[must_use]
+    pub fn math_issues(&self) -> &[super::MarkdownMathIssue] {
+        &self.math_issues
+    }
+
+    /// Mathematical conversion counts and any exhausted tracking allowance.
+    #[must_use]
+    pub fn math_summary(&self) -> super::MarkdownMathSummary {
+        self.math_summary
+    }
     /// Final, trimmed bytes against which all node and anchor ranges are indexed.
     pub fn text(&self) -> &str {
         &self.text
@@ -157,7 +170,24 @@ pub(super) fn render_markdown_artifact(
     options: MarkdownOptions,
     track: bool,
 ) -> MarkdownArtifact<'_> {
-    render_markdown_with_context(query, RenderOptions::portable(options), track)
+    if options.math == super::MarkdownMath::Readable {
+        return render_markdown_with_context(query, RenderOptions::portable(options), track);
+    }
+    let context = super::math_markdown::MathContext::export(true);
+    let mut artifact = render_markdown_with_context(
+        query,
+        RenderOptions {
+            options,
+            math: Some(&context),
+        },
+        track,
+    );
+    let (issues, summary) = context
+        .finish()
+        .expect("best-effort export recovers formula errors");
+    artifact.math_issues = issues;
+    artifact.math_summary = summary;
+    artifact
 }
 
 pub(super) fn render_markdown_with_context<'src>(
@@ -176,7 +206,10 @@ pub(super) fn render_markdown_with_context<'src>(
     // when semantic export was not requested (including addressable output).
     options.preserve_semantics = options.preserve_semantics
         && !heading_links
-        && query.document.as_ref().is_some_and(semantic::supported);
+        && query
+            .document
+            .as_ref()
+            .is_some_and(|document| semantic::supported(document, options.options.math));
     // Raw HTML anchor blocks are not part of semantic reimport. Real heading
     // links require their destinations, so content preservation takes priority
     // over optional entry metadata for that document.
@@ -358,6 +391,8 @@ impl<'src> ArtifactBuilder<'src> {
             nodes: self.nodes,
             sections: self.sections,
             anchors: std::sync::OnceLock::new(),
+            math_issues: Vec::new(),
+            math_summary: super::MarkdownMathSummary::default(),
         }
     }
 }

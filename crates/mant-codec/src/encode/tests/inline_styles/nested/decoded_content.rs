@@ -345,6 +345,7 @@ fn admitted_controls_keep_original_meaning_across_final_owner_contexts() {
                 for options in [
                     MarkdownOptions::default(),
                     MarkdownOptions {
+                        math: crate::encode::MarkdownMath::Latex,
                         preserve_semantics: true,
                         preserve_anchors: false,
                     },

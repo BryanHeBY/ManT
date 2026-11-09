@@ -112,6 +112,7 @@ fn report_forms_rebase_exact_unicode_source_slices_and_preserve_authored_spaces(
     let styles = spans::LocatedStyles::with_pool(&evidence, &[]);
     let report = Report {
         markdown: false,
+        options: mant_codec::encode::MarkdownFragmentOptions::default(),
         decorate: &|_, text| text.into(),
     };
     let mut output = String::new();
@@ -135,6 +136,7 @@ fn report_forms_without_a_valid_source_owner_have_no_inferred_row_geometry() {
     let styles = spans::LocatedStyles::with_pool(&evidence, &[]);
     let report = Report {
         markdown: false,
+        options: mant_codec::encode::MarkdownFragmentOptions::default(),
         decorate: &|_, text| text.into(),
     };
     let mut output = String::new();

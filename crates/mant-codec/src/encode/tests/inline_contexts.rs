@@ -271,6 +271,7 @@ fn empty_fragments_and_optional_anchors_do_not_break_code_delimiter_context() {
             let markdown = super::inline::render_inline_segments(
                 &[&head, &body],
                 MarkdownOptions {
+                    math: crate::encode::MarkdownMath::Latex,
                     preserve_anchors,
                     preserve_semantics: false,
                 },
@@ -399,6 +400,7 @@ fn omitted_link_wrappers_share_all_inline_encoding_contexts() {
                                 &head,
                                 &body,
                                 MarkdownOptions {
+                                    math: crate::encode::MarkdownMath::Latex,
                                     preserve_anchors,
                                     preserve_semantics: false,
                                 },
@@ -453,6 +455,7 @@ fn transparent_nested_labels_keep_anchors_backticks_and_executed_hard_rows() {
                     &head,
                     &body,
                     MarkdownOptions {
+                        math: crate::encode::MarkdownMath::Latex,
                         preserve_anchors,
                         preserve_semantics: false,
                     },
@@ -513,6 +516,7 @@ fn empty_transparent_label_nodes_cannot_change_adjacent_style_context() {
                                 &head,
                                 &body,
                                 MarkdownOptions {
+                                    math: crate::encode::MarkdownMath::Latex,
                                     preserve_anchors,
                                     preserve_semantics: false,
                                 },

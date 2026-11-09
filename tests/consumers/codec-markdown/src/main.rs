@@ -70,6 +70,7 @@ fn exercise_public_codec() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(entry_count, 1);
     let document = content.document.as_ref().unwrap();
     let options = MarkdownFragmentOptions {
+        math: mant_codec::encode::MarkdownMath::Latex,
         preserve_anchors: true,
     };
     let mut fragments = render_blocks_fragment(&document.blocks, options);

@@ -23,6 +23,7 @@ pub fn render_explanation_text_with(
         result,
         &Report {
             markdown: false,
+            options: mant_codec::encode::MarkdownFragmentOptions::default(),
             decorate: &decorate,
         },
     )
@@ -30,10 +31,23 @@ pub fn render_explanation_text_with(
 /// Render the same evidence page as escaped, quoted `CommonMark`.
 #[must_use]
 pub fn render_explanation_markdown(result: &QueryExplanation) -> String {
+    render_explanation_markdown_with_options(
+        result,
+        mant_codec::encode::MarkdownFragmentOptions::default(),
+    )
+}
+
+/// Render explanation evidence using the document export's formula policy.
+#[must_use]
+pub fn render_explanation_markdown_with_options(
+    result: &QueryExplanation,
+    options: mant_codec::encode::MarkdownFragmentOptions,
+) -> String {
     render(
         result,
         &Report {
             markdown: true,
+            options,
             decorate: &|_, text| text.to_owned(),
         },
     )
@@ -53,6 +67,7 @@ pub fn render_scope_explanation_text_with(
         result,
         &Report {
             markdown: false,
+            options: mant_codec::encode::MarkdownFragmentOptions::default(),
             decorate: &decorate,
         },
     )
@@ -60,10 +75,23 @@ pub fn render_scope_explanation_text_with(
 /// `CommonMark` presentation of the same global class-first evidence page.
 #[must_use]
 pub fn render_scope_explanation_markdown(result: &ScopeExplanation) -> String {
+    render_scope_explanation_markdown_with_options(
+        result,
+        mant_codec::encode::MarkdownFragmentOptions::default(),
+    )
+}
+
+/// Render cross-document explanation evidence with explicit formula options.
+#[must_use]
+pub fn render_scope_explanation_markdown_with_options(
+    result: &ScopeExplanation,
+    options: mant_codec::encode::MarkdownFragmentOptions,
+) -> String {
     render_scope(
         result,
         &Report {
             markdown: true,
+            options,
             decorate: &|_, text| text.to_owned(),
         },
     )

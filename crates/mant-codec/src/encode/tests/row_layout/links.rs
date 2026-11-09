@@ -113,7 +113,10 @@ fn uri_equal_labels_keep_navigation_children_out_of_the_autolink_shortcut() {
                     content: &nodes,
                     layout: rows,
                 },
-                MarkdownFragmentOptions { preserve_anchors },
+                MarkdownFragmentOptions {
+                    math: crate::encode::MarkdownMath::Latex,
+                    preserve_anchors,
+                },
             )
         });
         let marker = if preserve_anchors {
@@ -200,6 +203,7 @@ fn anchors_before_a_positioned_link_label_do_not_create_empty_links() {
                 layout: &rows,
             },
             MarkdownFragmentOptions {
+                math: crate::encode::MarkdownMath::Latex,
                 preserve_anchors: true,
             },
         );

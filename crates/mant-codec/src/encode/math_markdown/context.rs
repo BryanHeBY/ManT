@@ -18,7 +18,10 @@ pub(in crate::encode) struct RenderOptions<'ctx> {
 impl RenderOptions<'_> {
     pub(in crate::encode) fn portable(options: MarkdownOptions) -> Self {
         Self {
-            options,
+            options: MarkdownOptions {
+                math: crate::encode::MarkdownMath::Readable,
+                ..options
+            },
             math: None,
         }
     }
@@ -50,6 +53,7 @@ enum FormulaKey {
 }
 
 struct Formula {
+    blocked: bool,
     latex: Option<String>,
     losses: Vec<MathLoss>,
     first_loss: Option<MathLoss>,
@@ -62,6 +66,7 @@ struct Formula {
 
 #[derive(Default)]
 struct State {
+    exhausted: bool,
     keys: HashMap<FormulaKey, usize>,
     formulas: Vec<Formula>,
     nodes: usize,
@@ -74,6 +79,8 @@ struct State {
 
 pub(in crate::encode) struct MathContext {
     policy: MathPolicy,
+    recover_errors: bool,
+    memoize: bool,
     state: RefCell<State>,
 }
 
@@ -81,24 +88,85 @@ impl MathContext {
     pub(in crate::encode) fn new(policy: MathPolicy) -> Self {
         Self {
             policy,
+            recover_errors: false,
+            memoize: true,
             state: RefCell::default(),
+        }
+    }
+
+    pub(in crate::encode) fn export(memoize: bool) -> Self {
+        Self {
+            policy: MathPolicy::BestEffort,
+            recover_errors: true,
+            memoize,
+            state: RefCell::default(),
+        }
+    }
+
+    fn begin(&self, state: &mut State, key: FormulaKey, bytes: usize) -> Option<usize> {
+        if self.memoize
+            && let Some(&formula) = state.keys.get(&key)
+        {
+            return Some(formula);
+        }
+        if state.error.is_some() || state.exhausted {
+            return None;
+        }
+        let formula = state.formulas.len();
+        if formula >= MAX_MARKDOWN_MATH_FORMULAS {
+            self.reject(state, None, limit(MarkdownMathLimit::Formulas));
+            return None;
+        }
+        if self.memoize {
+            state.keys.insert(key, formula);
+        }
+        state.formulas.push(Formula {
+            blocked: false,
+            latex: None,
+            losses: Vec::new(),
+            first_loss: None,
+            loss_count: 0,
+            fallback: None,
+            encoded: false,
+            readable_bytes: bytes,
+            fallback_reserved: false,
+        });
+        Some(formula)
+    }
+
+    fn reject(&self, state: &mut State, formula: Option<usize>, error: MarkdownMathError) {
+        if !self.recover_errors {
+            state.error = Some(error);
+            return;
+        }
+        let kind = match error {
+            MarkdownMathError::LimitExceeded { limit } => {
+                state.exhausted = true;
+                MarkdownMathIssueKind::BudgetLimit(limit)
+            }
+            MarkdownMathError::Encoding {
+                error: crate::math::MathError::LimitExceeded { limit },
+                ..
+            } => MarkdownMathIssueKind::EncodingLimit(limit),
+            _ => MarkdownMathIssueKind::InvalidEquation,
+        };
+        if let Some(formula) = formula {
+            let entry = &mut state.formulas[formula];
+            entry.blocked = true;
+            entry.encoded = false;
+            entry.fallback = Some(kind);
         }
     }
 
     fn register(&self, expression: &EquationExpression, value: &str) -> Option<usize> {
         let key = FormulaKey::Expression(std::ptr::from_ref(expression));
         let mut state = self.state.borrow_mut();
-        if state.error.is_some() {
-            return None;
-        }
-        if let Some(&formula) = state.keys.get(&key) {
+        if self.memoize
+            && let Some(&formula) = state.keys.get(&key)
+        {
             return Some(formula);
         }
-        let formula = state.formulas.len();
-        if formula >= MAX_MARKDOWN_MATH_FORMULAS {
-            state.error = Some(limit(MarkdownMathLimit::Formulas));
-            return None;
-        }
+        let formula = self.begin(&mut state, key, value.len())?;
         // Remaining aggregate and per-expression encoding budgets precede
         // every projection. An exhausted operation never starts a large
         // default-budget readable fallback merely to check its cache.
@@ -112,7 +180,36 @@ impl MathContext {
                 .min(crate::math::MAX_MATH_INPUT_BYTES),
         };
         if let Err(error) = expression.validate(limits) {
-            state.error = Some(match error {
+            if self.recover_errors {
+                let local = match error {
+                    mant_ir::EquationValidationError::DepthLimit => {
+                        Some(crate::math::MathLimit::Depth)
+                    }
+                    mant_ir::EquationValidationError::NodeLimit
+                        if limits.max_nodes == crate::math::MAX_MATH_NODES =>
+                    {
+                        Some(crate::math::MathLimit::Nodes)
+                    }
+                    mant_ir::EquationValidationError::TextByteLimit
+                        if limits.max_text_bytes == crate::math::MAX_MATH_INPUT_BYTES =>
+                    {
+                        Some(crate::math::MathLimit::InputBytes)
+                    }
+                    _ => None,
+                };
+                if let Some(limit) = local {
+                    self.reject(
+                        &mut state,
+                        Some(formula),
+                        MarkdownMathError::Encoding {
+                            formula,
+                            error: crate::math::MathError::LimitExceeded { limit },
+                        },
+                    );
+                    return Some(formula);
+                }
+            }
+            let error = match error {
                 mant_ir::EquationValidationError::InvalidNode(_) => {
                     MarkdownMathError::InvalidEquation {
                         formula,
@@ -124,15 +221,20 @@ impl MathContext {
                 }
                 mant_ir::EquationValidationError::DepthLimit => limit(MarkdownMathLimit::Depth),
                 mant_ir::EquationValidationError::NodeLimit => limit(MarkdownMathLimit::Nodes),
-            });
-            return None;
+            };
+            self.reject(&mut state, Some(formula), error);
+            return Some(formula);
         }
         if expression.readable_text() != value {
-            state.error = Some(MarkdownMathError::InvalidEquation {
-                formula,
-                message: "equation text does not match its owned expression".into(),
-            });
-            return None;
+            self.reject(
+                &mut state,
+                Some(formula),
+                MarkdownMathError::InvalidEquation {
+                    formula,
+                    message: "equation text does not match its owned expression".into(),
+                },
+            );
+            return Some(formula);
         }
         let mut stack = vec![expression];
         while let Some(node) = stack.pop() {
@@ -145,17 +247,6 @@ impl MathContext {
             }
             stack.extend(node.children.iter().rev());
         }
-        state.keys.insert(key, formula);
-        state.formulas.push(Formula {
-            latex: None,
-            losses: Vec::new(),
-            first_loss: None,
-            loss_count: 0,
-            fallback: None,
-            encoded: false,
-            readable_bytes: value.len(),
-            fallback_reserved: false,
-        });
         Some(formula)
     }
 
@@ -166,6 +257,9 @@ impl MathContext {
     ) -> Option<String> {
         let formula = self.register(expression, value)?;
         let mut state = self.state.borrow_mut();
+        if state.error.is_some() || state.formulas[formula].blocked {
+            return None;
+        }
         if state.formulas[formula].latex.is_none() {
             // Strictness is applied to the final accepted branch at finish.
             // A rejected style/link candidate must not poison a later safe
@@ -181,13 +275,21 @@ impl MathContext {
             let artifact = match result {
                 Ok(artifact) => artifact,
                 Err(error) => {
-                    state.error = Some(MarkdownMathError::Encoding { formula, error });
+                    self.reject(
+                        &mut state,
+                        Some(formula),
+                        MarkdownMathError::Encoding { formula, error },
+                    );
                     return None;
                 }
             };
             let framed_bytes = artifact.text.len().saturating_add(16);
             if framed_bytes > MAX_MARKDOWN_MATH_OUTPUT_BYTES.saturating_sub(state.output_bytes) {
-                state.error = Some(limit(MarkdownMathLimit::OutputBytes));
+                self.reject(
+                    &mut state,
+                    Some(formula),
+                    limit(MarkdownMathLimit::OutputBytes),
+                );
                 return None;
             }
             state.output_bytes += framed_bytes;
@@ -219,7 +321,12 @@ impl MathContext {
 
     fn mark_reading(&self, formula: usize, kind: MarkdownMathIssueKind) {
         let mut state = self.state.borrow_mut();
-        if state.error.is_some() {
+        if state.error.is_some() || state.formulas[formula].blocked {
+            return;
+        }
+        if self.recover_errors {
+            state.formulas[formula].encoded = false;
+            state.formulas[formula].fallback = Some(kind);
             return;
         }
         if !state.formulas[formula].fallback_reserved {
@@ -232,7 +339,11 @@ impl MathContext {
                 .saturating_mul(8)
                 .saturating_add(32);
             if bytes > MAX_MARKDOWN_MATH_OUTPUT_BYTES.saturating_sub(state.output_bytes) {
-                state.error = Some(limit(MarkdownMathLimit::OutputBytes));
+                self.reject(
+                    &mut state,
+                    Some(formula),
+                    limit(MarkdownMathLimit::OutputBytes),
+                );
                 return;
             }
             state.output_bytes += bytes;
@@ -245,38 +356,28 @@ impl MathContext {
     pub(in crate::encode) fn missing(&self, owner: &Block) {
         let key = FormulaKey::Missing(std::ptr::from_ref(owner));
         let mut state = self.state.borrow_mut();
-        if state.error.is_some() {
-            return;
-        }
-        if let Some(&formula) = state.keys.get(&key) {
+        if self.memoize
+            && let Some(&formula) = state.keys.get(&key)
+        {
             drop(state);
             self.mark_reading(formula, MarkdownMathIssueKind::MissingStructure);
-            return;
-        }
-        let formula = state.formulas.len();
-        if formula >= MAX_MARKDOWN_MATH_FORMULAS {
-            state.error = Some(limit(MarkdownMathLimit::Formulas));
             return;
         }
         let Block::Equation { value, .. } = owner else {
             return;
         };
+        let Some(formula) = self.begin(&mut state, key, value.len()) else {
+            return;
+        };
         if value.len() > MAX_MARKDOWN_MATH_INPUT_BYTES.saturating_sub(state.input_bytes) {
-            state.error = Some(limit(MarkdownMathLimit::InputBytes));
+            self.reject(
+                &mut state,
+                Some(formula),
+                limit(MarkdownMathLimit::InputBytes),
+            );
             return;
         }
         state.input_bytes += value.len();
-        state.keys.insert(key, formula);
-        state.formulas.push(Formula {
-            latex: None,
-            losses: Vec::new(),
-            first_loss: None,
-            loss_count: 0,
-            fallback: None,
-            encoded: false,
-            readable_bytes: value.len(),
-            fallback_reserved: false,
-        });
         drop(state);
         self.mark_reading(formula, MarkdownMathIssueKind::MissingStructure);
     }
@@ -368,12 +469,19 @@ impl MathContext {
         if state.error.is_some() {
             return false;
         }
+        if self.recover_errors {
+            if depth > EquationValidationLimits::default().max_depth {
+                self.reject(&mut state, None, limit(MarkdownMathLimit::Depth));
+                return false;
+            }
+            return true;
+        }
         if depth > crate::math::MAX_MATH_DEPTH {
-            state.error = Some(limit(MarkdownMathLimit::Depth));
+            self.reject(&mut state, None, limit(MarkdownMathLimit::Depth));
             return false;
         }
         if state.context_work >= MAX_MARKDOWN_MATH_NODES {
-            state.error = Some(limit(MarkdownMathLimit::Nodes));
+            self.reject(&mut state, None, limit(MarkdownMathLimit::Nodes));
             return false;
         }
         state.context_work += 1;
@@ -394,6 +502,7 @@ impl MathContext {
         let mut issues = Vec::new();
         let mut summary = MarkdownMathSummary {
             formulas: state.formulas.len(),
+            budget_exhausted: state.exhausted,
             ..Default::default()
         };
         for (formula, entry) in state.formulas.into_iter().enumerate() {
