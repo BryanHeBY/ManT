@@ -133,7 +133,7 @@ impl InlineBuilder {
             return PlainFlushOutcome::Ordinary;
         }
         let Some(PlainInputUnit {
-            buffer,
+            mut buffer,
             anchors,
             mut output_start,
         }) = Self::take_plain_flush_unit(execution, nodes, authorless_definition)
@@ -175,10 +175,9 @@ impl InlineBuilder {
         if !reprojected_literal_rows {
             super::output::native_passes::project_accepted_native_passes(
                 nodes,
-                &buffer,
+                &mut buffer,
                 &anchors,
                 passes,
-                0,
                 output_start,
             );
         }

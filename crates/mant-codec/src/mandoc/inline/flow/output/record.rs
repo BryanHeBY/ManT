@@ -1,24 +1,26 @@
 use super::super::WordProjectionPolicy;
 use super::super::field_buffer::FieldCell;
 use super::super::{Inline, InlineBuilder, PendingBoundary};
-use super::native_passes::split_native_field_passes;
+use super::native_passes::{RecordedRowSplit, split_recorded_native_passes};
+use super::source_blanks::take_retreated_source_blank;
 use std::collections::BTreeMap;
 
 #[derive(Default)]
 pub(super) struct WordPassProjection {
-    pub(super) closes_before: usize,
+    pub(super) closes_before: Vec<usize>,
     pub(super) leading_padding: RestartedPadding,
     pub(super) native_separator: usize,
     pub(super) preserve_retreated_separator: bool,
     pub(super) consumed_initial_separator: bool,
     pub(super) prints_padding: bool,
+    pub(super) authored_separator: Option<Inline>,
     pub(super) split_word: Option<Vec<Inline>>,
 }
 
 #[derive(Clone, Copy)]
 pub(super) enum RestartedPadding {
     CurrentWord(usize),
-    WithEarlierOwners(usize),
+    WithEarlierOwners { total: usize, current: usize },
 }
 
 impl Default for RestartedPadding {
@@ -35,23 +37,31 @@ impl RestartedPadding {
         word_first_cell: usize,
         borrowed: Option<&BorrowedPrefix>,
     ) -> Self {
+        let current = buffer.projection_length(boundary.max(word_start), word_first_cell);
         if let Some(prefix) = borrowed
             && prefix.offset(buffer, boundary) == 0
         {
-            Self::WithEarlierOwners(
-                buffer
+            Self::WithEarlierOwners {
+                total: buffer
                     .projection_length(boundary, word_first_cell)
                     .saturating_sub(prefix.count),
-            )
+                current,
+            }
         } else {
-            Self::CurrentWord(buffer.projection_length(boundary.max(word_start), word_first_cell))
+            Self::CurrentWord(current)
         }
     }
 
     pub(super) fn remaining(self, earlier_cells: usize) -> usize {
         match self {
             Self::CurrentWord(cells) => cells,
-            Self::WithEarlierOwners(cells) => cells.saturating_sub(earlier_cells),
+            Self::WithEarlierOwners { total, .. } => total.saturating_sub(earlier_cells),
+        }
+    }
+    pub(super) const fn current_word_cells(self) -> usize {
+        match self {
+            Self::CurrentWord(cells) => cells,
+            Self::WithEarlierOwners { current, .. } => current,
         }
     }
 }
@@ -148,21 +158,21 @@ impl InlineBuilder {
         let receipt = definition
             .field_buffer
             .apply_writes(&native_writes.expect("formatter word native writes"));
-        if receipt.retreated_leading_blank_on_rearm {
-            trim_retreated_word_blank(incoming);
-        }
+        let native_separator = definition
+            .field_buffer
+            .surviving_word_separator(native_word_start, separator);
+        let authored_separator =
+            take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
         definition
             .field_word_anchors
             .push(super::super::NativeWordAnchor {
                 start: native_word_start,
                 owner: anchor_ir_start,
-                content: if definition
-                    .field_buffer
-                    .word_separator_survives(native_word_start, separator)
+                content: if native_separator > 0
                     && self.execution.pending_field_spaces == 0
                     && (!boundary.is_tight()
                         || self.execution.zero_advance_joined
-                        || receipt.retreated_leading_blank_on_rearm
+                        || receipt.leading_retreat.is_some()
                         || projected_keep)
                 {
                     native_word_start
@@ -179,16 +189,14 @@ impl InlineBuilder {
                 projection,
             });
         observe_definition_word(definition, incoming, separator);
-        let native_separator = definition
-            .field_buffer
-            .surviving_word_separator(native_word_start, separator);
         let mut projection =
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
         let (buffer, _) = self.execution.word_input();
         projection.record_separator(buffer, native_word_start, separator, native_separator);
         projection.preserve_retreated_separator |=
-            receipt.retreated_leading_blank_on_rearm || projected_keep;
+            receipt.leading_retreat.is_some() || projected_keep;
         projection.prints_padding = receipt.prints_padding;
+        projection.authored_separator = authored_separator;
         projection
     }
 
@@ -225,24 +233,24 @@ impl InlineBuilder {
             .plain_input
             .buffer
             .apply_writes(&native_writes.unwrap_or_default());
-        if receipt.retreated_leading_blank_on_rearm {
-            trim_retreated_word_blank(incoming);
-        }
+        let native_separator = self
+            .execution
+            .plain_input
+            .buffer
+            .surviving_word_separator(native_word_start, separator);
+        let authored_separator =
+            take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
         self.execution
             .plain_input
             .anchors
             .push(super::super::NativeWordAnchor {
                 start: native_word_start,
                 owner: anchor_ir_start,
-                content: if self
-                    .execution
-                    .plain_input
-                    .buffer
-                    .word_separator_survives(native_word_start, separator)
+                content: if native_separator > 0
                     && !native_boundary.is_tight()
                     && (!self.execution.boundary.is_tight()
                         || self.execution.zero_advance_joined
-                        || receipt.retreated_leading_blank_on_rearm
+                        || receipt.leading_retreat.is_some()
                         || projected_keep)
                 {
                     native_word_start
@@ -253,11 +261,6 @@ impl InlineBuilder {
                 projected_field_prefix: false,
                 projection,
             });
-        let native_separator = self
-            .execution
-            .plain_input
-            .buffer
-            .surviving_word_separator(native_word_start, separator);
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
         // at authored markers and never at a device-width guess.
@@ -266,6 +269,10 @@ impl InlineBuilder {
             rest: usize::MAX / 2,
             unbounded: true,
         };
+        let cached_glyph = self
+            .execution
+            .zero_advance
+            .buffered_glyph_belongs_to_current_word();
         let unit = &mut self.execution.plain_input;
         let mut result = Self::native_unit_passes(
             incoming,
@@ -273,11 +280,12 @@ impl InlineBuilder {
             &mut unit.anchors,
             targets,
             receipt.first_content_cell,
+            cached_glyph,
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
-        result.preserve_retreated_separator |=
-            receipt.retreated_leading_blank_on_rearm || projected_keep;
+        result.preserve_retreated_separator |= receipt.leading_retreat.is_some() || projected_keep;
         result.prints_padding = receipt.prints_padding;
+        result.authored_separator = authored_separator;
         result
     }
 
@@ -297,12 +305,17 @@ impl InlineBuilder {
         };
         let mut buffer = std::mem::take(&mut definition.field_buffer);
         let mut anchors = std::mem::take(&mut definition.field_word_anchors);
+        let cached_glyph = self
+            .execution
+            .zero_advance
+            .buffered_glyph_belongs_to_current_word();
         let result = Self::native_unit_passes(
             incoming,
             &mut buffer,
             &mut anchors,
             targets,
             word_first_cell,
+            cached_glyph,
         );
         let Some(definition) = self.execution.definition.as_mut() else {
             return result;
@@ -321,10 +334,11 @@ impl InlineBuilder {
         anchors: &mut [super::super::NativeWordAnchor],
         targets: super::super::field_buffer::FillTargets,
         word_first_cell: usize,
+        cached_glyph: bool,
     ) -> WordPassProjection {
         let anchor_count = anchors.len();
-        let mut inside_splits: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-        let mut closes_before = 0;
+        let mut inside_splits: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
+        let mut closes_before = Vec::new();
         let mut leading_padding = RestartedPadding::default();
         let starts_earlier_owner = starts_with_borrowed_output(incoming, anchors.last());
         // Borrowed output need not precede this pass: a projected glyph's
@@ -382,21 +396,27 @@ impl InlineBuilder {
                                     // may already have projected its pending
                                     // blanks into nodes: let the same row
                                     // close transfer those cells once.
-                                    closes_before += 1;
+                                    closes_before.push(pass.end);
                                 } else {
-                                    inside_splits
-                                        .entry(prefix.owner.clone())
-                                        .or_default()
-                                        .push(offset);
+                                    record_row_split(
+                                        &mut inside_splits,
+                                        &prefix.owner,
+                                        pass.end,
+                                        offset,
+                                        false,
+                                    );
                                 }
                             } else {
-                                inside_splits
-                                    .entry(anchors[anchor_count - 1].owner.clone())
-                                    .or_default()
-                                    .push(0);
+                                record_row_split(
+                                    &mut inside_splits,
+                                    &anchors[anchor_count - 1].owner,
+                                    pass.end,
+                                    0,
+                                    false,
+                                );
                             }
                         } else {
-                            closes_before += 1;
+                            closes_before.push(pass.end);
                         }
                     }
                     // term_flushln() consumes blanks only until the first
@@ -414,15 +434,16 @@ impl InlineBuilder {
                         anchors,
                         boundary,
                         word_first_cell,
-                        closes_before > 0
-                            && leading_padding.remaining(0) > 0
-                            && !starts_earlier_owner,
+                        !closes_before.is_empty() && leading_padding.current_word_cells() > 0,
                     );
                 } else if boundary < word_end && !represented_in_ir {
-                    inside_splits
-                        .entry(anchors[anchor_count - 1].owner.clone())
-                        .or_default()
-                        .push(scalar_offset);
+                    record_row_split(
+                        &mut inside_splits,
+                        &anchors[anchor_count - 1].owner,
+                        pass.end,
+                        scalar_offset,
+                        cached_glyph && buffer.projection_length(boundary, word_end) > 0,
+                    );
                 }
                 if boundary >= word_end {
                     break;
@@ -430,36 +451,13 @@ impl InlineBuilder {
                 first_pass = false;
             }
         }
-        let split_word = split_recorded_word(incoming, anchors.last(), &inside_splits);
+        let split_word = split_recorded_word(incoming, anchors.last(), inside_splits, buffer);
         WordPassProjection {
             closes_before,
             leading_padding,
             split_word,
-            native_separator: 0,
-            preserve_retreated_separator: false,
-            consumed_initial_separator: false,
-            prints_padding: false,
+            ..WordPassProjection::default()
         }
-    }
-}
-
-// A second zero-advance arm needs the consumed blank removed before
-// projecting the next overwrite. An ordinary word can instead retain its
-// authored separator in the same visible column and annotation owner.
-fn trim_retreated_word_blank(nodes: &mut [Inline]) {
-    let Some(first) = nodes.first_mut() else {
-        return;
-    };
-    match first {
-        Inline::Text { value } | Inline::Code { value } if value.starts_with([' ', '\t']) => {
-            value.remove(0);
-        }
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => {
-            trim_retreated_word_blank(children);
-        }
-        _ => {}
     }
 }
 
@@ -542,7 +540,8 @@ impl BorrowedPrefix {
 fn split_recorded_word(
     incoming: &[Inline],
     anchor: Option<&super::super::NativeWordAnchor>,
-    boundaries: &BTreeMap<String, Vec<usize>>,
+    boundaries: BTreeMap<String, Vec<RecordedRowSplit>>,
+    buffer: &mut super::super::field_buffer::FieldBuffer,
 ) -> Option<Vec<Inline>> {
     if boundaries.is_empty() {
         return None;
@@ -556,7 +555,24 @@ fn split_recorded_word(
     if !starts_owned {
         nodes.insert(0, Inline::anchor(owner.clone()));
     }
-    Some(split_native_field_passes(&nodes, boundaries))
+    Some(split_recorded_native_passes(&nodes, boundaries, buffer))
+}
+
+fn record_row_split(
+    splits: &mut BTreeMap<String, Vec<RecordedRowSplit>>,
+    owner: &str,
+    pass_end: usize,
+    offset: usize,
+    before_cached_glyph: bool,
+) {
+    splits
+        .entry(owner.to_owned())
+        .or_default()
+        .push(RecordedRowSplit {
+            offset,
+            pass_end,
+            before_cached_glyph,
+        });
 }
 
 fn borrowed_prefix_scalars(nodes: &[Inline], owner: &str) -> usize {

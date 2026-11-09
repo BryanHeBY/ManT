@@ -310,6 +310,113 @@ fn existing_hard_boundaries_represent_events_without_native_scalars() {
 }
 
 #[test]
+fn incremental_pass_acknowledges_only_its_materialized_owner_boundary() {
+    use super::super::super::field_buffer::{
+        FieldBuffer, FieldCell, FieldWrite, FillTargets, FlushReceipt,
+    };
+    use super::{RecordedRowSplit, project_accepted_native_passes, split_recorded_native_passes};
+
+    // Fixed CVS: ALPHA\p\:\zX ends its first pass at ASCII_BREAK before
+    // X. The next graph already exists in the native buffer, although
+    // the zero-advance projection still owes the scalar (term.c:205-220,
+    // 294-305 and 924-927).
+    let mut buffer = FieldBuffer::default();
+    let mut writes = FieldWrite::literal("ALPHA");
+    writes.extend([
+        FieldWrite::Cell(FieldCell::BreakMarker),
+        FieldWrite::Cell(FieldCell::Breakpoint),
+        FieldWrite::ArmBackafter,
+    ]);
+    writes.extend(FieldWrite::literal("X"));
+    buffer.apply_writes(&writes);
+    let pass = buffer.fill_pass(160).unwrap();
+    buffer.commit_pass(pass, 160 * 24);
+    assert!(!buffer.has_projected_pass(pass.end));
+
+    let word = marker("pending");
+    let input = [Inline::anchor(word.clone()), text("ALPHA")];
+    let split = |before_cached_glyph| {
+        BTreeMap::from([(
+            word.clone(),
+            vec![RecordedRowSplit {
+                offset: 5,
+                pass_end: pass.end,
+                before_cached_glyph,
+            }],
+        )])
+    };
+    let output = split_recorded_native_passes(&input, split(false), &mut buffer);
+    assert_eq!(plain_text(&output), "ALPHA");
+    assert!(!buffer.has_projected_pass(pass.end));
+
+    let mut retiring = buffer.clone();
+    let targets = FillTargets {
+        first: usize::MAX / 2,
+        rest: usize::MAX / 2,
+        unbounded: true,
+    };
+    let FlushReceipt::Accepted { passes, .. } = retiring.flush_receipt(targets, false) else {
+        panic!("the cached X was already written");
+    };
+    let anchors = [super::super::super::NativeWordAnchor {
+        start: 0,
+        owner: word.clone(),
+        content: 0,
+        projected_device_padding: 0,
+        projected_field_prefix: false,
+        projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
+    }];
+    let mut settled = vec![Inline::anchor(word.clone()), text("ALPHAX")];
+    for _ in 0..2 {
+        project_accepted_native_passes(&mut settled, &mut retiring, &anchors, &passes, 0);
+        assert_eq!(plain_text(&settled), "ALPHA\nX");
+        assert!(retiring.has_projected_pass(pass.end));
+    }
+
+    let output = split_recorded_native_passes(&input, split(true), &mut buffer);
+    assert_eq!(plain_text(&output), "ALPHA\n");
+    assert!(buffer.has_projected_pass(pass.end));
+}
+
+#[test]
+fn consecutive_deferred_glyphs_project_each_owner_once() {
+    // Both exact paragraphs ran on pinned CVS before the assertions.
+    // Each ASCII_BREAK closes the row before X, and the next native word
+    // writes A or B after that delayed glyph (term.c:205-220, 294-305).
+    // Word-time acknowledgements must keep retirement from traversing the
+    // growing output prefix for each delayed row.
+    for words in [128, 512] {
+        let source = format!(
+            ".Dd October 13, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n{}.No B\n",
+            ".No \"A\\p\\:\\zX\"\n".repeat(words),
+        );
+        super::OWNER_NODES_VISITED.with(|work| work.set(0));
+        let document = crate::mandoc::parse_plain_manual(
+            std::path::Path::new("deferred-rows.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        let description = document
+            .sections
+            .iter()
+            .find(|section| section.heading.plain_text() == "DESCRIPTION")
+            .unwrap();
+        let [mant_ir::Block::Paragraph { children, .. }] = description.blocks.as_slice() else {
+            panic!("expected one native paragraph");
+        };
+        assert_eq!(
+            plain_text(children),
+            format!("A\n{}XB", "XA\n".repeat(words - 1))
+        );
+        let visits = super::OWNER_NODES_VISITED.with(std::cell::Cell::get);
+        assert!(
+            visits <= words * 8,
+            "{words} words caused {visits} owner visits"
+        );
+    }
+}
+
+#[test]
 fn private_text_marker_does_not_advance_the_scalar_cursor() {
     let input = [text(&marker("text")), text("A B")];
     let output = split_native_field_passes(&input, &BTreeMap::from([(marker("text"), vec![2])]));

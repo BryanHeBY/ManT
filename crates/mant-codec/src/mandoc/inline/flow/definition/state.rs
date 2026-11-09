@@ -84,7 +84,6 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// The normal BODY origin is already expressed by its block placement.
     /// Same-row padding can instead belong to an inline HEAD/BODY owner.
     pub(in crate::mandoc::inline::flow) declared_body_origin: Option<BodyOriginProjection>,
-    pub(in crate::mandoc::inline::flow) projected_passes: usize,
     /// `TERMP_NOPAD`, consumed by the next real `term_flushln`, not an IR drain.
     pub(in crate::mandoc::inline::flow) no_pad: bool,
     pub(in crate::mandoc::inline::flow) run_in_boundaries: Vec<super::run_in::PendingRunInBoundary>,
@@ -376,9 +375,7 @@ impl InlineExecutionState {
             state.hang_row.minbl = row.minbl;
             state.hang_row.page_origin_printed = row.page_origin_printed;
         }
-        if state.field_buffer.configure_tabs(&tabs) {
-            state.projected_passes = 0;
-        }
+        state.field_buffer.configure_tabs(&tabs);
         state
     }
 }

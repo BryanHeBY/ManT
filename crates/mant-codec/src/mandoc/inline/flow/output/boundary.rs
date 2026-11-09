@@ -167,7 +167,7 @@ impl InlineBuilder {
             .saturating_sub(projected_separator);
         let starts_output_row = incoming_has_line_break
             || projection.split_word.is_some()
-            || projection.closes_before > 0;
+            || !projection.closes_before.is_empty();
         let mut payload = projection
             .split_word
             .take()
@@ -177,7 +177,7 @@ impl InlineBuilder {
             word,
             empty_word,
             add_space && projected_separator == 0,
-            &projection,
+            &mut projection,
             &mut payload,
         );
         if word {
@@ -352,10 +352,10 @@ impl InlineBuilder {
         word: bool,
         empty_word: bool,
         add_space: bool,
-        projection: &super::record::WordPassProjection,
+        projection: &mut super::record::WordPassProjection,
         payload: &mut Vec<Inline>,
     ) -> usize {
-        let accepted_row_break = projection.closes_before;
+        let accepted_row_break = !projection.closes_before.is_empty();
         let native_separator = projection.native_separator;
         let layout_start = self.nodes.len();
         // Plain MC's one projected next-word blank is an advance reservation,
@@ -386,14 +386,14 @@ impl InlineBuilder {
             self.execution.plain_input.anchors.last()
         }
         .map(|anchor| anchor.owner.clone());
-        let earlier_spaces = if accepted_row_break == 0 && !empty_word {
+        let earlier_spaces = if !accepted_row_break && !empty_word {
             self.materialize_pending_word_spaces()
         } else {
             0
         };
         if word
             && (self.execution.pending_field_spaces == 0
-                || accepted_row_break > 0
+                || accepted_row_break
                 || !projection.prints_padding)
             && let Some(marker) = native_anchor_marker.as_ref()
         {
@@ -402,7 +402,7 @@ impl InlineBuilder {
             // branch below, but still needs this word's stable output owner.
             self.nodes.push(Inline::anchor(marker.clone()));
         }
-        if accepted_row_break > 0 {
+        if accepted_row_break {
             self.append_restarted_word_padding(
                 projection,
                 empty_word,
@@ -431,23 +431,35 @@ impl InlineBuilder {
             let virtual_padding = !empty_word
                 && native_separator == 0
                 && self.projects_automatic_space(spacing_boundary, add_space);
+            let authored_in_payload = native_separator > 0
+                && !field_padding
+                && self.projects_automatic_space(spacing_boundary, add_space)
+                && reattach_authored_separator(
+                    payload,
+                    native_anchor_marker.as_deref(),
+                    projection.authored_separator.take(),
+                );
             if word
                 && (field_padding || virtual_padding)
                 && let Some(marker) = native_anchor_marker.as_ref()
             {
                 self.mark_native_field_prefix(marker);
             }
-            self.append_boundary_spacing(
-                spacing_boundary,
-                add_space,
-                empty_word,
-                field_padding,
-                if transferred_automatic {
-                    0
-                } else {
-                    native_separator
-                },
-            );
+            if field_padding {
+                self.append_device_field_padding();
+            } else {
+                self.append_boundary_spacing(
+                    spacing_boundary,
+                    add_space,
+                    empty_word,
+                    if transferred_automatic {
+                        0
+                    } else {
+                        native_separator
+                    },
+                    authored_in_payload,
+                );
+            }
             if word
                 && (field_padding || virtual_padding)
                 && let Some(marker) = native_anchor_marker
@@ -462,7 +474,7 @@ impl InlineBuilder {
 
     fn append_restarted_word_padding(
         &mut self,
-        projection: &super::record::WordPassProjection,
+        projection: &mut super::record::WordPassProjection,
         empty_word: bool,
         native_anchor_marker: Option<&str>,
         payload: &mut Vec<Inline>,
@@ -470,15 +482,15 @@ impl InlineBuilder {
         // A consumed \p separator closes the already accepted prefix.
         // Its blank is part of the break, not a new formatter word cell.
         trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
-        for _ in 0..projection.closes_before {
+        for &end in &projection.closes_before {
             let row_indent = self.take_definition_row_indent();
             super::push_row_break(&mut self.nodes, row_indent);
+            self.execution.acknowledge_word_input_pass(end);
         }
         if matches!(
             projection.leading_padding,
-            super::record::RestartedPadding::WithEarlierOwners(_)
-        ) && !self.execution.pending_word_spaces.is_empty()
-            && let Some(marker) = native_anchor_marker
+            super::record::RestartedPadding::WithEarlierOwners { .. }
+        ) && let Some(marker) = native_anchor_marker
         {
             // The borrowed payload is older than the queued empty
             // words. Its held source blanks and recovery text retain
@@ -493,16 +505,25 @@ impl InlineBuilder {
         } else {
             self.materialize_pending_word_spaces()
         };
-        if earlier_cells > 0
+        // A borrowed glyph can put older separators in the same native
+        // range. The deferred receipts already printed their owners.
+        let leading_cells = projection.leading_padding.remaining(earlier_cells);
+        if (earlier_cells > 0 || projection.leading_padding.current_word_cells() > 0)
             && let Some(marker) = native_anchor_marker
         {
             self.nodes.push(Inline::anchor(marker));
         }
-        // A borrowed glyph can put older separators in the same native
-        // range. The deferred receipts already printed their owners.
-        let leading_cells = projection.leading_padding.remaining(earlier_cells);
         if leading_cells > 0 {
-            push_text(&mut self.nodes, " ".repeat(leading_cells));
+            let authored_in_payload = projection.leading_padding.current_word_cells() > 0
+                && reattach_authored_separator(
+                    payload,
+                    native_anchor_marker,
+                    projection.authored_separator.take(),
+                );
+            let generated = leading_cells - usize::from(authored_in_payload);
+            if generated > 0 {
+                push_text(&mut self.nodes, " ".repeat(generated));
+            }
         }
         layout_start
     }
@@ -587,31 +608,32 @@ impl InlineBuilder {
         }
     }
 
+    fn append_device_field_padding(&mut self) {
+        let count = self.execution.pending_field_spaces;
+        let separator_start = self.nodes.len();
+        // This generated range remains provisional until term_field()
+        // prints a graph (term.c:389-427). Keep it separate from the
+        // committed prefix so a graphless control flush can retire only
+        // these cells, using NoBreakField's saved owner boundaries.
+        self.nodes.push(Inline::Text {
+            value: " ".repeat(count),
+        });
+        self.bind_materialized_field_separator(separator_start, count);
+        self.execution.pending_field_spaces = 0;
+        self.execution.trailing_output = TrailingOutput::FieldBlank(count);
+        self.execution.last_visible_character = Some(' ');
+        self.execution.formatter_column = FormatterColumn::Advanced;
+    }
+
     fn append_boundary_spacing(
         &mut self,
         boundary: PendingBoundary,
         add_space: bool,
         empty_word: bool,
-        materialized_field_separator: bool,
         automatic_spaces: usize,
+        authored_in_payload: bool,
     ) {
-        if materialized_field_separator {
-            let count = self.execution.pending_field_spaces;
-            let separator_start = self.nodes.len();
-            // This generated range remains provisional until term_field()
-            // prints a graph (term.c:389-427). Keep it separate from the
-            // committed prefix so a graphless control flush can retire only
-            // these cells, using NoBreakField's saved owner boundaries.
-            self.nodes.push(Inline::Text {
-                value: " ".repeat(count),
-            });
-            self.bind_materialized_field_separator(separator_start, count);
-            self.execution.pending_field_spaces = 0;
-            self.execution.trailing_output = TrailingOutput::FieldBlank(count);
-            self.execution.last_visible_character = Some(' ');
-            self.execution.formatter_column = FormatterColumn::Advanced;
-        }
-        if materialized_field_separator || !self.projects_automatic_space(boundary, add_space) {
+        if !self.projects_automatic_space(boundary, add_space) {
             return;
         }
         if empty_word {
@@ -622,7 +644,10 @@ impl InlineBuilder {
             }
         } else {
             let automatic_spaces = automatic_spaces.max(1);
-            self.push_field_owned_breakable_space(" ".repeat(automatic_spaces));
+            let generated = automatic_spaces - usize::from(authored_in_payload);
+            if generated > 0 {
+                self.push_field_owned_breakable_space(" ".repeat(generated));
+            }
             let prior = match self.execution.trailing_output {
                 TrailingOutput::BreakableBlank(count) => count,
                 _ => 0,
@@ -740,4 +765,25 @@ fn take_word_prefix(payload: &mut Vec<Inline>, owner: &str) -> Vec<Inline> {
     };
     let suffix = payload.split_off(index);
     std::mem::replace(payload, suffix)
+}
+
+/// An authored surrogate must enter with the word's payload, after the
+/// annotation opens and any older borrowed owner has been emitted.
+fn reattach_authored_separator(
+    payload: &mut Vec<Inline>,
+    owner: Option<&str>,
+    separator: Option<Inline>,
+) -> bool {
+    let Some(separator) = separator else {
+        return false;
+    };
+    let position = owner
+        .and_then(|owner| {
+            payload
+                .iter()
+                .position(|node| super::native_passes::native_word_marker(node) == Some(owner))
+        })
+        .map_or(0, |position| position + 1);
+    payload.insert(position, separator);
+    true
 }

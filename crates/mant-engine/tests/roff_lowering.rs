@@ -298,3 +298,6 @@ mod grouped_line_flush;
 
 #[path = "roff_lowering/deferred_word_spaces.rs"]
 mod deferred_word_spaces;
+
+#[path = "roff_lowering/word_receipts.rs"]
+mod word_receipts;

@@ -36,8 +36,8 @@ mod flush;
 mod scan;
 mod writes;
 
-pub(super) use cells::WordWriteReceipt;
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};
+pub(super) use cells::{LeadingBlankRetreat, WordWriteReceipt};
 
 use std::collections::BTreeSet;
 use std::sync::Arc;

@@ -142,49 +142,46 @@ fn next_native_pass_start(
 /// this projection, including an accepted prefix followed by rejection.
 pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     nodes: &mut Vec<Inline>,
-    buffer: &super::super::field_buffer::FieldBuffer,
+    buffer: &mut super::super::field_buffer::FieldBuffer,
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
-    projected_passes: usize,
     output_start: usize,
-) -> usize {
+) {
     use super::super::field_buffer::{FieldCell, FillBoundary};
 
-    let first = projected_passes.max(buffer.committed_pass_count());
     let count = passes.len().saturating_sub(1);
-    if first >= count {
-        return count;
-    }
     let start = output_start.min(nodes.len());
-    let mut boundaries: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-    for (index, pass) in passes.iter().take(count).enumerate() {
-        let mut cell = pass.end;
-        while matches!(buffer.cells().get(cell), Some(FieldCell::BreakableBlank)) {
-            cell += 1;
-        }
-        let represented = buffer.has_projected_pass(pass.end);
-        if index < first || represented || pass.boundary == FillBoundary::Hyphen {
+    let mut boundaries: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
+    for pass in &passes[..count] {
+        if buffer.has_projected_pass(pass.end) || pass.boundary == FillBoundary::Hyphen {
             // An encoded ASCII_HYPH candidate locates the final device row
             // for BODY. The responsive reading projection keeps that source
             // word complete rather than hardening its discretionary split
             // (term.c:307-324); authored \p events remain independent.
             continue;
         }
+        let mut cell = pass.end;
+        while matches!(buffer.cells().get(cell), Some(FieldCell::BreakableBlank)) {
+            cell += 1;
+        }
         let owner = anchors.partition_point(|anchor| anchor.content <= cell);
         if let Some(anchor) = owner.checked_sub(1).and_then(|index| anchors.get(index)) {
             boundaries
                 .entry(anchor.owner.clone())
                 .or_default()
-                .push(buffer.projection_length(anchor.content, cell));
+                .push(RecordedRowSplit {
+                    offset: buffer.projection_length(anchor.content, cell),
+                    pass_end: pass.end,
+                    before_cached_glyph: false,
+                });
         }
     }
     if !boundaries.is_empty() {
         // Earlier flushed fields are immutable output. Only the active
         // suffix is traversed, once per real flush (term.c:233-237).
         let pending = nodes.split_off(start);
-        nodes.extend(split_native_field_passes(&pending, &boundaries));
+        nodes.extend(split_recorded_native_passes(&pending, boundaries, buffer));
     }
-    count
 }
 
 #[cfg(test)]
@@ -197,11 +194,12 @@ std::thread_local! {
 /// receipt supplies scalar offsets inside each formatter word; semantic
 /// wrappers do not begin another word or reset its cursor. No formatter
 /// register changes here: term.c:205-220 already chose the accepted ranges.
-pub(in crate::mandoc::inline::flow) fn split_native_field_passes(
+#[cfg(test)]
+fn split_native_field_passes(
     nodes: &[Inline],
     boundaries: &BTreeMap<String, Vec<usize>>,
 ) -> Vec<Inline> {
-    split_native_field_passes_mode(nodes, boundaries, false)
+    split_native_field_passes_mode(nodes, boundaries, &|_, _| false).0
 }
 
 /// Rebuild one complete active native interval, including loop events at the
@@ -211,14 +209,51 @@ pub(in crate::mandoc::inline::flow) fn split_retired_native_field_passes(
     nodes: &[Inline],
     boundaries: &BTreeMap<String, Vec<usize>>,
 ) -> Vec<Inline> {
-    split_native_field_passes_mode(nodes, boundaries, true)
+    split_native_field_passes_mode(nodes, boundaries, &|_, _| true).0
 }
+
+/// An accepted pass to project in the active formatter word.
+pub(super) struct RecordedRowSplit {
+    pub(super) offset: usize,
+    pub(super) pass_end: usize,
+    /// The following native scalar already exists in this word but its
+    /// cached zero-advance glyph cannot appear in the current fragment.
+    pub(super) before_cached_glyph: bool,
+}
+
+pub(super) fn split_recorded_native_passes(
+    nodes: &[Inline],
+    splits: BTreeMap<String, Vec<RecordedRowSplit>>,
+    buffer: &mut super::super::field_buffer::FieldBuffer,
+) -> Vec<Inline> {
+    let mut splits = splits;
+    let mut positions = BTreeMap::new();
+    for (owner, splits) in &mut splits {
+        splits.sort_unstable_by_key(|split| (split.offset, split.pass_end));
+        positions.insert(
+            owner.clone(),
+            splits.iter().map(|split| split.offset).collect(),
+        );
+    }
+    let (output, projected) = split_native_field_passes_mode(nodes, &positions, &|owner, index| {
+        splits[owner][index].before_cached_glyph
+    });
+    for (owner, splits) in splits {
+        let count = projected.get(&owner).map_or(0, |&(_, count)| count);
+        for split in splits.into_iter().take(count) {
+            buffer.acknowledge_projected_pass(split.pass_end);
+        }
+    }
+    output
+}
+
+type OwnerPassPositions = BTreeMap<String, (usize, usize)>;
 
 fn split_native_field_passes_mode(
     nodes: &[Inline],
     boundaries: &BTreeMap<String, Vec<usize>>,
-    complete: bool,
-) -> Vec<Inline> {
+    can_project_tail: &dyn Fn(&str, usize) -> bool,
+) -> (Vec<Inline>, OwnerPassPositions) {
     let mut ordered = boundaries.clone();
     for positions in ordered.values_mut() {
         positions.sort_unstable();
@@ -232,14 +267,17 @@ fn split_native_field_passes_mode(
         next_boundary: 0,
         owner: None,
         positions: BTreeMap::new(),
-        complete,
+        can_project_tail,
     };
     let mut output = project_native_pass_nodes(nodes, &ordered, &mut cursor);
-    if complete {
-        project_owner_tail_events(&mut cursor, &mut output);
+    project_owner_tail_events(&mut cursor, &mut output);
+    if let Some(owner) = cursor.owner {
+        cursor
+            .positions
+            .insert(owner, (cursor.scalar, cursor.next_boundary));
     }
     trim_native_pass_rows(&mut output);
-    output
+    (output, cursor.positions)
 }
 
 struct NativePassCursor<'a> {
@@ -247,15 +285,20 @@ struct NativePassCursor<'a> {
     scalar: usize,
     next_boundary: usize,
     owner: Option<String>,
-    positions: BTreeMap<String, (usize, usize)>,
-    complete: bool,
+    positions: OwnerPassPositions,
+    can_project_tail: &'a dyn Fn(&str, usize) -> bool,
 }
 
 /// `term_flushln()`217 emits the accepted pass's endline even if its final
 /// graph is the final scalar before a rejected suffix (term_fill()299-312).
 /// Equal scalar positions can still carry separate physical row events.
 fn project_owner_tail_events(cursor: &mut NativePassCursor<'_>, output: &mut Vec<Inline>) {
-    while cursor.boundaries.get(cursor.next_boundary) == Some(&cursor.scalar) {
+    while cursor.boundaries.get(cursor.next_boundary) == Some(&cursor.scalar)
+        && cursor
+            .owner
+            .as_deref()
+            .is_some_and(|owner| (cursor.can_project_tail)(owner, cursor.next_boundary))
+    {
         output.push(Inline::line_break());
         cursor.next_boundary += 1;
     }
@@ -282,7 +325,7 @@ fn project_native_pass_nodes<'a>(
         #[cfg(test)]
         OWNER_NODES_VISITED.with(|work| work.set(work.get().saturating_add(1)));
         if let Some(marker) = native_word_marker(node) {
-            if cursor.complete && cursor.owner.as_deref() != Some(marker) {
+            if cursor.owner.as_deref() != Some(marker) {
                 project_owner_tail_events(cursor, &mut output);
             }
             if let Some(owner) = cursor.owner.take() {

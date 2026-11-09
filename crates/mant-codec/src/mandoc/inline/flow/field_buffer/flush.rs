@@ -289,7 +289,6 @@ impl FieldBuffer {
         }
         self.advance_tab_offset(pass.units, tab_target);
         self.committed_passes.push(pass);
-        self.projected_pass_ends.insert(pass.end);
         self.scan = None;
         self.advance_past(pass.end);
         self.consume_break_blanks();
@@ -336,8 +335,11 @@ impl FieldBuffer {
         !self.committed_passes.is_empty()
     }
 
-    pub(in crate::mandoc::inline::flow) fn committed_pass_count(&self) -> usize {
-        self.committed_passes.len()
+    /// A committed native row is represented only once its owner has
+    /// emitted the boundary. A still-cached glyph may leave the split
+    /// position outside the current projection fragment.
+    pub(in crate::mandoc::inline::flow) fn acknowledge_projected_pass(&mut self, end: usize) {
+        self.projected_pass_ends.insert(end);
     }
 
     pub(in crate::mandoc::inline::flow) fn has_non_ignorable_after(

@@ -161,6 +161,38 @@ fn projected_recovery_and_held_cells_keep_their_actual_source_order() {
 }
 
 #[test]
+fn an_accepted_breakpoint_row_survives_a_cached_following_glyph() {
+    // Exact sources ran through the pinned CVS profiles before these
+    // assertions. term_fill() stops at ASCII_BREAK after \p, and
+    // term_flushln() ends the accepted row before encoding the suffix
+    // (term.c:294-305 and 205-220). A later BACKBEFORE replacement
+    // changes the suffix glyph, never the committed first row.
+    for (body, expected) in [
+        (
+            ".No \"ALPHA\\p\\:\\zX\"\n.No BETA\n.br\n.No OMEGA\n",
+            "ALPHA\nXBETA\nOMEGA",
+        ),
+        (".No \"ALPHA\\p\\:\\zX\"\n", "ALPHA\nX"),
+        (
+            ".No \"ALPHA\\p\\:\\zX\"\n.br\n.No OMEGA\n",
+            "ALPHA\nX\nOMEGA",
+        ),
+        (
+            ".No \"ALPHA\\p\\:\\zX\\zY\"\n.No BETA\n.br\n.No OMEGA\n",
+            "ALPHA\nYBETA\nOMEGA",
+        ),
+        (
+            ".No \"ALPHA\\p\\:\\&\\p\\:\\zX\"\n.No BETA\n.br\n.No OMEGA\n",
+            "ALPHA\n\nXBETA\nOMEGA",
+        ),
+        (".No \"ALPHA\\p\\:\"\n.br\n.No OMEGA\n", "ALPHA\nOMEGA"),
+    ] {
+        let document = parse(MDOC_HEADER, body);
+        assert_eq!(text(description(&document)), expected, "{body}");
+    }
+}
+
+#[test]
 fn no_fill_breakpoint_rows_are_cells_without_catalog_glyphs() {
     // term_newln() flushes even a graphless buffered ASCII_BREAK and ends
     // that physical row; it also retires bare BACKAFTER. Explicit Unicode

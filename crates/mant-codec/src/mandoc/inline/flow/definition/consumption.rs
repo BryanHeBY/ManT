@@ -303,25 +303,19 @@ impl InlineBuilder {
     }
 
     fn project_accepted_field_passes(&mut self, passes: &[super::super::field_buffer::FillPass]) {
-        let state = self.execution.definition.as_ref().expect("native field");
+        let state = self.execution.definition.as_mut().expect("native field");
         let start = self
             .execution
             .author_execution
             .as_ref()
             .map_or(0, |author| author.field_output_start);
-        let projected = super::super::output::native_passes::project_accepted_native_passes(
+        super::super::output::native_passes::project_accepted_native_passes(
             &mut self.nodes,
-            &state.field_buffer,
+            &mut state.field_buffer,
             &state.field_word_anchors,
             passes,
-            state.projected_passes,
             start,
         );
-        self.execution
-            .definition
-            .as_mut()
-            .expect("native field")
-            .projected_passes = projected;
     }
 
     /// Retire only the rejected native buffer's registers after its exact
@@ -581,7 +575,6 @@ impl InlineBuilder {
             state.field_buffer.clear_consumed_field();
             state.no_pad = false;
             state.field_word_anchors.clear();
-            state.projected_passes = 0;
         }
     }
 }

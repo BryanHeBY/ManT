@@ -18,7 +18,8 @@
 use std::sync::Arc;
 
 use super::{
-    FieldBuffer, FieldCell, FieldWrite, PassStop, TabStops, WordScanPolicy, WordWriteReceipt,
+    FieldBuffer, FieldCell, FieldWrite, LeadingBlankRetreat, PassStop, TabStops, WordScanPolicy,
+    WordWriteReceipt,
 };
 
 #[cfg(test)]
@@ -90,19 +91,9 @@ impl FieldBuffer {
         separator
     }
 
-    /// Whether this word's automatic separator still occupies its native
-    /// cell after `encode1()` ran. BACKBEFORE pops an ordinary blank; its
-    /// backspace arm overwrites a KEEP blank instead (term.c:901-908).
-    pub(in crate::mandoc::inline::flow) fn word_separator_survives(
-        &self,
-        start: usize,
-        separator: usize,
-    ) -> bool {
-        self.surviving_word_separator(start, separator) > 0
-    }
-
     /// At most the two automatic SENTENCE cells can survive encode1's
-    /// BACKBEFORE retreat; a KEEP boundary contributes one nonbreaking cell.
+    /// BACKBEFORE retreat; a KEEP boundary contributes one nonbreaking cell
+    /// unless the backspace overstrikes it (term.c:901-908).
     pub(in crate::mandoc::inline::flow) fn surviving_word_separator(
         &self,
         start: usize,
@@ -249,18 +240,30 @@ impl FieldBuffer {
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
         self.word_first_content = None;
-        let mut retreated_leading_blank_on_rearm = false;
+        let mut first_graph = true;
+        let mut leading_retreat = None;
         for write in writes {
             match write {
                 FieldWrite::Cell(FieldCell::Graph { text, width }) => {
-                    retreated_leading_blank_on_rearm |= self.encode_graph(*text, *width, true);
+                    leading_retreat = leading_retreat.or(self.encode_graph(
+                        *text,
+                        *width,
+                        true,
+                        &mut first_graph,
+                    ));
                 }
                 FieldWrite::Cell(FieldCell::Hyphen) => {
-                    retreated_leading_blank_on_rearm |= self.encode_graph('-', 1, true);
+                    leading_retreat =
+                        leading_retreat.or(self.encode_graph('-', 1, true, &mut first_graph));
                     *self.cells.last_mut().expect("encoded hyphen") = FieldCell::Hyphen;
                 }
                 FieldWrite::OwnedBlank { projected } => {
-                    retreated_leading_blank_on_rearm |= self.encode_graph('\u{a0}', 1, *projected);
+                    leading_retreat = leading_retreat.or(self.encode_graph(
+                        '\u{a0}',
+                        1,
+                        *projected,
+                        &mut first_graph,
+                    ));
                 }
                 FieldWrite::Cell(cell) => {
                     if matches!(cell, FieldCell::BreakMarker) {
@@ -312,7 +315,7 @@ impl FieldBuffer {
             first_content_cell,
             end_cell,
             prints_padding,
-            retreated_leading_blank_on_rearm,
+            leading_retreat,
         }
     }
     pub(in crate::mandoc::inline::flow) fn has_projected_pass(&self, end: usize) -> bool {
@@ -323,14 +326,16 @@ impl FieldBuffer {
         !self.projected_pass_ends.is_empty()
     }
 
-    fn encode_graph(&mut self, text: char, width: usize, projected: bool) -> bool {
-        let retreated_leading_blank_on_rearm = self.backbefore_armed
-            && self.backafter_armed
-            && self.word_first_content == self.cells.len().checked_sub(1)
-            && matches!(
-                self.cells.last(),
-                Some(FieldCell::BreakableBlank | FieldCell::Tab)
-            );
+    fn encode_graph(
+        &mut self,
+        text: char,
+        width: usize,
+        projected: bool,
+        first_graph: &mut bool,
+    ) -> Option<LeadingBlankRetreat> {
+        let leading_retreat = std::mem::take(first_graph)
+            .then(|| self.leading_blank_retreat())
+            .flatten();
         self.push_graph(text, width);
         if !projected {
             let prefix = self.projection_prefix.last_mut().expect("encoded graph");
@@ -341,7 +346,49 @@ impl FieldBuffer {
             self.backbefore_armed = true;
             self.pending_projection_graph = self.cells.len().checked_sub(1);
         }
-        retreated_leading_blank_on_rearm
+        leading_retreat
+    }
+
+    fn leading_blank_retreat(&self) -> Option<LeadingBlankRetreat> {
+        if !self.backbefore_armed {
+            return None;
+        }
+        let start = self.word_first_content?;
+        let last = self.cells.len().checked_sub(1)?;
+        let character = match self.cells.get(last)? {
+            FieldCell::BreakableBlank => ' ',
+            FieldCell::Tab => '\t',
+            _ => return None,
+        };
+        // Only encode1() pops this cell. The source prefix is examined
+        // once, before the first graph, and excludes term_word() padding.
+        if !self
+            .cells
+            .get(start..last)?
+            .iter()
+            .enumerate()
+            .all(|(offset, cell)| match cell {
+                FieldCell::BreakableBlank | FieldCell::Tab => true,
+                // term_word() buffers these controls without calling
+                // encode1(). A reading recovery spelling has a nonzero
+                // projection and is outside the raw blank prefix.
+                FieldCell::BreakMarker
+                | FieldCell::Breakpoint
+                | FieldCell::TabReference
+                | FieldCell::ZeroWidthGraph => {
+                    self.projection_length(start + offset, start + offset + 1) == 0
+                }
+                _ => false,
+            })
+            || self.projection_length(last, last + 1) == 0
+        {
+            return None;
+        }
+        Some(LeadingBlankRetreat {
+            offset: self.projection_length(start, last),
+            character,
+            rearmed: self.backafter_armed,
+        })
     }
 
     /// A drained IR owner is immutable. Backtracking remains native state,

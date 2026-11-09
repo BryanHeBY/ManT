@@ -572,6 +572,19 @@ impl super::InlineExecutionState {
         }
     }
 
+    pub(super) fn acknowledge_word_input_pass(&mut self, end: usize) {
+        let buffer = if self.uses_definition_word_buffer() {
+            &mut self
+                .definition
+                .as_mut()
+                .expect("authored word field")
+                .field_buffer
+        } else {
+            &mut self.plain_input.buffer
+        };
+        buffer.acknowledge_projected_pass(end);
+    }
+
     pub(in crate::mandoc) fn enter_tab_source_node(&mut self, node: &libmandoc_rs::Node) {
         // A source node routed from block to inline execution is still one
         // entry event. Use stable AST identity, never a source coordinate.
@@ -609,7 +622,6 @@ impl super::InlineExecutionState {
             ));
             if let Some(definition) = &mut self.definition {
                 definition.field_buffer.configure_tabs(&self.tab_stops);
-                definition.projected_passes = 0;
             }
             self.plain_input.buffer.configure_tabs(&self.tab_stops);
         }
@@ -619,7 +631,6 @@ impl super::InlineExecutionState {
         self.tab_stops = super::Arc::new(super::TabStops::default());
         if let Some(definition) = &mut self.definition {
             definition.field_buffer.configure_tabs(&self.tab_stops);
-            definition.projected_passes = 0;
         }
         self.plain_input.buffer.configure_tabs(&self.tab_stops);
     }
@@ -628,7 +639,6 @@ impl super::InlineExecutionState {
         self.tab_stops = super::Arc::new(super::TabStops::literal());
         if let Some(definition) = &mut self.definition {
             definition.field_buffer.configure_tabs(&self.tab_stops);
-            definition.projected_passes = 0;
         }
         self.plain_input.buffer.configure_tabs(&self.tab_stops);
     }

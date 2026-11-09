@@ -72,6 +72,7 @@ mod hard_breaks;
 mod projection;
 mod row_layout;
 mod scopes;
+mod source_blanks;
 mod words;
 
 pub(in crate::mandoc) use projection::consume_one_row_ending;

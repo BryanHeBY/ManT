@@ -69,6 +69,8 @@ fn final_scan_copies_native_facts_without_output_ownership_history() {
     source.push_break_marker();
     let pass = source.fill_pass(32).unwrap();
     source.commit_pass(pass, 32 * super::EN);
+    assert!(!source.has_projected_pass(pass.end));
+    source.acknowledge_projected_pass(pass.end);
     let scan = source.native_flush_scan();
     assert_eq!(scan.cells, source.cells);
     assert_eq!(scan.resume, source.resume);
@@ -494,6 +496,7 @@ fn configuration_restart_keeps_projected_pass_identity_at_earlier_offsets() {
     buffer.apply_writes(&super::FieldWrite::literal("AAA BBB CCC"));
     let later = buffer.fill_pass(8).unwrap();
     buffer.commit_pass(later, 8 * 24);
+    buffer.acknowledge_projected_pass(later.end);
     assert!(
         buffer.configure_tabs(&std::sync::Arc::new(super::TabStops::from_arguments(
             ["2n"].into_iter()
@@ -503,6 +506,8 @@ fn configuration_restart_keeps_projected_pass_identity_at_earlier_offsets() {
     assert!(earlier.end < later.end);
     buffer.commit_pass(earlier, 4 * 24);
     assert!(buffer.has_projected_pass(later.end));
+    assert!(!buffer.has_projected_pass(earlier.end));
+    buffer.acknowledge_projected_pass(earlier.end);
     assert!(buffer.has_projected_pass(earlier.end));
     buffer.clear_consumed_field();
     assert!(!buffer.has_projected_rows());
