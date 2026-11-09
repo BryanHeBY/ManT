@@ -37,7 +37,7 @@ pub(super) fn record_native_event(
         RoffInlineEvent::ZeroAdvance => {
             writes.push(FieldWrite::ArmBackafter);
         }
-        RoffInlineEvent::NoSpace | RoffInlineEvent::HorizontalMotion { .. } => {
+        RoffInlineEvent::NoSpace => {
             writes.push(FieldWrite::CancelBackafter);
         }
         RoffInlineEvent::LineBreak => {

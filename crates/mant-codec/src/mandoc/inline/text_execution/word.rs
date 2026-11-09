@@ -177,12 +177,47 @@ impl WordExecution {
         argument: Option<&str>,
         context: &mut TextExecutionContext<'_>,
     ) {
+        use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+        let armed = context.zero_advance.take_armed();
+        let pending = context.zero_advance.has_pending_glyph();
+        let preserves_advance = reading_blank
+            && (!pending
+                || argument.is_some_and(
+                    libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore,
+                ));
+        let mut rewind_entry = false;
+        if context.policy.record_native_cells {
+            if !armed {
+                if self.native_writes.is_empty()
+                    && let Some(distance) =
+                        argument.and_then(crate::mandoc::layout::Distance::parse)
+                    && distance.basic_units() < 0
+                {
+                    let columns = distance.basic_units().unsigned_abs() as usize / 24;
+                    self.native_writes
+                        .push(FieldWrite::RewindWordEntry(columns));
+                    rewind_entry = true;
+                } else if reading_blank {
+                    if pending {
+                        // The first positive advance clears BACKBEFORE
+                        // without overwriting the previous graph (term.c:692).
+                        self.native_writes.push(FieldWrite::CancelBackbefore);
+                    }
+                    if preserves_advance {
+                        self.native_writes
+                            .push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
+                    }
+                }
+            }
+            if !rewind_entry {
+                self.native_writes.push(FieldWrite::CancelBackafter);
+            }
+        }
         // ESCAPE_HORIZ clears BACKAFTER before parsing the operand. Omit
         // only this generated approximation; never remove an author blank.
-        if context.zero_advance.take_armed() || !reading_blank {
+        if armed || !(reading_blank || rewind_entry) {
             return;
         }
-        let pending = context.zero_advance.has_pending_glyph();
         if pending {
             // The first positive HORIZ cell clears BACKBEFORE, rather than
             // overstriking its graph. Absolute zero motion is not this path.
@@ -193,11 +228,7 @@ impl WordExecution {
                 self.link.as_deref(),
             );
         }
-        if !pending
-            || argument.is_some_and(
-                libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore,
-            )
-        {
+        if preserves_advance {
             self.append_glyph(" ", context.zero_advance);
             if self.content_prefix != super::ContentPrefix::Authored
                 && context.zero_advance.leading_motion_origin().is_some()

@@ -161,6 +161,31 @@ fn rejected_kept_suffix_does_not_repeat_its_accepted_prefix_endline() {
 }
 
 #[test]
+fn leading_horizontal_motion_changes_native_acceptance_without_replaying_padding() {
+    // Each source was run through the fixed CVS. term.c:678–714 makes
+    // HORIZ clear or rewind BACKBEFORE before term_fill() accepts cells.
+    let heading = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    for (first, second, expected) in [
+        ("ALPHA", r"\h'-1n'BETA", "ALPHABETA\nOMEGA"),
+        (
+            r"ALPHA\p\:\zX",
+            r"\h'-1n'\&\p\: \p BETA",
+            "ALPHA\nX\n\nOMEGA",
+        ),
+        (
+            r"ALPHA\zX\p\: ",
+            r"\h'-1n'\&\p\: \p BETA",
+            "ALPHAX\n\n\nOMEGA",
+        ),
+        (r"ALPHA\zX", r"\h'1n'\z \p BETA", "ALPHAX\n\nOMEGA"),
+    ] {
+        let source =
+            format!("{heading}.No \"{first}\"\n.No \"{second}\"\n.No \"\"\n.br\n.No OMEGA\n");
+        assert_readbacks(&source, expected, None);
+    }
+}
+
+#[test]
 fn body_flush_returns_only_printed_blanks_to_a_detached_linked_term() {
     // Both exact inputs ran fixed CVS. mdoc_term.c::termp_it_post() leaves
     // inset HEAD cells live until the BODY flush; term_field() advances

@@ -87,6 +87,8 @@ pub(in crate::mandoc) enum FieldWrite {
     CancelBackafter,
     /// A positive HORIZ first clears BACKBEFORE without buffering a cell.
     CancelBackbefore,
+    /// A leading negative relative HORIZ can overwrite word entry padding.
+    RewindWordEntry(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,6 +117,21 @@ pub(super) struct DeferredBlankRun {
 }
 
 impl FieldWrite {
+    pub(super) const fn overwrites_entry_padding(&self) -> bool {
+        matches!(
+            self,
+            Self::Cell(
+                FieldCell::Graph { .. }
+                    | FieldCell::Hyphen
+                    | FieldCell::ZeroWidthGraph
+                    | FieldCell::Tab
+                    | FieldCell::TabReference
+                    | FieldCell::BreakMarker
+                    | FieldCell::Breakpoint
+            ) | Self::RecoveryGlyph { .. }
+        )
+    }
+
     pub(in crate::mandoc) fn literal(value: &str) -> Vec<Self> {
         value.chars().map(Self::literal_cell).collect()
     }

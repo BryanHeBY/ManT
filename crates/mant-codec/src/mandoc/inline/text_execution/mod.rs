@@ -216,33 +216,14 @@ fn execute_formatter_word_events(
             RoffInlineEvent::Overstrike { buffered, .. } => *buffered,
             _ => false,
         };
-        if context.policy.record_native_cells {
-            if let RoffInlineEvent::HorizontalMotion {
-                reading_blank: true,
-                argument,
-            } = event
-                && !context.zero_advance.is_armed()
-            {
-                use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
-                let pending = context.zero_advance.has_pending_glyph();
-                if pending {
-                    // ESCAPE_HORIZ consumes the first advance by clearing
-                    // BACKBEFORE, preserving the previous graph (term.c:692).
-                    word.native_writes.push(FieldWrite::CancelBackbefore);
-                }
-                if !pending || argument.as_deref().is_some_and(
-                    libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore,
-                ) {
-                    word.native_writes.push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
-                }
-            }
-            if !context.policy.field_authoritative || !matches!(event, RoffInlineEvent::Text(_)) {
-                record_native_event(
-                    event,
-                    &mut word.native_writes,
-                    context.zero_advance.fallback_is_projected(),
-                );
-            }
+        if context.policy.record_native_cells
+            && (!context.policy.field_authoritative || !matches!(event, RoffInlineEvent::Text(_)))
+        {
+            record_native_event(
+                event,
+                &mut word.native_writes,
+                context.zero_advance.fallback_is_projected(),
+            );
         }
         word.append_source_event(event, &mut context, index + 1 == events.len());
     }

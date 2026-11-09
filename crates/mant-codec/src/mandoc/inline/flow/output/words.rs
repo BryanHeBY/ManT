@@ -237,7 +237,7 @@ impl InlineBuilder {
         &mut self,
         next_is_visible: bool,
         next_has_glyph: bool,
-        marker_blank_before_graph: bool,
+        leading_event_needs_retreat: bool,
     ) -> bool {
         let continued_word = self.begin_native_word_registers(next_is_visible);
         self.settle_pending_word_break(next_is_visible, next_has_glyph);
@@ -250,7 +250,7 @@ impl InlineBuilder {
             self.execution.boundary = PendingBoundary::Continued;
         }
         self.promote_word_keep(next_is_visible);
-        if marker_blank_before_graph
+        if leading_event_needs_retreat
             && self.execution.zero_advance.has_buffered_glyph()
             && !self.execution.boundary.is_nonbreaking()
             && (self.execution.spacing.enabled()
@@ -259,13 +259,10 @@ impl InlineBuilder {
                     PendingBoundary::Preserved | PendingBoundary::Continued
                 ))
         {
-            // The incoming word starts with a `\p` marker whose following
-            // blank the pending glyph's BACKBEFORE retreat consumes
-            // (term.c:901-908): resolving the glyph at this virtual boundary
-            // would instead eat the separator and arm the marker's break on
-            // the wrong cell. Keep the glyph pending; the word's own blank
-            // settles it. The shared field receipt projects any separator
-            // after the glyph only if the native cell is printed.
+            // A leading HORIZ can clear BACKBEFORE without a new cell;
+            // a marker can redirect it to a later authored blank. Keep
+            // the glyph pending until that event, so the actual word
+            // receipt can decide which separator prints.
             // A completed BACKBEFORE glyph still occupies its cell when a
             // second \\z has armed BACKAFTER. Both flags coexist upstream:
             // the marker's author blank, rather than this automatic blank,

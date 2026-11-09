@@ -65,7 +65,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     let settled_boundary_glyph = builder.begin_word_projection_with_break(
         true,
         !builder.in_definition_field() || has_glyph,
-        starts_with_break_marker_blank(&events),
+        leading_event_needs_native_retreat(&events),
     );
     builder.execution.settled_boundary_glyph =
         settled_boundary_glyph && matches!(origin, WordSource::Text(_));
@@ -166,15 +166,25 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     !execution.definitive_reject && !builder.execution.wipe_remainder
 }
 
-/// Whether a decoded word begins with a `\p` marker whose following blank
-/// precedes the word's first graph. Upstream, that blank is the retreat
-/// target of an armed BACKBEFORE glyph (term.c:901-908), not the marker's
-/// break cell; the word-boundary projection must not consume it early.
-fn starts_with_break_marker_blank(events: &[RoffInlineEvent]) -> bool {
+/// Whether a leading motion or marker needs the live BACKBEFORE glyph.
+/// HORIZ can consume it without writing a space, while a marker can
+/// redirect its retreat to an authored blank (term.c:678–705, 901–908).
+fn leading_event_needs_native_retreat(events: &[RoffInlineEvent]) -> bool {
     let mut seen_marker = false;
     for event in events {
         match event {
             RoffInlineEvent::LineBreak => seen_marker = true,
+            RoffInlineEvent::HorizontalMotion {
+                reading_blank: true,
+                argument,
+            } if argument.as_deref().is_some_and(|argument| {
+                !libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore(
+                    argument,
+                )
+            }) =>
+            {
+                return true;
+            }
             RoffInlineEvent::Text(value) => {
                 for character in value.chars() {
                     if is_formatter_word_blank(character) {

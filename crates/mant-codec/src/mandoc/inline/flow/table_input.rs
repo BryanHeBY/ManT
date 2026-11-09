@@ -16,6 +16,7 @@ impl InlineExecutionState {
                         FieldWrite::ArmBackafter
                             | FieldWrite::CancelBackafter
                             | FieldWrite::CancelBackbefore
+                            | FieldWrite::RewindWordEntry(_)
                     )
                 });
         }

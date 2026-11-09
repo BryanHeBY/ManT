@@ -239,6 +239,52 @@ impl FieldBuffer {
         true
     }
 
+    /// HORIZ rewinds the input cursor without shortening lastcol (term.c
+    /// 701–714). Retire entry padding only if the word overwrites the whole
+    /// rewound suffix. A visible earlier owner and an unoverwritten native
+    /// byte remain outside this reading projection.
+    pub(in crate::mandoc::inline::flow) fn rewind_word_entry(
+        &mut self,
+        writes: &[FieldWrite],
+        word_start: usize,
+    ) -> usize {
+        let Some((FieldWrite::RewindWordEntry(columns), following)) = writes.split_first() else {
+            return 0;
+        };
+        let count = columns.saturating_add(usize::from(self.backbefore_armed));
+        let Some(start) = self.cells.len().checked_sub(count) else {
+            return 0;
+        };
+        if count == 0
+            || start < self.resume
+            || self.cells[start..word_start.max(start)]
+                .iter()
+                .any(|cell| !matches!(cell, FieldCell::TabReference))
+            || following.len() < count
+            || !following[..count]
+                .iter()
+                .all(FieldWrite::overwrites_entry_padding)
+        {
+            return 0;
+        }
+        let removed = self.cells.len() - start.max(word_start);
+        for index in start..self.cells.len() {
+            self.blank_positions.remove(&index);
+            self.nonbreaking_positions.remove(&index);
+        }
+        self.cells.truncate(start);
+        self.projection_prefix.truncate(start + 1);
+        self.normalized_until = self.normalized_until.min(start);
+        if self
+            .scan
+            .as_ref()
+            .is_some_and(|scan| scan.registers.index > start)
+        {
+            self.scan = None;
+        }
+        removed
+    }
+
     /// Execute decoded native writes without consulting projected IR.
     pub(in crate::mandoc::inline::flow) fn apply_writes(
         &mut self,
@@ -300,7 +346,7 @@ impl FieldBuffer {
                 }
                 FieldWrite::ArmBackafter => self.backafter_armed = true,
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
-                FieldWrite::CancelBackbefore => {
+                FieldWrite::CancelBackbefore | FieldWrite::RewindWordEntry(_) => {
                     self.backbefore_armed = false;
                     self.backline_projection_target = None;
                 }

@@ -154,12 +154,14 @@ impl InlineBuilder {
         // BACKBEFORE retreat (term.c:901-908) can pop the separator blank
         // recorded above, and a pre-execution content start would put
         // already-accepted cells into a later rejected interval.
-        let receipt = definition
+        let writes = native_writes.expect("formatter word native writes");
+        let retired_entry = definition
             .field_buffer
-            .apply_writes(&native_writes.expect("formatter word native writes"));
+            .rewind_word_entry(&writes, native_word_start);
+        let receipt = definition.field_buffer.apply_writes(&writes);
         let native_separator = definition
             .field_buffer
-            .surviving_word_separator(native_word_start, separator);
+            .surviving_word_separator(native_word_start, separator - retired_entry);
         let authored_separator =
             take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
         definition
@@ -192,6 +194,7 @@ impl InlineBuilder {
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
         let (buffer, _) = self.execution.word_input();
         projection.record_separator(buffer, native_word_start, separator, native_separator);
+        projection.consumed_initial_separator |= retired_entry > 0 && native_separator == 0;
         if let Some(anchor) = self
             .execution
             .definition
@@ -235,16 +238,15 @@ impl InlineBuilder {
             .native_word_owner
             .take()
             .expect("native word owner");
-        let receipt = self
-            .execution
-            .plain_input
-            .buffer
-            .apply_writes(&native_writes.unwrap_or_default());
+        let writes = native_writes.unwrap_or_default();
+        let buffer = &mut self.execution.plain_input.buffer;
+        let retired_entry = buffer.rewind_word_entry(&writes, native_word_start);
+        let receipt = buffer.apply_writes(&writes);
         let native_separator = self
             .execution
             .plain_input
             .buffer
-            .surviving_word_separator(native_word_start, separator);
+            .surviving_word_separator(native_word_start, separator - retired_entry);
         let authored_separator =
             take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
         self.execution
@@ -290,6 +292,7 @@ impl InlineBuilder {
             cached_glyph,
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
+        result.consumed_initial_separator |= retired_entry > 0 && native_separator == 0;
         if let Some(anchor) = unit.anchors.last_mut() {
             result.align_separator_owner(anchor, receipt.first_content_cell);
         }

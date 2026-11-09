@@ -129,6 +129,8 @@ that crate was not published for that change.
   breakpoint restarts.
 - Preserve one hard row per native endline when a kept word pass rejects
   its remaining input.
+- Keep leading literal horizontal motion in native word acceptance when
+  it consumes generated padding or clears a pending backstep.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.
