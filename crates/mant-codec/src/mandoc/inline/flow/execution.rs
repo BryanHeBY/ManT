@@ -6,6 +6,7 @@ use super::{
     last_visible_character, trim_trailing_breakable_spaces, updated_spacing,
 };
 use libmandoc_rs::{
+    MacroSet,
     MacroToken::{Man, Roff},
     ManMacro, RoffMacro,
 };
@@ -14,9 +15,7 @@ impl InlineBuilder {
     /// A pre-handler's direct `term_word` operands do not run the native node
     /// exit. `pre_alternate` explicitly forwards its child EOS separately.
     pub(in crate::mandoc) fn finish_executed_node(&mut self, node: &libmandoc_rs::Node) {
-        if self.direct_word_operands.is_none()
-            && self.execution.observe_no_fill_source_lines != SourceLineObservation::Grouped
-        {
+        if self.visits_native_node() {
             self.execution.finish_executed_node(node);
         }
     }
@@ -260,15 +259,40 @@ impl InlineBuilder {
         // NODE_LINE settles the previous field under its old settings;
         // roff_term_pre_ta() then changes stops for the subsequent field.
         self.execution.execute_tab_configuration(node);
-        if node.line != 0 {
-            self.execution.last_executed_source_line = Some(node.line);
-        }
         // mdoc_term.c keys KEEP lifetime from each executed NODE_LINE event,
         // not from the numeric source coordinate. User-macro expansion can
         // execute several input rows that all retain the call site's line.
         if self.execution.keep.keeping() && node.flags.line_start {
             self.execution.keep.phase = KeepPhase::PreKeep;
         }
+    }
+
+    /// Apply the TEXT-specific branches of `print_man_node` and `print_mdoc_node`
+    /// after node entry and any ancestor pre-handler's generated words.
+    /// Return true when the visitor consumes the empty node itself.
+    pub(in crate::mandoc) fn execute_text_source_boundary(
+        &mut self,
+        node: &libmandoc_rs::Node,
+        native: &str,
+    ) -> bool {
+        if !self.visits_native_node() || self.execution.macro_set == MacroSet::None {
+            return false;
+        }
+        if native.is_empty() && (self.execution.macro_set == MacroSet::Man || node.flags.line_start)
+        {
+            self.execute_visited_empty_text(node.flags.no_fill);
+            return true;
+        }
+        // tbl_term.c fills cell operands directly. NODE_LINE from a synthetic
+        // recovery parse does not give a tbl cell another source-line event.
+        if node.flags.line_start
+            && native.starts_with(' ')
+            && self.table_buffer_written.is_none()
+            && !self.final_source_continuation_or(false)
+        {
+            self.execute_native_newline();
+        }
+        false
     }
 
     pub(in crate::mandoc) fn observe_no_fill_source_lines(&mut self, enabled: bool) {
@@ -391,7 +415,6 @@ impl InlineBuilder {
 
     /// Continue a formatter stream across an IR-only ownership split.
     pub(in crate::mandoc) fn inherit_preserved_execution(&mut self, state: PreservedInlineState) {
-        self.execution.last_executed_source_line = state.last_executed_source_line;
         self.execution.zero_advance = state.zero_advance;
         self.execution.word_end_break = if state.word_end_break {
             WordEndBreak::Pending

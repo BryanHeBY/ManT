@@ -37,7 +37,6 @@ pub(super) fn lower_definition_head(
     native_head_field_units: Option<usize>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionHeadOutcome {
-    let head = head_nodes.content;
     let groups = std::iter::once(head_nodes);
     if flow.head.generated_cells().is_some() {
         let generated_cells = usize::from(flow.head.generated_cells().unwrap_or_default());
@@ -65,7 +64,7 @@ pub(super) fn lower_definition_head(
             }
             _ => crate::mandoc::inline::AuthorBreakEffect::Line,
         };
-        let mut finished = context.lower_run_in_definition_head(
+        let finished = context.lower_run_in_definition_head(
             groups,
             flow.spacing_enabled,
             formatter,
@@ -73,11 +72,6 @@ pub(super) fn lower_definition_head(
             generated_cells,
             run_in_field,
         );
-        finished.execution.last_executed_source_line = head
-            .iter()
-            .chain(head_nodes.before)
-            .filter_map(latest_source_line)
-            .max();
         return DefinitionHeadOutcome {
             line: crate::mandoc::formatter::FinishedInlineLine {
                 output: finished.output,
@@ -107,13 +101,6 @@ pub(super) fn lower_definition_head(
         line: finished,
         run_in_execution: None,
     }
-}
-
-fn latest_source_line(node: &Node) -> Option<u32> {
-    std::iter::once(node.line)
-        .chain(node.children.iter().filter_map(latest_source_line))
-        .filter(|line| *line != 0)
-        .max()
 }
 
 /// Preserve libmandoc's tag on a man(7) `.TP`/`.IP` head. Unlike mdoc `Fl`

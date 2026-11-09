@@ -77,9 +77,7 @@ fn styled_scopes_preserve_pending_spacing_and_continuation() {
     }
 }
 
-use super::{
-    FilledBoundary, Font, InlineBuilder, parse_roff_text, parse_roff_text_with_font, plain_text,
-};
+use super::{Font, InlineBuilder, parse_roff_text, parse_roff_text_with_font, plain_text};
 use mant_ir::Inline;
 
 #[test]
@@ -91,14 +89,11 @@ fn inline_builder_tracks_nested_visible_boundaries_incrementally() {
             value: "first".to_owned(),
         }],
     }]);
-    builder.append_filled(
-        vec![Inline::Emphasis {
-            children: vec![Inline::Text {
-                value: "second".to_owned(),
-            }],
+    builder.append(vec![Inline::Emphasis {
+        children: vec![Inline::Text {
+            value: "second".to_owned(),
         }],
-        FilledBoundary::Word,
-    );
+    }]);
     builder.hard_break();
     builder.hard_break();
     builder.append(vec![Inline::Code {

@@ -187,7 +187,6 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// Active terminal tab settings persist across output owners and fields.
     tab_stops: Arc<TabStops>,
     last_tab_source_node: Option<u32>,
-    last_executed_source_line: Option<u32>,
     /// Detached definition HEADs use the same `NODE_LINE` entry rule as the
     /// block driver while their output is collected in a term field.
     observe_no_fill_source_lines: SourceLineObservation,
@@ -332,7 +331,6 @@ pub(in crate::mandoc) struct PreservedInlineState {
     pub(in crate::mandoc) formatter_cell_occupied: bool,
     pub(in crate::mandoc) pending_line_indent: usize,
     pub(in crate::mandoc) pending_definition_indent: Option<usize>,
-    pub(in crate::mandoc) last_executed_source_line: Option<u32>,
 }
 
 #[derive(Clone, Copy)]
@@ -481,18 +479,4 @@ impl From<bool> for SpacingMode {
     fn from(enabled: bool) -> Self {
         Self::from_enabled(enabled)
     }
-}
-
-/// Semantic boundary between two inline fragments in filled roff mode.
-///
-/// Roff distinguishes ordinary source wrapping from an input line whose first
-/// text character is whitespace.  The former fills as a word boundary; the
-/// latter starts a new output line.  Keeping that distinction here prevents
-/// renderers from having to rediscover formatter semantics from flattened
-/// text.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::mandoc) enum FilledBoundary {
-    SameLine,
-    Word,
-    LineBreak,
 }

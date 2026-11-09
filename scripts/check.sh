@@ -123,6 +123,8 @@ run "test annotation publication source and oracle matrix" \
   python3 -m unittest scripts.roff.tests.test_annotation_publication_fixture
 run "test complete source-sequence receipts and recovery classification" \
   python3 -m unittest scripts.roff.tests.test_source_sequence_fixtures
+run "test shared source-line receipts and row classifications" \
+  python3 -m unittest scripts.roff.tests.test_shared_source_line_fixtures
 run "test incoming word-separator state fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_word_spacing_fixture
 run "test source-bound synopsis word observation corrections" \
@@ -149,6 +151,8 @@ run "test exact roff fixture checkout across newline settings" \
   python3 -m unittest scripts.roff.tests.test_fixture_checkout
 run "test mathematical export real-source identities" \
   python3 -m unittest scripts.roff.tests.test_math_export_sources
+run "test source-line real-manual identity" \
+  python3 -m unittest scripts.roff.tests.test_real_source_lines
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test
 run "test bounded rendering census" python3 -m scripts.roff.audit.audit_roff_rendering --self-test
 run "test roff audit parallelism planning" python3 -m scripts.roff.tests.test_roff_audit_common

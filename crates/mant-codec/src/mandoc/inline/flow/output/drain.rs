@@ -439,7 +439,6 @@ impl InlineBuilder {
             formatter_cell_occupied,
             pending_line_indent: self.execution.pending_line_indent,
             pending_definition_indent: self.pending_definition_indent(),
-            last_executed_source_line: self.execution.last_executed_source_line,
         };
         // A scope return is not term_newln(). In particular, an authored
         // br/sp at the end of an inset HEAD closed its last physical row;

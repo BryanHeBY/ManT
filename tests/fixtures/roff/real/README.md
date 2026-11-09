@@ -8,6 +8,7 @@ required by the third-party manuals.
 
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
+| [`source-lines/`](source-lines/README.md) | Arch Linux libxcb 1.17.0-1 | Complete original gzip package member | Leading TAB in filled definition bodies and ordinary paragraphs |
 | [`mathematical-export/`](mathematical-export/README.md) | Exact November 2026 mathematical audit sources from POSIX, OpenBSD, FreeBSD, illumos and X11 | Complete original sources and the original X11 gzip member | Inline/display ownership, scripts, integral limits, matrices, accents and readable code-context formulas |
 | [`field-boundaries/`](field-boundaries/README.md) | Exact November 2026 audit sources: Debian chem, NetBSD 11.0 scmdctl, OpenBSD 7.9 mandoc and ksh | Original gzip and complete uncompressed release members | Native field exits, single table owners and nested display origins |
 | [`source-adjacency/`](source-adjacency/README.md) | Exact members from the November 2026 audit: Arch tmux, OpenBSD date, DragonFly regex, illumos ksh93 | Original gzip members and exact complete uncompressed sources | Source-sibling execution, spacing controls, complete semantic owners, links and repeated Markdown readback |

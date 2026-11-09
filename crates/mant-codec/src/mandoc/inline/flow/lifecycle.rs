@@ -51,7 +51,6 @@ impl InlineExecutionState {
             detached_device_row: None,
             tab_stops: Arc::new(TabStops::default()),
             last_tab_source_node: None,
-            last_executed_source_line: None,
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,
             wipe_remainder: false,
@@ -116,7 +115,6 @@ impl InlineExecutionState {
         // property. A paragraph drain does not consume a preceding \c.
         self.execution_epoch = 0;
         self.retire_definition_output_owner();
-        self.last_executed_source_line = None;
         self.completed_vertical_rows = 0;
         if let Some(author) = &mut self.author_execution {
             // The author mode is a formatter register; this index belongs to
@@ -138,7 +136,6 @@ impl InlineExecutionState {
         self.final_word_join = None;
         self.execution_epoch = 0;
         self.retire_definition_output_owner();
-        self.last_executed_source_line = None;
         if let Some(author) = &mut self.author_execution {
             author.field_output_start = 0;
         }

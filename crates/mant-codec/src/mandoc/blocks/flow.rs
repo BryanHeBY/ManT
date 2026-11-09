@@ -1,5 +1,5 @@
 //! Paragraph and literal flow own pending text, provenance and flush boundaries.
-use super::{FilledBoundary, InlineBuilder, layout, targets};
+use super::{InlineBuilder, layout, targets};
 use mant_ir::{Block, Inline};
 
 mod assembly;

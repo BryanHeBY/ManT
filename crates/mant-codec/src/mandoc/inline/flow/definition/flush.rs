@@ -3,7 +3,7 @@ use super::super::{
     AuthorBreakEffect, FormatterColumn, InlineBuilder, PendingBoundary, TrailingOutput,
     WordEndBreak, has_printable_character, trim_trailing_breakable_spaces,
 };
-use super::device::NativeFieldDevice;
+use super::device::{NativeFieldDevice, NativeFieldEmission};
 use super::state::{HangRowTransition, PendingFieldGapOrigin};
 
 pub(super) use super::super::output::retain_inline_identities as retain_unprinted_field_targets;
@@ -124,12 +124,19 @@ impl InlineBuilder {
             .is_some_and(|state| state.hang_row.field_discarded);
         let native_field_printable = !flags.wraps()
             && !native_field_discarded
-            && (self
-                .execution
-                .definition
-                .as_ref()
-                .is_some_and(|state| state.hang_row.field_printable)
-                || self.pending_hang_glyph_width().is_some());
+            && native.as_ref().map_or_else(
+                || {
+                    self.execution
+                        .definition
+                        .as_ref()
+                        .is_some_and(|state| state.hang_row.field_printable)
+                        || self.pending_hang_glyph_width().is_some()
+                },
+                // termp_it_pre() writes diag/inset run-in cells as a
+                // term_word(). U+00A0 is printed graph in term_field(),
+                // even when the projection represents it as ASCII space.
+                |device| device.emission == NativeFieldEmission::Printed,
+            );
         self.flush_native_hang_field(gap_cells, body_width_columns, exit_field);
         if let Some(native) = &native {
             self.definition_state_mut().hang_row.viscol = native.viscol;

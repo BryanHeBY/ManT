@@ -178,7 +178,6 @@ impl BlockState {
         &mut self,
         nodes: Vec<Inline>,
         source: Option<mant_ir::SourceSpan>,
-        starts_indented_line: bool,
         continues_line: bool,
     ) {
         if nodes.is_empty() {
@@ -187,7 +186,7 @@ impl BlockState {
             }
             return;
         }
-        self.push_inline_with(source, starts_indented_line, continues_line, |paragraph| {
+        self.push_inline_with(source, continues_line, |paragraph| {
             paragraph.append(nodes);
         });
     }
@@ -197,27 +196,16 @@ impl BlockState {
     pub(in crate::mandoc::blocks) fn push_inline_with(
         &mut self,
         source: Option<mant_ir::SourceSpan>,
-        starts_indented_line: bool,
         continues_line: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
         let visible_before = self.formatter.execution.visible_content_checkpoint();
         if self.uses_literal_output() {
-            self.literal.append_filled_fragment(
-                &mut self.formatter,
-                source,
-                starts_indented_line,
-                continues_line,
-                append,
-            );
+            self.literal
+                .append_filled_fragment(&mut self.formatter, continues_line, append);
         } else {
-            self.paragraph.append(
-                &mut self.formatter,
-                source,
-                starts_indented_line,
-                continues_line,
-                append,
-            );
+            self.paragraph
+                .append(&mut self.formatter, source, continues_line, append);
         }
         self.observe_inline_source_effects(visible_before);
     }
@@ -292,7 +280,7 @@ impl BlockState {
             // NODE_LINE already ran through the common source gate. Rich
             // declaration text retains that hard row in Paragraph instead
             // of turning its styles into fenced-code content.
-            self.push_inline_with(source, false, fallback, append);
+            self.push_inline_with(source, fallback, append);
             return;
         }
         let visible_before = self.formatter.execution.visible_content_checkpoint();

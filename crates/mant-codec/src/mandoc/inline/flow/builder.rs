@@ -1,6 +1,5 @@
 //! Construct inline projection owners without changing persistent execution state.
 use super::{CellProduction, Inline, InlineBuilder, InlineExecutionState, output};
-use libmandoc_rs::MacroSet;
 
 impl InlineBuilder {
     pub(in crate::mandoc) fn set_text_alignment(&mut self, alignment: mant_ir::TextAlignment) {
@@ -87,18 +86,9 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn visits_empty_text_as_space(&self, node: &libmandoc_rs::Node) -> bool {
-        if self.execution.observe_no_fill_source_lines == super::SourceLineObservation::Grouped {
-            return false;
-        }
-        if self.direct_word_operands.is_some() {
-            return false;
-        }
-        match self.execution.macro_set {
-            MacroSet::Man => true,
-            MacroSet::Mdoc => node.flags.line_start,
-            MacroSet::None => false,
-        }
+    pub(super) fn visits_native_node(&self) -> bool {
+        self.direct_word_operands.is_none()
+            && self.execution.observe_no_fill_source_lines != super::SourceLineObservation::Grouped
     }
 
     pub(in crate::mandoc) fn mark_definition_term_break(&mut self) {

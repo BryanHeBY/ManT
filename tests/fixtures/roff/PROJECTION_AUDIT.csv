@@ -12475,6 +12475,7 @@ fixtures,real/source-adjacency/arch-tmux.1.gz,1,573571f995860eb240a6092c7739f5e7
 fixtures,real/source-adjacency/dragonfly-regex.3.gz,3,e2a82c06d71a54a27cbd6e125786e8fbcf437d38a9b75a3fdf2417a4d9b4cf06,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/source-adjacency/illumos-ksh93.1,1,65c02f17ab03acc8d821d917c50ce22c967616d5783dec58bb1fcc28e3184ed8,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/source-adjacency/openbsd-date.1,1,da6857fda8a7b1f9b6098f1503085b2c1a9d8800b3c0433bae49a5d2986c80cd,mant.roff-projection-profile/v3,clean,not-required,
+fixtures,real/source-lines/xcb_composite_unredirect_window.3.gz,3,7be33290c550f8abb224dd9832d1fd5777449cf74175ebb689a3792cec452d77,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/windows-releases/npm.1.zst,1,34557de7f44cfdaf1bccdc05621bae7108df3bf58c49d24b1688292b82cff158,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/windows-releases/rclone.1.zst,1,f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/windows-releases/rg.1.zst,1,e83d82c28bb2683cf71500e5fb8d9746a162bb24b08a6396a15ab2ed1d96cb45,mant.roff-projection-profile/v3,clean,not-required,

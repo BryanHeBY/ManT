@@ -71,7 +71,7 @@ impl super::BlockLowerer<'_, '_> {
                 self.state.flush_preformatted();
             }
             self.state
-                .push_inline_with(source_span(argument), false, false, |builder| {
+                .push_inline_with(source_span(argument), false, |builder| {
                     crate::mandoc::inline::function_argument(
                         builder,
                         argument,
@@ -95,7 +95,7 @@ impl super::BlockLowerer<'_, '_> {
                 self.state.flush_preformatted();
             }
             self.state
-                .push_inline_with(source_span(source), false, false, |builder| {
+                .push_inline_with(source_span(source), false, |builder| {
                     append_generated_event(builder, event);
                 });
         }
@@ -272,7 +272,6 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 } else {
                     self.lowerer.state.push_inline_with(
                         nodes.first().and_then(source_span),
-                        false,
                         false,
                         append,
                     );

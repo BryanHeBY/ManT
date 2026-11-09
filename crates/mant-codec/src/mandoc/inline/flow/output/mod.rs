@@ -1,6 +1,6 @@
 use super::{
-    FilledBoundary, Font, FormatterColumn, Inline, InlineBuilder, OutputCheckpoint,
-    PendingBoundary, TrailingOutput, WordEndBreak, has_printable_character,
+    Font, FormatterColumn, Inline, InlineBuilder, OutputCheckpoint, PendingBoundary,
+    TrailingOutput, WordEndBreak, has_printable_character,
 };
 
 // A private boundary carried only while one authored Link spans two native

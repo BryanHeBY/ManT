@@ -27,11 +27,12 @@ fn block_state_preserves_filled_line_boundaries_and_continuations() {
         Vec::new(),
         crate::mandoc::formatter::FormatterState::default(),
     );
-    state.push_inline(text("alpha"), Some(source(1)), false, false);
-    state.push_inline(text("beta"), Some(source(2)), false, false);
-    state.push_inline(text("gamma"), Some(source(3)), true, false);
-    state.push_inline(text("delta"), Some(source(4)), false, true);
-    state.push_inline(text("epsilon"), Some(source(5)), false, false);
+    state.push_inline(text("alpha"), Some(source(1)), false);
+    state.push_inline(text("beta"), Some(source(2)), false);
+    state.paragraph.hard_break(&mut state.formatter);
+    state.push_inline(text("gamma"), Some(source(3)), false);
+    state.push_inline(text("delta"), Some(source(4)), true);
+    state.push_inline(text("epsilon"), Some(source(5)), false);
 
     let output = state.finish();
     let [
@@ -65,7 +66,7 @@ fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
         Vec::new(),
         crate::mandoc::formatter::FormatterState::default(),
     );
-    state.push_inline(text("prose"), Some(source(1)), false, false);
+    state.push_inline(text("prose"), Some(source(1)), false);
     state.push_preformatted(text("first"), Some(source(3)), false, true, true);
     state.push_preformatted(text("second"), Some(source(4)), true, true, true);
     state.push_preformatted(text("third"), Some(source(5)), false, true, true);
@@ -178,11 +179,11 @@ fn block_state_paragraph_take_resets_pending_join() {
         Vec::new(),
         crate::mandoc::formatter::FormatterState::default(),
     );
-    state.push_inline(text("first"), Some(source(1)), false, true);
+    state.push_inline(text("first"), Some(source(1)), true);
     state.flush_paragraph();
     assert!(state.paragraph_is_empty());
-    state.push_inline(text("second"), Some(source(4)), true, false);
-    state.push_inline(text("third"), Some(source(5)), false, false);
+    state.push_inline(text("second"), Some(source(4)), false);
+    state.push_inline(text("third"), Some(source(5)), false);
     let blocks = state.finish();
     let [
         Block::Paragraph {

@@ -1,21 +1,17 @@
 //! Filled IR content and its source positions; text registers live in the formatter.
-use super::{FilledBoundary, InlineBuilder, layout};
+use super::{InlineBuilder, layout};
 use crate::mandoc::formatter::FormatterState;
 use mant_ir::{Block, Inline, SourceSpan};
 
 pub(super) struct ParagraphFlow {
     nodes: Vec<Inline>,
     source: Option<SourceSpan>,
-    last_line: Option<u32>,
 }
 
 impl ParagraphFlow {
     pub(super) fn note_source(&mut self, source: Option<SourceSpan>) {
         if self.source.is_none() {
             self.source = source;
-        }
-        if source.is_some() {
-            self.last_line = source.map(|span| span.line);
         }
     }
 
@@ -61,7 +57,6 @@ impl ParagraphFlow {
         Self {
             nodes: Vec::new(),
             source: None,
-            last_line: None,
         }
     }
 
@@ -83,7 +78,6 @@ impl ParagraphFlow {
     /// Move the live projection destination without executing `term_newln`.
     /// Native cell and owner offsets address this same ordered node vector.
     pub(super) fn take_active_output(&mut self) -> (Vec<Inline>, Option<SourceSpan>) {
-        self.last_line = None;
         (std::mem::take(&mut self.nodes), self.source.take())
     }
 
@@ -91,7 +85,6 @@ impl ParagraphFlow {
         assert_eq!(self.nodes.len(), 0);
         self.nodes = nodes;
         self.source = source;
-        self.last_line = source.map(|span| span.line);
     }
 
     /// The detached definition HEAD already represents its pending native
@@ -127,7 +120,6 @@ impl ParagraphFlow {
         formatter: &mut FormatterState,
         state: crate::mandoc::inline::PreservedInlineState,
     ) {
-        self.last_line = state.last_executed_source_line;
         self.with_inline_builder(formatter, |builder| {
             builder.inherit_preserved_execution(state);
         });
@@ -152,36 +144,18 @@ impl ParagraphFlow {
         &mut self,
         formatter: &mut FormatterState,
         source: Option<SourceSpan>,
-        starts_indented_line: bool,
         continues_line: bool,
         append: impl FnOnce(&mut InlineBuilder),
     ) {
-        let source_line = source.map(|span| span.line);
-        let crossed_source_line = self
-            .last_line
-            .zip(source_line)
-            .is_some_and(|(previous, current)| current > previous);
-        let has_executed_predecessor =
-            self.last_line.is_some() || formatter.execution.has_formatter_cell();
         // The definition BODY's row decision reads TERMP_NONEWLINE as it
         // stands at this word's source-line entry, before the word's own
         // term_word() clears it (term.c:588 with mdoc_term.c:314-317).
         formatter.note_definition_source_line();
         let changed = self.with_inline_builder(formatter, |builder| {
-            let boundary = filled_fragment_boundary(
-                builder,
-                starts_indented_line && has_executed_predecessor,
-                crossed_source_line,
-            );
-            append_filled_fragment(builder, boundary, continues_line, append)
+            append_filled_fragment(builder, continues_line, append)
         });
-        if changed {
-            if self.source.is_none() {
-                self.source = source;
-            }
-            if source_line.is_some() {
-                self.last_line = source_line;
-            }
+        if changed && self.source.is_none() {
+            self.source = source;
         }
     }
 
@@ -224,7 +198,6 @@ impl ParagraphFlow {
             layout.continuation_indent_columns = continuation_indent;
         }
         let source = self.source.take();
-        self.last_line = None;
         (
             (!children.is_empty()).then_some(Block::Paragraph {
                 inline_layout,
@@ -243,13 +216,9 @@ impl ParagraphFlow {
 /// literal presentation. The destination does not choose another executor.
 pub(super) fn append_filled_fragment(
     builder: &mut InlineBuilder,
-    boundary: FilledBoundary,
     continues_line: bool,
     append: impl FnOnce(&mut InlineBuilder),
 ) -> bool {
-    if boundary == FilledBoundary::LineBreak {
-        builder.hard_break();
-    }
     // Filled NODE_LINE observes tab/source state but does not rewrite the
     // next word's NOSPACE/NONOSPACE decision (mdoc_term.c:318-322,
     // term.c:573-589). Ordinary source words use the same word entry as
@@ -265,22 +234,4 @@ pub(super) fn append_filled_fragment(
         builder.tighten_next_boundary();
     }
     builder.node_count() != previous_count
-}
-
-pub(super) fn filled_fragment_boundary(
-    builder: &InlineBuilder,
-    starts_indented_row: bool,
-    crossed_source_line: bool,
-) -> FilledBoundary {
-    if builder.final_source_continuation_or(false) {
-        FilledBoundary::SameLine
-    } else if starts_indented_row {
-        // CVS print_mdoc_node() executes NODE_LINE before a word,
-        // including generated punctuation and transparent wrappers.
-        FilledBoundary::LineBreak
-    } else if builder.has_tight_boundary() || !crossed_source_line {
-        FilledBoundary::SameLine
-    } else {
-        FilledBoundary::Word
-    }
 }

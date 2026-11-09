@@ -1,0 +1,129 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Complete unchanged Arch Linux libxcb manual; three selected filled TEXT boundaries.",
+  "referenceIdentity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "referenceRecipe": {
+    "name": "native-default",
+    "stdin": "exact source bytes encoded as UTF-8",
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "LC_ALL": "C.UTF-8",
+      "TZ": "UTC"
+    },
+    "profiles": {
+      "ascii": [
+        "-Tascii",
+        "-Owidth=78"
+      ],
+      "utf8": [
+        "-Tutf8",
+        "-Owidth=78"
+      ],
+      "html": [
+        "-Thtml"
+      ],
+      "tree": [
+        "-Ttree"
+      ],
+      "lint": [
+        "-Tlint"
+      ]
+    },
+    "timeoutSeconds": 30
+  },
+  "cases": [
+    {
+      "file": "xcb_composite_unredirect_window.3.gz",
+      "sourceIdentity": "archlinux-libxcb-1.17.0-1:man3/xcb_composite_unredirect_window.3.gz",
+      "sourceSha256": "7be33290c550f8abb224dd9832d1fd5777449cf74175ebb689a3792cec452d77",
+      "fixtureSha256": "68aba5897f250fb1d81479dce2a471bf2e9b0598b45c339abb7a82816b4f1a2c",
+      "sourceBytes": 1372,
+      "fixtureBytes": 701,
+      "retrievedFromRetainedCorpusOn": "2026-11-09",
+      "originUrl": "https://archive.archlinux.org/packages/l/libxcb/libxcb-1.17.0-1-x86_64.pkg.tar.zst",
+      "sourceRepository": "https://gitlab.freedesktop.org/xorg/lib/libxcb",
+      "revision": "Arch Linux libxcb 1.17.0-1, x86_64",
+      "archive": "libxcb-1.17.0-1-x86_64.pkg.tar.zst",
+      "archiveMember": "usr/share/man/man3/xcb_composite_unredirect_window.3.gz",
+      "archiveSha256": "2b2e7ac64b1d56c08a227c10bcab179605f2773f31db0a8c89f49f4e5b2f1292",
+      "license": "X11 (complete package COPYING)",
+      "licenseFile": "../LICENSES/LIBXCB-COPYING.txt",
+      "licenseArchiveMember": "usr/share/licenses/libxcb/COPYING",
+      "licenseSha256": "c5ffbfeaa501071ceeb97b7de2c0d703fdaa35de01c0fb6cbac1c28453a3e9fd",
+      "transformation": "None; original gzip member extracted byte-for-byte.",
+      "selectionReason": "Filled leading TAB in two IP bodies and one ordinary SH paragraph.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "14cfcfff8b2c43b3cd499c4d221224623c10e9e9f04f309075821fc0ef2867dd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2053,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "c210a8e49f348ec1018d71746d0cbcadfea077292bcd99ca461cfa4acddab0aa",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2056,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "83372ef64cc2c70b820916449132993b6ff2ca3bdad256a63c4f5babffff7255",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3878,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "841205cdd78d19e90ff8205caeaec51e7fb24964f3847d5c08837093689c5216",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3114,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 2,
+          "stdoutSha256": "02a60fb4bee18488869a13c574aec7a35d968170750437071dab007042a53758",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 866,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      },
+      "wideUtf8": {
+        "arguments": [
+          "-Tutf8",
+          "-Owidth=160"
+        ],
+        "exitCode": 0,
+        "stdoutSha256": "59cdb0395f7a08e2f88201fa21fc2a9bab287dd2c3c80fab042bcc8e9128693b",
+        "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdoutBytes": 2093,
+        "stderrBytes": 0,
+        "status": "Captured"
+      }
+    }
+  ]
+}

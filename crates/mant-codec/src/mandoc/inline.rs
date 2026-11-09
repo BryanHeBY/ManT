@@ -33,7 +33,7 @@ pub(in crate::mandoc) use flow::{
     retain_inline_identities, split_row_origin, strip_native_projection_markers,
     take_definition_term_breaks, take_inline_layout, trailing_completed_row_origins,
 };
-pub(super) use flow::{FilledBoundary, FontScope, FontState, InlineBuilder};
+pub(super) use flow::{FontScope, FontState, InlineBuilder};
 mod node;
 mod source;
 mod word_input;

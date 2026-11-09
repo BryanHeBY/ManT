@@ -1,11 +1,7 @@
 //! Annotate already executed output without creating formatter state.
 
 use super::super::super::links;
-use super::super::WordProjectionPolicy;
-use super::{
-    FilledBoundary, Font, INTERNAL_LINK_SPLIT, INTERNAL_OUTPUT_SCOPE, Inline, InlineBuilder,
-    projection,
-};
+use super::{Font, INTERNAL_LINK_SPLIT, INTERNAL_OUTPUT_SCOPE, Inline, InlineBuilder, projection};
 
 impl InlineBuilder {
     /// Mark a local annotation scope without writing a formatter cell. A
@@ -200,33 +196,6 @@ impl InlineBuilder {
             })
         });
         (annotated, membership)
-    }
-
-    /// Append content using the formatter-level boundary selected by the
-    /// block lowering pass.
-    pub(in crate::mandoc) fn append_filled(
-        &mut self,
-        incoming: Vec<Inline>,
-        boundary: FilledBoundary,
-    ) {
-        match boundary {
-            FilledBoundary::SameLine => self.append(incoming),
-            FilledBoundary::Word => {
-                let mut incoming = incoming;
-                self.append_at_boundary(
-                    &mut incoming,
-                    false,
-                    true,
-                    false,
-                    0,
-                    WordProjectionPolicy::Printed,
-                );
-            }
-            FilledBoundary::LineBreak => {
-                self.hard_break();
-                self.append(incoming);
-            }
-        }
     }
 }
 

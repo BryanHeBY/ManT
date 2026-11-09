@@ -1,9 +1,7 @@
 //! Plan source-backed tbl cells and replay tbl's bounded lexical execution.
 use crate::mandoc::{
     LoweringContext, TableTextBlock,
-    inline::{
-        FilledBoundary, InlineBuilder, lower_source_fragment_with_formatter_state, plain_text,
-    },
+    inline::{InlineBuilder, lower_source_fragment_with_formatter_state, plain_text},
 };
 use libmandoc_rs::Node;
 use mant_ir::Inline;
@@ -390,7 +388,7 @@ fn lower_raw_table_text_block(
     if !operand_source.is_empty() {
         let lowered = context.lower_text(&operand_source, formatter);
         builder.begin_word_projection(mant_ir::has_printable_character(&lowered));
-        builder.append_filled(lowered, FilledBoundary::Word);
+        builder.append(lowered);
     }
     formatter.set_spacing_enabled(builder.spacing_enabled());
     formatter.vertical_space_debt = builder.vertical_space_debt();

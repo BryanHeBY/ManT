@@ -14,7 +14,6 @@ impl BlockLowerer<'_, '_> {
             // its HEAD keeps the ordinary source/continuation driver.
             self.state.push_inline_with(
                 super::source_span(node),
-                super::inline_flow::starts_indented_filled_line(node),
                 super::ends_with_line_continuation(node),
                 |builder| {
                     builder.observe_no_fill_source_lines(true);

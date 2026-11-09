@@ -124,7 +124,7 @@ impl super::BlockLowerer<'_, '_> {
             self.push_no_fill_generated(node, false, false, false, append);
         } else {
             self.state
-                .push_inline_with(source_span(node), false, false, append);
+                .push_inline_with(source_span(node), false, append);
         }
     }
 }

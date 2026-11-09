@@ -1,4 +1,4 @@
-//! Filled inline routing and source-boundary recognition, not structural ownership.
+//! Route filled inline nodes to the active output owner.
 use super::{Node, NodeKind, is_enclosure_macro, source_span};
 use crate::mandoc::adjacency::Siblings;
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
@@ -44,19 +44,15 @@ impl super::BlockLowerer<'_, '_> {
         // filled word executes, independently of the presentation fill mode.
         self.resume_no_fill_row();
         let source = source_span(node);
-        self.state.push_inline_with(
-            source,
-            starts_indented_filled_line(node),
-            ends_with_line_continuation(node),
-            |builder| {
+        self.state
+            .push_inline_with(source, ends_with_line_continuation(node), |builder| {
                 crate::mandoc::inline::append_inline_node_with_source(
                     builder,
                     node,
                     siblings,
                     self.context.default_name,
                 );
-            },
-        );
+            });
     }
 }
 
@@ -64,28 +60,6 @@ pub(super) fn is_inline_equation(node: &Node) -> bool {
     // roff_EQ sets NODE_LINE for both explicit and delimiter-origin EQ.
     // Older owned snapshots retain the previous source-line fallback.
     node.kind == NodeKind::Equation && node.equation_inline.unwrap_or(!node.flags.line_start)
-}
-
-/// Match the filled-text line-break rule used by libmandoc's terminal and
-/// HTML renderers: a text node beginning an input line with whitespace starts
-/// a new output line.  The first printable text can sit below an inline macro
-/// wrapper, so inspect the semantic subtree rather than only direct text
-/// siblings.
-pub(super) fn starts_indented_filled_line(node: &Node) -> bool {
-    if node.flags.no_print || node.kind == NodeKind::Comment {
-        return false;
-    }
-    if node.kind == NodeKind::Text {
-        return node.flags.line_start
-            && node
-                .text
-                .as_deref()
-                .is_some_and(|text| text.starts_with(char::is_whitespace));
-    }
-    node.children
-        .iter()
-        .find(|child| !child.flags.no_print && child.kind != NodeKind::Comment)
-        .is_some_and(starts_indented_filled_line)
 }
 
 /// Whether the final printable fragment in this syntax subtree ends with the

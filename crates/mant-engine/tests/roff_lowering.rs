@@ -264,6 +264,8 @@ mod control_requests;
 #[path = "roff_lowering/display_return.rs"]
 mod display_return;
 
+#[path = "roff_lowering/source_line_consumers.rs"]
+mod source_line_consumers;
 #[path = "roff_lowering/source_spacing.rs"]
 mod source_spacing;
 
@@ -287,3 +289,6 @@ mod table_execution;
 
 #[path = "roff_lowering/deferred_ownership.rs"]
 mod deferred_ownership;
+
+#[path = "roff_lowering/shared_source_lines.rs"]
+mod shared_source_lines;

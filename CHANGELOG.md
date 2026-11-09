@@ -66,6 +66,10 @@ that crate was not published for that change.
 - Match native printing of trailing spaces and tabs. Preserve empty rows,
   fixed Unicode blanks and recovery glyphs while omitting padding left
   unprinted by the native formatter.
+- Keep filled source lines beginning with a tab on the current row. Apply
+  the native ASCII-space line rule when visiting text inside enclosures and
+  definition terms, so generated punctuation, continuations and field gaps
+  stay in execution order.
 - Add complete POSIX, BSD, illumos and X11 mathematical regression pages for
   inline paragraphs, scripts, integral limits, matrices and readable formulas
   inside code examples. Align the structure audit with executed inline origin
