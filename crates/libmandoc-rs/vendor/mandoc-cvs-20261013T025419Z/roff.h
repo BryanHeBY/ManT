@@ -541,6 +541,7 @@ struct	roff_node {
 #define	NODE_NOPRT	 (1 << 10) /* Shall not print anything. */
 #define	NODE_ID		 (1 << 11) /* Target for deep linking. */
 #define	NODE_HREF	 (1 << 12) /* Link to another place in this page. */
+#define	NODE_EQN_INLINE	 (1 << 13) /* Originated in equation delimiters. */
 	int		  prev_font; /* Before entering this node. */
 	int		  aux;     /* Decoded node data, type-dependent. */
 	enum roff_tok	  tok;     /* Request or macro ID. */

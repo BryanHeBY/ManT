@@ -232,6 +232,7 @@ enum mant_mandoc_author_mode {
 #define MANT_MANDOC_NODE_SYNOPSIS_PRETTY (1U << 9)
 #define MANT_MANDOC_NODE_TABLE_START (1U << 10)
 #define MANT_MANDOC_NODE_BROKEN (1U << 11)
+#define MANT_MANDOC_NODE_EQUATION_INLINE (1U << 12)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(
     const char *, const char *, int, int, const char *);

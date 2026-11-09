@@ -16,6 +16,7 @@ use std::{
 
 mod append_growth;
 mod bundles;
+mod equation_placement;
 mod includes;
 mod input;
 mod lifecycle;

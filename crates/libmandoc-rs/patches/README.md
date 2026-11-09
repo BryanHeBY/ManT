@@ -55,6 +55,10 @@ complete literal atom identities for the owned equation snapshot. It changes
 neither native parsing nor formatting. A literal remains a mathematical atom,
 not automatically prose or an inferred function.
 
+Patch `0036` retains `roff_eqndelim`'s executed inline-origin state on equation
+nodes. Source-line position remains independent. The owned snapshot exposes
+the origin to producers before they choose inline or display content owners.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

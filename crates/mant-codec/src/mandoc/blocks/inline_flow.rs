@@ -41,8 +41,10 @@ impl super::BlockLowerer<'_, '_> {
 }
 
 pub(super) fn is_inline_equation(node: &Node) -> bool {
+    // roff_EQ sets NODE_LINE for both explicit and delimiter-origin EQ.
+    // Older owned snapshots retain the previous source-line fallback.
     node.kind == NodeKind::Equation
-        && !node.flags.line_start
+        && node.equation_inline.unwrap_or(!node.flags.line_start)
         && node
             .equation
             .as_ref()

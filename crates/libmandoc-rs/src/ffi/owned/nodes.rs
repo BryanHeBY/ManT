@@ -28,6 +28,7 @@ const NODE_DELIMITER_OPEN: u32 = 1 << 7;
 const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
 const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
 const NODE_TABLE_START: u32 = 1 << 10;
+const NODE_EQUATION_INLINE: u32 = 1 << 12;
 const MAX_OWNED_NODE_DEPTH: usize = 256;
 
 #[derive(Default)]
@@ -327,6 +328,8 @@ unsafe fn copy_node_shallow(
             copy_table_rule_data_columns(document, view.table_rule_data, transfer_budget)
         }?,
         equation: unsafe { copy_equation(document, view.equation, 0, equation_budget) }?,
+        equation_inline: (kind == NodeKind::Equation)
+            .then_some(view.flags & NODE_EQUATION_INLINE != 0),
         children: Vec::new(),
     };
 

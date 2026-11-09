@@ -69,6 +69,12 @@ text to simulate padding.
 - Change an unreleased wire family deliberately and document migration. Never
   rewrite a frozen schema or weaken an assertion to hide a representation loss.
 
+Formula placement resolves to `Inline::Equation` inside its complete content
+owner or `Block::Equation` for a display. An inline delimiter at the start of
+an input line still belongs to the surrounding paragraph in filled text.
+Native delimiter-origin evidence stays in the source producer and its owned
+syntax snapshot. Consumers receive the resolved content relationship.
+
 Native compatibility is resolved before publication: equation parser counters
 become mathematical sequences/groups, not IR fields. A table's optional
 `max_alignment_padding_columns` describes a resolved alignment region; its

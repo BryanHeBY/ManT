@@ -45,6 +45,11 @@ that crate was not published for that change.
   The checked mathematical export API exposes strict conversion/resource errors.
 - Encode ASCII operator ellipses as `\ldots`, including normalized GNU `ldots`
   from native manuals. Quoted literal dots retain their literal representation.
+- Keep delimiter-origin equations in their surrounding paragraph across source
+  line breaks, including POSIX floating-point and integer-limit descriptions.
+  Preserve explicit display equations and literal owners independently of
+  source-line position. Document MathJax text-mode configuration, literal POSIX
+  notation and target-format approximation warnings.
 
 ### Dependency maintenance
 
@@ -240,6 +245,10 @@ that crate was not published for that change.
   changing grouping, pagination, context or source positions.
 
 ### libmandoc-rs 0.14.0
+
+- Add optional `Node::equation_inline` evidence captured from executed equation
+  delimiters. Explicit EQ requests report false. Older owned snapshots decode
+  with absent evidence and retain the prior source-line fallback when lowered.
 
 - Retain recognized function and complete literal mathematical atom roles in
   owned equation snapshots before native font splitting erases their identity.

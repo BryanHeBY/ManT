@@ -561,7 +561,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree is the pinned pristine source subset plus the
-34 ordered patches in `patches/series`. The stack follows build prerequisites,
+36 ordered patches in `patches/series`. The stack follows build prerequisites,
 parser safety, embedding, execution evidence, compatibility, rendering,
 allocation performance, and HTML scope lifetime. Patch numbers identify the
 patch stack. Cargo features select compiled capabilities.
@@ -714,6 +714,13 @@ they never refer to a patch number in the current series.
 - `0034-embed-native-markdown-renderer.patch` captures upstream Markdown
   output in the bounded renderer sink and resets formatting state and
   indentation storage per call.
+
+- `0035-retain-equation-text-roles.patch` retains complete function and quoted
+  atom identities before native font splitting.
+- `0036-retain-inline-equation-origin.patch` retains the executed delimiter
+  origin of equation nodes independently of their input-line position.
+  `Node::equation_inline` exposes this optional evidence. Serialized snapshots
+  from older versions decode the absent field as `None`.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

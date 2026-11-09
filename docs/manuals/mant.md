@@ -1270,6 +1270,13 @@ report conversion findings on stderr. Plain report titles and search previews
 retain their supplied text representation. Markdown math input preserves its
 source spelling as unsupported reading content.
 
+MathJax viewers require `textmacros` and `textcomp`, including `textcomp` in
+the text-mode package configuration. The complete setup is documented in the
+Mathematical Export section of mant-markdown(7). KaTeX supports the exported
+literal text escapes directly. Quoted POSIX `^` and ordinary underscore
+spellings retain their literal meaning. Conversion warnings can describe
+font, symbol and spacing approximations while preserving the formula content.
+
 Search JSON declares its coordinate projection as `mant.markdown/v2` with
 `math: "readable"`, preserving literal mathematical symbols for visible search.
 Reproduce its complete Markdown using `--format markdown --preserve-anchors

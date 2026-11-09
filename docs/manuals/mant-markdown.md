@@ -451,6 +451,11 @@ needs mathematical/amsmath support. Source atom text is escaped as content,
 while fractions, roots, scripts, limits, accents and matrices use a fixed
 LaTeX subset. This conversion works from the resolved expression tree.
 
+Inline formulas retain their enclosing paragraph across source line breaks.
+The roff producer resolves delimiter-origin equations separately from explicit
+EQ displays before publishing IR. Code and other literal content retain their
+own hard rows.
+
 Default Markdown export selects LaTeX with readable best-effort fallback.
 `--markdown-math readable` selects code spans and unlabelled display fences.
 Literal blocks, portable reading tables and legacy
@@ -468,6 +473,61 @@ conversion, including hard resource errors. Producer diagnostics describe
 source coverage independently of target-format conversion issues. Semantic
 reimport declarations require `--markdown-math readable`. Markdown math input
 continues to retain its delimiters as unsupported reading content.
+
+### Renderer configuration
+
+MathJax viewers require `textmacros` and `textcomp` for literal characters
+inside the exported text wrappers. Configure both the math packages and the
+nested text-mode packages before loading MathJax.
+
+```javascript
+window.MathJax = {
+  loader: { load: ['[tex]/textmacros', '[tex]/textcomp'] },
+  tex: {
+    packages: { '[+]': ['textmacros', 'textcomp'] },
+    textmacros: { packages: { '[+]': ['textcomp'] } },
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']]
+  }
+};
+```
+
+Viewers that tokenize Markdown mathematics themselves pass the extracted
+formula bodies to the renderer. The delimiter settings above apply when
+MathJax scans the resulting HTML text. Literal code surfaces retain the
+viewer's usual code-block exclusions.
+
+The text-mode package configuration enables escapes such as
+`\textasciicircum`, `\textgreater` and `\textbackslash`. In a basic MathJax
+configuration those commands can appear as visible text. Enabling only their
+math-mode definitions can produce text-mode errors. KaTeX supports these
+literal escapes directly. See the MathJax textcomp and textmacros documentation
+for the same configuration contract.
+[MathJax textcomp](https://docs.mathjax.org/en/v3.2/input/tex/extensions/textcomp.html)
+[MathJax textmacros](https://docs.mathjax.org/en/v3.2/input/tex/extensions/textmacros.html)
+
+### Source notation and approximation warnings
+
+Quoted POSIX forms such as `2"^" N` and ordinary `X_ i` spellings remain
+literal mathematical content. Parsed `2 sup N` and `X sub i` operations produce
+structured scripts. For example, POSIX `stdint.h` uses a quoted caret, and
+`drand48` mixes `X_ i` with the structural `X sub {n+1}` form. The resulting
+text characters and scripts preserve those distinct source declarations.
+Plain-text mathematical descriptions and code examples
+retain their supplied content. Markdown math reimport retains source spelling
+and follows the unsupported-syntax rules below.
+
+Target conversion reports can include unknown atom roles, font approximations
+and literal spacing. Unicode fallback needs suitable fonts and may generate
+additional renderer-specific glyph-metrics warnings. Formula structure and
+readable source content remain available under best effort. Strict library
+exports reject reported losses. Resource and structure failures follow the
+checked/default export policies described above.
+
+Full-document CLI warnings retain up to eight issue details plus a summary.
+Several quoted spaces in a formula can each contribute a spacing finding.
+`--markdown-math readable` selects the shared reading representation for
+viewers using ordinary code spans and fences.
 
 ## Preserved Unsupported Syntax
 

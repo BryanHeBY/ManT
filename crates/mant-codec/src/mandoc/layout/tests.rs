@@ -42,6 +42,7 @@ fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         table_cells: Vec::new(),
         table_rule_data_columns: Vec::new(),
         equation: None,
+        equation_inline: None,
         children: Vec::new(),
     }
 }

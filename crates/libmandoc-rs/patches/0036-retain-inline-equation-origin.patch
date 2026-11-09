@@ -1,0 +1,29 @@
+Subject: retain executed inline equation delimiter origin
+Upstream-Status: ManT-owned equation snapshot evidence
+
+roff_eqndelim() already tracks whether EQ came from active delimiters.
+Retain that resolved origin when roff_EQ() allocates the equation node.
+NODE_LINE records source line position independently. The owned snapshot
+transfers delimiter origin to producers resolving mathematical placement.
+
+--- a/roff.h
++++ b/roff.h
+@@ -541,6 +541,7 @@
+ #define	NODE_NOPRT	 (1 << 10) /* Shall not print anything. */
+ #define	NODE_ID		 (1 << 11) /* Target for deep linking. */
+ #define	NODE_HREF	 (1 << 12) /* Link to another place in this page. */
++#define	NODE_EQN_INLINE	 (1 << 13) /* Originated in equation delimiters. */
+ 	int		  prev_font; /* Before entering this node. */
+ 	int		  aux;     /* Decoded node data, type-dependent. */
+ 	enum roff_tok	  tok;     /* Request or macro ID. */
+--- a/roff.c
++++ b/roff.c
+@@ -3551,6 +3551,8 @@
+ 	n = roff_node_alloc(r->man, ln, ppos, ROFFT_EQN, TOKEN_NONE);
+ 	if (ln > r->man->last->line)
+ 		n->flags |= NODE_LINE;
++	if (r->eqn_inline)
++		n->flags |= NODE_EQN_INLINE;
+ 	n->eqn = eqn_box_new();
+ 	roff_node_append(r->man, n);
+ 	r->man->next = ROFF_NEXT_SIBLING;

@@ -149,6 +149,19 @@ handling for fallback text. Source backslashes, braces, dollars and other
 special characters remain literal content. Consumers choose the enclosing
 Markdown or document syntax.
 
+`MathJax` viewers need `textmacros` and `textcomp` in the TeX packages, plus
+`textcomp` in the nested text-mode package list. This enables literal escapes
+such as `\textasciicircum` and `\textgreater` inside styled text wrappers.
+Configure `tex.textmacros.packages` with `{'[+]': ['textcomp']}` as well as
+the loader and TeX packages. The complete browser configuration is documented
+in the [mathematical export manual](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-markdown.md#renderer-configuration).
+`KaTeX` supports these literal text escapes directly. Unicode fallback still
+requires suitable fonts and may produce renderer-specific metrics warnings.
+
+Quoted POSIX notation such as `e"^"` and ordinary underscores stays literal.
+The producer preserves parsed `sup`/`sub` operations as structured scripts.
+Plain-text or literal mathematical descriptions retain their source content.
+
 Unknown atom roles, opaque structure, unsupported target symbols/fonts,
 custom LaTeX fences/decorations, irregular matrices and unrepresentable
 characters or whitespace produce expression-local loss paths. Strict policy

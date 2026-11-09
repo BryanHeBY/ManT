@@ -466,6 +466,14 @@ pub struct Node {
     pub table_rule_data_columns: Vec<u32>,
     /// Owned native eqn(7) expression carried by this node.
     pub equation: Option<crate::EquationBox>,
+    /// Whether the equation originated in active inline delimiters.
+    /// `Some(false)` denotes an explicit EQ request. `None` covers other
+    /// node kinds and older owned snapshots without this execution evidence.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub equation_inline: Option<bool>,
     /// Child nodes in source order.
     pub children: Vec<Self>,
 }

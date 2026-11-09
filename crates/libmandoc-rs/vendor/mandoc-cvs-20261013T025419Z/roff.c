@@ -3551,6 +3551,8 @@ roff_EQ(ROFF_ARGS)
 	n = roff_node_alloc(r->man, ln, ppos, ROFFT_EQN, TOKEN_NONE);
 	if (ln > r->man->last->line)
 		n->flags |= NODE_LINE;
+	if (r->eqn_inline)
+		n->flags |= NODE_EQN_INLINE;
 	n->eqn = eqn_box_new();
 	roff_node_append(r->man, n);
 	r->man->next = ROFF_NEXT_SIBLING;

@@ -1345,9 +1345,15 @@ Display [mandoc eqn(7)](https://mandoc.bsd.lv/man/eqn.7.html) input becomes an
 readable text projection. The producer resolves native boxes into text,
 operations, sequences, groups, piles and matrices; parser argument counters
 and execution state do not enter IR. Delimiter-selected equations inside prose
-remain inline equation nodes between the surrounding words. Configuration-only
+remain inline equation nodes between the surrounding words, including when
+the opening delimiter starts a new source line. The native producer retains
+the executed delimiter origin separately from input-line position. Literal
+owners preserve their own hard rows and readable formulas. Configuration-only
 `EQ`/`EN` blocks emit no empty equation. The common complete, unquoted GNU
 `ldots` macro is projected as `...`; quoted `"ldots"` remains literal text.
+
+Quoted POSIX notation such as `2"^" N` and ordinary `X_ i` spellings stays
+literal. Native `2 sup N` and `X sub i` operations become structured scripts.
 
 Native `tbl(7)` keeps delimiter-like cell text opaque. ManT decodes that native
 word with the ordinary roff escape and font state, preserving its delimiters
@@ -1366,8 +1372,10 @@ continue to occupy their original place among prose words.
 
 Text, search and TUI consumers use the shared readable projection. JSON retains
 the mathematical structure, and `mant-codec::math` can encode that structure as
-`MathML` Core or a restricted LaTeX body. `--markdown-math latex` selects
-mathematical Markdown explicitly. Ordinary Markdown keeps readable formulas.
+`MathML` Core or a restricted LaTeX body. Markdown defaults to inline/display
+LaTeX with reported best effort. `--markdown-math readable` selects the shared
+reading projection. Renderer configuration and approximation boundaries are
+documented in [mant-markdown(7)](mant-markdown.md#mathematical-export).
 Each mathematical encoder reports target-format losses separately from the
 producer's source diagnostics. Opaque table cells keep the native executed
 word payload in the ordinary text path.

@@ -573,6 +573,7 @@ Escape.
             table_cells: Vec::new(),
             table_rule_data_columns: Vec::new(),
             equation: None,
+            equation_inline: None,
             children,
         }
     }
