@@ -394,6 +394,71 @@ fn body_flush_returns_only_printed_blanks_to_a_detached_linked_term() {
 }
 
 #[test]
+fn a_detached_head_does_not_replay_its_endline_in_a_rejecting_body_flush() {
+    // The exact sources ran through fixed CVS. mdoc_term.c::termp_it_post()
+    // leaves the inset HEAD's cells pending. The first body flush accepts
+    // HEAD X, rejects Y, and leaves one actual empty row; a positive sp
+    // adds its own row. The accepted HEAD endline closes the term once.
+    let source = r#".Dd September 28, 2026
+.Dt TEST 1
+.Os
+.Sh NAME
+.Nm test
+.Nd probe
+.Sh DESCRIPTION
+.Bl -inset
+.It Xo
+.No "X\p \p Y"
+.Xc
+.br
+.No BodyWord
+.El
+"#;
+    for (input, expected, markdown_expected) in [
+        (source.to_owned(), "X\n\nBodyWord", "• X\n\n  BodyWord"),
+        (
+            source.replace(".br\n", ".sp 0\n"),
+            "X\n\nBodyWord",
+            "• X\n\n  BodyWord",
+        ),
+        (
+            source.replace(".br\n", ".sp 1\n"),
+            "X\n\n\nBodyWord",
+            "• X\n\n  BodyWord",
+        ),
+        (
+            source.replace(".No \"X", ".Em \"X"),
+            "X\n\nBodyWord",
+            "• X\n\n  BodyWord",
+        ),
+        (source.replace(".br\n", ""), "X\n", "• X\n"),
+    ] {
+        let plain = render(&input, "roff", "text", "never", false);
+        assert_eq!(description(&plain), expected, "{input}");
+        assert_eq!(
+            without_sgr(&render(&input, "roff", "text", "always", false)),
+            plain
+        );
+        let wire = render(&input, "roff", "json", "never", false);
+        let bundle: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
+        let document = bundle.document.unwrap();
+        let [mant_ir::Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_slice()
+        else {
+            panic!("expected one definition after JSON transport");
+        };
+        assert_eq!(inline_plain_text(&items[0].terms[0].content), "X");
+
+        // Raw addressable HTML is outside the semantic reimport subset.
+        let mut markdown = render(&input, "roff", "markdown", "never", false);
+        for _ in 0..2 {
+            let readback = render(&markdown, "markdown", "text", "never", false);
+            assert_eq!(description(&readback), markdown_expected, "{markdown}");
+            markdown = render(&markdown, "markdown", "markdown", "never", false);
+        }
+    }
+}
+
+#[test]
 fn accepted_empty_word_passes_keep_hard_rows_before_a_successor_or_eof() {
     // These exact inputs ran all five pristine profiles. term.c:205–220
     // closes each accepted loop pass, including NBRZW with no printed

@@ -60,6 +60,10 @@ impl DeferredHeadProjection {
         Self(Rc::clone(&self.0))
     }
 
+    pub(in crate::mandoc::inline::flow) fn owns_word(&self, owner: &str) -> bool {
+        self.0.borrow().owners.contains(owner)
+    }
+
     pub(in crate::mandoc::inline::flow) fn accept(&self, receipts: &[RowReceipt]) {
         let mut pending = self.0.borrow_mut();
         for receipt in receipts {

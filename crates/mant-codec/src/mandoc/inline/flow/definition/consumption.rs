@@ -154,10 +154,7 @@ impl InlineBuilder {
             self.project_accepted_field_passes(passes);
         }
         let FlushReceipt::Rejected {
-            passes,
-            rejected_from,
-            definitive,
-            ..
+            passes, definitive, ..
         } = receipt
         else {
             unreachable!("accepted field returned before rejection projection")
@@ -165,7 +162,7 @@ impl InlineBuilder {
         if owner_boundary && !*definitive {
             return false;
         }
-        self.project_rejected_field_prefix(passes, *rejected_from, !owner_boundary);
+        self.project_rejected_field_prefix(passes, !owner_boundary);
         self.project_completed_empty_passes(&empty_pass_ends);
         self.finish_rejected_field_state(
             owner_boundary,
@@ -177,7 +174,6 @@ impl InlineBuilder {
     fn project_rejected_field_prefix(
         &mut self,
         passes: &[super::super::field_buffer::FillPass],
-        rejected_from: usize,
         return_to_head: bool,
     ) {
         let definition = self.execution.definition.as_mut().expect("native field");
@@ -188,11 +184,17 @@ impl InlineBuilder {
             passes,
             false,
         );
-        let accepted_owned_prefix = !passes.is_empty()
-            && definition
-                .field_word_anchors
-                .iter()
-                .any(|anchor| anchor.start < rejected_from);
+        // The detached HEAD keeps native owner anchors for deferred blanks
+        // and layout. Its accepted final pass has its own structural close;
+        // the rejecting BODY flush cannot project that endline a second
+        // time. Actual accepted BODY cells still end their own pass.
+        let accepted_owned_prefix = accepted_owners.iter().any(|(owner, acceptance)| {
+            acceptance.native_cells
+                && !definition
+                    .deferred_head_projection
+                    .as_ref()
+                    .is_some_and(|head| head.owns_word(owner))
+        });
         definition.hang_row.accepted_prefix_before_rejection = accepted_owned_prefix;
         let current_field_start = self
             .execution
