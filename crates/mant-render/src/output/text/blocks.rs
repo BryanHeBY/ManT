@@ -154,14 +154,14 @@ impl BlockRenderer<'_> {
         let heading_origin = coordinate(depth.saturating_mul(2));
         let mut output = Flow::default();
         output.gap(section.spacing_before_lines);
-        output.push_text(self.inline_layout_at(
+        output.extend(Flow::heading(self.inline_layout_at(
             InlineContentRef {
                 content: &section.heading.content,
                 layout: &section.heading.inline_layout,
             },
             TextRole::Heading,
             heading_origin,
-        ));
+        )));
         output.extend(self.block_flow(&section.blocks, coordinate(depth.saturating_mul(2))));
         output.extend(self.sections_flow(&section.children, depth + 1));
         output

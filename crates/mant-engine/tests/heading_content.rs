@@ -225,6 +225,53 @@ fn setext_heading_breaks_preserve_inline_structure_in_markdown() {
 }
 
 #[test]
+fn roff_heading_keeps_its_completed_empty_tail_at_eof_and_before_body() {
+    let header = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    // CVS mdoc_term.c::termp_sh_post/termp_ss_post close the live field.
+    // term.c::term_flushln commits an empty row before rejecting the
+    // suffix. Only the separate footer row is removed from the oracle.
+    let rejected = r#""\&\p\: \p\: \p\: \p BETA""#;
+    for section in ["Sh", "Ss"] {
+        for (suffix, tail) in [("", ""), (rejected, "\n\n")] {
+            let source = format!("{header}.{section} \"ALPHA\\zX\" {suffix}\n");
+            let query = load_roff_bytes(source.as_bytes()).unwrap();
+            let indent = if section == "Ss" { "  " } else { "" };
+            let expected = format!("{indent}ALPHAX{tail}");
+            assert!(render_query_text(&query).ends_with(&expected), "{source}");
+            if section == "Sh" {
+                for options in [
+                    mant_codec::encode::MarkdownOptions::default(),
+                    mant_codec::encode::MarkdownOptions::ADDRESSABLE,
+                ] {
+                    let mut readback = query.clone();
+                    for _ in 0..2 {
+                        let markdown =
+                            mant_codec::encode::render_markdown_with_options(&readback, options);
+                        readback = load_markdown_text(&markdown, None).unwrap();
+                        let actual = render_query_text(&readback);
+                        assert!(actual.ends_with(&expected), "{source}\n{actual:?}");
+                    }
+                }
+            }
+        }
+        let source = format!("{header}.{section} \"ALPHA\\zX\" {rejected}\n.No OMEGA\n");
+        let query = load_roff_bytes(source.as_bytes()).unwrap();
+        let text = render_query_text(&query);
+        let indent = if section == "Ss" { "  " } else { "" };
+        assert!(
+            text.ends_with(&format!("ALPHAX\n\n{indent}OMEGA")),
+            "{text:?}"
+        );
+    }
+    let query = load_markdown_text("Catalog<br>\n===\n\nBody.\n", None).unwrap();
+    let excerpt =
+        mant_query::select_excerpt(&query, &[mant_protocol::ContentSelector::path("root")])
+            .unwrap();
+    let text = mant_render::render_excerpt_text(&excerpt);
+    assert!(text.ends_with("Catalog\n\n\nBody."), "{text:?}");
+}
+
+#[test]
 fn deep_multiline_headings_keep_hierarchy_and_links_in_portable_markdown() {
     let mut query = load_markdown_text("# Catalog\n\n## Parent\n\n### Child\n", None).unwrap();
     let child = &mut query.document.as_mut().unwrap().sections[0].children[0];

@@ -1,6 +1,6 @@
 //! Materialized excerpt furniture and breadcrumbs around original source bodies.
 
-use super::{blocks, body::render_tldr_text, document_label};
+use super::{blocks, body::render_tldr_text, document_label, flow::Flow};
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole};
 use mant_protocol::{ExcerptSelection, QueryExcerpt};
 
@@ -73,22 +73,23 @@ fn render_selection(
         }
         ExcerptSelection::DocumentRoot {
             heading, blocks, ..
-        } => join_parts(vec![
-            context,
-            heading
-                .as_ref()
-                .map(|heading| {
-                    renderer.inline_text(
-                        mant_ir::InlineContentRef {
-                            content: &heading.content,
-                            layout: &heading.inline_layout,
-                        },
-                        TextRole::Heading,
-                    )
-                })
-                .unwrap_or_default(),
-            renderer.render_blocks(blocks, 0),
-        ]),
+        } => {
+            let mut root = heading.as_ref().map_or_else(Flow::default, |heading| {
+                Flow::heading(renderer.inline_layout(
+                    mant_ir::InlineContentRef {
+                        content: &heading.content,
+                        layout: &heading.inline_layout,
+                    },
+                    TextRole::Heading,
+                ))
+            });
+            let body = renderer.block_flow(blocks, 0);
+            if !root.is_empty() && !body.is_empty() {
+                root.gap(1);
+            }
+            root.extend(body);
+            join_parts(vec![context, root.finish(false)])
+        }
         ExcerptSelection::DocumentSection { section, .. } => {
             join_parts(vec![context, renderer.render_section(section, 0)])
         }

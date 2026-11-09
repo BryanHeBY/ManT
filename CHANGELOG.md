@@ -135,6 +135,8 @@ that crate was not published for that change.
   native pass shows whether a later glyph covers the base.
 - Keep native line boundaries inside no-fill man URL and mail labels,
   including when the formatter rejects a later word pass.
+- Preserve completed empty rows at the end of section headings in terminal
+  reading and excerpts.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

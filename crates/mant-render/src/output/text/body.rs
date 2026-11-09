@@ -116,7 +116,7 @@ fn render_query_body_with(
                 )
             },
         );
-    let mut output = flow::Flow::text(title);
+    let mut output = flow::Flow::heading(title);
     if include_tldr && let Some(tldr) = &query.tldr {
         output.gap(1);
         output.push_text(render_tldr_text(tldr).into());

@@ -42,6 +42,16 @@ impl Flow {
         result
     }
 
+    pub(super) fn heading(value: LayoutText) -> Self {
+        // A heading owns its final inline row. A trailing hard break in
+        // that owner retains an empty heading row, including at EOF.
+        if value.visible.ends_with('\n') {
+            Self::completed_text(value)
+        } else {
+            Self::text(value)
+        }
+    }
+
     pub(super) fn literal(value: LayoutText) -> Self {
         Self {
             parts: vec![Part::Literal(value)],
