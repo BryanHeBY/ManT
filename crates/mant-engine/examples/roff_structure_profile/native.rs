@@ -109,7 +109,7 @@ fn collect_ast_structure(
             None => profile.equation_configurations += 1,
             Some(value) if value.trim().is_empty() => profile.equation_configurations += 1,
             Some(_) if inside_table => profile.table_equations += 1,
-            Some(_) if node.flags.line_start => profile.display_equations += 1,
+            Some(_) if equation_is_display(node) => profile.display_equations += 1,
             Some(_) => profile.inline_equations += 1,
         }
     }
@@ -387,7 +387,7 @@ pub(super) fn ast_tag_is_bullet(node: &Node) -> bool {
     } else {
         head
     };
-    let term = strip_equation_font_escapes(&ast_visible_text(tag));
+    let term = strip_tag_font_escapes(&ast_visible_text(tag));
     matches!(term.trim(), r"\[bu]" | r"\(bu")
 }
 
@@ -471,7 +471,7 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
             source_line: node.line,
             context: if inside_table {
                 EquationContext::TableCell
-            } else if node.flags.line_start {
+            } else if equation_is_display(node) {
                 EquationContext::Display
             } else {
                 EquationContext::Inline
@@ -583,19 +583,60 @@ fn mdoc_definition_is_recoverable_ordinal_list(node: &Node) -> bool {
     count > 0
 }
 
+fn equation_is_display(node: &Node) -> bool {
+    // roff_eqndelim's executed origin is independent from roff_EQ's NODE_LINE.
+    node.equation_inline
+        .map_or(node.flags.line_start, |inline| !inline)
+}
+
 pub(super) fn equation_visible_text(source: &str) -> String {
-    let source = strip_equation_font_escapes(source);
     let mut output = String::with_capacity(source.len());
-    let mut rest = source.as_str();
+    let mut rest = source;
     while let Some(index) = rest.find('\\') {
         output.push_str(&rest[..index]);
         let escape = &rest[index + 1..];
+        if let Some(after_backslash) = escape.strip_prefix('\\') {
+            output.push('\\');
+            rest = after_backslash;
+            continue;
+        }
+        if let Some(after_breakpoint) = escape.strip_prefix(':') {
+            // term_word buffers ASCII_BREAK for the direct form. It adds no
+            // visible character to the source-neutral reading projection.
+            rest = after_breakpoint;
+            continue;
+        }
+        if let Some(operand) = escape.strip_prefix('f') {
+            rest = if let Some(bracketed) = operand.strip_prefix('[') {
+                let Some(end) = bracketed.find(']') else {
+                    output.push_str(&rest[index..]);
+                    return output;
+                };
+                &bracketed[end + 1..]
+            } else if let Some(two_character) = operand.strip_prefix('(') {
+                let consumed = two_character.chars().take(2).map(char::len_utf8).sum();
+                &two_character[consumed..]
+            } else {
+                operand
+                    .chars()
+                    .next()
+                    .map_or("", |character| &operand[character.len_utf8()..])
+            };
+            continue;
+        }
         let (name, consumed) = if let Some(after_open) = escape.strip_prefix('[') {
             let Some(end) = after_open.find(']') else {
                 output.push_str(&rest[index..]);
                 return output;
             };
-            (&after_open[..end], end + 3)
+            let name = &after_open[..end];
+            let consumed = end + 3;
+            // roff_escape.c accepts '-' as the only bracketed one-byte name.
+            if name.len() == 1 && name != "-" {
+                rest = &rest[index + consumed..];
+                continue;
+            }
+            (name, consumed)
         } else if let Some(after_open) = escape.strip_prefix('(') {
             let mut characters = after_open.char_indices();
             let Some((_, _)) = characters.next() else {
@@ -608,6 +649,13 @@ pub(super) fn equation_visible_text(source: &str) -> String {
                     offset + character.len_utf8()
                 });
             (&after_open[..consumed_name], consumed_name + 2)
+        } else if matches!(
+            escape.chars().next(),
+            Some(' ' | '\'' | '-' | '0' | '_' | '`' | 'e' | '~')
+        ) {
+            // roff_escape.c's argument-free ESCAPE_SPECIAL cases share the
+            // same chars.c catalog with bracketed and two-character forms.
+            (&escape[..1], 2)
         } else {
             output.push('\\');
             rest = escape;
@@ -624,7 +672,8 @@ pub(super) fn equation_visible_text(source: &str) -> String {
     output
 }
 
-fn strip_equation_font_escapes(source: &str) -> String {
+fn strip_tag_font_escapes(source: &str) -> String {
+    // Bullet obligations retain the authored named-character spelling.
     let mut output = String::with_capacity(source.len());
     let mut rest = source;
     while let Some(index) = rest.find("\\f") {

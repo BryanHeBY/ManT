@@ -1,0 +1,608 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Eight complete unchanged manuals selected from the 1,824-identity mathematical Markdown audit; selected mathematical ownership and encoding contracts.",
+  "auditDate": "2026-11-09",
+  "originalManifestSha256": "fb92e76e37129aba0f315fa812605936dec118e3420cfabef3bc8dc36ed84286",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "referenceRecipe": {
+    "name": "native-default",
+    "stdin": "exact source bytes encoded as UTF-8",
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "LC_ALL": "C.UTF-8",
+      "TZ": "UTC"
+    },
+    "profiles": {
+      "ascii": [
+        "-Tascii",
+        "-Owidth=78"
+      ],
+      "utf8": [
+        "-Tutf8",
+        "-Owidth=78"
+      ],
+      "html": [
+        "-Thtml"
+      ],
+      "tree": [
+        "-Ttree"
+      ],
+      "lint": [
+        "-Tlint"
+      ]
+    },
+    "timeoutSeconds": 30
+  },
+  "cases": [
+    {
+      "archiveSha256": "ce67bb25b5048b20dad772e405a83f4bc70faf051afa289361c81f9660318bc3",
+      "file": "posix-float.h.0p",
+      "sourceIdentity": "posix-2017a:man-pages-posix-2017/man0p/float.h.0p",
+      "sourceSha256": "962eb3e0f4a29eece96a0c28da6a818dc9b9a3ac575581b1797666addb49772e",
+      "fixtureSha256": "962eb3e0f4a29eece96a0c28da6a818dc9b9a3ac575581b1797666addb49772e",
+      "sourceBytes": 10353,
+      "fixtureBytes": 10353,
+      "license": "POSIX IEEE/The Open Group reprint notice",
+      "licenseFile": "../LICENSES/POSIX-COPYRIGHT.txt",
+      "licenseSha256": "bdb5ccf2f08e9e2ec70f361304d1c70a1379028e62eff4f50f912683bcb3991e",
+      "transformation": "None; complete original uncompressed source bytes.",
+      "selectionReason": "Complete numeric-limit descriptions, mixed inline/display equations, fractions, floors, ceilings and quoted literal notation.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "9fcf54343198cfb810d966ba126a0d6d9caab4188b1a1db50625bd9f86678282",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 11384,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "6d5cc7ece73b7fe78bed8f3bf7f85d2e278fcb75406c60da273054d7fa6d45f3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 11421,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "e3f7f32fa138e26df1f0a8f7008bc87b5df7d2ba7f403ba91465ab1560d56d77",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 22821,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "7e6aef5ef5d4421de5ef489e9e353bd30696de328dec2066d877a9ea1e1a0cd8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 41711,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 3,
+          "stdoutSha256": "2e8b2e1900e3fde93e7a917d379a3a4d12a447a678aebc19632cd319f0086b6b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1669,
+          "stderrBytes": 0
+        }
+      },
+      "sourceRepository": "https://deb.debian.org/debian/pool/non-free/m/manpages-posix/manpages-posix_2017a.orig.tar.xz",
+      "originUrl": "https://deb.debian.org/debian/pool/non-free/m/manpages-posix/manpages-posix_2017a.orig.tar.xz",
+      "archiveMember": "man-pages-posix-2017/man0p/float.h.0p"
+    },
+    {
+      "archiveSha256": "ce67bb25b5048b20dad772e405a83f4bc70faf051afa289361c81f9660318bc3",
+      "file": "posix-stdint.h.0p",
+      "sourceIdentity": "posix-2017a:man-pages-posix-2017/man0p/stdint.h.0p",
+      "sourceSha256": "62620ef7a8acb897256d4267bce5f2484b131034a88cc1f407d22178aac3d60e",
+      "fixtureSha256": "62620ef7a8acb897256d4267bce5f2484b131034a88cc1f407d22178aac3d60e",
+      "sourceBytes": 16617,
+      "fixtureBytes": 16617,
+      "license": "POSIX IEEE/The Open Group reprint notice",
+      "licenseFile": "../LICENSES/POSIX-COPYRIGHT.txt",
+      "licenseSha256": "bdb5ccf2f08e9e2ec70f361304d1c70a1379028e62eff4f50f912683bcb3991e",
+      "transformation": "None; complete original uncompressed source bytes.",
+      "selectionReason": "Inline formula ownership inside nested integer-limit definitions and literal carets.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "49d7407427956e5a2c1c78d9b7643b063dc74fd23e7640e8f6572542dcc1a834",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 19743,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "1724192f88f3416727ead0f7ea8bcf1801d2e2a64347e03936a25db6a2979e3c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 19752,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "ddd672fef6fe76a586938ba5c2865eb9e8bfd9e8268de92d66c2b1d469ae123f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 25835,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "5fe21c0e6ff694a27427c4a6bad2455e7ba3f3baefc4a05a387d0cd290c8b950",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 61953,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 2,
+          "stdoutSha256": "1fb28bf2319e4b683319169409df34b9fefeb24d88ec7338182bc9e29d98d118",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3617,
+          "stderrBytes": 0
+        }
+      },
+      "sourceRepository": "https://deb.debian.org/debian/pool/non-free/m/manpages-posix/manpages-posix_2017a.orig.tar.xz",
+      "originUrl": "https://deb.debian.org/debian/pool/non-free/m/manpages-posix/manpages-posix_2017a.orig.tar.xz",
+      "archiveMember": "man-pages-posix-2017/man0p/stdint.h.0p"
+    },
+    {
+      "archiveSha256": "ce67bb25b5048b20dad772e405a83f4bc70faf051afa289361c81f9660318bc3",
+      "file": "posix-drand48.3p",
+      "sourceIdentity": "posix-2017a:man-pages-posix-2017/man3p/drand48.3p",
+      "sourceSha256": "6965cab009af539ad78c9ff66e51fb1bb242488c702c28793ef059f3c0fdbd2d",
+      "fixtureSha256": "6965cab009af539ad78c9ff66e51fb1bb242488c702c28793ef059f3c0fdbd2d",
+      "sourceBytes": 7103,
+      "fixtureBytes": 7103,
+      "license": "POSIX IEEE/The Open Group reprint notice",
+      "licenseFile": "../LICENSES/POSIX-COPYRIGHT.txt",
+      "licenseSha256": "bdb5ccf2f08e9e2ec70f361304d1c70a1379028e62eff4f50f912683bcb3991e",
+      "transformation": "None; complete original uncompressed source bytes.",
+      "selectionReason": "Inline formulas across source lines, structural scripts and distinct quoted/plain notation.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "32a78ef414e2662fbf9f8b64eb5a9414c1164d31322a37d74da19d2ae07e4a6a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8236,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "e37621ddbd6cbea020115973219e39f00fc72c917feba89a9b65695bff6213cd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8240,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "a2e5521380af6cd6d6578aa3eac5b341ae145b065630b6569aed87d13893802b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 13333,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "6482fdcee2992e181c2ae87b6b6e0e6fedc4be7c17680463e7a2c402ec063ac8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 22277,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 2,
+          "stdoutSha256": "2d047144f5cc3e5217936456b900722892208b9a0039f44f958b7978cdde7c31",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 239,
+          "stderrBytes": 0
+        }
+      },
+      "sourceRepository": "https://deb.debian.org/debian/pool/non-free/m/manpages-posix/manpages-posix_2017a.orig.tar.xz",
+      "originUrl": "https://deb.debian.org/debian/pool/non-free/m/manpages-posix/manpages-posix_2017a.orig.tar.xz",
+      "archiveMember": "man-pages-posix-2017/man3p/drand48.3p"
+    },
+    {
+      "file": "openbsd-erf.3",
+      "sourceIdentity": "openbsd-head:erf.3",
+      "sourceSha256": "975ddb1cab2d67d7118dda0828539bcc1c445c3806ada4465ca2c6408c9ea278",
+      "fixtureSha256": "975ddb1cab2d67d7118dda0828539bcc1c445c3806ada4465ca2c6408c9ea278",
+      "sourceBytes": 2904,
+      "fixtureBytes": 2904,
+      "license": "BSD-3-Clause",
+      "licenseFile": "../LICENSES/BSD-3-Clause.txt",
+      "licenseSha256": "02a66d6af5a4ef501849a33e6d8a0624e2b4284c8bed19ba0b0c24e8ac1add4e",
+      "transformation": "None; complete original uncompressed source bytes.",
+      "selectionReason": "Displayed fraction, radical, integral limits, fences and nested superscripts in mdoc.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "432c1950bccadbcc965c6e851e45ce330e8c3b05212718c33c55df8e65aa3bfc",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1780,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "b093fa3c087c770fd081c5d380466fe686bb62a4c373eb2b61077b6e3c2308dd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1773,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "13caed77de691c422d806a391978a234e3367672f959cc551206dd7e2a80f6a8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 6711,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "9a616c8124798f972719bda583823fa8fcbbf2809b4ef09e2a8156233971b832",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 7423,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 0,
+          "stderrBytes": 0
+        }
+      },
+      "sourceRepository": "https://github.com/openbsd/src/blob/3c34c3840589cf2f3a60107b434f42c3253fb3e2/lib/libm/man/erf.3",
+      "originUrl": "https://raw.githubusercontent.com/openbsd/src/3c34c3840589cf2f3a60107b434f42c3253fb3e2/lib/libm/man/erf.3",
+      "revision": "3c34c3840589cf2f3a60107b434f42c3253fb3e2"
+    },
+    {
+      "file": "openbsd-lgamma.3",
+      "sourceIdentity": "openbsd-head:lgamma.3",
+      "sourceSha256": "8d696a81288381e0060b213bcf1f02d337b908f9ead0480ccc081656150f822d",
+      "fixtureSha256": "8d696a81288381e0060b213bcf1f02d337b908f9ead0480ccc081656150f822d",
+      "sourceBytes": 4515,
+      "fixtureBytes": 4515,
+      "license": "BSD-3-Clause",
+      "licenseFile": "../LICENSES/BSD-3-Clause.txt",
+      "licenseSha256": "02a66d6af5a4ef501849a33e6d8a0624e2b4284c8bed19ba0b0c24e8ac1add4e",
+      "transformation": "None; complete original uncompressed source bytes.",
+      "selectionReason": "Displayed gamma integrals and reflection formula with repeated function/fence operands.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "aaddd8afc16ce1be4688db2cd67abfb83c68ffb4ff5d9f505e46540c255eadf5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 4252,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "d6f09eb470d6cd295c3032afa2ec5e5b2be47f2b6a9935a4843a7b89e7257f4b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 4204,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "03dfac1e58ed14e199349b8eb6105a5e4b96478668c36478ee3f16fff43cb05c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 10830,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "b96ae9a82c3d7564aa98c4554a354823b76a0286f9dff8407599fc96a46b51c6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 13627,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 0,
+          "stderrBytes": 0
+        }
+      },
+      "sourceRepository": "https://github.com/openbsd/src/blob/3c34c3840589cf2f3a60107b434f42c3253fb3e2/lib/libm/man/lgamma.3",
+      "originUrl": "https://raw.githubusercontent.com/openbsd/src/3c34c3840589cf2f3a60107b434f42c3253fb3e2/lib/libm/man/lgamma.3",
+      "revision": "3c34c3840589cf2f3a60107b434f42c3253fb3e2"
+    },
+    {
+      "file": "freebsd-stdc_bit_width.3",
+      "sourceIdentity": "freebsd-head:stdc_bit_width.3",
+      "sourceSha256": "7ba026709493d5e2f635f808a1d0d339f8a2a8fa8df9729b97f09c76d031bcac",
+      "fixtureSha256": "7ba026709493d5e2f635f808a1d0d339f8a2a8fa8df9729b97f09c76d031bcac",
+      "sourceBytes": 2049,
+      "fixtureBytes": 2049,
+      "license": "BSD-2-Clause",
+      "licenseFile": "../LICENSES/FREEBSD-STDBIT-BSD-2-Clause.txt",
+      "licenseSha256": "2775b34422468beacbbf4205619853cfbc0a612d4fd4218093f2113091b2ca91",
+      "transformation": "None; complete original uncompressed source bytes.",
+      "selectionReason": "Displayed logarithm subscript and floor brackets in a C23 mdoc manual.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "af871a5f98ffda7cdda0d3f3f4d88e3a63f2574f9343ecc80b620828a21f19ed",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3301,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "93a1831acbbd1a061262d3e3e34dde7ff5b2f2f1cb0471247de578741cacf151",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3310,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "5c533da8ee5e6796b3f8031f6c0a24246237724e9a1d761bbef4997f9665f619",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 7079,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "efcf3b650620c085a5ead56bf941472820330a98a3d3a8ab6f727d857388c5ab",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8025,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 1,
+          "stdoutSha256": "6a7fff76ed80b7f973a144041baaebc125b2d91d9c029d54525e58b0983eac4c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 610,
+          "stderrBytes": 0
+        }
+      },
+      "sourceRepository": "https://raw.githubusercontent.com/freebsd/freebsd-src/769c49de261fbbd1293adab9188e5099516675cf/lib/libc/stdbit/stdc_bit_width.3",
+      "originUrl": "https://raw.githubusercontent.com/freebsd/freebsd-src/769c49de261fbbd1293adab9188e5099516675cf/lib/libc/stdbit/stdc_bit_width.3",
+      "revision": "769c49de261fbbd1293adab9188e5099516675cf",
+      "licenseSourceUrl": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/BSD-2-Clause.txt",
+      "licenseTransformation": "Standard SPDX BSD-2-Clause terms with the complete copyright line from the unchanged manual source."
+    },
+    {
+      "file": "illumos-eqn.1",
+      "sourceIdentity": "illumos-head:eqn.1",
+      "sourceSha256": "26d43e92a68a756ec923d42652a6435c22a683c8a67c0bc54a4836d291292692",
+      "fixtureSha256": "26d43e92a68a756ec923d42652a6435c22a683c8a67c0bc54a4836d291292692",
+      "sourceBytes": 9422,
+      "fixtureBytes": 9422,
+      "license": "CDDL-1.0",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "licenseSha256": "1ffb70c33c4f79f04e947facc5c7851f289609256aacb47fc115f700427d9520",
+      "transformation": "None; complete original uncompressed source bytes.",
+      "selectionReason": "Inline matrices, piles, scripts, limits, independent fences and accents in complete nested definitions.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "6eb23625015cbbd4366efc3d1d022a3d8f1c1aef4c1c7d72a5da1a918b346235",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 9593,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "902629cb7c41a99e1b9848d14cfc5e7416a45e074e0355125ea2af3adf6e4735",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 9585,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "f5926ada63b1af3e981206fba9cdce6bc43e975ceaca7025b8dfeb9a7bbe129f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 14971,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "eca0d390906edc4169ffcc05b93e33599b6b0c3393dc38ae1983ffdfc610eedb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 26250,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 2,
+          "stdoutSha256": "1dbb9b69784fabe1649f2c53f42ba335d2b25659fe15f384ced25dfc96fcacea",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2966,
+          "stderrBytes": 0
+        }
+      },
+      "sourceRepository": "https://raw.githubusercontent.com/illumos/illumos-gate/b1c424a261b16b9c81280c0eb6de8b2f9f4ffacb/usr/src/man/man1/eqn.1",
+      "originUrl": "https://raw.githubusercontent.com/illumos/illumos-gate/b1c424a261b16b9c81280c0eb6de8b2f9f4ffacb/usr/src/man/man1/eqn.1",
+      "revision": "b1c424a261b16b9c81280c0eb6de8b2f9f4ffacb"
+    },
+    {
+      "file": "xorg-XDrawArc.3.gz",
+      "sourceIdentity": "archlinux:libx11-1.8.14-1:usr/share/man/man3/XDrawArc.3.gz",
+      "originUrl": "https://archive.archlinux.org/packages/l/libx11/libx11-1.8.14-1-x86_64.pkg.tar.zst",
+      "archiveSha256": "47fff5bbeadabe30b5fb1ad3f3609c20e6064ef002ba0377dfd8564ec813da7b",
+      "archiveMember": "usr/share/man/man3/XDrawArc.3.gz",
+      "sourceSha256": "05f42581f61503352e688122cd53752823a7cc8626fbf48e4c401ca326fde5b0",
+      "fixtureSha256": "2387e0fae1fc4ccfa96e563c764a0bf8fbbb3aa88417d0add38978b5c64105be",
+      "sourceBytes": 8581,
+      "fixtureBytes": 3445,
+      "license": "X Consortium and Digital/Tektronix documentation permissions",
+      "licenseFile": "../LICENSES/XORG-XDRAWARC-MANUAL.txt",
+      "licenseSha256": "db97309bfccf4df1019e2ca8ec19dec70d6d46e91a519cdb1e5bf31364378f55",
+      "embeddedNoticeLines": [
+        2,
+        42
+      ],
+      "embeddedNoticeSha256": "c44fcda162036cbd4978bcf3a56c99442577bbb2640ace1f3cc1056b0b2a6cf4",
+      "transformation": "None; original gzip package member, independently compared with the official archive.",
+      "selectionReason": "Nine active inline formulas and one readable formula in the complete authored literal code owner.",
+      "oracleProfiles": {
+        "ascii": {
+          "arguments": [
+            "-Tascii",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "8afbc27efbc8c2fe8db6058be34987e11f20debc020988a6c549c1fc293e993c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 7209,
+          "stderrBytes": 0
+        },
+        "utf8": {
+          "arguments": [
+            "-Tutf8",
+            "-Owidth=78"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "89c14aa372575d421a0aed451c6135913fcd7a6433fabfc81dfacb624438068c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 7205,
+          "stderrBytes": 0
+        },
+        "html": {
+          "arguments": [
+            "-Thtml"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "5146955167aa1dd74a1bc63a3e6cf72cdfeea9193d85a412d98830aeadaebea9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 13686,
+          "stderrBytes": 0
+        },
+        "tree": {
+          "arguments": [
+            "-Ttree"
+          ],
+          "exitCode": 0,
+          "stdoutSha256": "d4dfb0d51fbb4f863b400c1d8ba3b724683780e541b3d8d1dcd5fa87edd7702a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 21671,
+          "stderrBytes": 0
+        },
+        "lint": {
+          "arguments": [
+            "-Tlint"
+          ],
+          "exitCode": 2,
+          "stdoutSha256": "811b22f4aad7a77e1110b54d727ae28ae5c0401705a2170bd3a2b4ee5aebdda0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 168,
+          "stderrBytes": 0
+        }
+      }
+    }
+  ]
+}

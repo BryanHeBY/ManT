@@ -50,6 +50,10 @@ that crate was not published for that change.
   Preserve explicit display equations and literal owners independently of
   source-line position. Document MathJax text-mode configuration, literal POSIX
   notation and target-format approximation warnings.
+- Add complete POSIX, BSD, illumos and X11 mathematical regression pages for
+  inline paragraphs, scripts, integral limits, matrices and readable formulas
+  inside code examples. Align the structure audit with executed inline origin
+  and native single-character glyphs, retaining detection of missing formulas.
 
 ### Dependency maintenance
 
@@ -247,7 +251,7 @@ that crate was not published for that change.
 ### libmandoc-rs 0.14.0
 
 - Add optional `Node::equation_inline` evidence captured from executed equation
-  delimiters. Explicit EQ requests report false. Older owned snapshots decode
+  delimiter mode at node allocation. Older owned snapshots decode
   with absent evidence and retain the prior source-line fallback when lowered.
 
 - Retain recognized function and complete literal mathematical atom roles in

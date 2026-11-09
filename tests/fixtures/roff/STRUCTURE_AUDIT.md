@@ -74,19 +74,20 @@ JSON reports retain the exact source coordinates for each link macro family
 under `sourceLinkOrigins`; this makes a count candidate manually auditable
 without turning local paths or the verbose topology into a product protocol.
 
-Equation topology is source-addressed by line and context. A non-empty
-line-start `.EQ` node must remain one display equation block; an inline
-delimited equation must remain an inline code-valued expression without
-splitting its paragraph; and an equation carried by a tbl cell must remain in
-that cell. The normalized value must match as well as the placement. An empty
-configuration-only `.EQ delim … .EN` is counted as parser state and must not
-invent a display block. For table-cell delimiter expressions that libmandoc
-keeps as opaque text, the profiler reads the bounded source, finds expressions
-using the active delimiter pair, and normalizes each fragment through the same
-pinned eqn parser. It never implements a second equation grammar merely to
-guess their meaning. Missing optional host decompressors only omit this extra
-table check for `.xz`/`.bz2` inputs; plain, gzip, and zstd inputs are
-self-contained.
+Equation topology is source-addressed by line and context. Native
+`Node::equation_inline` mode determines inline/display ownership independently
+of physical input-line position. Older snapshots use their original line-start
+fallback. An inline equation stays in its complete paragraph or literal owner,
+and display equations retain their independent blocks. Normalized values and
+placement are checked together. Empty configuration equations contribute only
+to the parser-state count.
+
+Only executed native equation nodes establish mathematical obligations. CVS
+`roff_parseln` keeps tbl words opaque while the table parser owns their input.
+Those cell words keep their literal delimiters through the normal text path.
+The profiler compares bounded executed snapshots directly. Its reading-value
+normalization handles native special characters and fonts in one sequential
+pass, preserving escaped backslashes and consuming nonprinting breakpoints.
 
 This distinction is intentional. The ledger should surface credible lowering
 loss, not prescribe byte-for-byte formatter emulation or turn normal

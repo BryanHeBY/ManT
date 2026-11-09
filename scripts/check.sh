@@ -147,6 +147,8 @@ run "test complete field boundary sources" \
   python3 -m unittest scripts.roff.tests.test_field_boundary_sources
 run "test exact roff fixture checkout across newline settings" \
   python3 -m unittest scripts.roff.tests.test_fixture_checkout
+run "test mathematical export real-source identities" \
+  python3 -m unittest scripts.roff.tests.test_math_export_sources
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test
 run "test bounded rendering census" python3 -m scripts.roff.audit.audit_roff_rendering --self-test
 run "test roff audit parallelism planning" python3 -m scripts.roff.tests.test_roff_audit_common

@@ -224,3 +224,59 @@ fn equation_text_normalizes_bracketed_and_two_character_specials() {
         "1 + ⌊ x ⌋ → infinity"
     );
 }
+
+#[test]
+fn line_initial_inline_equations_use_executed_origin_and_visible_glyphs() {
+    // Exact input ran the five pristine profiles first. roff_eqndelim creates
+    // the first EQ inline despite NODE_LINE. roff_escape.c classifies \- as
+    // ESCAPE_SPECIAL; html_encode resolves chars.c's '-' entry to ASCII '-'.
+    let (expected, native, document) = parsed_structure(
+        ".TH AUDIT 1\n.SH BODY\n.EQ\ndelim $$\n.EN\nBefore\n$2\"^\" N\\-1$ after.\n.EQ\nx over y\n.EN\n",
+    );
+    assert_eq!(expected.inline_equations, 1);
+    assert_eq!(expected.display_equations, 1);
+    assert_eq!(native.equations[0].context, super::EquationContext::Inline);
+    assert_eq!(native.equations[0].value, "2 ^ N -1");
+    let (observed, mut lowered) = super::ir_profile(&document);
+    assert!(super::compare_structure(&expected, &observed, &native, &lowered).is_empty());
+    lowered
+        .equations
+        .retain(|equation| equation.context != super::EquationContext::Inline);
+    assert!(
+        super::compare_structure(&expected, &observed, &native, &lowered)
+            .iter()
+            .any(|violation| violation.starts_with("inline-equation at line 7:"))
+    );
+}
+
+#[test]
+fn equation_observation_consumes_each_escape_once() {
+    // Each exact quoted-atom source ran the five pristine profiles first.
+    // roff_escape.c consumes escaped backslashes atomically and all three
+    // font operand forms. Its one-byte bracket-name guard rejects \[:],
+    // while term_word's direct \: is a nonprinting breakpoint.
+    for (atom, visible) in [
+        (r"a\:b", "ab"),
+        (r"a\[:]b", "ab"),
+        (r"a\\:b", r"a\:b"),
+        (r"a\\[->]b", r"a\[->]b"),
+        (r"a\\fBb", r"a\fBb"),
+        (r"a\\-b", r"a\-b"),
+        (r"a\-b", "a-b"),
+        (r"a\[-]b", "a-b"),
+        (r"a\0b", "a\u{a0}b"),
+        (r"a\eb", r"a\b"),
+        (r"a\fBb\fPc", "abc"),
+        (r"a\f(BIb\fPc", "abc"),
+        (r"a\f[B]b\f[]c", "abc"),
+    ] {
+        let source = format!(".TH AUDIT 1\n.SH BODY\n.EQ\n\"{atom}\"\n.EN\n");
+        let (expected, native, document) = parsed_structure(&source);
+        assert_eq!(native.equations[0].value, visible, "{atom}");
+        let (observed, lowered) = super::ir_profile(&document);
+        assert!(
+            super::compare_structure(&expected, &observed, &native, &lowered).is_empty(),
+            "{atom}"
+        );
+    }
+}

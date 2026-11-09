@@ -1355,6 +1355,10 @@ owners preserve their own hard rows and readable formulas. Configuration-only
 Quoted POSIX notation such as `2"^" N` and ordinary `X_ i` spellings stays
 literal. Native `2 sup N` and `X sub i` operations become structured scripts.
 
+Equation control requests follow native input-line recognition. An `.EN`
+embedded after mathematical text on the same line remains equation content.
+The resulting atom text and native diagnostics retain that source spelling.
+
 Native `tbl(7)` keeps delimiter-like cell text opaque. ManT decodes that native
 word with the ordinary roff escape and font state, preserving its delimiters
 and operands. It does not reparse the cell as an isolated equation: the owned

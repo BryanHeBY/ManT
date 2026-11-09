@@ -8,6 +8,7 @@ required by the third-party manuals.
 
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
+| [`mathematical-export/`](mathematical-export/README.md) | Exact November 2026 mathematical audit sources from POSIX, OpenBSD, FreeBSD, illumos and X11 | Complete original sources and the original X11 gzip member | Inline/display ownership, scripts, integral limits, matrices, accents and readable code-context formulas |
 | [`field-boundaries/`](field-boundaries/README.md) | Exact November 2026 audit sources: Debian chem, NetBSD 11.0 scmdctl, OpenBSD 7.9 mandoc and ksh | Original gzip and complete uncompressed release members | Native field exits, single table owners and nested display origins |
 | [`source-adjacency/`](source-adjacency/README.md) | Exact members from the November 2026 audit: Arch tmux, OpenBSD date, DragonFly regex, illumos ksh93 | Original gzip members and exact complete uncompressed sources | Source-sibling execution, spacing controls, complete semantic owners, links and repeated Markdown readback |
 | [`scoped-layout/`](scoped-layout/README.md) | Exact November 2026 audit sources: NetBSD 11.0 printf, OpenBSD 7.9 bpf, immutable illumos bhyve | Exact complete uncompressed release members and repository file | Nested definition origins, scoped literal indentation and column-cell physical rows |
@@ -23,11 +24,14 @@ the host manual database. Fixed compressed roff sources replace the former
 generated HTML snapshots, making parser regressions reproducible across Linux,
 macOS, and Windows while retaining upstream notices embedded in the manuals.
 
-Each source directory also contains a human-readable
+Distribution and release source directories also contain a human-readable
 `VERIFIED_TOPICS.txt` summary of the topic/section requests scanned through
 ManT's bundled libmandoc path. Its header records the total scan breadth; the
 neighbouring README records the package provenance and observed parser
 behaviour.
+
+Source-specific audit groups bind their complete selected members, licenses
+and pristine native run receipts in `manifest.json`.
 
 The same fixed pages can be compared with a local `man(1)`/groff renderer by running `python3 -m scripts.roff.audit.audit_roff_fidelity --fixtures` from the repository root. This optional audit searches for missing visible tokens, broken token continuity, and known control-syntax leaks without treating reference layout as a ManT contract. Confirmed findings become focused tests in the existing source-specific Rust modules; the external reference renderer is intentionally not required by ordinary CI.
 

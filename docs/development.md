@@ -448,6 +448,7 @@ actual application and executable.
 | Native reader interactions | `mant-ui/tests` | Real Buffer cells, activation, selection, copying and resizing |
 | Executable delivery and discovery | `mant/tests/process` | Child-process stdout, stderr, exit codes and isolated document roots |
 | Real manual corpus | `tests/fixtures/roff/real` and distribution suites | Licensed source identities and domain-specific query gold |
+| Real mathematical exports | `mant-engine/tests/real_mathematical_export.rs` and `real/mathematical-export` | Eight complete licensed pages, 86 formula owners, query JSON round trips, MathML/LaTeX, matrix axes, search and literal-context fallback |
 | Shared engine test helpers | `mant-engine/tests/support` | Semantic reads and corpus assertions; helpers have no production API |
 
 Only the semantic-read helper required by the packaged deterministic suites is

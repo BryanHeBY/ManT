@@ -466,8 +466,8 @@ pub struct Node {
     pub table_rule_data_columns: Vec<u32>,
     /// Owned native eqn(7) expression carried by this node.
     pub equation: Option<crate::EquationBox>,
-    /// Whether the equation originated in active inline delimiters.
-    /// `Some(false)` denotes an explicit EQ request. `None` covers other
+    /// Native inline-delimiter mode when the equation node was allocated.
+    /// `Some(false)` denotes native display mode. `None` covers other
     /// node kinds and older owned snapshots without this execution evidence.
     #[cfg_attr(
         feature = "serde",
