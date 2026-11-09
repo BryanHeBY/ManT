@@ -73,6 +73,11 @@ that crate was not published for that change.
 
 ### Dependency maintenance
 
+- Upgrade the paired rmcp SDK and macros to 3.9.0 to resolve
+  RUSTSEC-2026-0462, an unbounded HTTP response buffering issue.
+- Update toml to 1.2.1 and cc to 1.11.1 across the affected Rust lockfiles.
+  Refresh install-action to 2.90.3 and CodeQL upload-sarif to 4.39.3 using
+  verified release commit pins, and regenerate the dependency license report.
 - Update zip to 9.3.0 and install-action to its verified 2.88.0 release
   commit, superseding the pending dependency PRs. Regenerate the locked
   multi-platform license report without changing archive extraction policy.
