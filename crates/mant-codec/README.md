@@ -184,6 +184,12 @@ Default exports recover individual malformed, oversized or unrepresentable
 formulas through their readable payload. Mathematical tracking and encoding
 budgets apply to formulas independently of ordinary document traversal. When
 the aggregate budget is exhausted, further formulas use readable output.
+Every fresh validation attempt charges its checked prefix immediately,
+including failed limits, invalid shapes and inconsistent readable caches.
+Memoized owners reuse that work, while fresh owners and non-memoized attempts
+consume their own allowance. Presentation candidate rollback retains spent
+validation work. Checked and default exports classify per-expression encoding
+limits and cumulative operation limits consistently.
 `MarkdownArtifact::math_issues()` exposes bounded details and `math_summary()`
 reports tracked counts plus `budget_exhausted`. String-returning APIs consume
 the artifact and its report. Located fragments avoid memoizing temporary

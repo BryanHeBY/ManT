@@ -6,8 +6,14 @@ use super::{
 };
 use crate::encode::MarkdownOptions;
 use crate::math::{MathFormat, MathLoss, MathOptions, MathPolicy, encode_equation};
-use mant_ir::{Block, EquationExpression, EquationValidationLimits, Inline};
+use mant_ir::{
+    Block, EquationExpression, EquationValidationError, EquationValidationLimits, Inline,
+};
 use std::{cell::RefCell, collections::HashMap};
+
+#[cfg(test)]
+#[path = "context/tests.rs"]
+mod tests;
 
 #[derive(Clone, Copy, Default)]
 pub(in crate::encode) struct RenderOptions<'ctx> {
@@ -170,58 +176,26 @@ impl MathContext {
         // Remaining aggregate and per-expression encoding budgets precede
         // every projection. An exhausted operation never starts a large
         // default-budget readable fallback merely to check its cache.
+        let remaining_nodes = MAX_MARKDOWN_MATH_NODES.saturating_sub(state.nodes);
+        let remaining_bytes = MAX_MARKDOWN_MATH_INPUT_BYTES.saturating_sub(state.input_bytes);
         let limits = EquationValidationLimits {
-            max_nodes: MAX_MARKDOWN_MATH_NODES
-                .saturating_sub(state.nodes)
-                .min(crate::math::MAX_MATH_NODES),
+            max_nodes: remaining_nodes.min(crate::math::MAX_MATH_NODES),
             max_depth: crate::math::MAX_MATH_DEPTH,
-            max_text_bytes: MAX_MARKDOWN_MATH_INPUT_BYTES
-                .saturating_sub(state.input_bytes)
-                .min(crate::math::MAX_MATH_INPUT_BYTES),
+            max_text_bytes: remaining_bytes.min(crate::math::MAX_MATH_INPUT_BYTES),
         };
-        if let Err(error) = expression.validate(limits) {
-            if self.recover_errors {
-                let local = match error {
-                    mant_ir::EquationValidationError::DepthLimit => {
-                        Some(crate::math::MathLimit::Depth)
-                    }
-                    mant_ir::EquationValidationError::NodeLimit
-                        if limits.max_nodes == crate::math::MAX_MATH_NODES =>
-                    {
-                        Some(crate::math::MathLimit::Nodes)
-                    }
-                    mant_ir::EquationValidationError::TextByteLimit
-                        if limits.max_text_bytes == crate::math::MAX_MATH_INPUT_BYTES =>
-                    {
-                        Some(crate::math::MathLimit::InputBytes)
-                    }
-                    _ => None,
-                };
-                if let Some(limit) = local {
-                    self.reject(
-                        &mut state,
-                        Some(formula),
-                        MarkdownMathError::Encoding {
-                            formula,
-                            error: crate::math::MathError::LimitExceeded { limit },
-                        },
-                    );
-                    return Some(formula);
-                }
-            }
-            let error = match error {
-                mant_ir::EquationValidationError::InvalidNode(_) => {
-                    MarkdownMathError::InvalidEquation {
-                        formula,
-                        message: error.to_string(),
-                    }
-                }
-                mant_ir::EquationValidationError::TextByteLimit => {
-                    limit(MarkdownMathLimit::InputBytes)
-                }
-                mant_ir::EquationValidationError::DepthLimit => limit(MarkdownMathLimit::Depth),
-                mant_ir::EquationValidationError::NodeLimit => limit(MarkdownMathLimit::Nodes),
-            };
+        let validation = expression.validate_with_report(limits);
+        // Failed validation and cache checks still consume the traversed
+        // prefix. Candidate presentation changes never refund this work.
+        state.nodes = state.nodes.saturating_add(validation.visited_nodes);
+        state.input_bytes = state.input_bytes.saturating_add(validation.text_bytes);
+        if let Err(error) = validation.result {
+            let error = validation_error(
+                formula,
+                error,
+                remaining_nodes,
+                remaining_bytes,
+                validation.text_bytes,
+            );
             self.reject(&mut state, Some(formula), error);
             return Some(formula);
         }
@@ -235,17 +209,6 @@ impl MathContext {
                 },
             );
             return Some(formula);
-        }
-        let mut stack = vec![expression];
-        while let Some(node) = stack.pop() {
-            state.nodes += 1;
-            for value in [&node.text, &node.left, &node.right, &node.top, &node.bottom]
-                .into_iter()
-                .flatten()
-            {
-                state.input_bytes += value.len();
-            }
-            stack.extend(node.children.iter().rev());
         }
         Some(formula)
     }
@@ -544,6 +507,48 @@ impl MathContext {
         }
         summary.details_omitted = summary.issues.saturating_sub(issues.len());
         Ok((issues, summary))
+    }
+}
+
+fn validation_error(
+    formula: usize,
+    error: EquationValidationError,
+    remaining_nodes: usize,
+    remaining_bytes: usize,
+    visited_bytes: usize,
+) -> MarkdownMathError {
+    match error {
+        EquationValidationError::InvalidNode(_) => MarkdownMathError::InvalidEquation {
+            formula,
+            message: error.to_string(),
+        },
+        EquationValidationError::TextByteLimit
+            if remaining_bytes <= crate::math::MAX_MATH_INPUT_BYTES
+                || visited_bytes > remaining_bytes =>
+        {
+            limit(MarkdownMathLimit::InputBytes)
+        }
+        EquationValidationError::NodeLimit if remaining_nodes <= crate::math::MAX_MATH_NODES => {
+            limit(MarkdownMathLimit::Nodes)
+        }
+        EquationValidationError::NodeLimit => MarkdownMathError::Encoding {
+            formula,
+            error: crate::math::MathError::LimitExceeded {
+                limit: crate::math::MathLimit::Nodes,
+            },
+        },
+        EquationValidationError::DepthLimit => MarkdownMathError::Encoding {
+            formula,
+            error: crate::math::MathError::LimitExceeded {
+                limit: crate::math::MathLimit::Depth,
+            },
+        },
+        EquationValidationError::TextByteLimit => MarkdownMathError::Encoding {
+            formula,
+            error: crate::math::MathError::LimitExceeded {
+                limit: crate::math::MathLimit::InputBytes,
+            },
+        },
     }
 }
 

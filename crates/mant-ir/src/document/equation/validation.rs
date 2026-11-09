@@ -29,6 +29,24 @@ impl Default for EquationValidationLimits {
     }
 }
 
+/// Result and consumed work of one bounded validation attempt.
+///
+/// Counts describe the checked prefix on success and failure. This transient
+/// operation report records validation work independently of document content.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EquationValidationReport {
+    /// First contract or limit failure, or successful complete validation.
+    pub result: Result<(), EquationValidationError>,
+    /// Nodes entered after the node-budget check, including an invalid node.
+    pub visited_nodes: usize,
+    /// Stored UTF-8 field lengths checked, including a field exceeding the limit.
+    /// Saturates at `usize::MAX` if those lengths overflow.
+    pub text_bytes: usize,
+    /// Deepest entered node, including one failing the depth check.
+    /// Zero when the node budget prevents entering the root.
+    pub max_depth: usize,
+}
+
 /// A local contract failure or a validation work limit, without source execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EquationValidationError {
@@ -126,18 +144,45 @@ impl EquationExpression {
     ///
     /// # Errors
     /// Returns the first local contract failure, or `NodeLimit`, `DepthLimit`
-    /// or `TextByteLimit` before exceeding the corresponding caller budget.
+    /// or `TextByteLimit` when a caller budget prevents complete validation.
     pub fn validate(
         &self,
         limits: EquationValidationLimits,
     ) -> Result<(), EquationValidationError> {
-        let mut nodes = 0usize;
-        let mut bytes = 0usize;
+        self.validate_with_report(limits).result
+    }
+
+    /// Validate once and retain consumed prefix work, including failed attempts.
+    ///
+    /// The node limit is checked before entering a node. Depth and local shape
+    /// checks follow entry, and text fields are checked in text, left, right,
+    /// top, bottom order. Only fields reached before a failure are counted.
+    #[must_use]
+    pub fn validate_with_report(
+        &self,
+        limits: EquationValidationLimits,
+    ) -> EquationValidationReport {
+        let mut report = EquationValidationReport {
+            result: Ok(()),
+            visited_nodes: 0,
+            text_bytes: 0,
+            max_depth: 0,
+        };
+        report.result = self.validate_tree(limits, &mut report);
+        report
+    }
+
+    fn validate_tree(
+        &self,
+        limits: EquationValidationLimits,
+        report: &mut EquationValidationReport,
+    ) -> Result<(), EquationValidationError> {
         let mut check = |node: &Self, depth: usize| {
-            if nodes >= limits.max_nodes {
+            if report.visited_nodes >= limits.max_nodes {
                 return Err(EquationValidationError::NodeLimit);
             }
-            nodes += 1;
+            report.visited_nodes += 1;
+            report.max_depth = report.max_depth.max(depth);
             if depth > limits.max_depth {
                 return Err(EquationValidationError::DepthLimit);
             }
@@ -146,9 +191,11 @@ impl EquationExpression {
                 .into_iter()
                 .flatten()
             {
-                bytes = bytes
-                    .checked_add(text.len())
-                    .ok_or(EquationValidationError::TextByteLimit)?;
+                let Some(bytes) = report.text_bytes.checked_add(text.len()) else {
+                    report.text_bytes = usize::MAX;
+                    return Err(EquationValidationError::TextByteLimit);
+                };
+                report.text_bytes = bytes;
                 if bytes > limits.max_text_bytes {
                     return Err(EquationValidationError::TextByteLimit);
                 }

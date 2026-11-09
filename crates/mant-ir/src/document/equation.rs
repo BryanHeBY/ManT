@@ -9,7 +9,7 @@ mod validation;
 mod views;
 mod wire;
 
-pub use validation::{EquationValidationError, EquationValidationLimits};
+pub use validation::{EquationValidationError, EquationValidationLimits, EquationValidationReport};
 pub use views::{
     EquationDecorationKind, EquationDecorationRef, EquationMatrixRef, EquationOperationRef,
 };

@@ -20,7 +20,7 @@ pub use diagnostic::{
 pub use equation::{
     EquationAtomRole, EquationDecorationKind, EquationDecorationRef, EquationExpression,
     EquationFont, EquationKind, EquationMatrixRef, EquationOperandScope, EquationOperationRef,
-    EquationOperator, EquationValidationError, EquationValidationLimits,
+    EquationOperator, EquationValidationError, EquationValidationLimits, EquationValidationReport,
 };
 pub use inline::{Inline, LinkTarget};
 pub use source::{DocumentSource, SourceFormat, SourceSpan, TextRange, TextSize};

@@ -38,6 +38,10 @@ that crate was not published for that change.
   across full documents, excerpts and explanation reports. Individual formula
   errors and aggregate mathematical budgets preserve readable document content.
   Addressable artifacts expose bounded conversion reports and final-byte ranges.
+- Charge failed formula validation and readable-cache checks against cumulative
+  Markdown math budgets. Preserve complete readable output after exhaustion.
+  Add a single-pass validation work report and align checked/default limit
+  classification, including cached owners and rejected presentation candidates.
 - Introduce `mant.markdown/v2` search descriptors with required
   `math: "readable"`. Reproduce them using `READABLE_ADDRESSABLE` or
   `--preserve-anchors --markdown-math readable`, preserving mathematical symbols

@@ -4,7 +4,7 @@ use mant_ir::{
     Block, EquationAtomRole as Role, EquationExpression as Expr, EquationFont, EquationKind,
     EquationOperandScope, EquationOperator, Inline, LayoutHint,
 };
-use pulldown_cmark::{Event, Options, Parser};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
 fn atom(value: &str) -> Expr {
     Expr {
@@ -483,4 +483,133 @@ fn portable_backtick_rows_are_charged_before_their_framing_is_allocated() {
             limit: MarkdownMathLimit::OutputBytes
         })
     ));
+}
+
+fn code_blocks(markdown: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut current = None;
+    for event in Parser::new_ext(markdown, Options::ENABLE_MATH) {
+        match event {
+            Event::Start(Tag::CodeBlock(_)) => current = Some(String::new()),
+            Event::Text(text) => {
+                if let Some(value) = &mut current {
+                    value.push_str(&text);
+                }
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                let mut value = current.take().expect("matching code block");
+                if value.ends_with('\n') {
+                    value.pop();
+                }
+                blocks.push(value);
+            }
+            _ => {}
+        }
+    }
+    blocks
+}
+
+fn assert_export_budget(
+    source: &ResolvedContent,
+    expected_encoded: usize,
+    global_limit: MarkdownMathLimit,
+    local_limit: crate::math::MathLimit,
+) {
+    let artifact = super::super::render_addressable_markdown(source);
+    let summary = artifact.math_summary();
+    assert!(summary.budget_exhausted);
+    assert_eq!(summary.encoded_formulas, expected_encoded);
+    assert_eq!(math_events(artifact.text()).len(), expected_encoded);
+    assert_eq!(
+        summary.formulas,
+        summary.encoded_formulas + summary.fallback_formulas
+    );
+    let expected_readable: Vec<_> = source.document.as_ref().unwrap().blocks[expected_encoded..]
+        .iter()
+        .map(|block| {
+            let Block::Equation { value, .. } = block else {
+                panic!("independent mathematical owners");
+            };
+            value.clone()
+        })
+        .collect();
+    assert_eq!(code_blocks(artifact.text()), expected_readable);
+    assert_eq!(
+        artifact.math_issues().last().unwrap().kind,
+        MarkdownMathIssueKind::BudgetLimit(global_limit)
+    );
+    let expected_error = if expected_encoded == 0 {
+        assert_eq!(
+            artifact.math_issues()[0].kind,
+            MarkdownMathIssueKind::EncodingLimit(local_limit)
+        );
+        MarkdownMathError::Encoding {
+            formula: 0,
+            error: crate::math::MathError::LimitExceeded { limit: local_limit },
+        }
+    } else {
+        MarkdownMathError::LimitExceeded {
+            limit: global_limit,
+        }
+    };
+    for policy in [MathPolicy::Strict, MathPolicy::BestEffort] {
+        let error = render_math_markdown(source, MarkdownOptions::default(), policy)
+            .err()
+            .expect("checked export reports the limiting resource");
+        assert_eq!(error, expected_error);
+    }
+}
+
+#[test]
+fn production_node_budget_charges_failed_formulas_and_preserves_all_reading() {
+    for (owners, nodes_per_formula, encoded) in [
+        (4, crate::math::MAX_MATH_NODES, 4),
+        (5, crate::math::MAX_MATH_NODES + 1, 0),
+    ] {
+        let mut blocks = Vec::new();
+        for _ in 0..owners {
+            let expression = Expr {
+                kind: EquationKind::Sequence,
+                atom_role: Role::Unknown,
+                text: None,
+                children: vec![atom("x"); nodes_per_formula - 1],
+                ..atom("")
+            };
+            expression
+                .validate(mant_ir::EquationValidationLimits::default())
+                .unwrap();
+            blocks.push(display(Some(expression), ""));
+        }
+        blocks.push(display(Some(atom("TAIL")), ""));
+        assert_export_budget(
+            &query(blocks),
+            encoded,
+            MarkdownMathLimit::Nodes,
+            crate::math::MathLimit::Nodes,
+        );
+    }
+}
+
+#[test]
+fn production_byte_budget_charges_failed_formulas_and_preserves_all_reading() {
+    for (bytes_per_formula, encoded) in [
+        (crate::math::MAX_MATH_INPUT_BYTES, 4),
+        (crate::math::MAX_MATH_INPUT_BYTES + 1, 0),
+    ] {
+        let mut blocks = Vec::new();
+        for _ in 0..4 {
+            let expression = atom(&"x".repeat(bytes_per_formula));
+            expression
+                .validate(mant_ir::EquationValidationLimits::default())
+                .unwrap();
+            blocks.push(display(Some(expression), ""));
+        }
+        blocks.push(display(Some(atom("TAIL")), ""));
+        assert_export_budget(
+            &query(blocks),
+            encoded,
+            MarkdownMathLimit::InputBytes,
+            crate::math::MathLimit::InputBytes,
+        );
+    }
 }

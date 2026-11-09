@@ -345,6 +345,14 @@ accepts every such depth. Formula block and inline decoding checks the shared
 readable cache after bounded validation, including formulas embedded directly
 inside excerpts and explanation forms rather than a full document envelope.
 
+`validate_with_report(EquationValidationLimits)` returns the result and consumed
+work from that same traversal. The report counts entered nodes, checked UTF-8
+field lengths and the deepest entered node on success and failure. A depth or
+shape failure includes its entered node. A byte failure includes the complete
+length of the violating field. A node-limit failure stops before entering the
+next node. These transient operation counts let consumers charge failed
+attempts against cumulative work budgets.
+
 `readable_text()` supplies one shared reading projection for text consumers.
 Structured math-capable output uses the expression tree directly. Encoders
 distinguish source coverage findings from target-format conversion losses.

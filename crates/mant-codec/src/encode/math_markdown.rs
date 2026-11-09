@@ -12,7 +12,7 @@ use std::{error::Error, fmt};
 
 /// Maximum independently owned formulas in one mathematical Markdown operation.
 pub const MAX_MARKDOWN_MATH_FORMULAS: usize = 4096;
-/// Maximum cumulative expression nodes or source-context traversal work.
+/// Maximum cumulative expression validation visits or source-context traversal work.
 pub const MAX_MARKDOWN_MATH_NODES: usize = 65_536;
 /// Maximum cumulative stored mathematical UTF-8 bytes charged by one operation.
 pub const MAX_MARKDOWN_MATH_INPUT_BYTES: usize = 4 * 1024 * 1024;

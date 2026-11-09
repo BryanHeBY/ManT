@@ -401,3 +401,130 @@ fn schema_carries_closed_fields_and_local_shape_conditions() {
         1
     );
 }
+
+#[test]
+fn validation_reports_the_exact_checked_prefix_on_success_and_limit_failure() {
+    let expression = container(EquationKind::Sequence, vec![atom("x"), atom("yz")]);
+    let complete = EquationValidationLimits {
+        max_nodes: 3,
+        max_depth: 2,
+        max_text_bytes: 3,
+    };
+    for (limits, result, expected_work) in [
+        (complete, Ok(()), (3, 3, 2)),
+        (
+            EquationValidationLimits {
+                max_nodes: 2,
+                ..complete
+            },
+            Err(EquationValidationError::NodeLimit),
+            (2, 1, 2),
+        ),
+        (
+            EquationValidationLimits {
+                max_depth: 1,
+                ..complete
+            },
+            Err(EquationValidationError::DepthLimit),
+            (2, 0, 2),
+        ),
+        (
+            EquationValidationLimits {
+                max_text_bytes: 2,
+                ..complete
+            },
+            Err(EquationValidationError::TextByteLimit),
+            (3, 3, 2),
+        ),
+        (
+            EquationValidationLimits {
+                max_nodes: 0,
+                ..complete
+            },
+            Err(EquationValidationError::NodeLimit),
+            (0, 0, 0),
+        ),
+        (
+            EquationValidationLimits {
+                max_depth: 0,
+                ..complete
+            },
+            Err(EquationValidationError::DepthLimit),
+            (1, 0, 1),
+        ),
+    ] {
+        let report = expression.validate_with_report(limits);
+        assert_eq!(report.result, result);
+        assert_eq!(expression.validate(limits), report.result);
+        assert_eq!(
+            (report.visited_nodes, report.text_bytes, report.max_depth),
+            expected_work
+        );
+    }
+}
+
+#[test]
+fn invalid_equations_report_only_the_fields_reached_before_failure() {
+    let mut invalid = container(EquationKind::Sequence, Vec::new());
+    invalid.text = Some("unvisited bytes".into());
+    let limits = EquationValidationLimits::default();
+    let root = invalid.validate_with_report(limits);
+    assert!(matches!(
+        root.result,
+        Err(EquationValidationError::InvalidNode(_))
+    ));
+    assert_eq!(
+        (root.visited_nodes, root.text_bytes, root.max_depth),
+        (1, 0, 1)
+    );
+    let expression = container(EquationKind::Sequence, vec![atom("x"), invalid]);
+    let late = expression.validate_with_report(limits);
+    assert!(matches!(
+        late.result,
+        Err(EquationValidationError::InvalidNode(_))
+    ));
+    assert_eq!(
+        (late.visited_nodes, late.text_bytes, late.max_depth),
+        (3, 1, 2)
+    );
+}
+
+#[test]
+fn validation_byte_reports_include_the_violating_utf8_field() {
+    let mut expression = atom("x");
+    expression.left = Some("(".into());
+    expression.right = Some(")".into());
+    expression.top = Some("→".into());
+    expression.bottom = Some("_".into());
+    let limits = EquationValidationLimits::default();
+    let complete = expression.validate_with_report(limits);
+    assert_eq!(complete.result, Ok(()));
+    assert_eq!(
+        (
+            complete.visited_nodes,
+            complete.text_bytes,
+            complete.max_depth
+        ),
+        (1, 7, 1)
+    );
+    let partial = expression.validate_with_report(EquationValidationLimits {
+        max_text_bytes: 4,
+        ..limits
+    });
+    assert_eq!(partial.result, Err(EquationValidationError::TextByteLimit));
+    assert_eq!(
+        (partial.visited_nodes, partial.text_bytes, partial.max_depth),
+        (1, 6, 1)
+    );
+    for empty in [atom(""), container(EquationKind::Sequence, Vec::new())] {
+        let report = empty.validate_with_report(EquationValidationLimits {
+            max_text_bytes: 0,
+            ..limits
+        });
+        assert_eq!(report.result, Ok(()));
+        assert_eq!(
+            (report.visited_nodes, report.text_bytes, report.max_depth),
+            (1, 0, 1)
+        );
+    }
+}
