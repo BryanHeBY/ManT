@@ -121,7 +121,8 @@ that crate was not published for that change.
   an adjacent paragraph gap.
 - Retire unprinted word separators at their native pass boundary. Later
   breaks preserve authored spaces, accepted glyphs, link ownership and
-  completed hard rows in reading output and Markdown round trips.
+  completed hard rows in reading output and Markdown round trips. Keep
+  accepted empty passes before a following word, at EOF and in no-fill.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

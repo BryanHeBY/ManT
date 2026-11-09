@@ -36,6 +36,7 @@ mod flush;
 mod scan;
 mod writes;
 
+pub(in crate::mandoc::inline) use cells::DeferredSourceBlank;
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};
 pub(super) use cells::{LeadingBlankRetreat, WordWriteReceipt};
 
@@ -160,6 +161,7 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Scalar ownership attached to each native write. Replaced zero-advance
     /// graphs remain native graph cells but contribute no projected glyph.
     projection_prefix: Vec<usize>,
+    deferred_blanks: Vec<cells::DeferredBlankRun>,
     /// Latest occupied cell that an emitted backline could overwrite in
     /// this projection interval. Native BACKBEFORE can survive its retirement.
     backline_projection_target: Option<usize>,

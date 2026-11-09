@@ -135,6 +135,7 @@ impl InlineBuilder {
             if !owner_boundary {
                 self.project_accepted_field_passes(passes);
                 self.project_unprinted_accepted_field_padding(passes);
+                self.project_deferred_field_blanks(passes);
             }
             self.definition_state_mut().hang_row.field_discarded = false;
             self.project_completed_empty_passes(&empty_pass_ends);
@@ -147,7 +148,6 @@ impl InlineBuilder {
             // would merge two different endline events at the same scalar.
             self.project_accepted_field_passes(passes);
         }
-        let definition = self.execution.definition.as_mut().expect("native field");
         let FlushReceipt::Rejected {
             passes,
             rejected_from,
@@ -160,7 +160,21 @@ impl InlineBuilder {
         if owner_boundary && !*definitive {
             return false;
         }
-        let rejected_from = *rejected_from;
+        self.project_rejected_field_prefix(passes, *rejected_from);
+        self.project_completed_empty_passes(&empty_pass_ends);
+        self.finish_rejected_field_state(
+            owner_boundary,
+            no_break_flush,
+            native.map(|device| device.ends_row),
+        )
+    }
+
+    fn project_rejected_field_prefix(
+        &mut self,
+        passes: &[super::super::field_buffer::FillPass],
+        rejected_from: usize,
+    ) {
+        let definition = self.execution.definition.as_mut().expect("native field");
         definition.hang_row.field_discarded = true;
         let accepted_owners = super::super::output::native_passes::accepted_owner_lengths(
             &definition.field_buffer,
@@ -192,6 +206,12 @@ impl InlineBuilder {
             retain_unprinted_field_targets(&mut pending_output);
         }
         self.nodes.extend(pending_output);
+        super::super::output::deferred_blanks::project(
+            &mut self.nodes,
+            &definition.field_buffer,
+            passes,
+            current_field_start,
+        );
         if accepted_owned_prefix
             && !super::super::output::ends_with_executed_line_break(&self.nodes)
         {
@@ -204,12 +224,21 @@ impl InlineBuilder {
         if let Some(author) = &mut self.execution.author_execution {
             author.field_output_start = self.nodes.len();
         }
-        self.project_completed_empty_passes(&empty_pass_ends);
-        self.finish_rejected_field_state(
-            owner_boundary,
-            no_break_flush,
-            native.map(|device| device.ends_row),
-        )
+    }
+
+    fn project_deferred_field_blanks(&mut self, passes: &[super::super::field_buffer::FillPass]) {
+        let definition = self.execution.definition.as_ref().expect("native field");
+        let start = self
+            .execution
+            .author_execution
+            .as_ref()
+            .map_or(0, |author| author.field_output_start);
+        super::super::output::deferred_blanks::project(
+            &mut self.nodes,
+            &definition.field_buffer,
+            passes,
+            start,
+        );
     }
 
     /// Acceptance by `term_fill` leaves `term_field`'s deferred tail unprinted.

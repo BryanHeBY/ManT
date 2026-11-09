@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+fn contiguous_deferred_source_spaces_use_one_run_receipt() {
+    use crate::mandoc::inline::flow::field_buffer::FieldWrite;
+
+    // The exact .No operand ran pinned term.c::term_flushln()205-207
+    // first: the continuation sweeps all 8,192 SP, leaving ALPHA/BETA.
+    let operand = format!("ALPHA\\p{}BETA", " ".repeat(8192));
+    let mut font = FontState::new();
+    let mut zero = ZeroAdvanceState::new();
+    zero.set_native_word_owner(1);
+    let execution = parse_roff_text_with_zero_advance(
+        &operand,
+        TextExecutionContext {
+            font: &mut font,
+            zero_advance: &mut zero,
+            pending_word_end_break: false,
+            policy: TextExecutionPolicy {
+                recognize_generated_references: false,
+                record_native_cells: true,
+                field_authoritative: true,
+                word_space: crate::mandoc::roff_escape::WordSpace::Breakable,
+            },
+        },
+    );
+    assert_eq!(execution.native_writes.len(), 11);
+    assert!(matches!(
+        execution.native_writes[6],
+        FieldWrite::DeferredBlanks { count: 8192, .. }
+    ));
+    assert_eq!(execution.output.len(), 3);
+    assert_eq!(mant_ir::inline_plain_text(&execution.output), "ALPHABETA");
+}
+
+#[test]
 fn function_word_policy_changes_only_literal_source_blanks() {
     // Fn/Fo exact full sources for literal, escaped, numbered and motion
     // blanks first ran all five pinned profiles. NBRWORD changes only

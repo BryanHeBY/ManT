@@ -107,29 +107,53 @@ pub(super) fn retain_blank_only_unit_output(
     }
 }
 
-/// The supplied row origin determines the completed row's projection.
-/// Literal rows can precede another source word in the same owner, so
-/// they enter the inline stream immediately.
-pub(super) fn project_retired_empty_rows(
+/// An accepted `term_flushln()` loop endline (term.c:205-220) closes a
+/// hard row even if `term_field()` printed no glyph. Keep its delimiter
+/// when a later word joins this owner and its receipt for a terminal drain.
+pub(super) fn project_completed_empty_passes(
     execution: &mut super::super::InlineExecutionState,
     nodes: &mut Vec<Inline>,
+    output_start: usize,
     rows: u16,
     origin: super::super::output::CompletedRowOrigin,
 ) {
-    match origin {
-        super::super::output::CompletedRowOrigin::Layout
-        | super::super::output::CompletedRowOrigin::HardLine => {
-            InlineBuilder::record_completed_rows_at(execution, nodes, rows, origin);
-        }
-        super::super::output::CompletedRowOrigin::LiteralText => {
-            for _ in 0..rows {
-                nodes.push(Inline::Text {
-                    value: String::new(),
-                });
-                nodes.push(Inline::line_break());
-            }
-        }
+    use super::super::output::CompletedRowOrigin;
+    if rows == 0 {
+        return;
     }
+    // Reconcile only the surviving projection of this accepted suffix.
+    // Acknowledged delimiters can be removed by later owner acceptance.
+    let mut delimiters = 0;
+    let visible = count_projected_tail_delimiters(&nodes[output_start..], &mut delimiters);
+    if visible && delimiters == 0 {
+        nodes.push(Inline::line_break());
+    }
+    let projected_empty = delimiters.saturating_sub(usize::from(visible));
+    let missing = usize::from(rows).saturating_sub(projected_empty);
+    if origin == CompletedRowOrigin::LiteralText {
+        for _ in 0..missing {
+            nodes.push(Inline::Text {
+                value: String::new(),
+            });
+            nodes.push(Inline::line_break());
+        }
+        return;
+    }
+    nodes.extend(std::iter::repeat_n(Inline::line_break(), missing));
+    InlineBuilder::record_completed_rows_at(execution, nodes, rows, CompletedRowOrigin::HardLine);
+}
+
+fn count_projected_tail_delimiters(nodes: &[Inline], delimiters: &mut usize) -> bool {
+    nodes.iter().rev().any(|node| match node {
+        Inline::LineBreak { .. } => {
+            *delimiters += 1;
+            false
+        }
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => count_projected_tail_delimiters(children, delimiters),
+        _ => super::super::output::has_rendered_formatter_glyph(std::slice::from_ref(node)),
+    })
 }
 
 /// Each real loop endline closes its accepted native interval, including

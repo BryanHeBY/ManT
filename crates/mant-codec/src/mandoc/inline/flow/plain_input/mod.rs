@@ -19,8 +19,8 @@ use super::{Inline, InlineBuilder};
 
 mod projection;
 use projection::{
-    completed_empty_plain_passes, literal_tail_row, project_rejected_plain_prefix,
-    project_retired_empty_rows, retain_accepted_unit_output, retain_blank_only_unit_output,
+    completed_empty_plain_passes, literal_tail_row, project_completed_empty_passes,
+    project_rejected_plain_prefix, retain_accepted_unit_output, retain_blank_only_unit_output,
     retire_plain_presentation,
 };
 
@@ -221,7 +221,8 @@ impl InlineBuilder {
         else {
             let empty_tail =
                 retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start);
-            project_retired_empty_rows(execution, nodes, empty_rows, row_origin);
+            project_completed_empty_passes(execution, nodes, output_start, empty_rows, row_origin);
+            super::output::deferred_blanks::project(nodes, &buffer, passes, output_start);
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
             return PlainFlushOutcome::from_unprinted_tail(
                 empty_tail,
@@ -237,6 +238,7 @@ impl InlineBuilder {
                 output_start,
                 row_origin,
             );
+            super::output::deferred_blanks::project(nodes, &buffer, &passes, output_start);
             // The buffer was nonempty, so term_flushln() retires BACKAFTER
             // along with it even though no term_field() ran (235-237).
             execution.zero_advance.discard_at_row_end();
@@ -259,9 +261,8 @@ impl InlineBuilder {
         // term.c::term_flushln() clears both backtracking flags; a rejected
         // unit dies whole, including a still-buffered `\z` glyph.
         execution.zero_advance.discard_at_row_end();
-        if !reprojected_literal_rows {
-            project_retired_empty_rows(execution, nodes, empty_rows, row_origin);
-        }
+        project_completed_empty_passes(execution, nodes, output_start, empty_rows, row_origin);
+        super::output::deferred_blanks::project(nodes, &buffer, &passes, output_start);
         let outcome = PlainFlushOutcome::rejected_prefix(&buffer, &passes);
         Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
         outcome

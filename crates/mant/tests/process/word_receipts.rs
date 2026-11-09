@@ -130,6 +130,34 @@ fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
 }
 
 #[test]
+fn accepted_empty_word_passes_keep_hard_rows_before_a_successor_or_eof() {
+    // These exact inputs ran all five pristine profiles. term.c:205–220
+    // closes each accepted loop pass, including NBRZW with no printed
+    // scalar. The last rejected pass also ends its row (250–253). The
+    // following .Pp independently executes term_vspace().
+    let before_break = include_str!(
+        "../../../mant-engine/tests/roff_lowering/word_passes/empty-passes-before-break.1"
+    );
+    let at_eof =
+        include_str!("../../../mant-engine/tests/roff_lowering/word_passes/empty-passes-at-eof.1");
+    let kept =
+        include_str!("../../../mant-engine/tests/roff_lowering/word_passes/empty-passes-in-keep.1");
+    let literal_at_eof = at_eof.replace(".Sh DESCRIPTION\n", ".Sh DESCRIPTION\n.nf\n") + ".fi\n";
+    let before_paragraph = before_break.replace(".br\n", ".Pp\n");
+    let one_less_pass = before_break.replacen("\\&\\p\\: ", "", 1);
+    for (source, expected) in [
+        (before_break, "ALPHAX\n\n\nOMEGA"),
+        (at_eof, "ALPHAX\nY\n\n\n"),
+        (&literal_at_eof, "ALPHAX\nY\n\n\n"),
+        (&before_paragraph, "ALPHAX\n\n\n\nOMEGA"),
+        (&one_less_pass, "ALPHAX\n\nOMEGA"),
+        (kept, "ALPHA\n\n\nOMEGA"),
+    ] {
+        assert_readbacks(source, expected, None);
+    }
+}
+
+#[test]
 fn accepted_words_and_delayed_hard_rows_survive_two_cli_markdown_readbacks() {
     // All three exact .1 sources ran the five pristine profiles. The
     // formatter's accepted ranges and hard rows come from term.c::encode1(),
@@ -176,6 +204,45 @@ fn marker_passes_keep_only_printed_separators_through_cli_readbacks() {
         ),
         (SURVIVING_SEPARATOR, "ALPHAX BETA\nOMEGA", None),
         (PASS_LEADING_SPACE, "ALPHAX\n\n YBETA", None),
+    ] {
+        assert_readbacks(source, expected, label);
+    }
+}
+
+#[test]
+fn deferred_source_space_survives_only_in_the_printed_native_pass() {
+    // The pinned terminal prints the SP following an accepted breakpoint.
+    // In the negative control encode1() emits a backspace instead of
+    // retreating over an immediately preceding SP (term.c:901-908).
+    for (source, expected, label) in [
+        (
+            include_str!(
+                "../../../mant-engine/tests/roff_lowering/word_passes/deferred-source-blank.1"
+            ),
+            "ALPHAX\nY\n\n BETA\nOMEGA",
+            None,
+        ),
+        (
+            include_str!(
+                "../../../mant-engine/tests/roff_lowering/word_passes/deferred-source-blank-in-style.1"
+            ),
+            "ALPHAX\nY\n\n BETA\nOMEGA",
+            None,
+        ),
+        (
+            include_str!(
+                "../../../mant-engine/tests/roff_lowering/word_passes/deferred-source-blank-in-link.1"
+            ),
+            "ALPHAX\nY\n\n BETA:\nhttps://x.io\nOMEGA",
+            Some("\nY\n\n BETA"),
+        ),
+        (
+            include_str!(
+                "../../../mant-engine/tests/roff_lowering/word_passes/overwritten-source-blank.1"
+            ),
+            "ALPHAX\n\nBETA\nOMEGA",
+            None,
+        ),
     ] {
         assert_readbacks(source, expected, label);
     }

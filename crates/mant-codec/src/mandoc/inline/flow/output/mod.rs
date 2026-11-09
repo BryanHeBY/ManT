@@ -56,6 +56,8 @@ pub(super) fn is_term_alternative(node: &Inline) -> bool {
 const INTERNAL_DEVICE_ROW_END: &str = "\0mant:output-scope:device-row-end";
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output-scope:";
+pub(in crate::mandoc::inline::flow) const DEFERRED_SOURCE_BLANK: &str =
+    "\0mant:output-scope:deferred-blank:";
 
 /// The public drain and local row-index consumers share this classification.
 /// Metadata can sit after a real row end without becoming that row's payload.
@@ -69,6 +71,7 @@ pub(in crate::mandoc::inline::flow) fn is_private_output_marker(node: &Inline) -
 
 mod boundary;
 mod checkpoints;
+pub(in crate::mandoc::inline::flow) mod deferred_blanks;
 mod drain;
 mod hard_breaks;
 mod projection;

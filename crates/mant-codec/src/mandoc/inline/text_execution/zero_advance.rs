@@ -86,6 +86,10 @@ impl ZeroAdvanceState {
         self.native_word_owner = Some(owner);
     }
 
+    pub(super) const fn native_word_owner(&self) -> Option<u64> {
+        self.native_word_owner
+    }
+
     fn project_glyph(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
         self.machine
             .project_glyph(OwnedGlyph {

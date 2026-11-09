@@ -50,6 +50,43 @@ std::thread_local! {
 }
 
 impl FieldBuffer {
+    pub(in crate::mandoc::inline::flow) fn has_deferred_blanks(&self) -> bool {
+        !self.deferred_blanks.is_empty()
+    }
+
+    pub(in crate::mandoc::inline::flow) fn printed_deferred_blanks(
+        &self,
+        passes: &[FillPass],
+    ) -> Vec<(super::cells::DeferredSourceBlank, usize)> {
+        let mut next = self.deferred_blanks.iter().peekable();
+        let mut output = Vec::new();
+        let mut start = 0;
+        for pass in passes {
+            // A pass's ordinary boundary SP is swept before the next
+            // interval (term.c:205-207). Inside it, term_field() advances
+            // an authored SP only in front of a real graph (389-427).
+            let printed_end = self.printed_content_end(start, pass.end);
+            while let Some(run) = next.peek().filter(|run| run.start < pass.end) {
+                let count = run
+                    .end
+                    .min(printed_end)
+                    .saturating_sub(run.start.max(start));
+                if count > 0 {
+                    output.push((run.source, count));
+                }
+                if run.end > pass.end {
+                    break;
+                }
+                next.next();
+            }
+            if next.peek().is_none() {
+                break;
+            }
+            start = self.after_break_blanks(pass.end);
+        }
+        output
+    }
+
     pub(in crate::mandoc::inline::flow) fn flush_receipt(
         &self,
         targets: FillTargets,
@@ -104,6 +141,7 @@ impl FieldBuffer {
             nonbreaking_positions: self.nonbreaking_positions.clone(),
             blank_positions: self.blank_positions.clone(),
             projection_prefix: Vec::new(),
+            deferred_blanks: Vec::new(),
             backline_projection_target: None,
             backbefore_armed: false,
             backafter_armed: false,

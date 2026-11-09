@@ -1,4 +1,6 @@
 use super::{Inline, TextEventState, WordOutput, is_formatter_word_blank};
+use crate::mandoc::inline::flow::field_buffer::{DeferredSourceBlank, FieldWrite};
+use crate::mandoc::inline::font::style::{flush_segment, styled_link};
 
 impl TextEventState {
     pub(super) fn note_text_character(&mut self, character: char) {
@@ -48,6 +50,7 @@ pub(super) fn append_text_event(
     destination: WordOutput<'_>,
     state: &mut TextEventState,
     field_authoritative: bool,
+    mut native_writes: Option<&mut Vec<FieldWrite>>,
 ) {
     let WordOutput {
         output,
@@ -57,6 +60,9 @@ pub(super) fn append_text_event(
         zero_advance,
     } = destination;
     if !state.pending_word_end_break && !state.suppress_break_whitespace && !state.wiped {
+        if let Some(writes) = native_writes {
+            FieldWrite::append_literal(writes, value);
+        }
         for character in value.chars() {
             state.note_text_character(character);
         }
@@ -66,14 +72,22 @@ pub(super) fn append_text_event(
         return;
     }
     let mut chunk = String::new();
-    for character in value.chars() {
+    let mut destination = WordOutput {
+        output,
+        buffer,
+        font,
+        link,
+        zero_advance,
+    };
+    let mut characters = value.chars().peekable();
+    while let Some(character) = characters.next() {
         if state.wiped {
             // The flush unit's remainder is unprinted input (term.c:233-237
             // reached through 143-146); graphs and blanks alike die with it.
             continue;
         }
         if state.pending_word_end_break && is_formatter_word_blank(character) {
-            zero_advance.append_text(&chunk, output, buffer, font, link);
+            destination.append_chunk(&chunk);
             chunk.clear();
             // This is the marker's first following blank in either
             // projection arm. BACKBEFORE can consume that blank, but it
@@ -81,26 +95,36 @@ pub(super) fn append_text_event(
             // event (term.c:294-305,901-908). Native passes retain breakline
             // independently until they accept their ordered cell interval.
             state.pending_word_end_break = false;
-            if zero_advance.has_buffered_glyph() {
+            if destination.zero_advance.has_buffered_glyph() {
                 // Release the cached glyph and held author spaces in
                 // their source order. The next encode1() can consume
                 // the marker's raw blank, leaving the break pending
                 // (term.c:294-295,901-908).
-                zero_advance.flush_with_held(output, buffer, font, link);
+                destination.zero_advance.flush_with_held(
+                    destination.output,
+                    destination.buffer,
+                    font,
+                    link,
+                );
                 // The authored blank is not the automatic word separator.
                 // Only the field receipt can decide whether that separator
                 // survived the retreat and actually printed in its pass.
                 state.suppress_break_whitespace = true;
+                if let Some(writes) = native_writes.as_deref_mut() {
+                    destination.defer_source_blanks(writes, &mut characters);
+                }
                 continue;
             }
-            zero_advance.flush(output, buffer, font, link);
+            destination
+                .zero_advance
+                .flush(destination.output, destination.buffer, font, link);
             let rejected_after_accepted_blank =
                 state.break_started_after_blank && !state.graph_since_break;
             if rejected_after_accepted_blank {
                 // term_fill() records nbr before the breakable blank. That
                 // blank is outside the accepted field as well as its suffix.
                 crate::mandoc::inline::flow::trim_trailing_breakable_spaces(
-                    output,
+                    destination.output,
                     state.break_trailing_blanks,
                 );
             }
@@ -120,11 +144,14 @@ pub(super) fn append_text_event(
             if !field_authoritative {
                 let tail_accepted = state.graph_since_blank;
                 if tail_accepted || state.graph_seen {
-                    output.push(Inline::line_break());
+                    destination.output.push(Inline::line_break());
                 }
                 if !tail_accepted {
                     state.wiped = true;
                 }
+            }
+            if let Some(writes) = native_writes.as_deref_mut() {
+                destination.defer_source_blanks(writes, &mut characters);
             }
             state.suppress_break_whitespace = true;
             state.graph_seen = false;
@@ -137,13 +164,61 @@ pub(super) fn append_text_event(
             continue;
         }
         if state.suppress_break_whitespace && is_formatter_word_blank(character) {
+            if let Some(writes) = native_writes.as_deref_mut() {
+                destination.defer_source_blanks(writes, &mut characters);
+            }
             continue;
         }
         state.suppress_break_whitespace = false;
         state.note_text_character(character);
+        if let Some(writes) = native_writes.as_deref_mut() {
+            FieldWrite::append_character(writes, character);
+        }
         chunk.push(character);
     }
     // The decoder has already classified controls. A backslash produced by
     // \e or \[rs] is literal author content.
-    zero_advance.append_text(&chunk, output, buffer, font, link);
+    destination.append_chunk(&chunk);
+}
+
+impl WordOutput<'_> {
+    fn append_chunk(&mut self, chunk: &str) {
+        self.zero_advance
+            .append_text(chunk, self.output, self.buffer, self.font, self.link);
+    }
+
+    fn defer_source_blanks(
+        &mut self,
+        writes: &mut Vec<FieldWrite>,
+        characters: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    ) {
+        let mut count = 1;
+        while characters.next_if_eq(&' ').is_some() {
+            count += 1;
+        }
+        let Some(owner) = self.zero_advance.native_word_owner() else {
+            writes.extend(std::iter::repeat_n(FieldWrite::UnprojectedBlank, count));
+            return;
+        };
+        let blank = DeferredSourceBlank {
+            owner,
+            write: writes.len(),
+            font: self.font,
+        };
+        writes.push(FieldWrite::DeferredBlanks {
+            source: blank,
+            count,
+        });
+        // Keep the source's typed wrapper but leave the cell invisible
+        // until term_field() confirms its advance (term.c:389-427).
+        flush_segment(self.output, self.buffer, self.font, self.link);
+        let marker = Inline::anchor(blank.marker());
+        let mut node = styled_link(String::new(), super::Font::Regular, self.link);
+        if let Inline::Link { children, .. } = &mut node {
+            children[0] = marker;
+        } else {
+            node = marker;
+        }
+        self.output.push(node);
+    }
 }

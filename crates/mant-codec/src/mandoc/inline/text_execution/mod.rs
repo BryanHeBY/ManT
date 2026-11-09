@@ -236,15 +236,13 @@ fn execute_formatter_word_events(
                     word.native_writes.push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
                 }
             }
-            record_native_event(
-                event,
-                &mut word.native_writes,
-                context.zero_advance.fallback_is_projected(),
-                context
-                    .policy
-                    .field_authoritative
-                    .then_some(&word.text_state),
-            );
+            if !context.policy.field_authoritative || !matches!(event, RoffInlineEvent::Text(_)) {
+                record_native_event(
+                    event,
+                    &mut word.native_writes,
+                    context.zero_advance.fallback_is_projected(),
+                );
+            }
         }
         word.append_source_event(event, &mut context, index + 1 == events.len());
     }

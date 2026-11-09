@@ -55,6 +55,8 @@ impl WordExecution {
                 },
                 &mut self.text_state,
                 context.policy.field_authoritative,
+                (context.policy.field_authoritative && context.policy.record_native_cells)
+                    .then_some(&mut self.native_writes),
             ),
             RoffInlineEvent::Glyph(value)
             | RoffInlineEvent::Overstrike {

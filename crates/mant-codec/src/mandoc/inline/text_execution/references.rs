@@ -35,6 +35,7 @@ pub(super) fn append_empty_destination(
         },
         text_state,
         policy.field_authoritative,
+        None,
     );
     let Some(before_marker) = word.buffer.strip_suffix("<>").filter(|_| eligible) else {
         return;

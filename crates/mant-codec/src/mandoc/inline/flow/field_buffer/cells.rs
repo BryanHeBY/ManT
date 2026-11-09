@@ -77,10 +77,41 @@ pub(in crate::mandoc) enum FieldWrite {
     /// A breakable source blank consumed by a marker's pass boundary. Its
     /// cell participates in acceptance, but has no authored output scalar.
     UnprojectedBlank,
+    /// An authored SP suppressed by the early word projection. The real
+    /// pass can still print it, retaining its original owner and style.
+    DeferredBlanks {
+        source: DeferredSourceBlank,
+        count: usize,
+    },
     ArmBackafter,
     CancelBackafter,
     /// A positive HORIZ first clears BACKBEFORE without buffering a cell.
     CancelBackbefore,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::mandoc) struct DeferredSourceBlank {
+    pub(in crate::mandoc::inline) owner: u64,
+    pub(in crate::mandoc::inline) write: usize,
+    pub(in crate::mandoc::inline) font: super::super::super::Font,
+}
+
+impl DeferredSourceBlank {
+    pub(in crate::mandoc::inline) fn marker(self) -> String {
+        format!(
+            "{}{}/{}",
+            super::super::output::DEFERRED_SOURCE_BLANK,
+            self.owner,
+            self.write
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct DeferredBlankRun {
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) source: DeferredSourceBlank,
 }
 
 impl FieldWrite {

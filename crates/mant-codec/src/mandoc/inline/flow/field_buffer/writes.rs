@@ -198,6 +198,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn clear(&mut self) {
         self.cells.clear();
         self.projection_prefix.clear();
+        self.deferred_blanks.clear();
         self.backline_projection_target = None;
         self.resume = 0;
         self.backbefore_armed = false;
@@ -284,6 +285,18 @@ impl FieldBuffer {
                 FieldWrite::UnprojectedBlank => {
                     self.push_cell(FieldCell::BreakableBlank);
                     *self.projection_prefix.last_mut().expect("buffered blank") -= 1;
+                }
+                FieldWrite::DeferredBlanks { source, count } => {
+                    let start = self.cells.len();
+                    for _ in 0..*count {
+                        self.push_cell(FieldCell::BreakableBlank);
+                        *self.projection_prefix.last_mut().expect("buffered blank") -= 1;
+                    }
+                    self.deferred_blanks.push(super::cells::DeferredBlankRun {
+                        start,
+                        end: self.cells.len(),
+                        source: *source,
+                    });
                 }
                 FieldWrite::ArmBackafter => self.backafter_armed = true,
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
@@ -455,11 +468,17 @@ impl FieldBuffer {
                         self.blank_positions.pop_last();
                     }
                     self.cells.pop();
+                    self.retire_deferred_blank_at(self.cells.len());
                     self.normalized_until = self.normalized_until.min(self.cells.len());
                     self.projection_prefix.pop();
                 }
                 Some(_) => {
                     if let Some(cell) = target.filter(|&cell| cell >= self.resume) {
+                        // term_field() advances to the blank and then
+                        // rewinds over it before printing the new graph
+                        // (term.c:420-434,901-908). Its latent projection
+                        // is overwritten just like an already visible cell.
+                        self.retire_deferred_blank_at(cell);
                         let contribution = self.projection_length(cell, cell + 1);
                         // An arm can cross invisible controls, but the next
                         // arm starts with a newly appended glyph. Each
@@ -478,6 +497,17 @@ impl FieldBuffer {
             }
         }
         self.push_cell(FieldCell::Graph { text, width });
+    }
+
+    fn retire_deferred_blank_at(&mut self, cell: usize) {
+        if let Some(run) = self.deferred_blanks.last_mut()
+            && run.end == cell + 1
+        {
+            run.end = cell;
+            if run.start == run.end {
+                self.deferred_blanks.pop();
+            }
+        }
     }
 
     /// Arm the retreat for the NEXT glyph after a completed `\z` glyph
