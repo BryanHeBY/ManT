@@ -166,8 +166,16 @@ impl InlineBuilder {
             || !self.execution.plain_input.buffer.is_empty();
         if occupied {
             self.consume_execution_line_with_origin(origin);
-            return;
+        } else {
+            self.flush_empty_execution_line(origin);
         }
+        // This is term_flushln(), not the lastcol/viscol guard in
+        // term_newln(). A bare \z wrote no cell, but the unconditional
+        // flush still clears BACKAFTER and BACKBEFORE (term.c:233-237).
+        self.execution.zero_advance.discard_at_row_end();
+    }
+
+    fn flush_empty_execution_line(&mut self, origin: super::super::CompletedRowOrigin) {
         let native = self.native_field_device(false);
         let ends_row = native
             .as_ref()
@@ -315,6 +323,15 @@ impl InlineBuilder {
     /// has settled that field.  A plain `hard_break()` loses BRIND geometry,
     /// so `.br`, `.ti`, and the break phase of `.sp` must use this entrypoint.
     pub(in crate::mandoc) fn control_line_break(&mut self) -> bool {
+        self.control_line_break_with_origin(super::super::CompletedRowOrigin::for_source_mode(
+            self.execution.no_fill_word_active,
+        ))
+    }
+
+    pub(in crate::mandoc) fn control_line_break_with_origin(
+        &mut self,
+        origin: super::super::CompletedRowOrigin,
+    ) -> bool {
         let _ = self.commit_definition_row_origin();
         // term_newln selects NOSPACE before its lastcol/viscol test or flush
         // (term.c:475-481). BRIND/NOBREAK still describe the old buffer here.
@@ -355,7 +372,7 @@ impl InlineBuilder {
             });
         let Some(mut field) = configuration else {
             let occupied = self.has_formatter_cell();
-            self.execute_native_newline();
+            self.execute_native_newline_with_origin(origin);
             return occupied;
         };
         if let Some((flags, _, trailspace)) = self.native_field_parameters(false, resumed) {
@@ -394,7 +411,7 @@ impl InlineBuilder {
         });
         let changed = if occupied {
             let native = self.native_field_device_at(false, resumed, field.start);
-            self.flush_captured_definition_field(field, native)
+            self.flush_captured_definition_field_with_origin(field, native, origin)
         } else {
             // An empty term_newln has no flush. pre-br nevertheless performs
             // its BRIND post below; it cannot revive a previous separator.

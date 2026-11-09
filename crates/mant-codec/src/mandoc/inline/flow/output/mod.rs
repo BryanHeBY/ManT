@@ -18,6 +18,16 @@ pub(in crate::mandoc) enum CompletedRowOrigin {
     LiteralText,
 }
 
+impl CompletedRowOrigin {
+    pub(in crate::mandoc) const fn for_source_mode(no_fill: bool) -> Self {
+        if no_fill {
+            Self::LiteralText
+        } else {
+            Self::Layout
+        }
+    }
+}
+
 /// Proof attached to the latest accepted physical row, before private markers
 /// leave its owner. A generated close can replace its projected delimiter;
 /// completed literal content must keep its delimiter and empty-row witness.

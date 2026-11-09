@@ -15,15 +15,16 @@
 
 //! Executed vertical rows and skip-space debt, independent of IR drains.
 
-use super::super::InlineBuilder;
+use super::super::{CompletedRowOrigin, InlineBuilder};
 
 impl InlineBuilder {
     /// Execute a visited empty TEXT at its actual node position. Native
     /// `print_man_node()`/`print_mdoc_node()` call `term_newln()` for an active \c;
     /// otherwise `term_vspace()` consumes skipvsp before emitting a blank row.
     pub(in crate::mandoc) fn execute_visited_empty_text(&mut self, no_fill: bool) {
+        let origin = CompletedRowOrigin::for_source_mode(no_fill);
         if self.final_source_continuation_or(false) {
-            self.execute_native_newline();
+            self.execute_native_newline_with_origin(origin);
             // term_newln() does not clear TERMP_NONEWLINE. Another empty
             // source TEXT therefore also takes this branch, without adding
             // a vertical row or consuming skipvsp.
@@ -32,14 +33,7 @@ impl InlineBuilder {
             // Empty TEXT calls term_vspace(), not roff_term_pre_sp().
             // Its resolved rows are recorded by that single execution
             // entry; it must not add a second receipt or execute pre_br.
-            self.native_vertical_space_with_origin(
-                1,
-                if no_fill {
-                    super::super::CompletedRowOrigin::LiteralText
-                } else {
-                    super::super::CompletedRowOrigin::Layout
-                },
-            );
+            self.native_vertical_space_with_origins(1, origin, origin);
         }
     }
 
@@ -66,15 +60,20 @@ impl InlineBuilder {
     /// Plain `term_vspace()`, as used by `print_bvspace()`; unlike roff `.sp`,
     /// this does not execute `pre_br` or clear BRIND/NOBREAK afterwards.
     pub(in crate::mandoc) fn native_vertical_space(&mut self, rows: u16) {
-        self.native_vertical_space_with_origin(rows, super::super::CompletedRowOrigin::Layout);
+        let source_origin = CompletedRowOrigin::for_source_mode(self.execution.no_fill_word_active);
+        self.native_vertical_space_with_origins(rows, source_origin, CompletedRowOrigin::Layout);
     }
 
-    fn native_vertical_space_with_origin(
+    fn native_vertical_space_with_origins(
         &mut self,
         rows: u16,
-        origin: super::super::CompletedRowOrigin,
+        source_origin: CompletedRowOrigin,
+        spacing_origin: CompletedRowOrigin,
     ) {
-        self.execute_native_newline();
+        // term_vspace first closes the current source row, then issues a
+        // separate endline for the spacing. The latter cannot relabel the
+        // close of a literal row as an additional layout gap (term.c:489-497).
+        self.execute_native_newline_with_origin(source_origin);
         let rows = self.execution.resolve_vertical_space(i32::from(rows));
         // NOBREAK/HANG can leave an already printed device row alive after
         // term_newln(). The first backend endline then closes that graph;
@@ -94,7 +93,7 @@ impl InlineBuilder {
         // term_vspace() already emitted these empty rows after resolving
         // skipvsp. They survive an output-owner return independently of
         // the ordinary row end from its leading term_newln().
-        self.record_completed_rows(completed_rows, origin);
+        self.record_completed_rows(completed_rows, spacing_origin);
     }
 }
 

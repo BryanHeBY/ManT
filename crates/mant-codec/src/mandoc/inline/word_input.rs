@@ -119,12 +119,11 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         builder.execution.table_line_needs_width |= execution.table_line_needs_width;
     }
     builder.native_word_writes = Some(execution.native_writes);
-    // mdoc_term gives an empty text node a vertical row only when the text
-    // itself begins an input line. An empty No/Em argument does not, whereas
-    // a buffered zero-width glyph (for example \&) still occupies that row.
+    // A visited empty source TEXT takes the vertical path before reaching
+    // here. roff_term_pre_ce() executes its empty TEXT as a direct term_word:
+    // its NODE_LINE is a grouping delimiter, not an occupied cell.
     let occupies_literal_row = !execution.output.is_empty()
         || builder.zero_advance.has_buffered_glyph()
-        || matches!(origin, WordSource::Text(node) if node.flags.line_start && node.text.as_deref().is_some_and(str::is_empty))
         || events.iter().any(|event| {
             matches!(
                 event,

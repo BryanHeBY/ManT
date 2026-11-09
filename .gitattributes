@@ -11,6 +11,7 @@ crates/mant/src/arguments/help_tldr_generated.rs text eol=lf
 # Roff matrix sources and sealed rows are bound to exact pristine profile bytes.
 # Windows autocrlf must not alter the input covered by the recorded source hash.
 crates/mant-engine/tests/roff_lowering/**/*.1 text eol=lf
+crates/mant-engine/tests/roff_lowering/grouped_line_flush/literal-tab.1 whitespace=-blank-at-eol
 crates/libmandoc-rs/tests/fixtures/table-execution/*.1 text eol=lf
 crates/libmandoc-rs/tests/fixtures/markdown-renderer/*.mdoc text eol=lf
 crates/libmandoc-rs/tests/fixtures/markdown-renderer/*.man text eol=lf

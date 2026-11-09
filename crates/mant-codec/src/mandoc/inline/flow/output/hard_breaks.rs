@@ -191,10 +191,13 @@ impl InlineBuilder {
                 value: String::new(),
             });
         }
-        if completed_unprinted_row {
+        if completed_unprinted_row
+            && (origin != CompletedRowOrigin::LiteralText || !current_row_has_printable)
+        {
             // term_field() can accept only deferred padding without printing
-            // it. Its empty-word witness belongs before the same row's real
-            // endline (term.c:389-427,250-253), so it cannot reopen that close.
+            // it (term.c:389-427). If the literal owner already represents
+            // that row with retained source SP/TAB, the same endline closes
+            // that content. A separate empty-row receipt would replay it.
             self.record_completed_rows(1, origin);
         }
         self.finish_hard_break_projection(

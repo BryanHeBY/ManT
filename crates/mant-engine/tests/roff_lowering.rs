@@ -293,5 +293,8 @@ mod deferred_ownership;
 #[path = "roff_lowering/shared_source_lines.rs"]
 mod shared_source_lines;
 
+#[path = "roff_lowering/grouped_line_flush.rs"]
+mod grouped_line_flush;
+
 #[path = "roff_lowering/deferred_word_spaces.rs"]
 mod deferred_word_spaces;

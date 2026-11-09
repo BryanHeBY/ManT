@@ -1,5 +1,6 @@
 //! Execute filled and literal source input against their existing flow owners.
 use super::{BlockState, InlineBuilder, InlineOutputRole};
+use crate::mandoc::inline::CompletedRowOrigin;
 use mant_ir::{Block, Inline};
 
 impl BlockState {
@@ -399,16 +400,14 @@ impl BlockState {
     /// their `pre_br` still consumes the request node's original source owner.
     pub(in crate::mandoc::blocks) fn pre_break_request_in_source_mode(&mut self, no_fill: bool) {
         self.formatter.note_definition_boundary();
+        let close = |builder: &mut InlineBuilder| {
+            builder.control_line_break_with_origin(CompletedRowOrigin::for_source_mode(no_fill));
+        };
         if self.inline_output_is_literal(no_fill) {
-            self.literal
-                .with_inline_builder(&mut self.formatter, |builder| {
-                    builder.control_line_break();
-                });
+            self.literal.with_inline_builder(&mut self.formatter, close);
         } else {
             self.paragraph
-                .with_inline_builder(&mut self.formatter, |builder| {
-                    builder.control_line_break();
-                });
+                .with_inline_builder(&mut self.formatter, close);
         }
         self.formatter.no_fill_inline.retire_consumed_cell();
         self.settle_definition_line_boundary();
