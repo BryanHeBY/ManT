@@ -76,13 +76,27 @@ pub(super) fn project_rejected_plain_prefix(
     retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start, false);
     if literal_rows {
         reproject_plain_literal_loops(nodes, buffer, anchors, passes, output_start);
-    } else if accepted_owned_prefix
-        && !crate::mandoc::inline::flow::output::ends_with_executed_line_break(nodes)
+    } else if accepted_owned_prefix && accepted_prefix_endline(&nodes[output_start..]) != Some(true)
     {
         // term_flushln() ended the last accepted pass before discovering
-        // nbr=0; the retirement boundary must expose that native event.
+        // nbr=0; expose that native event if it has no delimiter yet.
         nodes.push(Inline::line_break());
     }
+}
+
+fn accepted_prefix_endline(nodes: &[Inline]) -> Option<bool> {
+    // An accepted invisible cell may keep an empty projection after an
+    // already emitted boundary. The receipt counts additional empty loops
+    // separately in project_completed_empty_passes().
+    nodes.iter().rev().find_map(|node| match node {
+        Inline::Anchor { .. } => None,
+        Inline::Text { value } | Inline::Code { value } if value.is_empty() => None,
+        Inline::LineBreak { .. } => Some(true),
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => accepted_prefix_endline(children),
+        _ => Some(false),
+    })
 }
 
 /// A blank-only buffer reaches nbr=0 without a rejecting marker

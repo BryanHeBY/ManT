@@ -127,6 +127,8 @@ that crate was not published for that change.
   definition body flushes its shared field, including spaces in link labels.
 - Preserve source blanks accepted around native word-end markers and
   breakpoint restarts.
+- Preserve one hard row per native endline when a kept word pass rejects
+  its remaining input.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

@@ -130,6 +130,37 @@ fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
 }
 
 #[test]
+fn rejected_kept_suffix_does_not_repeat_its_accepted_prefix_endline() {
+    // Exact rejected, accepted and unkept controls ran fixed CVS in all
+    // five profiles. term.c::term_flushln() ends the accepted field at
+    // the first breakpoint, then nbr=0 ends just one empty row. The
+    // invisible graph accepted by the first field cannot end another row.
+    let rejected = r#".Dd November 10, 2026
+.Dt CHECK 1
+.Os
+.Sh NAME
+.Nm check
+.Nd word audit
+.Sh DESCRIPTION
+.Bk -words
+.No "ALPHA\zX"
+.No "\&\p\: \p\:\&\p\: \zY\p BETA"
+.br
+.No OMEGA
+.Ek
+"#;
+    let accepted = rejected.replacen(r"\p\:\&", r"\&", 1);
+    let unkept = rejected.replace(".Bk -words\n", "").replace(".Ek\n", "");
+    for (source, expected) in [
+        (rejected, "ALPHAX\n\nOMEGA"),
+        (&accepted, "ALPHAX\n\nYBETA\nOMEGA"),
+        (&unkept, "ALPHAX\n\nOMEGA"),
+    ] {
+        assert_readbacks(source, expected, None);
+    }
+}
+
+#[test]
 fn body_flush_returns_only_printed_blanks_to_a_detached_linked_term() {
     // Both exact inputs ran fixed CVS. mdoc_term.c::termp_it_post() leaves
     // inset HEAD cells live until the BODY flush; term_field() advances
