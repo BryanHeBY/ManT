@@ -241,11 +241,9 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 // live field consumption and BRIND transition.
                 self.lowerer.state.pre_break_request();
                 // roff_term_pre_br() ends the active formatter row before
-                // either IR destination is drained.
+                // the output destination can change.
                 self.lowerer.settle_no_fill_inline();
-                self.lowerer.state.flush_preformatted();
-                self.lowerer.state.flush_paragraph();
-                self.lowerer.state.consume_hanging_first_line();
+                self.lowerer.state.finish_aligned_row_output();
             }
             Event::FlushLine => {
                 // roff_term_pre_ce() calls term_flushln() after each grouped

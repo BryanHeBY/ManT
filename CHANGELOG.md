@@ -104,6 +104,13 @@ that crate was not published for that change.
 
 ### mant-codec, mant-ir and mant-ui
 
+- Keep a single projected separator when native zero advance consumes an
+  authored blank. Preserve surviving word ranges and link styles through
+  restarted rows, and emit accepted hard breaks before delayed glyphs.
+- Preserve filled roff alignment groups as hard rows through Markdown
+  export and reimport. Explicit paragraph spacing remains part of the
+  document structure.
+
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.
   Preserve complete inline code owners when execution splits their words.

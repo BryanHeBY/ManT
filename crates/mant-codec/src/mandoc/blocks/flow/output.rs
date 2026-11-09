@@ -303,8 +303,19 @@ impl BlockState {
                 .with_inline_builder(&mut self.formatter, flush);
         }
         self.formatter.no_fill_inline.retire_consumed_cell();
+        self.finish_aligned_row_output();
+    }
+
+    pub(in crate::mandoc::blocks) fn finish_aligned_row_output(&mut self) {
+        let needs_owner_boundary =
+            self.inline_output_is_literal(self.formatter.no_fill) || self.hanging_origin.is_some();
         self.flush_preformatted();
-        self.flush_paragraph();
+        if needs_owner_boundary {
+            self.flush_paragraph();
+        }
+        // A filled roff_term_pre_ce() endline closes a physical row.
+        // Keep its hard break and row hint in the live paragraph; starting
+        // another paragraph would add portable Markdown paragraph spacing.
         self.consume_hanging_first_line();
     }
 

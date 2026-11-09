@@ -615,6 +615,11 @@ exits and ordered markers that cannot interrupt a paragraph still retain their
 required framing. The same assembly applies to complete artifacts and detached
 block fragments, including nested list and definition content. Exported hard
 row markers remain stable through repeated import/export cycles.
+
+Filled roff alignment groups inside a paragraph contribute hard rows on entry,
+between group rows and on return to prose. Markdown places their text at the
+left origin and keeps those row breaks. A following explicit paragraph
+request retains its paragraph spacing.
 Definition term tails retain their completed rows when a later body or an
 explicit gap consumes that boundary. An open terminal delimiter by itself
 does not create a completed empty row.

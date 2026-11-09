@@ -1056,6 +1056,10 @@ alignment after wrapping against the current content area, not a captured
 mandoc page width. With no viewport, text and Markdown use the left origin;
 plain Markdown cannot preserve centering without adding source-specific markup.
 
+Filled rows within a paragraph, including the entry into a group and its
+return to ordinary prose, keep their executed hard breaks through Markdown
+readback. An explicit paragraph request still contributes its resolved gap.
+
 An aligned field can follow an earlier field on the same native physical row,
 particularly in tagged or hanging labels. Owner-local row alignment cannot
 move only that suffix while keeping the prefix fixed. This layout is reduced

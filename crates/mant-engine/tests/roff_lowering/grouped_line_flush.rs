@@ -132,28 +132,34 @@ fn grouped_literal_tab_keeps_one_owned_row_through_markdown() {
 }
 
 #[test]
-fn a_bare_zero_advance_survives_only_the_conditional_empty_flush() {
+fn grouped_hard_rows_survive_both_markdown_profiles() {
     // These exact sources are from the pristine tree and text receipts.
     // ce dispatches the same unconditional flush in a bracket enclosure;
     // an empty .br leaves BACKAFTER armed and consumes the N in NEXT.
-    for (source, expected_body, expected_prefix) in [
+    // roff_term_pre_ce ends rows, while pre_PP's vertical space starts a
+    // real paragraph. Both boundaries must survive portable Markdown.
+    let centered = include_str!("grouped_line_flush/bare-zero-advance-group.1");
+    for (source, expected_body) in [
+        (centered.to_owned(), "BEFORE\n\n NEXT\nAFTER"),
+        (centered.replace(".ce 2", ".rj 2"), "BEFORE\n\n NEXT\nAFTER"),
         (
-            include_str!("grouped_line_flush/bare-zero-advance-group.1"),
-            "BEFORE\n\n NEXT\nAFTER",
-            "BEFORE\n\n NEXT\n",
+            centered.replace("\nAFTER\n", "\n.PP\nAFTER\n"),
+            "BEFORE\n\n NEXT\n\nAFTER",
         ),
         (
-            include_str!("grouped_line_flush/bare-zero-advance-enclosure.1"),
+            centered.replace(".ce 2\n\\z\n NEXT\n", ".ce 0\nNEXT\n"),
+            "BEFORE\nNEXT AFTER",
+        ),
+        (
+            include_str!("grouped_line_flush/bare-zero-advance-enclosure.1").to_owned(),
             "BEFORE [\n\n NEXT\n] AFTER",
-            "BEFORE [\n\n NEXT\n",
         ),
         (
-            include_str!("grouped_line_flush/conditional-break.1"),
-            "BEFORE\nEXT AFTER",
+            include_str!("grouped_line_flush/conditional-break.1").to_owned(),
             "BEFORE\nEXT AFTER",
         ),
     ] {
-        let original = load(source);
+        let original = load(&source);
         assert_eq!(
             description(&mant_render::render_query_man(&original)),
             expected_body
@@ -167,8 +173,7 @@ fn a_bare_zero_advance_survives_only_the_conditional_empty_flush() {
                 );
                 let rendered = mant_render::render_query_text(&content);
                 let body = description(&rendered);
-                assert!(body.starts_with(expected_prefix), "{source}: {body:?}");
-                assert_eq!(body.matches("AFTER").count(), 1, "{source}: {body:?}");
+                assert_eq!(body, expected_body, "{source}");
             }
         }
     }

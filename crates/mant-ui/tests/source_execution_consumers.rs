@@ -153,6 +153,24 @@ fn empty_group_flush_resets_zero_advance_but_empty_newline_does_not() {
             2,
         ),
         (
+            MAN,
+            "BEFORE\n.rj 2\n\\z\n NEXT\nAFTER\n",
+            "BEFORE",
+            "NEXT",
+            2,
+            "AFTER",
+            3,
+        ),
+        (
+            MAN,
+            "BEFORE\n.ce 2\n\\z\n NEXT\n.PP\nAFTER\n",
+            "BEFORE",
+            "NEXT",
+            2,
+            "AFTER",
+            4,
+        ),
+        (
             MDOC,
             "BEFORE\n.Bo\n.ce 2\n\\z\n NEXT\n.Bc\nAFTER\n",
             "BEFORE [",
@@ -171,24 +189,14 @@ fn empty_group_flush_resets_zero_advance_but_empty_newline_does_not() {
             1,
         ),
     ] {
-        visit_projections(&format!("{header}{body}"), |content, readback| {
+        visit_projections(&format!("{header}{body}"), |content, _| {
             for width in [40, 78] {
                 let (_, terminal) = paint(content, width);
                 let buffer = terminal.backend().buffer();
                 let (_, start) = position(buffer, first);
                 assert_eq!(position(buffer, next).1, start + next_offset, "{body}");
                 let trailing_row = position(buffer, last).1;
-                if readback && last_offset > next_offset {
-                    // A filled aligned group is a separate paragraph in the
-                    // Markdown export. Portable paragraph spacing can add
-                    // one row after NEXT; the group's own blank still has
-                    // the exact independent BEFORE-to-NEXT distance above.
-                    assert!(
-                        (start + last_offset..=start + last_offset + 1).contains(&trailing_row)
-                    );
-                } else {
-                    assert_eq!(trailing_row, start + last_offset, "{body}");
-                }
+                assert_eq!(trailing_row, start + last_offset, "{body}");
                 if next.starts_with("EXT") {
                     assert_eq!(positions(buffer, "NEXT"), [] as [(u16, u16); 0]);
                 }
