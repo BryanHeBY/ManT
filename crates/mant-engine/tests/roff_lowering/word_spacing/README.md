@@ -84,6 +84,12 @@ recipe with terminal width 160. Remove only the known five-cell mdoc page
 origin and the header/footer furniture from the UTF-8 description rows.
 The Python fixture test independently checks the saved source identities.
 
+`strict-rejected-keeps.json.gz` retains the other 24 strictly comparable
+failures from the same audit as the 256 marker-blank cases. Each source ran
+the five fixed reference profiles. The expected rows remove only the common
+manual origin and footer. They retain any accepted prefix row and the
+rejected tail's separate empty row.
+
 ```sh
 python3 -m scripts.roff.fixtures.record_word_spacing
 cargo test --locked -p mant-engine --test roff_lowering word_spacing

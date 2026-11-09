@@ -12,6 +12,30 @@ from scripts.roff.fixtures import record_word_receipts as receipts
 
 
 class WordSpacingFixtureTests(unittest.TestCase):
+    def test_strict_rejected_keeps_complete_the_marker_blanks_cases(self):
+        archived = recorder.FIXTURE.with_name("strict-rejected-keeps.json.gz")
+        matrix = json.loads(gzip.decompress(archived.read_bytes()))
+        self.assertEqual(matrix["terminal_width"], 160)
+        self.assertEqual(matrix["oracle_sha256"],
+                         "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e")
+        marker_blanks = recorder.FIXTURE.with_name("marker-blanks.json.gz")
+        earlier = json.loads(gzip.decompress(marker_blanks.read_bytes()))
+        source_ids = {case["source_sha256"] for case in earlier["cases"]}
+        self.assertEqual(len(matrix["cases"]), 24)
+        for case in matrix["cases"]:
+            with self.subTest(case=case["id"]):
+                digest = recorder.digest(case["source"])
+                self.assertEqual(case["source_sha256"], digest)
+                self.assertEqual(case["id"], digest[:12])
+                self.assertNotIn(digest, source_ids)
+                source_ids.add(digest)
+                self.assertEqual(set(case["profiles"]), set(receipts.PROFILES))
+                for status, stdout, stderr in case["profiles"].values():
+                    self.assertEqual(status, 0)
+                    self.assertRegex(stdout, r"^[0-9a-f]{64}$")
+                    self.assertRegex(stderr, r"^[0-9a-f]{64}$")
+        self.assertEqual(len(source_ids), 280)
+
     def test_borrowed_word_owners_keep_exact_source_and_receipt_ids(self):
         fixture = recorder.FIXTURE.with_name("borrowed-word-owners.json.gz")
         matrix = json.loads(gzip.decompress(fixture.read_bytes()))

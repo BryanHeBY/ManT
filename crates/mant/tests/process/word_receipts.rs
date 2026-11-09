@@ -147,21 +147,27 @@ fn combining_overstrike_uses_the_accepted_field_to_keep_or_cover_its_base() {
     // keeps their source order. A later cell on the same native pass can
     // cover the base, while a subsequent physical line cannot.
     for (input, expected) in [
-        (r#".No "ALPHA\zé""#, "ALPHAe\u{301}"),
+        (".No \"ALPHA\\ze\u{301}\"", "ALPHAe\u{301}"),
         (r#".No "ALPHA\ze\[u0301]""#, "ALPHAe\u{301}"),
-        (r#".No "ALPHA\zé̀""#, "ALPHAe\u{301}\u{300}"),
-        (r#".No "ALPHA\zéTAIL""#, "ALPHA\u{301}TAIL"),
+        (".No \"ALPHA\\ze\u{301}\u{300}\"", "ALPHAe\u{301}\u{300}"),
+        (".No \"ALPHA\\ze\u{301}TAIL\"", "ALPHA\u{301}TAIL"),
         (r#".No "ALPHA\ze\[u0301]TAIL""#, "ALPHA\u{301}TAIL"),
-        (r#".No "ALPHA\ze\źTAIL""#, "ALPHA\u{301}TAIL"),
-        (r#".No "ALPHA\zé" Ns No TAIL"#, "ALPHA\u{301}TAIL"),
-        (".No \"ALPHA\\zé\"\n.No \"TAIL\"", "ALPHA\u{301} TAIL"),
-        (r#".No "ALPHA\ze ́TAIL""#, "ALPHAe\u{301}TAIL"),
-        (".No \"ALPHA\\zé\"\n.br\n.No TAIL", "ALPHAe\u{301}\nTAIL"),
+        (".No \"ALPHA\\ze\\z\u{301}TAIL\"", "ALPHA\u{301}TAIL"),
+        (".No \"ALPHA\\ze\u{301}\" Ns No TAIL", "ALPHA\u{301}TAIL"),
+        (
+            ".No \"ALPHA\\ze\u{301}\"\n.No \"TAIL\"",
+            "ALPHA\u{301} TAIL",
+        ),
+        (".No \"ALPHA\\ze \u{301}TAIL\"", "ALPHAe\u{301}TAIL"),
+        (
+            ".No \"ALPHA\\ze\u{301}\"\n.br\n.No TAIL",
+            "ALPHAe\u{301}\nTAIL",
+        ),
     ] {
         assert_readbacks(&format!("{header}{input}\n"), expected, None);
     }
 
-    let styled = format!("{header}.No \"ALPHA\\fB\\ze\\fÍ\"\n");
+    let styled = format!("{header}.No \"ALPHA\\fB\\ze\\fI\u{301}\"\n");
     let bundle: mant_protocol::QueryBundle =
         serde_json::from_str(&render(&styled, "roff", "json", "never", false)).unwrap();
     let document = bundle.document.unwrap();

@@ -51,6 +51,14 @@ fn borrowed_word_owners_keep_their_printed_spaces_and_pass_boundaries() {
     verify_recorded_rows(include_bytes!("borrowed-word-owners.json.gz"), 54, 3);
 }
 
+#[test]
+fn rejected_kept_words_do_not_replay_the_completed_prefix_row() {
+    // In pinned term.c::term_flushln(), the accepted keep pass reaches
+    // endline before a later nbr == 0. The final empty row does not close
+    // that prefix again. All 24 exact sources ran the five fixed profiles.
+    verify_recorded_rows(include_bytes!("strict-rejected-keeps.json.gz"), 24, 0);
+}
+
 fn verify_recorded_rows(compressed: &[u8], sources: usize, lint_warnings: usize) {
     let fixture: Fixture = serde_json::from_reader(GzDecoder::new(compressed)).unwrap();
     assert_eq!(
