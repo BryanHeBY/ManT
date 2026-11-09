@@ -283,6 +283,73 @@ fn leading_horizontal_motion_changes_native_acceptance_without_replaying_padding
 }
 
 #[test]
+fn rewound_literal_spaces_keep_existing_cells_before_word_end_breaks() {
+    // Fixed CVS ran these exact words with ASCII, UTF-8, HTML, tree and
+    // lint. term.c::encode() advances across old cells for raw SP but
+    // keeps their bytes. The next marker can replace the automatic blank
+    // or a tight word's still-pending X. Only ETA prints after rearming.
+    let source = r#".Dd November 10, 2026
+.Dt CHECK 1
+.Os
+.Sh NAME
+.Nm check
+.Nd word audit
+.Sh DESCRIPTION
+.No "ALPHA\zX"
+.No "\h'-1n'\z \p BETA"
+.No ""
+.br
+.No OMEGA
+"#;
+    let word = r"\h'-1n'\z \p BETA";
+    let same_line = source.replace("\"\n.No \"\\h", "\" No \"\\h");
+    let joined = source.replace("\"\n.No \"\\h", "\" Ns No \"\\h");
+    let styled = source.replace(".No \"\\h", ".Em \"\\h");
+    for (input, expected) in [
+        (source.to_owned(), "ALPHAX\nETA\nOMEGA"),
+        (same_line, "ALPHAX\nETA\nOMEGA"),
+        (joined, "ALPHA\nETA\nOMEGA"),
+        (styled, "ALPHAX\nETA\nOMEGA"),
+        (
+            source.replace(word, r"\h'-1n' \p BETA"),
+            "ALPHAX\nBETA\nOMEGA",
+        ),
+        (
+            source.replace(word, "\\h'-1n'\\z\t\\p BETA"),
+            "ALPHAX\nETA\nOMEGA",
+        ),
+        (
+            source.replace(word, r"\h'-1n'\z  \p BETA"),
+            "ALPHAX\n\nOMEGA",
+        ),
+        (source.replace(r"\h'-1n'", ""), "ALPHAX  ETA\nOMEGA"),
+        (
+            source.replace("\n.No \"\"\n.br\n.No OMEGA", ""),
+            "ALPHAX\nETA",
+        ),
+    ] {
+        assert_readbacks(&input, expected, None);
+    }
+    // The tight rewind can remove the pending combining mark while
+    // leaving its preceding native backline. A graph on that same cell
+    // covers the base only when it prints on the same accepted pass.
+    let combining = source
+        .replace("\"\n.No \"\\h", "\" Ns No \"\\h")
+        .replace(r"ALPHA\zX", "ALPHA\\ze\\z\u{301}");
+    for (input, expected) in [
+        (combining.clone(), "ALPHAe\nETA\nOMEGA"),
+        (combining.replace(r"\z \p BETA", " B"), "ALPHAB\nOMEGA"),
+        (
+            combining.replace(r"\z \p BETA", r" B\p TAIL"),
+            "ALPHAB\nTAIL\nOMEGA",
+        ),
+        (combining.replace(word, " B"), "ALPHA\u{301}B\nOMEGA"),
+    ] {
+        assert_readbacks(&input, expected, None);
+    }
+}
+
+#[test]
 fn body_flush_returns_only_printed_blanks_to_a_detached_linked_term() {
     // Both exact inputs ran fixed CVS. mdoc_term.c::termp_it_post() leaves
     // inset HEAD cells live until the BODY flush; term_field() advances

@@ -138,6 +138,7 @@ impl FieldBuffer {
             resume: self.resume,
             normalized_until: self.normalized_until,
             last_graph_position: self.last_graph_position,
+            previous_graph_position: self.previous_graph_position,
             nonbreaking_positions: self.nonbreaking_positions.clone(),
             blank_positions: self.blank_positions.clone(),
             projection_prefix: Vec::new(),
@@ -243,7 +244,10 @@ impl FieldBuffer {
                     .map(|index| start + index);
                 while let Some(&&(target, mark)) = retreats.peek().filter(|pair| pair.0 < pass.end)
                 {
-                    if target >= start && last_advance.is_some_and(|advance| advance > mark) {
+                    // The original mark has no width. A leading HORIZ can
+                    // overwrite its cell with an advancing graph while the
+                    // preceding backline still owns the retreat.
+                    if target >= start && last_advance.is_some_and(|advance| advance >= mark) {
                         covered.push(target);
                     }
                     retreats.next();

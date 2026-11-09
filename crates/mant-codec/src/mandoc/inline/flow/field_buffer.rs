@@ -192,11 +192,11 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Accepted native row events already projected. A .ta change restarts
     /// width scanning, but cannot execute the same marker pass twice.
     projected_pass_ends: std::collections::BTreeSet<usize>,
-    /// Graphs, hyphens and backlines only append and survive until retirement:
-    /// `encode1()` can retreat over a trailing blank/tab, never over these cells.
-    /// The tail sweep needs only their last position (term.c:177-198), so do
-    /// not allocate an ordered-tree entry for every ordinary source glyph.
+    /// The tail sweep needs only the last graph (term.c:177-198). A leading
+    /// HORIZ can also replace one live BACKBEFORE glyph, so keep its
+    /// predecessor without storing an ordered entry for each source cell.
     last_graph_position: Option<usize>,
+    previous_graph_position: Option<usize>,
     /// Direct `ASCII_NBRSP` is significant until `term_fill()` normalizes it to
     /// a breakable blank. Keep its independently removable positions; an
     /// earlier normalization must not revoke a later printable graph.

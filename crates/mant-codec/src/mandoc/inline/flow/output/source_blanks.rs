@@ -4,6 +4,42 @@ use super::super::Inline;
 use super::super::field_buffer::LeadingBlankRetreat;
 use super::native_passes::native_word_marker;
 
+/// A literal SP can advance the rewound native cursor without overwriting a
+/// tab reference (term.c:948-952). Those source blanks have no output cell.
+pub(super) fn remove_rewound_source_blanks(nodes: &mut [Inline], owner: &str, mut count: usize) {
+    fn remove(nodes: &mut [Inline], owner: &str, active: &mut bool, remaining: &mut usize) {
+        for node in nodes {
+            if *remaining == 0 {
+                break;
+            }
+            if let Some(marker) = native_word_marker(node) {
+                *active = marker == owner;
+                continue;
+            }
+            match node {
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => remove(children, owner, active, remaining),
+                Inline::Text { value } | Inline::Code { value } if *active => {
+                    let count = value
+                        .bytes()
+                        .take(*remaining)
+                        .take_while(|&byte| byte == b' ')
+                        .count();
+                    value.drain(..count);
+                    *remaining -= count;
+                    if !value.is_empty() {
+                        *remaining = 0;
+                    }
+                }
+                Inline::Equation { .. } | Inline::LineBreak { .. } if *active => *remaining = 0,
+                _ => {}
+            }
+        }
+    }
+    remove(nodes, owner, &mut true, &mut count);
+}
+
 /// Remove the exact raw blank if it is still projected. When an ordinary
 /// SP can represent the same surviving automatic cell, return its original
 /// styling and ownership for the separator emitter to use exactly once.

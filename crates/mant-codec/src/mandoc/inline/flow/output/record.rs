@@ -1,7 +1,7 @@
 use super::super::WordProjectionPolicy;
 use super::super::{Inline, InlineBuilder, PendingBoundary};
 use super::native_passes::{RecordedRowSplit, split_recorded_native_passes};
-use super::source_blanks::take_retreated_source_blank;
+use super::source_blanks::{remove_rewound_source_blanks, take_retreated_source_blank};
 use std::collections::BTreeMap;
 
 #[derive(Default)]
@@ -154,11 +154,12 @@ impl InlineBuilder {
         // BACKBEFORE retreat (term.c:901-908) can pop the separator blank
         // recorded above, and a pre-execution content start would put
         // already-accepted cells into a later rejected interval.
-        let writes = native_writes.expect("formatter word native writes");
-        let retired_entry = definition
+        let mut writes = native_writes.expect("formatter word native writes");
+        let (retired_entry, ignored_blanks) = definition
             .field_buffer
-            .rewind_word_entry(&writes, native_word_start);
+            .rewind_word_entry(&mut writes, native_word_start);
         let receipt = definition.field_buffer.apply_writes(&writes);
+        remove_rewound_source_blanks(incoming, &anchor_ir_start, ignored_blanks);
         let native_separator = definition
             .field_buffer
             .surviving_word_separator(native_word_start, separator - retired_entry);
@@ -238,10 +239,12 @@ impl InlineBuilder {
             .native_word_owner
             .take()
             .expect("native word owner");
-        let writes = native_writes.unwrap_or_default();
+        let mut writes = native_writes.unwrap_or_default();
         let buffer = &mut self.execution.plain_input.buffer;
-        let retired_entry = buffer.rewind_word_entry(&writes, native_word_start);
+        let (retired_entry, ignored_blanks) =
+            buffer.rewind_word_entry(&mut writes, native_word_start);
         let receipt = buffer.apply_writes(&writes);
+        remove_rewound_source_blanks(incoming, &anchor_ir_start, ignored_blanks);
         let native_separator = self
             .execution
             .plain_input

@@ -27,6 +27,11 @@ std::thread_local! {
     static SEPARATOR_CELLS_VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+struct EntryRewind {
+    start: usize,
+    traversed_blanks: Vec<usize>,
+}
+
 impl FieldBuffer {
     fn push_cell(&mut self, cell: FieldCell) {
         if self.word_first_content.is_none() {
@@ -45,7 +50,7 @@ impl FieldBuffer {
             | FieldCell::ZeroWidthGraph
             | FieldCell::Breakpoint => {}
             _ => {
-                self.last_graph_position = Some(self.cells.len());
+                self.previous_graph_position = self.last_graph_position.replace(self.cells.len());
             }
         }
         let projection = usize::from(matches!(
@@ -213,6 +218,7 @@ impl FieldBuffer {
         self.word_first_content = None;
         self.completed_empty_pass_end = None;
         self.last_graph_position = None;
+        self.previous_graph_position = None;
         self.nonbreaking_positions.clear();
         self.blank_positions.clear();
         self.scan = None;
@@ -241,40 +247,43 @@ impl FieldBuffer {
     }
 
     /// HORIZ rewinds the input cursor without shortening lastcol (term.c
-    /// 701–714). Retire entry padding only if the word overwrites the whole
-    /// rewound suffix. A visible earlier owner and an unoverwritten native
-    /// byte remain outside this reading projection.
+    /// 701–714). Preserve the old prefix traversed by raw SP, then replay
+    /// the fully replaced suffix. Only generated padding and the live
+    /// BACKBEFORE glyph can be overwritten by this bounded projection.
     pub(in crate::mandoc::inline::flow) fn rewind_word_entry(
         &mut self,
-        writes: &[FieldWrite],
+        writes: &mut Vec<FieldWrite>,
         word_start: usize,
-    ) -> usize {
-        let Some((FieldWrite::RewindWordEntry(columns), following)) = writes.split_first() else {
-            return 0;
+    ) -> (usize, usize) {
+        let Some(EntryRewind {
+            start,
+            traversed_blanks,
+        }) = self.plan_entry_rewind(writes, word_start)
+        else {
+            return (0, 0);
         };
-        let count = columns.saturating_add(usize::from(self.backbefore_armed));
-        let Some(start) = self.cells.len().checked_sub(count) else {
-            return 0;
-        };
-        if count == 0
-            || start < self.resume
-            || self.cells[start..word_start.max(start)]
-                .iter()
-                .any(|cell| !matches!(cell, FieldCell::TabReference))
-            || following.len() < count
-            || !following[..count]
-                .iter()
-                .all(FieldWrite::overwrites_entry_padding)
-        {
-            return 0;
+        let unprinted_blanks = traversed_blanks.len();
+        if unprinted_blanks > 0 {
+            let mut traversed_blanks = traversed_blanks.into_iter().peekable();
+            let mut index = 0;
+            writes.retain(|_| {
+                let keep = traversed_blanks.next_if_eq(&index).is_none();
+                index += 1;
+                keep
+            });
         }
         let removed = self.cells.len() - start.max(word_start);
-        for index in start..self.cells.len() {
+        for index in (start..self.cells.len()).rev() {
             self.blank_positions.remove(&index);
             self.nonbreaking_positions.remove(&index);
+            self.retire_deferred_blank_at(index);
         }
         self.cells.truncate(start);
         self.projection_prefix.truncate(start + 1);
+        self.zero_width_retreats.truncate(
+            self.zero_width_retreats
+                .partition_point(|&(_, mark)| mark.saturating_sub(1) < start),
+        );
         self.normalized_until = self.normalized_until.min(start);
         if self
             .scan
@@ -283,7 +292,82 @@ impl FieldBuffer {
         {
             self.scan = None;
         }
-        removed
+        if self.last_graph_position.is_some_and(|last| last >= start) {
+            self.last_graph_position = self.previous_graph_position.take();
+        }
+        (removed, unprinted_blanks)
+    }
+
+    fn plan_entry_rewind(&self, writes: &[FieldWrite], word_start: usize) -> Option<EntryRewind> {
+        let Some(FieldWrite::RewindWordEntry(columns)) = writes.first() else {
+            return None;
+        };
+        let count = columns.saturating_add(usize::from(self.backbefore_armed));
+        let start = self.cells.len().checked_sub(count)?;
+        if count == 0 || start < self.resume {
+            return None;
+        }
+        let pending_glyph = self.backline_projection_target.filter(|&cell| {
+            self.backbefore_armed && matches!(self.cells.get(cell), Some(FieldCell::Graph { .. }))
+        });
+        let mut at = start;
+        let mut rewritten = None;
+        let mut traversed_blanks = Vec::new();
+        let mut armed = self.backafter_armed;
+        let mut backbefore = false;
+        for (index, write) in writes.iter().enumerate().skip(1) {
+            match write {
+                FieldWrite::ArmBackafter => {
+                    armed = true;
+                    continue;
+                }
+                FieldWrite::CancelBackafter => {
+                    armed = false;
+                    continue;
+                }
+                FieldWrite::CancelBackbefore => {
+                    backbefore = false;
+                    continue;
+                }
+                FieldWrite::Cell(FieldCell::Graph { .. } | FieldCell::Hyphen) => {
+                    if backbefore {
+                        // A following encode1() can pop or add a cell.
+                        // Leave that earlier owner's bytes out of this rewind.
+                        return None;
+                    }
+                    backbefore = std::mem::take(&mut armed);
+                }
+                FieldWrite::Cell(FieldCell::BreakableBlank) if rewritten.is_none() => {
+                    // encode() advances over an already buffered cell but
+                    // leaves it unchanged for SP (term.c:948–952).
+                    traversed_blanks.push(index);
+                    at += 1;
+                    if at == self.cells.len() {
+                        break;
+                    }
+                    continue;
+                }
+                FieldWrite::Cell(FieldCell::BreakableBlank)
+                    if matches!(self.cells[at], FieldCell::BreakableBlank) => {}
+                other if other.overwrites_entry_padding() => {}
+                _ => return None,
+            }
+            if at < word_start
+                && pending_glyph != Some(at)
+                && !matches!(self.cells[at], FieldCell::TabReference)
+            {
+                return None;
+            }
+            rewritten.get_or_insert(at);
+            at += 1;
+            if at == self.cells.len() {
+                break;
+            }
+        }
+        (at == self.cells.len()).then_some(EntryRewind {
+            start: rewritten.unwrap_or(at),
+            traversed_blanks,
+        })
     }
 
     /// Execute decoded native writes without consulting projected IR.
