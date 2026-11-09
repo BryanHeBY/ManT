@@ -1,9 +1,78 @@
 //! Pure IR projection after native receipts have already decided output.
 
 use super::{
-    CompletedRowOrigin, INTERNAL_COMPLETED_ROW, INTERNAL_DEVICE_ROW_END, INTERNAL_HARD_ROW,
-    INTERNAL_LINK_SPLIT, INTERNAL_LITERAL_ROW, Inline, OutputRowEnd,
+    CompletedRowOrigin, INTERNAL_COMPLETED_ROW, INTERNAL_DEVICE_ROW_END, INTERNAL_FIELD_WORD,
+    INTERNAL_HARD_ROW, INTERNAL_LINK_SPLIT, INTERNAL_LITERAL_ROW, Inline, OutputRowEnd,
 };
+
+impl super::super::InlineExecutionState {
+    pub(in crate::mandoc) fn note_removed_plain_output_node(&mut self, index: usize) {
+        if index < self.plain_input.output_start {
+            self.plain_input.output_start -= 1;
+        }
+    }
+
+    /// Man link annotation can wrap a committed literal row and a live
+    /// native word together. Carry the original output boundary through
+    /// that local rewrite and split the wrapper until native retirement.
+    pub(in crate::mandoc) fn rewrite_plain_output_suffix<R>(
+        &mut self,
+        nodes: &mut Vec<Inline>,
+        from: usize,
+        rewrite: impl FnOnce(&mut Vec<Inline>) -> R,
+    ) -> R {
+        if self.definition.is_some()
+            || self.plain_input.buffer.is_empty()
+            || self.plain_input.output_start < from
+        {
+            return rewrite(nodes);
+        }
+        let start = &mut self.plain_input.output_start;
+        if *start >= nodes.len() {
+            let result = rewrite(nodes);
+            *start = nodes.len();
+            return result;
+        }
+        let marker = format!("{INTERNAL_FIELD_WORD}rewrite-boundary");
+        nodes.insert(*start, Inline::anchor(marker.clone()));
+        let result = rewrite(nodes);
+        *start = restore_plain_output_boundary(nodes, from, &marker);
+        result
+    }
+}
+
+fn restore_plain_output_boundary(nodes: &mut Vec<Inline>, from: usize, marker: &str) -> usize {
+    fn contains(node: &Inline, marker: &str) -> bool {
+        match node {
+            Inline::Anchor { id, .. } => id.as_str() == marker,
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => children.iter().any(|child| contains(child, marker)),
+            _ => false,
+        }
+    }
+
+    let index = from
+        + nodes[from..]
+            .iter()
+            .position(|node| contains(node, marker))
+            .expect("link rewrite retains the native output boundary");
+    let tail = nodes.split_off(index);
+    let mut tail = tail.into_iter();
+    let root = tail.next().expect("located boundary root");
+    let (left, right, _) = split_output_scope_prefix(vec![root], marker);
+    let split_link = matches!((left.last(), right.first()),
+        (Some(Inline::Link { target: left, title: lt, .. }),
+         Some(Inline::Link { target: right, title: rt, .. })) if left == right && lt == rt);
+    nodes.extend(left);
+    if split_link {
+        nodes.push(Inline::anchor(INTERNAL_LINK_SPLIT));
+    }
+    let start = nodes.len();
+    nodes.extend(right);
+    nodes.extend(tail);
+    start
+}
 
 /// A row-end receipt can precede or follow the same projected delimiter.
 /// Accepted later cells start another row. Literal empty rows stay authored

@@ -133,6 +133,8 @@ that crate was not published for that change.
   it consumes generated padding or clears a pending backstep.
 - Preserve a zero-advance base and its combining marks until the accepted
   native pass shows whether a later glyph covers the base.
+- Keep native line boundaries inside no-fill man URL and mail labels,
+  including when the formatter rejects a later word pass.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

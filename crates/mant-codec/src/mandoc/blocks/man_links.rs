@@ -1,7 +1,9 @@
 //! Man link labels are annotations over normally executed block content.
 use super::{Block, Inline, Node, NodeKind, first_part_children, source_span};
 use crate::mandoc::inline::ownership::{Annotation, OutputMembership};
-use crate::mandoc::inline::{InlineBuilder, append_inline_nodes, man_link_destination};
+use crate::mandoc::inline::{
+    InlineBuilder, InlineExecutionState, append_inline_nodes, man_link_destination,
+};
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 use mant_ir::LinkTarget;
 
@@ -150,6 +152,7 @@ pub(super) fn wrap_first_visible_inline(
     marker: &str,
     range: &mut LabelRange,
     membership: OutputMembership,
+    execution: Option<&mut InlineExecutionState>,
 ) -> bool {
     if range.closed {
         return false;
@@ -162,7 +165,20 @@ pub(super) fn wrap_first_visible_inline(
     } else {
         return false;
     };
-    let suffix = nodes.split_off(start);
+    rewrite_link_output(nodes, start, execution, |nodes| {
+        let suffix = nodes.split_off(start);
+        wrap_visible_suffix(nodes, suffix, target, marker, range, membership)
+    })
+}
+
+fn wrap_visible_suffix(
+    nodes: &mut Vec<Inline>,
+    suffix: Vec<Inline>,
+    target: &LinkTarget,
+    marker: &str,
+    range: &mut LabelRange,
+    membership: OutputMembership,
+) -> bool {
     let (mut children, after, closed) =
         crate::mandoc::inline::split_output_scope_prefix(suffix, &membership.end_marker());
     range.closed = closed;
@@ -235,6 +251,19 @@ pub(super) fn wrap_first_visible_inline(
     wrapped
 }
 
+fn rewrite_link_output<R>(
+    nodes: &mut Vec<Inline>,
+    start: usize,
+    execution: Option<&mut InlineExecutionState>,
+    rewrite: impl FnOnce(&mut Vec<Inline>) -> R,
+) -> R {
+    if let Some(execution) = execution {
+        execution.rewrite_plain_output_suffix(nodes, start, rewrite)
+    } else {
+        rewrite(nodes)
+    }
+}
+
 fn contains_annotation(nodes: &[Inline], target: &LinkTarget) -> bool {
     nodes.iter().any(|node| match node {
         Inline::Link {
@@ -259,7 +288,7 @@ pub(super) fn wrap_first_visible_block(
     let mut wrapped = false;
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            wrapped |= wrap_first_visible_inline(children, target, marker, range, membership);
+            wrapped |= wrap_first_visible_inline(children, target, marker, range, membership, None);
         }
         Block::List { items, .. } => {
             for item in items {
@@ -277,6 +306,7 @@ pub(super) fn wrap_first_visible_block(
                         marker,
                         range,
                         membership,
+                        None,
                     );
                 }
                 for block in &mut item.description {
@@ -310,7 +340,7 @@ pub(super) fn finish_output_membership(
 ) {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            finish_inline_membership(children, marker, started, membership);
+            finish_inline_membership(children, marker, started, membership, None);
         }
         Block::List { items, .. } => {
             for item in items {
@@ -322,7 +352,7 @@ pub(super) fn finish_output_membership(
         Block::DefinitionList { items, .. } => {
             for item in items {
                 for term in &mut item.terms {
-                    finish_inline_membership(&mut term.content, marker, started, membership);
+                    finish_inline_membership(&mut term.content, marker, started, membership, None);
                 }
                 for block in &mut item.description {
                     finish_output_membership(block, marker, started, membership);
@@ -350,6 +380,7 @@ pub(super) fn finish_inline_membership(
     marker: &str,
     started: &mut bool,
     membership: OutputMembership,
+    execution: Option<&mut InlineExecutionState>,
 ) {
     let start = if let Some(at) = nodes.iter().rposition(|node| is_link_cursor(node, marker)) {
         *started = true;
@@ -359,8 +390,10 @@ pub(super) fn finish_inline_membership(
     } else {
         return;
     };
-    let suffix = nodes.split_off(start);
-    nodes.extend(membership.map_owned(suffix, |nodes| nodes));
+    rewrite_link_output(nodes, start, execution, |nodes| {
+        let suffix = nodes.split_off(start);
+        nodes.extend(membership.map_owned(suffix, |nodes| nodes));
+    });
 }
 
 pub(super) fn link_cursor_marker(
@@ -377,6 +410,7 @@ pub(super) fn remove_link_cursor(
     nodes: &mut Vec<Inline>,
     marker: &str,
     entry: Option<&str>,
+    execution: Option<&mut InlineExecutionState>,
 ) -> bool {
     let Some(index) = nodes.iter().rposition(|node| is_link_cursor(node, marker)) else {
         return false;
@@ -385,6 +419,9 @@ pub(super) fn remove_link_cursor(
         nodes[index] = Inline::anchor(entry);
     } else {
         nodes.remove(index);
+        if let Some(execution) = execution {
+            execution.note_removed_plain_output_node(index);
+        }
     }
     remove_label_marker(&mut nodes[index..], &format!("{marker}:content"));
     true
@@ -413,7 +450,7 @@ pub(super) fn remove_link_cursor_block(
 ) -> bool {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            remove_link_cursor(children, marker, entry) && children.is_empty()
+            remove_link_cursor(children, marker, entry, None) && children.is_empty()
         }
         Block::List { items, .. } => {
             for item in items {
@@ -425,7 +462,7 @@ pub(super) fn remove_link_cursor_block(
         Block::DefinitionList { items, .. } => {
             for item in items {
                 for term in &mut item.terms {
-                    remove_link_cursor(&mut term.content, marker, entry);
+                    remove_link_cursor(&mut term.content, marker, entry, None);
                 }
                 item.description
                     .retain_mut(|block| !remove_link_cursor_block(block, marker, entry));

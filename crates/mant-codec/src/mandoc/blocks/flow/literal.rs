@@ -166,8 +166,13 @@ impl LiteralFlow {
         self.nodes.push(Inline::anchor(marker));
     }
 
-    pub(super) fn discard_link_cursor(&mut self, marker: &str, entry: Option<&str>) {
-        super::super::man_links::remove_link_cursor(&mut self.nodes, marker, entry);
+    pub(super) fn discard_link_cursor(
+        &mut self,
+        marker: &str,
+        entry: Option<&str>,
+        execution: Option<&mut crate::mandoc::inline::InlineExecutionState>,
+    ) {
+        super::super::man_links::remove_link_cursor(&mut self.nodes, marker, entry, execution);
     }
 
     pub(super) fn finish_output_membership(
@@ -175,12 +180,14 @@ impl LiteralFlow {
         marker: &str,
         started: &mut bool,
         membership: crate::mandoc::inline::ownership::OutputMembership,
+        execution: Option<&mut crate::mandoc::inline::InlineExecutionState>,
     ) {
         super::super::man_links::finish_inline_membership(
             &mut self.nodes,
             marker,
             started,
             membership,
+            execution,
         );
     }
 
@@ -190,6 +197,7 @@ impl LiteralFlow {
         marker: &str,
         started: &mut super::super::man_links::LabelRange,
         membership: crate::mandoc::inline::ownership::OutputMembership,
+        execution: Option<&mut crate::mandoc::inline::InlineExecutionState>,
     ) -> bool {
         super::super::man_links::wrap_first_visible_inline(
             &mut self.nodes,
@@ -197,6 +205,7 @@ impl LiteralFlow {
             marker,
             started,
             membership,
+            execution,
         )
     }
 

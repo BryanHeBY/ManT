@@ -117,12 +117,21 @@ impl BlockState {
                 block, target, &marker, &mut range, membership,
             );
         }
-        wrapped |= self
-            .paragraph
-            .wrap_first_link(target, &marker, &mut range, membership);
-        wrapped |= self
-            .literal
-            .wrap_first_link(target, &marker, &mut range, membership);
+        let literal = self.inline_output_is_literal(self.formatter.no_fill);
+        wrapped |= self.paragraph.wrap_first_link(
+            target,
+            &marker,
+            &mut range,
+            membership,
+            (!literal).then_some(&mut self.formatter.execution),
+        );
+        wrapped |= self.literal.wrap_first_link(
+            target,
+            &marker,
+            &mut range,
+            membership,
+            literal.then_some(&mut self.formatter.execution),
+        );
         wrapped
     }
 
@@ -136,10 +145,19 @@ impl BlockState {
         for block in &mut self.output[cursor.output..] {
             super::man_links::finish_output_membership(block, &marker, &mut started, membership);
         }
-        self.paragraph
-            .finish_output_membership(&marker, &mut started, membership);
-        self.literal
-            .finish_output_membership(&marker, &mut started, membership);
+        let literal = self.inline_output_is_literal(self.formatter.no_fill);
+        self.paragraph.finish_output_membership(
+            &marker,
+            &mut started,
+            membership,
+            (!literal).then_some(&mut self.formatter.execution),
+        );
+        self.literal.finish_output_membership(
+            &marker,
+            &mut started,
+            membership,
+            literal.then_some(&mut self.formatter.execution),
+        );
     }
 
     pub(super) fn discard_link_cursor(&mut self, cursor: LinkOutputCursor, entry: Option<&str>) {
@@ -156,8 +174,17 @@ impl BlockState {
             }
         });
         self.output.extend(scoped_output);
-        self.paragraph.discard_link_cursor(&marker, entry);
-        self.literal.discard_link_cursor(&marker, entry);
+        let literal = self.inline_output_is_literal(self.formatter.no_fill);
+        self.paragraph.discard_link_cursor(
+            &marker,
+            entry,
+            (!literal).then_some(&mut self.formatter.execution),
+        );
+        self.literal.discard_link_cursor(
+            &marker,
+            entry,
+            literal.then_some(&mut self.formatter.execution),
+        );
     }
 
     pub(super) const fn source_indent(&self) -> crate::mandoc::layout::SourceIndent {

@@ -50,17 +50,15 @@ const LINK_SPACES: [&str; 3] = [
 ];
 
 #[derive(Default)]
-struct Links(Vec<(String, String)>);
+struct Links(Vec<(LinkTarget, String)>);
 
 impl<'a> Visit<'a> for Links {
     fn visit_inline(&mut self, inline: &'a Inline) {
         if let Inline::Link {
-            target: LinkTarget::External { uri },
-            children,
-            ..
+            target, children, ..
         } = inline
         {
-            self.0.push((uri.clone(), inline_plain_text(children)));
+            self.0.push((target.clone(), inline_plain_text(children)));
         }
         visit::walk_inline(self, inline);
     }
@@ -92,14 +90,26 @@ fn description(text: &str) -> &str {
     body.strip_suffix('\n').unwrap_or(body)
 }
 
-fn assert_link(source: &str, input: &str, label: &str) {
+fn document_links(source: &str, input: &str) -> Vec<(LinkTarget, String)> {
     let json = render(source, input, "json", "never", false);
     let bundle: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
     let mut links = Links::default();
     for section in &bundle.document.unwrap().sections {
         links.visit_section(section);
     }
-    assert_eq!(links.0, [("https://x.io".into(), label.into())]);
+    links.0
+}
+
+fn assert_link(source: &str, input: &str, label: &str) {
+    assert_eq!(
+        document_links(source, input),
+        [(
+            LinkTarget::External {
+                uri: "https://x.io".into(),
+            },
+            label.into(),
+        )],
+    );
 }
 
 fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
@@ -200,6 +210,50 @@ fn rejected_kept_suffix_does_not_repeat_its_accepted_prefix_endline() {
         (&unkept, "ALPHAX\n\nOMEGA"),
     ] {
         assert_readbacks(source, expected, None);
+    }
+}
+
+#[test]
+fn man_link_annotation_keeps_the_native_boundary_between_literal_rows() {
+    let header = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- word audit\n.SH DESCRIPTION\n.nf";
+    // Fixed CVS accepted the first label row and the subsequent empty pass
+    // but rejected the rest of that buffer, including the post_UR() target.
+    // term.c::term_flushln() cannot revoke the committed first label row.
+    let rejected_word = r"\&\p\: \p BETA";
+    for (open, close, address, target) in [
+        (
+            "UR",
+            "UE",
+            "https://x.io",
+            LinkTarget::External {
+                uri: "https://x.io".into(),
+            },
+        ),
+        (
+            "MT",
+            "ME",
+            "u@matrix.test",
+            LinkTarget::Email {
+                address: "u@matrix.test".into(),
+            },
+        ),
+    ] {
+        let rejected = format!(
+            "{header}\n.{open} {address}\n.B \"ALPHA\\zX\\p\\: \"\n.B \"{rejected_word}\"\n.{close}\n.fi\n.br\nOMEGA\n"
+        );
+        let accepted = rejected.replace(rejected_word, "BETA");
+        let accepted_text = format!("ALPHAX\nBETA <{address}>\nOMEGA");
+        for (source, expected, label) in [
+            (&rejected, "ALPHAX\n\n\nOMEGA", "ALPHAX\n\n"),
+            (&accepted, accepted_text.as_str(), "ALPHAX\nBETA"),
+        ] {
+            assert_readbacks(source, expected, None);
+            assert_eq!(
+                document_links(source, "roff"),
+                [(target.clone(), label.into())],
+                "{source}"
+            );
+        }
     }
 }
 
