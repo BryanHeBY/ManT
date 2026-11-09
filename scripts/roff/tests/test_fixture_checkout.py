@@ -11,7 +11,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-FIXTURES = Path("crates/mant-engine/tests/roff_lowering")
+ENGINE_TESTS = Path("crates/mant-engine/tests")
+FIXTURES = ENGINE_TESTS / "roff_lowering"
 
 
 class FixtureCheckoutTests(unittest.TestCase):
@@ -50,8 +51,9 @@ class FixtureCheckoutTests(unittest.TestCase):
 
     def test_checkout_keeps_sources_and_sealed_rows_byte_identical(self):
         files = {path.relative_to(ROOT): path.read_bytes()
-                 for path in (ROOT / FIXTURES).rglob("*")
-                 if path.suffix in {".1", ".expected"}}
+                 for path in (ROOT / ENGINE_TESTS).rglob("*.1")}
+        files.update({path.relative_to(ROOT): path.read_bytes()
+                      for path in (ROOT / FIXTURES).rglob("*.expected")})
         for family in ("literal_leading_rows", "table_layout"):
             files.update({path.relative_to(ROOT): path.read_bytes()
                           for path in (ROOT / "tests/fixtures/roff" / family).rglob("*.1")})
