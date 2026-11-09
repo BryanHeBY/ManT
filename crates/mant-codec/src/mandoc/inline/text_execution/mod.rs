@@ -34,7 +34,7 @@ pub(in crate::mandoc) struct TextExecutionPolicy {
 pub(in crate::mandoc) struct TextExecutionContext<'state> {
     pub(in crate::mandoc) font: &'state mut FontState,
     pub(in crate::mandoc) zero_advance: &'state mut ZeroAdvanceState,
-    pub(in crate::mandoc) pending_word_end_break: bool,
+    pub(in crate::mandoc) defer_leading_blanks: bool,
     pub(in crate::mandoc) policy: TextExecutionPolicy,
 }
 
@@ -70,7 +70,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
         TextExecutionContext {
             font: state,
             zero_advance: &mut zero_advance,
-            pending_word_end_break: false,
+            defer_leading_blanks: false,
             policy: TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: false,

@@ -404,7 +404,7 @@ impl<'a> LoweringContext<'a> {
             inline::TextExecutionContext {
                 font: &mut formatter.font,
                 zero_advance: &mut zero_advance,
-                pending_word_end_break: false,
+                defer_leading_blanks: false,
                 policy: inline::TextExecutionPolicy {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
                     record_native_cells,

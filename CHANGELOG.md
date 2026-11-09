@@ -139,6 +139,8 @@ that crate was not published for that change.
   reading and excerpts.
 - Preserve native blank rows at hanging, paragraph and section boundaries.
   Apply alignment to each accepted row across styled text and link labels.
+- Keep printed separators and line breaks with their original words when
+  native marker passes restart across multiple operands.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

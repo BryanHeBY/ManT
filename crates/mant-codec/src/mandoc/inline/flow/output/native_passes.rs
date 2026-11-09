@@ -449,7 +449,7 @@ fn trim_native_pass_rows(nodes: &mut Vec<Inline>) {
     *nodes = output;
 }
 
-fn starts_with_native_break(nodes: &[Inline]) -> bool {
+pub(super) fn starts_with_native_break(nodes: &[Inline]) -> bool {
     first_native_row_event(nodes) == Some(true)
 }
 
@@ -473,7 +473,7 @@ fn first_native_row_event(nodes: &[Inline]) -> Option<bool> {
     None
 }
 
-fn trim_native_breakable_tail(nodes: &mut Vec<Inline>) -> bool {
+pub(super) fn trim_native_breakable_tail(nodes: &mut Vec<Inline>) -> bool {
     let mut metadata = Vec::new();
     let mut exhausted = true;
     while let Some(mut node) = nodes.pop() {

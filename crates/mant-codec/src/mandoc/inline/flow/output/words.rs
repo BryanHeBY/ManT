@@ -17,6 +17,20 @@ pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
 }
 
 impl InlineBuilder {
+    pub(in crate::mandoc::inline) fn defers_blanks_after_prior_breakpoint(&self) -> bool {
+        let (buffer, _) = self.execution.word_input();
+        // term_flushln()205-207 skips SP at the restart but stops at
+        // ASCII_BREAK. If the previous word buffered that delimiter,
+        // a later word's authored SP can print after the hard row. Keep
+        // its original owner until term_field() confirms the advance.
+        buffer.has_pending_break_markers()
+            && matches!(
+                buffer.cells().last(),
+                Some(super::super::field_buffer::FieldCell::Breakpoint)
+            )
+            && !self.execution.zero_advance.has_buffered_glyph()
+    }
+
     /// Mint projection identity before decoding, so a cached BACKBEFORE
     /// glyph remains attached to its source word after a later word emits it.
     pub(in crate::mandoc) fn begin_native_word_owner(&mut self) {

@@ -69,7 +69,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     );
     builder.execution.settled_boundary_glyph =
         settled_boundary_glyph && matches!(origin, WordSource::Text(_));
-    let pending_word_end_break = builder.take_word_end_break();
+    builder.clear_word_end_break();
     // term_word() stores a previous operand's \p in the native buffer.
     // Its actual automatic separator is consumed by term_fill(), before
     // this operand's internal blanks. Do not replay that older marker in
@@ -82,6 +82,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     // until its native row retires; isolated table words retain their
     // independent cell scope.
     let field_authoritative = true;
+    let defer_leading_blanks = builder.defers_blanks_after_prior_breakpoint();
     let word_space = builder.word_operand_spaces();
     builder.begin_native_word_owner();
     // pre_alternate selects an operand role before this actual term_word;
@@ -103,7 +104,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         font::TextExecutionContext {
             font: &mut builder.execution.font,
             zero_advance: &mut builder.execution.zero_advance,
-            pending_word_end_break: pending_word_end_break && !field_authoritative,
+            defer_leading_blanks,
             policy: font::TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: true,

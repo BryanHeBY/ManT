@@ -2,7 +2,7 @@ use super::super::WordProjectionPolicy;
 use super::super::{Inline, InlineBuilder, PendingBoundary};
 use super::native_passes::{RecordedRowSplit, split_recorded_native_passes};
 use super::source_blanks::{remove_rewound_source_blanks, take_retreated_source_blank};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub(super) struct WordPassProjection {
@@ -173,6 +173,7 @@ impl InlineBuilder {
                 content: if native_separator > 0
                     && self.execution.pending_field_spaces == 0
                     && (!boundary.is_tight()
+                        || (self.execution.settled_boundary_glyph && !receipt.prints_padding)
                         || self.execution.zero_advance_joined
                         || receipt.leading_retreat.is_some()
                         || projected_keep)
@@ -356,7 +357,10 @@ impl InlineBuilder {
         let mut inside_splits: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
         let mut closes_before = Vec::new();
         let mut restart = None;
-        let starts_earlier_owner = starts_with_borrowed_output(incoming, anchors.last());
+        let tracks_authored_passes =
+            anchor_count > 0 && !buffer.word_scan_deferred() && buffer.has_pending_break_markers();
+        let starts_earlier_owner =
+            tracks_authored_passes && starts_with_borrowed_output(incoming, anchors.last());
         // Borrowed output need not precede this pass: a projected glyph's
         // held cells can follow its breakpoint. Recover their exact native
         // interval only when such a prefix exists, searching recent owners
@@ -364,7 +368,7 @@ impl InlineBuilder {
         let borrowed = starts_earlier_owner
             .then(|| BorrowedPrefix::capture(incoming, buffer, anchors, word_first_cell))
             .flatten();
-        if anchor_count > 0 && !buffer.word_scan_deferred() && buffer.has_pending_break_markers() {
+        if tracks_authored_passes {
             let word_end = buffer.cells().len();
             let mut first_pass = !buffer.has_committed_pass();
             while let Some(pass) = buffer.fill_pass_units(targets.scan(first_pass)) {
@@ -392,39 +396,14 @@ impl InlineBuilder {
                     restarted_word_offset(buffer, anchors, boundary, word_first_cell);
                 if boundary <= word_first_cell || (scalar_offset == 0 && !starts_earlier_owner) {
                     if !represented_in_ir {
-                        // The incoming projection may first settle an earlier
-                        // word's cached BACKBEFORE glyph. Its native graph
-                        // precedes this accepted boundary, so put the row
-                        // event at the current word's stable owner, not before
-                        // the entire Rust fragment (term.c:901-927).
-                        if starts_earlier_owner {
-                            if let Some(prefix) = &borrowed {
-                                let offset = prefix.offset(buffer, boundary);
-                                if offset == 0 {
-                                    // Every borrowed scalar follows this
-                                    // native boundary. Earlier empty words
-                                    // may already have projected its pending
-                                    // blanks into nodes: let the same row
-                                    // close transfer those cells once.
-                                    closes_before.push(pass.end);
-                                } else {
-                                    record_row_split(
-                                        &mut inside_splits,
-                                        &prefix.owner,
-                                        pass.end,
-                                        offset,
-                                        false,
-                                    );
-                                }
-                            } else {
-                                record_row_split(
-                                    &mut inside_splits,
-                                    &anchors[anchor_count - 1].owner,
-                                    pass.end,
-                                    0,
-                                    false,
-                                );
-                            }
+                        if let Some((owner, offset)) = restart_inside_borrowed_fragment(
+                            buffer,
+                            boundary,
+                            starts_earlier_owner,
+                            borrowed.as_ref(),
+                            &anchors[anchor_count - 1].owner,
+                        ) {
+                            record_row_split(&mut inside_splits, owner, pass.end, offset, false);
                         } else {
                             closes_before.push(pass.end);
                         }
@@ -484,6 +463,31 @@ fn starts_with_borrowed_output(
     })
 }
 
+fn restart_inside_borrowed_fragment<'a>(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    boundary: usize,
+    starts_earlier_owner: bool,
+    borrowed: Option<&'a BorrowedPrefix>,
+    current_owner: &'a str,
+) -> Option<(&'a str, usize)> {
+    if !starts_earlier_owner {
+        return None;
+    }
+    let Some(prefix) = borrowed else {
+        return Some((current_owner, 0));
+    };
+    // A cached glyph and a held source blank can belong to different
+    // operands. Place this pass at the next actual owner marker when only
+    // native controls separate it from the restart cell (term.c:205-220).
+    if let Some(owner) = prefix.owner_at_restart(buffer, boundary) {
+        return Some((owner, 0));
+    }
+    let offset = prefix.offset(buffer, boundary);
+    // With zero earlier scalars, close before the whole fragment so it
+    // can transfer padding already projected by a graphless word once.
+    (offset > 0).then_some((&prefix.owner, offset))
+}
+
 fn observe_definition_word(
     definition: &mut super::super::definition::DefinitionFieldState,
     incoming: &[Inline],
@@ -515,6 +519,7 @@ struct BorrowedPrefix {
     content: usize,
     emitted: usize,
     count: usize,
+    following: Vec<(usize, String)>,
 }
 
 impl BorrowedPrefix {
@@ -527,10 +532,27 @@ impl BorrowedPrefix {
         let Inline::Anchor { id, .. } = incoming.first()? else {
             return None;
         };
-        let index = anchors[..anchors.len() - 1]
+        let mut markers: BTreeSet<_> = incoming
             .iter()
-            .rposition(|anchor| anchor.owner == id.as_str())?;
-        let content = anchors[index].content;
+            .skip(1)
+            .filter_map(super::native_passes::native_word_marker)
+            .collect();
+        let mut following = Vec::new();
+        // Pending output can span control-only source words. Search its
+        // recent suffix once, retaining only owners whose markers appear
+        // in this borrowed fragment. Each accepted pass then uses a lookup.
+        let (index, first) = anchors.iter().enumerate().rev().find(|(_, anchor)| {
+            if anchor.owner == id.as_str() {
+                return true;
+            }
+            if markers.remove(anchor.owner.as_str()) {
+                following.push((anchor.content, anchor.owner.clone()));
+            }
+            false
+        })?;
+        following.reverse();
+        following.sort_by_key(|&(start, _)| start);
+        let content = first.content;
         let end = anchors[index + 1].start.min(word_first_cell);
         let count = borrowed_prefix_scalars(incoming, id.as_str());
         let emitted = buffer.projection_length(content, end).saturating_sub(count);
@@ -539,6 +561,7 @@ impl BorrowedPrefix {
             content,
             emitted,
             count,
+            following,
         })
     }
 
@@ -547,6 +570,18 @@ impl BorrowedPrefix {
             .projection_length(self.content, boundary)
             .saturating_sub(self.emitted)
             .min(self.count)
+    }
+
+    fn owner_at_restart(
+        &self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        boundary: usize,
+    ) -> Option<&str> {
+        let next = self
+            .following
+            .partition_point(|&(start, _)| start < boundary);
+        let (start, owner) = self.following.get(next)?;
+        (buffer.projection_length(boundary, *start) == 0).then_some(owner.as_str())
     }
 }
 

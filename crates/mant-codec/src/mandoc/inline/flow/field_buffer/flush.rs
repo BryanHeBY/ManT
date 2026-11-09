@@ -291,6 +291,42 @@ impl FieldBuffer {
         count + self.projection_length(start.max(self.resume), end)
     }
 
+    /// Queued automatic blanks may belong to a pass committed while
+    /// recording a later operand. Test their real printed range, caching
+    /// the last pass so a long queue cannot rescan its trailing padding.
+    pub(in crate::mandoc::inline::flow) fn word_space_is_printed_or_live(
+        &self,
+        cell: usize,
+        last_pass: &mut Option<(std::ops::Range<usize>, std::ops::Range<usize>)>,
+    ) -> bool {
+        if cell >= self.resume {
+            return true;
+        }
+        if let Some((input, printed)) = last_pass.as_ref()
+            && input.contains(&cell)
+        {
+            return printed.contains(&cell);
+        }
+        let index = self
+            .committed_passes
+            .partition_point(|pass| pass.end <= cell);
+        let Some(pass) = self.committed_passes.get(index) else {
+            return false;
+        };
+        let start = index
+            .checked_sub(1)
+            .map_or(0, |previous| self.committed_passes[previous].end);
+        let content = if index == 0 {
+            0
+        } else {
+            self.after_break_blanks(start)
+        };
+        let printed = content..self.printed_content_end(content, pass.end);
+        let accepted = printed.contains(&cell);
+        *last_pass = Some((start..pass.end, printed));
+        accepted
+    }
+
     pub(in crate::mandoc::inline::flow) fn after_break_blanks(&self, mut cell: usize) -> usize {
         while matches!(self.cells.get(cell), Some(FieldCell::BreakableBlank)) {
             cell += 1;

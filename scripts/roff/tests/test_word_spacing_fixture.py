@@ -12,6 +12,31 @@ from scripts.roff.fixtures import record_word_receipts as receipts
 
 
 class WordSpacingFixtureTests(unittest.TestCase):
+    def test_borrowed_word_owners_keep_exact_source_and_receipt_ids(self):
+        fixture = recorder.FIXTURE.with_name("borrowed-word-owners.json.gz")
+        matrix = json.loads(gzip.decompress(fixture.read_bytes()))
+        self.assertEqual(matrix["terminal_width"], 160)
+        self.assertEqual(matrix["oracle_identity"],
+                         "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible")
+        self.assertEqual(matrix["oracle_sha256"],
+                         "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e")
+        cases = matrix["cases"]
+        self.assertEqual(len(cases), 54)
+        self.assertEqual(len({case["id"] for case in cases}), 54)
+        self.assertEqual(len({case["source_sha256"] for case in cases}), 54)
+        self.assertEqual(sum(case["id"] == case["source_sha256"][:8] for case in cases), 39)
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                self.assertEqual(recorder.digest(case["source"]), case["source_sha256"])
+                self.assertEqual(set(case["profiles"]), set(receipts.PROFILES))
+                for profile, (status, stdout, stderr) in case["profiles"].items():
+                    lint_warning = profile == "lint" and case["id"] in {
+                        "004bedfb", "2f030b75", "af83a655",
+                    }
+                    self.assertEqual(status, int(lint_warning))
+                    self.assertRegex(stdout, r"^[0-9a-f]{64}$")
+                    self.assertRegex(stderr, r"^[0-9a-f]{64}$")
+
     def test_ordered_marker_pass_matrix_keeps_every_source_and_profile(self):
         matrix = json.loads(gzip.decompress(passes.FIXTURE.read_bytes()))
         self.assertEqual(matrix["terminal_width"], 160)

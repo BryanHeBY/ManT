@@ -12,7 +12,7 @@ impl WordExecution {
             font: context.font.display_current(),
             link: None,
             source_continuation: None,
-            text_state: TextEventState::new(context.pending_word_end_break),
+            text_state: TextEventState::new(context.defer_leading_blanks),
             native_writes: Vec::new(),
             table_device_buffer_written: false,
             table_line_needs_width: false,

@@ -223,9 +223,8 @@ impl InlineBuilder {
         self.execution.word_end_break = WordEndBreak::Pending;
     }
 
-    pub(in crate::mandoc) fn take_word_end_break(&mut self) -> bool {
-        std::mem::replace(&mut self.execution.word_end_break, WordEndBreak::Clear)
-            == WordEndBreak::Pending
+    pub(in crate::mandoc) fn clear_word_end_break(&mut self) {
+        self.execution.word_end_break = WordEndBreak::Clear;
     }
 
     pub(in crate::mandoc) fn note_zero_advance_join(&mut self) {

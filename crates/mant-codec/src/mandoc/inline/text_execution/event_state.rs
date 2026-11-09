@@ -26,10 +26,10 @@ impl TextEventState {
         self.trailing_breakable_blanks = 0;
     }
 
-    pub(super) const fn new(pending_word_end_break: bool) -> Self {
+    pub(super) const fn new(defer_leading_blanks: bool) -> Self {
         Self {
-            pending_word_end_break,
-            suppress_break_whitespace: false,
+            pending_word_end_break: false,
+            suppress_break_whitespace: defer_leading_blanks,
             graph_seen: false,
             last_breakable_blank: false,
             saw_source_cell: false,

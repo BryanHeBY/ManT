@@ -39,21 +39,32 @@ fn source_blanks_across_marker_boundaries_follow_accepted_native_cells() {
     // term_flushln() sweeps only SP at the resume cursor (term.c:205-207);
     // encode1() can retract a later blank without consuming an earlier
     // one (901-908). term_field() prints the remaining advance (389-427).
-    let fixture: Fixture =
-        serde_json::from_reader(GzDecoder::new(&include_bytes!("marker-blanks.json.gz")[..]))
-            .unwrap();
+    verify_recorded_rows(include_bytes!("marker-blanks.json.gz"), 256, 8);
+}
+
+#[test]
+fn borrowed_word_owners_keep_their_printed_spaces_and_pass_boundaries() {
+    // Fixed CVS term_word() writes the automatic separator before it sees
+    // a bare \z (term.c:573-589). encode1() can retreat over a later blank,
+    // while term_flushln() can consume an earlier SP at the restart. Both
+    // facts survive when Ns splits the input across distinct text owners.
+    verify_recorded_rows(include_bytes!("borrowed-word-owners.json.gz"), 54, 3);
+}
+
+fn verify_recorded_rows(compressed: &[u8], sources: usize, lint_warnings: usize) {
+    let fixture: Fixture = serde_json::from_reader(GzDecoder::new(compressed)).unwrap();
     assert_eq!(
         fixture.oracle_sha256,
         "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e"
     );
-    assert_eq!(fixture.cases.len(), 256);
+    assert_eq!(fixture.cases.len(), sources);
     assert_eq!(
         fixture
             .cases
             .iter()
             .filter(|case| case.profiles["lint"].0 == 1)
             .count(),
-        8
+        lint_warnings
     );
     verify_cases(
         fixture.cases,

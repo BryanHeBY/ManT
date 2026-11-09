@@ -64,6 +64,26 @@ diagnostic and still produce normal native output. The test compares
 untrimmed description rows after JSON and after two real readbacks in
 each Markdown profile.
 
+`borrowed-word-owners.json.gz` records 21 token-split cases, 18 adjacent
+accepted leading-space cases and their controls, for 54 distinct sources
+with five pristine profiles each. It covers a surviving automatic separator
+after a projected zero-advance glyph, a deferred glyph plus held blanks from multiple `Ns`
+operands, and the same pass boundary with an intervening `\:` or with a
+plain glyph. It also covers separators that print in an intermediate pass
+and an authored blank beginning in a later operand. Tight, ordinary and
+coalesced operand controls check which spaces survive and where each
+physical line ends.
+
+Three native inputs have lint style diagnostics. Their terminal output
+remains valid and supplies the expected physical rows.
+
+The first 39 IDs are prefixes of their archived matrix source SHA-256.
+Each case stores the full digest, exact input and both stream digests for
+the five profiles. Replaying those inputs uses the `native-default`
+recipe with terminal width 160. Remove only the known five-cell mdoc page
+origin and the header/footer furniture from the UTF-8 description rows.
+The Python fixture test independently checks the saved source identities.
+
 ```sh
 python3 -m scripts.roff.fixtures.record_word_spacing
 cargo test --locked -p mant-engine --test roff_lowering word_spacing

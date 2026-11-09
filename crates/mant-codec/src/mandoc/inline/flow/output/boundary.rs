@@ -157,6 +157,17 @@ impl InlineBuilder {
         let starts_output_row = incoming_has_line_break
             || projection.split_word.is_some()
             || !projection.closes_before.is_empty();
+        if projection
+            .split_word
+            .as_deref()
+            .is_some_and(super::native_passes::starts_with_native_break)
+        {
+            // The accepted native pass can begin the projected fragment
+            // with a line break even when its last unprinted source blanks
+            // already reside in the previous operand's output (term.c:205-
+            // 207,389-427). Retire that tail before appending the split.
+            super::native_passes::trim_native_breakable_tail(&mut self.nodes);
+        }
         let mut payload = projection
             .split_word
             .take()
@@ -565,7 +576,8 @@ impl InlineBuilder {
             (PendingBoundary::Preserved, true)
         } else if word
             && native_separator > 0
-            && ((empty_word && self.execution.settled_boundary_glyph)
+            && ((self.execution.settled_boundary_glyph
+                && (empty_word || !projection.prints_padding))
                 || !boundary.is_tight()
                 || self.execution.zero_advance_joined
                 || projection.preserve_retreated_separator)
@@ -573,10 +585,10 @@ impl InlineBuilder {
             // term_word()573-589 buffers this separator independently
             // of projected glyphs and authored leading/trailing blanks.
             // Its write receipt, rather than the last visible IR scalar,
-            // proves the cell survived BACKBEFORE. Only the actual 2→1
-            // write/retreat receipt additionally proves that a virtual
-            // boundary kept one SENTENCE cell after the cached glyph;
-            // other tight presentation joins retain their existing policy.
+            // proves the cell survived BACKBEFORE. Settling a prior glyph
+            // provisionally selected Tight. A graphless word cannot yet
+            // execute the actual retreat, but it can leave a later authored
+            // blank as its target (term.c:901-908).
             (PendingBoundary::Preserved, true)
         } else {
             (boundary, add_space)
@@ -693,10 +705,11 @@ impl InlineBuilder {
     pub(super) fn materialize_pending_word_spaces(&mut self) -> usize {
         let mut spaces = std::mem::take(&mut self.execution.pending_word_spaces);
         let mut count = 0usize;
+        let mut last_pass = None;
         for pending in spaces.drain(..) {
             use super::super::field_buffer::FieldCell;
             let (buffer, _) = self.execution.word_input();
-            let start = pending.start.max(buffer.resume_offset());
+            let start = pending.start;
             let end = pending
                 .start
                 .saturating_add(pending.count)
@@ -707,6 +720,7 @@ impl InlineBuilder {
                         buffer.cells()[cell],
                         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
                     ) && buffer.projection_length(cell, cell + 1) > 0
+                        && buffer.word_space_is_printed_or_live(cell, &mut last_pass)
                 })
                 .count();
             if width == 0 {
