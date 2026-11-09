@@ -1,0 +1,63 @@
+Subject: unwind HTML scopes opened after a saved tag detaches
+Upstream-Status: ManT-owned native HTML scope lifetime
+
+Use tag opening order to find the nearest surviving ancestor when a
+node's saved tag has been detached. This closes structural tags the
+node opened in its place while retaining ordinary paragraph and literal
+continuation. Detached tags still carry only the existing node references.
+
+--- a/html.c
++++ b/html.c
+@@ -679,6 +679,7 @@
+ 		t = mandoc_malloc(sizeof(struct tag));
+ 		t->tag = tag;
+ 		t->next = h->tag;
++		t->serial = ++h->tag_serial;
+ 		t->refcnt = 0;
+ 		t->state = TAG_OPEN;
+ 		h->tag = t;
+@@ -919,9 +920,23 @@
+ void
+ html_unwind_node(struct html *h, struct tag *saved)
+ {
+-	/* A detached boundary no longer delimits the active stack. */
+-	if (saved->state != TAG_DETACHED)
+-		print_stagq(h, saved);
++	struct tag *boundary = saved;
++
++	/*
++	 * Detaching removes the saved tag from the active stack but
++	 * leaves its serial intact until this node releases it.
++	 * The stack is ordered from newest to oldest, so the first
++	 * surviving older tag was already present on entry to the
++	 * node.  Close scopes opened since then, allowing a replacement
++	 * paragraph or literal scope to continue as usual.
++	 */
++	if (saved->state == TAG_DETACHED) {
++		boundary = h->tag;
++		while (boundary != NULL && boundary->serial > saved->serial)
++			boundary = boundary->next;
++	}
++	if (boundary != NULL)
++		print_stagq(h, boundary);
+ 	html_tag_unref(saved);
+ }
+ 
+--- a/html.h
++++ b/html.h
+@@ -83,6 +83,7 @@
+ 
+ struct	tag {
+ 	struct tag	 *next;
++	size_t		  serial; /* tag opening order */
+ 	int		  refcnt;
+ 	enum tag_state	  state;
+ 	enum htmltag	  tag;
+@@ -107,6 +108,7 @@
+ 	size_t		  bufcol; /* current buf byte position */
+ 	char		  buf[80]; /* output buffer */
+ 	struct tag	 *tag; /* last open tag */
++	size_t		  tag_serial;
+ 	struct rofftbl	  tbl; /* current table */
+ 	struct tag	 *tblt; /* current open table scope */
+ 	char		 *base_man1; /* bases for manpage href */

@@ -53,3 +53,6 @@
 # Source-neutral equation atom evidence
 0035-retain-equation-text-roles.patch
 0036-retain-inline-equation-origin.patch
+
+# Native HTML scope unwinding after detachment
+0037-unwind-replacement-html-scopes.patch

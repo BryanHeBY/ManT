@@ -274,8 +274,10 @@ that crate was not published for that change.
   `Unsupported`. Update exhaustive format matches for the new variant.
 
 - Keep native HTML sections and link boundaries intact when a paragraph
-  or fill request closes a tag still held by an enclosing node. Release
-  the saved tag on return without unwinding the active ancestors.
+  or fill request closes a tag still held by an enclosing node. Close scopes
+  opened after the saved tag detached, so text following a synopsis stays
+  outside its table. Preserve the surviving ancestors and paragraph or
+  literal continuation.
 
 - Reserve cumulative owned-transfer bytes before copying enclosure strings,
   source spellings, tags, metadata, diagnostics and table storage. Charge each

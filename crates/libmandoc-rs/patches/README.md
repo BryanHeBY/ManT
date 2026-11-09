@@ -59,6 +59,11 @@ Patch `0036` retains `roff_eqndelim`'s executed inline-origin state on equation
 nodes. Source-line position remains independent. The owned snapshot exposes
 the origin to producers before they choose inline or display content owners.
 
+Patch `0037` uses tag opening order to recover the surviving ancestor of a
+detached boundary. The shared node unwind can then close replacement
+structures such as a synopsis table. It retains the original paragraph and
+literal continuation rules and the saved tag's reference lifecycle.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

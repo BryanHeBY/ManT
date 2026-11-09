@@ -83,6 +83,7 @@ enum tag_state {
 
 struct	tag {
 	struct tag	 *next;
+	size_t		  serial; /* tag opening order */
 	int		  refcnt;
 	enum tag_state	  state;
 	enum htmltag	  tag;
@@ -107,6 +108,7 @@ struct	html {
 	size_t		  bufcol; /* current buf byte position */
 	char		  buf[80]; /* output buffer */
 	struct tag	 *tag; /* last open tag */
+	size_t		  tag_serial;
 	struct rofftbl	  tbl; /* current table */
 	struct tag	 *tblt; /* current open table scope */
 	char		 *base_man1; /* bases for manpage href */

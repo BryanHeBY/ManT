@@ -679,6 +679,7 @@ print_otag(struct html *h, enum htmltag tag, const char *fmt, ...)
 		t = mandoc_malloc(sizeof(struct tag));
 		t->tag = tag;
 		t->next = h->tag;
+		t->serial = ++h->tag_serial;
 		t->refcnt = 0;
 		t->state = TAG_OPEN;
 		h->tag = t;
@@ -919,9 +920,23 @@ html_tag_unref(struct tag *tag)
 void
 html_unwind_node(struct html *h, struct tag *saved)
 {
-	/* A detached boundary no longer delimits the active stack. */
-	if (saved->state != TAG_DETACHED)
-		print_stagq(h, saved);
+	struct tag *boundary = saved;
+
+	/*
+	 * Detaching removes the saved tag from the active stack but
+	 * leaves its serial intact until this node releases it.
+	 * The stack is ordered from newest to oldest, so the first
+	 * surviving older tag was already present on entry to the
+	 * node.  Close scopes opened since then, allowing a replacement
+	 * paragraph or literal scope to continue as usual.
+	 */
+	if (saved->state == TAG_DETACHED) {
+		boundary = h->tag;
+		while (boundary != NULL && boundary->serial > saved->serial)
+			boundary = boundary->next;
+	}
+	if (boundary != NULL)
+		print_stagq(h, boundary);
 	html_tag_unref(saved);
 }
 

@@ -50,6 +50,12 @@ sibling repository fixtures are intentionally unavailable. The ASan runner
 executes the exact caller-buffer and output-limit regression under mixed
 Rust/C instrumentation.
 
+`html_scope_matrix.rs` checks the actual element ancestry and row content of
+full and fragment HTML. It crosses man link type, fill mode, prefix and block
+boundary, and covers nested man and mdoc scopes plus repeated and concurrent
+byte, file and source-bundle rendering. The pinned CVS tree and terminal
+profiles establish ownership for inputs where pristine HTML faults.
+
 `table_layout.rs` checks the full u32 horizontal-span boundary with standalone
 sources and reuses the repository's original table-layout fixtures when
 available. These cover shared layout ownership, frames, T& border changes,
