@@ -1,5 +1,12 @@
 # Repository agent rules
 
+## Review follow-through
+
+- During implementation and repair, fix confirmed defects within the active
+  scope and add regression coverage as soon as they are found. Continue
+  through cross-review and verification without waiting for a separate
+  request. Honor an explicitly read-only review or pause.
+
 ## Document IR responsibility
 
 - Treat document IR as enhanced Markdown after source execution, shared by
