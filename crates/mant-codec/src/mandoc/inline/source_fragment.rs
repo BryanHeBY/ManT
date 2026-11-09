@@ -352,11 +352,11 @@ fn lower_body(
     // An already closed Nm BODY has no input to flush a second time.
     builder.execute_native_newline();
     let (mut inlines, _, completed_rows, _) = builder.take_paragraph_segment(false);
-    if completed_rows > 0 {
+    if !completed_rows.is_empty() {
         // A cell's split_terminator consumes the printed row's closing
         // delimiter. Completed empty rows therefore need their own ones.
-        let delimiters = usize::from(completed_rows)
-            + usize::from(!mant_ir::inline_plain_text(&inlines).is_empty());
+        let delimiters =
+            completed_rows.len() + usize::from(!mant_ir::inline_plain_text(&inlines).is_empty());
         inlines.extend((0..delimiters).map(|_| Inline::line_break()));
     }
     formatter.font = builder.font.clone();

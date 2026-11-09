@@ -16,8 +16,8 @@ use libmandoc_rs::{
 
 use super::super::controls::{FormatterBoundary, formatter_control};
 use super::{
-    BlockLowerer, DisplayFillMode, NodeSourceContext, StructuralLowerer, TableEmbedding,
-    TableEmbeddingPlan, adjacent_ip_run, is_native_transparent_sibling,
+    BlockLowerer, DisplayFillMode, NodeSourceContext, SourceSequence, StructuralLowerer,
+    TableEmbedding, TableEmbeddingPlan, adjacent_ip_run, is_native_transparent_sibling,
     man_nofill::no_fill_boundary,
     mdoc_macros::{reference_author_conjunction, reference_field_post},
     participates_in_inline_flow, restores_macro_indent, source_span, synopsis, targets,
@@ -29,14 +29,23 @@ impl BlockLowerer<'_, '_> {
     /// field; the `Rs` wrapper itself has no post text or formatter row
     /// break.
     pub(super) fn push_nodes_with_reference_posts(&mut self, nodes: &[Node], reference_body: bool) {
-        self.push_source_sequence(nodes, reference_body, false);
+        let sequence = if reference_body {
+            SourceSequence::Reference
+        } else {
+            SourceSequence::Plain
+        };
+        self.push_source_sequence(nodes, sequence);
     }
 
     pub(super) fn push_function_children(&mut self, nodes: &[Node]) {
-        self.push_source_sequence(nodes, false, true);
+        self.push_source_sequence(nodes, SourceSequence::Function);
     }
 
-    fn push_source_sequence(&mut self, nodes: &[Node], reference_body: bool, function_body: bool) {
+    pub(super) fn push_man_hanging_children(&mut self, nodes: &[Node]) {
+        self.push_source_sequence(nodes, SourceSequence::ManHanging);
+    }
+
+    fn push_source_sequence(&mut self, nodes: &[Node], sequence: SourceSequence) {
         let table_plan = TableEmbeddingPlan::new(nodes, self.context);
         let mut synopsis_previous = None;
         let mut has_native_sibling = false;
@@ -56,14 +65,17 @@ impl BlockLowerer<'_, '_> {
             let source_line_entered = self.enter_no_fill_source_line(node);
             self.prepare_node_execution(node);
             self.state.enter_synopsis_node(node, synopsis_previous);
-            let author_pre = reference_body && reference_author_conjunction(nodes, index);
+            let author_pre =
+                sequence == SourceSequence::Reference && reference_author_conjunction(nodes, index);
             if author_pre {
                 self.push_generated_container_event(
                     node,
                     crate::mandoc::containers::Event::Glyph("and".to_owned()),
                 );
             }
-            if function_body && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa)) {
+            if sequence == SourceSequence::Function
+                && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa))
+            {
                 let comma_after = !node.children.is_empty()
                     && siblings.next.is_some_and(|next| {
                         next.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fa))
@@ -80,6 +92,7 @@ impl BlockLowerer<'_, '_> {
                         line_entered: source_line_entered,
                         predecessor: source_predecessor,
                         previous_is_sy,
+                        sequence,
                     },
                 );
             }
@@ -88,7 +101,9 @@ impl BlockLowerer<'_, '_> {
                 .formatter
                 .execution
                 .finish_no_fill_source_line_entry(node.id);
-            if reference_body && let Some(punctuation) = reference_field_post(nodes, index) {
+            if sequence == SourceSequence::Reference
+                && let Some(punctuation) = reference_field_post(nodes, index)
+            {
                 self.push_generated_container_event(node, crate::mandoc::containers::Event::Tight);
                 self.push_generated_container_event(
                     node,
@@ -283,7 +298,7 @@ impl BlockLowerer<'_, '_> {
         if self.column_field && self.push_column_payload(node, siblings) {
             return true;
         }
-        if self.consume_control(node) {
+        if self.consume_control(node, source.sequence) {
             return true;
         }
         if self.push_no_fill_synopsis(node) {

@@ -200,11 +200,18 @@ impl InlineBuilder {
             // that content. A separate empty-row receipt would replay it.
             self.record_completed_rows(1, origin);
         }
-        self.finish_hard_break_projection(
-            exited_definition_row,
-            exited_discarded_buffer,
-            retiring_rejection,
-        );
+        // An empty native buffer can end an already projected device row
+        // (term_newln's viscol guard). Its zero-width word owner cannot hide
+        // the existing reading delimiter and invent another empty row.
+        let has_projected_end = if exited_definition_row && !had_native_buffer {
+            super::ends_with_executed_line_break(&self.nodes)
+        } else {
+            matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
+        };
+        let project_delimiter = (exited_discarded_buffer && !exited_definition_row)
+            || !has_projected_end
+            || retiring_rejection;
+        self.finish_hard_break_projection(project_delimiter);
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }
 
@@ -249,12 +256,7 @@ impl InlineBuilder {
         }
     }
 
-    fn finish_hard_break_projection(
-        &mut self,
-        exited_definition_row: bool,
-        exited_discarded_buffer: bool,
-        retiring_rejection: bool,
-    ) {
+    fn finish_hard_break_projection(&mut self, project_delimiter: bool) {
         // This is a committed device-row end, including a detached HEAD
         // whose buffer already belongs to another IR owner. ascii_endline()
         // consumes ti here; an owner drain or a retained HANG field does not.
@@ -273,10 +275,7 @@ impl InlineBuilder {
         self.execution.wipe_remainder = false;
         self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
-        if (exited_discarded_buffer && !exited_definition_row)
-            || !matches!(self.nodes.last(), Some(Inline::LineBreak { .. }))
-            || retiring_rejection
-        {
+        if project_delimiter {
             let row_indent = self.take_definition_row_indent();
             push_row_break(&mut self.nodes, row_indent);
             self.note_definition_output_row();

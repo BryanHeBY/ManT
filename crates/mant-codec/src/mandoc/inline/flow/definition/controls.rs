@@ -24,6 +24,42 @@ use super::super::{
 use super::state::PendingFieldGapOrigin;
 
 impl InlineExecutionState {
+    pub(in crate::mandoc) fn has_initial_man_hanging_field(&self) -> bool {
+        self.definition.as_ref().is_some_and(|field| {
+            field.native_margin_units.is_some() && field.margin_override.is_none()
+        })
+    }
+
+    /// The reading paragraph adopts its hanging origin independently of
+    /// the live native field. Keep that field's offset and viscol in the
+    /// original coordinate system until its post.
+    pub(in crate::mandoc) fn set_man_hanging_reading_origin(
+        &mut self,
+        units: usize,
+        shared_first_owner: bool,
+    ) -> bool {
+        let Some(state) = &mut self.definition else {
+            return false;
+        };
+        state.declared_body_origin = Some(super::state::BodyOriginProjection {
+            units: i64::try_from(units).unwrap_or(i64::MAX)
+                - i64::from(self.row_presentation.parent),
+            padding: if shared_first_owner {
+                super::state::BodyPaddingPlacement::Continuation
+            } else {
+                super::state::BodyPaddingPlacement::Structural
+            },
+        });
+        true
+    }
+
+    pub(in crate::mandoc) fn finish_man_hanging_field(&mut self) {
+        // post_HP(BODY) already executed term_newln() with its live flags.
+        // Restore mt->offset and the page margin without ending an occupied
+        // device row left by the old NOBREAK field.
+        self.exit_native_field_scope();
+    }
+
     /// `pre_SY(BODY)` assigns mt->offset + len, rather than adding len to
     /// the previous offset. The two output paths can have different parents;
     /// retain one absolute native target and declare its IR placement once.
@@ -77,6 +113,37 @@ impl InlineExecutionState {
 }
 
 impl InlineBuilder {
+    pub(in crate::mandoc) fn begin_man_hanging_field(&mut self, margin_units: i64) {
+        // man_term.c::pre_HP(BODY) installs NOBREAK|BRIND and two cells of
+        // trailspace for a filled first child. Feed this field to the same
+        // term_flushln receipt as any other native field. The margin is in
+        // basic units: 275u and 276u can straddle the half-EN tail test.
+        let flags =
+            super::super::native_field::FieldFlags::new(&[FieldFlag::NoBreak, FieldFlag::Brind], 2);
+        self.execution.enter_native_field_scope();
+        self.inherit_author_execution_with_effect(
+            self.execution
+                .author_flow()
+                .unwrap_or(crate::mandoc::formatter::AuthorFlow::Automatic),
+            false,
+            AuthorBreakEffect::Field {
+                flags,
+                gap_cells: 2,
+                body_width_columns: 0,
+                field_width_columns: 0,
+            },
+        );
+        let field = self.definition_state_mut();
+        field.native_margin_units = Some(margin_units);
+        field.margin_override = None;
+        field.no_break = None;
+        field.no_break_cleared = false;
+        field.head_flags_cleared = false;
+        field.field_offset_units = 0;
+        field.hang_row.field_offset = 0;
+        field.declared_body_origin = None;
+    }
+
     /// Every definition HEAD eventually reaches `term_fill()`, including
     /// inset/diag/ohang heads without a NOBREAK field. Track accepted and
     /// rejected word-end slices in their shared native input buffer.
@@ -146,7 +213,7 @@ impl InlineBuilder {
     /// `roff_term_pre_ce()` calls `term_flushln()`, even over an empty buffer.
     /// A HANG tail may keep its device row open; this is not a hard break.
     pub(in crate::mandoc) fn flush_execution_line(&mut self) {
-        self.flush_execution_line_with_origin(super::super::CompletedRowOrigin::Layout);
+        self.flush_execution_line_with_origin(super::super::CompletedRowOrigin::HardLine);
     }
 
     /// The same unconditional flush belongs to the active literal owner,

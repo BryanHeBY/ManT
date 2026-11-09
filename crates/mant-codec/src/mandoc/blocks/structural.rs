@@ -256,12 +256,22 @@ impl StructuralLowerer<'_, '_, '_> {
             Vec::new(),
             std::mem::take(self.formatter),
         );
+        let filled_field = children.first().is_some_and(|first| !first.flags.no_fill);
         if let Some(first) = children.first() {
             let continuation_origin = self.context.offset_indent(
                 node,
                 self.indent_columns,
                 *self.definition_hanging_width,
             );
+            if filled_field {
+                let start = self.indent_columns.physical_basic_units();
+                let end = continuation_origin.physical_basic_units();
+                let margin_units = i64::try_from(end).unwrap_or(i64::MAX)
+                    - i64::try_from(start).unwrap_or(i64::MAX);
+                lowerer.state.with_active_output_builder(|builder| {
+                    builder.begin_man_hanging_field(margin_units);
+                });
+            }
             if lowerer.state.formatter.no_fill || first.flags.no_fill {
                 // print_man_node(out) belongs to this exact first BODY
                 // child, not the first text row produced by a later child.
@@ -285,10 +295,14 @@ impl StructuralLowerer<'_, '_, '_> {
             &mut lowerer.state.formatter.head_operand_capture,
             operand_capture.clone(),
         );
-        lowerer.push_nodes(children);
+        lowerer.push_man_hanging_children(children);
         // man_term.c::post_HP() closes its BODY row. PP/P/LP have no post
         // handler and execute in the caller's live BlockState instead.
-        let nested = lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Settle);
+        lowerer.state.finish_native_body_line();
+        let nested = lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Preserve);
+        if filled_field {
+            self.formatter.execution.finish_man_hanging_field();
+        }
         self.formatter.head_operand_capture = inbound_capture;
         self.formatter.font.man_text_boundary(); // BODY post
         self.formatter.font.man_text_boundary(); // BLOCK post

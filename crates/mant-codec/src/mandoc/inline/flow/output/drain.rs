@@ -5,6 +5,7 @@ use super::super::{
     FormatterColumn, Inline, InlineBuilder, InlineExecutionState, PendingBoundary,
     PreservedInlineState, WordEndBreak, has_printable_character,
 };
+use super::CompletedRowOrigin;
 use super::projection::{
     finalize_inline_output, has_rendered_formatter_glyph, retain_inline_identities,
     trim_output_terminators,
@@ -32,7 +33,12 @@ impl InlineBuilder {
     /// actual register without retaining the drained HEAD's field geometry.
     pub(in crate::mandoc) fn take_flushed_field_segment(
         &mut self,
-    ) -> (Vec<Inline>, bool, u16, super::OutputRowEnd) {
+    ) -> (
+        Vec<Inline>,
+        bool,
+        Vec<CompletedRowOrigin>,
+        super::OutputRowEnd,
+    ) {
         let tab_offset = self
             .execution
             .definition
@@ -66,7 +72,12 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn take_paragraph_segment(
         &mut self,
         line_request: bool,
-    ) -> (Vec<Inline>, bool, u16, super::OutputRowEnd) {
+    ) -> (
+        Vec<Inline>,
+        bool,
+        Vec<CompletedRowOrigin>,
+        super::OutputRowEnd,
+    ) {
         if line_request {
             // roff_term_pre_br() reaches term_newln() even with an empty
             // input buffer; the output drain alone has no such effect.
@@ -128,19 +139,19 @@ impl InlineBuilder {
         // Trailing LineBreak nodes own already closed rows; the current
         // invisible cell is a later row. A bare \p was excluded above and
         // is transferred separately through empty_word_end_break.
-        let executed_tail_rows = super::projection::trailing_completed_row_receipts(&self.nodes);
-        let mut completed_vertical_rows = executed_tail_rows
-            .saturating_add(u16::from(requested_invisible_row))
-            .saturating_add(trailing_invisible_rows.saturating_sub(executed_tail_rows));
+        let mut completed_rows = super::projection::trailing_paragraph_row_origins(&self.nodes);
+        let extra_rows = usize::from(requested_invisible_row)
+            + usize::from(trailing_invisible_rows).saturating_sub(completed_rows.len());
+        completed_rows.extend(std::iter::repeat_n(CompletedRowOrigin::Layout, extra_rows));
         // The accepted tail's executed close survives transferring completed
         // request rows to their gap owner. Read before retiring those private
         // receipts; an empty IR drain cannot reopen term_vspace's endline.
         let closed_graph_tail = self.closed_graph_tail();
-        if completed_vertical_rows > 0 {
-            // term_vspace() has already emitted these rows. Remove only their
-            // trailing inline projection, including a later invisible word
-            // cell; the block owner will carry the completed rows across the
-            // structural split. Ordinary trailing term_newln() stays trimable.
+        if !completed_rows.is_empty() {
+            // Native execution has already ended these rows. The block owner
+            // carries their ordered receipts across the structural split.
+            // Remove their old inline projection and any later invisible
+            // word cell; a plain paragraph terminator remains trimmable.
             // term_fill() can end a row whose only buffered cells are
             // breakable blanks from a visited whitespace-only TEXT. Those
             // cells are printable to our inline model, yet still form an
@@ -153,8 +164,9 @@ impl InlineBuilder {
                     .rev()
                     .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
                     .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node)));
-            completed_vertical_rows = completed_vertical_rows
-                .saturating_add(u16::from(active_invisible_cell && !requested_invisible_row));
+            if active_invisible_cell && !requested_invisible_row {
+                completed_rows.push(CompletedRowOrigin::Layout);
+            }
             // The completed-row owner now accounts for this cell. The old
             // invisible-word fallback must not manufacture it a second time.
             invisible_formatter_cell &= !active_invisible_cell;
@@ -187,7 +199,7 @@ impl InlineBuilder {
         (
             children,
             empty_word_end_break,
-            completed_vertical_rows,
+            completed_rows,
             closed_graph_tail,
         )
     }

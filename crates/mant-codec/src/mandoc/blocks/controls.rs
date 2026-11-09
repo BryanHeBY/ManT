@@ -1,8 +1,8 @@
 //! State-only requests execute before printable fallback and never leak operands.
 use super::{
-    Block, BlockState, LoweringContext, Node, NodeKind, is_section, lower_inline_nodes,
-    lower_inline_nodes_with_font_state, plain_text, source_span, update_paragraph_distance,
-    vertical_space_delta,
+    Block, BlockState, LoweringContext, Node, NodeKind, SourceSequence, is_section,
+    lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text, source_span,
+    update_paragraph_distance, vertical_space_delta,
 };
 use libmandoc_rs::{
     MacroToken::{Man, Mdoc, Roff},
@@ -100,7 +100,7 @@ impl super::BlockLowerer<'_, '_> {
         true
     }
 
-    pub(super) fn consume_control(&mut self, node: &Node) -> bool {
+    pub(super) fn consume_control(&mut self, node: &Node, sequence: SourceSequence) -> bool {
         if node.macro_token.as_ref() == Some(&Man(ManMacro::In))
             && self.context.macro_set == libmandoc_rs::MacroSet::Man
         {
@@ -134,6 +134,7 @@ impl super::BlockLowerer<'_, '_> {
                     self.context,
                     &mut self.state,
                     self.paragraph_distance,
+                    sequence,
                 );
             })
             .is_some();
@@ -167,17 +168,21 @@ fn execute_block_control(
     context: &LoweringContext<'_>,
     state: &mut BlockState,
     paragraph_distance: &mut u16,
+    sequence: SourceSequence,
 ) {
     match request {
         BlockControl::ParagraphDistance => update_paragraph_distance(node, paragraph_distance),
         BlockControl::LiteralBoundary => {
-            if matches!(
+            // fi/nf dispatch directly to pre_br. man_term.c::pre_literal
+            // applies the same BRIND conversion while a direct HP parent
+            // still has a finite first field, including before its first
+            // word. Both paths reset TAB even if term_newln has no input.
+            let pre_break = matches!(
                 node.macro_token.as_ref(),
                 Some(Roff(RoffMacro::Fi | RoffMacro::Nf))
-            ) {
-                // roff_term_pre_acts dispatches fi/nf to pre_br, including
-                // an empty term_newln's TAB reset. The owner drain below
-                // cannot replace that actual request (term.c:475-481).
+            ) || sequence == SourceSequence::ManHanging
+                && state.formatter.execution.has_initial_man_hanging_field();
+            if pre_break {
                 state.pre_break_request_in_source_mode(node.flags.no_fill);
             } else {
                 // man_term.c::pre_literal calls term_newln directly.

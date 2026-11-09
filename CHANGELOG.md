@@ -113,6 +113,12 @@ that crate was not published for that change.
 - Preserve filled roff alignment groups as hard rows through Markdown
   export and reimport. Explicit paragraph spacing remains part of the
   document structure.
+- Preserve the native device row after a short `HP` field when the reading
+  line already ended. A later conditional break can still retire a pending
+  zero-advance escape before the next word or section heading.
+- Keep completed empty roff alignment rows as hard lines, including
+  request-only groups. Markdown preserves those rows independently of
+  an adjacent paragraph gap.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

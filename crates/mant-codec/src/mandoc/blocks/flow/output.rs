@@ -146,13 +146,13 @@ impl BlockState {
             return;
         }
         let output_start = self.output.len();
-        let (block, empty_word_end_break, completed_vertical_rows, closed_tail) =
-            self.paragraph.take(
-                &mut self.formatter,
-                self.indent_columns,
-                self.source_origin.offset_from(self.indent_columns),
-                line_request,
-            );
+        let (block, empty_word_end_break, completed_rows, closed_tail) = self.paragraph.take(
+            &mut self.formatter,
+            self.indent_columns,
+            self.source_origin.offset_from(self.indent_columns),
+            self.hanging_origin,
+            line_request,
+        );
         let mut suppressed_head_row = false;
         if let Some(block) = block {
             match block {
@@ -204,19 +204,16 @@ impl BlockState {
                 block => self.output.push(block),
             }
         }
-        if completed_vertical_rows > 0 {
+        if !completed_rows.is_empty() {
             // A detached HEAD may already represent the device row that
             // this flush ended (termp_it_post followed by term_flushln).
             // Claim its row once regardless of whether the receipt came
             // from an invisible word or a rejected plain-buffer suffix.
             let head_row = !suppressed_head_row && self.formatter.consume_definition_head_row();
-            let body_rows = completed_vertical_rows.saturating_sub(u16::from(head_row));
-            if body_rows > 0 {
-                self.output.push(Block::VerticalSpace {
-                    lines: body_rows,
-                    source: None,
-                });
-            }
+            self.append_completed_paragraph_rows(
+                &completed_rows[usize::from(head_row)..],
+                output_start,
+            );
         }
         if empty_word_end_break && !suppressed_head_row {
             // A bare \p can occupy the native tag row without leaving an
@@ -241,14 +238,45 @@ impl BlockState {
                 owner: output_start,
                 row_end: closed_tail,
             });
-            if let Some(origin) = self.hanging_origin
-                && let Some(Block::Paragraph { layout, .. }) = self.output.last_mut()
-            {
-                layout.continuation_indent_columns = origin.offset_from(self.indent_columns);
-            }
             self.consume_hanging_first_line();
         }
         self.attach_pending_to_new_output(output_start);
+    }
+
+    fn append_completed_paragraph_rows(
+        &mut self,
+        rows: &[crate::mandoc::inline::CompletedRowOrigin],
+        output_start: usize,
+    ) {
+        use crate::mandoc::inline::CompletedRowOrigin;
+        for run in rows.chunk_by(|left, right| left == right) {
+            if run[0] == CompletedRowOrigin::Layout {
+                self.output.push(Block::VerticalSpace {
+                    lines: u16::try_from(run.len()).unwrap_or(u16::MAX),
+                    source: None,
+                });
+                continue;
+            }
+            // A completed alignment row is part of the current hard-line
+            // flow. A separate spacing request must not absorb it.
+            if self.output.len() > output_start
+                && let Some(Block::Paragraph { children, .. }) = self.output.last_mut()
+            {
+                let close_visible = crate::mandoc::inline::has_rendered_formatter_glyph(children)
+                    && !crate::mandoc::inline::ends_with_executed_line_break(children);
+                children.extend(std::iter::repeat_n(
+                    Inline::line_break(),
+                    run.len() + usize::from(close_visible),
+                ));
+            } else {
+                self.output.push(Block::Paragraph {
+                    inline_layout: mant_ir::InlineLayout::default(),
+                    children: vec![Inline::line_break(); run.len()],
+                    layout: mant_ir::LayoutHint::default(),
+                    source: None,
+                });
+            }
+        }
     }
 
     pub(in crate::mandoc::blocks) fn flush_preformatted(&mut self) {

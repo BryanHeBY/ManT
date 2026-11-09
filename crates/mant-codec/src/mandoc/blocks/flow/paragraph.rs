@@ -69,6 +69,10 @@ impl ParagraphFlow {
         }
     }
 
+    pub(super) fn retains_hanging_first_line(&self) -> bool {
+        self.hanging_first_line.is_some()
+    }
+
     /// Give one output segment to the active formatter state for the duration
     /// of an operation. The same registers return before the next node enters;
     /// neither a paragraph flush nor a different IR destination clones them.
@@ -175,11 +179,12 @@ impl ParagraphFlow {
         formatter: &mut FormatterState,
         indent: SourceIndent,
         continuation_indent: i32,
+        hanging_origin: Option<SourceIndent>,
         line_request: bool,
     ) -> (
         Option<Block>,
         bool,
-        u16,
+        Vec<crate::mandoc::inline::CompletedRowOrigin>,
         crate::mandoc::inline::OutputRowEnd,
     ) {
         let (mut children, empty_word_end_break, completed_vertical_rows, closed_graph_tail) = self
@@ -188,12 +193,27 @@ impl ParagraphFlow {
             });
         let mut inline_layout = crate::mandoc::inline::take_inline_layout(&mut children);
         let first_line = self.hanging_first_line.take();
-        let mut layout = layout(first_line.unwrap_or(indent));
-        if let Some(first_line) = first_line {
-            // HP changes the native presentation base at pre_br. Hints
-            // already use the first-line base for row zero and the hanging
-            // base for later rows, so the layout must retain both bases.
-            layout.continuation_indent_columns = indent.offset_from(first_line);
+        let owner_origin = first_line.unwrap_or(indent);
+        let mut layout = layout(owner_origin);
+        if first_line.is_some() {
+            // Only now does a new output owner use the hanging origin.
+            // This paragraph's accepted hints keep the original base.
+            formatter
+                .execution
+                .set_man_hanging_reading_origin(indent.physical_basic_units(), false);
+        }
+        if let Some(origin) = first_line.map(|_| indent).or(hanging_origin) {
+            // BRIND's accepted hard rows can carry explicit native offsets.
+            // Resolve against the continuation once, for the whole owner;
+            // an unhinted continuation row inherits the hanging origin.
+            let continuation = origin.offset_from(owner_origin);
+            for hint in &mut inline_layout.row_hints {
+                if hint.row > 0 {
+                    hint.indent_columns = hint.indent_columns.saturating_sub(continuation);
+                }
+            }
+            inline_layout.row_hints.retain(|hint| !hint.is_empty());
+            layout.continuation_indent_columns = continuation;
         } else if continuation_indent != 0 {
             // Nm BODY and HEAD execute in one owner. Its resolved BODY
             // origin governs visual wraps, while accepted hard-row origins

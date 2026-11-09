@@ -1,8 +1,8 @@
 //! Pure IR projection after native receipts have already decided output.
 
 use super::{
-    CompletedRowOrigin, INTERNAL_COMPLETED_ROW, INTERNAL_DEVICE_ROW_END, INTERNAL_LINK_SPLIT,
-    INTERNAL_LITERAL_ROW, Inline, OutputRowEnd,
+    CompletedRowOrigin, INTERNAL_COMPLETED_ROW, INTERNAL_DEVICE_ROW_END, INTERNAL_HARD_ROW,
+    INTERNAL_LINK_SPLIT, INTERNAL_LITERAL_ROW, Inline, OutputRowEnd,
 };
 
 /// A row-end receipt can precede or follow the same projected delimiter.
@@ -15,7 +15,9 @@ pub(in crate::mandoc) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> Ou
                 Inline::Anchor { id, .. } if id.as_str() == INTERNAL_DEVICE_ROW_END => {
                     *protected = OutputRowEnd::GeneratedClose;
                 }
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_COMPLETED_ROW => {
+                Inline::Anchor { id, .. }
+                    if matches!(id.as_str(), INTERNAL_COMPLETED_ROW | INTERNAL_HARD_ROW) =>
+                {
                     *protected = OutputRowEnd::CompletedClose;
                 }
                 Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LITERAL_ROW => {
@@ -43,15 +45,18 @@ pub(in crate::mandoc) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> Ou
 /// Receipts are read only after native acceptance has removed rejected
 /// glyphs. Accepted intervening glyphs already represent earlier hard rows
 /// inside the paragraph; an unprinted suffix cannot hide their empty rows.
-pub(in crate::mandoc) fn trailing_completed_row_receipts(nodes: &[Inline]) -> u16 {
-    fn visit(nodes: &[Inline], rows: &mut u16) {
+pub(super) fn trailing_paragraph_row_origins(nodes: &[Inline]) -> Vec<CompletedRowOrigin> {
+    fn visit(nodes: &[Inline], rows: &mut Vec<CompletedRowOrigin>) {
         for node in nodes {
             match node {
                 Inline::Anchor { id, .. } if id.as_str() == INTERNAL_COMPLETED_ROW => {
-                    *rows = rows.saturating_add(1);
+                    rows.push(CompletedRowOrigin::Layout);
+                }
+                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_HARD_ROW => {
+                    rows.push(CompletedRowOrigin::HardLine);
                 }
                 Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LITERAL_ROW => {
-                    *rows = 0;
+                    rows.clear();
                 }
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
@@ -61,13 +66,13 @@ pub(in crate::mandoc) fn trailing_completed_row_receipts(nodes: &[Inline]) -> u1
                 | Inline::Equation { value, .. }
                     if value.chars().any(|character| !character.is_whitespace()) =>
                 {
-                    *rows = 0;
+                    rows.clear();
                 }
                 _ => {}
             }
         }
     }
-    let mut rows = 0;
+    let mut rows = Vec::new();
     visit(nodes, &mut rows);
     rows
 }
@@ -83,6 +88,9 @@ pub(in crate::mandoc) fn trailing_completed_row_origins(
             match node {
                 Inline::Anchor { id, .. } if id.as_str() == INTERNAL_COMPLETED_ROW => {
                     rows.push(CompletedRowOrigin::Layout);
+                }
+                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_HARD_ROW => {
+                    rows.push(CompletedRowOrigin::HardLine);
                 }
                 Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LITERAL_ROW => {
                     rows.push(CompletedRowOrigin::LiteralText);

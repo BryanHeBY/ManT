@@ -73,7 +73,7 @@ fn only_a_real_plain_close_commits_its_unprinted_tail_once() {
             .buffer
             .apply_writes(&[FieldWrite::Cell(cell.clone())]);
         let (_, _, rows, _) = projected.take_paragraph_segment(false);
-        assert_eq!(rows, 0);
+        assert!(rows.is_empty());
 
         // The block .sp/.br path consumes this same unit at its real
         // line-request boundary. Both a NBRZW cell and buffered ordinary
@@ -85,9 +85,9 @@ fn only_a_real_plain_close_commits_its_unprinted_tail_once() {
             .buffer
             .apply_writes(&[FieldWrite::Cell(cell.clone())]);
         let (_, _, rows, _) = requested.take_paragraph_segment(true);
-        assert_eq!(rows, 1);
+        assert_eq!(rows.len(), 1);
         let (_, _, rows, _) = requested.take_paragraph_segment(false);
-        assert_eq!(rows, 0);
+        assert!(rows.is_empty());
 
         let mut consumed = InlineBuilder::new();
         consumed
@@ -98,9 +98,9 @@ fn only_a_real_plain_close_commits_its_unprinted_tail_once() {
         consumed.execute_native_newline();
         assert_eq!(consumed.execution.completed_vertical_rows, 1);
         let (_, _, rows, _) = consumed.take_paragraph_segment(false);
-        assert_eq!(rows, 1);
+        assert_eq!(rows.len(), 1);
         let (_, _, rows, _) = consumed.take_paragraph_segment(false);
-        assert_eq!(rows, 0);
+        assert!(rows.is_empty());
     }
 }
 
@@ -124,7 +124,7 @@ fn a_requested_plain_tail_clears_backafter_only_when_it_flushed_cells() {
             }
             let (_, _, rows, _) = builder.take_paragraph_segment(line_request);
             let flushed = line_request && buffered;
-            assert_eq!(rows, u16::from(flushed));
+            assert_eq!(rows.len(), usize::from(flushed));
             assert_eq!(builder.execution.zero_advance.take_armed(), !flushed);
         }
     }

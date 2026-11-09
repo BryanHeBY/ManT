@@ -5,6 +5,7 @@ use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 use mant_ir::{Block, ResolvedContent, inline_plain_text};
 use mant_ui::{App, CopyRequest, DocumentView};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+use unicode_width::UnicodeWidthStr;
 
 #[path = "../../mant-engine/tests/support/json_roundtrip.rs"]
 mod json_roundtrip;
@@ -49,7 +50,7 @@ fn position(buffer: &Buffer, text: &str) -> (u16, u16) {
 }
 
 fn copy_span(app: &mut App, (column, row): (u16, u16), text: &str) {
-    let last = column + u16::try_from(text.len()).unwrap() - 1;
+    let last = column + u16::try_from(text.width()).unwrap() - 1;
     select_span(app, column, row, last, None);
     assert_eq!(
         copied_selections(app, |request| {
@@ -203,6 +204,32 @@ fn empty_group_flush_resets_zero_advance_but_empty_newline_does_not() {
             }
         });
     }
+}
+
+#[test]
+fn completed_empty_alignment_and_paragraph_gap_survive_reader_resize() {
+    // The same complete source was rendered by pinned CVS in the engine
+    // fixture. roff_term_pre_ce() flushes one empty physical row before the
+    // distinct PP spacing request. Exercise both Markdown readbacks too.
+    let source =
+        include_str!("../../mant-engine/tests/roff_lowering/grouped_line_flush/empty-alignment.1");
+    visit_projections(source, |content, _| {
+        let (mut app, mut terminal) = paint(content, 78);
+        for width in [78, 20, 40, 78] {
+            terminal.backend_mut().resize(width + 4, 48);
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            let buffer = terminal.backend().buffer();
+            let (column, before) = position(buffer, "BEFOREMARK");
+            let after = position(buffer, "AFTERMARK");
+            assert_eq!(after.1, before + 3, "reader width {width}");
+            for row in before + 1..after.1 {
+                for cell in column..column + width {
+                    assert_eq!(buffer[(cell, row)].symbol(), " ", "{cell},{row}");
+                }
+            }
+            copy_span(&mut app, after, "AFTERMARK");
+        }
+    });
 }
 
 #[test]

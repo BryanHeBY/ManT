@@ -408,6 +408,22 @@ impl BlockState {
         } else {
             self.paragraph
                 .with_inline_builder(&mut self.formatter, close);
+            if let Some(origin) = self.hanging_origin
+                && self.formatter.execution.has_open_native_device_row()
+                && !self.paragraph.is_empty()
+            {
+                // A short HP field can retain viscol after pre_br's
+                // BRIND conversion. Preserve the requested reading line
+                // break, leaving the native device row for later requests.
+                self.formatter
+                    .execution
+                    .set_man_hanging_reading_origin(origin.physical_basic_units(), true);
+                self.paragraph
+                    .with_inline_builder(&mut self.formatter, |builder| {
+                        builder.force_output_line_break();
+                        builder.tighten_next_boundary();
+                    });
+            }
         }
         self.formatter.no_fill_inline.retire_consumed_cell();
         self.settle_definition_line_boundary();

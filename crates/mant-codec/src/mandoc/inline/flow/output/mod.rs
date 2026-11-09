@@ -7,6 +7,7 @@ use super::{
 // term_flushln() fields. It is removed before any IR owner is returned.
 pub(in crate::mandoc::inline) const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
 const INTERNAL_COMPLETED_ROW: &str = "\0mant:output-scope:completed-row";
+const INTERNAL_HARD_ROW: &str = "\0mant:output-scope:hard-row";
 const INTERNAL_LITERAL_ROW: &str = "\0mant:output-scope:literal-row";
 const INTERNAL_ROW_ORIGIN: &str = "\0mant:output-scope:row-origin:";
 pub(in crate::mandoc::inline::flow) const INTERNAL_FIELD_PREFIX: &str =
@@ -15,6 +16,7 @@ pub(in crate::mandoc::inline::flow) const INTERNAL_FIELD_PREFIX: &str =
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(in crate::mandoc) enum CompletedRowOrigin {
     Layout,
+    HardLine,
     LiteralText,
 }
 
@@ -141,6 +143,7 @@ impl InlineBuilder {
         execution.completed_vertical_rows = execution.completed_vertical_rows.saturating_add(rows);
         let marker = match origin {
             CompletedRowOrigin::Layout => INTERNAL_COMPLETED_ROW,
+            CompletedRowOrigin::HardLine => INTERNAL_HARD_ROW,
             CompletedRowOrigin::LiteralText => INTERNAL_LITERAL_ROW,
         };
         nodes.extend(std::iter::repeat_n(

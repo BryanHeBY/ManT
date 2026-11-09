@@ -16,6 +16,9 @@ pub(in crate::mandoc::inline::flow) enum BodyPaddingPlacement {
     OutputOwner,
     /// Block/definition placement represents normal field padding too.
     Structural,
+    /// The first HP paragraph keeps its original origin for hard-row
+    /// receipts. Its continuation layout represents normal field padding.
+    Continuation,
     /// Only the row origin is represented; field gaps remain inline words.
     RowOrigin,
     /// A shared eventual inline owner retains its native field padding.

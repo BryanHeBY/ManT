@@ -257,9 +257,10 @@ impl NativeFieldDevice {
     }
 
     pub(in crate::mandoc::inline::flow) fn closes_unprinted_row(&self) -> bool {
-        self.ends_row
-            && self.emission == NativeFieldEmission::Unprinted
-            && self.printed_row.is_none()
+        // The pass loop can print and close earlier rows. The tail endline
+        // owns the last device row, whose print state was reset at each
+        // loop endline (term.c:217,250-253).
+        self.ends_row && self.printed_row.is_none()
     }
 
     /// The consumed field left a printed device row open for BODY.

@@ -187,12 +187,15 @@ impl BlockState {
         if let Some(origin) = self.hanging_origin.take() {
             self.indent_columns = origin;
             self.source_origin = origin;
-            // The filled field's output adopts its hanging continuation
-            // origin. Native no-fill first-child posts are executed by
-            // the node driver, independently of these output drains.
-            self.formatter.row_presentation.parent =
-                i32::try_from(origin.physical_basic_units()).unwrap_or(i32::MAX);
-            self.formatter.row_presentation.offset_shift = 0;
+            let units = origin.physical_basic_units();
+            if !self
+                .formatter
+                .execution
+                .set_man_hanging_reading_origin(units, self.paragraph.retains_hanging_first_line())
+            {
+                self.formatter.row_presentation.parent = i32::try_from(units).unwrap_or(i32::MAX);
+                self.formatter.row_presentation.offset_shift = 0;
+            }
         }
     }
 

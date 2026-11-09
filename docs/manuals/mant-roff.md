@@ -1058,9 +1058,13 @@ plain Markdown cannot preserve centering without adding source-specific markup.
 
 Filled rows within a paragraph, including the entry into a group and its
 return to ordinary prose, keep their executed hard breaks through Markdown
-readback. In a filled `HP`, entering an alignment group moves the later
-rows to the hanging origin within the same paragraph. An explicit paragraph
-request still contributes its resolved gap.
+readback. A group containing only requests can still complete an empty hard
+row. A count-only request has no group to flush. In a filled `HP`, entering
+an alignment group moves the later rows to the hanging origin within the
+same paragraph. A short first field can still occupy the native device row
+after its reading line ends. A later conditional break flushes that row,
+including any pending zero-advance escape. An explicit paragraph request
+contributes its own resolved gap independently of a completed empty hard row.
 
 An aligned field can follow an earlier field on the same native physical row,
 particularly in tagged or hanging labels. Owner-local row alignment cannot

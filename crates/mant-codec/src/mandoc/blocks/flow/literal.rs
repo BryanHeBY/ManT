@@ -395,7 +395,7 @@ fn append_completed_rows(
                 lines: u16::try_from(rows).unwrap_or(u16::MAX),
                 source: None,
             }),
-            CompletedRowOrigin::LiteralText => {
+            CompletedRowOrigin::LiteralText | CompletedRowOrigin::HardLine => {
                 if !matches!(blocks.last(), Some(Block::Preformatted { .. })) {
                     blocks.push(Block::Preformatted {
                         inline_layout: mant_ir::InlineLayout::default(),

@@ -267,6 +267,15 @@ struct NodeSourceContext {
     line_entered: bool,
     predecessor: bool,
     previous_is_sy: bool,
+    sequence: SourceSequence,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum SourceSequence {
+    Plain,
+    Reference,
+    Function,
+    ManHanging,
 }
 
 struct BlockLowerer<'a, 'source> {

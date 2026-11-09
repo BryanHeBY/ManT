@@ -414,6 +414,7 @@ impl FormatterState {
     ) -> Vec<mant_ir::Inline> {
         let occupied = builder.flush_native_field();
         let (mut output, _, completed_empty_rows, _) = builder.take_flushed_field_segment();
+        let completed_empty_rows = u16::try_from(completed_empty_rows.len()).unwrap_or(u16::MAX);
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,

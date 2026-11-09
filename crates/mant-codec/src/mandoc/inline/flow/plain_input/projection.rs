@@ -107,9 +107,9 @@ pub(super) fn retain_blank_only_unit_output(
     }
 }
 
-/// The output destination chooses the representation of completed rows,
-/// never their execution. Literal rows can precede another source word in
-/// the same owner; a marker only read at its tail would lose those rows.
+/// Completed blank rows in filled output are layout facts. Literal rows can
+/// precede another source word in the same owner, so they must appear in
+/// the inline stream instead of waiting for the final paragraph drain.
 pub(super) fn project_retired_empty_rows(
     execution: &mut super::super::InlineExecutionState,
     nodes: &mut Vec<Inline>,
@@ -117,7 +117,8 @@ pub(super) fn project_retired_empty_rows(
     origin: super::super::output::CompletedRowOrigin,
 ) {
     match origin {
-        super::super::output::CompletedRowOrigin::Layout => {
+        super::super::output::CompletedRowOrigin::Layout
+        | super::super::output::CompletedRowOrigin::HardLine => {
             InlineBuilder::record_completed_rows_at(execution, nodes, rows, origin);
         }
         super::super::output::CompletedRowOrigin::LiteralText => {
@@ -133,8 +134,8 @@ pub(super) fn project_retired_empty_rows(
 
 /// Each real loop endline closes its accepted native interval, including
 /// graphful NBRZW intervals with no printed scalar (term.c:340-349,397,217).
-/// Only trailing empty rows move to layout; earlier rows retain their ordered
-/// inline boundaries before a later accepted printed pass.
+/// Only trailing empty rows are transferred at drain; earlier rows retain
+/// their ordered inline boundaries before a later accepted printed pass.
 pub(super) fn completed_empty_plain_passes(
     buffer: &super::super::field_buffer::FieldBuffer,
     passes: &[super::super::field_buffer::FillPass],

@@ -29,15 +29,17 @@ struct Case {
     rows: Vec<String>,
 }
 
-fn find_group(node: &Node) -> Option<&Node> {
-    if matches!(
-        node.macro_token,
-        Some(MacroToken::Roff(RoffMacro::Ce | RoffMacro::Rj))
-    ) {
-        Some(node)
-    } else {
-        node.children.iter().find_map(find_group)
-    }
+fn find_group(node: &Node) -> Option<(&Node, Option<&Node>)> {
+    node.children.iter().enumerate().find_map(|(index, child)| {
+        if matches!(
+            child.macro_token,
+            Some(MacroToken::Roff(RoffMacro::Ce | RoffMacro::Rj))
+        ) {
+            Some((child, node.children.get(index + 1)))
+        } else {
+            find_group(child)
+        }
+    })
 }
 
 fn body(text: &str) -> &str {
@@ -58,11 +60,11 @@ fn heading_anchor(round: usize) -> String {
     "\n\n<a id=\"end\"></a>".repeat(round)
 }
 
-fn native_group_witness(case: &Case) {
+fn native_group_witness(case: &Case, paragraph_gap_policy: bool) {
     let parsed = Parser::default()
         .parse_bytes("grouped-alignment.1", case.source.as_bytes())
         .unwrap();
-    let node = find_group(&parsed.document.root).expect("native grouped request");
+    let (node, following) = find_group(&parsed.document.root).expect("native grouped request");
     let tree = &case.group_tree;
     assert_eq!(
         node.macro_token,
@@ -89,6 +91,14 @@ fn native_group_witness(case: &Case) {
             .count(),
         "actual physical TEXT operands"
     );
+    if paragraph_gap_policy {
+        assert_eq!(node.children.len(), 1, "count-only group has no hard row");
+        assert_eq!(
+            following.and_then(|node| node.macro_token.as_ref()),
+            Some(&MacroToken::Roff(RoffMacro::Sp)),
+            "source blank generated a spacing request outside the group"
+        );
+    }
 }
 
 #[test]
@@ -120,7 +130,16 @@ fn alignment_groups_preserve_hard_rows_across_hanging_paragraphs() {
                     assert_eq!(*status, 0);
                 }
             }
-            native_group_witness(case);
+            let id = case.id.split('/').collect::<Vec<_>>();
+            // roff.c::roff_onearg suppresses collection at count zero.
+            // The man.c::man_ptext blank becomes a sibling sp, so only
+            // these explicit positive spacing contributions can collapse.
+            let paragraph_gap_policy = id[0] == "man"
+                && id[2] == "fill"
+                && id[4] == "0"
+                && id[5] == "empty"
+                && id[6] == "pp";
+            native_group_witness(case, paragraph_gap_policy);
             let original = load(&case.source);
             let plain = mant_render::render_query_man(&original);
             let direct = body(&plain)
@@ -132,48 +151,28 @@ fn alignment_groups_preserve_hard_rows_across_hanging_paragraphs() {
                 .iter()
                 .map(|row| without_origin(row))
                 .collect::<Vec<_>>();
-            let id = case.id.split('/').collect::<Vec<_>>();
             let wide_filled_hp = id[0] == "man" && id[1].ends_with("hp16") && id[2] == "fill";
             // A short HP field can remain open on the native character
             // device at pre_br; ManT keeps the authored hard line. Only
             // the exact native padding from that one seam can be dropped.
-            // The related count0/bare-z/br and /PP glyph loss is Review
-            // pending a separate native field fix. Never gold FTERMARK.
-            let short_field_zero_review =
-                wide_filled_hp && id[4..6] == ["0", "zero"] && matches!(id[6], "br" | "pp");
-            if !short_field_zero_review {
-                let mut expected = native.clone();
-                if wide_filled_hp {
-                    if let Some(following) = native[0].strip_prefix("BEFOREMARK ")
-                        && following.starts_with(' ')
-                    {
-                        expected[0] = "BEFOREMARK";
-                        expected.insert(1, without_origin(following));
-                    } else if id[5] == "zero"
-                        && id[4] != "0"
-                        && (native.get(1) != Some(&"")
-                            || matches!(id[4], "default" | "1") && id[6] == "pp")
-                    {
-                        expected.insert(1, "");
-                    }
-                }
-                assert_eq!(direct, expected, "native and portable physical rows");
+            // A graphless group flush can close that occupied device row.
+            // The row already has a portable end and contributes no new
+            // empty row (term.c:475-481,233-253).
+            let mut expected = native.clone();
+            if wide_filled_hp
+                && let Some(following) = native[0].strip_prefix("BEFOREMARK ")
+                && following.starts_with(' ')
+            {
+                expected[0] = "BEFOREMARK";
+                expected.insert(1, without_origin(following));
             }
+            assert_eq!(direct, expected, "native and portable physical rows");
             let ansi = mant_render::render_query_text_with(&original, |_, text| {
                 format!("\x1b[1m{text}\x1b[0m")
             });
             assert_eq!(ansi.replace("\x1b[1m", "").replace("\x1b[0m", ""), plain);
 
-            // An already-empty aligned tail followed by PP can be
-            // normalized to a single paragraph gap by Markdown. These
-            // exact gap cases are Review and have their own named axis;
-            // do not apply this comparison to any interior empty row.
-            let paragraph_gap_review = id[0] == "man"
-                && id[2] == "fill"
-                && id[6] == "pp"
-                && (id[5] == "empty" && id[4] != "2"
-                    || id[5] == "zero" && matches!(id[4], "default" | "1"));
-            let mut expected = markdown_rows(&direct, &id, paragraph_gap_review);
+            let mut expected = markdown_rows(&expected, &id, paragraph_gap_policy);
             for options in [MarkdownOptions::default(), MarkdownOptions::ADDRESSABLE] {
                 if options.preserve_anchors && id[0] == "mdoc" && matches!(id[1], "tag" | "hang") {
                     // The raw definition term ID, like the END heading ID,
@@ -202,9 +201,9 @@ fn alignment_groups_preserve_hard_rows_across_hanging_paragraphs() {
     );
 }
 
-fn markdown_rows(direct: &[&str], id: &[&str], paragraph_gap_review: bool) -> Vec<String> {
+fn markdown_rows(direct: &[&str], id: &[&str], paragraph_gap_policy: bool) -> Vec<String> {
     let mut rows = direct.iter().map(ToString::to_string).collect::<Vec<_>>();
-    if paragraph_gap_review {
+    if paragraph_gap_policy {
         let end = rows.len() - 1;
         assert_eq!(rows[end], "AFTERMARK");
         let previous = rows.iter().rposition(|row| row == "BEFOREMARK").unwrap();
@@ -264,5 +263,188 @@ fn hanging_row_hints_stay_in_one_paragraph_after_json_roundtrip() {
             assert_eq!(hint.indent_columns, 0);
             assert_eq!(hint.alignment, alignment);
         }
+    }
+}
+
+const MAN: &str = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH DESCRIPTION\n";
+const END: &str = ".SH END\nENDMARK\n";
+
+#[test]
+fn occupied_hanging_device_row_controls_a_later_conditional_flush() {
+    // The pinned CVS ASCII/UTF-8 rows for these exact sources bracket
+    // term_flushln()'s final vbr + trailspace > vfield + half-EN test.
+    // At 276u the original HP field still occupies the device. Its
+    // later .br flushes BACKAFTER even though the reading line already
+    // ended. The direct successor instead consumes that pending escape.
+    for (prefix, suffix) in [("", ""), (".RS 3\n.RS 2\n", ".RE\n.RE\n")] {
+        for (width, occupied) in [("275u", false), ("276u", true), ("277u", true)] {
+            for alignment in ["ce", "rj"] {
+                for count in ["0", "-1"] {
+                    for (request, gap) in [
+                        ("", false),
+                        (".br\n", false),
+                        (".br\n.br\n", false),
+                        (".PP\n", true),
+                    ] {
+                        let source = format!(
+                            "{MAN}{prefix}.HP {width}\nBEFOREMARK\n.{alignment} {count}\n\\z\n{request}AFTERMARK\n{suffix}{END}"
+                        );
+                        let last = if occupied && !request.is_empty() {
+                            "AFTERMARK"
+                        } else {
+                            "FTERMARK"
+                        };
+                        let expected = if gap {
+                            vec!["BEFOREMARK", "", last]
+                        } else {
+                            vec!["BEFOREMARK", last]
+                        };
+                        let original = load(&source);
+                        let rendered = mant_render::render_query_man(&original);
+                        assert_eq!(
+                            body(&rendered)
+                                .split('\n')
+                                .map(without_origin)
+                                .collect::<Vec<_>>(),
+                            expected,
+                            "{source}"
+                        );
+                        for options in [MarkdownOptions::default(), MarkdownOptions::ADDRESSABLE] {
+                            let mut content = original.clone();
+                            for round in 1..=2 {
+                                let markdown = render_markdown_with_options(&content, options);
+                                content = super::json_string_roundtrip(
+                                    &mant_loader::load_markdown_text(&markdown, None).unwrap(),
+                                );
+                                let rendered = mant_render::render_query_text(&content);
+                                let mut readback = body(&rendered);
+                                if options.preserve_anchors {
+                                    readback =
+                                        readback.strip_suffix(&heading_anchor(round)).unwrap();
+                                }
+                                assert_eq!(
+                                    readback.split('\n').map(without_origin).collect::<Vec<_>>(),
+                                    expected,
+                                    "{options:?} cycle {round}: {source}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn occupied_hanging_device_row_keeps_the_following_section_owner() {
+    // man_term.c::pre_SH calls term_newln before its heading word. The
+    // frozen wide-HP source has NEXT, with the bare escape already flushed.
+    let source = format!("{MAN}.HP 16n\nBEFOREMARK\n.ce 0\n\\z\n.SH NEXT\nAFTERMARK\n{END}");
+    let content = load(&source);
+    let document = content.document.as_ref().unwrap();
+    let next = &document.sections[2];
+    assert_eq!(next.id.as_str(), "next");
+    assert_eq!(next.heading.plain_text(), "NEXT");
+    assert_eq!(next.source.unwrap().line, 9);
+    let index = mant_ir::DocumentIndex::build(document);
+    assert_eq!(index.fragment_target("next"), Some(&next.id));
+    let outline = mant_query::build_outline(&content).unwrap();
+    let node = outline
+        .nodes
+        .iter()
+        .find(|node| node.id() == "next")
+        .unwrap();
+    assert_eq!(node.title(), "NEXT");
+    let search = mant_query::search_query(
+        &content,
+        &mant_protocol::SearchQuery {
+            pattern: "NEXT".into(),
+            syntax: mant_protocol::SearchSyntax::Literal,
+            case: mant_protocol::SearchCase::Sensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: true,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .unwrap();
+    let [hit] = search.matches.as_slice() else {
+        panic!("exactly one heading hit");
+    };
+    assert_eq!(hit.outline.node.id(), "next");
+    assert_eq!(hit.outline.node.title(), "NEXT");
+    assert_eq!(
+        body(&mant_render::render_query_man(&content)),
+        "BEFOREMARK\n\nNEXT\nAFTERMARK"
+    );
+}
+
+const WORD_MAN: &str =
+    ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- word audit\n.SH DESCRIPTION\n";
+const WORD_END: &str = ".SH ENDTEST\nFINISH\n";
+
+fn hanging_word_rows(source: &str) -> String {
+    let rendered = mant_render::render_query_man(&load(source));
+    let (_, body) = rendered.split_once("\nDESCRIPTION\n").unwrap();
+    body.strip_suffix("\n\nENDTEST\nFINISH").unwrap().to_owned()
+}
+
+#[test]
+fn hanging_word_passes_resolve_origins_and_close_the_rejected_tail_once() {
+    // Pinned CVS term.c::term_flushln() moves BRIND's next accepted pass
+    // to rmargin after the loop endline. The later nbr == 0 tail can end
+    // a distinct empty row, even if this flush previously printed text.
+    for width in [4, 16] {
+        let indent = " ".repeat(width);
+        for request in ["", "\n.br"] {
+            for (first, next, expected) in [
+                (
+                    r#".B "ALPHA\zX""#,
+                    r#".I "\p BETA""#,
+                    format!("ALPHAX BETA\n{indent}OMEGA"),
+                ),
+                (
+                    r#".B "ALPHA\zX""#,
+                    r#".I "\p\: \p\& \p BETA""#,
+                    if request.is_empty() {
+                        "ALPHAX\n".to_owned()
+                    } else {
+                        format!("ALPHAX\n\n{indent}OMEGA")
+                    },
+                ),
+                (
+                    r#".B "ALPHA\zX\z""#,
+                    r#".I "\&\p\: \p BETA""#,
+                    format!("ALPHAX\n{indent} ETA\n{indent}OMEGA"),
+                ),
+            ] {
+                let source =
+                    format!("{WORD_MAN}.HP {width}n\n{first}\n{next}{request}\nOMEGA\n{WORD_END}");
+                // A wide short field can keep BETA and OMEGA on the
+                // native line at br. The explicit reading boundary keeps
+                // OMEGA on the hanging row without adding native padding.
+                assert_eq!(hanging_word_rows(&source), expected, "{source}");
+            }
+        }
+    }
+}
+
+#[test]
+fn alignment_after_an_accepted_hanging_word_pass_rebases_each_origin_once() {
+    // pre_br() can enter the group after an earlier term_flushln() pass
+    // has already committed a continuation row. Earlier and later rows
+    // of the same reading paragraph share one coordinate base.
+    for width in [4, 16] {
+        let indent = " ".repeat(width);
+        let source = format!(
+            "{WORD_MAN}.HP {width}n\n.B \"ALPHA\\p BETA\"\n.ce 0\n\\z\n.br\nOMEGA\n{WORD_END}"
+        );
+        assert_eq!(
+            hanging_word_rows(&source),
+            format!("ALPHA\n{indent}BETA\n{indent}MEGA"),
+            "{source}"
+        );
     }
 }

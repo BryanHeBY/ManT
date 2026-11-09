@@ -26,11 +26,8 @@ use super::flush::retain_unprinted_field_targets;
 
 impl InlineBuilder {
     pub(in crate::mandoc::inline::flow) fn native_field_closes_unprinted_row(&self) -> bool {
-        self.native_field_device(false).is_some_and(|device| {
-            device.ends_row
-                && device.emission == super::device::NativeFieldEmission::Unprinted
-                && device.printed_row.is_none()
-        })
+        self.native_field_device(false)
+            .is_some_and(|device| device.closes_unprinted_row())
     }
 
     pub(in crate::mandoc) fn discard_unprinted_definition_field_output(&mut self) -> bool {

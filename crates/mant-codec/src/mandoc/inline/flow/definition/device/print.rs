@@ -57,7 +57,12 @@ impl InlineBuilder {
                     .column_origin_units
                     .map(|units| i64::try_from(units).unwrap_or(i64::MAX))
             })
-            .or(state.declared_body_origin.map(|origin| origin.units))
+            .or(state
+                .declared_body_origin
+                .filter(|origin| {
+                    origin.padding != super::super::state::BodyPaddingPlacement::Continuation
+                })
+                .map(|origin| origin.units))
             .unwrap_or(0);
         let graph = (start..end).find(|cell| {
             matches!(
@@ -162,6 +167,7 @@ impl InlineBuilder {
                 matches!(
                     origin.padding,
                     super::super::state::BodyPaddingPlacement::Structural
+                        | super::super::state::BodyPaddingPlacement::Continuation
                         | super::super::state::BodyPaddingPlacement::OutputOwner
                 )
             })
