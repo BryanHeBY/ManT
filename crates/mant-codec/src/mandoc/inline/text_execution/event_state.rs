@@ -118,11 +118,11 @@ pub(super) fn append_text_event(
             destination
                 .zero_advance
                 .flush(destination.output, destination.buffer, font, link);
-            let rejected_after_accepted_blank =
-                state.break_started_after_blank && !state.graph_since_break;
-            if rejected_after_accepted_blank {
-                // term_fill() records nbr before the breakable blank. That
-                // blank is outside the accepted field as well as its suffix.
+            if !field_authoritative && state.break_started_after_blank && !state.graph_since_break {
+                // The standalone projection has no pass receipt. A live
+                // field must retain the earlier source blank here: encode1()
+                // can retract the blank after the marker (term.c:901-908),
+                // and term_field() then prints the earlier one (389-427).
                 crate::mandoc::inline::flow::trim_trailing_breakable_spaces(
                     destination.output,
                     state.break_trailing_blanks,

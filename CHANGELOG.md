@@ -125,6 +125,8 @@ that crate was not published for that change.
   accepted empty passes before a following word, at EOF and in no-fill.
 - Return printed roff spaces to their original definition term when the
   definition body flushes its shared field, including spaces in link labels.
+- Preserve source blanks accepted around native word-end markers and
+  breakpoint restarts.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

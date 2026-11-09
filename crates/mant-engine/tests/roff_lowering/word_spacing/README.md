@@ -54,6 +54,16 @@ exhaustive combinations of arbitrary roff programs.
 
 ## Reproduction
 
+`marker-blanks.json.gz` retains 256 exact sources from the finite word
+matrix, with their source IDs and five pristine profile receipts. The
+16 single-operand seam cases cover an earlier authored SP whose later
+marker-adjacent SP is retracted by `encode1()`. The 240 ordered seam
+cases cover a source SP surviving the restart after an ASCII_BREAK,
+including `Bk`, `Sm off`, and `Ns`. Eight sources have a lint style
+diagnostic and still produce normal native output. The test compares
+untrimmed description rows after JSON and after two real readbacks in
+each Markdown profile.
+
 ```sh
 python3 -m scripts.roff.fixtures.record_word_spacing
 cargo test --locked -p mant-engine --test roff_lowering word_spacing

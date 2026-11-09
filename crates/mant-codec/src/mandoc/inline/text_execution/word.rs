@@ -228,6 +228,11 @@ impl WordExecution {
                 state.wiped |= !state.graph_since_blank;
             }
             state.pending_word_end_break = false;
+            // term_flushln() consumes only consecutive SP at the resume
+            // position (term.c:205-207). ASCII_BREAK can stop that sweep
+            // before a source blank, even if its word ends before the next
+            // printable glyph. Keep that blank pending native acceptance.
+            state.suppress_break_whitespace |= context.policy.field_authoritative;
             state.graph_seen = false;
             state.graph_since_break = false;
             state.break_started_after_blank = false;
