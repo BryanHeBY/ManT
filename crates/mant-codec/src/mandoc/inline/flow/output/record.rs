@@ -107,7 +107,7 @@ impl InlineBuilder {
         let receipt = definition
             .field_buffer
             .apply_writes(&native_writes.expect("formatter word native writes"));
-        if receipt.retreated_leading_blank {
+        if receipt.retreated_leading_blank_on_rearm {
             trim_retreated_word_blank(incoming);
         }
         definition
@@ -121,7 +121,7 @@ impl InlineBuilder {
                     && self.execution.pending_field_spaces == 0
                     && (!boundary.is_tight()
                         || self.execution.zero_advance_joined
-                        || receipt.retreated_leading_blank
+                        || receipt.retreated_leading_blank_on_rearm
                         || projected_keep)
                 {
                     native_word_start
@@ -146,7 +146,7 @@ impl InlineBuilder {
         let (buffer, _) = self.execution.word_input();
         projection.record_separator(buffer, native_word_start, separator, native_separator);
         projection.preserve_retreated_separator |=
-            receipt.retreated_leading_blank || projected_keep;
+            receipt.retreated_leading_blank_on_rearm || projected_keep;
         projection.prints_padding = receipt.prints_padding;
         projection
     }
@@ -184,7 +184,7 @@ impl InlineBuilder {
             .plain_input
             .buffer
             .apply_writes(&native_writes.unwrap_or_default());
-        if receipt.retreated_leading_blank {
+        if receipt.retreated_leading_blank_on_rearm {
             trim_retreated_word_blank(incoming);
         }
         self.execution
@@ -201,7 +201,7 @@ impl InlineBuilder {
                     && !native_boundary.is_tight()
                     && (!self.execution.boundary.is_tight()
                         || self.execution.zero_advance_joined
-                        || receipt.retreated_leading_blank
+                        || receipt.retreated_leading_blank_on_rearm
                         || projected_keep)
                 {
                     native_word_start
@@ -234,7 +234,8 @@ impl InlineBuilder {
             receipt.first_content_cell,
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
-        result.preserve_retreated_separator |= receipt.retreated_leading_blank || projected_keep;
+        result.preserve_retreated_separator |=
+            receipt.retreated_leading_blank_on_rearm || projected_keep;
         result.prints_padding = receipt.prints_padding;
         result
     }
@@ -404,8 +405,9 @@ impl InlineBuilder {
     }
 }
 
-// An initial authored blank was removed by encode1's BACKBEFORE. It
-// may have been projected before an older pending glyph was settled.
+// A second zero-advance arm needs the consumed blank removed before
+// projecting the next overwrite. An ordinary word can instead retain its
+// authored separator in the same visible column and annotation owner.
 fn trim_retreated_word_blank(nodes: &mut [Inline]) {
     let Some(first) = nodes.first_mut() else {
         return;

@@ -138,6 +138,8 @@ pub(in crate::mandoc::inline::flow) struct WordWriteReceipt {
     /// `term_field()` writes deferred vbl only at a Graph or backspace.
     /// NBRZW contributes graph acceptance, but never prints this padding.
     pub(in crate::mandoc::inline::flow) prints_padding: bool,
-    /// `encode1()` consumed the only authored cell before the first graph.
-    pub(in crate::mandoc::inline::flow) retreated_leading_blank: bool,
+    /// The first graph rearmed BACKBEFORE after consuming an authored blank.
+    /// With no rearm the reading projection can use the authored separator
+    /// as its visible blank, retaining source style and link ownership.
+    pub(in crate::mandoc::inline::flow) retreated_leading_blank_on_rearm: bool,
 }

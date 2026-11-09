@@ -249,18 +249,18 @@ impl FieldBuffer {
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
         self.word_first_content = None;
-        let mut retreated_leading_blank = false;
+        let mut retreated_leading_blank_on_rearm = false;
         for write in writes {
             match write {
                 FieldWrite::Cell(FieldCell::Graph { text, width }) => {
-                    retreated_leading_blank |= self.encode_graph(*text, *width, true);
+                    retreated_leading_blank_on_rearm |= self.encode_graph(*text, *width, true);
                 }
                 FieldWrite::Cell(FieldCell::Hyphen) => {
-                    retreated_leading_blank |= self.encode_graph('-', 1, true);
+                    retreated_leading_blank_on_rearm |= self.encode_graph('-', 1, true);
                     *self.cells.last_mut().expect("encoded hyphen") = FieldCell::Hyphen;
                 }
                 FieldWrite::OwnedBlank { projected } => {
-                    retreated_leading_blank |= self.encode_graph('\u{a0}', 1, *projected);
+                    retreated_leading_blank_on_rearm |= self.encode_graph('\u{a0}', 1, *projected);
                 }
                 FieldWrite::Cell(cell) => {
                     if matches!(cell, FieldCell::BreakMarker) {
@@ -312,7 +312,7 @@ impl FieldBuffer {
             first_content_cell,
             end_cell,
             prints_padding,
-            retreated_leading_blank,
+            retreated_leading_blank_on_rearm,
         }
     }
     pub(in crate::mandoc::inline::flow) fn has_projected_pass(&self, end: usize) -> bool {
@@ -324,7 +324,8 @@ impl FieldBuffer {
     }
 
     fn encode_graph(&mut self, text: char, width: usize, projected: bool) -> bool {
-        let retreated_leading_blank = self.backbefore_armed
+        let retreated_leading_blank_on_rearm = self.backbefore_armed
+            && self.backafter_armed
             && self.word_first_content == self.cells.len().checked_sub(1)
             && matches!(
                 self.cells.last(),
@@ -340,7 +341,7 @@ impl FieldBuffer {
             self.backbefore_armed = true;
             self.pending_projection_graph = self.cells.len().checked_sub(1);
         }
-        retreated_leading_blank
+        retreated_leading_blank_on_rearm
     }
 
     /// A drained IR owner is immutable. Backtracking remains native state,

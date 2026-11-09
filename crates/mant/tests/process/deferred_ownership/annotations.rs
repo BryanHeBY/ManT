@@ -94,6 +94,49 @@ fn source_occurrences_and_native_body_members_survive_real_json_and_color_output
     }
 }
 
+#[test]
+fn backbefore_keeps_the_authored_link_prefix_until_a_word_rearms_it() {
+    // CVS term.c::encode1() retreats over the leading blank before the
+    // graph. With a single pending glyph the same visible blank can keep
+    // its source ownership, as in man_html.c::man_UR_pre(). A second \z
+    // rearms the retreat at A, which L then overstrikes.
+    for (operand, label, row) in [
+        (" ALPHA", " ALPHA", "PREX ALPHA <https://outer.test> TAIL"),
+        ("\\z ALPHA", "LPHA", "PREX LPHA <https://outer.test> TAIL"),
+    ] {
+        let case = serde_json::json!({
+            "id": operand,
+            "source": format!(
+                ".TH REVIEW 1 \"November 7, 2026\"\n.SH NAME\nreview \\- demonstrate delayed link ownership\n.SH DESCRIPTION\nPRE\\zX\n.UR https://outer.test\n.B \"{operand}\"\n.UE\nTAIL\n"
+            ),
+        });
+        let bundle: mant_protocol::QueryBundle =
+            serde_json::from_slice(&run(&case, "json", "never").stdout).unwrap();
+        let content: mant_ir::ResolvedContent = bundle.into();
+        let mut links = Links::default();
+        links.visit_document(content.document.as_ref().unwrap());
+        assert_eq!(
+            links.0,
+            [(
+                mant_ir::LinkTarget::External {
+                    uri: "https://outer.test".into()
+                },
+                label.into()
+            )],
+            "{operand}"
+        );
+        let plain = String::from_utf8(run(&case, "text", "never").stdout).unwrap();
+        assert_eq!(
+            plain
+                .split_once("DESCRIPTION\n")
+                .unwrap()
+                .1
+                .trim_end_matches('\n'),
+            row
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn original_born_members_reach_both_actual_terminal_widths() {
