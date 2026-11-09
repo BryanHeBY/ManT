@@ -127,6 +127,8 @@ run "test shared source-line receipts and row classifications" \
   python3 -m unittest scripts.roff.tests.test_shared_source_line_fixtures
 run "test incoming word-separator state fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_word_spacing_fixture
+run "test finite word and aligned-row audit" \
+  python3 -m unittest scripts.roff.tests.test_word_row_matrix
 run "test source-bound synopsis word observation corrections" \
   python3 -m unittest scripts.roff.tests.test_synopsis_word_observations
 run "test native enclosure operand identities and profile admission" \
