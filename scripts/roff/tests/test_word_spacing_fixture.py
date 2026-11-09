@@ -19,10 +19,10 @@ class WordSpacingFixtureTests(unittest.TestCase):
                          "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e")
         cases = matrix["cases"]
         self.assertEqual(Counter(case["cohort"] for case in cases),
-                         {"cross": 768, "wrapper": 324, "consumer": 31})
+                         {"cross": 768, "wrapper": 324, "consumer": 32})
         self.assertEqual(len({case["source_sha256"] for case in cases}), len(cases))
         self.assertEqual(Counter(case["profiles"]["lint"][0] for case in cases),
-                         {0: 931, 1: 192})
+                         {0: 932, 1: 192})
         for expected, actual in zip(passes.specifications(), cases, strict=True):
             with self.subTest(case=actual["id"]):
                 self.assertEqual(expected, {key: actual[key] for key in expected})

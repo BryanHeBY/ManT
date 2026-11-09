@@ -179,7 +179,7 @@ fn word_passes_retire_the_entry_separator_before_later_markers() {
     // output cell. Neither a later word-end marker nor a newly buffered
     // \zY can replay the unprinted tail of the accepted earlier pass.
     let matrix = fixture(include_bytes!("word_passes/cases.json.gz"));
-    assert_eq!(matrix.cases.len(), 1123);
+    assert_eq!(matrix.cases.len(), 1124);
     verify_matrix(matrix);
 }
 
