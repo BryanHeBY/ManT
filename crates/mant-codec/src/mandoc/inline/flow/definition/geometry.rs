@@ -426,6 +426,7 @@ mod row_origin_tests {
             content: 9,
             projected_device_padding: 2,
             projected_field_prefix: false,
+            projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
         });
         definition.no_break = Some(NoBreakField {
             flags: super::super::super::native_field::FieldFlags::column(false),

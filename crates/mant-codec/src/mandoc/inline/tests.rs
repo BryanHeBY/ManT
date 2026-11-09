@@ -297,6 +297,9 @@ fn empty_equation_wrappers_do_not_invent_formatter_words() {
             .parse_bytes("empty-equation.1", source.as_bytes())
             .unwrap();
         let equation = find_inline_equation(&report.document.root).unwrap();
-        assert!(!super::equation_emits_words(equation, false));
+        let mut builder = super::InlineBuilder::new();
+        let receipt = super::equation::append_words(&mut builder, equation);
+        assert_eq!(receipt.words, 0);
+        assert!(receipt.complete);
     }
 }

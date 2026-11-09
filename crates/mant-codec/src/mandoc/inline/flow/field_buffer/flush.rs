@@ -134,6 +134,43 @@ impl FieldBuffer {
         self.printed_columns_with_tabs(start, end, tab_offset, initial_padding, None)
     }
 
+    /// `term_field()` only commits deferred blanks and tabs at a real
+    /// graph or backspace. NBRZW can make `term_fill()` accept the tail
+    /// without printing that padding (term.c:389-427).
+    pub(in crate::mandoc::inline::flow) fn printed_content_end(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> usize {
+        let end = end.min(self.cells.len());
+        let start = start.min(end);
+        self.cells[start..end]
+            .iter()
+            .rposition(|cell| {
+                matches!(
+                    cell,
+                    FieldCell::Graph { .. } | FieldCell::Hyphen | FieldCell::Backline
+                )
+            })
+            .map_or(start, |index| start + index + 1)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn has_unprinted_padding(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> bool {
+        let printed_end = self.printed_content_end(start, end);
+        self.cells[printed_end..end.min(self.cells.len())]
+            .iter()
+            .any(|cell| {
+                matches!(
+                    cell,
+                    FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
+                )
+            })
+    }
+
     /// The same accepted `term_field` scan can record how literal TAB cells
     /// actually printed. Deferred tail TABs consume no device cells.
     pub(in crate::mandoc::inline::flow) fn printed_columns_with_tabs(

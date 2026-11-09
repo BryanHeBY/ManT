@@ -58,6 +58,14 @@ that crate was not published for that change.
   including macro arguments, links and preformatted examples. Follow native
   HEAD/BODY ownership for definition terms and join equation suffixes using
   executed line boundaries.
+- Keep source hard lines, pending characters and word spacing when inline
+  formulas follow roff controls. Execute eqn operands through the shared word
+  pipeline, including empty atoms and authored blanks. Publish complete
+  mathematical owners after native acceptance, with diagnosed text recovery
+  for genuinely overwritten or fragmented formulas.
+- Match native printing of trailing spaces and tabs. Preserve empty rows,
+  fixed Unicode blanks and recovery glyphs while omitting padding left
+  unprinted by the native formatter.
 - Add complete POSIX, BSD, illumos and X11 mathematical regression pages for
   inline paragraphs, scripts, integral limits, matrices and readable formulas
   inside code examples. Align the structure audit with executed inline origin

@@ -4,13 +4,16 @@ use super::super::Inline;
 use super::split::{advance_boundary, split_text_at_boundaries};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
     pub(in crate::mandoc::inline::flow) scalars: usize,
     pub(in crate::mandoc::inline::flow) native_cells: bool,
     /// The first accepted interval printed this word's deferred device pad.
     /// An accepted NBRZW prefix alone cannot print it (term.c:389-427).
     pub(in crate::mandoc::inline::flow) prefix_printed: bool,
+    /// Accepted source scalars belonging to deferred native padding which
+    /// no subsequent graph printed. Recovery spellings remain independent.
+    pub(in crate::mandoc::inline::flow) unprinted_padding: Vec<std::ops::Range<usize>>,
 }
 
 /// Accepted projection range of each stable source word. A delayed glyph
@@ -20,8 +23,21 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     buffer: &super::super::field_buffer::FieldBuffer,
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
+    preserve_literal_whitespace: bool,
 ) -> BTreeMap<String, OwnerAcceptance> {
+    use super::super::field_buffer::FieldCell;
+
     let mut lengths = BTreeMap::new();
+    let mut previous_end = buffer.resume_offset();
+    let printed_ends: Vec<_> = passes
+        .iter()
+        .map(|pass| {
+            let printed_end = buffer.printed_content_end(previous_end, pass.end);
+            let printed = printed_end > previous_end;
+            previous_end = next_native_pass_start(buffer, pass.end);
+            (printed_end, printed)
+        })
+        .collect();
     let mut pass_index = 0;
     let mut pass_start = 0;
     for (index, anchor) in anchors.iter().enumerate() {
@@ -58,6 +74,37 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             let start = (*content).max(pass_start);
             let accepted_end = end.min(pass.end);
             if start < accepted_end {
+                let (printed_end, printed) = printed_ends[pass_index];
+                let padding_start = if preserve_literal_whitespace
+                    && anchor.projection
+                        == super::super::WordProjectionPolicy::SourceLiteralWhitespace
+                    && !printed
+                {
+                    // A source literal row remains nonempty authored content
+                    // even when term_field prints no deferred SP/TAB. This
+                    // never changes native acceptance or revives rejected cells.
+                    accepted_end
+                } else {
+                    start.max(printed_end)
+                };
+                for cell in padding_start..accepted_end {
+                    if matches!(
+                        buffer.cells()[cell],
+                        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
+                    ) {
+                        let first = acceptance.scalars + buffer.projection_length(start, cell);
+                        let last = acceptance.scalars + buffer.projection_length(start, cell + 1);
+                        if first < last {
+                            if let Some(previous) = acceptance.unprinted_padding.last_mut()
+                                && previous.end == first
+                            {
+                                previous.end = last;
+                            } else {
+                                acceptance.unprinted_padding.push(first..last);
+                            }
+                        }
+                    }
+                }
                 acceptance.scalars += buffer.projection_length(start, accepted_end);
                 acceptance.native_cells = true;
                 if start == *content {

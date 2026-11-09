@@ -10,6 +10,7 @@ use mant_ir::Inline;
 pub(crate) use mant_ir::{inline_plain_text as plain_text, terms_fit_inline};
 
 pub(in crate::mandoc) mod display_tabs;
+mod equation;
 mod flow;
 mod font;
 mod generated;
@@ -193,82 +194,30 @@ fn append_inline_sequence(
     }
 }
 
-/// Generated equations have no inline child stream to execute.
-fn lower_equation_node(node: &Node) -> Vec<Inline> {
-    node.equation
-        .as_ref()
-        .map(crate::mandoc::equations::expression_from_ast)
-        .map(|expression| (expression.readable_text(), expression))
-        .filter(|(value, _)| !value.trim().is_empty())
-        .map(|(value, expression)| vec![Inline::Equation { value, expression }])
-        .unwrap_or_default()
+pub(in crate::mandoc) fn is_configuration_equation(node: &Node) -> bool {
+    node.kind == NodeKind::Equation
+        && node.equation.as_ref().is_none_or(|equation| {
+            equation.kind == libmandoc_rs::EquationKind::Text
+                && equation.text.is_none()
+                && equation.children.is_empty()
+                && equation.position == libmandoc_rs::EquationPosition::None
+                && equation.top.is_none()
+                && equation.bottom.is_none()
+        })
 }
 
 fn append_equation_node(builder: &mut InlineBuilder, node: &Node, next: Option<&Node>) {
-    // print_man_node()/print_mdoc_node() join an equation and its
-    // suffix using NODE_LINE, including escaped and quoted text.
+    // Native node entry/post surround the actual eqn_box word stream once.
     if !node.flags.line_start {
         builder.tighten_next_boundary();
     }
-    builder.append(lower_equation_node(node));
-    if node
-        .equation
-        .as_ref()
-        .is_some_and(|equation| equation_emits_words(equation, false))
-    {
-        // term_word() consumes NONEWLINE even for a quoted blank atom.
-        builder.continue_source_line(false);
+    if !is_configuration_equation(node) {
+        equation::append_owned(builder, node);
     }
-    // eqn_term.c::term_eqn clears NOSPACE even without a protected
-    // suffix word. Only the actual next sibling may arm it again.
     builder.release_next_boundary();
     if next.is_some_and(|next| !next.flags.line_start) {
         builder.tighten_next_boundary();
     }
-}
-
-/// `eqn_term.c::eqn_box` emits words for atoms, operations, decorations and
-/// generated fences. An empty equation root emits none, while an empty/blank
-/// atom is still a `term_word` call and consumes NONEWLINE. Keep this source
-/// execution fact independent of the projection's printable content.
-fn equation_emits_words(equation: &libmandoc_rs::EquationBox, has_sibling: bool) -> bool {
-    use libmandoc_rs::{EquationKind, EquationPosition};
-    equation.text.is_some()
-        || equation.top.is_some()
-        || equation.bottom.is_some()
-        || equation.kind == EquationKind::Subexpression
-        || equation.position == EquationPosition::Sqrt
-        || (equation.kind == EquationKind::List && equation.expected_args > 1)
-        || (equation.kind == EquationKind::Pile && has_sibling)
-        || {
-            // eqn_term.c skips a matrix's column-list wrapper and each
-            // singleton pile-row wrapper before recursively visiting boxes.
-            let children = if equation.kind == EquationKind::Matrix {
-                equation
-                    .children
-                    .first()
-                    .filter(|child| child.kind == EquationKind::List && child.expected_args > 1)
-                    .map_or(equation.children.as_slice(), |child| {
-                        child.children.as_slice()
-                    })
-            } else {
-                &equation.children
-            };
-            children.iter().any(|child| {
-                if equation.kind == EquationKind::Pile
-                    && child.kind == EquationKind::List
-                    && child.expected_args > 1
-                    && child.actual_args == 1
-                {
-                    child
-                        .children
-                        .first()
-                        .is_some_and(|first| equation_emits_words(first, child.children.len() > 1))
-                } else {
-                    equation_emits_words(child, children.len() > 1)
-                }
-            })
-        }
 }
 
 /// Execute mdoc `.In` delimiters and operands in one formatter stream before

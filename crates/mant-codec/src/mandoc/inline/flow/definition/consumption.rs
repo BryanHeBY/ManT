@@ -137,6 +137,7 @@ impl InlineBuilder {
         if let FlushReceipt::Accepted { passes, .. } = receipt {
             if !owner_boundary {
                 self.project_accepted_field_passes(passes);
+                self.project_unprinted_accepted_field_padding(passes);
             }
             self.definition_state_mut().hang_row.field_discarded = false;
             self.project_completed_empty_passes(&empty_pass_ends);
@@ -168,6 +169,7 @@ impl InlineBuilder {
             &definition.field_buffer,
             &definition.field_word_anchors,
             passes,
+            false,
         );
         let accepted_owned_prefix = !passes.is_empty()
             && definition
@@ -211,6 +213,41 @@ impl InlineBuilder {
             no_break_flush,
             native.map(|device| device.ends_row),
         )
+    }
+
+    /// Acceptance by `term_fill` leaves `term_field`'s deferred tail unprinted.
+    /// Consume that same native scalar receipt on real field flushes.
+    fn project_unprinted_accepted_field_padding(
+        &mut self,
+        passes: &[super::super::field_buffer::FillPass],
+    ) {
+        let definition = self.execution.definition.as_ref().expect("native field");
+        let mut pass_start = definition.field_buffer.resume_offset();
+        let unprinted_padding = passes.iter().any(|pass| {
+            let unprinted = definition
+                .field_buffer
+                .has_unprinted_padding(pass_start, pass.end);
+            pass_start = pass.end;
+            unprinted
+        });
+        if !unprinted_padding {
+            return;
+        }
+        let accepted = super::super::output::native_passes::accepted_owner_lengths(
+            &definition.field_buffer,
+            &definition.field_word_anchors,
+            passes,
+            true,
+        );
+        let start = self
+            .execution
+            .author_execution
+            .as_ref()
+            .map_or(0, |author| author.field_output_start)
+            .min(self.nodes.len());
+        let mut output = self.nodes.split_off(start);
+        super::super::output::split::retain_native_field_owners(&mut output, &accepted);
+        self.nodes.extend(output);
     }
 
     /// Observe only authored loop endlines of this exact flush. Captured
@@ -653,6 +690,56 @@ mod tests {
             assert!(passes.len() > 1, "{word:?} must exercise multiple passes");
             assert!(!receipt_has_authored_loop_rows(&receipt), "{word:?}");
         }
+    }
+
+    #[test]
+    fn accepted_definition_fields_drop_only_unprinted_native_padding() {
+        use crate::mandoc::formatter::AuthorFlow;
+
+        // The exact TP TAG / nf / `A \\&` / B source ran all five
+        // pristine profiles first. pre_TP/post_TP route this BODY through
+        // the same term_field:389-427 deferred-blank printing rule.
+        let mut builder = InlineBuilder::new();
+        builder.inherit_author_execution_with_effect(
+            AuthorFlow::default(),
+            false,
+            AuthorBreakEffect::Field {
+                gap_cells: 0,
+                body_width_columns: 78,
+                field_width_columns: 78,
+                flags: FieldFlags::inset(),
+            },
+        );
+        builder.execution.no_fill_word_active = true;
+        crate::mandoc::inline::word_input::append_normalized_word(&mut builder, "A \\&");
+        assert!(!builder.discard_unprinted_definition_field_output());
+        assert_eq!(mant_ir::inline_plain_text(&builder.nodes), "A");
+    }
+
+    #[test]
+    fn accepted_padding_close_follows_its_empty_word_witness() {
+        use crate::mandoc::formatter::AuthorFlow;
+
+        // The exact empty-tab-1.1 column source ran all five pristine
+        // profiles first. Its five-column field accepts TAB but term_field
+        // prints no padding; the tail endline still closes that empty row
+        // (term.c:327-338,389-427,250-253; mdoc_term.c:946-948).
+        let mut builder = InlineBuilder::new();
+        builder.inherit_author_execution_with_effect(
+            AuthorFlow::default(),
+            false,
+            AuthorBreakEffect::Field {
+                gap_cells: 1,
+                body_width_columns: 5,
+                field_width_columns: 5,
+                flags: FieldFlags::column(false),
+            },
+        );
+        crate::mandoc::inline::word_input::append_normalized_word(&mut builder, "\t");
+        builder.hard_break();
+        assert_eq!(mant_ir::inline_plain_text(&builder.nodes), "\n");
+        assert_eq!(builder.completed_empty_rows(), 1);
+        assert!(builder.closed_graph_tail().is_closed());
     }
 
     #[test]

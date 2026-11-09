@@ -41,6 +41,13 @@ pub(in crate::mandoc) use output::{
     trailing_completed_row_origins,
 };
 
+/// Reading projection of one executed formatter word.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::mandoc) enum WordProjectionPolicy {
+    Printed,
+    SourceLiteralWhitespace,
+}
+
 /// A stable source-word range plus the device cells its IR owner already
 /// represents. Padding never enters the native input buffer.
 #[derive(Clone, Debug)]
@@ -52,6 +59,9 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
     /// The word's generated field prefix was written before its content
     /// marker. This receipt owns positioning, not a native buffer scalar.
     projected_field_prefix: bool,
+    /// A raw no-fill source line retains its authored whitespace even when
+    /// the accepted native pass has no printed graph. Generated words do not.
+    projection: WordProjectionPolicy,
 }
 
 pub(in crate::mandoc) struct InlineBuilder {

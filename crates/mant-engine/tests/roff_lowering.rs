@@ -50,6 +50,8 @@ mod driver;
 mod empty_word_columns;
 #[path = "roff_lowering/entry_forms.rs"]
 mod entry_forms;
+#[path = "roff_lowering/equation_execution.rs"]
+mod equation_execution;
 #[path = "roff_lowering/equation_json_depth.rs"]
 mod equation_json_depth;
 #[path = "roff_lowering/equation_quotes.rs"]

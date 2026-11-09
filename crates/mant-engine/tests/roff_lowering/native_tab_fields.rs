@@ -318,7 +318,8 @@ fn generated_inset_separator_permission_rejects_authored_nonbreaking_blanks() {
 #[test]
 fn native_empty_tab_fields_keep_their_physical_empty_row_receipts() {
     // These exact sources ran pristine ASCII/UTF-8(width78)/HTML/tree/lint
-    // first. term_fill() rejects a TAB-only field, but its final vbr and
+    // first. term_fill() accepts a TAB-only field, but term_field() leaves
+    // its deferred padding unprinted. Its final vbr and
     // trailspace still run the term.c:250-253 row-tail comparison. The
     // column BODY post calls term_flushln() (mdoc_term.c:946-948), so width1
     // owns a real empty row; width4/8 leave the row open for RIGHT. No raw

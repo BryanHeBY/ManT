@@ -517,8 +517,15 @@ Plain-text mathematical descriptions and code examples
 retain their supplied content. Markdown math reimport retains source spelling
 and follows the unsupported-syntax rules below.
 
-Low-level roff controls inside quoted eqn atoms, such as `\c`, currently
-have approximate line-continuation behavior in normalized formula layout.
+Inline eqn operands share the surrounding source word execution. Pending
+characters, word spacing, author blanks and source hard rows are settled
+before a complete mathematical owner is exported. When actual overstrike,
+rejected fields or an internal hard row fragment a formula, its accepted
+reading remains available with a `manual.equation-execution-coverage`
+diagnostic. Low-level controls inside quoted eqn atoms can require this reading
+projection in place of active mathematical markup.
+Line and continuation behavior for controls such as `\c` and `\p` inside
+quoted eqn atoms remains an approximation boundary.
 
 Target conversion reports can include unknown atom roles, font approximations
 and literal spacing. Unicode fallback needs suitable fonts and may generate

@@ -6,12 +6,14 @@ use std::{
     rc::Rc,
 };
 
-use mant_ir::{Block, Inline, LinkTarget, Section, SourceSpan};
+use mant_ir::{Block, EquationExpression, Inline, LinkTarget, Section, SourceSpan};
 
 use super::markers;
 
 mod candidates;
 use candidates::{finish_source_candidates, protect_source_label_candidates};
+mod equations;
+use equations::EquationDestination;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(in crate::mandoc) struct AnnotationKey(u32);
@@ -40,7 +42,13 @@ pub(in crate::mandoc) struct RegisteredAnnotation {
 #[derive(Debug)]
 struct Destination {
     key: AnnotationKey,
-    target: LinkTarget,
+    payload: DestinationPayload,
+}
+
+#[derive(Debug)]
+enum DestinationPayload {
+    Link(LinkTarget),
+    Equation(Box<EquationDestination>),
 }
 
 mod projection;
@@ -117,14 +125,17 @@ impl AnnotationPool {
             .borrow()
             .targets
             .get(key)
-            .map(|destination| read(&destination.target))
+            .and_then(|destination| match &destination.payload {
+                DestinationPayload::Link(target) => Some(read(target)),
+                DestinationPayload::Equation(_) => None,
+            })
     }
 
     pub(in crate::mandoc) fn register(&self, target: LinkTarget) -> RegisteredAnnotation {
         // The allocator is operation-local and also shared by speculative
         // forks. A discarded fork can leave a vacant key, never reuse a
         // live source occurrence's identity. No key reaches public IR.
-        let mut destinations = self.0.borrow_mut();
+        let destinations = self.0.borrow();
         if let LinkTarget::External { uri } = &target
             && let Some(destination) = destinations.targets.get(uri)
         {
@@ -133,6 +144,71 @@ impl AnnotationPool {
                 target,
             };
         }
+        drop(destinations);
+        #[cfg(test)]
+        super::metrics::note(|counts| {
+            counts.registered += 1;
+            counts.registered_bytes += target_bytes(&target);
+        });
+        self.insert_destination(DestinationPayload::Link(target))
+    }
+
+    pub(in crate::mandoc) fn register_equation(
+        &self,
+        expression: EquationExpression,
+        source: Option<SourceSpan>,
+    ) -> RegisteredAnnotation {
+        self.insert_destination(DestinationPayload::Equation(Box::new(
+            EquationDestination::new(expression, source),
+        )))
+    }
+
+    pub(in crate::mandoc) fn record_equation_projection(
+        &self,
+        key: AnnotationKey,
+        children: &[Inline],
+        complete: bool,
+    ) {
+        let mut destinations = self.0.borrow_mut();
+        if let Some(Destination {
+            payload: DestinationPayload::Equation(equation),
+            ..
+        }) = destinations.targets.get_mut(&markers::target_key(key))
+        {
+            equation.record(children, complete);
+        }
+    }
+
+    pub(in crate::mandoc) fn mark_equation_incomplete(&self, key: AnnotationKey) {
+        let mut destinations = self.0.borrow_mut();
+        if let Some(Destination {
+            payload: DestinationPayload::Equation(equation),
+            ..
+        }) = destinations.targets.get_mut(&markers::target_key(key))
+        {
+            equation.mark_incomplete();
+        }
+    }
+
+    pub(in crate::mandoc) fn record_equation_deferred(
+        &self,
+        key: AnnotationKey,
+        children: &[Inline],
+    ) {
+        let mut destinations = self.0.borrow_mut();
+        if let Some(Destination {
+            payload: DestinationPayload::Equation(equation),
+            ..
+        }) = destinations.targets.get_mut(&markers::target_key(key))
+        {
+            equation.record_deferred(children);
+        }
+    }
+
+    fn insert_destination(&self, payload: DestinationPayload) -> RegisteredAnnotation {
+        // Only this occurrence owns the equation tree or destination. Native
+        // word splits and deferred glyphs carry the short private key.
+        let mut destinations = self.0.borrow_mut();
         let id =
             AnnotationKey(u32::try_from(destinations.next).expect("bounded source occurrences"));
         let key = markers::target_key(id);
@@ -140,14 +216,9 @@ impl AnnotationPool {
             .next
             .checked_add(1)
             .expect("bounded authored annotations");
-        #[cfg(test)]
-        super::metrics::note(|counts| {
-            counts.registered += 1;
-            counts.registered_bytes += target_bytes(&target);
-        });
         destinations
             .targets
-            .insert(key.clone(), Destination { key: id, target });
+            .insert(key.clone(), Destination { key: id, payload });
         RegisteredAnnotation {
             key: id,
             target: LinkTarget::External { uri: key },
@@ -160,6 +231,7 @@ impl AnnotationPool {
         let has_source_candidates = destinations.source_candidates > 0;
         drop(destinations);
         if !deferred {
+            self.check_local_equation_carriers(nodes);
             self.finish_inline_root(nodes, has_source_candidates);
         }
     }
@@ -180,14 +252,16 @@ impl AnnotationPool {
             return;
         };
         let mut destinations = self.0.borrow_mut();
-        if let Some(key) = destinations
-            .targets
-            .get(uri)
-            .map(|destination| destination.key)
-        {
-            let first = destinations.reduced.entry(key).or_insert(None);
-            *first = first.or(source);
+        let Some(destination) = destinations.targets.get_mut(uri) else {
+            return;
+        };
+        if let DestinationPayload::Equation(equation) = &mut destination.payload {
+            equation.mark_incomplete();
+            return;
         }
+        let key = destination.key;
+        let first = destinations.reduced.entry(key).or_insert(None);
+        *first = first.or(source);
     }
 
     pub(in crate::mandoc) fn finish(
@@ -200,6 +274,7 @@ impl AnnotationPool {
         if self.0.borrow().targets.is_empty() && !has_source_candidates {
             return;
         }
+        self.check_document_equation_carriers(blocks, sections);
         evidence.publish_annotations(blocks, sections, |nodes| {
             self.finish_inline_root(nodes, has_source_candidates)
         });
@@ -232,13 +307,15 @@ impl AnnotationPool {
     pub(in crate::mandoc) fn take_diagnostics(&self) -> Vec<mant_ir::Diagnostic> {
         let mut reduced: Vec<_> = self.0.borrow_mut().reduced.drain().collect();
         reduced.sort_unstable_by_key(|(key, _)| key.0);
-        reduced.into_iter().map(|(_, source)| mant_ir::Diagnostic {
+        let mut diagnostics: Vec<_> = reduced.into_iter().map(|(_, source)| mant_ir::Diagnostic {
             level: mant_ir::DiagnosticLevel::Warning,
             impact: mant_ir::DiagnosticImpact::SemanticCoverage,
             code: Some("manual.annotation-coverage".into()),
             message: "a source annotation could not include all its accepted members in one owner; its initial identity and all accepted content were retained".into(),
             source,
-        }).collect()
+        }).collect();
+        self.take_equation_diagnostics(&mut diagnostics);
+        diagnostics
     }
 
     fn publish(&self, nodes: &mut Vec<Inline>, compact: bool, nonempty: &HashSet<String>) {
@@ -263,6 +340,9 @@ impl AnnotationPool {
             } = &mut node
                 && self.0.borrow().targets.contains_key(uri)
             {
+                if self.publish_equation(uri, children, &mut output, nonempty) {
+                    continue;
+                }
                 // An empty provisional receipt must not precede its accepted
                 // label as another public occurrence in this same root.
                 let has_content = has_scalar(children);
@@ -270,7 +350,7 @@ impl AnnotationPool {
                     output.append(children);
                     continue;
                 }
-                let foreign = children.iter().position(|child| matches!(child, Inline::Link { target: LinkTarget::External { uri: other }, .. } if markers::is_target(other) && other != uri));
+                let foreign = children.iter().position(|child| matches!(child, Inline::Link { target: LinkTarget::External { uri: other }, .. } if other != uri && self.is_link_destination(other)));
                 let cut = foreign.map(|at| {
                     let Inline::Link { target, .. } = &children[at] else { unreachable!() };
                     let marker = markers::entry_marker(target);
@@ -284,12 +364,15 @@ impl AnnotationPool {
                     destinations.reduced.entry(key).or_insert(None);
                 }
                 if destinations.published.insert(uri.clone()) {
-                    let target = destinations
+                    let DestinationPayload::Link(target) = &destinations
                         .targets
                         .get(uri)
                         .expect("live annotation")
-                        .target
-                        .clone();
+                        .payload
+                    else {
+                        unreachable!("equations publish separately")
+                    };
+                    let target = target.clone();
                     #[cfg(test)]
                     super::metrics::note(|counts| {
                         counts.published += 1;
@@ -320,5 +403,13 @@ impl AnnotationPool {
             output.push(node);
         }
         *nodes = output;
+    }
+
+    fn is_link_destination(&self, uri: &str) -> bool {
+        self.0
+            .borrow()
+            .targets
+            .get(uri)
+            .is_some_and(|destination| matches!(destination.payload, DestinationPayload::Link(_)))
     }
 }

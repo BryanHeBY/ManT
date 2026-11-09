@@ -1,5 +1,6 @@
 //! Generated words and pending glyphs execute in the live formatter.
 
+use super::super::WordProjectionPolicy;
 use super::super::field_buffer::FieldWrite;
 use super::super::{
     FormatterColumn, Inline, InlineBuilder, KeepPhase, NativeWordSpacing, PendingBoundary,
@@ -69,7 +70,13 @@ impl InlineBuilder {
         // term_word("") updates registers but writes no operand cell. Its
         // automatic separator, if any, is recorded independently; the word
         // event itself cannot manufacture a no-fill physical row.
-        self.append_word_with_literal_row(Vec::new(), false, TrailingOutput::None, 0);
+        self.append_word_with_literal_row(
+            Vec::new(),
+            false,
+            TrailingOutput::None,
+            0,
+            WordProjectionPolicy::Printed,
+        );
     }
 
     /// Generated glyphs use the effective font just like authored text, but

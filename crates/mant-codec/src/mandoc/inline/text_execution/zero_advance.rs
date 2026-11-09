@@ -60,7 +60,7 @@ struct OwnedGlyph {
 type ProjectionRun = (Option<u64>, u64, bool, Option<Arc<Decoration>>);
 
 impl ZeroAdvanceState {
-    pub(super) fn is_armed(&self) -> bool {
+    pub(in crate::mandoc) fn is_armed(&self) -> bool {
         self.machine.is_armed()
     }
     pub(in crate::mandoc) const fn new() -> Self {

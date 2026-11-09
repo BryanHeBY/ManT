@@ -162,6 +162,15 @@ Quoted POSIX notation such as `e"^"` and ordinary underscores stays literal.
 The producer preserves parsed `sup`/`sub` operations as structured scripts.
 Plain-text or literal mathematical descriptions retain their source content.
 
+Native inline formulas enter the same word lifecycle as surrounding text.
+The private eqn adapter visits atoms, generated fences, operators and
+decorations in native order, with source-word reference inference disabled.
+Formula structure is published after row/field acceptance proves one complete
+owner. Actual overwrites or internal hard rows retain accepted text, existing
+links and source boundaries with a `manual.equation-execution-coverage`
+diagnostic. Empty atoms and authored SP/NBSP payloads retain their executed
+effects independently of configuration-only roots.
+
 Unknown atom roles, opaque structure, unsupported target symbols/fonts,
 custom LaTeX fences/decorations, irregular matrices and unrepresentable
 characters or whitespace produce expression-local loss paths. Strict policy

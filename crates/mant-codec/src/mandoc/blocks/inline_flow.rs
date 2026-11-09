@@ -4,13 +4,12 @@ use crate::mandoc::adjacency::Siblings;
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 impl super::BlockLowerer<'_, '_> {
-    pub(super) fn push_empty_equation(&mut self, node: &Node, siblings: Siblings<'_>) -> bool {
-        if node.kind == NodeKind::Equation
-            && node
-                .equation
-                .as_ref()
-                .is_none_or(|equation| equation.readable_text().trim().is_empty())
-        {
+    pub(super) fn push_configuration_equation(
+        &mut self,
+        node: &Node,
+        siblings: Siblings<'_>,
+    ) -> bool {
+        if crate::mandoc::inline::is_configuration_equation(node) {
             // Even a configuration-only or blank equation executes
             // term_eqn's spacing post on a live row. At an empty field
             // origin its automatic initial blank is layout padding.

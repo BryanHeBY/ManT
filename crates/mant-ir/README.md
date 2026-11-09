@@ -75,6 +75,15 @@ an input line still belongs to the surrounding paragraph in filled text.
 Native delimiter-origin evidence stays in the source producer and its owned
 syntax snapshot. Consumers receive the resolved content relationship.
 
+Formula operands participate in the producer's shared word execution before
+their mathematical owner is published. Pending glyphs retain their original
+text/link ownership, and source hard rows and blank-word effects are resolved
+alongside ordinary prose. A complete accepted formula retains one expression
+and its checked readable value. When actual overstrike, rejection or internal
+hard rows fragment that owner, the producer retains the accepted reading and
+reports semantic coverage. Native word receipts and private occurrence keys
+remain within the lowering operation.
+
 Native compatibility is resolved before publication: equation parser counters
 become mathematical sequences/groups, not IR fields. A table's optional
 `max_alignment_padding_columns` describes a resolved alignment region; its

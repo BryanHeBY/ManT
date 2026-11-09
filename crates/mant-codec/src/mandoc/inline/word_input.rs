@@ -2,7 +2,7 @@
 use libmandoc_rs::Node;
 use mant_ir::Inline;
 
-use super::{InlineBuilder, font};
+use super::{InlineBuilder, flow::WordProjectionPolicy, font};
 use crate::mandoc::roff_escape::{RoffInlineEvent, decode, is_formatter_word_blank};
 
 pub(super) fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
@@ -27,13 +27,29 @@ pub(in crate::mandoc) fn append_normalized_word(builder: &mut InlineBuilder, sou
     append_roff_word(builder, source, WordSource::NormalizedOperand);
 }
 
+pub(super) fn append_equation_word(builder: &mut InlineBuilder, source: &str) -> bool {
+    append_roff_word(builder, source, WordSource::EquationOperand)
+}
+
 #[derive(Clone, Copy)]
 enum WordSource<'a> {
     Text(&'a Node),
     NormalizedOperand,
+    EquationOperand,
 }
 
-fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSource<'_>) {
+impl WordSource<'_> {
+    fn projection(self) -> WordProjectionPolicy {
+        match self {
+            Self::Text(node) if node.flags.no_fill && node.flags.line_start => {
+                WordProjectionPolicy::SourceLiteralWhitespace
+            }
+            _ => WordProjectionPolicy::Printed,
+        }
+    }
+}
+
+fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSource<'_>) -> bool {
     let events = decode(source);
     // `term_word()` consumes its inter-word boundary even for an explicit
     // empty operand. That word event can resolve a preceding `\\z` glyph
@@ -82,6 +98,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     let recognize_generated_references = match origin {
         WordSource::Text(node) => !node.flags.no_fill,
         WordSource::NormalizedOperand => !builder.execution.no_fill_word_active,
+        WordSource::EquationOperand => false,
     };
     let execution = font::parse_roff_text_with_zero_advance(
         source,
@@ -127,6 +144,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         occupies_literal_row,
         execution.trailing_output,
         execution.projected_word_separator,
+        origin.projection(),
     );
     if execution.definitive_reject {
         builder.note_definitive_word_rejection();
@@ -149,6 +167,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         builder.tighten_next_boundary();
     }
     builder.continue_source_line(continues_line);
+    !execution.definitive_reject && !builder.execution.wipe_remainder
 }
 
 /// Whether a decoded word begins with a `\p` marker whose following blank

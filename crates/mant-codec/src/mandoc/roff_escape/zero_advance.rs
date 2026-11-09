@@ -68,6 +68,12 @@ impl<T> ZeroAdvanceMachine<T> {
         }
     }
 
+    /// Borrow the buffered glyph and its source-order slot among recoveries.
+    pub(in crate::mandoc) fn pending_projection(&self) -> Option<(usize, &T)> {
+        self.pending_ref()
+            .map(|glyph| (self.recoveries_before_pending, glyph))
+    }
+
     /// Change projection metadata without consuming either backtracking flag.
     pub(in crate::mandoc) fn pending_mut(&mut self) -> Option<&mut T> {
         match &mut self.pending {

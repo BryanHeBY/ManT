@@ -1,3 +1,4 @@
+use super::super::WordProjectionPolicy;
 use super::super::{Inline, InlineBuilder, PendingBoundary};
 use super::native_passes::split_native_field_passes;
 use std::collections::BTreeMap;
@@ -17,6 +18,7 @@ impl InlineBuilder {
         &mut self,
         incoming: &[Inline],
         boundary: PendingBoundary,
+        projection: WordProjectionPolicy,
     ) -> WordPassProjection {
         if self.execution.native_word_owner.is_none() {
             self.begin_native_word_owner();
@@ -37,7 +39,13 @@ impl InlineBuilder {
             // paragraph is a degenerate flush unit (term.c runs one
             // term_fill() over `tcol->buf` regardless of authorship), so
             // its words take the same marker/pass/rejection arithmetic.
-            return self.record_plain_unit_word(incoming, native_boundary, native_writes, sentence);
+            return self.record_plain_unit_word(
+                incoming,
+                native_boundary,
+                native_writes,
+                sentence,
+                projection,
+            );
         }
         let materialized_field_padding = self.projected_native_field_padding();
         let Some(definition) = &mut self.execution.definition else {
@@ -94,6 +102,7 @@ impl InlineBuilder {
                 }
                 .max(materialized_field_padding),
                 projected_field_prefix: false,
+                projection,
             });
         let projected = super::super::super::plain_text(incoming);
         let trimmed = projected.trim_end_matches(' ');
@@ -135,6 +144,7 @@ impl InlineBuilder {
         native_boundary: PendingBoundary,
         native_writes: Option<Vec<super::super::field_buffer::FieldWrite>>,
         sentence: bool,
+        projection: WordProjectionPolicy,
     ) -> WordPassProjection {
         // term_flushln() retired the old native unit before this word.
         // The IR destination may since have changed (D1/Dl, heading, link
@@ -177,6 +187,7 @@ impl InlineBuilder {
                 },
                 projected_device_padding: 0,
                 projected_field_prefix: false,
+                projection,
             });
         let native_separator = self
             .execution

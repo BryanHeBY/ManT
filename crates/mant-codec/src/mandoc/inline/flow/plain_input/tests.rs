@@ -307,3 +307,92 @@ fn literal_tail_queries_stop_before_completed_row_history() {
         assert_eq!(visits, 3);
     }
 }
+
+#[test]
+fn literal_source_whitespace_retains_its_accepted_nonprinting_row() {
+    fn initial_literal(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::Node> {
+        if node.kind == libmandoc_rs::NodeKind::Text && node.line == 5 {
+            Some(node)
+        } else {
+            node.children.iter().find_map(initial_literal)
+        }
+    }
+
+    // Both complete literal-leading-rows fixtures ran pristine ASCII,
+    // UTF-8, HTML, tree and lint first. term_field()389-427 prints neither
+    // SP nor TAB before NBRZW. The approved literal reading contract keeps
+    // these accepted authored source scalars despite that device omission.
+    // Generated formatter operands retain the printed projection.
+    for (entry, exit, authored) in [("nf", "fi", "  "), ("EX", "EE", "\t")] {
+        let source = format!(
+            ".TH LITERAL-ROWS 1 \"October 16, 2026\"\n.SH DESCRIPTION\nBEFORE\n.{entry}\n{authored}\\&\nLINE_A\n.{exit}\nAFTER\n.SH NEXT\nEND\n"
+        );
+        let parsed = libmandoc_rs::Parser::default()
+            .parse_bytes("literal-whitespace.1", source.as_bytes())
+            .unwrap();
+        let node = initial_literal(&parsed.document.root).unwrap();
+        assert!(node.flags.no_fill && node.flags.line_start);
+        let mut builder = InlineBuilder::new();
+        crate::mandoc::inline::word_input::append_text_node(&mut builder, node);
+        let outcome = builder.retire_plain_flush_unit_with_tail();
+        assert!(!outcome.rejected());
+        assert!(outcome.closes_unprinted_row());
+        assert_eq!(mant_ir::inline_plain_text(&builder.nodes), authored);
+
+        let mut generated = InlineBuilder::new();
+        generated.execution.no_fill_word_active = true;
+        crate::mandoc::inline::word_input::append_normalized_word(
+            &mut generated,
+            &format!("{authored}\\&"),
+        );
+        generated.retire_plain_flush_unit_with_tail();
+        assert_eq!(mant_ir::inline_plain_text(&generated.nodes), "");
+    }
+}
+
+#[test]
+fn accepted_zero_width_tails_do_not_publish_deferred_native_padding() {
+    // Each exact `.nf` source word followed by B ran pristine
+    // ASCII/UTF-8/HTML/tree/lint before this assertion. term.c:340-365
+    // accepts NBRZW, but term_field:389-427 never prints its deferred
+    // tail padding. Unicode NBSP is an actual encoded graph and survives.
+    for (source, expected) in [
+        ("A \\&", "A"),
+        ("A  \\&", "A"),
+        ("A\t\\&", "A"),
+        ("  \\&", ""),
+        ("A \\&B", "A B"),
+        ("A\\~\\&", "A\u{a0}"),
+    ] {
+        let mut builder = InlineBuilder::new();
+        builder.execution.no_fill_word_active = true;
+        crate::mandoc::inline::word_input::append_normalized_word(&mut builder, source);
+        let outcome = builder.retire_plain_flush_unit_with_tail();
+        assert!(!outcome.rejected(), "{source:?}");
+        assert_eq!(
+            mant_ir::inline_plain_text(&builder.nodes),
+            expected,
+            "{source:?}"
+        );
+        assert_eq!(outcome.closes_unprinted_row(), expected.is_empty());
+        assert!(InlineBuilder::has_literal_tail_row(&builder.nodes));
+    }
+}
+
+#[test]
+fn native_padding_receipts_preserve_independent_recovery_spelling() {
+    // These exact sources ran all five pristine profiles first. The
+    // unknown special buffers NBRZW rather than a printed glyph. The
+    // established recovery projection retains its spelling independently
+    // of the ordinary blanks term_field:389-427 never printed.
+    for source in ["A \\[unknownname]", "A \\[unknownname] \\&"] {
+        let mut builder = InlineBuilder::new();
+        builder.execution.no_fill_word_active = true;
+        crate::mandoc::inline::word_input::append_normalized_word(&mut builder, source);
+        builder.retire_plain_flush_unit();
+        assert_eq!(
+            mant_ir::inline_plain_text(&builder.nodes),
+            "A\\[unknownname]"
+        );
+    }
+}

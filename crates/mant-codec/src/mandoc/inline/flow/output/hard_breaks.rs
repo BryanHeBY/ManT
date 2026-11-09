@@ -160,12 +160,8 @@ impl InlineBuilder {
         // still settles through the ordinary flush.
         self.flush_zero_advance();
         self.external_head_row_pending = false;
-        if plain_flush_rejection {
-            // This real term_newln() finished a rejected nbr=0 pass. Its
-            // row is complete now, even if another native unit starts before
-            // the paragraph owner drains (term.c:143-146,250-253).
-            self.record_completed_rows(1, origin);
-        } else if unprinted_field_tail
+        let completed_unprinted_row = plain_flush_rejection
+            || unprinted_field_tail
             || plain_flush.closes_unprinted_row()
             || !self.in_definition_field()
                 && self.execution.completed_vertical_rows > 0
@@ -175,14 +171,7 @@ impl InlineBuilder {
                     .iter()
                     .rev()
                     .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-                    .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node)))
-        {
-            // term_newln() commits a whitespace-only formatter row even
-            // though term_fill() prints no glyphs. When a later empty TEXT
-            // requests another term_vspace(), that committed row must remain
-            // in the completed-row count after formatter_column resets.
-            self.record_completed_rows(1, origin);
-        }
+                    .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node)));
         let current_row_has_printable = self
             .nodes
             .iter()
@@ -201,6 +190,12 @@ impl InlineBuilder {
             self.nodes.push(Inline::Text {
                 value: String::new(),
             });
+        }
+        if completed_unprinted_row {
+            // term_field() can accept only deferred padding without printing
+            // it. Its empty-word witness belongs before the same row's real
+            // endline (term.c:389-427,250-253), so it cannot reopen that close.
+            self.record_completed_rows(1, origin);
         }
         self.finish_hard_break_projection(
             exited_definition_row,

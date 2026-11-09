@@ -181,7 +181,7 @@ impl BlockLowerer<'_, '_> {
                 .queue_targets(structural_targets, source_span(node));
             return;
         }
-        if self.push_empty_equation(node, siblings) {
+        if self.push_configuration_equation(node, siblings) {
             return;
         }
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Rs)) {

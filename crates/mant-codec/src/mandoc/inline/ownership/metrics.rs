@@ -11,12 +11,14 @@ pub(in crate::mandoc) struct Counts {
     pub runs: usize,
     pub held: usize,
     pub normalization: usize,
+    pub previewed: usize,
 }
 
 std::thread_local! {
     static COUNTS: std::cell::Cell<Counts> = const { std::cell::Cell::new(Counts {
         registered: 0, registered_bytes: 0, published: 0, published_bytes: 0,
         bound: 0, decorations: 0, released: 0, runs: 0, held: 0, normalization: 0,
+        previewed: 0,
     }) };
 }
 

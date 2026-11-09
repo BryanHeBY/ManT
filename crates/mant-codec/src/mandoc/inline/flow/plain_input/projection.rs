@@ -73,7 +73,7 @@ pub(super) fn project_rejected_plain_prefix(
 ) {
     let accepted_owned_prefix =
         !passes.is_empty() && anchors.iter().any(|anchor| anchor.start < rejected_from);
-    retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start);
+    retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start, false);
     if literal_rows {
         reproject_plain_literal_loops(nodes, buffer, anchors, passes, output_start);
     } else if accepted_owned_prefix
@@ -97,7 +97,7 @@ pub(super) fn retain_blank_only_unit_output(
     output_start: usize,
     row_origin: super::super::output::CompletedRowOrigin,
 ) {
-    retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start);
+    retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start, false);
     if row_origin == super::super::output::CompletedRowOrigin::LiteralText
         && !InlineBuilder::has_literal_tail_row(&nodes[output_start.min(nodes.len())..])
     {
@@ -297,11 +297,18 @@ pub(super) fn retain_accepted_unit_output(
     // An accepted unit can still leave ordinary trailing blanks outside
     // its final nbr. Use exactly the same native ownership intervals as
     // rejection; provisional IR spaces do not prove printed native content.
-    if passes
-        .last()
-        .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)
+    let mut pass_start = buffer.resume_offset();
+    let unprinted_padding = passes.iter().any(|pass| {
+        let unprinted = buffer.has_unprinted_padding(pass_start, pass.end);
+        pass_start = pass.end;
+        unprinted
+    });
+    if unprinted_padding
+        || passes
+            .last()
+            .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)
     {
-        retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start);
+        retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start, true);
     }
     let pending_start = buffer.resume_offset();
     let accepted_empty_tail = passes.last().is_some_and(|pass| {
@@ -332,9 +339,14 @@ fn retain_unit_owner_ranges(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
+    preserve_literal_whitespace: bool,
 ) {
-    let accepted_owners =
-        super::super::output::native_passes::accepted_owner_lengths(buffer, anchors, passes);
+    let accepted_owners = super::super::output::native_passes::accepted_owner_lengths(
+        buffer,
+        anchors,
+        passes,
+        preserve_literal_whitespace,
+    );
     let mut pending_output = nodes.split_off(output_start);
     let owned = crate::mandoc::inline::flow::output::split::retain_native_field_owners(
         &mut pending_output,

@@ -1,6 +1,7 @@
 //! Annotate already executed output without creating formatter state.
 
 use super::super::super::links;
+use super::super::WordProjectionPolicy;
 use super::{
     FilledBoundary, Font, INTERNAL_LINK_SPLIT, INTERNAL_OUTPUT_SCOPE, Inline, InlineBuilder,
     projection,
@@ -129,6 +130,28 @@ impl InlineBuilder {
         owner: crate::mandoc::inline::ownership::annotations::AnnotationKey,
         retain_empty: bool,
         append: impl FnOnce(&mut Self),
+        wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
+    ) -> (bool, crate::mandoc::inline::ownership::OutputMembership) {
+        self.append_semantic_scope_with_entry(owner, retain_empty, true, append, wrap)
+    }
+
+    /// An equation's empty identity starts at its first actual operand.
+    /// Earlier layout markers and foreign glyphs keep their original owners.
+    pub(in crate::mandoc) fn append_semantic_word_scope(
+        &mut self,
+        owner: crate::mandoc::inline::ownership::annotations::AnnotationKey,
+        append: impl FnOnce(&mut Self),
+        wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
+    ) -> (bool, crate::mandoc::inline::ownership::OutputMembership) {
+        self.append_semantic_scope_with_entry(owner, true, false, append, wrap)
+    }
+
+    fn append_semantic_scope_with_entry(
+        &mut self,
+        owner: crate::mandoc::inline::ownership::annotations::AnnotationKey,
+        retain_empty: bool,
+        retain_entry_identity: bool,
+        append: impl FnOnce(&mut Self),
         mut wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) -> (bool, crate::mandoc::inline::ownership::OutputMembership) {
         self.execution.zero_advance.begin_output_owner();
@@ -165,7 +188,7 @@ impl InlineBuilder {
                     prefix.extend(output);
                 } else {
                     prefix.extend(children);
-                    if retain_empty && !annotated {
+                    if retain_empty && retain_entry_identity && !annotated {
                         let output = wrap(Vec::new());
                         annotated |= output
                             .iter()
@@ -190,7 +213,14 @@ impl InlineBuilder {
             FilledBoundary::SameLine => self.append(incoming),
             FilledBoundary::Word => {
                 let mut incoming = incoming;
-                self.append_at_boundary(&mut incoming, false, true, false, 0);
+                self.append_at_boundary(
+                    &mut incoming,
+                    false,
+                    true,
+                    false,
+                    0,
+                    WordProjectionPolicy::Printed,
+                );
             }
             FilledBoundary::LineBreak => {
                 self.hard_break();

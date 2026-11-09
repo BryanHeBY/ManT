@@ -1,3 +1,4 @@
+use super::super::WordProjectionPolicy;
 use super::super::{
     FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput, WordEndBreak,
     first_visible_character, has_printable_character, last_visible_character, needs_boundary_space,
@@ -28,13 +29,27 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn append(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, false, true, false, 0);
+        self.append_at_boundary(
+            &mut incoming,
+            false,
+            true,
+            false,
+            0,
+            WordProjectionPolicy::Printed,
+        );
     }
 
     /// A native text node is a word event even if decoding yields no glyphs.
     /// Unlike a target/control-only append, it consumes the pending boundary.
     pub(in crate::mandoc) fn append_word(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, true, true, false, 0);
+        self.append_at_boundary(
+            &mut incoming,
+            true,
+            true,
+            false,
+            0,
+            WordProjectionPolicy::Printed,
+        );
     }
 
     /// A decoded empty word can be a real literal row, an empty macro
@@ -46,6 +61,7 @@ impl InlineBuilder {
         occupies_row: bool,
         trailing_output: TrailingOutput,
         projected_separator: usize,
+        projection: WordProjectionPolicy,
     ) {
         self.note_produced_formatter_cell(occupies_row);
         self.append_at_boundary(
@@ -54,6 +70,7 @@ impl InlineBuilder {
             occupies_row,
             trailing_output == TrailingOutput::FixedBlank,
             projected_separator,
+            projection,
         );
         if trailing_output != TrailingOutput::None {
             self.execution.trailing_output = trailing_output;
@@ -69,6 +86,7 @@ impl InlineBuilder {
         occupies_row: bool,
         incoming_starts_with_fixed_blank: bool,
         projected_separator: usize,
+        projection: WordProjectionPolicy,
     ) {
         if incoming.is_empty() && !word {
             return;
@@ -137,7 +155,7 @@ impl InlineBuilder {
             needs_boundary_space(self.execution.last_visible_character, incoming_first)
         };
         let mut projection = if word {
-            self.record_hang_word(incoming, boundary)
+            self.record_hang_word(incoming, boundary, projection)
         } else {
             super::record::WordPassProjection::default()
         };

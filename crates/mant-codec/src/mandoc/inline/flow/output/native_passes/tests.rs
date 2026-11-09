@@ -44,6 +44,7 @@ fn accepted_owner_receipt_intersects_each_ordered_range_once() {
                 content: start,
                 projected_device_padding: 0,
                 projected_field_prefix: false,
+                projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
             });
         }
         let targets = FillTargets {
@@ -56,7 +57,7 @@ fn accepted_owner_receipt_intersects_each_ordered_range_once() {
         };
         assert_eq!(passes.len(), words);
         super::OWNER_PASS_INTERSECTIONS.with(|work| work.set(0));
-        let accepted = super::accepted_owner_lengths(&buffer, &anchors, &passes);
+        let accepted = super::accepted_owner_lengths(&buffer, &anchors, &passes, false);
         assert_eq!(accepted.len(), words + 1);
         assert_eq!(accepted[&marker("0")].scalars, 2);
         assert!(!accepted[&marker(&words.to_string())].native_cells);
