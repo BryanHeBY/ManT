@@ -100,7 +100,7 @@ impl super::BlockLowerer<'_, '_> {
         true
     }
 
-    pub(super) fn consume_control_or_empty_block(&mut self, node: &Node) -> bool {
+    pub(super) fn consume_control(&mut self, node: &Node) -> bool {
         if node.macro_token.as_ref() == Some(&Man(ManMacro::In))
             && self.context.macro_set == libmandoc_rs::MacroSet::Man
         {
@@ -137,36 +137,11 @@ impl super::BlockLowerer<'_, '_> {
                 );
             })
             .is_some();
-        if control_consumed
+        control_consumed
             || node.flags.no_print
             || node.kind == NodeKind::Comment
             || is_section(node, false)
             || crate::mandoc::controls::operand_control(node.macro_token.as_ref()).is_some()
-        {
-            return true;
-        }
-        if node.kind == NodeKind::Text
-            && node.text.as_deref().is_some_and(str::is_empty)
-            && !node.flags.no_fill
-        {
-            // The filled source-line path also visits an empty TEXT through
-            // term_vspace(), so negative .sp debt is consumed here instead
-            // of turning the blank into an unconditional IR gap.
-            let lines = self.state.resolve_vertical_space(1);
-            self.state.flush_paragraph_for_line_request();
-            if lines > 0 {
-                self.state
-                    .formatter
-                    .execution
-                    .finish_native_vertical_rows(usize::from(lines));
-                self.state.output.push(Block::VerticalSpace {
-                    lines,
-                    source: source_span(node),
-                });
-            }
-            return true;
-        }
-        false
     }
 
     /// `.ft` selects fonts without printable block output of its own; it is

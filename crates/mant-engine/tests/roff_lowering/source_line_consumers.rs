@@ -359,3 +359,199 @@ fn source_line_field_flush_keeps_the_accepted_generated_cells() {
         assert!(mant_render::render_query_text(&content).contains(expected));
     }
 }
+
+#[test]
+fn empty_text_uses_its_native_visit_or_operand_path() {
+    #[derive(serde::Deserialize)]
+    struct Case {
+        id: String,
+        source: String,
+        source_sha256: String,
+        expected: String,
+        profiles: std::collections::BTreeMap<String, (i32, String, String)>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Matrix {
+        oracle_sha256: String,
+        cases: Vec<Case>,
+    }
+
+    // The fixture records exact pristine UTF-8 rows after undoing terminal
+    // overstrikes and removing the fixed five-column page margin. In's
+    // in_line_argn() emits its later empty argument as a sibling. The mdoc
+    // TEXT visitor uses term_word() for it, while man visits even a
+    // non-NODE_LINE empty B child via term_vspace() unless \c is live.
+    let matrix: Matrix =
+        serde_json::from_str(include_str!("source_line_consumers/empty_text_cases.json")).unwrap();
+    assert_eq!(
+        matrix.oracle_sha256,
+        "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e"
+    );
+    assert_eq!(matrix.cases.len(), 54);
+    for case in matrix.cases {
+        assert_eq!(case.source_sha256.len(), 64, "{}", case.id);
+        assert_eq!(case.profiles.len(), 5, "{}", case.id);
+        for (profile, (status, stdout, stderr)) in &case.profiles {
+            assert_eq!(stdout.len(), 64, "{}: {profile}", case.id);
+            assert_eq!(stderr.len(), 64, "{}: {profile}", case.id);
+            if profile != "lint" {
+                assert_eq!(*status, 0, "{}: {profile}", case.id);
+            }
+        }
+        assert_empty_text_visit_path(&case.source, &case.id);
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap());
+        let plain = mant_render::render_query_text(&content);
+        let (actual, _) = plain
+            .split_once("DESCRIPTION\n")
+            .unwrap()
+            .1
+            .split_once("\n\nEND\n")
+            .unwrap();
+        assert_eq!(actual, case.expected, "{}", case.id);
+        if case.id == "no-fill/c/in-sibling" {
+            assert_published_include_span(&content);
+        }
+        if case.id == "filled/plain/in-sibling" {
+            let search = mant_query::search_query(
+                &content,
+                &mant_protocol::SearchQuery {
+                    pattern: "<header.h>  AFTER".into(),
+                    syntax: mant_protocol::SearchSyntax::Literal,
+                    case: mant_protocol::SearchCase::Sensitive,
+                    scope: mant_protocol::SearchScope::Visible,
+                    word: false,
+                    context_lines: 0,
+                    limit: 10,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(search.total, 1);
+            assert_eq!(
+                search.matches[0].occurrences[0].matched_text,
+                "<header.h>  AFTER"
+            );
+        }
+        if case.id.contains("/in-") {
+            assert!(
+                description(&content)
+                    .iter()
+                    .all(|block| !matches!(block, Block::VerticalSpace { .. })),
+                "{}",
+                case.id
+            );
+        }
+        if matches!(
+            case.id.as_str(),
+            "filled/plain/in-sibling"
+                | "filled/p/in-expanded"
+                | "no-fill/plain/in-sibling"
+                | "no-fill/c/in-sibling"
+                | "no-fill/c/in-expanded"
+                | "no-fill/plain/mdoc-empty-source"
+                | "filled/plain/man-operand"
+        ) {
+            let rows = row_offsets(&case.expected, &["BEFORE", "AFTER"]);
+            assert_text_and_markdown(&content, &["BEFORE", "AFTER"], &rows, |_, plain| {
+                assert!(plain.contains(&case.expected), "{}: {plain:?}", case.id);
+            });
+        }
+    }
+}
+
+fn assert_published_include_span(content: &ResolvedContent) {
+    // The pinned HTML marks the complete accepted In spelling as code.
+    let roots = description(content).iter().filter_map(|block| match block {
+        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => Some(children),
+        _ => None,
+    });
+    let mut code_spans = Vec::new();
+    for inline in roots.flatten() {
+        match inline {
+            Inline::Code { value } => code_spans.push(value.as_str()),
+            Inline::Link { .. } => panic!("private include annotation reached public IR"),
+            _ => {}
+        }
+    }
+    assert_eq!(code_spans, ["<header.h>"]);
+}
+
+fn assert_empty_text_visit_path(source: &str, id: &str) {
+    use libmandoc_rs::{MacroToken, ManMacro, MdocMacro, RoffMacro};
+
+    let parsed = Parser::default()
+        .parse_bytes("probe.1", source.as_bytes())
+        .unwrap();
+    let body = parsed
+        .document
+        .root
+        .children
+        .iter()
+        .find_map(|section| {
+            let head = section
+                .children
+                .iter()
+                .find(|node| node.kind == NodeKind::Head)?;
+            (head.children.first()?.text.as_deref()? == "DESCRIPTION").then(|| {
+                section
+                    .children
+                    .iter()
+                    .find(|node| node.kind == NodeKind::Body)
+                    .unwrap()
+            })
+        })
+        .unwrap();
+    let empty = |node: &Node| node.kind == NodeKind::Text && node.text.as_deref() == Some("");
+    let filled = id.starts_with("filled/");
+    if id.contains("/in-") {
+        let index = body
+            .children
+            .iter()
+            .position(|node| node.macro_token == Some(MacroToken::Mdoc(MdocMacro::In)))
+            .unwrap();
+        let include = &body.children[index];
+        let sibling = &body.children[index + 1];
+        assert_eq!(include.children.len(), 1, "{id}");
+        assert!(empty(sibling) && !sibling.flags.line_start, "{id}");
+        assert_eq!(sibling.line, include.line, "{id}");
+        if id.ends_with("in-expanded") {
+            assert_eq!(body.children[index + 2].line, sibling.line, "{id}");
+            assert!(body.children[index + 2].flags.line_start, "{id}");
+        }
+    } else if id.ends_with("man-visited") || id.ends_with("man-operand") {
+        let (name, count) = if id.ends_with("man-visited") {
+            (ManMacro::B, 1)
+        } else {
+            (ManMacro::Br, 2)
+        };
+        let macro_node = body
+            .children
+            .iter()
+            .find(|node| node.macro_token == Some(MacroToken::Man(name)))
+            .unwrap();
+        assert_eq!(macro_node.children.len(), count, "{id}");
+        assert!(
+            macro_node
+                .children
+                .iter()
+                .all(|node| empty(node) && !node.flags.line_start),
+            "{id}"
+        );
+    } else if filled {
+        // man.c/mdoc.c consume a raw blank after a continued word.
+        // Without continuation they normalize it to a sp request.
+        let spacing = body.children.iter().any(|node| {
+            node.macro_token == Some(MacroToken::Roff(RoffMacro::Sp)) && node.children.is_empty()
+        });
+        assert_eq!(spacing, !id.contains("/c/"), "{id}");
+        assert!(!body.children.iter().any(empty), "{id}");
+    } else {
+        assert!(
+            body.children
+                .iter()
+                .any(|node| { empty(node) && node.flags.line_start && node.flags.no_fill }),
+            "{id}"
+        );
+    }
+}

@@ -236,11 +236,10 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
         } else {
             Font::Emphasis
         });
-    // The code-span compaction flattens nested nodes, so delayed glyphs
-    // from preceding source must leave this wrapper's output before it
-    // runs: their own owner, style, and link identity cannot survive the
-    // compaction, and the outer semantic checkpoint could only recover
-    // plain text from the flattened value.
+    // Cut delayed glyphs from preceding source out of the code span.
+    // Keep the accepted ranges of "<", the operand and ">" separate
+    // until native retirement. Flattening them now would discard those
+    // word markers before a later blank can trigger range filtering.
     let scope = builder.begin_output_checkpoint();
     builder.zero_advance.begin_output_owner();
     if node.flags.synopsis_pretty && node.flags.line_start {
@@ -261,8 +260,20 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     builder
         .zero_advance
         .bind_deferred(membership, &ownership::Annotation::Code, false);
+    let annotation = builder
+        .zero_advance
+        .annotations
+        .as_ref()
+        .map(ownership::annotations::AnnotationPool::register_code);
     builder.wrap_output_since(scope, |nodes| {
         membership.map_owned(nodes, |rest| {
+            if let Some(annotation) = &annotation {
+                return vec![Inline::Link {
+                    target: annotation.target.clone(),
+                    title: None,
+                    children: rest,
+                }];
+            }
             let value = plain_text(&rest);
             let mut output = Vec::new();
             if !value.is_empty() {

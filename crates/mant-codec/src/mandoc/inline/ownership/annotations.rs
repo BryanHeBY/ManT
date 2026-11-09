@@ -49,6 +49,7 @@ struct Destination {
 enum DestinationPayload {
     Link(LinkTarget),
     Equation(Box<EquationDestination>),
+    Code,
 }
 
 mod projection;
@@ -127,7 +128,7 @@ impl AnnotationPool {
             .get(key)
             .and_then(|destination| match &destination.payload {
                 DestinationPayload::Link(target) => Some(read(target)),
-                DestinationPayload::Equation(_) => None,
+                DestinationPayload::Equation(_) | DestinationPayload::Code => None,
             })
     }
 
@@ -161,6 +162,10 @@ impl AnnotationPool {
         self.insert_destination(DestinationPayload::Equation(Box::new(
             EquationDestination::new(expression, source),
         )))
+    }
+
+    pub(in crate::mandoc) fn register_code(&self) -> RegisteredAnnotation {
+        self.insert_destination(DestinationPayload::Code)
     }
 
     pub(in crate::mandoc) fn record_equation_projection(
@@ -343,6 +348,15 @@ impl AnnotationPool {
                 if self.publish_equation(uri, children, &mut output, nonempty) {
                     continue;
                 }
+                if self.0.borrow().targets.get(uri).is_some_and(|destination| {
+                    matches!(destination.payload, DestinationPayload::Code)
+                }) {
+                    let value = crate::mandoc::inline::plain_text(children);
+                    if !value.is_empty() {
+                        output.push(Inline::Code { value });
+                    }
+                    continue;
+                }
                 // An empty provisional receipt must not precede its accepted
                 // label as another public occurrence in this same root.
                 let has_content = has_scalar(children);
@@ -370,7 +384,7 @@ impl AnnotationPool {
                         .expect("live annotation")
                         .payload
                     else {
-                        unreachable!("equations publish separately")
+                        unreachable!("non-link annotations publish separately")
                     };
                     let target = target.clone();
                     #[cfg(test)]

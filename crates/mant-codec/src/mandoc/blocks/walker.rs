@@ -283,7 +283,7 @@ impl BlockLowerer<'_, '_> {
         if self.column_field && self.push_column_payload(node, siblings) {
             return true;
         }
-        if self.consume_control_or_empty_block(node) {
+        if self.consume_control(node) {
             return true;
         }
         if self.push_no_fill_synopsis(node) {

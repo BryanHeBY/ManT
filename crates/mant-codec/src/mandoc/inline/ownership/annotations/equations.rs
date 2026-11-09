@@ -295,7 +295,7 @@ impl AnnotationPool {
             .values_mut()
             .filter_map(|destination| match &mut destination.payload {
                 DestinationPayload::Equation(equation) => Some((destination.key, equation)),
-                DestinationPayload::Link(_) => None,
+                DestinationPayload::Link(_) | DestinationPayload::Code => None,
             })
             .collect();
         equations.sort_unstable_by_key(|(key, _)| key.0);

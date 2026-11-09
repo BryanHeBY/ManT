@@ -30,3 +30,16 @@ The three empty-HEAD controls record the run-in field at a source SP or
 an explicit break request. Native UTF-8 prints the two generated diagnostic
 cells on their own row, while an empty inset HEAD contributes no such word.
 Their raw profiles are in the repair audit's `diag-controls.json`.
+
+The N3 `empty_text_cases.json` matrix crosses filled/no-fill, ordinary and
+continued predecessors, word breaks and zero advance, physical source blanks,
+man font visitors, direct BR operands, and mdoc In siblings. It records the
+negative-spacing cases separately. The fixed tree places In's empty trailing
+operand outside In and without NODE_LINE, even when the next expanded macro
+shares that coordinate. In's sibling is a word event. A visited empty man
+TEXT follows the `term_vspace` / `term_newln` branch, and filled physical
+blanks follow the parser's spacing or continuation path.
+
+The no-fill continuation controls also ensure the generated include words
+survive the empty sibling's acceptance pass. Their code span is assembled
+after native word ownership and acceptance are resolved.
