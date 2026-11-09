@@ -75,15 +75,6 @@ impl InlineBuilder {
         })
     }
 
-    /// Whether an author-split row end restarted the head field (its
-    /// breaks do not close the head before BODY).
-    pub(in crate::mandoc) fn definition_author_restarted(&self) -> bool {
-        self.execution
-            .definition
-            .as_ref()
-            .is_some_and(|state| state.outcome.is_field_restarted())
-    }
-
     pub(in crate::mandoc) fn definition_field_exited(
         &self,
         native: Option<&NativeFieldDevice>,

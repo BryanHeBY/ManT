@@ -281,10 +281,6 @@ impl BlockState {
         self.literal.end_line();
     }
 
-    pub(in crate::mandoc::blocks) fn tighten_next_boundary(&mut self) {
-        self.paragraph.tighten_next_boundary(&mut self.formatter);
-    }
-
     pub(in crate::mandoc::blocks) fn execute_no_fill_fragment(
         &mut self,
         source: Option<mant_ir::SourceSpan>,

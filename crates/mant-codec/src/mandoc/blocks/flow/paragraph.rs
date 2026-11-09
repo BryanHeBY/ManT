@@ -105,6 +105,7 @@ impl ParagraphFlow {
         self.with_inline_builder(formatter, InlineBuilder::hard_break);
     }
 
+    #[cfg(test)]
     pub(super) fn tighten_next_boundary(&mut self, formatter: &mut FormatterState) {
         self.with_inline_builder(formatter, InlineBuilder::tighten_next_boundary);
     }

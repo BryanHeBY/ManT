@@ -173,11 +173,7 @@ impl InlineBuilder {
                 // termp_an_pre() invokes the same term_newln() as a source
                 // event. Its captured receipt already decides the tail;
                 // projected text width cannot end this row a second time.
-                if self.execute_native_newline_with_tail()
-                    && let Some(definition) = &mut self.execution.definition
-                {
-                    definition.outcome.mark_field_restarted();
-                }
+                self.execute_native_newline_with_tail();
                 if !flags.wraps()
                     && let Some(definition) = &mut self.execution.definition
                 {

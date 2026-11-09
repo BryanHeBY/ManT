@@ -3,7 +3,7 @@ use super::font::coalesce_font_runs;
 use super::links::{append_bsd_reference, append_link, append_mail_addresses};
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_include, append_inline_nodes,
-    authored_section_phrase, inline_children, lower_equation_node, navigation_anchor,
+    authored_section_phrase, inline_children, navigation_anchor,
 };
 mod nested;
 use nested::{append_column_list, append_nested_list};
@@ -471,9 +471,6 @@ fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -
                 builder.append(vec![anchor]);
             }
             append_mail_addresses(builder, node, name);
-        }
-        _ if node.kind == NodeKind::Equation => {
-            builder.append(lower_equation_node(node));
         }
         _ => return false,
     }

@@ -517,6 +517,9 @@ Plain-text mathematical descriptions and code examples
 retain their supplied content. Markdown math reimport retains source spelling
 and follows the unsupported-syntax rules below.
 
+Low-level roff controls inside quoted eqn atoms, such as `\c`, currently
+have approximate line-continuation behavior in normalized formula layout.
+
 Target conversion reports can include unknown atom roles, font approximations
 and literal spacing. Unicode fallback needs suitable fonts and may generate
 additional renderer-specific glyph-metrics warnings. Formula structure and

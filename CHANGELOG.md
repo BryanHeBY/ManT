@@ -50,6 +50,10 @@ that crate was not published for that change.
   Preserve explicit display equations and literal owners independently of
   source-line position. Document MathJax text-mode configuration, literal POSIX
   notation and target-format approximation warnings.
+- Preserve authored quotes and escaped quote characters after inline equations,
+  including macro arguments, links and preformatted examples. Follow native
+  HEAD/BODY ownership for definition terms and join equation suffixes using
+  executed line boundaries.
 - Add complete POSIX, BSD, illumos and X11 mathematical regression pages for
   inline paragraphs, scripts, integral limits, matrices and readable formulas
   inside code examples. Align the structure audit with executed inline origin

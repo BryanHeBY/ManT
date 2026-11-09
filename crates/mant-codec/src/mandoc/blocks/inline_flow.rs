@@ -1,9 +1,30 @@
 //! Filled inline routing and source-boundary recognition, not structural ownership.
-use super::{Node, NodeKind, is_enclosure_macro, source_span, visible_text};
+use super::{Node, NodeKind, is_enclosure_macro, source_span};
 use crate::mandoc::adjacency::Siblings;
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 impl super::BlockLowerer<'_, '_> {
+    pub(super) fn push_empty_equation(&mut self, node: &Node, siblings: Siblings<'_>) -> bool {
+        if node.kind == NodeKind::Equation
+            && node
+                .equation
+                .as_ref()
+                .is_none_or(|equation| equation.readable_text().trim().is_empty())
+        {
+            // Even a configuration-only or blank equation executes
+            // term_eqn's spacing post on a live row. At an empty field
+            // origin its automatic initial blank is layout padding.
+            if self.state.formatter.execution.has_formatter_cell()
+                || self.state.formatter.execution.has_open_native_device_row()
+                || self.state.formatter.execution.source_row_continues()
+            {
+                self.push_inline_node_with_source(node, siblings);
+            }
+            return true;
+        }
+        false
+    }
+
     pub(super) fn push_inline_node(&mut self, node: &Node, next: Option<&Node>) {
         self.push_inline_node_with_source(
             node,
@@ -43,49 +64,7 @@ impl super::BlockLowerer<'_, '_> {
 pub(super) fn is_inline_equation(node: &Node) -> bool {
     // roff_EQ sets NODE_LINE for both explicit and delimiter-origin EQ.
     // Older owned snapshots retain the previous source-line fallback.
-    node.kind == NodeKind::Equation
-        && node.equation_inline.unwrap_or(!node.flags.line_start)
-        && node
-            .equation
-            .as_ref()
-            .is_some_and(|value| !value.readable_text().trim().is_empty())
-}
-
-/// libmandoc terminates a quoted man-macro argument containing inline eqn by
-/// moving the equation beside the macro and retaining the closing source quote
-/// as a `\&"` text sibling. The quote is parser scaffolding, not output.
-pub(super) fn is_inline_equation_quote_artifact(nodes: &[Node], index: usize) -> bool {
-    let Some(node) = nodes.get(index) else {
-        return false;
-    };
-    let Some(previous) = index.checked_sub(1).and_then(|index| nodes.get(index)) else {
-        return false;
-    };
-    is_inline_equation(previous)
-        && previous.line == node.line
-        && node.kind == NodeKind::Text
-        && node
-            .text
-            .as_deref()
-            .is_some_and(|text| visible_text(text).trim() == "\"")
-}
-
-pub(super) fn follows_inline_equation_punctuation(nodes: &[Node], index: usize) -> bool {
-    let Some(node) = nodes.get(index) else {
-        return false;
-    };
-    let Some(previous) = index.checked_sub(1).and_then(|index| nodes.get(index)) else {
-        return false;
-    };
-    is_inline_equation(previous)
-        && previous.line == node.line
-        && node.kind == NodeKind::Text
-        && node
-            .text
-            .as_deref()
-            .map(visible_text)
-            .and_then(|text| text.chars().next())
-            .is_some_and(|character| matches!(character, '.' | ',' | ':' | ';' | '!' | '?'))
+    node.kind == NodeKind::Equation && node.equation_inline.unwrap_or(!node.flags.line_start)
 }
 
 /// Match the filled-text line-break rule used by libmandoc's terminal and

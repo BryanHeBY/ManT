@@ -75,8 +75,11 @@ fn inline_mathematics_preserves_its_surrounding_words() {
     );
     assert!(output.status.success(), "{output:?}");
     let text = String::from_utf8(output.stdout).unwrap();
+    // Exact INLINE ran pristine ASCII/UTF-8/HTML/tree/lint first.
+    // roff_eqndelim protects the authored suffix blank, and print_man_node
+    // selects NOSPACE before it. Only that single authored blank survives.
     assert!(
-        text.contains("Before $") && text.contains("$  after."),
+        text.contains("Before $") && text.contains("$ after."),
         "{text}"
     );
     assert!(text.contains("^{"), "{text}");

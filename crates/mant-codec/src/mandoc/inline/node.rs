@@ -168,6 +168,10 @@ fn execute_inline_macro_handler(
     next: Option<&Node>,
     default_name: Option<&str>,
 ) {
+    if node.kind == NodeKind::Equation {
+        super::append_equation_node(builder, node, next);
+        return;
+    }
     if append_ordered_declaration_or_display_part(builder, node, previous, default_name) {
         return;
     }

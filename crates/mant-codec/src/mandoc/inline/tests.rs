@@ -276,3 +276,27 @@ fn preserves_sphinx_shape_in_no_fill_and_code_content() {
         }
     )));
 }
+#[test]
+fn empty_equation_wrappers_do_not_invent_formatter_words() {
+    fn find_inline_equation(node: &libmandoc_rs::Node) -> Option<&libmandoc_rs::EquationBox> {
+        if node.equation_inline == Some(true) {
+            return node.equation.as_ref();
+        }
+        node.children.iter().find_map(find_inline_equation)
+    }
+
+    // Each exact source ran pristine ASCII/UTF-8/HTML/tree/lint first.
+    // eqn_term.c::eqn_box skips a matrix column-list wrapper and a pile's
+    // singleton row wrapper. Neither empty form executes term_word, so the
+    // preceding NONEWLINE survives term_eqn's unconditional NOSPACE clear.
+    for expression in ["matrix { }", "pile { bold }"] {
+        let source = format!(
+            ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\\c\n${expression}\n.EN\nAfter\n.fi\n"
+        );
+        let report = libmandoc_rs::Parser::default()
+            .parse_bytes("empty-equation.1", source.as_bytes())
+            .unwrap();
+        let equation = find_inline_equation(&report.document.root).unwrap();
+        assert!(!super::equation_emits_words(equation, false));
+    }
+}

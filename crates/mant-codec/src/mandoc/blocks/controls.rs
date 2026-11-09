@@ -145,16 +145,6 @@ impl super::BlockLowerer<'_, '_> {
         {
             return true;
         }
-        // A configuration-only `.EQ delim XX .EN` produces an empty equation
-        // syntax node. It changes parser state but owns no printable block.
-        if node.kind == NodeKind::Equation
-            && node
-                .equation
-                .as_ref()
-                .is_none_or(|value| value.readable_text().trim().is_empty())
-        {
-            return true;
-        }
         if node.kind == NodeKind::Text
             && node.text.as_deref().is_some_and(str::is_empty)
             && !node.flags.no_fill

@@ -17,8 +17,7 @@ use libmandoc_rs::{
 use super::super::controls::{FormatterBoundary, formatter_control};
 use super::{
     BlockLowerer, DisplayFillMode, NodeSourceContext, StructuralLowerer, TableEmbedding,
-    TableEmbeddingPlan, adjacent_ip_run, follows_inline_equation_punctuation,
-    is_inline_equation_quote_artifact, is_native_transparent_sibling,
+    TableEmbeddingPlan, adjacent_ip_run, is_native_transparent_sibling,
     man_nofill::no_fill_boundary,
     mdoc_macros::{reference_author_conjunction, reference_field_post},
     participates_in_inline_flow, restores_macro_indent, source_span, synopsis, targets,
@@ -48,12 +47,6 @@ impl BlockLowerer<'_, '_> {
             if !is_native_transparent_sibling(node) {
                 has_native_sibling = true;
                 previous_native_is_sy = node.macro_token.as_ref() == Some(&Man(ManMacro::Sy));
-            }
-            if is_inline_equation_quote_artifact(nodes, index) {
-                continue;
-            }
-            if follows_inline_equation_punctuation(nodes, index) {
-                self.state.tighten_next_boundary();
             }
             self.enter_annotation_root(node);
             self.observe_source_fill_mode(node);
@@ -186,6 +179,9 @@ impl BlockLowerer<'_, '_> {
         if self.push_no_fill_lines(node, siblings, source.line_entered, single_line_literal) {
             self.state
                 .queue_targets(structural_targets, source_span(node));
+            return;
+        }
+        if self.push_empty_equation(node, siblings) {
             return;
         }
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Rs)) {

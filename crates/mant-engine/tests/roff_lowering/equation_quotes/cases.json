@@ -1,0 +1,503 @@
+{
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "tp-raw-head",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TP\nBefore $x$\"\nBODY_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "x\" BODY_SENTINEL",
+      "term": "Before"
+    },
+    {
+      "id": "tp-quoted-head",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TP\n.B \"Before $x$\"\nBODY_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "x\" BODY_SENTINEL",
+      "term": "Before"
+    },
+    {
+      "id": "tp-body",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TP\nTAG_SENTINEL\nBefore $x$\"\nBODY_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" BODY_SENTINEL",
+      "term": "TAG_SENTINEL"
+    },
+    {
+      "id": "ip-quoted-head",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.IP \"Before $x$\"\nBODY_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "x\" BODY_SENTINEL",
+      "term": "Before"
+    },
+    {
+      "id": "bold-quoted",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.B \"Before $x$\"\nAFTER_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" AFTER_SENTINEL"
+    },
+    {
+      "id": "br-displaced-existing",
+      "source": ".TH EQNPROBE2 7\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TP\n.BR Dp\\~ \"$dx sub 1 ~ ldots ~ dx sub n$\"\nDraw a polygon with,\nfor $i = 1 , ldots , n + 1$,\nits vertex.\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 2,
+      "owner": "paragraph",
+      "body": "dx _ 1 ... dx _ n\" Draw a polygon with, for i = 1 , ... , n + 1, its vertex.",
+      "term": "Dp "
+    },
+    {
+      "id": "link-body",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.UR https://example.org\nBefore\n$x$\"\nAFTER_SENTINEL\n.UE\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" AFTER_SENTINEL <https://example.org>",
+      "linkLabel": "Before x\" AFTER_SENTINEL"
+    },
+    {
+      "id": "ip-body",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.IP TAG_SENTINEL\nBefore\n$x$\"\nBODY_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" BODY_SENTINEL",
+      "term": "TAG_SENTINEL"
+    },
+    {
+      "id": "adjacent",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$$y$\"\nAFTER_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 2,
+      "owner": "paragraph",
+      "body": "Before xy\" AFTER_SENTINEL"
+    },
+    {
+      "id": "spaced-quote",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$ \\(dq \nAFTER_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x \" AFTER_SENTINEL"
+    },
+    {
+      "id": "quote-tail",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\" TAIL_SENTINEL\nAFTER_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" TAIL_SENTINEL AFTER_SENTINEL"
+    },
+    {
+      "id": "single-quote",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$'\nAFTER_SENTINEL\n",
+      "quotes": 0,
+      "apostrophes": 1,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x' AFTER_SENTINEL"
+    },
+    {
+      "id": "mdoc-it-head",
+      "source": ".Dd November 9, 2026\n.Dt QUOTEREVIEW 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.Bl -tag -width tag\n.It Before $x$\"\nBODY_SENTINEL\n.El\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "x\" BODY_SENTINEL",
+      "term": "Before"
+    },
+    {
+      "id": "mdoc-it-body",
+      "source": ".Dd November 9, 2026\n.Dt QUOTEREVIEW 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.Bl -tag -width tag\n.It TAG_SENTINEL\nBefore\n$x$\"\nBODY_SENTINEL\n.El\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" BODY_SENTINEL",
+      "term": "TAG_SENTINEL"
+    },
+    {
+      "id": "tp-adjacent-head",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TP\n.B \"Before $x$$y$\"\nBODY_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 2,
+      "owner": "paragraph",
+      "body": "xy\" BODY_SENTINEL",
+      "term": "Before"
+    },
+    {
+      "id": "man-filled-line-start-plain",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\n$x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "man-filled-line-start-short-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\n$x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "man-filled-line-start-long-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\n$x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "man-filled-line-middle-plain",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "man-filled-line-middle-short-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "man-filled-line-middle-long-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "man-no-fill-line-start-plain",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\n$x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before\nx\"\nAfter"
+    },
+    {
+      "id": "man-no-fill-line-start-short-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\n$x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before\nx\"\nAfter"
+    },
+    {
+      "id": "man-no-fill-line-start-long-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\n$x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before\nx\"\nAfter"
+    },
+    {
+      "id": "man-no-fill-line-middle-plain",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore $x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before x\"\nAfter"
+    },
+    {
+      "id": "man-no-fill-line-middle-short-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore $x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before x\"\nAfter"
+    },
+    {
+      "id": "man-no-fill-line-middle-long-dq",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore $x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before x\"\nAfter"
+    },
+    {
+      "id": "mdoc-filled-line-start-plain",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\n$x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "mdoc-filled-line-start-short-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\n$x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "mdoc-filled-line-start-long-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\n$x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "mdoc-filled-line-middle-plain",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "mdoc-filled-line-middle-short-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "mdoc-filled-line-middle-long-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" After"
+    },
+    {
+      "id": "mdoc-no-fill-line-start-plain",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\n$x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before\nx\"\nAfter"
+    },
+    {
+      "id": "mdoc-no-fill-line-start-short-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\n$x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before\nx\"\nAfter"
+    },
+    {
+      "id": "mdoc-no-fill-line-start-long-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\n$x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before\nx\"\nAfter"
+    },
+    {
+      "id": "mdoc-no-fill-line-middle-plain",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore $x$\"\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before x\"\nAfter"
+    },
+    {
+      "id": "mdoc-no-fill-line-middle-short-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore $x$\\(dq\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before x\"\nAfter"
+    },
+    {
+      "id": "mdoc-no-fill-line-middle-long-dq",
+      "source": ".Dd November 9, 2026\n.Dt MATH 1\n.Os\n.Sh DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore $x$\\[dq]\nAfter\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Before x\"\nAfter"
+    },
+    {
+      "id": "two-quotes",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\"\"\nAFTER_SENTINEL\n",
+      "quotes": 2,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\"\" AFTER_SENTINEL"
+    },
+    {
+      "id": "roff-comment",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\\\" HIDDEN_COMMENT\nAFTER_SENTINEL\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x AFTER_SENTINEL"
+    },
+    {
+      "id": "ordinary-macro-quotes",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.B \"Before\"\nAFTER_SENTINEL\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 0,
+      "owner": "paragraph",
+      "body": "Before AFTER_SENTINEL"
+    },
+    {
+      "id": "next-line-quote",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x$\n\"\nAFTER_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x \" AFTER_SENTINEL"
+    },
+    {
+      "id": "tp-second-quote",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TP\n.B \"Before $x$\"\n\"\nBODY_SENTINEL\n",
+      "quotes": 2,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "x\" \" BODY_SENTINEL",
+      "term": "Before"
+    },
+    {
+      "id": "equation-quote-atom",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $\"\\(dq\"$\nAFTER_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before \" AFTER_SENTINEL"
+    },
+    {
+      "id": "alternate-delimiter",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim %%\n.EN\nBefore %x%\"\nAFTER_SENTINEL\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x\" AFTER_SENTINEL"
+    },
+    {
+      "id": "macro-same-line-body",
+      "source": ".TH QUOTEREVIEW 1 \"2026-11-09\"\n.SH DESCRIPTION\n.de ITEM\n.TP\nTAG_SENTINEL\n$x$\"\nBODY_SENTINEL\n..\n.EQ\ndelim $$\n.EN\n.ITEM\n",
+      "quotes": 1,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "x\" BODY_SENTINEL",
+      "term": "TAG_SENTINEL"
+    },
+    {
+      "id": "manual-en-inline-next-word",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x\n.EN\nAfter\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Before x After"
+    },
+    {
+      "id": "manual-en-inline-next-equation",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore $x\n.EN\n.EQ\ny over z\n.EN\nAfter.\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 2,
+      "owner": "paragraph",
+      "body": "Before x y / z After."
+    },
+    {
+      "id": "continued-inline-explicit-close",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\\c\n$x\n.EN\nAfter\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "paragraph",
+      "body": "Beforex After"
+    },
+    {
+      "id": "no-fill-continued-inline-explicit-close",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\\c\n$x\n.EN\nAfter\n.fi\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 1,
+      "owner": "preformatted",
+      "body": "Beforex\nAfter"
+    },
+    {
+      "id": "continued-empty-explicit-close",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\nBefore\\c\n$\n.EN\nAfter\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 0,
+      "owner": "paragraph",
+      "body": "Before After"
+    },
+    {
+      "id": "no-fill-continued-empty-explicit-close",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\\c\n$\n.EN\nAfter\n.fi\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 0,
+      "owner": "preformatted",
+      "body": "Before After"
+    },
+    {
+      "id": "no-fill-continued-space-atom-explicit-close",
+      "source": ".TH MATH 1 \"2026-11-09\"\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.nf\nBefore\\c\n$\" \"\n.EN\nAfter\n.fi\n",
+      "quotes": 0,
+      "apostrophes": 0,
+      "equations": 0,
+      "owner": "preformatted",
+      "body": "Before\nAfter"
+    }
+  ]
+}

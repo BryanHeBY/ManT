@@ -116,7 +116,7 @@ use body::{
     enter_definition_body, finish_definition_body_execution,
 };
 pub(super) use head::visible_definition_head;
-use head::{definition_head_nodes, displaced_definition_equations, lower_definition_head};
+use head::{definition_head_nodes, lower_definition_head};
 #[cfg(test)]
 pub(super) use layout::split_definition_terms;
 use layout::{
@@ -138,7 +138,6 @@ pub(super) fn definition_item(
     let head = visible_definition_head(node);
     let head_nodes = definition_head_nodes(node, head, context.macro_set, indent_columns);
     let body = first_part_children(node, NodeKind::Body);
-    let (displaced_equations, body) = displaced_definition_equations(head, body);
     let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;
     if man_node {
         formatter.font.man_text_boundary(); // HEAD pre
@@ -148,7 +147,6 @@ pub(super) fn definition_item(
     let session = DefinitionSession::enter(node, formatter, man_node);
     let (finished, run_in_execution) = lower_definition_head(
         head_nodes,
-        &displaced_equations,
         context,
         flow,
         geometry.native_head_field_units,

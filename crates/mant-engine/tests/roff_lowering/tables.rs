@@ -147,15 +147,16 @@ fn keeps_inline_equations_in_macro_arguments_and_filled_prose() {
     let [item] = items.as_slice() else {
         panic!("expected one equation definition");
     };
-    // CVS html.c::print_encode keeps the authored \~ after Dp as NBSP.
-    // The exact inline-eqn source was checked with the fixed oracle.
-    assert_eq!(inline_text(&item.terms[0]), "Dp\u{a0}dx _ 1 ... dx _ n");
+    // CVS roff.c::roff_eqndelim closes the BR argument and man_descope
+    // creates BODY before the equation and protected quote suffix. The exact
+    // source ran pristine ASCII/UTF-8/HTML/tree/lint before this assertion.
+    assert_eq!(inline_text(&item.terms[0]), "Dp\u{a0}");
     let [Block::Paragraph { children, .. }] = item.description.as_slice() else {
         panic!("expected one filled description: {:?}", item.description);
     };
     assert_eq!(
         inline_text(children),
-        "Draw a polygon with, for i = 1 , ... , n + 1, its vertex."
+        "dx _ 1 ... dx _ n\" Draw a polygon with, for i = 1 , ... , n + 1, its vertex."
     );
     assert!(
         children

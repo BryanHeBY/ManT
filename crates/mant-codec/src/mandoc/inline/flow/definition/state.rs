@@ -385,19 +385,6 @@ impl InlineExecutionState {
 impl DefinitionOutcome {
     const FIELD_EXITED: u8 = 1;
     const BODY_GAP_CONSUMED: u8 = 2;
-    const AUTHOR_RESTARTED: u8 = 4;
-
-    /// An author-split row end that restarts the field: the next author
-    /// word is the restarted field's first word, so the head did not exit
-    /// (mdoc_term.c:1084-1085 keeps NOBREAK and BRIND until the item post).
-    pub(in crate::mandoc::inline::flow) fn mark_field_restarted(&mut self) {
-        self.0 |= Self::AUTHOR_RESTARTED;
-    }
-
-    pub(in crate::mandoc::inline::flow) fn is_field_restarted(self) -> bool {
-        self.0 & Self::AUTHOR_RESTARTED != 0
-    }
-
     pub(in crate::mandoc::inline::flow) fn mark_field_exited(&mut self) {
         self.0 |= Self::FIELD_EXITED;
     }

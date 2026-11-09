@@ -20,19 +20,14 @@ use super::{
         add_leading_spacing, layout, section_spacing, set_block_spacing, update_paragraph_distance,
         vertical_space_delta,
     },
-    part_child_groups,
-    roff_escape::visible_text,
-    source_span, targets,
+    part_child_groups, source_span, targets,
 };
 
 mod container_flow;
 mod controls;
 mod inline_flow;
 pub(super) use inline_flow::ends_with_line_continuation;
-use inline_flow::{
-    follows_inline_equation_punctuation, is_inline_equation, is_inline_equation_quote_artifact,
-    participates_in_inline_flow,
-};
+use inline_flow::participates_in_inline_flow;
 
 mod sections;
 use sections::is_section;
