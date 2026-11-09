@@ -75,7 +75,10 @@ pub(super) fn lower_man_font_scope(
         output.append_text("[");
         output.tighten_next_boundary();
         output.enter_keep_words();
-        for (index, child) in node.children.iter().enumerate() {
+        // post_OP() diagnoses excess arguments but leaves the AST intact.
+        // pre_OP() executes only the first two operands.
+        let operands = &node.children[..node.children.len().min(2)];
+        for (index, child) in operands.iter().enumerate() {
             output.font.select(if index == 0 {
                 Font::Strong
             } else {
@@ -86,7 +89,7 @@ pub(super) fn lower_man_font_scope(
                     output,
                     child,
                     None,
-                    node.children.get(index + 1),
+                    operands.get(index + 1),
                     default_name,
                 );
             });

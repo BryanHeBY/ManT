@@ -265,3 +265,158 @@ fn fo_counts_operands_without_counting_controls_or_targets() {
     };
     assert_eq!(inline_text(children), "int size_t");
 }
+
+#[test]
+fn man_optional_argument_recovery_executes_only_the_native_operand_prefix() {
+    use libmandoc_rs::{MacroToken, ManMacro, NodeKind, Parser};
+
+    #[derive(serde::Deserialize)]
+    struct Case {
+        id: String,
+        source: String,
+        source_sha256: String,
+        expected: String,
+        profiles: std::collections::BTreeMap<String, (i32, String, String)>,
+        operand_count: usize,
+    }
+    #[derive(serde::Deserialize)]
+    struct Matrix {
+        oracle_sha256: String,
+        cases: Vec<Case>,
+    }
+
+    // The fixed pristine tree keeps every operand after post_OP's recovery
+    // diagnostic. man_term.c::pre_OP visits only its first two term_word
+    // operands, followed by the generated closing bracket. The expected
+    // rows preserve that order and exact spacing after undoing overstrikes
+    // and removing the fixed five-column device margin.
+    let matrix: Matrix =
+        serde_json::from_str(include_str!("upstream_inline/man_option_arity.json")).unwrap();
+    assert_eq!(
+        matrix.oracle_sha256,
+        "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e"
+    );
+    assert_eq!(matrix.cases.len(), 45);
+    for case in &matrix.cases {
+        assert_eq!(case.source_sha256.len(), 64, "{}", case.id);
+        assert_eq!(case.profiles.len(), 5, "{}", case.id);
+        for (profile, (status, stdout, stderr)) in &case.profiles {
+            assert_eq!(stdout.len(), 64, "{}: {profile}", case.id);
+            assert_eq!(stderr.len(), 64, "{}: {profile}", case.id);
+            if profile != "lint" {
+                assert_eq!(*status, 0, "{}: {profile}", case.id);
+            }
+        }
+        let parsed = Parser::default()
+            .parse_bytes("probe.1", case.source.as_bytes())
+            .unwrap();
+        let op = parsed
+            .document
+            .root
+            .children
+            .iter()
+            .flat_map(|section| &section.children)
+            .filter(|part| part.kind == NodeKind::Body)
+            .flat_map(|body| &body.children)
+            .find(|node| node.macro_token == Some(MacroToken::Man(ManMacro::Op)))
+            .unwrap();
+        assert_eq!(op.children.len(), case.operand_count, "{}", case.id);
+
+        let content = super::json_roundtrip::json_string_roundtrip(
+            &mant_loader::load_roff_bytes(case.source.as_bytes()).unwrap(),
+        );
+        let document = content.document.as_ref().unwrap();
+        let diagnostic = document
+            .diagnostics
+            .iter()
+            .find(|d| d.message.starts_with("skipping excess arguments: OP"));
+        assert_eq!(diagnostic.is_some(), case.operand_count > 2, "{}", case.id);
+        let plain = mant_render::render_query_text(&content);
+        let (actual, _) = plain
+            .split_once("DESCRIPTION\n")
+            .unwrap()
+            .1
+            .split_once("\n\nEND\n")
+            .unwrap();
+        assert_eq!(actual, case.expected, "{}", case.id);
+        assert_option_ansi_matches_plain(&content, &plain);
+
+        if let Some(diagnostic) = diagnostic {
+            assert_eq!(case.profiles["lint"].0, 3, "{}", case.id);
+            assert_eq!(diagnostic.impact, mant_ir::DiagnosticImpact::None);
+            assert_eq!(diagnostic.level, mant_ir::DiagnosticLevel::Error);
+            assert_eq!(diagnostic.source.unwrap().line, op.children[2].line);
+            assert_eq!(diagnostic.source.unwrap().column, op.children[2].column);
+
+            let (variant, follower) = case.id.split_once('/').unwrap();
+            let legal = match variant {
+                "first-empty" => "first-empty-legal",
+                "second-empty" => "second-empty-legal",
+                "both-empty" => "both-empty-legal",
+                _ => "two",
+            };
+            let control_id = format!("{legal}/{follower}");
+            let control = matrix
+                .cases
+                .iter()
+                .find(|case| case.id == control_id)
+                .unwrap();
+            let control = mant_loader::load_roff_bytes(control.source.as_bytes()).unwrap();
+            let control = control.document.as_ref().unwrap();
+            assert_eq!(styled_text(document), styled_text(control), "{}", case.id);
+            assert_eq!(links(document), links(control), "{}", case.id);
+        } else {
+            assert_eq!(
+                case.profiles["lint"].0,
+                if case.operand_count == 0 { 2 } else { 0 }
+            );
+        }
+        if case.id == "first-empty/plain" {
+            assert_recovered_option_search(&content);
+        }
+        assert_recovered_option_readbacks(&content, &case.expected, &case.id);
+    }
+}
+
+fn assert_option_ansi_matches_plain(content: &ResolvedContent, plain: &str) {
+    let ansi =
+        mant_render::render_query_text_with(content, |_, value| format!("\x1b[1m{value}\x1b[0m"));
+    assert_eq!(ansi.replace("\x1b[1m", "").replace("\x1b[0m", ""), plain);
+}
+
+fn assert_recovered_option_search(content: &ResolvedContent) {
+    for (pattern, total) in [("EXTRA", 0), ("[ B] AFTER", 1)] {
+        let search = mant_query::search_query(
+            content,
+            &mant_protocol::SearchQuery {
+                pattern: pattern.into(),
+                syntax: mant_protocol::SearchSyntax::Literal,
+                case: mant_protocol::SearchCase::Sensitive,
+                scope: mant_protocol::SearchScope::Visible,
+                word: false,
+                context_lines: 0,
+                limit: 10,
+                offset: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(search.total, total, "{pattern}: {search:#?}");
+        assert!(search.content_complete);
+    }
+}
+
+fn assert_recovered_option_readbacks(content: &ResolvedContent, expected: &str, id: &str) {
+    use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+
+    for options in [MarkdownOptions::default(), MarkdownOptions::ADDRESSABLE] {
+        let mut current = content.clone();
+        for _ in 0..2 {
+            let markdown = render_markdown_with_options(&current, options);
+            current = super::json_roundtrip::json_string_roundtrip(
+                &mant_loader::load_markdown_text(&markdown, None).unwrap(),
+            );
+            let readback = mant_render::render_query_text(&current);
+            assert!(readback.contains(expected), "{id}: {readback:?}");
+        }
+    }
+}
