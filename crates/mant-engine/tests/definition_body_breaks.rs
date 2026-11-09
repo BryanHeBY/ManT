@@ -476,6 +476,38 @@ fn invisible_synopsis_words_keep_each_real_row_across_owner_drains() {
 }
 
 #[test]
+fn synopsis_blank_word_closes_the_tag_before_counting_vertical_rows() {
+    // Every exact variant ran all five fixed CVS profiles. In mdoc_term.c,
+    // synopsis_pre() calls term_vspace between two Ft nodes. The first
+    // flush closes the still printed tag, then the independent vspace
+    // emits a blank row. roff_term_pre_br() closes the next blank-only
+    // field after the native printed column has returned to zero.
+    let fixture = include_str!("definition_body_breaks/synopsis-blank-word.1");
+    for (source, section, blanks) in [
+        (fixture.to_owned(), "SYNOPSIS", 2),
+        (fixture.replace(".sp 0", ".br"), "SYNOPSIS", 2),
+        (fixture.replace(".sp 0", ".sp -1"), "SYNOPSIS", 2),
+        (fixture.replace(".sp 0", ".sp 1"), "SYNOPSIS", 3),
+        (fixture.replacen(".Ft \"\" \"\"\n", "", 1), "SYNOPSIS", 0),
+        (
+            fixture.replace(".Sh SYNOPSIS", ".Sh DESCRIPTION"),
+            "DESCRIPTION",
+            0,
+        ),
+    ] {
+        let query = load_roff_bytes(source.as_bytes()).unwrap();
+        let text = render_query_text(&query);
+        let (_, body) = text.split_once(&format!("{section}\n")).unwrap();
+        let expected = format!("x\n{}        BODY", "\n".repeat(blanks));
+        assert_eq!(body.trim_end_matches('\n'), expected, "{source}");
+        assert_eq!(
+            item(&query).head_body_relation,
+            mant_ir::HeadBodyRelation::Separate
+        );
+    }
+}
+
+#[test]
 fn pending_body_scan_observes_author_mode_executed_by_the_term() {
     // The fixed CVS renderer executes the It head before the body; -split in
     // the head therefore makes the body An close the pending tag row.

@@ -91,11 +91,7 @@ impl InlineBuilder {
         projected: bool,
         origin: CompletedRowOrigin,
     ) {
-        let had_native_buffer = self.definition.as_ref().is_some_and(|state| {
-            state.field_buffer.resume_offset() < state.field_buffer.cells().len()
-        }) || (self.execution.definition.is_none()
-            && self.execution.plain_input.buffer.resume_offset()
-                < self.execution.plain_input.buffer.cells().len());
+        let had_native_buffer = self.has_unconsumed_field_cells();
         let unprinted_field_tail = had_native_buffer
             && if projected {
                 captured
@@ -129,7 +125,11 @@ impl InlineBuilder {
         // term_flushln(): a definitive rejection ends its own row here.
         let plain_flush = self.consume_hard_break_buffer(projected);
         let plain_flush_rejection = plain_flush.rejected();
-        self.observe_hard_break_boundary(plain_flush);
+        let closes_preceding_printed_row = captured
+            .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row);
+        self.observe_hard_break_boundary(
+            closes_preceding_printed_row || plain_flush.closes_represented_row(),
+        );
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
         // a bare armed `\z` did not and remains ordered before the next word.
@@ -160,8 +160,6 @@ impl InlineBuilder {
         // still settles through the ordinary flush.
         self.flush_zero_advance();
         self.external_head_row_pending = false;
-        let closes_preceding_printed_row = captured
-            .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row);
         let completed_unprinted_row = !closes_preceding_printed_row
             && (plain_flush_rejection
                 || unprinted_field_tail
@@ -220,6 +218,15 @@ impl InlineBuilder {
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }
 
+    fn has_unconsumed_field_cells(&self) -> bool {
+        let buffer = if let Some(definition) = &self.execution.definition {
+            &definition.field_buffer
+        } else {
+            &self.execution.plain_input.buffer
+        };
+        buffer.resume_offset() < buffer.cells().len()
+    }
+
     fn consume_hard_break_buffer(
         &mut self,
         projected: bool,
@@ -245,11 +252,8 @@ impl InlineBuilder {
         }
     }
 
-    fn observe_hard_break_boundary(
-        &mut self,
-        plain_flush: super::super::plain_input::PlainFlushOutcome,
-    ) {
-        if (!self.execution.has_printable_content || plain_flush.closes_represented_row())
+    fn observe_hard_break_boundary(&mut self, closes_preceding_printed_row: bool) {
+        if (!self.execution.has_printable_content || closes_preceding_printed_row)
             && self.execution.leading_line_boundary == LeadingLineBoundary::None
         {
             // An ordinary blank can set the projection's printable flag,
