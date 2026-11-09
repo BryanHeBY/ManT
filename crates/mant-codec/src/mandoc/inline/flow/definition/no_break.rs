@@ -148,7 +148,7 @@ impl InlineBuilder {
                 self.execution.row_zero_graph = false;
                 self.execution.empty_word = false;
                 self.execution.trailing_output = TrailingOutput::None;
-                self.execution.pending_breakable_spaces = 0;
+                self.execution.pending_word_spaces.clear();
                 self.execution.pending_field_spaces = 0;
                 self.execution.formatter_column = FormatterColumn::Origin;
                 self.execution.boundary = PendingBoundary::Ordinary;
@@ -233,7 +233,7 @@ impl InlineBuilder {
         // automatic blank; Ns may suppress it. Retaining a second synthetic
         // cell here duplicates that word boundary after an empty-word flush.
         // Declared TAG/HANG fields keep their distinct device receipts above.
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.pending_field_spaces = 0;
         // roff_term_pre_mc() clears NOSPACE after resetting the old buffer
         // (roff_term.c:147-150). The next graphless term_word() therefore
@@ -350,7 +350,7 @@ impl InlineBuilder {
 
     pub(super) fn reset_after_no_break_field(&mut self) {
         self.execution.empty_word = false;
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.pending_field_spaces = 0;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;
@@ -470,7 +470,7 @@ impl InlineBuilder {
             },
         });
         self.execution.empty_word = false;
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;
         self.execution.row_zero_graph = false;
@@ -581,7 +581,7 @@ impl InlineBuilder {
                 TrailingOutput::None
             };
         }
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.pending_field_spaces = 0;
         if native.is_some() {
             let row = &mut self.definition_state_mut().hang_row;

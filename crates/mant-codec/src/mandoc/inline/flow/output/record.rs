@@ -1,4 +1,5 @@
 use super::super::WordProjectionPolicy;
+use super::super::field_buffer::FieldCell;
 use super::super::{Inline, InlineBuilder, PendingBoundary};
 use super::native_passes::split_native_field_passes;
 use std::collections::BTreeMap;
@@ -8,15 +9,39 @@ pub(super) struct WordPassProjection {
     pub(super) closes_before: usize,
     pub(super) leading_cells: usize,
     pub(super) native_separator: usize,
-    pub(super) retreated_sentence_separator: bool,
+    pub(super) preserve_retreated_separator: bool,
+    pub(super) consumed_initial_separator: bool,
     pub(super) prints_padding: bool,
     pub(super) split_word: Option<Vec<Inline>>,
+}
+
+impl WordPassProjection {
+    fn record_separator(
+        &mut self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        word_start: usize,
+        written: usize,
+        surviving: usize,
+    ) {
+        self.native_separator = surviving;
+        self.preserve_retreated_separator = written == 2 && surviving == 1;
+        let content = word_start.saturating_add(surviving);
+        self.consumed_initial_separator = surviving > 0
+            && buffer
+                .cells()
+                .get(content..buffer.resume_offset())
+                .is_some_and(|prefix| {
+                    prefix.iter().all(|cell| {
+                        matches!(cell, FieldCell::BreakableBlank | FieldCell::TabReference)
+                    })
+                });
+    }
 }
 
 impl InlineBuilder {
     pub(super) fn record_hang_word(
         &mut self,
-        incoming: &[Inline],
+        incoming: &mut [Inline],
         boundary: PendingBoundary,
         projection: WordProjectionPolicy,
     ) -> WordPassProjection {
@@ -30,6 +55,7 @@ impl InlineBuilder {
             .take()
             .unwrap_or(boundary);
         let sentence = std::mem::take(&mut self.execution.native_word_sentence);
+        let projected_keep = std::mem::take(&mut self.execution.projected_keep_separator);
         self.execution.observe_table_word_writes(
             native_writes.as_deref().unwrap_or_default(),
             !native_boundary.is_native_tight(),
@@ -44,6 +70,7 @@ impl InlineBuilder {
                 native_boundary,
                 native_writes,
                 sentence,
+                projected_keep,
                 projection,
             );
         }
@@ -80,6 +107,9 @@ impl InlineBuilder {
         let receipt = definition
             .field_buffer
             .apply_writes(&native_writes.expect("formatter word native writes"));
+        if receipt.retreated_leading_blank {
+            trim_retreated_word_blank(incoming);
+        }
         definition
             .field_word_anchors
             .push(super::super::NativeWordAnchor {
@@ -89,7 +119,10 @@ impl InlineBuilder {
                     .field_buffer
                     .word_separator_survives(native_word_start, separator)
                     && self.execution.pending_field_spaces == 0
-                    && (!boundary.is_tight() || self.execution.zero_advance_joined)
+                    && (!boundary.is_tight()
+                        || self.execution.zero_advance_joined
+                        || receipt.retreated_leading_blank
+                        || projected_keep)
                 {
                     native_word_start
                 } else {
@@ -104,33 +137,16 @@ impl InlineBuilder {
                 projected_field_prefix: false,
                 projection,
             });
-        let projected = super::super::super::plain_text(incoming);
-        let trimmed = projected.trim_end_matches(' ');
-        let trailing_spaces = projected.len().saturating_sub(trimmed.len());
-        let width = mant_ir::geometry::text_width(trimmed);
-        definition.hang_row.field_breakable |= trimmed.contains(' ');
-        definition.hang_row.field_unproven_break |= trimmed.contains('\n');
-        // term_fill() discards a field containing only ordinary breakable
-        // blanks. A nonbreaking blank from \~ or \0 is a printable cell.
-        let printable = trimmed
-            .chars()
-            .any(|ch| !super::super::super::is_formatter_word_blank(ch) && ch != '\n');
-        definition
-            .hang_row
-            .word(separator, width, trailing_spaces, printable);
-        if printable {
-            definition.hang_row.field_last_unbreakable_width = trimmed
-                .rsplit([' ', '\n'])
-                .find(|part| !part.is_empty())
-                .map_or(0, mant_ir::geometry::text_width);
-        }
+        observe_definition_word(definition, incoming, separator);
         let native_separator = definition
             .field_buffer
             .surviving_word_separator(native_word_start, separator);
         let mut projection =
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
-        projection.native_separator = native_separator;
-        projection.retreated_sentence_separator = separator == 2 && native_separator == 1;
+        let (buffer, _) = self.execution.word_input();
+        projection.record_separator(buffer, native_word_start, separator, native_separator);
+        projection.preserve_retreated_separator |=
+            receipt.retreated_leading_blank || projected_keep;
         projection.prints_padding = receipt.prints_padding;
         projection
     }
@@ -140,10 +156,11 @@ impl InlineBuilder {
     /// It has no hang-row geometry; only the marker pass loop can act.
     fn record_plain_unit_word(
         &mut self,
-        incoming: &[Inline],
+        incoming: &mut [Inline],
         native_boundary: PendingBoundary,
         native_writes: Option<Vec<super::super::field_buffer::FieldWrite>>,
         sentence: bool,
+        projected_keep: bool,
         projection: WordProjectionPolicy,
     ) -> WordPassProjection {
         // term_flushln() retired the old native unit before this word.
@@ -167,6 +184,9 @@ impl InlineBuilder {
             .plain_input
             .buffer
             .apply_writes(&native_writes.unwrap_or_default());
+        if receipt.retreated_leading_blank {
+            trim_retreated_word_blank(incoming);
+        }
         self.execution
             .plain_input
             .anchors
@@ -179,7 +199,10 @@ impl InlineBuilder {
                     .buffer
                     .word_separator_survives(native_word_start, separator)
                     && !native_boundary.is_tight()
-                    && (!self.execution.boundary.is_tight() || self.execution.zero_advance_joined)
+                    && (!self.execution.boundary.is_tight()
+                        || self.execution.zero_advance_joined
+                        || receipt.retreated_leading_blank
+                        || projected_keep)
                 {
                     native_word_start
                 } else {
@@ -210,8 +233,8 @@ impl InlineBuilder {
             targets,
             receipt.first_content_cell,
         );
-        result.native_separator = native_separator;
-        result.retreated_sentence_separator = separator == 2 && native_separator == 1;
+        result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
+        result.preserve_retreated_separator |= receipt.retreated_leading_blank || projected_keep;
         result.prints_padding = receipt.prints_padding;
         result
     }
@@ -261,12 +284,7 @@ impl InlineBuilder {
         let mut inside_splits: BTreeMap<String, Vec<usize>> = BTreeMap::new();
         let mut closes_before = 0;
         let mut leading_cells = 0;
-        let starts_earlier_owner = anchor_count > 0
-            && incoming.first().is_some_and(|node| {
-                matches!(node, Inline::Anchor { id, .. }
-                    if id.as_str().starts_with(super::INTERNAL_FIELD_WORD)
-                        && id.as_str() != anchors[anchor_count - 1].owner)
-            });
+        let starts_earlier_owner = starts_with_borrowed_output(incoming, anchors.last());
         // Borrowed output need not precede this pass: a projected glyph's
         // held cells can follow its breakpoint. Recover their exact native
         // interval only when such a prefix exists, searching recent owners
@@ -304,16 +322,8 @@ impl InlineBuilder {
                 }
                 let represented_in_ir = buffer.has_projected_pass(pass.end);
                 buffer.commit_pass(pass, targets.actual(first_pass));
-                let scalar_offset = buffer.projection_length(word_first_cell, boundary);
-                if scalar_offset == 0 {
-                    // term_flushln() consumes the current word's automatic
-                    // blank before its first projected scalar (term.c:205-207).
-                    // NBRZW/markers can put that boundary inside the word,
-                    // rather than in closes_before. The consumed separator
-                    // cannot later grant acceptance to a rejected glyph.
-                    let anchor = &mut anchors[anchor_count - 1];
-                    anchor.content = anchor.content.max(word_first_cell);
-                }
+                let scalar_offset =
+                    restarted_word_offset(buffer, anchors, boundary, word_first_cell);
                 if boundary <= word_first_cell || (scalar_offset == 0 && !starts_earlier_owner) {
                     if !represented_in_ir {
                         // The incoming projection may first settle an earlier
@@ -363,6 +373,12 @@ impl InlineBuilder {
                             word_first_cell,
                         )
                     };
+                    restore_restarted_separator(
+                        anchors,
+                        boundary,
+                        word_first_cell,
+                        closes_before > 0 && leading_cells > 0 && !starts_earlier_owner,
+                    );
                 } else if boundary < word_end && !represented_in_ir {
                     inside_splits
                         .entry(anchors[anchor_count - 1].owner.clone())
@@ -381,9 +397,65 @@ impl InlineBuilder {
             leading_cells,
             split_word,
             native_separator: 0,
-            retreated_sentence_separator: false,
+            preserve_retreated_separator: false,
+            consumed_initial_separator: false,
             prints_padding: false,
         }
+    }
+}
+
+// An initial authored blank was removed by encode1's BACKBEFORE. It
+// may have been projected before an older pending glyph was settled.
+fn trim_retreated_word_blank(nodes: &mut [Inline]) {
+    let Some(first) = nodes.first_mut() else {
+        return;
+    };
+    match first {
+        Inline::Text { value } | Inline::Code { value } if value.starts_with([' ', '\t']) => {
+            value.remove(0);
+        }
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => {
+            trim_retreated_word_blank(children);
+        }
+        _ => {}
+    }
+}
+
+fn starts_with_borrowed_output(
+    incoming: &[Inline],
+    current: Option<&super::super::NativeWordAnchor>,
+) -> bool {
+    current.is_some_and(|anchor| {
+        matches!(incoming.first(), Some(Inline::Anchor { id, .. })
+            if id.as_str().starts_with(super::INTERNAL_FIELD_WORD) && id.as_str() != anchor.owner)
+    })
+}
+
+fn observe_definition_word(
+    definition: &mut super::super::definition::DefinitionFieldState,
+    incoming: &[Inline],
+    separator: usize,
+) {
+    let row = &mut definition.hang_row;
+    let projected = super::super::super::plain_text(incoming);
+    let trimmed = projected.trim_end_matches(' ');
+    let trailing_spaces = projected.len().saturating_sub(trimmed.len());
+    let width = mant_ir::geometry::text_width(trimmed);
+    row.field_breakable |= trimmed.contains(' ');
+    row.field_unproven_break |= trimmed.contains('\n');
+    // term_fill() discards a field containing only ordinary breakable
+    // blanks. A nonbreaking blank from \~ or \0 is a printable cell.
+    let printable = trimmed
+        .chars()
+        .any(|ch| !super::super::super::is_formatter_word_blank(ch) && ch != '\n');
+    row.word(separator, width, trailing_spaces, printable);
+    if printable {
+        row.field_last_unbreakable_width = trimmed
+            .rsplit([' ', '\n'])
+            .find(|part| !part.is_empty())
+            .map_or(0, mant_ir::geometry::text_width);
     }
 }
 
@@ -478,4 +550,35 @@ fn borrowed_prefix_scalars(nodes: &[Inline], owner: &str) -> usize {
     let mut scalars = 0;
     count(nodes, owner, &mut scalars);
     scalars
+}
+
+// Only the blanks skipped by term_flushln() are outside the restarted
+// range. The word owns any remaining separator projected ahead of its text.
+fn restarted_word_offset(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &mut [super::super::NativeWordAnchor],
+    boundary: usize,
+    word_first_cell: usize,
+) -> usize {
+    let offset = buffer.projection_length(word_first_cell, boundary);
+    if offset == 0 {
+        // term_flushln() consumes the automatic blank before a word's first
+        // projected scalar (term.c:205-207). NBRZW and markers can place the
+        // boundary inside that word without accepting any of its glyphs.
+        let anchor = anchors.last_mut().expect("current native word");
+        anchor.content = anchor.content.max(word_first_cell);
+    }
+    offset
+}
+
+fn restore_restarted_separator(
+    anchors: &mut [super::super::NativeWordAnchor],
+    boundary: usize,
+    word_first_cell: usize,
+    projected: bool,
+) {
+    if projected {
+        let anchor = anchors.last_mut().expect("current native word");
+        anchor.content = boundary.max(anchor.start).min(word_first_cell);
+    }
 }

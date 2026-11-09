@@ -138,4 +138,6 @@ pub(in crate::mandoc::inline::flow) struct WordWriteReceipt {
     /// `term_field()` writes deferred vbl only at a Graph or backspace.
     /// NBRZW contributes graph acceptance, but never prints this padding.
     pub(in crate::mandoc::inline::flow) prints_padding: bool,
+    /// `encode1()` consumed the only authored cell before the first graph.
+    pub(in crate::mandoc::inline::flow) retreated_leading_blank: bool,
 }

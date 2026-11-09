@@ -366,7 +366,7 @@ impl InlineBuilder {
             self.execution.word_end_break = WordEndBreak::Clear;
             self.execution.wipe_remainder = false;
             self.execution.row_zero_graph = false;
-            self.execution.pending_breakable_spaces = 0;
+            self.execution.pending_word_spaces.clear();
             self.execution.trailing_output = TrailingOutput::None;
             if let Some(execution) = &mut self.execution.author_execution {
                 execution.field_output_start = self.nodes.len();

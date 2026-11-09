@@ -332,7 +332,7 @@ impl InlineBuilder {
             PendingBoundary::Tight
         };
         self.execution.empty_word = false;
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.pending_field_spaces = deferred_field_cells;
         self.execution.pending_field_gap_origin = PendingFieldGapOrigin::Other;
         self.execution.word_end_break = WordEndBreak::Clear;

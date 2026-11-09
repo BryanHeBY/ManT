@@ -46,15 +46,17 @@ impl InlineBuilder {
         if !self.execution.zero_advance.has_pending_glyph() {
             return;
         }
-        let breakable = std::mem::take(&mut self.execution.pending_breakable_spaces);
+        let breakable = self.materialize_pending_word_spaces();
         let field = std::mem::take(&mut self.execution.pending_field_spaces);
         let count = breakable.saturating_add(field);
         if count == 0 {
             return;
         }
-        self.append_projected(vec![Inline::Text {
-            value: " ".repeat(count),
-        }]);
+        if field > 0 {
+            self.append_projected(vec![Inline::Text {
+                value: " ".repeat(field),
+            }]);
+        }
         self.execution.trailing_output = if field > 0 {
             TrailingOutput::FieldBlank(field)
         } else {
@@ -222,7 +224,9 @@ impl InlineBuilder {
         if self.execution.wipe_remainder {
             return None;
         }
-        self.execution.zero_advance.resolve_at_word_boundary()
+        let projected = self.execution.zero_advance.resolve_at_word_boundary()?;
+        self.execution.settled_boundary_glyph = true;
+        Some(projected)
     }
 
     pub(in crate::mandoc) fn begin_word_projection(&mut self, next_is_visible: bool) {
@@ -235,7 +239,7 @@ impl InlineBuilder {
         next_is_visible: bool,
         next_has_glyph: bool,
         marker_blank_before_graph: bool,
-    ) {
+    ) -> bool {
         let continued_word = self.begin_native_word_registers(next_is_visible);
         self.settle_pending_word_break(next_is_visible, next_has_glyph);
         if continued_word && !self.execution.boundary.is_tight() {
@@ -280,7 +284,7 @@ impl InlineBuilder {
             self.execution
                 .zero_advance
                 .note_marker_blank_separator(cells);
-            return;
+            return std::mem::take(&mut self.execution.settled_boundary_glyph);
         }
         if !next_is_visible
             || self.execution.boundary.is_nonbreaking()
@@ -289,13 +293,14 @@ impl InlineBuilder {
             || !(self.execution.spacing.enabled()
                 || matches!(self.execution.boundary, PendingBoundary::Preserved))
         {
-            return;
+            return std::mem::take(&mut self.execution.settled_boundary_glyph);
         }
         let Some(glyph) = self.resolve_zero_advance_at_word_boundary() else {
-            return;
+            return std::mem::take(&mut self.execution.settled_boundary_glyph);
         };
         self.append_projected(glyph);
         self.execution.boundary = PendingBoundary::Tight;
+        std::mem::take(&mut self.execution.settled_boundary_glyph)
     }
 
     fn promote_word_keep(&mut self, next_is_visible: bool) {
@@ -313,9 +318,20 @@ impl InlineBuilder {
                 if let Some(glyph) = self.resolve_zero_advance_at_word_boundary() {
                     self.append_projected(glyph);
                 } else {
-                    self.append_projected(vec![Inline::Text {
-                        value: " ".repeat(1 + usize::from(self.execution.native_word_sentence)),
-                    }]);
+                    if self
+                        .execution
+                        .native_word_boundary
+                        .is_some_and(|boundary| !boundary.is_native_tight())
+                    {
+                        // term_word() wrote this separator before promoting
+                        // PREKEEP. The word's receipt decides whether it
+                        // survived a later BACKBEFORE retreat.
+                        self.execution.projected_keep_separator = true;
+                    } else {
+                        self.append_projected(vec![Inline::Text {
+                            value: " ".repeat(1 + usize::from(self.execution.native_word_sentence)),
+                        }]);
+                    }
                     self.execution.formatter_column = FormatterColumn::Advanced;
                 }
                 self.execution.boundary = PendingBoundary::Tight;
@@ -430,6 +446,8 @@ impl InlineBuilder {
         // term_word() consumes SENTENCE before interpreting its payload;
         // empty/control-only/generated words are still real word events.
         self.execution.native_word_sentence = std::mem::take(&mut self.execution.sentence_pending);
+        self.execution.projected_keep_separator = false;
+        self.execution.settled_boundary_glyph = false;
         if next_is_visible {
             // term_word() clears skipvsp before consuming the word itself.
             self.execution.vertical_space_debt = 0;
@@ -474,15 +492,14 @@ impl InlineBuilder {
         }
         let mut pending = Vec::new();
         self.execution.zero_advance.finish_into(&mut pending);
-        if !pending.is_empty()
-            && (self.execution.pending_breakable_spaces > 0
-                || self.execution.pending_field_spaces > 0)
-        {
-            let spaces = std::mem::take(&mut self.execution.pending_breakable_spaces)
-                .saturating_add(std::mem::take(&mut self.execution.pending_field_spaces));
-            self.append_projected(vec![Inline::Text {
-                value: " ".repeat(spaces),
-            }]);
+        if !pending.is_empty() {
+            self.materialize_pending_word_spaces();
+            let field = std::mem::take(&mut self.execution.pending_field_spaces);
+            if field > 0 {
+                self.append_projected(vec![Inline::Text {
+                    value: " ".repeat(field),
+                }]);
+            }
         }
         self.append_projected(pending);
     }

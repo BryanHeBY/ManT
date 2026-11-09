@@ -264,7 +264,7 @@ impl InlineBuilder {
         self.execution.boundary = PendingBoundary::Ordinary;
         self.execution.empty_word = false;
         self.execution.trailing_output = TrailingOutput::None;
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.pending_field_spaces = 0;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;

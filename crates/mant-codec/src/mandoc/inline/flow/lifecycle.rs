@@ -29,7 +29,7 @@ impl InlineExecutionState {
             formatter_column: FormatterColumn::Origin,
             empty_word: false,
             trailing_output: TrailingOutput::None,
-            pending_breakable_spaces: 0,
+            pending_word_spaces: Vec::new(),
             pending_field_spaces: 0,
             pending_field_gap_origin: definition::PendingFieldGapOrigin::Other,
             pending_line_indent: 0,
@@ -63,6 +63,8 @@ impl InlineExecutionState {
             native_word_boundary: None,
             sentence_pending: false,
             native_word_sentence: false,
+            projected_keep_separator: false,
+            settled_boundary_glyph: false,
             native_word_owner: None,
             native_owner_serial: 0,
             plain_input: super::plain_input::PlainInputUnit::default(),
@@ -101,7 +103,7 @@ impl InlineExecutionState {
         self.formatter_column = FormatterColumn::Origin;
         self.empty_word = false;
         self.trailing_output = TrailingOutput::None;
-        self.pending_breakable_spaces = 0;
+        self.pending_word_spaces.clear();
         self.pending_field_spaces = 0;
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;

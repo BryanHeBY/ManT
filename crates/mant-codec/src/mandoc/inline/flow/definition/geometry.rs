@@ -223,7 +223,7 @@ impl InlineBuilder {
         self.execution.last_visible_character = Some('\n');
         self.execution.trailing_output = TrailingOutput::None;
         self.execution.boundary = PendingBoundary::Ordinary;
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.pending_field_spaces = 0;
         self.execution.formatter_column = FormatterColumn::Origin;
     }

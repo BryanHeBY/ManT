@@ -1,6 +1,7 @@
 """Verify shared source-line identities and both directions of row errors."""
 
 from collections import Counter
+import gzip
 from itertools import product
 import json
 import unittest
@@ -9,6 +10,36 @@ from scripts.roff.fixtures import record_shared_source_lines as fixture
 
 
 class SharedSourceLineFixture(unittest.TestCase):
+    def test_deferred_word_source_and_oracle_receipts(self):
+        path = fixture.FIXTURE.parents[1] / "deferred_word_spaces" / "cases.json.gz"
+        recorded = json.loads(gzip.decompress(path.read_bytes()))
+        self.assertEqual(recorded["oracle_sha256"], fixture.load()["oracle_sha256"])
+        self.assertEqual(recorded["terminal_width"], 160)
+        cases = recorded["cases"]
+        self.assertEqual(Counter(case["group"] for case in cases), {
+            "N1": 720, "N1/same-line": 12, "N1b/field": 24, "N1b/link": 12,
+            "N1b/register": 15, "N1b/partial": 4, "N1b/word-boundaries": 756,
+            "N1b/keep": 162,
+        })
+        self.assertEqual(len({case["sha256"] for case in cases}), 1692)
+        self.assertEqual(len({(case["group"], case["id"]) for case in cases}), len(cases))
+        allowed = 0
+        for case in cases:
+            self.assertEqual(fixture.digest(case["source"].encode()), case["sha256"], case["id"])
+            self.assertEqual(set(case["profiles"]), set(fixture.PROFILES), case["id"])
+            for profile, (status, stdout, stderr) in case["profiles"].items():
+                self.assertRegex(stdout, r"^[0-9a-f]{64}$")
+                self.assertRegex(stderr, r"^[0-9a-f]{64}$")
+                if profile in {"ascii", "utf8", "tree"}:
+                    self.assertEqual(status, 0, (case["id"], profile))
+            if "native_rows" in case:
+                allowed += 1
+                self.assertEqual(case["group"], "N1b/field")
+                self.assertTrue(case["id"].startswith(("inset/", "diag/")))
+                self.assertEqual(case["rows"], [row.replace("\N{NO-BREAK SPACE}", " ")
+                                                for row in case["native_rows"]])
+        self.assertEqual(allowed, 9)
+
     def test_consumer_sources_keep_exact_bytes_and_all_profiles(self):
         directory = fixture.FIXTURE.parents[1] / "source_line_consumers"
         recorded = json.loads((directory / "receipts.json").read_bytes())

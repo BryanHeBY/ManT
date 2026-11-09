@@ -271,7 +271,7 @@ impl InlineBuilder {
         // automatic separator after an empty HEAD operand. The persistent
         // native ledger retains viscol/minbl; this old IR projection debt
         // must not be replayed as a scalar in the next BODY owner.
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         if native_tail_end || invisible_native_row_end {
             self.nodes.push(Inline::line_break());
             self.note_definition_output_row();

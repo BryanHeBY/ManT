@@ -208,7 +208,7 @@ fn a_real_newline_selects_nospace_even_after_a_graphless_word() {
             &mut builder,
             text_operand(&parsed.document.root, "\\&").unwrap(),
         );
-        assert_eq!(builder.execution.pending_breakable_spaces, 0);
+        assert_eq!(builder.execution.pending_word_spaces, []);
         builder.append_text("BODY");
         let text = crate::mandoc::inline::plain_text(&builder.finish_preserving_rows());
         assert_eq!(

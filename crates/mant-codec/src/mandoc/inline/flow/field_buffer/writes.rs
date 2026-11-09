@@ -249,16 +249,19 @@ impl FieldBuffer {
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
         self.word_first_content = None;
+        let mut retreated_leading_blank = false;
         for write in writes {
             match write {
                 FieldWrite::Cell(FieldCell::Graph { text, width }) => {
-                    self.encode_graph(*text, *width, true);
+                    retreated_leading_blank |= self.encode_graph(*text, *width, true);
                 }
                 FieldWrite::Cell(FieldCell::Hyphen) => {
-                    self.encode_graph('-', 1, true);
+                    retreated_leading_blank |= self.encode_graph('-', 1, true);
                     *self.cells.last_mut().expect("encoded hyphen") = FieldCell::Hyphen;
                 }
-                FieldWrite::OwnedBlank { projected } => self.encode_graph('\u{a0}', 1, *projected),
+                FieldWrite::OwnedBlank { projected } => {
+                    retreated_leading_blank |= self.encode_graph('\u{a0}', 1, *projected);
+                }
                 FieldWrite::Cell(cell) => {
                     if matches!(cell, FieldCell::BreakMarker) {
                         self.last_break_marker = Some(self.cells.len());
@@ -309,6 +312,7 @@ impl FieldBuffer {
             first_content_cell,
             end_cell,
             prints_padding,
+            retreated_leading_blank,
         }
     }
     pub(in crate::mandoc::inline::flow) fn has_projected_pass(&self, end: usize) -> bool {
@@ -319,7 +323,13 @@ impl FieldBuffer {
         !self.projected_pass_ends.is_empty()
     }
 
-    fn encode_graph(&mut self, text: char, width: usize, projected: bool) {
+    fn encode_graph(&mut self, text: char, width: usize, projected: bool) -> bool {
+        let retreated_leading_blank = self.backbefore_armed
+            && self.word_first_content == self.cells.len().checked_sub(1)
+            && matches!(
+                self.cells.last(),
+                Some(FieldCell::BreakableBlank | FieldCell::Tab)
+            );
         self.push_graph(text, width);
         if !projected {
             let prefix = self.projection_prefix.last_mut().expect("encoded graph");
@@ -330,6 +340,7 @@ impl FieldBuffer {
             self.backbefore_armed = true;
             self.pending_projection_graph = self.cells.len().checked_sub(1);
         }
+        retreated_leading_blank
     }
 
     /// A drained IR owner is immutable. Backtracking remains native state,
@@ -378,8 +389,17 @@ impl FieldBuffer {
                     self.projection_prefix.pop();
                     self.pending_projection_graph = None;
                 }
-                Some(_) => {
-                    if let Some(graph) = self.pending_projection_graph.take() {
+                Some(previous) => {
+                    let pending = self.pending_projection_graph.take();
+                    // ASCII_NBRSP prints its queued advance before the
+                    // backspace. The replacement occupies that blank, not
+                    // the graph that originally armed BACKBEFORE (term.c:389-435).
+                    let overwritten = if matches!(previous, FieldCell::NonBreakingBlank) {
+                        self.cells.len().checked_sub(1)
+                    } else {
+                        pending
+                    };
+                    if let Some(graph) = overwritten {
                         // A glyph can stay pending across invisible controls.
                         // Each replacement advances the pending graph, so
                         // these adjusted suffixes are disjoint over a field.

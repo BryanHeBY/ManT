@@ -73,8 +73,8 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
             let start = (*content).max(pass_start);
             let accepted_end = end.min(pass.end);
+            let (printed_end, printed) = printed_ends[pass_index];
             if start < accepted_end {
-                let (printed_end, printed) = printed_ends[pass_index];
                 let padding_start = if preserve_literal_whitespace
                     && anchor.projection
                         == super::super::WordProjectionPolicy::SourceLiteralWhitespace
@@ -108,7 +108,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                 acceptance.scalars += buffer.projection_length(start, accepted_end);
                 acceptance.native_cells = true;
                 if start == *content {
-                    acceptance.prefix_printed =
+                    acceptance.prefix_printed |=
                         buffer.printed_columns(start, accepted_end, 0, 0).is_some();
                 }
             }

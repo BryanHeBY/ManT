@@ -62,11 +62,13 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         | RoffInlineEvent::Overstrike { .. } => true,
         _ => false,
     });
-    builder.begin_word_projection_with_break(
+    let settled_boundary_glyph = builder.begin_word_projection_with_break(
         true,
         !builder.in_definition_field() || has_glyph,
         starts_with_break_marker_blank(&events),
     );
+    builder.execution.settled_boundary_glyph =
+        settled_boundary_glyph && matches!(origin, WordSource::Text(_));
     let pending_word_end_break = builder.take_word_end_break();
     // term_word() stores a previous operand's \p in the native buffer.
     // Its actual automatic separator is consumed by term_fill(), before

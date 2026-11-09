@@ -24,7 +24,7 @@ impl InlineBuilder {
     /// one ordinary boundary, but padding already queued on its left must not
     /// be replayed in addition to the following word's own boundary.
     pub(in crate::mandoc) fn consume_compacted_pending_padding(&mut self) {
-        self.execution.pending_breakable_spaces = 0;
+        self.execution.pending_word_spaces.clear();
         self.execution.pending_field_spaces = 0;
     }
 
@@ -291,7 +291,7 @@ impl InlineBuilder {
             // breakable padding a field flush already emitted is
             // unprinted input (term.c:205-207), not content.
             self.execution.pending_field_spaces = 0;
-            self.execution.pending_breakable_spaces = 0;
+            self.execution.pending_word_spaces.clear();
             trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
             self.execution.last_visible_character = last_visible_character(&self.nodes);
         }
@@ -367,10 +367,8 @@ impl InlineBuilder {
                 == super::super::definition::PendingFieldGapOrigin::AutomaticWord
             && self.execution.pending_field_spaces > 0;
         if transferred_automatic {
-            self.execution.pending_breakable_spaces = self
-                .execution
-                .pending_breakable_spaces
-                .saturating_add(std::mem::take(&mut self.execution.pending_field_spaces));
+            let spaces = std::mem::take(&mut self.execution.pending_field_spaces);
+            self.defer_current_word_spaces(spaces);
             self.execution.pending_field_gap_origin =
                 super::super::definition::PendingFieldGapOrigin::Other;
         }
@@ -386,6 +384,11 @@ impl InlineBuilder {
             self.execution.plain_input.anchors.last()
         }
         .map(|anchor| anchor.owner.clone());
+        let earlier_spaces = if accepted_row_break == 0 && !empty_word {
+            self.materialize_pending_word_spaces()
+        } else {
+            0
+        };
         if word
             && (self.execution.pending_field_spaces == 0
                 || accepted_row_break > 0
@@ -400,13 +403,20 @@ impl InlineBuilder {
         if accepted_row_break > 0 {
             // A consumed \p separator closes the already accepted prefix.
             // Its blank is part of the break, not a new formatter word cell.
-            self.execution.pending_breakable_spaces = 0;
             trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
             for _ in 0..accepted_row_break {
                 let row_indent = self.take_definition_row_indent();
                 super::push_row_break(&mut self.nodes, row_indent);
             }
             layout_start = self.nodes.len();
+            // The pass can stop skipping ordinary blanks at TABREF.
+            // Only cells before the restarted cursor were consumed.
+            if !empty_word
+                && self.materialize_pending_word_spaces() > 0
+                && let Some(marker) = native_anchor_marker.as_ref()
+            {
+                self.nodes.push(Inline::anchor(marker.clone()));
+            }
             if leading_cells > 0 {
                 push_text(&mut self.nodes, " ".repeat(leading_cells));
             }
@@ -428,8 +438,12 @@ impl InlineBuilder {
             // same minbl again at the next pre_br (term.c:389-427).
             let field_padding =
                 self.execution.pending_field_spaces > 0 && projection.prints_padding;
+            let add_space = add_space && (native_separator > 0 || earlier_spaces == 0);
+            let virtual_padding = !empty_word
+                && native_separator == 0
+                && self.projects_automatic_space(spacing_boundary, add_space);
             if word
-                && field_padding
+                && (field_padding || virtual_padding)
                 && let Some(marker) = native_anchor_marker.as_ref()
             {
                 self.mark_native_field_prefix(marker);
@@ -439,10 +453,14 @@ impl InlineBuilder {
                 add_space,
                 empty_word,
                 field_padding,
-                native_separator.max(1),
+                if transferred_automatic {
+                    0
+                } else {
+                    native_separator
+                },
             );
             if word
-                && field_padding
+                && (field_padding || virtual_padding)
                 && let Some(marker) = native_anchor_marker
             {
                 // Device minbl is field geometry, not a native buffer cell.
@@ -462,7 +480,13 @@ impl InlineBuilder {
         projection: &super::record::WordPassProjection,
     ) -> (PendingBoundary, bool) {
         let native_separator = projection.native_separator;
-        if word && self.execution.no_fill_word_active && boundary == PendingBoundary::CommittedField
+        if projection.consumed_initial_separator {
+            // The word wrote a blank, but an accepted pass or BACKBEFORE
+            // consumed it. A presentation fallback cannot count it again.
+            (boundary, false)
+        } else if word
+            && self.execution.no_fill_word_active
+            && boundary == PendingBoundary::CommittedField
         {
             // The committed field already represents its positioning
             // and the following ordinary word blank. term_word() must
@@ -487,9 +511,10 @@ impl InlineBuilder {
             (PendingBoundary::Preserved, true)
         } else if word
             && native_separator > 0
-            && (!boundary.is_tight()
+            && ((empty_word && self.execution.settled_boundary_glyph)
+                || !boundary.is_tight()
                 || self.execution.zero_advance_joined
-                || projection.retreated_sentence_separator)
+                || projection.preserve_retreated_separator)
         {
             // term_word()573-589 buffers this separator independently
             // of projected glyphs and authored leading/trailing blanks.
@@ -526,7 +551,7 @@ impl InlineBuilder {
         }
     }
 
-    pub(super) fn append_boundary_spacing(
+    fn append_boundary_spacing(
         &mut self,
         boundary: PendingBoundary,
         add_space: bool,
@@ -534,18 +559,6 @@ impl InlineBuilder {
         materialized_field_separator: bool,
         automatic_spaces: usize,
     ) {
-        if !empty_word && self.execution.pending_breakable_spaces > 0 {
-            let spaces = " ".repeat(self.execution.pending_breakable_spaces);
-            self.push_field_owned_breakable_space(spaces);
-            let prior = match self.execution.trailing_output {
-                TrailingOutput::BreakableBlank(count) => count,
-                _ => 0,
-            };
-            self.execution.trailing_output = TrailingOutput::BreakableBlank(
-                prior.saturating_add(self.execution.pending_breakable_spaces),
-            );
-            self.execution.pending_breakable_spaces = 0;
-        }
         if materialized_field_separator {
             let count = self.execution.pending_field_spaces;
             let separator_start = self.nodes.len();
@@ -562,29 +575,17 @@ impl InlineBuilder {
             self.execution.last_visible_character = Some(' ');
             self.execution.formatter_column = FormatterColumn::Advanced;
         }
-        if !(self.execution.spacing.enabled()
-            || matches!(
-                boundary,
-                PendingBoundary::Preserved | PendingBoundary::Continued | PendingBoundary::Kept
-            ))
-            || boundary.is_tight()
-            || !add_space
-            || materialized_field_separator
-        {
+        if materialized_field_separator || !self.projects_automatic_space(boundary, add_space) {
             return;
         }
         if empty_word {
-            // A word boundary is real, but trailing formatter padding is not
-            // authored term content. Materialize it at the next glyph. CVS
-            // term_word() has already buffered this cell, so a line request
-            // must still close the otherwise invisible physical row.
-            self.execution.pending_breakable_spaces = self
-                .execution
-                .pending_breakable_spaces
-                .saturating_add(automatic_spaces);
-            self.execution.formatter_column = FormatterColumn::Advanced;
-            self.note_produced_formatter_cell(true);
+            if automatic_spaces > 0 {
+                self.defer_current_word_spaces(automatic_spaces);
+                self.execution.formatter_column = FormatterColumn::Advanced;
+                self.note_produced_formatter_cell(true);
+            }
         } else {
+            let automatic_spaces = automatic_spaces.max(1);
             self.push_field_owned_breakable_space(" ".repeat(automatic_spaces));
             let prior = match self.execution.trailing_output {
                 TrailingOutput::BreakableBlank(count) => count,
@@ -596,6 +597,86 @@ impl InlineBuilder {
             self.execution.has_printable_content = true;
             self.execution.formatter_column = FormatterColumn::Advanced;
         }
+    }
+
+    fn projects_automatic_space(&self, boundary: PendingBoundary, add_space: bool) -> bool {
+        add_space
+            && !boundary.is_tight()
+            && (self.execution.spacing.enabled()
+                || matches!(
+                    boundary,
+                    PendingBoundary::Preserved | PendingBoundary::Continued | PendingBoundary::Kept
+                ))
+    }
+
+    fn defer_current_word_spaces(&mut self, count: usize) {
+        let anchor = if self.in_definition_field() {
+            self.execution
+                .definition
+                .as_mut()
+                .and_then(|state| state.field_word_anchors.last_mut())
+        } else {
+            self.execution.plain_input.anchors.last_mut()
+        };
+        if let Some(anchor) = anchor {
+            anchor.content = anchor.start;
+            self.execution
+                .pending_word_spaces
+                .push(super::super::DeferredWordSpace {
+                    owner: self.execution.native_owner_serial,
+                    start: anchor.start,
+                    count,
+                });
+        }
+    }
+
+    /// Project the earlier word intervals before starting the next word's
+    /// scalar range. Stable markers can re-enter an owner after wrapping,
+    /// just like the existing pending-glyph projection.
+    pub(super) fn materialize_pending_word_spaces(&mut self) -> usize {
+        let mut spaces = std::mem::take(&mut self.execution.pending_word_spaces);
+        let mut count = 0usize;
+        for pending in spaces.drain(..) {
+            use super::super::field_buffer::FieldCell;
+            let (buffer, _) = self.execution.word_input();
+            let start = pending.start.max(buffer.resume_offset());
+            let end = pending
+                .start
+                .saturating_add(pending.count)
+                .min(buffer.cells().len());
+            let width = buffer
+                .cells()
+                .get(start..end)
+                .unwrap_or_default()
+                .iter()
+                .filter(|cell| {
+                    matches!(
+                        cell,
+                        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                    )
+                })
+                .count();
+            if width == 0 {
+                continue;
+            }
+            self.nodes.push(Inline::anchor(format!(
+                "{}{}",
+                super::INTERNAL_FIELD_WORD,
+                pending.owner
+            )));
+            self.push_field_owned_breakable_space(" ".repeat(width));
+            count = count.saturating_add(width);
+        }
+        self.execution.pending_word_spaces = spaces;
+        if count > 0 {
+            let prior = match self.execution.trailing_output {
+                TrailingOutput::BreakableBlank(prior) => prior,
+                _ => 0,
+            };
+            self.execution.trailing_output =
+                TrailingOutput::BreakableBlank(prior.saturating_add(count));
+        }
+        count
     }
 
     fn push_field_owned_breakable_space(&mut self, spaces: String) {

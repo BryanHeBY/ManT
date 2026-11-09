@@ -125,7 +125,7 @@ impl InlineExecutionState {
         self.formatter_column = FormatterColumn::Origin;
         self.empty_word = false;
         self.trailing_output = TrailingOutput::None;
-        self.pending_breakable_spaces = 0;
+        self.pending_word_spaces.clear();
         self.pending_field_spaces = 0;
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;

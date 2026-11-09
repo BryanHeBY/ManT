@@ -59,9 +59,18 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
     /// The word's generated field prefix was written before its content
     /// marker. This receipt owns positioning, not a native buffer scalar.
     projected_field_prefix: bool,
+    /// Native cells projected before the owner marker during PREKEEP.
+    /// They can print with a later graph, even if this word is empty.
     /// A raw no-fill source line retains its authored whitespace even when
     /// the accepted native pass has no printed graph. Generated words do not.
     projection: WordProjectionPolicy,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DeferredWordSpace {
+    owner: u64,
+    start: usize,
+    count: usize,
 }
 
 pub(in crate::mandoc) struct InlineBuilder {
@@ -140,7 +149,9 @@ pub(in crate::mandoc) struct InlineExecutionState {
     formatter_column: FormatterColumn,
     empty_word: bool,
     trailing_output: TrailingOutput,
-    pending_breakable_spaces: usize,
+    // Automatic separators written by earlier empty words, keyed by native
+    // owner serial. The next emitted graph must not inherit these scalars.
+    pending_word_spaces: Vec<DeferredWordSpace>,
     pending_field_spaces: usize,
     pending_field_gap_origin: definition::PendingFieldGapOrigin,
     pending_line_indent: usize,
@@ -212,6 +223,8 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// `term_word` consumes it even when that word has no visible glyph.
     sentence_pending: bool,
     native_word_sentence: bool,
+    projected_keep_separator: bool,
+    pub(in crate::mandoc::inline) settled_boundary_glyph: bool,
     pub(in crate::mandoc) native_word_owner: Option<String>,
     native_owner_serial: u64,
     pub(in crate::mandoc) concat_next_word: bool,
