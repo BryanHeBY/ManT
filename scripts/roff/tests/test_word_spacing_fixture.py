@@ -6,11 +6,30 @@ import json
 import unittest
 
 from scripts.roff.fixtures import record_word_spacing as recorder
+from scripts.roff.fixtures import record_word_passes as passes
 from scripts.roff.fixtures import record_word_projection as projection
 from scripts.roff.fixtures import record_word_receipts as receipts
 
 
 class WordSpacingFixtureTests(unittest.TestCase):
+    def test_ordered_marker_pass_matrix_keeps_every_source_and_profile(self):
+        matrix = json.loads(gzip.decompress(passes.FIXTURE.read_bytes()))
+        self.assertEqual(matrix["terminal_width"], 160)
+        self.assertEqual(matrix["oracle_sha256"],
+                         "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e")
+        cases = matrix["cases"]
+        self.assertEqual(Counter(case["cohort"] for case in cases),
+                         {"cross": 768, "wrapper": 324, "consumer": 17})
+        self.assertEqual(len({case["source_sha256"] for case in cases}), len(cases))
+        self.assertEqual(Counter(case["profiles"]["lint"][0] for case in cases),
+                         {0: 917, 1: 192})
+        for expected, actual in zip(passes.specifications(), cases, strict=True):
+            with self.subTest(case=actual["id"]):
+                self.assertEqual(expected, {key: actual[key] for key in expected})
+                self.assertEqual(receipts.digest(actual["source"].encode()), actual["source_sha256"])
+                self.assertEqual(set(actual["profiles"]), set(receipts.PROFILES))
+                self.assertTrue(actual["tree_words"])
+
     def test_all_core_axes_and_independent_control_rows_are_recorded(self):
         fixture = json.loads(recorder.FIXTURE.read_text())
         cases = fixture["cases"]

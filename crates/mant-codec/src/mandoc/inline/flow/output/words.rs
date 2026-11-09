@@ -76,7 +76,6 @@ impl InlineBuilder {
             Vec::new(),
             false,
             TrailingOutput::None,
-            0,
             WordProjectionPolicy::Printed,
         );
     }
@@ -265,25 +264,12 @@ impl InlineBuilder {
             // (term.c:901-908): resolving the glyph at this virtual boundary
             // would instead eat the separator and arm the marker's break on
             // the wrong cell. Keep the glyph pending; the word's own blank
-            // settles it. The surviving separator is the blank term_word()
-            // actually wrote before the marker, so it exists only where the
-            // entry state allowed one: spacing enabled (`.Sm on`) or the
-            // first fragment after the transition (`Preserved`/`Continued`),
-            // never across a tight join — TERMP_NOSPACE wrote nothing
-            // (term.c:573-580).
+            // settles it. The shared field receipt projects any separator
+            // after the glyph only if the native cell is printed.
             // A completed BACKBEFORE glyph still occupies its cell when a
             // second \\z has armed BACKAFTER. Both flags coexist upstream:
             // the marker's author blank, rather than this automatic blank,
             // is what the next encode1() retreats over (term.c:901-927).
-            let native_boundary = self
-                .execution
-                .native_word_boundary
-                .unwrap_or(self.execution.boundary);
-            let cells = usize::from(!native_boundary.is_native_tight())
-                * (1 + usize::from(self.execution.native_word_sentence));
-            self.execution
-                .zero_advance
-                .note_marker_blank_separator(cells);
             return std::mem::take(&mut self.execution.settled_boundary_glyph);
         }
         if !next_is_visible

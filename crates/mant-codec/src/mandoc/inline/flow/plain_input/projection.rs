@@ -107,9 +107,9 @@ pub(super) fn retain_blank_only_unit_output(
     }
 }
 
-/// Completed blank rows in filled output are layout facts. Literal rows can
-/// precede another source word in the same owner, so they must appear in
-/// the inline stream instead of waiting for the final paragraph drain.
+/// The supplied row origin determines the completed row's projection.
+/// Literal rows can precede another source word in the same owner, so
+/// they enter the inline stream immediately.
 pub(super) fn project_retired_empty_rows(
     execution: &mut super::super::InlineExecutionState,
     nodes: &mut Vec<Inline>,

@@ -31,6 +31,13 @@ const REARM: &str =
     include_str!("../../mant-engine/tests/roff_lowering/word_projection/rearm-prefix-space.1");
 const LINK_REARM: &str =
     include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-rearm.1");
+const DEFERRED_MARKER: &str =
+    include_str!("../../mant-engine/tests/roff_lowering/word_passes/deferred-marker.1");
+const LINKED_MARKER: &str =
+    include_str!("../../mant-engine/tests/roff_lowering/word_passes/linked-marker.1");
+const EMPTY_LINK_BEFORE_PP: &str = include_str!(
+    "../../mant-engine/tests/roff_lowering/word_passes/terminal-empty-link-before-pp.1"
+);
 const LINK_SPACES: [&str; 3] = [
     include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-source-spaces-1.1"),
     include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-source-spaces-2.1"),
@@ -170,6 +177,62 @@ fn overwritten_cells_and_hard_rows_remain_searchable_after_reader_readbacks() {
             }
         });
     }
+}
+
+#[test]
+fn successive_passes_keep_the_printed_rows_and_link_cells_after_readback() {
+    // The pinned term_field() advances only before an actual output
+    // character. The word_passes sources retain the exact native rows.
+    for (source, rows, word, link_blanks) in [
+        (
+            DEFERRED_MARKER,
+            &["ALPHAX", " BETA", "OMEGA"][..],
+            "BETA",
+            None,
+        ),
+        (
+            LINKED_MARKER,
+            &["ALPHAX", "YBETA:", "https://x.io", "OMEGA"][..],
+            "YBETA",
+            Some(0),
+        ),
+    ] {
+        visit_readbacks(source, |content| {
+            for width in [20, 40, 78] {
+                assert_rows(content, width, rows, word, link_blanks);
+            }
+        });
+    }
+}
+
+#[test]
+fn reader_keeps_the_rejected_tail_row_before_a_positive_paragraph_gap() {
+    // The pinned formatter emits an empty term_flushln() tail and then
+    // a separate term_vspace(). Neither gives the rejected link a label.
+    visit_readbacks(EMPTY_LINK_BEFORE_PP, |content| {
+        for width in [20, 40, 78] {
+            let (mut app, terminal) = paint(content, width);
+            let buffer = terminal.backend().buffer();
+            let (column, first_row) = only_position(buffer, "ALPHAX");
+            let (next_column, next_row) = only_position(buffer, "OMEGA");
+            assert_eq!((next_column, next_row), (column, first_row + 3));
+            assert!(
+                (first_row + 1..next_row)
+                    .all(|row| (column..width + 2).all(|x| buffer[(x, row)].symbol() == " "))
+            );
+            click(&mut app, column + 6, first_row);
+            assert_eq!(opened_targets(&mut app), Vec::<String>::new());
+            copy(&mut app, (next_column, next_row), "OMEGA");
+            let rendered = DocumentView::new(content).render(width);
+            let heading = rendered.anchor_row("description").unwrap();
+            let hits = rendered.search("OMEGA");
+            assert_eq!(hits.len(), 1);
+            assert_eq!(
+                hits[0].row - heading,
+                usize::from(next_row - only_position(buffer, "DESCRIPTION").1)
+            );
+        }
+    });
 }
 
 #[test]

@@ -140,7 +140,6 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         execution.output,
         occupies_literal_row,
         execution.trailing_output,
-        execution.projected_word_separator,
         origin.projection(),
     );
     if execution.definitive_reject {

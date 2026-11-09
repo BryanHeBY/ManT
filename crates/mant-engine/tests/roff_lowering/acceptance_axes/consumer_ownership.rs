@@ -122,7 +122,9 @@ fn pending_and_unicode_cells_keep_exact_scalar_owner_boundaries() {
     for (source, expected_text, range) in [
         (
             super::load_case("word_owner_pending_prefix").source,
-            "PY",
+            // The pinned terminal closes the accepted PY pass, then the
+            // empty rejected tail. Those breaks follow the link's range.
+            "PY\n\n",
             (1, 2),
         ),
         (

@@ -198,7 +198,7 @@ impl InlineBuilder {
             // it (term.c:389-427). If the literal owner already represents
             // that row with retained source SP/TAB, the same endline closes
             // that content. A separate empty-row receipt would replay it.
-            self.record_completed_rows(1, origin);
+            self.record_completed_rows(1, plain_flush.row_origin(origin));
         }
         // An empty native buffer can end an already projected device row
         // (term_newln's viscol guard). Its zero-width word owner cannot hide

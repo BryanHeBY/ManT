@@ -38,9 +38,24 @@ pub(in crate::mandoc::inline::flow) enum PlainFlushOutcome {
     UnprintedTail,
     RepresentedTail,
     Rejected,
+    RejectedAfterPrintedPass,
 }
 
 impl PlainFlushOutcome {
+    fn rejected_prefix(
+        buffer: &super::field_buffer::FieldBuffer,
+        passes: &[super::field_buffer::FillPass],
+    ) -> Self {
+        if passes
+            .last()
+            .is_some_and(|pass| buffer.printed_content_end(0, pass.end) > 0)
+        {
+            Self::RejectedAfterPrintedPass
+        } else {
+            Self::Rejected
+        }
+    }
+
     const fn from_unprinted_tail(unprinted: bool, inherited: bool) -> Self {
         if !unprinted {
             Self::Ordinary
@@ -52,7 +67,23 @@ impl PlainFlushOutcome {
     }
 
     pub(in crate::mandoc::inline::flow) const fn rejected(self) -> bool {
-        matches!(self, Self::Rejected)
+        matches!(self, Self::Rejected | Self::RejectedAfterPrintedPass)
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn row_origin(
+        self,
+        fallback: super::output::CompletedRowOrigin,
+    ) -> super::output::CompletedRowOrigin {
+        use super::output::CompletedRowOrigin;
+        match (self, fallback) {
+            (Self::RejectedAfterPrintedPass, CompletedRowOrigin::Layout) => {
+                // The same prose unit already printed its accepted prefix.
+                // Its rejected tail reaches a separate unconditional
+                // endline (term.c:143-146,250-253), before any term_vspace.
+                CompletedRowOrigin::HardLine
+            }
+            _ => fallback,
+        }
     }
 
     pub(in crate::mandoc::inline::flow) const fn closes_unprinted_row(self) -> bool {
@@ -231,14 +262,9 @@ impl InlineBuilder {
         if !reprojected_literal_rows {
             project_retired_empty_rows(execution, nodes, empty_rows, row_origin);
         }
-        drop(buffer);
-        drop(anchors);
-        if authorless_definition {
-            Self::clear_authorless_definition_at(execution, nodes);
-        } else {
-            Self::clear_plain_flush_unit_at(execution, nodes);
-        }
-        PlainFlushOutcome::Rejected
+        let outcome = PlainFlushOutcome::rejected_prefix(&buffer, &passes);
+        Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
+        outcome
     }
 
     /// Move the selected native buffer and its owner interval as one unit;

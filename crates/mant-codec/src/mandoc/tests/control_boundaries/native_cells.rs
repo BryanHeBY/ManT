@@ -39,7 +39,9 @@ fn accepted_plain_flushes_project_every_final_native_pass() {
         (".No X\\p\n.ta 2n\n.No Y\n.No AFTER\n", "X\nY AFTER"),
         (".No \\zX\\p\n.ta 2n\n.No Y\n.No AFTER\n", "XY\nAFTER"),
         (".No \\p\n.ta 2n\n.No Y\n.No AFTER\n", ""),
-        (".No X\\p\n.ta 2n\n.No \\p\n.No Z\n.No AFTER\n", "X"),
+        // term_flushln() closes the printed pass and then the empty
+        // rejected tail before the separate ENDTEST section gap.
+        (".No X\\p\n.ta 2n\n.No \\p\n.No Z\n.No AFTER\n", "X\n\n"),
         (".Em X\\p\n.ta 2n\n.Sy Y\n.No AFTER\n", "X\nY AFTER"),
         (".No X\\p\n.No Y\n.No AFTER\n", "X\nY AFTER"),
         (

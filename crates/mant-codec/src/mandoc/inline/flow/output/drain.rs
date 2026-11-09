@@ -93,7 +93,7 @@ impl InlineBuilder {
             // blanks reach term_flushln's endline even when nbr == 0;
             // their filtered IR text cannot supply an invisible-row fallback.
             // A pure owner drain must not manufacture that native close.
-            self.record_completed_vertical_rows(1);
+            self.record_completed_rows(1, plain_flush.row_origin(CompletedRowOrigin::Layout));
             self.execution.zero_advance.discard_at_row_end();
             self.execution.word_end_break = WordEndBreak::Clear;
             self.execution.formatter_column = FormatterColumn::Origin;

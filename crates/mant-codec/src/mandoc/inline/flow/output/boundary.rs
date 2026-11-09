@@ -34,7 +34,6 @@ impl InlineBuilder {
             false,
             true,
             false,
-            0,
             WordProjectionPolicy::Printed,
         );
     }
@@ -47,7 +46,6 @@ impl InlineBuilder {
             true,
             true,
             false,
-            0,
             WordProjectionPolicy::Printed,
         );
     }
@@ -60,7 +58,6 @@ impl InlineBuilder {
         mut incoming: Vec<Inline>,
         occupies_row: bool,
         trailing_output: TrailingOutput,
-        projected_separator: usize,
         projection: WordProjectionPolicy,
     ) {
         self.note_produced_formatter_cell(occupies_row);
@@ -69,7 +66,6 @@ impl InlineBuilder {
             true,
             occupies_row,
             trailing_output == TrailingOutput::FixedBlank,
-            projected_separator,
             projection,
         );
         if trailing_output != TrailingOutput::None {
@@ -85,7 +81,6 @@ impl InlineBuilder {
         word: bool,
         occupies_row: bool,
         incoming_starts_with_fixed_blank: bool,
-        projected_separator: usize,
         projection: WordProjectionPolicy,
     ) {
         if incoming.is_empty() && !word {
@@ -159,12 +154,6 @@ impl InlineBuilder {
         } else {
             super::record::WordPassProjection::default()
         };
-        // A marker-blank retreat already emitted these native cells after
-        // the cached glyph. Only the remaining write receipt can add cells
-        // before the new payload; never replay them before that old glyph.
-        projection.native_separator = projection
-            .native_separator
-            .saturating_sub(projected_separator);
         let starts_output_row = incoming_has_line_break
             || projection.split_word.is_some()
             || !projection.closes_before.is_empty();
@@ -176,7 +165,7 @@ impl InlineBuilder {
             boundary,
             word,
             empty_word,
-            add_space && projected_separator == 0,
+            add_space,
             &mut projection,
             &mut payload,
         );
@@ -584,8 +573,7 @@ impl InlineBuilder {
             // term_word()573-589 buffers this separator independently
             // of projected glyphs and authored leading/trailing blanks.
             // Its write receipt, rather than the last visible IR scalar,
-            // proves the cell survived BACKBEFORE. Marker-blank projection
-            // has already subtracted its own cells. Only the actual 2→1
+            // proves the cell survived BACKBEFORE. Only the actual 2→1
             // write/retreat receipt additionally proves that a virtual
             // boundary kept one SENTENCE cell after the cached glyph;
             // other tight presentation joins retain their existing policy.

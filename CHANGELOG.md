@@ -119,6 +119,9 @@ that crate was not published for that change.
 - Keep completed empty roff alignment rows as hard lines, including
   request-only groups. Markdown preserves those rows independently of
   an adjacent paragraph gap.
+- Retire unprinted word separators at their native pass boundary. Later
+  breaks preserve authored spaces, accepted glyphs, link ownership and
+  completed hard rows in reading output and Markdown round trips.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

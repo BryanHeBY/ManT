@@ -101,9 +101,6 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) table_device_buffer_written: bool,
     pub(in crate::mandoc) table_line_needs_width: bool,
     pub(in crate::mandoc) joins_preceding_node: bool,
-    /// Automatic separator cells already placed after a cached glyph by
-    /// the marker-blank path, rather than before this complete word.
-    pub(in crate::mandoc) projected_word_separator: usize,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
     pub(in crate::mandoc) trailing_output: TrailingOutput,
@@ -144,7 +141,6 @@ struct TextEventState {
     wiped: bool,
     /// A zero-width graph class cell (NBRZW) armed `graph` this word.
     zero_graph_seen: bool,
-    projected_word_separator: usize,
 }
 
 /// Decode a text node while retaining formatter state in its caller's inline
@@ -254,7 +250,6 @@ fn execute_formatter_word_events(
     }
     word.finish_content_prefix();
     word.flush_segment();
-    context.zero_advance.clear_marker_blank_separator();
     finish_text_execution(events, context.zero_advance, word)
 }
 
@@ -292,7 +287,6 @@ fn finish_text_execution(
         table_device_buffer_written,
         table_line_needs_width,
         joins_preceding_node: zero_advance.take_preceding_join(),
-        projected_word_separator: text_state.projected_word_separator,
         source_continuation,
         pending_word_end_break: text_state.pending_word_end_break,
         pending_word_end_break_separated: text_state.pending_word_end_break

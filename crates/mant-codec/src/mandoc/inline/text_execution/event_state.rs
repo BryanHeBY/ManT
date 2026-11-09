@@ -39,7 +39,6 @@ impl TextEventState {
             graph_count: 0,
             wiped: false,
             zero_graph_seen: false,
-            projected_word_separator: 0,
         }
     }
 }
@@ -83,20 +82,14 @@ pub(super) fn append_text_event(
             // independently until they accept their ordered cell interval.
             state.pending_word_end_break = false;
             if zero_advance.has_buffered_glyph() {
-                // CVS stores `\\p` in the same terminal buffer as a
-                // completed `\\z` glyph.  The intervening word blank settles
-                // that glyph first; the next graph's retreat consumes the
-                // marker's own blank (term.c:901-908), so the blank held
-                // before the marker — like the word separator of the `ph`
-                // shape — survives and prints after the settled glyph
-                // (term.c:573-576).  `breakline` stays armed: term_fill()
-                // cannot stop at the eaten blank and defers the break to
-                // the next surviving blank (term.c:294-295).
+                // Release the cached glyph and held author spaces in
+                // their source order. The next encode1() can consume
+                // the marker's raw blank, leaving the break pending
+                // (term.c:294-295,901-908).
                 zero_advance.flush_with_held(output, buffer, font, link);
-                let cells = zero_advance.take_marker_blank_separator();
-                buffer.extend(std::iter::repeat_n(' ', cells));
-                state.projected_word_separator =
-                    state.projected_word_separator.saturating_add(cells);
+                // The authored blank is not the automatic word separator.
+                // Only the field receipt can decide whether that separator
+                // survived the retreat and actually printed in its pass.
                 state.suppress_break_whitespace = true;
                 continue;
             }

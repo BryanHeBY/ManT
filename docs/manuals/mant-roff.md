@@ -915,7 +915,21 @@ Markdown export retains its explicit angle-URI autolink policy. A native `UR` su
 
 Semantic link annotations keep delayed glyphs with their original source operand. For example, `.Mt \zX a@example.org` reads `Xa@example.org`: `X` keeps the first operand's font, while only `a@example.org` is linked and copied by an address selection. Pure target decoding cannot erase that pending glyph or move its activation range.
 
-Native reading retains each accepted automatic separator written by `term_word()`, including a leading separator after an empty or control-only word. That source-buffer cell is distinct from the common manual margin and approximate device field origins, which remain omitted under the recorded geometry rules. Authored spaces and executed empty physical rows also remain observable. Portable Markdown protects accepted row-edge ASCII spaces with character entities; literal fences retain their accepted native row payload. Responsive HANG labels preserve the accepted hard-row sequence without promising the device's BRIND origin for each internal field pass; the separately recorded BODY origin remains active.
+Native reading retains automatic separators that `term_word()` buffers and
+`term_field()` prints, including a leading separator after an empty or
+control-only word. A pass retires unprinted padding at its end. A later
+`\p` or a newly cached zero-advance glyph acts only on the remaining
+cells. Retiring a pass does not erase the next row's authored leading
+space. If a prose flush prints an accepted pass before rejecting the
+remaining input, its empty tail closes a hard row independently of a
+following positive spacing request. The recorded geometry rules distinguish
+these source-buffer cells from the common manual margin and approximate
+device field origins.
+Authored spaces and executed empty physical rows also remain observable.
+Portable Markdown protects accepted row-edge ASCII spaces with character
+entities, and literal fences retain their accepted native row payload.
+Responsive HANG labels preserve the accepted hard-row sequence, while the
+separately recorded BODY origin remains active.
 
 Accepted inline children are the only visible body in native reading, Markdown, search, explain and TUI copy. BSD lifecycle operands keep the pinned validator's native spelling (for example, `-alphaBSD`); export does not insert lifecycle commentary. An accepted `Lk` colon and URI remain visible even when a descriptive label is clickable. Link identity is resolved after native field acceptance, including partial rejection. Private description and URI owners preserve output identity through field splits and are removed at IR drain; they neither execute another formatter word nor keep a page execution history. An earlier operand's delayed glyph cannot qualify a description or enter the fallback URI's activation range. If the native field rejects every link glyph, the authored destination still survives as typed identity with an empty label, matching the existing HTML identity contract; it has no visible activation range and does not recreate rejected prose or hard rows. Two authored occurrences with the same destination keep separate identities. Ordinary Markdown links retain their authored labels without roff-generated suffixes.
 

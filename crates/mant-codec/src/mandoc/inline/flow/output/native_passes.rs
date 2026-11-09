@@ -28,14 +28,30 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     use super::super::field_buffer::FieldCell;
 
     let mut lengths = BTreeMap::new();
-    let mut previous_end = buffer.resume_offset();
+    let mut previous_end = 0;
     let printed_ends: Vec<_> = passes
         .iter()
         .map(|pass| {
             let printed_end = buffer.printed_content_end(previous_end, pass.end);
             let printed = printed_end > previous_end;
+            // Acknowledged endlines already removed trailing SP from the
+            // projection. Do not charge those old scalar slots to later
+            // output when term_field's receipt retires unprinted padding.
+            // Preserve any intervening authored recovery spelling.
+            let mut projected_end = pass.end;
+            if buffer.has_projected_pass(pass.end) {
+                while projected_end > printed_end {
+                    let cell = projected_end - 1;
+                    if !matches!(buffer.cells()[cell], FieldCell::BreakableBlank)
+                        && buffer.projection_length(cell, projected_end) != 0
+                    {
+                        break;
+                    }
+                    projected_end = cell;
+                }
+            }
             previous_end = next_native_pass_start(buffer, pass.end);
-            (printed_end, printed)
+            (printed_end, printed, projected_end)
         })
         .collect();
     let mut pass_index = 0;
@@ -73,8 +89,9 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
             let start = (*content).max(pass_start);
             let accepted_end = end.min(pass.end);
-            let (printed_end, printed) = printed_ends[pass_index];
+            let (printed_end, printed, projected_end) = printed_ends[pass_index];
             if start < accepted_end {
+                let projected_end = projected_end.min(accepted_end);
                 let padding_start = if preserve_literal_whitespace
                     && anchor.projection
                         == super::super::WordProjectionPolicy::SourceLiteralWhitespace
@@ -87,7 +104,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                 } else {
                     start.max(printed_end)
                 };
-                for cell in padding_start..accepted_end {
+                for cell in padding_start..projected_end {
                     if matches!(
                         buffer.cells()[cell],
                         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
@@ -105,7 +122,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                         }
                     }
                 }
-                acceptance.scalars += buffer.projection_length(start, accepted_end);
+                acceptance.scalars += buffer.projection_length(start, projected_end);
                 acceptance.native_cells = true;
                 if start == *content {
                     acceptance.prefix_printed |=
