@@ -5,6 +5,15 @@ use super::super::{Font, Inline};
 use crate::mandoc::inline::font::style::styled_segment;
 use std::collections::BTreeMap;
 
+const PROJECTED_BLANK: &str = "\0mant:output-scope:projected-blank:";
+
+pub(super) fn projected_blank_count(node: &Inline) -> Option<usize> {
+    let Inline::Anchor { id, .. } = node else {
+        return None;
+    };
+    id.as_str().strip_prefix(PROJECTED_BLANK)?.parse().ok()
+}
+
 pub(in crate::mandoc::inline::flow) fn project(
     nodes: &mut Vec<Inline>,
     buffer: &FieldBuffer,
@@ -56,6 +65,10 @@ fn resolve(nodes: &mut Vec<Inline>, printed: &mut BTreeMap<String, (Font, usize)
         if let Inline::Anchor { id, .. } = &node
             && let Some((font, count)) = printed.remove(id.as_str())
         {
+            // This printed blank is outside the source-word scalar stream:
+            // the native buffer recorded its cell without a projection slot.
+            // Keep that fact beside the text for later layout receipts.
+            pending.push((Inline::anchor(format!("{PROJECTED_BLANK}{count}")), true));
             pending.push((styled_segment(" ".repeat(count), font), true));
         } else if matches!(node, Inline::LineBreak { .. }) {
             // A zero-scalar marker can precede an already projected

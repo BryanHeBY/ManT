@@ -137,6 +137,8 @@ that crate was not published for that change.
   including when the formatter rejects a later word pass.
 - Preserve completed empty rows at the end of section headings in terminal
   reading and excerpts.
+- Preserve native blank rows at hanging, paragraph and section boundaries.
+  Apply alignment to each accepted row across styled text and link labels.
 
 - Keep deferred native word spaces in their original acceptance ranges,
   including empty operands, retained link labels, and grouped word breaks.

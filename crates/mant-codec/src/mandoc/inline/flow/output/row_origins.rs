@@ -44,6 +44,7 @@ pub(in crate::mandoc::inline::flow) fn project_row_presentations(
         owner: None,
         scalar: 0,
         next: 0,
+        projected_blanks: 0,
         previous: BTreeMap::new(),
     };
     let start = output_start.min(nodes.len());
@@ -255,6 +256,7 @@ pub(in crate::mandoc::inline::flow) fn project_native_positions_with_tabs(
         owner: None,
         scalar: 0,
         next: 0,
+        projected_blanks: 0,
         previous: BTreeMap::new(),
     };
     // Earlier fields are already committed. The captured current-owner
@@ -348,6 +350,7 @@ struct OriginCursor<'a> {
     owner: Option<String>,
     scalar: usize,
     next: usize,
+    projected_blanks: usize,
     previous: BTreeMap<String, (usize, usize)>,
 }
 
@@ -373,15 +376,17 @@ impl OriginCursor<'_> {
         for node in nodes {
             self.project_node(node, &mut output);
         }
-        // An accepted graph can still be waiting in BACKAFTER without an IR
-        // scalar. Discharge that receipt only after this complete child list.
-        if self.has_unprojected_graph_here() {
-            self.emit_here(&mut output);
-        }
+        // A style or link can end inside one native word. Pending receipts
+        // are discharged only at the owner transition or root tail.
         output
     }
 
     fn project_node(&mut self, mut node: Inline, output: &mut Vec<ProjectedNode>) {
+        if let Some(count) = super::deferred_blanks::projected_blank_count(&node) {
+            self.projected_blanks = count;
+            output.push(ProjectedNode::content(node));
+            return;
+        }
         if let Inline::Anchor { id, .. } = &node
             && id.as_str().starts_with(INTERNAL_FIELD_PREFIX)
         {
@@ -403,12 +408,15 @@ impl OriginCursor<'_> {
             return;
         }
         if let Some(marker) = super::native_passes::native_word_marker(&node) {
+            self.projected_blanks = 0;
             // encode1() can write an accepted graph that the next word
             // overstrikes before it acquires an IR scalar (term.c:901-
             // 927). Its term_field() padding nevertheless printed. The
             // receipt owns that positioning even for an empty projected
             // owner; discharge it before advancing to the replacement.
-            if self.has_unprojected_graph_here() {
+            // Cached glyphs and pass boundaries can re-emit the same
+            // marker inside that word. It does not close the old owner.
+            if self.owner.as_deref() != Some(marker) && self.has_unprojected_graph_here() {
                 self.emit_here(output);
             }
             if let Some(owner) = self.owner.take() {
@@ -434,7 +442,7 @@ impl OriginCursor<'_> {
         }
         match &mut node {
             Inline::Text { value } | Inline::Code { value }
-                if !value.is_empty() && self.owner.is_some() =>
+                if !value.is_empty() && (self.owner.is_some() || self.projected_blanks > 0) =>
             {
                 self.project_text(&node, output);
                 return;
@@ -446,6 +454,7 @@ impl OriginCursor<'_> {
                 project_annotation(node, projected, output);
                 return;
             }
+            Inline::LineBreak {} | Inline::Equation { .. } => self.projected_blanks = 0,
             _ => {}
         }
         output.push(ProjectedNode::content(node));
@@ -515,6 +524,15 @@ impl OriginCursor<'_> {
             {
                 append_piece(node, &mut piece, output);
                 self.emit_here(output);
+            }
+            if self.projected_blanks > 0 {
+                self.projected_blanks -= 1;
+                if character == ' ' {
+                    piece.push(character);
+                    continue;
+                }
+                // A transformed projection can shorten the blank run.
+                self.projected_blanks = 0;
             }
             let spaces = (character == '\t')
                 .then(|| {

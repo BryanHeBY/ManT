@@ -184,3 +184,6 @@ mod hanging_alignment;
 
 #[path = "grouped_line_flush/empty_alignment.rs"]
 mod empty_alignment;
+
+#[path = "grouped_line_flush/accepted_passes.rs"]
+mod accepted_passes;

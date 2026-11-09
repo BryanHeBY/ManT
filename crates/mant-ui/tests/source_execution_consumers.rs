@@ -401,3 +401,36 @@ fn hanging_alignment_retains_the_live_paragraph_and_its_viewport_origins() {
         });
     }
 }
+
+#[test]
+fn accepted_pass_alignment_positions_the_next_styled_row() {
+    // The exact fixture ran pristine ASCII/UTF-8/HTML/tree/lint. term.c
+    // right-aligns the Y and BETA passes of one styled formatter word.
+    let source = include_str!(
+        "../../mant-engine/tests/roff_lowering/grouped_line_flush/alignment-passes-rj.1"
+    );
+    let content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+    );
+    for width in [40, 78] {
+        let rendered = DocumentView::new(&content).render(width);
+        let buffer = terminal_cells::paint(&rendered, width);
+        let first = rendered.anchor_row("description").unwrap() + 1;
+        for (offset, word) in [(1, "ALPHAX"), (2, ""), (3, "Y"), (4, "BETA")] {
+            terminal_cells::assert_row(
+                &buffer,
+                first + offset,
+                usize::from(width) - word.len(),
+                word,
+                "right-aligned passes",
+            );
+        }
+        assert_eq!(rendered.search("BETA").len(), 1);
+        let (mut app, terminal) = paint(&content, width);
+        copy_span(
+            &mut app,
+            position(terminal.backend().buffer(), "BETA"),
+            "BETA",
+        );
+    }
+}
