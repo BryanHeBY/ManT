@@ -17,6 +17,8 @@ fn heading_retires_only_the_row_consumed_by_its_native_pre_or_post() {
     // old \& with NEXT. The explicit .sp completes two old-owner rows;
     // it cannot move either of them below NEXT. Sh/Ss execute their own
     // mdoc pre/post and may leave the new BODY in literal mode.
+    // CVS also prints XNEXT on one device line for the delayed glyph
+    // case, but its tree has \zX in FIRST's BODY and NEXT in SS's HEAD.
     for (header, input, expected_title, previous_rows, literal_body) in [
         (MAN, "\\&\n.SS NEXT\n", "NEXT", 0, false),
         (MAN, ".nf\n\\&\n.SS NEXT\n", "NEXT", 0, false),
@@ -24,7 +26,7 @@ fn heading_retires_only_the_row_consumed_by_its_native_pre_or_post() {
         (MDOC, ".nf\n\\&\n.Ss NEXT\n", "NEXT", 1, true),
         (MDOC, ".nf\n\\&\n.Sh NEXT\n", "NEXT", 1, false),
         (MAN, ".nf\n\\z\n.SS NEXT\n", "EXT", 0, false),
-        (MAN, ".nf\n\\zX\n.SS NEXT\n", "XNEXT", 0, false),
+        (MAN, ".nf\n\\zX\n.SS NEXT\n", "NEXT", 1, false),
         (MAN, ".nf\nALPHA\\c\n.SS NEXT\n", "NEXT", 1, false),
         (MAN, ".nf\n\\&\n.sp 1\n.SS NEXT\n", "NEXT", 2, false),
     ] {
@@ -49,6 +51,12 @@ fn heading_retires_only_the_row_consumed_by_its_native_pre_or_post() {
             assert!(
                 matches!(previous.blocks.as_slice(), [Block::Preformatted { children, .. }]
                 if inline_text(children) == "ALPHA")
+            );
+        }
+        if input.contains("\\zX") {
+            assert!(
+                matches!(previous.blocks.as_slice(), [Block::Preformatted { children, .. }]
+                if inline_text(children) == "X")
             );
         }
         if input.contains(".sp") {
