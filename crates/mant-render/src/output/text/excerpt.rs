@@ -84,7 +84,7 @@ fn render_selection(
                 ))
             });
             let body = renderer.block_flow(blocks, 0);
-            if !root.is_empty() && !body.is_empty() {
+            if root.has_physical_rows() && body.has_physical_rows() {
                 root.gap(1);
             }
             root.extend(body);

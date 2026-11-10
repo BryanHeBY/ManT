@@ -25,10 +25,6 @@ enum Part {
 }
 
 impl Flow {
-    pub(super) fn is_empty(&self) -> bool {
-        self.parts.is_empty()
-    }
-
     pub(super) fn has_physical_rows(&self) -> bool {
         self.parts.iter().any(|part| match part {
             Part::Text(_) | Part::CompletedText(_) | Part::Literal(_) | Part::TableRule(_) => true,

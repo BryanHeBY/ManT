@@ -131,12 +131,12 @@ fn render_query_body_with(
         };
         let mut content = renderer.block_flow(&document.blocks, 0);
         content.extend(renderer.sections_flow(&document.sections, 0));
-        if !content.is_empty() {
+        if content.has_physical_rows() {
             // Page furniture has one explicit presentation separator. All
             // source-owned section/block gaps remain in the same flow.
             output.gap(1);
-            output.extend(content);
         }
+        output.extend(content);
     }
     output.finish(false)
 }

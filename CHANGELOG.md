@@ -355,6 +355,10 @@ that crate was not published for that change.
 
 ### mant-render and mant-ui
 
+- Add title separators only when the document or excerpt body contributes a
+  physical row. Zero-width navigation stays addressable without adding a
+  blank line; authored hard rows and explicit spacing still contribute.
+
 - Share source-preserving hard-row geometry and TAB expansion. CLI table
   measurement, soft wrapping, alignment and decorated slices now agree on
   terminal columns; retain a TAB's significant extent in declared fields.
