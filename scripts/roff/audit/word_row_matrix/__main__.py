@@ -21,6 +21,8 @@ def main():
                           help="freeze only the pending row handoff follow-up")
     manifest.add_argument("--section-tail", action="store_true",
                           help="freeze only the ordered section-tail passes")
+    manifest.add_argument("--section-padding", action="store_true",
+                          help="freeze only the section-padding and completed-row controls")
     parser.add_argument("--calibration", action="store_true")
     parser.add_argument("--cohort", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
@@ -32,7 +34,7 @@ def main():
     args = parser.parse_args()
     if args.action == "freeze":
         result = freeze(args.directory, increment=args.followup, section=args.sections,
-                        pending=args.pending_rows, tail=args.section_tail)
+                        pending=args.pending_rows, tail=args.section_tail, padding=args.section_padding)
     elif args.action == "compare":
         result = compare_products(args.directory)
     elif args.action == "section-ledger":

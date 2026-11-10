@@ -6,7 +6,7 @@ from pathlib import Path
 
 from scripts.roff.fixtures.reference_recipes import digest
 from .core import core_sources
-from . import followup, pending_handoff, rows, section_tail, sections, word
+from . import followup, pending_handoff, rows, section_padding, section_tail, sections, word
 
 SCHEMA = "mant.word-row-matrix/v1"
 BASELINE = "218edc22aa528651e824198708a6cbcb1e803ac8"
@@ -38,6 +38,11 @@ SECTION_TAIL_MEMBERS = {
     "PHT-core": 512, "PHT-wrapped": 24, "PHT-head": 32, "PHT-boundary": 16,
     "PHT-chain": 12, "PHT-rewind": 4,
 }
+SECTION_PADDING_BASELINE = "d125616864f05e266f9fcf35f3e982a6d32f4c93"
+SECTION_PADDING_MEMBERS = {
+    "PHD-core": 1920, "PHD-ordered": 96, "PHD-wrapped": 72,
+    "PHD-boundary": 36, "PHD-eof": 6, "PHD-source-event": 4, "PHD-scale": 15,
+}
 EXTRA_WIDTHS = {"A-blank", "A-glyph", "A-width"}
 
 
@@ -68,11 +73,13 @@ def jsonl(path):
             yield json.loads(line)
 
 
-def freeze(directory, *, increment=False, section=False, pending=False, tail=False):
-    if sum((increment, section, pending, tail)) > 1:
+def freeze(directory, *, increment=False, section=False, pending=False, tail=False, padding=False):
+    if sum((increment, section, pending, tail, padding)) > 1:
         raise ValueError("choose one follow-up manifest")
     generate, counts, baseline, extra_generators = (
-        (section_tail.section_tail_sources, SECTION_TAIL_MEMBERS, SECTION_TAIL_BASELINE,
+        (section_padding.padding_sources, SECTION_PADDING_MEMBERS, SECTION_PADDING_BASELINE,
+         ("pending_handoff.py", "section_tail.py", "section_padding.py"))
+        if padding else (section_tail.section_tail_sources, SECTION_TAIL_MEMBERS, SECTION_TAIL_BASELINE,
          ("pending_handoff.py", "section_tail.py"))
         if tail else (pending_handoff.pending_sources, PENDING_MEMBERS, PENDING_BASELINE,
                       ("pending_handoff.py",))

@@ -65,6 +65,20 @@ the documented single initial literal-row policy. A removed adjacent
 `.br` and a retained `.br` have distinct tree evidence; a same-owner
 control has no new section. Markdown stages retain their own readback axes.
 
+Use `freeze --section-padding` for the completed-row and padding follow-up:
+1,920 core coordinates plus 229 ordered, wrapper, boundary, EOF,
+source-event and bounded scale controls. Exact authored source bytes are
+retained, with identical sources sharing native invocations (2,111 sources
+for 2,149 coordinates). The native tree binds old text and executed
+requests to their original owner. Reader rows, old interior/tail rows,
+scalar padding witnesses, font/link owners, following section identity,
+and JSON/ANSI transport are separate assertions. Only source-proven
+motion forms can add one space-only reading row, and the precise old
+literal bytes are required before `allowed-reading-space-row` can pass.
+Unknown extraction remains Review, with the native and product observations
+retained; the original `--section-tail` and `--pending-rows` lanes are
+unchanged.
+
 `compare` also reports Markdown obligations by source hash, route, stage,
 and axis. Both first readbacks are checked against the original transported
 IR, even outside the strict native prose lane. The second readback has both

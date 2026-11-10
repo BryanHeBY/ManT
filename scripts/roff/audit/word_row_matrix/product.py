@@ -17,6 +17,7 @@ from .manifest import jsonl, row_bytes
 from .oracle import BATCH, atomic_output, check_checkpoint, stream_bytes
 from .pending_observations import check_pending_rows
 from .section_observations import check_section
+from .section_padding_observations import check_section_padding
 from .section_tail_observations import check_section_tail
 
 ROUTES = ("roff", "default-1", "default-2", "addressable-1", "addressable-2")
@@ -69,6 +70,9 @@ def verdict(source, oracle, observations, binding):
     if any(cohort.startswith("PHT-") for cohort in source["cohorts"]):
         result["nativePendingRow"] = check_section_tail(source["source"], tree, utf8,
                                                          observations.get("roff"))
+    if any(cohort.startswith("PHD-") for cohort in source["cohorts"]):
+        result["nativePendingRow"] = check_section_padding(source["source"], tree, utf8,
+                                                            observations.get("roff"))
     return result
 
 
@@ -136,7 +140,8 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
                    profiles=list(ROUTES), verdictContract={
                        name: digest(Path(__file__).with_name(name).read_bytes())
                        for name in ("product.py", "compare.py", "followup.py", "section_observations.py",
-                                    "pending_observations.py", "section_tail_observations.py")
+                                    "pending_observations.py", "section_tail_observations.py",
+                                    "section_padding_observations.py")
                    })
     path = output / "binding.json"
     if path.exists() and json.loads(path.read_bytes()) != product:
