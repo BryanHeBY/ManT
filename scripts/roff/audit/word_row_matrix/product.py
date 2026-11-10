@@ -10,17 +10,38 @@ from time import monotonic, sleep
 
 from scripts.roff.fixtures.reference_recipes import digest
 from .compare import (
-    STRICT, UnsupportedExtraction, group_witness, native_prose, product_prose, word_comparison,
+    STRICT, UnsupportedExtraction, group_witness, native_prose, product_prose,
 )
 from .fidelity import chain_obligations
+from .lanes import LANES, specialized_observations
 from .manifest import jsonl, row_bytes
 from .oracle import BATCH, atomic_output, check_checkpoint, stream_bytes
-from .pending_observations import check_pending_rows
-from .section_observations import check_section
-from .section_padding_observations import check_section_padding
-from .section_tail_observations import check_section_tail
 
 ROUTES = ("roff", "default-1", "default-2", "addressable-1", "addressable-2")
+
+
+def file_contract(names):
+    return {name: digest(Path(__file__).with_name(name).read_bytes()) for name in dict.fromkeys(names)}
+
+
+def verdict_contract():
+    shared = ("product.py", "lanes.py", "compare.py", "core.py")
+    specific = (name for lane in LANES for name in lane.verdict_files)
+    return file_contract((*shared, *specific))
+
+
+def comparison_contract():
+    # Markdown readback obligations are derived here, not saved in either
+    # product checkpoint, so record their rules separately from saved verdicts.
+    return file_contract(("product.py", "compare.py", "core.py", "followup.py",
+                          "fidelity.py", "content_signature.py", "navigation_evidence.py"))
+
+
+def bound_manifest(directory, native):
+    raw = (directory / "manifest.json").read_bytes()
+    if digest(raw) != native.get("manifestSha256"):
+        raise ValueError("product observations do not belong to this source manifest")
+    return json.loads(raw)
 
 
 def verdict(source, oracle, observations, binding):
@@ -60,37 +81,8 @@ def verdict(source, oracle, observations, binding):
             except UnsupportedExtraction:
                 state = "strict-row-difference"
         result["routes"][route] = state
-    if "W-core" in source["cohorts"]:
-        result["nativeWord"] = rewind_obligation(source, utf8, tree, observations.get("roff"))
-    if any(cohort.startswith("SEC-") for cohort in source["cohorts"]):
-        result["nativeSection"] = check_section(tree, utf8, observations.get("roff"))
-    if any(cohort.startswith("PH-") for cohort in source["cohorts"]):
-        result["nativePendingRow"] = check_pending_rows(source["source"], tree, utf8,
-                                                        observations.get("roff"))
-    if any(cohort.startswith("PHT-") for cohort in source["cohorts"]):
-        result["nativePendingRow"] = check_section_tail(source["source"], tree, utf8,
-                                                         observations.get("roff"))
-    if any(cohort.startswith("PHD-") for cohort in source["cohorts"]):
-        result["nativePendingRow"] = check_section_padding(source["source"], tree, utf8,
-                                                            observations.get("roff"))
+    result.update(specialized_observations(source, tree, utf8, observations.get("roff")))
     return result
-
-
-def rewind_obligation(source, receipt, tree, observation):
-    if observation is None:
-        return dict(state="blocked")
-    if not all(observation[key] for key in ("jsonEquivalent", "validDocument", "ansiEquivalent")):
-        return dict(state="public-invariant-failure")
-    try:
-        native = native_prose(receipt, tree)["rows"]
-    except UnsupportedExtraction as error:
-        return dict(state="review-extractor", reason=str(error))
-    try:
-        actual = product_prose(observation["plain"])
-    except UnsupportedExtraction as error:
-        return dict(state="difference", native=native, reason=str(error))
-    state = word_comparison(source["source"], native, actual)
-    return dict(state=state) if state == "exact" else dict(state=state, native=native, actual=actual)
 
 
 def product_batch(binary, chunk, checkpoint, output, binding):
@@ -133,19 +125,18 @@ def observe_checkpoint(chunk, checkpoint, records, binding):
 def collect_product(directory, binary, name, *, wall_budget, artifact_budget, follow=False):
     native = directory / "oracle" / "full"
     binding = json.loads((native / "binding.json").read_bytes())
+    manifest = bound_manifest(directory, binding)
+    sources = directory / "sources.jsonl.gz"
+    if digest(sources.read_bytes()) != manifest["inputs"][sources.name]:
+        raise ValueError("source manifest integrity check failed")
     output = directory / "product" / name
     output.mkdir(parents=True, exist_ok=True)
     binary = binary.resolve()
     product = dict(binary=str(binary), sha256=digest(binary.read_bytes()), native=binding,
-                   profiles=list(ROUTES), verdictContract={
-                       name: digest(Path(__file__).with_name(name).read_bytes())
-                       for name in ("product.py", "compare.py", "followup.py", "section_observations.py",
-                                    "pending_observations.py", "section_tail_observations.py",
-                                    "section_padding_observations.py")
-                   })
+                   profiles=list(ROUTES), verdictContract=verdict_contract())
     path = output / "binding.json"
     if path.exists() and json.loads(path.read_bytes()) != product:
-        raise ValueError("product binary or oracle cache changed")
+        raise ValueError("product binary, oracle evidence or verdict contract changed")
     path.write_bytes(row_bytes(product))
     (output / "budget.json").write_bytes(row_bytes(dict(
         timeoutSeconds=60, wallSeconds=wall_budget, artifactBytes=artifact_budget,
@@ -157,7 +148,7 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
     native_word = Counter()
     native_section = Counter()
     native_pending = Counter()
-    stream = jsonl(directory / "sources.jsonl.gz")
+    stream = jsonl(sources)
     for index, chunk in enumerate(iter(lambda: list(islice(stream, BATCH)), [])):
         checkpoint = native / f"{index:06}.jsonl.gz"
         while (follow and not checkpoint.exists() and not (native / "summary.json").exists()
@@ -187,7 +178,7 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
         (output / "progress.json").write_bytes(row_bytes(dict(
             completed=completed, routes=dict(routes), nativeWord=dict(native_word), nativeSection=dict(native_section), artifactBytes=size,
             wallSeconds=monotonic() - start)))
-    planned = json.loads((directory / "manifest.json").read_bytes())["sources"]
+    planned = manifest["sources"]
     summary = dict(planned=planned, completed=completed, uncovered=planned - completed,
                    routes=dict(routes), nativeWord=dict(native_word), nativeSection=dict(native_section), artifactBytes=size,
                    wallSeconds=monotonic() - start)
@@ -205,6 +196,10 @@ def compare_products(directory):
     after = json.loads((candidate / "binding.json").read_bytes())
     if before["native"] != after["native"]:
         raise ValueError("product observations use different native evidence")
+    contract = before.get("verdictContract")
+    if not contract or contract != after.get("verdictContract"):
+        raise ValueError("product observations require the same recorded verdict contract")
+    planned = bound_manifest(directory, before["native"])["sources"]
     totals = Counter()
     states = {route: Counter() for route in ROUTES}
     pairs = 0
@@ -283,8 +278,8 @@ def compare_products(directory):
                         section=section if section_failed else None,
                         **({"pendingRow": pending} if pending_failed else {}),
                         checkpoint=chunk.name, native=expected)))
-    planned = json.loads((directory / "manifest.json").read_bytes())["sources"]
     summary = dict(planned=planned, paired=pairs, uncovered=planned - pairs, counts=dict(totals),
+                   verdictContract=contract, comparisonContract=comparison_contract(),
                    byRoute={route: dict(counts) for route, counts in states.items()},
                    readbackAxes={key: dict(counts) for key, counts in fidelity_axes.items()},
                    readbackReviewReasons=dict(review_reasons),

@@ -5,28 +5,8 @@ import json
 import re
 
 from .compare import UnsupportedExtraction, device_row, tree_nodes
+from .section_facts import between_sections, section_node
 from .section_observations import exact, inline_value, sections
-
-
-def section_node(nodes, spelling):
-    heading = [node for node in nodes
-               if node["kind"] == "text" and node["label"] == spelling]
-    if len(heading) != 1:
-        raise UnsupportedExtraction(f"no unique {spelling} source marker")
-    path = heading[0]["path"]
-    matches = [node for node in nodes if node["kind"] == "block"
-               and node["label"] in ("SH", "SS") and node["path"] == path[:-2]]
-    if len(matches) != 1:
-        raise UnsupportedExtraction(f"no unique {spelling} source owner")
-    return matches[0]
-
-
-def between_sections(rows):
-    first = [index for index, row in enumerate(rows) if row == "FIRST"]
-    end = [index for index, row in enumerate(rows) if row == "ENDTEST"]
-    if len(first) != 1 or len(end) != 1 or first[0] >= end[0]:
-        raise UnsupportedExtraction("section interval is not uniquely delimited")
-    return rows[first[0] + 1:end[0]]
 
 
 def accepted_owner_rows(rows):

@@ -4,7 +4,7 @@ from collections import Counter
 import json
 from unittest import TestCase
 
-from scripts.roff.audit.word_row_matrix.manifest import SECTION_TAIL_MEMBERS
+from scripts.roff.audit.word_row_matrix.lanes import SECTION_TAIL_MEMBERS
 from scripts.roff.audit.word_row_matrix.oracle import stream_bytes
 from scripts.roff.audit.word_row_matrix.section_tail import render, section_tail_sources, word
 from scripts.roff.audit.word_row_matrix.section_tail_observations import check_section_tail

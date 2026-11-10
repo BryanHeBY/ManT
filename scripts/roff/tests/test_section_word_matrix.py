@@ -5,7 +5,7 @@ from copy import deepcopy
 import json
 from unittest import TestCase
 
-from scripts.roff.audit.word_row_matrix.manifest import SECTION_MEMBERS
+from scripts.roff.audit.word_row_matrix.lanes import SECTION_MEMBERS
 from scripts.roff.audit.word_row_matrix.oracle import stream_bytes
 from scripts.roff.audit.word_row_matrix.section_observations import branch_witness, check_section
 from scripts.roff.audit.word_row_matrix.sections import section_sources

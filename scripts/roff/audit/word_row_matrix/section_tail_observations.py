@@ -5,16 +5,11 @@ import json
 import re
 
 from .compare import UnsupportedExtraction, device_row, tree_nodes
-from .pending_observations import between_sections, section_node
+from .section_facts import (
+    HEAD_IDS, between_sections, inline_owners, projected_rows, section_node, suffix_blanks,
+)
 from .section_observations import exact, inline_value, sections
 
-HEAD_IDS = {
-    "NEXT": "next",
-    r"\&": "section", r"\p": "p", r"\p NEXT": "p-next", r"\&\p NEXT": "p-next",
-    r"NEXT\zX": "next-zx", r"\zNEXT": "znext", r"NEXT\p WORD": "next-p-word",
-    r"NEXT\p \p WORD": "next-p-p-word",
-    r"\h'-1n'NEXT": "h-1n-next", r"\h'-2n'NEXT": "h-2n-next",
-}
 OLD = r"(?:ALPHA(?: (?:BETA|X))?|BETA|X|GAMMA)(?: <(?:https://audit\.test/|audit@example\.test)>)?"
 HEAD = r"(?:NEXTX?|EXT|WORD)"
 SHARED = re.compile(fr"({OLD})( *)({HEAD})")
@@ -89,33 +84,12 @@ def native_projection(native, source, evidence):
 
 
 def block_rows(blocks):
-    rows = []
-    for block in blocks:
-        kind = block["type"]
-        if kind == "vertical-space":
-            rows.extend([""] * block["lines"])
-        elif kind in ("paragraph", "preformatted"):
-            value = inline_value(block["children"])
-            # An ordinary paragraph's last hard break opens a row that
-            # joins the next block; it is not a completed blank row.
-            # A preformatted owner, unlike a paragraph, keeps that row.
-            if kind == "paragraph" and value.endswith("\n"):
-                value = value[:-1]
-                rows.extend(row.lstrip(" ") for row in value.split("\n"))
-            elif value or kind == "preformatted" and list(inline_owners(block["children"], "text")):
-                rows.extend(row.lstrip(" ") for row in value.split("\n"))
-        else:
-            raise UnsupportedExtraction(f"unmapped product block: {kind}")
-    return rows
+    return [row.lstrip(" ") for row in projected_rows(blocks)]
 
 
 def visible(rows):
     positions = [index for index, row in enumerate(rows) if row]
     return rows[positions[0]:positions[-1] + 1] if positions else []
-
-
-def suffix_blanks(rows):
-    return len(rows) - 1 - max((index for index, row in enumerate(rows) if row), default=-1)
 
 
 def interval(rows):
@@ -138,13 +112,6 @@ def accepted_heading_pad(source, evidence, accepted, native):
             and len(evidence["words"]) == 1
             and re.fullmatch(r"(?:\\p\\& )+", source.splitlines()[evidence["words"][0] - 1])
             and row_origin(native, "NEXT") == row_origin(native, "AFTERMARK") + 1)
-
-
-def inline_owners(nodes, kind):
-    for node in nodes:
-        if node["type"] == kind:
-            yield node
-        yield from inline_owners(node.get("children", ()), kind)
 
 
 def wrapper_axes(source, expected_old, old, new):

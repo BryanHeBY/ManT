@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import signal
 
+from .lanes import CORE, LANES
 from .manifest import freeze
 from .oracle import collect
 from .product import collect_product, compare_products
@@ -15,14 +16,11 @@ def main():
     parser.add_argument("directory", type=Path)
     parser.add_argument("action", choices=("freeze", "oracle", "product", "compare", "section-ledger"))
     manifest = parser.add_mutually_exclusive_group()
-    manifest.add_argument("--followup", action="store_true", help="freeze only the word follow-up")
-    manifest.add_argument("--sections", action="store_true", help="freeze only the section follow-up")
-    manifest.add_argument("--pending-rows", action="store_true",
-                          help="freeze only the pending row handoff follow-up")
-    manifest.add_argument("--section-tail", action="store_true",
-                          help="freeze only the ordered section-tail passes")
-    manifest.add_argument("--section-padding", action="store_true",
-                          help="freeze only the section-padding and completed-row controls")
+    for lane in LANES:
+        if lane.flag is not None:
+            manifest.add_argument(lane.flag, dest="lane", action="store_const", const=lane,
+                                  help=lane.help)
+    parser.set_defaults(lane=CORE)
     parser.add_argument("--calibration", action="store_true")
     parser.add_argument("--cohort", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
@@ -33,8 +31,7 @@ def main():
     parser.add_argument("--follow", action="store_true")
     args = parser.parse_args()
     if args.action == "freeze":
-        result = freeze(args.directory, increment=args.followup, section=args.sections,
-                        pending=args.pending_rows, tail=args.section_tail, padding=args.section_padding)
+        result = freeze(args.directory, lane=args.lane)
     elif args.action == "compare":
         result = compare_products(args.directory)
     elif args.action == "section-ledger":

@@ -5,10 +5,12 @@ import json
 import re
 
 from .compare import UnsupportedExtraction, device_row, tree_nodes
-from .pending_observations import between_sections, section_node
+from .section_facts import (
+    HEAD_IDS, between_sections, inline_owners, payload_source_axis, projected_rows,
+    section_node, suffix_blanks,
+)
 from .section_observations import exact, inline_value, sections
 from .section_padding import operand
-from .section_tail_observations import HEAD_IDS, inline_owners, suffix_blanks
 
 
 HEADS = dict(HEAD_IDS, LATER="later", **{r"\z": "z"})
@@ -113,24 +115,6 @@ def native_structural_rows(rows):
                 raise UnsupportedExtraction(f"unmapped native section padding row: {row!r}")
             expected.append(row)
     return expected, head_indices, split
-
-
-def projected_rows(blocks):
-    """Only count a terminal paragraph LF as a following-row delimiter."""
-    rows = []
-    for block in blocks:
-        kind = block["type"]
-        if kind == "vertical-space":
-            rows.extend([""] * block["lines"])
-        elif kind in ("paragraph", "preformatted"):
-            value = inline_value(block["children"])
-            if kind == "paragraph":
-                value = value.removesuffix("\n")
-            if value or any(node["type"] == "text" for node in block["children"]):
-                rows.extend(value.split("\n"))
-        else:
-            raise UnsupportedExtraction(f"unsupported product section block {kind!r}")
-    return rows
 
 
 def reading_key(row):
@@ -252,9 +236,8 @@ def body_axes(evidence, by_line, expected, old, roots):
         label = "AFTERMARK" if not index else "AFTERLATER"
         rows = projected_rows(next_section["blocks"])
         axes["body" + suffix] = exact([label], [reading_key(row) for row in rows if reading_key(row)])
-        axes["body-source" + suffix] = exact(True, any(
-            block.get("source", {}).get("line") == mark["bodyLine"]
-            for block in next_section["blocks"] if projected_rows([block])))
+        axes["body-source" + suffix] = payload_source_axis(
+            next_section["blocks"], mark["bodyLine"])
     return axes
 
 
@@ -342,9 +325,7 @@ def check_section_padding(source, tree, utf8, observation):
     if motion or not (evidence["marks"] and not heads and expected_old[-1:] == [""]):
         axes["old-tail-rows"] = exact(suffix_blanks(list(map(reading_key, expected_old))),
                                       suffix_blanks(list(map(reading_key, old_rows))))
-    axes["old-source"] = exact(True, any(
-        block.get("source", {}).get("line") == evidence["wordLine"]
-        for block in old["blocks"] if projected_rows([block])))
+    axes["old-source"] = payload_source_axis(old["blocks"], evidence["wordLine"])
     if motion:
         pad, prior, policy = motion
         evidence["readingMotion"] = dict(padding=pad, precedingRows=len(prior), policy=policy)

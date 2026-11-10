@@ -4,7 +4,7 @@ from collections import Counter
 import json
 from unittest import TestCase
 
-from scripts.roff.audit.word_row_matrix.manifest import PENDING_MEMBERS
+from scripts.roff.audit.word_row_matrix.lanes import PENDING_MEMBERS
 from scripts.roff.audit.word_row_matrix.oracle import stream_bytes
 from scripts.roff.audit.word_row_matrix.pending_handoff import END, HEADER, pending_sources
 from scripts.roff.audit.word_row_matrix.pending_observations import check_pending_rows

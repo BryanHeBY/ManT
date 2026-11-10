@@ -20,6 +20,14 @@ Use the same example source with the original codec to record the baseline
 via `product --name baseline --binary ...`. The `compare` action pairs the
 two observations by source hash and checkpoint and reports retained
 passes, fixes, regressions, legacy differences and unresolved comparisons.
+Both sides must bind the same frozen manifest, native evidence and saved
+verdict contract. An archived pair with the same recorded contract remains
+comparable; a new verdict must not be compared to an old one. To change
+classification rules, apply them to both sets of raw observations or
+capture both sides again. Do not edit binding metadata to bypass the check.
+The comparison report records that saved verdict contract and the live
+comparison contract separately. Markdown readback rules belong to the
+latter because they are derived from raw observations during comparison.
 The profiler serializes each state through the public QueryBundle text
 boundary, exports two independent Markdown chains and reimports each
 chain twice. It records a document-validation verdict and a synthetic
@@ -35,9 +43,10 @@ semantic owners from terminal strings. Its library observations do not
 stand in for CLI or interactive TUI verification.
 
 The calibration, cohort, full-native and product summaries report coverage
-and budget stops independently. The local gate runs the small manifest and
-comparator tests, while the dedicated fixtures test the confirmed behavior
-through the actual rendering consumers.
+and budget stops independently. The local gate discovers the manifest and
+comparator tests under `scripts/roff/tests`, while the dedicated fixtures
+test confirmed behavior through the actual rendering consumers. Each lane
+declares its CLI flag, frozen inputs and specialized verdict in `lanes.py`.
 
 The horizontal-rewind and literal-owner follow-up is frozen independently
 with `freeze --followup`: 54,260 logical coordinates, including degenerate
@@ -72,9 +81,11 @@ retained, with identical sources sharing native invocations (2,111 sources
 for 2,149 coordinates). The native tree binds old text and executed
 requests to their original owner. Reader rows, old interior/tail rows,
 scalar padding witnesses, font/link owners, following section identity,
-and JSON/ANSI transport are separate assertions. Only source-proven
-motion forms can add one space-only reading row, and the precise old
-literal bytes are required before `allowed-reading-space-row` can pass.
+and JSON/ANSI transport are separate assertions. Each retained text block
+must keep its original source, even when another block already matches.
+Only source-proven motion forms can add one space-only reading row, and the
+precise old literal bytes are required before `allowed-reading-space-row` can
+pass.
 Unknown extraction remains Review, with the native and product observations
 retained; the original `--section-tail` and `--pending-rows` lanes are
 unchanged.

@@ -3,8 +3,11 @@ from base64 import b64encode
 from collections import Counter
 import copy
 import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
+from scripts.roff.fixtures.reference_recipes import digest
 from scripts.roff.audit.word_row_matrix.compare import (
     UnsupportedExtraction, device_row, group_witness, native_prose, product_prose, word_comparison,
 )
@@ -12,16 +15,67 @@ from scripts.roff.audit.word_row_matrix.core import MDOC
 from scripts.roff.audit.word_row_matrix.fidelity import (
     chain_obligations, compare_direct, readback,
 )
-from scripts.roff.audit.word_row_matrix.manifest import (
-    FOLLOWUP_MEMBERS, MEMBERS, followup_records, records,
+from scripts.roff.audit.word_row_matrix.lanes import (
+    FOLLOWUP_MEMBERS, MEMBERS, followup_records, records, specialized_observations,
 )
 from scripts.roff.audit.word_row_matrix.oracle import (
     BASE_PROFILES, EXTRA_PROFILES, check_checkpoint, stream_bytes,
 )
-from scripts.roff.audit.word_row_matrix.product import public_state
+from scripts.roff.audit.word_row_matrix.product import collect_product, compare_products, public_state
 
 
 class WordRowMatrixTests(unittest.TestCase):
+    def test_saved_verdicts_require_a_common_recorded_contract(self):
+        with TemporaryDirectory() as scratch:
+            audit = Path(scratch)
+            manifest = b'{"sources": 0}'
+            (audit / "manifest.json").write_bytes(manifest)
+
+            def binding(side, contract):
+                path = audit / "product" / side / "binding.json"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                data = {"native": {"oracleIdentity": "fixed", "manifestSha256": digest(manifest)}}
+                if contract is not None:
+                    data["verdictContract"] = {"product.py": contract}
+                path.write_text(json.dumps(data), encoding="utf-8")
+
+            binding("baseline", "recorded")
+            binding("candidate", "different")
+            with self.assertRaisesRegex(ValueError, "same recorded verdict contract"):
+                compare_products(audit)
+            self.assertFalse((audit / "classification.json").exists())
+            binding("candidate", None)
+            with self.assertRaisesRegex(ValueError, "same recorded verdict contract"):
+                compare_products(audit)
+            binding("candidate", "recorded")
+            self.assertEqual(compare_products(audit)["paired"], 0)
+            (audit / "manifest.json").write_bytes(b'{"sources": 1}')
+            with self.assertRaisesRegex(ValueError, "do not belong to this source manifest"):
+                compare_products(audit)
+
+    def test_cross_lane_aliases_cannot_overwrite_a_native_obligation(self):
+        self.assertEqual(
+            specialized_observations({"cohorts": ["W-core"], "source": ""}, None, None, None),
+            {"nativeWord": {"state": "blocked"}})
+        with self.assertRaisesRegex(ValueError, "conflicting native observations"):
+            specialized_observations({"cohorts": ["PH-core", "PHT-core"]}, None, None, None)
+
+    def test_product_collection_rejects_changed_frozen_sources_before_launch(self):
+        with TemporaryDirectory() as scratch:
+            audit = Path(scratch)
+            sources = audit / "sources.jsonl.gz"
+            manifest = json.dumps(dict(inputs={sources.name: digest(b"frozen")})).encode()
+            (audit / "manifest.json").write_bytes(manifest)
+            native = audit / "oracle" / "full"
+            native.mkdir(parents=True)
+            (native / "binding.json").write_text(
+                json.dumps(dict(manifestSha256=digest(manifest))), encoding="utf-8")
+            sources.write_bytes(b"mutated")
+            with self.assertRaisesRegex(ValueError, "source manifest integrity check failed"):
+                collect_product(audit, audit / "missing-binary", "candidate",
+                                wall_budget=1, artifact_budget=1)
+            self.assertFalse((audit / "product").exists())
+
     def test_frozen_source_language_retains_every_cohort_coordinate(self):
         counts = Counter()
         core = set()

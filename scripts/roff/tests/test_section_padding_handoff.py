@@ -4,9 +4,10 @@ from collections import Counter
 import json
 from unittest import TestCase
 
-from scripts.roff.audit.word_row_matrix.manifest import SECTION_PADDING_MEMBERS
+from scripts.roff.audit.word_row_matrix.lanes import SECTION_PADDING_MEMBERS
 from scripts.roff.audit.word_row_matrix.oracle import stream_bytes
-from scripts.roff.audit.word_row_matrix.section_padding import operand, padding_sources, wrapped_operand
+from scripts.roff.audit.word_row_matrix.section_facts import projected_rows
+from scripts.roff.audit.word_row_matrix.section_padding import operand, padding_sources
 from scripts.roff.audit.word_row_matrix.section_padding_observations import check_section_padding
 from scripts.roff.audit.word_row_matrix.section_tail import render
 from scripts.roff.tests.test_section_tail_handoff import text_block
@@ -118,6 +119,31 @@ class SectionPaddingHandoffTests(TestCase):
         self.assertEqual(observe(word, native, old, native, title="")["state"], "asserted-axes-pass")
         revived = observe(word, native, [literal("ALPHA\n\nBETA")], native, title="")
         self.assertEqual(revived["axes"]["old-content"], ("difference", ["ALPHA"], ["ALPHA", "BETA"]))
+
+    def test_every_payload_segment_keeps_its_original_source(self):
+        # The pinned tree for this input puts ALPHA and BETA in the same
+        # no-fill source node on line 7 (term.c::term_word); BETA can share
+        # NEXT's terminal row without moving into NEXT's source.
+        word = operand(1, r"\h'1n' BETA")
+        native = ["ALPHA", "", "BETA NEXT", "AFTERMARK"]
+        rows = ["ALPHA", "", "BETA", "NEXT", "AFTERMARK"]
+        original = [literal("ALPHA\n"), literal("  BETA")]
+        self.assertEqual(observe(word, native, original, rows)["state"], "allowed-owner-split")
+        no_source = literal("  BETA")
+        del no_source["source"]
+        for moved in (literal("  BETA", 8), no_source):
+            result = observe(word, native, [original[0], moved], rows)
+            self.assertEqual(result["axes"]["old-content"], ("exact",))
+            self.assertEqual(result["axes"]["old-source"], (
+                "difference", [7, 7], [7, moved.get("source", {}).get("line")]))
+            self.assertEqual(result["state"], "difference")
+
+    def test_raw_rows_keep_a_wrapped_empty_literal_but_not_an_empty_paragraph(self):
+        empty = [dict(type="emphasis", children=[dict(type="text", value="")])]
+        self.assertEqual(projected_rows([dict(type="preformatted", children=empty)]), [""])
+        self.assertEqual(projected_rows([dict(type="paragraph", children=empty)]), [])
+        self.assertEqual(projected_rows([dict(
+            type="paragraph", children=[dict(type="line-break")])]), [""])
 
     def test_equal_reading_text_does_not_hide_missing_old_style_or_target(self):
         word = operand(1, r"\h'1n' BETA")

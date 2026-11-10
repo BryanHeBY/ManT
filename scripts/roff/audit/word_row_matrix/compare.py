@@ -188,3 +188,20 @@ def word_comparison(source, expected, actual):
                         for word in ("BETA", "OMEGA"))):
             return "review-protected-cell"
     return "difference"
+
+
+def check_rewind(source, tree, receipt, observation):
+    if observation is None:
+        return dict(state="blocked")
+    if not all(observation[key] for key in ("jsonEquivalent", "validDocument", "ansiEquivalent")):
+        return dict(state="public-invariant-failure")
+    try:
+        native = native_prose(receipt, tree)["rows"]
+    except UnsupportedExtraction as error:
+        return dict(state="review-extractor", reason=str(error))
+    try:
+        actual = product_prose(observation["plain"])
+    except UnsupportedExtraction as error:
+        return dict(state="difference", native=native, reason=str(error))
+    state = word_comparison(source, native, actual)
+    return dict(state=state) if state == "exact" else dict(state=state, native=native, actual=actual)
