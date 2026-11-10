@@ -285,6 +285,7 @@ impl<'a> LoweringContext<'a> {
     /// spacing and zero-advance execution remain document-global.
     pub(super) fn lower_section_heading(
         &self,
+        block: &Node,
         nodes: HeadNodes<'_>,
         formatter: &mut formatter::FormatterState,
         authors_section: bool,
@@ -297,7 +298,15 @@ impl<'a> LoweringContext<'a> {
             authors_section,
             inline::AuthorBreakEffect::Line,
         );
+        if self.macro_set == MacroSet::Man {
+            // print_man_node() visits the filled SH/SS BLOCK before its
+            // HEAD: NODE_LINE writes TABREF into a live buffer
+            // (man_term.c:921–932; term.c::term_tab_ref).
+            builder.begin_executed_node(block);
+        }
         if shared {
+            // The reference is a control in the still-live old interval;
+            // it cannot transfer that interval's blank pass to the HEAD.
             builder.mark_section_handoff();
         }
         builder.scope_posts = self.scope_posts.clone();

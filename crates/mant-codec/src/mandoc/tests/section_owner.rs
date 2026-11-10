@@ -2,6 +2,9 @@
 
 use super::{Block, Inline, inline_text, parse_manual_bytes, visible_document_text};
 
+#[path = "section_owner/tail.rs"]
+mod tail;
+
 const MAN: &str = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n";
 const MDOC: &str =
     ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh FIRST\n";

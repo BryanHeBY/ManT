@@ -6,6 +6,9 @@ mod borrowed;
 #[path = "section_entry/pending_rows.rs"]
 mod pending_rows;
 
+#[path = "section_entry/tail_receipts.rs"]
+mod tail_receipts;
+
 const MDOC: &str =
     ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh DESCRIPTION\n";
 const MAN: &str = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH DESCRIPTION\n";

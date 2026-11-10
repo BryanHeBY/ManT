@@ -165,6 +165,11 @@ that crate was not published for that change.
   same native input. A word-end break no longer adds a blank heading line
   or publishes text the formatter rejects; actual empty rows and authored
   section destinations remain intact.
+- Keep empty rows between words in the preceding section without repeating
+  them before the next heading. Only accepted, surviving glyphs from the
+  preceding section turn its trailing empty rows into interior rows.
+  Execute the section's source-line entry before heading text so relative
+  motion cannot consume the wrong buffered glyph or revive rejected text.
 - Keep shared native cells in the old source row until a heading or field
   consumes them. An invisible cell no longer creates a phantom literal or
   blank paragraph, and a filled man link starts in its actual source mode.

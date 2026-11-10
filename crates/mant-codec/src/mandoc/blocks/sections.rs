@@ -162,6 +162,7 @@ fn prepare_heading(
     formatter.row_presentation.offset_shift = 0;
     formatter.row_presentation.parent = 0;
     context.lower_section_heading(
+        node,
         crate::mandoc::source_context::HeadNodes {
             // blk_full() emits leading delimiter TEXT before allocating
             // Sh/Ss HEAD. It executes before the HEAD's bold pre, remains

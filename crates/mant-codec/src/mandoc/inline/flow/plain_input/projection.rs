@@ -188,26 +188,30 @@ pub(super) fn completed_empty_plain_passes(
     if !rejected && passes.len() <= 1 {
         return 0;
     }
+    let covered = if handoff.is_some() {
+        buffer.covered_zero_width_retreats(passes)
+    } else {
+        Vec::new()
+    };
+    let mut covered = covered.as_slice();
     let mut rows = 0u16;
     let mut start = 0;
     for (index, pass) in passes.iter().enumerate() {
         let printed = interval_printed(start, pass.end);
         printed_row |= printed;
         let ends_line = index + 1 < passes.len() || rejected;
-        if let Some(handoff) = handoff
-            .as_deref_mut()
-            .filter(|handoff| ends_line && handoff.owns_loop_end(buffer, start..pass.end))
-        {
-            // The old owner's terminating break already closes its last
-            // printable row. Only separate invisible passes add rows.
-            if printed_row {
-                handoff.previous_empty_passes = 0;
-            } else {
-                handoff.previous_empty_passes = handoff.previous_empty_passes.saturating_add(1);
-            }
-        } else if printed_row {
+        let closes_previous = handoff.as_deref_mut().is_some_and(|handoff| {
+            handoff.observe_accepted_pass(
+                buffer,
+                start..pass.end,
+                ends_line,
+                printed_row,
+                &mut covered,
+            )
+        });
+        if !closes_previous && printed_row {
             rows = 0;
-        } else if ends_line {
+        } else if !closes_previous && ends_line {
             rows = rows.saturating_add(1);
         }
         if ends_line {

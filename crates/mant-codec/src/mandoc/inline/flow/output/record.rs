@@ -419,6 +419,9 @@ impl InlineBuilder {
         entry.record_projection(&mut result);
         if let Some(anchor) = unit.anchors.last_mut() {
             result.align_separator_owner(anchor, receipt.first_content_cell);
+            if let Some(handoff) = &mut self.section_handoff {
+                handoff.note_heading_word(anchor.start.min(anchor.content));
+            }
         }
         result.preserve_native_separator |= receipt.leading_retreat.is_some() || projected_keep;
         result.prints_padding = receipt.prints_padding;

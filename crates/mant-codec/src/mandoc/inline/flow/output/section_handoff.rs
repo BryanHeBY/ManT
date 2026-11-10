@@ -1,6 +1,6 @@
 //! A plain native input interval can span two source section owners.
 
-use super::super::field_buffer::FieldBuffer;
+use super::super::field_buffer::{FieldBuffer, FieldCell};
 use super::{Inline, InlineBuilder, projection};
 use std::ops::Range;
 
@@ -12,20 +12,71 @@ pub(in crate::mandoc::inline::flow) struct SectionHandoff {
     previous_cell_end: usize,
     previous_word_serial: u64,
     rejected_previous: bool,
-    pub(in crate::mandoc::inline::flow) previous_empty_passes: u16,
+    previous_empty_passes: u16,
 }
 
 impl SectionHandoff {
-    pub(in crate::mandoc::inline::flow) fn owns_loop_end(
-        &self,
-        buffer: &FieldBuffer,
-        pass: Range<usize>,
-    ) -> bool {
+    fn owns_loop_end(&self, buffer: &FieldBuffer, pass: Range<usize>) -> bool {
         pass.end <= self.previous_cell_end
             || pass.start < self.previous_cell_end
                 && buffer.printed_content_end(pass.start, self.previous_cell_end) > pass.start
                 && buffer.printed_content_end(self.previous_cell_end, pass.end)
                     == self.previous_cell_end
+    }
+
+    pub(in crate::mandoc::inline::flow) fn note_heading_word(&mut self, start: usize) {
+        // Use the stable word range, as in accepted_owner_lengths(). A
+        // heading's first write can land before the original seam after
+        // BACKBEFORE or a supported rewind (term.c:678–714,901–908).
+        self.previous_cell_end = self.previous_cell_end.min(start);
+    }
+
+    /// Update the old owner's tail from accepted input, independently of
+    /// where the device row ends. Return whether the old owner owns the
+    /// actual loop endline (term.c:143–217).
+    pub(in crate::mandoc::inline::flow) fn observe_accepted_pass(
+        &mut self,
+        buffer: &FieldBuffer,
+        pass: Range<usize>,
+        ends_line: bool,
+        printed_row: bool,
+        covered: &mut &[usize],
+    ) -> bool {
+        let closes_previous = ends_line && self.owns_loop_end(buffer, pass.clone());
+        if self.previous_empty_passes > 0
+            && self.has_surviving_previous_glyph(buffer, pass, covered)
+        {
+            // Earlier empty rows are now interior; their inline breaks
+            // already represent them. HEAD's own glyphs cannot do this.
+            self.previous_empty_passes = 0;
+        }
+        if closes_previous && !printed_row {
+            self.previous_empty_passes = self.previous_empty_passes.saturating_add(1);
+        }
+        closes_previous
+    }
+
+    fn has_surviving_previous_glyph(
+        &self,
+        buffer: &FieldBuffer,
+        pass: Range<usize>,
+        covered: &mut &[usize],
+    ) -> bool {
+        let end = pass.end.min(self.previous_cell_end);
+        (pass.start..end).any(|cell| {
+            // encode1() writes a \z glyph into its original word's cells.
+            // It may later lose its projection to an overstrike. For
+            // covers that depend on the accepted pass, use the same
+            // deferred cover evidence as the word-acceptance projector.
+            while covered.first().is_some_and(|&first| first < cell) {
+                *covered = &covered[1..];
+            }
+            matches!(
+                buffer.cells()[cell],
+                FieldCell::Graph { .. } | FieldCell::Hyphen
+            ) && buffer.projection_length(cell, cell + 1) > 0
+                && covered.first() != Some(&cell)
+        })
     }
 }
 

@@ -132,6 +132,11 @@ actual empty rows and hard lines within the heading are preserved. If
 mandoc rejects both pending body text and heading text, the authored section
 destination and its following body are still available.
 
+Empty rows followed by accepted text from the preceding body stay between
+its words. The heading does not repeat them as spacing. If no later glyph
+from the preceding body survives, its trailing empty rows remain, even when
+the heading prints new text or covers a pending body glyph.
+
 The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:
 
 | Macros | ManT result |

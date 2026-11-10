@@ -7,6 +7,7 @@ use serde::Deserialize;
 mod markdown;
 mod pending_rows;
 mod reader;
+mod tail_receipts;
 
 const BODY: &str = "AFTERMARK";
 const WIDTHS: [u16; 4] = [12, 24, 78, 120];
