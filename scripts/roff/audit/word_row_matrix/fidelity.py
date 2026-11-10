@@ -116,23 +116,30 @@ def section_anchors(document, markdown, source, inherited=None):
                                        inherited=True):
             exclusions.add((path, index))
 
-    def sections(path, items, expected):
+    def preorder(path, items):
         for index, section in enumerate(items):
             owner = (*path, index)
-            following = (expected[index + 1] if index + 1 < min(len(items), len(expected))
-                         and items[index + 1]["id"] == expected[index + 1]["id"] else None)
-            trailing(owner + ("body",), section["blocks"], following)
-            sections(owner + ("sections",), section["children"],
-                     expected[index]["children"] if index < len(expected) else ())
+            yield owner, section
+            yield from preorder(owner + ("sections",), section["children"])
 
-    items, expected = document["sections"], source["sections"]
+    # The source boundary before a heading belongs to the preceding owner
+    # in preorder, including parent → child and last descendant → sibling.
+    items = list(preorder(("sections",), document["sections"]))
+    expected = dict(preorder(("sections",), source["sections"]))
+
+    def known_target(entry):
+        path, actual = entry
+        target = expected.get(path)
+        return target if target and target["id"] == actual["id"] else None
+
     blocks = document.get("blocks", [])
     root = dict(id="document-overview", fragmentAliases=source.get("fragmentAliases", []))
     if source.get("heading") and blocks and anchor_block(blocks[0], markdown, anchor_lines(root)):
         exclusions.add((("root",), 0))
-    following = expected[0] if items and expected and items[0]["id"] == expected[0]["id"] else None
-    trailing(("root",), blocks, following)
-    sections(("sections",), items, expected)
+    trailing(("root",), blocks, known_target(items[0]) if items else None)
+    for (owner, section), following in zip(items, [*items[1:], None], strict=True):
+        if following is not None and known_target((owner, section)):
+            trailing(owner + ("body",), section["blocks"], known_target(following))
     return exclusions, carried
 
 

@@ -245,5 +245,26 @@ class FirstReadbackTests(unittest.TestCase):
                                   export="addressable")["gap"][0], "difference")
 
 
+    def test_addressable_proof_follows_section_preorder(self):
+        def section(name, children=()):
+            return dict(id=name.lower(), heading=dict(content=[text(name)]),
+                        spacingBeforeLines=1, blocks=[], children=list(children))
+        source = dict(sections=[section("PARENT", [section("CHILD")]), section("NEXT")])
+        md = '## PARENT\n<a id="child"></a>\n### CHILD\n<a id="next"></a>\n## NEXT'
+        observed = copy.deepcopy(source)
+        parent, child = observed["sections"][0], observed["sections"][0]["children"][0]
+        for node, target in ((parent, "child"), (child, "next")):
+            marker = f'<a id="{target}"></a>'
+            start = md.index(marker)
+            node["blocks"] = [dict(type="paragraph", children=[text(marker)],
+                                   source=dict(byteRange=dict(start=start, end=start + len(marker))))]
+        result = readback(observe(source), observe(observed, markdown=md), export="addressable")
+        self.assertEqual(result["owner"][0], "exact")
+        self.assertEqual(result["glyph"][0], "exact")
+        child["blocks"][0]["source"]["byteRange"]["start"] += 1
+        result = readback(observe(source), observe(observed, markdown=md), export="addressable")
+        self.assertEqual(result["glyph"][0], "difference")
+
+
 if __name__ == "__main__":
     unittest.main()
