@@ -68,6 +68,44 @@ fn shell_arguments_variables_and_urls_have_independent_accents() {
 }
 
 #[test]
+fn compiler_option_hashes_do_not_start_a_comment_or_hide_following_options() {
+    check(
+        "gcc -### -nostdinc++ # comment\n",
+        &[
+            ("gcc", Some(StyleRole::CodeCommand)),
+            ("-###", Some(StyleRole::CodeOption)),
+            ("-nostdinc++", Some(StyleRole::CodeOption)),
+            ("# comment", Some(StyleRole::CodeComment)),
+        ],
+    );
+}
+
+#[test]
+fn exhausted_inline_code_fragment_rejects_the_complete_prose_owner() {
+    let nodes = vec![
+        mant_ir::Inline::Code {
+            value: format!("echo \"{}x{}\"", "$(".repeat(65), ")".repeat(65)),
+        },
+        mant_ir::Inline::Text {
+            value: " and ".into(),
+        },
+        mant_ir::Inline::Code {
+            value: "git --help".into(),
+        },
+    ];
+    assert!(
+        CodeHighlights::for_inlines(
+            &nodes,
+            HighlightContext {
+                prose: true,
+                ..Default::default()
+            }
+        )
+        .is_none()
+    );
+}
+
+#[test]
 fn brackets_candidates_and_operators_have_distinct_semantic_roles() {
     check(
         "git [-v | --version] [-C <path>] [--output=<path|->] <command> [<args>]",

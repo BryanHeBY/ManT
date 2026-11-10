@@ -63,7 +63,10 @@ impl DocumentBuilder<'_> {
             navigation: Vec::new(),
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
-            highlight_context: crate::code::HighlightContext::default(),
+            highlight_context: crate::code::HighlightContext {
+                prose: true,
+                ..Default::default()
+            },
             pending_anchors: Vec::new(),
             pending_gap: mant_ir::geometry::GapPlan::default(),
             pending_gap_inherited: false,

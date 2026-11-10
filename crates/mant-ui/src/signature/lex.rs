@@ -235,7 +235,7 @@ fn closing(open: char) -> char {
 
 /// A URI owns balanced brackets within its atom (notably IPv6 hosts), while
 /// an unbalanced closing delimiter still belongs to the surrounding syntax.
-fn uri_body_end(value: &str, outer_close: Option<char>) -> usize {
+pub(super) fn uri_body_end(value: &str, outer_close: Option<char>) -> usize {
     let mut brackets = Vec::new();
     for (byte, character) in value.char_indices() {
         if character.is_whitespace() || brackets.is_empty() && outer_close == Some(character) {
@@ -251,7 +251,7 @@ fn uri_body_end(value: &str, outer_close: Option<char>) -> usize {
 }
 
 #[derive(Default)]
-struct UriLookahead {
+pub(super) struct UriLookahead {
     scanned_until: usize,
     #[cfg(test)]
     scheme_bytes_examined: usize,
@@ -262,7 +262,7 @@ impl UriLookahead {
     /// prefix. After a miss, starting later inside that run would find the
     /// same miss. After a match, the lexer consumes at least the prefix.
     /// In both cases the next probe skips all scheme bytes already examined.
-    fn body_start(&mut self, value: &str, start: usize) -> Option<usize> {
+    pub(super) fn body_start(&mut self, value: &str, start: usize) -> Option<usize> {
         if start < self.scanned_until {
             return None;
         }
@@ -281,6 +281,11 @@ impl UriLookahead {
         }
         self.scanned_until = value.len();
         None
+    }
+
+    #[cfg(test)]
+    pub(super) const fn scheme_work(&self) -> usize {
+        self.scheme_bytes_examined
     }
 }
 

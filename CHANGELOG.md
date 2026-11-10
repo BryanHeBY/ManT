@@ -23,6 +23,11 @@ that crate was not published for that change.
   placeholder color through the existing theme system.
 - Keep synopsis and entry argument highlighting responsive on long runs of
   ellipses or URI-like text. Link and argument recognition are unchanged.
+- Extend TUI syntax colors to option summaries and source-marked option
+  references in ordinary text. Distinguish embedded argument templates,
+  response files and compiler option punctuation while preserving source
+  fonts, links, formulas, normal wrapping and copied text. Keep recognition
+  responsive on long or heavily marked text.
 - Preserve explicit mathematical atom roles and distinguish opaque formula
   content from parsed atoms. Validate expression shape and operator arity at
   shared decoding boundaries. Retain malformed native operands through an

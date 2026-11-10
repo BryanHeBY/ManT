@@ -6,7 +6,10 @@
 use std::ops::Range;
 
 mod lex;
+mod prose;
 use lex::{Kind, Syntax, Token, tokenize};
+pub(crate) use prose::accents as prose_accents;
+pub(crate) use prose::checked_accents as checked_prose_accents;
 
 const MAX_BYTES: usize = 64 * 1024;
 const MAX_DEPTH: usize = 64;
@@ -31,6 +34,18 @@ pub(crate) enum Role {
 pub(crate) struct Accent {
     pub(crate) bytes: Range<usize>,
     pub(crate) role: Role,
+}
+
+pub(crate) fn overlay(base: &mut Vec<Accent>, patches: Vec<Accent>) {
+    crate::accent::overlay(
+        base,
+        patches,
+        |accent| accent.bytes.clone(),
+        |accent, bytes| Accent {
+            bytes,
+            role: accent.role,
+        },
+    );
 }
 
 /// Scan one complete content owner. Names are exact protected spellings;

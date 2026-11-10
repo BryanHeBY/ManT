@@ -133,6 +133,7 @@ impl<'a> EntryStyles<'a> {
         let mut text = String::new();
         let mut names = Vec::new();
         let mut emphasis = Vec::new();
+        let mut equations = Vec::new();
         let mut parts = Vec::new();
         let mut scalar = 0;
         for part in &form.parts {
@@ -141,9 +142,9 @@ impl<'a> EntryStyles<'a> {
             let root = nodes.as_ptr() as usize;
             let mut cursor = 0;
             let mut bounded = true;
-            mant_render::visit_inline_text(nodes, &[], |source, _, value| {
+            crate::code::source::visit(nodes, |source, value| {
                 if cursor >= projected.chars.end || !bounded {
-                    return;
+                    return false;
                 }
                 let byte_start = text.len();
                 for character in value.chars() {
@@ -162,6 +163,11 @@ impl<'a> EntryStyles<'a> {
                 if source.emphasis && byte_start < text.len() {
                     emphasis.push(byte_start..text.len());
                 }
+                if source.kind == crate::code::source::LeafKind::Equation && byte_start < text.len()
+                {
+                    equations.push(byte_start..text.len());
+                }
+                cursor < projected.chars.end && bounded
             });
             if !bounded {
                 return None;
@@ -180,7 +186,7 @@ impl<'a> EntryStyles<'a> {
             scalar += projected.chars.len();
         }
         names.sort_by_key(|range: &Range<usize>| range.start);
-        let accents = entry::form_accents(&text, &names, &emphasis);
+        let accents = entry::form_accents(&text, &names, &emphasis, &equations);
         let mut pending = Vec::new();
         let mut part_index = 0;
         for accent in &accents {

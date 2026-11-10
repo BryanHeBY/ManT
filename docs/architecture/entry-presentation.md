@@ -106,6 +106,16 @@ description text is outside this classifier's evidence scope. A synopsis may
 remain a Paragraph, retaining its original wrapping and surface. This is a
 consumer presentation policy and adds no execution or coloring facts to IR.
 
+Option inventories and source-marked references may also receive independent
+lexical decoration in ordinary descriptions. This does not create an Entry,
+extend an EntryForm or grant name-binding evidence to matching prose. Original
+font boundaries are evidence, never token boundaries. Embedded argument fonts
+may refine a proved option atom, but exact bound names and mathematical owners
+remain authoritative. Consumers merge ordered original-byte accent streams
+before scalar projection; they must not repeatedly scan suffixes or every
+font range for each token. The private URI probe retains one monotonic cursor
+per complete owner, including when ellipsis tokens split a scheme-like run.
+
 Match decoration is supplied only by a reported query location. Interactive
 search and selection apply their own final overlay; they do not mutate cached
 styles, facts, anchors, copied text or link hit regions.

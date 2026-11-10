@@ -881,6 +881,13 @@ Recognition is best effort; explanatory prose and ambiguous syntax retain
 their original appearance. Validated entry signatures use the same argument
 conventions. Colors do not change searched or copied text.
 
+Option summaries and explicitly marked option references in ordinary text also
+receive these colors, including compiler argument templates and response files.
+Source fonts identify replaceable pieces without treating every italic word as
+an argument. Strings, URLs and formulas retain their original presentation.
+Inline code that contains a recognizable command uses the same syntax cues;
+paragraph backgrounds and wrapping remain unchanged.
+
 ### Page Search
 
 - `Ctrl+F`, `/`: Open forward search in the bottom `Find Page` field.

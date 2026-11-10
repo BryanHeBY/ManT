@@ -56,13 +56,17 @@ impl DocumentBuilder<'_> {
         &self,
         content: mant_ir::InlineContentRef<'_>,
         style: Style,
+        prose: bool,
     ) -> Vec<StyledInlineLine> {
         styled_reference_content_lines(
             content,
             style,
             self.address.as_ref(),
             self.entry_styles.ranges(content.content),
-            self.highlight_context,
+            crate::code::HighlightContext {
+                prose: self.highlight_context.prose && prose,
+                ..self.highlight_context
+            },
             &self.reference_origins,
         )
     }

@@ -493,6 +493,7 @@ mod mdoc_execution_spacing;
 mod navigation;
 mod navigation_markers;
 mod ordered_source_children;
+mod prose_highlighting;
 mod reference_rows;
 mod references;
 mod row_origins;

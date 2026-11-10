@@ -16,7 +16,17 @@ pub(crate) struct Accent {
     pub(crate) role: StyleRole,
 }
 
-pub(crate) fn accents(text: &str, names: &[Range<usize>]) -> Vec<Accent> {
+#[cfg(test)]
+fn accents(text: &str, names: &[Range<usize>]) -> Vec<Accent> {
+    structure_accents(text, text, names, &[])
+}
+
+fn structure_accents(
+    text: &str,
+    scan_text: &str,
+    names: &[Range<usize>],
+    protected: &[Range<usize>],
+) -> Vec<Accent> {
     if text.len() > MAX_FORM_BYTES {
         return Vec::new();
     }
@@ -26,15 +36,12 @@ pub(crate) fn accents(text: &str, names: &[Range<usize>]) -> Vec<Accent> {
     let mut escaped = false;
     let mut opaque = false;
     let mut name_index = 0;
-    let mut chars = text.char_indices().enumerate().peekable();
-    while let Some((scalar, (byte, character))) = chars.next() {
-        while names.get(name_index).is_some_and(|name| name.end <= scalar) {
-            name_index += 1;
+    let mut protected_index = 0;
+    for (scalar, (byte, character)) in text.char_indices().enumerate() {
+        if contains_at(protected, &mut protected_index, scalar) {
+            continue;
         }
-        if names
-            .get(name_index)
-            .is_some_and(|name| name.contains(&scalar))
-        {
+        if contains_at(names, &mut name_index, scalar) {
             continue;
         }
         if character.is_whitespace() {
@@ -61,7 +68,7 @@ pub(crate) fn accents(text: &str, names: &[Range<usize>]) -> Vec<Accent> {
             quote = Some(character);
             continue;
         }
-        if character == ':' && url_start(text, byte) {
+        if character == ':' && url_start(scan_text, byte) {
             opaque = true;
             continue;
         }
@@ -99,8 +106,8 @@ pub(crate) fn accents(text: &str, names: &[Range<usize>]) -> Vec<Accent> {
                 .any(|(delimiter, _)| matches!(delimiter, '[' | '{')) =>
             {
                 // A synopsis choice, not a shell pipeline or logical OR.
-                let adjacent = text[..byte].ends_with('|')
-                    || chars.peek().is_some_and(|(_, (_, next))| *next == '|');
+                let adjacent =
+                    scan_text[..byte].ends_with('|') || scan_text[byte + 1..].starts_with('|');
                 (!adjacent).then_some(StyleRole::EntrySeparator)
             }
             _ => None,
@@ -116,43 +123,94 @@ pub(crate) fn accents(text: &str, names: &[Range<usize>]) -> Vec<Accent> {
     result
 }
 
+fn contains_at(ranges: &[Range<usize>], index: &mut usize, scalar: usize) -> bool {
+    while ranges.get(*index).is_some_and(|range| range.end <= scalar) {
+        *index += 1;
+    }
+    ranges
+        .get(*index)
+        .is_some_and(|range| range.contains(&scalar))
+}
+
 /// Form bindings use scalar coordinates, while the shared signature scanner
 /// uses bytes. Convert once for the complete owner, before source projection.
 pub(crate) fn form_accents(
     text: &str,
     names: &[Range<usize>],
     emphasis: &[Range<usize>],
+    protected: &[Range<usize>],
 ) -> Vec<Accent> {
     if text.len() > MAX_FORM_BYTES {
         return Vec::new();
     }
-    let mut result = accents(text, names);
     let boundaries: Vec<_> = text
         .char_indices()
         .map(|(byte, _)| byte)
         .chain(std::iter::once(text.len()))
         .collect();
+    let protected_scalars: Vec<_> = protected
+        .iter()
+        .map(|range| {
+            boundaries
+                .binary_search(&range.start)
+                .expect("protected UTF-8 start")
+                ..boundaries
+                    .binary_search(&range.end)
+                    .expect("protected UTF-8 end")
+        })
+        .collect();
+    let scan_text = crate::code::source::syntax_text(text, protected);
+    let mut result = structure_accents(text, &scan_text, names, &protected_scalars);
     let names = names
         .iter()
         .filter_map(|name| Some(*boundaries.get(name.start)?..*boundaries.get(name.end)?))
         .collect::<Vec<_>>();
-    for accent in
-        crate::signature::accents(text, crate::signature::Context::Entry, emphasis, &names)
-    {
+    let mut syntax = crate::signature::accents(
+        &scan_text,
+        crate::signature::Context::Entry,
+        emphasis,
+        &names,
+    );
+    let marked = (!text.is_empty()).then_some(0..text.len());
+    let prose = crate::signature::prose_accents(text, marked.as_slice(), emphasis, protected);
+    crate::signature::overlay(&mut syntax, prose);
+    let mut placeholders = Vec::new();
+    let mut name_index = 0;
+    for accent in syntax {
         if accent.role == crate::signature::Role::Placeholder {
+            while names
+                .get(name_index)
+                .is_some_and(|name| name.end <= accent.bytes.start)
+            {
+                name_index += 1;
+            }
+            if names
+                .get(name_index)
+                .is_some_and(|name| name.start < accent.bytes.end)
+            {
+                continue;
+            }
             let start = boundaries
                 .binary_search(&accent.bytes.start)
                 .expect("token UTF-8 boundary");
             let end = boundaries
                 .binary_search(&accent.bytes.end)
                 .expect("token UTF-8 boundary");
-            result.push(Accent {
+            placeholders.push(Accent {
                 range: start..end,
                 role: StyleRole::EntryPlaceholder,
             });
         }
     }
-    result.sort_by_key(|accent| accent.range.start);
+    crate::accent::overlay(
+        &mut result,
+        placeholders,
+        |accent| accent.range.clone(),
+        |accent, range| Accent {
+            range,
+            role: accent.role,
+        },
+    );
     result
 }
 

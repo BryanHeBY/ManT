@@ -13,16 +13,18 @@ use crate::theme::{CodeStyles, StyleRole};
 mod command;
 mod keywords;
 mod scan;
+pub(crate) mod source;
 mod synopsis;
 
 pub(crate) const MAX_BLOCK_BYTES: usize = 64 * 1024;
 
-/// Lexical evidence and display geometry are independent. A literal synopsis
-/// uses both flags; an ordinary synopsis paragraph uses only `synopsis`.
+/// Literal scanning, synopsis evidence and marked prose evidence are
+/// independent of display geometry. A synopsis can retain a normal surface.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct HighlightContext {
     pub(crate) literal: bool,
     pub(crate) synopsis: bool,
+    pub(crate) prose: bool,
 }
 
 impl From<bool> for HighlightContext {
@@ -30,6 +32,7 @@ impl From<bool> for HighlightContext {
         Self {
             literal,
             synopsis: false,
+            prose: literal,
         }
     }
 }
@@ -52,59 +55,91 @@ pub(crate) struct CodeHighlights {
 impl CodeHighlights {
     #[cfg(test)]
     pub(crate) fn new(value: &str) -> Self {
-        Self::with_context(value, true.into(), &[])
+        Self::with_source(
+            &source::Source {
+                text: value.into(),
+                ..Default::default()
+            },
+            true.into(),
+        )
     }
 
     pub(crate) fn for_inlines(
         nodes: &[mant_ir::Inline],
         context: HighlightContext,
     ) -> Option<Self> {
-        if !context.literal && !context.synopsis {
+        if !context.literal && !context.synopsis && !context.prose {
             return None;
         }
-        let mut value = String::new();
-        let mut emphasis = Vec::new();
-        let mut bounded = true;
-        mant_render::visit_inline_text(nodes, &[], |source, _, text| {
-            if bounded && text.len() <= MAX_BLOCK_BYTES - value.len() {
-                let start = value.len();
-                value.push_str(text);
-                if source.emphasis {
-                    emphasis.push(start..value.len());
-                }
-            } else {
-                bounded = false;
-            }
-        });
-        let highlights = if bounded {
-            Self::with_context(&value, context, &emphasis)
-        } else {
-            Self::default()
+        let Some(source) = source::Source::collect(nodes) else {
+            return context.literal.then(Self::default);
         };
+        let highlights = Self::with_source(&source, context);
         (context.literal || !highlights.accents.is_empty()).then_some(highlights)
     }
 
-    fn with_context(value: &str, context: HighlightContext, emphasis: &[Range<usize>]) -> Self {
+    fn with_source(source: &source::Source, context: HighlightContext) -> Self {
+        let value = source.text.as_str();
+        let syntax_text = source.syntax_text();
         // Reject the whole block before scanning: a partial scan would lose
         // quote/comment state and miscolor subsequent inline pieces.
         if value.len() > MAX_BLOCK_BYTES {
             return Self::default();
         }
         let mut accents = if context.literal {
-            let Some(accents) = scan::accents(value) else {
+            let Some(accents) = scan::accents(&syntax_text) else {
                 return Self::default();
             };
             accents
         } else {
             Vec::new()
         };
+        let opaque = if context.literal || !context.prose {
+            Vec::new()
+        } else {
+            let Some(opaque) = inline_commands(source, &mut accents) else {
+                return Self::default();
+            };
+            opaque
+        };
+        let lexical_protected = if context.literal {
+            accents
+                .iter()
+                .filter(|accent| protected_role(accent.role))
+                .map(|accent| accent.bytes.clone())
+                .collect()
+        } else {
+            opaque.clone()
+        };
+        let protected_ranges = crate::accent::union(&source.protected, &lexical_protected);
+        let signature_text = source::syntax_text(value, &protected_ranges);
         let signature_context = if context.synopsis {
             crate::signature::Context::Synopsis
         } else {
             crate::signature::Context::Inferred
         };
+        let mut syntax = if context.literal || context.synopsis {
+            crate::signature::accents(&signature_text, signature_context, &source.emphasis, &[])
+        } else {
+            Vec::new()
+        };
+        let prose = if context.prose {
+            let Some(prose) = crate::signature::checked_prose_accents(
+                value,
+                &source.marked,
+                &source.emphasis,
+                &protected_ranges,
+            ) else {
+                return Self::default();
+            };
+            prose
+        } else {
+            Vec::new()
+        };
+        crate::signature::overlay(&mut syntax, prose);
         let mut protected = 0;
-        let signature = crate::signature::accents(value, signature_context, emphasis, &[])
+        let mut opaque_index = 0;
+        let signature = syntax
             .into_iter()
             .filter_map(|accent| {
                 while accents
@@ -116,14 +151,17 @@ impl CodeHighlights {
                 let masked = accents[protected..]
                     .iter()
                     .take_while(|base| base.bytes.start < accent.bytes.end)
-                    .any(|base| {
-                        matches!(
-                            base.role,
-                            StyleRole::CodeString
-                                | StyleRole::CodeComment
-                                | StyleRole::CodeVariable
-                        )
-                    });
+                    .any(|base| protected_role(base.role));
+                while opaque
+                    .get(opaque_index)
+                    .is_some_and(|range: &Range<usize>| range.end <= accent.bytes.start)
+                {
+                    opaque_index += 1;
+                }
+                let masked = masked
+                    || opaque
+                        .get(opaque_index)
+                        .is_some_and(|range| range.start < accent.bytes.end);
                 (!masked).then_some(Accent {
                     bytes: accent.bytes,
                     role: signature_role(accent.role),
@@ -131,6 +169,7 @@ impl CodeHighlights {
             })
             .collect();
         overlay(&mut accents, signature);
+        exclude(&mut accents, &source.protected);
         Self {
             accents,
             ..Self::default()
@@ -175,6 +214,82 @@ impl CodeHighlights {
     }
 }
 
+const fn protected_role(role: StyleRole) -> bool {
+    matches!(
+        role,
+        StyleRole::CodeString | StyleRole::CodeComment | StyleRole::CodeVariable
+    )
+}
+
+/// Explicit Code leaves are independent fragments, not a mode applied to
+/// surrounding prose. Disjoint merged ranges bound their total scan length.
+fn inline_commands(
+    source: &source::Source,
+    accents: &mut Vec<Accent>,
+) -> Option<Vec<Range<usize>>> {
+    let mut opaque = Vec::new();
+    for range in &source.code {
+        let fragment = &source.text[range.clone()];
+        let first = fragment.trim_start();
+        let start = fragment.len() - first.len();
+        let command = first
+            .find(char::is_whitespace)
+            .is_some_and(|end| command::head(fragment, start, start + end));
+        let fragment_accents = scan::accents(fragment)?;
+        for accent in fragment_accents {
+            let bytes = range.start + accent.bytes.start..range.start + accent.bytes.end;
+            if protected_role(accent.role) {
+                opaque.push(bytes.clone());
+            }
+            if command {
+                accents.push(Accent {
+                    bytes,
+                    role: accent.role,
+                });
+            }
+        }
+    }
+    Some(opaque)
+}
+
+/// Each protected owner interval is consumed monotonically, independently of
+/// inline splitting. In particular, mathematical atoms are never CLI options.
+fn exclude(accents: &mut Vec<Accent>, protected: &[Range<usize>]) {
+    if protected.is_empty() {
+        return;
+    }
+    let mut index = 0;
+    let mut result = Vec::new();
+    for accent in accents.drain(..) {
+        while protected
+            .get(index)
+            .is_some_and(|range| range.end <= accent.bytes.start)
+        {
+            index += 1;
+        }
+        let mut start = accent.bytes.start;
+        for range in protected[index..]
+            .iter()
+            .take_while(|range| range.start < accent.bytes.end)
+        {
+            if start < range.start {
+                result.push(Accent {
+                    bytes: start..range.start,
+                    role: accent.role,
+                });
+            }
+            start = start.max(range.end);
+        }
+        if start < accent.bytes.end {
+            result.push(Accent {
+                bytes: start..accent.bytes.end,
+                role: accent.role,
+            });
+        }
+    }
+    *accents = result;
+}
+
 const fn signature_role(role: crate::signature::Role) -> StyleRole {
     use crate::signature::Role;
     match role {
@@ -190,41 +305,15 @@ const fn signature_role(role: crate::signature::Role) -> StyleRole {
 /// Both streams are source-ordered; each base accent is split only at actual
 /// token boundaries, never at viewport or inline-wrapper boundaries.
 fn overlay(base: &mut Vec<Accent>, signature: Vec<Accent>) {
-    if signature.is_empty() {
-        return;
-    }
-    let mut result = Vec::new();
-    let mut index = 0;
-    for accent in base.drain(..) {
-        while signature
-            .get(index)
-            .is_some_and(|patch| patch.bytes.end <= accent.bytes.start)
-        {
-            index += 1;
-        }
-        let mut start = accent.bytes.start;
-        for patch in signature[index..]
-            .iter()
-            .take_while(|patch| patch.bytes.start < accent.bytes.end)
-        {
-            if start < patch.bytes.start {
-                result.push(Accent {
-                    bytes: start..patch.bytes.start,
-                    role: accent.role,
-                });
-            }
-            start = start.max(patch.bytes.end);
-        }
-        if start < accent.bytes.end {
-            result.push(Accent {
-                bytes: start..accent.bytes.end,
-                role: accent.role,
-            });
-        }
-    }
-    result.extend(signature);
-    result.sort_by_key(|accent| accent.bytes.start);
-    *base = result;
+    crate::accent::overlay(
+        base,
+        signature,
+        |accent| accent.bytes.clone(),
+        |accent, bytes| Accent {
+            bytes,
+            role: accent.role,
+        },
+    );
 }
 
 #[cfg(test)]

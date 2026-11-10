@@ -99,6 +99,7 @@ impl DocumentBuilder<'_> {
                 layout: inline_layout,
             },
             theme::style(theme::StyleRole::Text),
+            true,
         );
         let mut deferred_targets = Self::trim_paragraph_tail(&mut inline_lines);
         for (id, row) in inline_anchor_rows(children) {
@@ -172,6 +173,7 @@ impl DocumentBuilder<'_> {
             if item.inline_term() {
                 self.inline_definition(item, indent);
             } else {
+                let prose = std::mem::replace(&mut self.highlight_context.prose, false);
                 for term in &item.terms {
                     self.inline_lines_with_surface(
                         term.inline_content(),
@@ -180,6 +182,7 @@ impl DocumentBuilder<'_> {
                         super::super::LineSurface::Normal,
                     );
                 }
+                self.highlight_context.prose = prose;
                 self.blocks(
                     &item.description,
                     compose_origin(indent, item.layout.body_indent_columns),
@@ -198,8 +201,11 @@ impl DocumentBuilder<'_> {
             for (id, row) in inline_anchor_rows(term) {
                 head_targets.push((id, head_lines.len() + row));
             }
-            let lines =
-                self.styled_inlines(term.inline_content(), theme::style(theme::StyleRole::Text));
+            let lines = self.styled_inlines(
+                term.inline_content(),
+                theme::style(theme::StyleRole::Text),
+                false,
+            );
             if lines.len() != 1 || !lines[0].spans.is_empty() {
                 head_lines.extend(lines);
             } else {
@@ -249,7 +255,7 @@ impl DocumentBuilder<'_> {
                 .expect("shared description has an inline root");
             let children = content.content;
             let mut description_lines =
-                self.styled_inlines(content, theme::style(theme::StyleRole::Text));
+                self.styled_inlines(content, theme::style(theme::StyleRole::Text), true);
             let literal_inline = matches!(description.block, Block::Preformatted { .. });
             let mut deferred_targets = if literal_inline {
                 Vec::new()

@@ -636,11 +636,11 @@ pub(super) fn option(value: &str, offset: usize) -> Option<usize> {
     if name.is_empty() || name.starts_with(char::is_whitespace) {
         return rest.starts_with('-').then_some(2);
     }
-    if !name.starts_with(|c: char| c.is_ascii_alphabetic()) {
+    if !name.starts_with(|c: char| c.is_ascii_alphabetic() || matches!(c, '#' | '?')) {
         return None;
     }
     let length = take_while(name, |c| {
-        c.is_ascii_alphanumeric() || matches!(c, '_' | '-')
+        c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '#' | '?' | '+')
     });
     if name[length..].starts_with(['(', ')', ';', '.', '/']) {
         return None;

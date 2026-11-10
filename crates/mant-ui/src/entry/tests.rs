@@ -28,6 +28,48 @@ fn signatures_distinguish_delimiters_assignment_and_choices() {
 }
 
 #[test]
+fn equation_punctuation_is_opaque_and_later_parameter_coordinates_stay_original() {
+    let text = "--x=\"[中文] --other=<VALUE>";
+    let start = text.find('"').unwrap();
+    let end = text.find(" --other").unwrap();
+    let result = form_accents(
+        text,
+        std::slice::from_ref(&(0..3)),
+        &[],
+        std::slice::from_ref(&(start..end)),
+    );
+    assert_eq!(role(text, &result, text.find('[').unwrap()), None);
+    assert_eq!(
+        role(text, &result, text.find("VALUE").unwrap()),
+        Some(StyleRole::EntryPlaceholder)
+    );
+    assert_eq!(
+        role(text, &result, text.find('<').unwrap()),
+        Some(StyleRole::EntryDelimiter)
+    );
+}
+
+#[test]
+fn equation_punctuation_cannot_complete_an_entry_uri_or_logical_operator() {
+    for (text, formula, visible, expected) in [
+        ("--x=a://[VALUE]", "//", "[", StyleRole::EntryDelimiter),
+        ("--x=[a||b]", "|b", "|", StyleRole::EntrySeparator),
+    ] {
+        let start = text.find(formula).unwrap();
+        let result = form_accents(
+            text,
+            std::slice::from_ref(&(0..3)),
+            &[],
+            std::slice::from_ref(&(start..start + formula.len())),
+        );
+        assert_eq!(
+            role(text, &result, text.find(visible).unwrap()),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
 fn names_quotes_escapes_urls_and_incomplete_pairs_stay_protected() {
     let text = "operator[]= '<literal>' \"[literal]=x\" \\[x\\] https://host/?q=[x]=y ssh://host/[x]=z file:///tmp/[x]=z --value=<未完 [mismatch>";
     let accents = accents(text, std::slice::from_ref(&(0..11)));

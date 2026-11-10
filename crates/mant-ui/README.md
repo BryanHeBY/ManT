@@ -190,8 +190,8 @@ Parameter, command and configuration-key signatures also accent matched
 `[]`, `<>`, `()` and `{}` delimiters in mauve purple (`#CBA6F7`), `=` in blue
 (`#89B4FA`), and single choice separators inside brackets/braces in purple. Independent
 `EntryDelimiter`, `EntryOperator` and `EntrySeparator` theme roles share the
-code palette's defaults without coupling future customization. Only validated
-authored form slices are scanned, not descriptions or ordinary terms; symbols
+code palette's defaults without coupling future customization. Declaration
+decoration scans only validated authored form slices; symbols
 inside bound names (such as `operator[]`), quotes, escapes and URLs remain
 protected. Explicit argument placeholders and source-emphasized argument slots
 use blue-cyan (`#74C7EC`) through the independent `EntryPlaceholder` role.
@@ -236,8 +236,10 @@ both option accents and structural markers. The tldr parser's rewriting is not
 reused.
 These are best-effort visual cues, not a full shell or programming grammar.
 Language tags are metadata, not grammar selectors or highlighter opt-outs;
-`text` synopses use the same cues. Ordinary inline code and the separate tldr
-view are unchanged.
+`text` synopses use the same cues. Explicit inline Code command fragments use
+the same lexical cues without changing their authored background. Other inline
+code retains its source styling outside the option-reference layer below.
+The separate tldr view is unchanged.
 Quotes and block comments span original inline pieces and hard rows. Accents
 store byte ranges and semantic roles, not colors. A borrowed `CodeStyles` set
 resolves those roles through the same `Theme` as other UI content.
@@ -281,6 +283,29 @@ names, links and coordinates remain authoritative. Multi-part entry forms
 project argument colors through every intersecting original inline root;
 descriptions and compact name-only labels do not inherit argument guesses.
 There are no new public IR fields, language dependencies or theme settings.
+
+Ordinary paragraphs also support a separate conservative option layer. A
+complete option inventory may begin directly with flags, including inside a
+generic definition's description or a table cell; it does not need a SYNOPSIS
+heading, command name, code surface or fabricated semantic entry. In prose,
+only complete option atoms explicitly marked Strong, Emphasis or Code acquire
+reference accents. The text is scanned before applying original font fragments,
+so `machine` plus a separately bold `-gcc` remains one identifier.
+
+Compiler punctuation such as `-###` and `-nostdinc++`, response-file `@file`
+notation, and source-emphasized pieces inside `-fplugin-arg-name=arg` are
+recognized in their option context. Partial argument fonts refine the option
+atom; an entirely italic `--parallel` is still an option, not an argument.
+Fixed choices and optional spelling suffixes retain their conservative rules.
+Strings, URIs, mathematical owners and exact name bindings remain protected;
+links, source modifiers and search/selection keep their original precedence.
+Unknown punctuation falls back locally instead of suppressing unrelated prose
+references. Resource limits reject the complete owner.
+
+All ranges refer to unchanged source bytes. URI lookahead advances once per
+complete owner, original font ranges are consumed with ordered cursors, and
+sorted accent streams merge linearly. Deterministic work-count regressions
+cover long URI-like runs, dense option templates and highly fragmented fonts.
 
 Outline and body adapters request semantic styles from the private `theme`
 module. `StyleRole` distinguishes text, source markup, entry kinds, outline
