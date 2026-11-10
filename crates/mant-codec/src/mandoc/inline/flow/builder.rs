@@ -23,6 +23,7 @@ impl InlineBuilder {
             input_retirement: NativeInputRetirement::Retained,
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
+            section_handoff: None,
         }
     }
 
@@ -40,6 +41,7 @@ impl InlineBuilder {
             input_retirement: NativeInputRetirement::Retained,
             execution,
             external_head_row_pending: false,
+            section_handoff: None,
         }
     }
 

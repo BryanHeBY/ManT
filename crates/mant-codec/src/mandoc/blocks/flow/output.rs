@@ -283,12 +283,16 @@ impl BlockState {
     }
 
     pub(in crate::mandoc::blocks) fn flush_preformatted(&mut self) {
+        self.flush_preformatted_with_retirement(true);
+    }
+
+    fn flush_preformatted_with_retirement(&mut self, retire: bool) {
         let output_start = self.output.len();
         let closed_tail = self.literal.closed_graph_tail();
         let retires_active_owner =
             self.literal.has_output() && self.inline_output_is_literal(self.formatter.no_fill);
         self.output.extend(self.literal.take(self.indent_columns));
-        if retires_active_owner {
+        if retire && retires_active_owner {
             // D1/Dl's post already consumed its native row (mdoc_term.c:
             // termp_bl_post). This Vec's indices cannot address a later
             // paragraph. Retire only projection ownership, not the native
@@ -426,12 +430,15 @@ impl BlockState {
             self.literal
                 .handoff_pending_native_input(&mut self.formatter);
         }
-        self.flush_preformatted();
-        if handoff {
-            self.flush_paragraph_with(ParagraphDrain::BeforeNativeFlush);
+        let consumed = row_boundary == super::super::FormatterRowBoundary::SectionHeadConsumed;
+        self.flush_preformatted_with_retirement(!consumed);
+        self.flush_paragraph_with(if handoff {
+            ParagraphDrain::BeforeNativeFlush
+        } else if consumed {
+            ParagraphDrain::AfterNativeFlush
         } else {
-            self.flush_paragraph();
-        }
+            ParagraphDrain::Ordinary
+        });
         let closed_tail = self
             .closed_output_tail
             .filter(|tail| tail.output_end == self.output.len());

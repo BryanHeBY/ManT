@@ -246,10 +246,17 @@ impl InlineBuilder {
             // consume its receipt before the row reset retires the cells.
             self.discard_unprinted_definition_field_output()
         } else {
-            return self.retire_plain_flush_unit_with_tail();
+            let outcome = self.retire_plain_flush_unit_with_tail();
+            if let Some(from) = outcome.rejection_start() {
+                self.note_section_rejection(from);
+            }
+            return outcome;
         };
         if rejected {
-            PlainFlushOutcome::Rejected
+            PlainFlushOutcome::Rejected {
+                from: None,
+                after_printed_pass: false,
+            }
         } else {
             PlainFlushOutcome::Ordinary
         }

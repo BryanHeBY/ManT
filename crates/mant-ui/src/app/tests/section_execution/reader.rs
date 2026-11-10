@@ -101,7 +101,10 @@ fn assert_painted_rows(case: &Case, app: &App, buffer: &ratatui::buffer::Buffer)
     }
 }
 
-fn source_cells(rendered: &crate::RenderedDocument, text: &str) -> Vec<(char, usize, usize)> {
+pub(super) fn source_cells(
+    rendered: &crate::RenderedDocument,
+    text: &str,
+) -> Vec<(char, usize, usize)> {
     let (record, start) = (0..rendered.search_record_count())
         .find_map(|record| {
             rendered
@@ -122,7 +125,7 @@ fn source_cells(rendered: &crate::RenderedDocument, text: &str) -> Vec<(char, us
         .collect()
 }
 
-fn viewport_cell(app: &App, row: usize, column: usize) -> (u16, u16) {
+pub(super) fn viewport_cell(app: &App, row: usize, column: usize) -> (u16, u16) {
     let area = app.geometry.content;
     let scroll = app.session.content_scroll;
     assert!((scroll..scroll + usize::from(area.height)).contains(&row));
@@ -133,7 +136,7 @@ fn viewport_cell(app: &App, row: usize, column: usize) -> (u16, u16) {
     )
 }
 
-fn assert_painted_glyphs(
+pub(super) fn assert_painted_glyphs(
     app: &App,
     buffer: &ratatui::buffer::Buffer,
     cells: &[(char, usize, usize)],

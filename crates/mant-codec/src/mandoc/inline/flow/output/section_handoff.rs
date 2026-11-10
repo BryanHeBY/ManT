@@ -1,0 +1,134 @@
+//! A plain native input interval can span two source section owners.
+
+use super::super::field_buffer::FieldBuffer;
+use super::{Inline, InlineBuilder, projection};
+use std::ops::Range;
+
+pub(super) const BOUNDARY: &str = "\0mant:output-scope:section-handoff";
+
+/// The old source owner's final input coordinate. Its provisional projection
+/// remains in the same Vec until HEAD's real `term_newln` consumes both owners.
+pub(in crate::mandoc::inline::flow) struct SectionHandoff {
+    previous_cell_end: usize,
+    previous_word_serial: u64,
+    rejected_previous: bool,
+    pub(in crate::mandoc::inline::flow) previous_empty_passes: u16,
+}
+
+impl SectionHandoff {
+    pub(in crate::mandoc::inline::flow) fn owns_loop_end(
+        &self,
+        buffer: &FieldBuffer,
+        pass: Range<usize>,
+    ) -> bool {
+        pass.end <= self.previous_cell_end
+            || pass.start < self.previous_cell_end
+                && buffer.printed_content_end(pass.start, self.previous_cell_end) > pass.start
+                && buffer.printed_content_end(self.previous_cell_end, pass.end)
+                    == self.previous_cell_end
+    }
+}
+
+impl InlineBuilder {
+    pub(in crate::mandoc) fn has_live_section_input(
+        execution: &super::super::InlineExecutionState,
+        nodes: &[Inline],
+    ) -> bool {
+        let input = &execution.plain_input;
+        !nodes.is_empty()
+            && execution.definition.is_none()
+            && input.buffer.resume_offset() < input.buffer.cells().len()
+            && (projection::has_rendered_formatter_glyph(
+                &nodes[input.output_start.min(nodes.len())..],
+            ) || execution.zero_advance.has_buffered_glyph())
+    }
+
+    pub(in crate::mandoc) fn mark_section_handoff(&mut self) {
+        self.section_handoff = Some(SectionHandoff {
+            previous_cell_end: self.execution.plain_input.buffer.cells().len(),
+            previous_word_serial: self.execution.native_owner_serial,
+            rejected_previous: false,
+            previous_empty_passes: 0,
+        });
+        self.nodes.push(Inline::anchor(BOUNDARY));
+    }
+
+    pub(super) fn route_section_loop_end(&mut self, pass: Range<usize>, indent: u16) -> bool {
+        if !self
+            .section_handoff
+            .as_ref()
+            .is_some_and(|handoff| handoff.owns_loop_end(&self.execution.plain_input.buffer, pass))
+        {
+            return false;
+        }
+        // An endline whose accepted pass ends within the old input closes
+        // the old owner. A generated separator before HEAD is not a new row.
+        let boundary = self.section_handoff_boundary();
+        let head = self.nodes.split_off(boundary);
+        super::push_row_break(&mut self.nodes, indent);
+        self.nodes.extend(head);
+        true
+    }
+
+    /// `encode1()` writes a zero-advance glyph to its original word before
+    /// the next word can overwrite or release it (term.c:901-920).
+    /// Its projection can arrive with HEAD, but must precede the old
+    /// word's loop end and keep its own word/annotation anchor.
+    pub(super) fn route_section_borrowed_prefix(&mut self, payload: &mut Vec<Inline>) {
+        let Some(handoff) = &self.section_handoff else {
+            return;
+        };
+        let markers = payload.iter().enumerate().filter_map(|(index, node)| {
+            super::native_passes::native_word_marker(node)
+                .and_then(|marker| marker.strip_prefix(super::INTERNAL_FIELD_WORD))
+                .and_then(|serial| serial.parse::<u64>().ok())
+                .map(|serial| (index, serial))
+        });
+        let mut markers = markers.peekable();
+        if markers
+            .peek()
+            .is_none_or(|(_, serial)| *serial > handoff.previous_word_serial)
+        {
+            return;
+        }
+        let end = markers
+            .find(|(_, serial)| *serial > handoff.previous_word_serial)
+            .map_or(payload.len(), |(index, _)| index);
+        let boundary = self.section_handoff_boundary();
+        self.nodes.splice(boundary..boundary, payload.drain(..end));
+    }
+
+    fn section_handoff_boundary(&self) -> usize {
+        self.nodes
+            .iter()
+            .rposition(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str() == BOUNDARY))
+            .expect("section owner boundary is live")
+    }
+
+    pub(super) fn note_section_rejection(&mut self, pass_start: usize) {
+        if let Some(handoff) = &mut self.section_handoff {
+            handoff.rejected_previous |= pass_start < handoff.previous_cell_end;
+        }
+    }
+
+    pub(in crate::mandoc) fn take_section_handoff_prefix(&mut self) -> Vec<Inline> {
+        let handoff = self.section_handoff.take().expect("active section handoff");
+        let (mut previous, mut head, found) =
+            projection::split_output_scope_prefix(std::mem::take(&mut self.nodes), BOUNDARY);
+        assert!(found, "section owner boundary survives native acceptance");
+        previous.extend(std::iter::repeat_n(
+            Inline::anchor(super::INTERNAL_COMPLETED_ROW),
+            usize::from(handoff.previous_empty_passes),
+        ));
+        if handoff.rejected_previous && !projection::has_rendered_formatter_glyph(&head) {
+            // The graphless pass began in the old owner's still-buffered
+            // suffix (term.c:143-146). It produced one final empty row,
+            // while accepting no HEAD glyph. Publish that row with its
+            // original input rather than as a phantom heading or BODY row.
+            previous.push(Inline::anchor(super::INTERNAL_COMPLETED_ROW));
+            projection::retain_inline_identities(&mut head);
+        }
+        self.nodes = head;
+        previous
+    }
+}

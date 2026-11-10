@@ -172,6 +172,7 @@ impl InlineBuilder {
             .split_word
             .take()
             .unwrap_or_else(|| std::mem::take(incoming));
+        self.route_section_borrowed_prefix(&mut payload);
         let layout_start = self.append_recorded_word_boundary(
             boundary,
             word,
@@ -490,10 +491,12 @@ impl InlineBuilder {
         // A consumed \p separator closes the already accepted prefix.
         // Its blank is part of the break, not a new formatter word cell.
         trim_trailing_breakable_spaces(&mut self.nodes, usize::MAX);
-        for &end in &projection.closes_before {
+        for pass in &projection.closes_before {
             let row_indent = self.take_definition_row_indent();
-            super::push_row_break(&mut self.nodes, row_indent);
-            self.execution.acknowledge_word_input_pass(end);
+            if !self.route_section_loop_end(pass.clone(), row_indent) {
+                super::push_row_break(&mut self.nodes, row_indent);
+            }
+            self.execution.acknowledge_word_input_pass(pass.end);
         }
         if matches!(
             projection.leading_padding,

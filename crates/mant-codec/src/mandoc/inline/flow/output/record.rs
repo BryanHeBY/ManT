@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub(super) struct WordPassProjection {
-    pub(super) closes_before: Vec<usize>,
+    pub(super) closes_before: Vec<std::ops::Range<usize>>,
     pub(super) leading_padding: RestartedPadding,
     pub(super) native_separator: usize,
     pub(super) preserve_native_separator: bool,
@@ -525,7 +525,7 @@ impl InlineBuilder {
                         ) {
                             record_row_split(&mut inside_splits, owner, pass.end, offset, false);
                         } else {
-                            closes_before.push(pass.end);
+                            closes_before.push(pass_start..pass.end);
                         }
                     }
                     restart = Some(boundary);

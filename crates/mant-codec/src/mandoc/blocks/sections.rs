@@ -6,7 +6,7 @@ use super::{
 };
 use crate::mandoc::{
     formatter::FormatterState, inline::authored_section_phrase,
-    layout::execute_vertical_spacing_after_newline,
+    layout::execute_vertical_spacing_after_newline, source_context::MdocSectionContext,
 };
 use libmandoc_rs::{
     MacroToken::{Man, Mdoc},
@@ -39,22 +39,34 @@ pub(in crate::mandoc) fn lower_document_structure(
             continue;
         }
         let entry = SectionEntry::for_node(node, predecessor);
-        let mut flow = ScopeFlow::settled(
+        let flow = ScopeFlow::settled(
             crate::mandoc::layout::SourceIndent::default(),
             formatter.spacing_enabled(),
         );
         // A preceding section already ran its BODY post. A nonempty root
         // slice can still own a row that this BLOCK pre must finish.
+        let mut heading = None;
         if root_start < index {
-            flow.row_boundary = FormatterRowBoundary::BeforeSection(entry);
+            let (blocks, prepared) = lower_before_heading(
+                &root.children[root_start..index],
+                context,
+                &mut paragraph_distance,
+                &mut formatter,
+                flow,
+                node,
+                entry,
+            );
+            root_blocks.extend(blocks);
+            heading = prepared;
+        } else {
+            root_blocks.extend(lower_scope(
+                &[],
+                context,
+                &mut paragraph_distance,
+                &mut formatter,
+                flow,
+            ));
         }
-        root_blocks.extend(lower_scope(
-            &root.children[root_start..index],
-            context,
-            &mut paragraph_distance,
-            &mut formatter,
-            flow,
-        ));
         root_start = index + 1;
         let spacing_before_lines = entry.finish(paragraph_distance, &mut formatter);
         sections.push(lower_section(
@@ -64,6 +76,7 @@ pub(in crate::mandoc) fn lower_document_structure(
             &mut paragraph_distance,
             &mut formatter,
             true,
+            heading,
         ));
     }
     let spacing_enabled = formatter.spacing_enabled();
@@ -96,27 +109,59 @@ fn report_presentation_reductions(
     }
 }
 
-fn lower_section(
-    node: &Node,
-    context: &mut LoweringContext<'_>,
-    spacing_before_lines: u16,
+type PreparedHeading = (Vec<mant_ir::Inline>, u16);
+
+fn lower_before_heading(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
     paragraph_distance: &mut u16,
-    formatter: &mut crate::mandoc::formatter::FormatterState,
-    top_level: bool,
-) -> Section {
-    let head = first_part_children(node, NodeKind::Head);
-    let section_context = if top_level {
-        native_mdoc_section_context(node)
+    formatter: &mut FormatterState,
+    flow: ScopeFlow<'_>,
+    next: &Node,
+    entry: SectionEntry,
+) -> (Vec<Block>, Option<PreparedHeading>) {
+    let mut lowerer = super::walk_scope(nodes, context, paragraph_distance, formatter, flow);
+    // With .PD 0, man_term.c::pre_SH/pre_SS can leave the input column
+    // intact. Do not publish a word that HEAD's real flush can still reject.
+    let prepared = if context.macro_set == libmandoc_rs::MacroSet::Man
+        && !entry.needs_newline(*lowerer.paragraph_distance)
+    {
+        lowerer
+            .state
+            .with_pending_section_output(|formatter, previous| {
+                prepare_heading(
+                    next,
+                    context,
+                    formatter,
+                    MdocSectionContext::Other,
+                    previous,
+                )
+            })
     } else {
-        context.active_mdoc_section()
+        None
     };
-    let authored_title = authored_section_phrase(head, context.default_name);
+    let boundary = if prepared.is_some() {
+        FormatterRowBoundary::SectionHeadConsumed
+    } else {
+        FormatterRowBoundary::BeforeSection(entry)
+    };
+    (lowerer.finish_into(formatter, boundary), prepared)
+}
+
+fn prepare_heading(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    formatter: &mut FormatterState,
+    section_context: MdocSectionContext,
+    previous: &mut Vec<mant_ir::Inline>,
+) -> PreparedHeading {
+    let head = first_part_children(node, NodeKind::Head);
     // SH/Sh and SS/Ss assign their heading origin in pre, and BODY's
     // ordinary manual origin afterwards (man_term.c::pre_SH/pre_SS,
     // mdoc_term.c::termp_sh_pre/termp_ss_pre). No prior ti offset leaks.
     formatter.row_presentation.offset_shift = 0;
     formatter.row_presentation.parent = 0;
-    let (mut heading, blank_heading_rows) = context.lower_section_heading(
+    context.lower_section_heading(
         crate::mandoc::source_context::HeadNodes {
             // blk_full() emits leading delimiter TEXT before allocating
             // Sh/Ss HEAD. It executes before the HEAD's bold pre, remains
@@ -130,8 +175,32 @@ fn lower_section(
             source_origin_units: None,
         },
         formatter,
-        section_context == crate::mandoc::source_context::MdocSectionContext::Authors,
+        section_context == MdocSectionContext::Authors,
+        previous,
+    )
+}
+
+fn lower_section(
+    node: &Node,
+    context: &mut LoweringContext<'_>,
+    spacing_before_lines: u16,
+    paragraph_distance: &mut u16,
+    formatter: &mut FormatterState,
+    top_level: bool,
+    prepared: Option<PreparedHeading>,
+) -> Section {
+    let section_context = if top_level {
+        native_mdoc_section_context(node)
+    } else {
+        context.active_mdoc_section()
+    };
+    let authored_title = authored_section_phrase(
+        first_part_children(node, NodeKind::Head),
+        context.default_name,
     );
+    let (mut heading, blank_heading_rows) = prepared.unwrap_or_else(|| {
+        prepare_heading(node, context, formatter, section_context, &mut Vec::new())
+    });
     // Allocate IDs in visible document order. Besides being deterministic for
     // consumers, this makes `.Sx` resolution independent of tree recursion.
     let (id, fragment_aliases) = context.section_identity_for(&authored_title, node);
@@ -156,27 +225,34 @@ fn lower_section(
         crate::mandoc::layout::SourceIndent::default(),
         spacing_enabled,
     );
-    flow.row_boundary =
-        body.get(first_subsection)
-            .map_or(FormatterRowBoundary::SectionBodyPost, |subsection| {
-                let previous = body[..first_subsection]
-                    .iter()
-                    .rfind(|node| !is_native_transparent_sibling(node));
-                FormatterRowBoundary::BeforeSection(SectionEntry::for_node(subsection, previous))
-            });
-    let blocks = lower_scope(
-        &body[..first_subsection],
-        context,
-        paragraph_distance,
-        formatter,
-        flow,
-    );
+    let (blocks, child_heading) = if let Some(subsection) = body.get(first_subsection) {
+        let nodes = &body[..first_subsection];
+        let previous = nodes
+            .iter()
+            .rfind(|node| !is_native_transparent_sibling(node));
+        lower_before_heading(
+            nodes,
+            context,
+            paragraph_distance,
+            formatter,
+            flow,
+            subsection,
+            SectionEntry::for_node(subsection, previous),
+        )
+    } else {
+        flow.row_boundary = FormatterRowBoundary::SectionBodyPost;
+        (
+            lower_scope(body, context, paragraph_distance, formatter, flow),
+            None,
+        )
+    };
     let children = lower_subsections(
         body,
         first_subsection,
         context,
         paragraph_distance,
         formatter,
+        child_heading,
     );
     context.replace_mdoc_section(previous_section);
     Section {
@@ -204,6 +280,7 @@ fn lower_subsections(
     context: &mut LoweringContext<'_>,
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
+    mut heading: Option<PreparedHeading>,
 ) -> Vec<Section> {
     let (body, subsections) = body.split_at(first_subsection);
     let mut previous_native = body
@@ -229,6 +306,7 @@ fn lower_subsections(
             paragraph_distance,
             formatter,
             false,
+            heading.take(),
         );
         children.push(child);
     }

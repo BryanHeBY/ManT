@@ -15,9 +15,13 @@ pub(super) enum ParagraphDrain {
     Ordinary,
     LineRequest,
     BeforeNativeFlush,
+    AfterNativeFlush,
 }
 
 impl ParagraphFlow {
+    pub(super) fn output_nodes_mut(&mut self) -> &mut Vec<Inline> {
+        &mut self.nodes
+    }
     pub(super) fn note_source(&mut self, source: Option<SourceSpan>) {
         if self.source.is_none() {
             self.source = source;
@@ -205,6 +209,9 @@ impl ParagraphFlow {
     ) {
         let (mut children, empty_word_end_break, completed_vertical_rows, closed_graph_tail) = self
             .with_inline_builder(formatter, |builder| {
+                if drain == ParagraphDrain::AfterNativeFlush {
+                    return builder.take_closed_paragraph_projection(true);
+                }
                 if drain == ParagraphDrain::BeforeNativeFlush
                     && let Some(retained) = builder.take_paragraph_before_native_flush()
                 {
@@ -216,7 +223,7 @@ impl ParagraphFlow {
         let first_line = self.hanging_first_line.take();
         let owner_origin = first_line.unwrap_or(indent);
         let mut layout = layout(owner_origin);
-        if first_line.is_some() {
+        if first_line.is_some() && drain != ParagraphDrain::AfterNativeFlush {
             // Only now does a new output owner use the hanging origin.
             // This paragraph's accepted hints keep the original base.
             formatter

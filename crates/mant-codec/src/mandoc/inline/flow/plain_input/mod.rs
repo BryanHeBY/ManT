@@ -37,22 +37,23 @@ pub(in crate::mandoc::inline::flow) enum PlainFlushOutcome {
     Ordinary,
     UnprintedTail,
     RepresentedTail,
-    Rejected,
-    RejectedAfterPrintedPass,
+    Rejected {
+        from: Option<usize>,
+        after_printed_pass: bool,
+    },
 }
 
 impl PlainFlushOutcome {
     fn rejected_prefix(
         buffer: &super::field_buffer::FieldBuffer,
         passes: &[super::field_buffer::FillPass],
+        from: usize,
     ) -> Self {
-        if passes
-            .last()
-            .is_some_and(|pass| buffer.printed_content_end(0, pass.end) > 0)
-        {
-            Self::RejectedAfterPrintedPass
-        } else {
-            Self::Rejected
+        Self::Rejected {
+            from: Some(from),
+            after_printed_pass: passes
+                .last()
+                .is_some_and(|pass| buffer.printed_content_end(0, pass.end) > 0),
         }
     }
 
@@ -67,7 +68,14 @@ impl PlainFlushOutcome {
     }
 
     pub(in crate::mandoc::inline::flow) const fn rejected(self) -> bool {
-        matches!(self, Self::Rejected | Self::RejectedAfterPrintedPass)
+        matches!(self, Self::Rejected { .. })
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn rejection_start(self) -> Option<usize> {
+        match self {
+            Self::Rejected { from, .. } => from,
+            _ => None,
+        }
     }
 
     pub(in crate::mandoc::inline::flow) const fn row_origin(
@@ -76,7 +84,13 @@ impl PlainFlushOutcome {
     ) -> super::output::CompletedRowOrigin {
         use super::output::CompletedRowOrigin;
         match (self, fallback) {
-            (Self::RejectedAfterPrintedPass, CompletedRowOrigin::Layout) => {
+            (
+                Self::Rejected {
+                    after_printed_pass: true,
+                    ..
+                },
+                CompletedRowOrigin::Layout,
+            ) => {
                 // The same prose unit already printed its accepted prefix.
                 // Its rejected tail reaches a separate unconditional
                 // endline (term.c:143-146,250-253), before any term_vspace.
@@ -125,6 +139,7 @@ impl InlineBuilder {
             &mut self.nodes,
             super::output::CompletedRowOrigin::Layout,
             Some(&mut projections),
+            self.section_handoff.as_mut(),
         );
         // Execution indices were mapped at the actual projection, before
         // retirement reset their cursors. Only live builder checkpoints
@@ -145,7 +160,7 @@ impl InlineBuilder {
         nodes: &mut Vec<Inline>,
         row_origin: super::output::CompletedRowOrigin,
     ) -> bool {
-        Self::retire_plain_flush_unit_with_projections(execution, nodes, row_origin, None)
+        Self::retire_plain_flush_unit_with_projections(execution, nodes, row_origin, None, None)
             .is_some_and(PlainFlushOutcome::rejected)
     }
 
@@ -154,6 +169,7 @@ impl InlineBuilder {
         nodes: &mut Vec<Inline>,
         row_origin: super::output::CompletedRowOrigin,
         projections: Option<&mut Vec<super::output::row_origins::OutputNodeEdits>>,
+        handoff: Option<&mut super::output::SectionHandoff>,
     ) -> Option<PlainFlushOutcome> {
         use super::field_buffer::{FillTargets, FlushReceipt};
         let inherited_printed_row = plain_unit_inherits_printed_row(execution);
@@ -187,6 +203,7 @@ impl InlineBuilder {
             matches!(&receipt, FlushReceipt::Rejected { .. }),
             inherited_printed_row,
             |start, end| buffer.printed_columns(start, end, 0, 0).is_some(),
+            handoff,
         );
         let reprojected_literal_rows = matches!(&receipt, FlushReceipt::Rejected { .. })
             && empty_rows > 0
@@ -259,7 +276,7 @@ impl InlineBuilder {
         execution.zero_advance.discard_at_row_end();
         project_completed_empty_passes(execution, nodes, output_start, empty_rows, row_origin);
         super::output::deferred_blanks::project(nodes, &buffer, &passes, output_start);
-        let outcome = PlainFlushOutcome::rejected_prefix(&buffer, &passes);
+        let outcome = PlainFlushOutcome::rejected_prefix(&buffer, &passes, rejected_from);
         Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
         Some(outcome)
     }

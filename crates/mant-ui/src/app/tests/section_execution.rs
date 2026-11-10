@@ -5,6 +5,7 @@ use mant_protocol::{ContentSelector, ExcerptSelection, QueryBundle, QueryExcerpt
 use serde::Deserialize;
 
 mod markdown;
+mod pending_rows;
 mod reader;
 
 const BODY: &str = "AFTERMARK";

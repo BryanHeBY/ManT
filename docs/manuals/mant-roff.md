@@ -124,6 +124,14 @@ This does not expand the recovery language or its per-cell and session budgets.
 
 ## man Language
 
+When `SH` or `SS` leaves a line live (for example, with `PD 0`), the
+heading can finish the preceding body's buffered words. Reading output
+keeps the body and heading as separate document elements. A word-end break
+that closes the preceding row does not introduce an empty heading row;
+actual empty rows and hard lines within the heading are preserved. If
+mandoc rejects both pending body text and heading text, the authored section
+destination and its following body are still available.
+
 The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:
 
 | Macros | ManT result |

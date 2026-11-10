@@ -180,6 +180,7 @@ pub(super) fn completed_empty_plain_passes(
     rejected: bool,
     mut printed_row: bool,
     mut interval_printed: impl FnMut(usize, usize) -> bool,
+    mut handoff: Option<&mut super::super::output::SectionHandoff>,
 ) -> u16 {
     // One accepted pass never reaches loop endline (term.c:200-217).
     // Its possibly empty final row remains with retain_accepted_unit_output;
@@ -192,12 +193,24 @@ pub(super) fn completed_empty_plain_passes(
     for (index, pass) in passes.iter().enumerate() {
         let printed = interval_printed(start, pass.end);
         printed_row |= printed;
-        if printed_row {
+        let ends_line = index + 1 < passes.len() || rejected;
+        if let Some(handoff) = handoff
+            .as_deref_mut()
+            .filter(|handoff| ends_line && handoff.owns_loop_end(buffer, start..pass.end))
+        {
+            // The old owner's terminating break already closes its last
+            // printable row. Only separate invisible passes add rows.
+            if printed_row {
+                handoff.previous_empty_passes = 0;
+            } else {
+                handoff.previous_empty_passes = handoff.previous_empty_passes.saturating_add(1);
+            }
+        } else if printed_row {
             rows = 0;
-        } else if index + 1 < passes.len() || rejected {
+        } else if ends_line {
             rows = rows.saturating_add(1);
         }
-        if index + 1 < passes.len() || rejected {
+        if ends_line {
             printed_row = false;
         }
         start = pass.end;

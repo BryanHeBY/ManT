@@ -253,7 +253,12 @@ pub(in crate::mandoc) fn retain_inline_identities(inlines: &mut Vec<Inline>) {
         let identity =
             crate::mandoc::inline::links::presentation::retains_authored_identity(inline);
         match inline {
-            Inline::Anchor { .. } => !super::is_private_output_marker(inline),
+            Inline::Anchor { id, .. } => {
+                // The final native receipt can reject both sides. The
+                // structural seam must still be split before either drain.
+                id.as_str() == super::section_handoff::BOUNDARY
+                    || !super::is_private_output_marker(inline)
+            }
             Inline::LineBreak { .. }
             | Inline::Text { .. }
             | Inline::Code { .. }

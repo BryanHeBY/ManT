@@ -156,6 +156,10 @@ that crate was not published for that change.
 - Execute man and mdoc section spacing from the native predecessor and active
   spacing debt. Preserve the difference between empty man peers, empty mdoc
   subsections, and mdoc sections with transparent BODY children.
+- Keep pending man text with its source owner when a heading completes the
+  same native input. A word-end break no longer adds a blank heading line
+  or publishes text the formatter rejects; actual empty rows and authored
+  section destinations remain intact.
 - Keep shared native cells in the old source row until a heading or field
   consumes them. An invisible cell no longer creates a phantom literal or
   blank paragraph, and a filled man link starts in its actual source mode.

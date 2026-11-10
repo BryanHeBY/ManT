@@ -45,6 +45,27 @@ impl BlockState {
         RowOwner::from_literal(self.inline_output_is_literal(no_fill))
     }
 
+    /// HEAD's native flush can finish the previous owner's still-live input.
+    /// Lend its exact projection vector, including native word coordinates.
+    pub(in crate::mandoc::blocks) fn with_pending_section_output<R>(
+        &mut self,
+        run: impl FnOnce(&mut crate::mandoc::formatter::FormatterState, &mut Vec<mant_ir::Inline>) -> R,
+    ) -> Option<R> {
+        let owner = self.row_owner(self.formatter.no_fill);
+        let nodes = match owner {
+            RowOwner::Paragraph => self.paragraph.output_nodes_mut(),
+            RowOwner::Literal => self.literal.output_nodes_mut(),
+        };
+        if !InlineBuilder::has_live_section_input(&self.formatter.execution, nodes) {
+            return None;
+        }
+        let result = run(&mut self.formatter, nodes);
+        if owner == RowOwner::Literal {
+            self.literal.finish_section_handoff();
+        }
+        Some(result)
+    }
+
     /// Borrow the chosen vector and update its local occupancy on return.
     /// Callers choose the owner and whether to execute a native pre or post.
     pub(super) fn with_row_builder<R>(

@@ -76,6 +76,8 @@ mod drain;
 mod hard_breaks;
 mod projection;
 mod row_layout;
+mod section_handoff;
+pub(super) use section_handoff::SectionHandoff;
 mod scopes;
 mod source_blanks;
 mod words;

@@ -510,6 +510,7 @@ impl InlineBuilder {
         let last = last_visible_character(&incoming);
         let printable = has_printable_character(&incoming);
         let has_glyph = has_rendered_formatter_glyph(&incoming);
+        self.route_section_borrowed_prefix(&mut incoming);
         self.nodes.append(&mut incoming);
         if last.is_some() {
             self.execution.last_visible_character = last;

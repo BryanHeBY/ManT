@@ -367,9 +367,24 @@ impl FormatterState {
         authors_section: bool,
         author_break_effect: AuthorBreakEffect,
     ) -> InlineBuilder {
+        self.begin_inline_session_on(
+            &mut Vec::new(),
+            spacing,
+            authors_section,
+            author_break_effect,
+        )
+    }
+
+    pub(super) fn begin_inline_session_on(
+        &mut self,
+        output: &mut Vec<mant_ir::Inline>,
+        spacing: bool,
+        authors_section: bool,
+        author_break_effect: AuthorBreakEffect,
+    ) -> InlineBuilder {
         let flow = self.author_flow();
         self.execution.set_spacing_enabled(spacing);
-        let mut builder = self.take_inline_builder(&mut Vec::new());
+        let mut builder = self.take_inline_builder(output);
         builder.inherit_author_execution_with_effect(flow, authors_section, author_break_effect);
         builder
     }

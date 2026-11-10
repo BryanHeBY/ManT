@@ -288,12 +288,18 @@ impl<'a> LoweringContext<'a> {
         nodes: HeadNodes<'_>,
         formatter: &mut formatter::FormatterState,
         authors_section: bool,
+        previous_output: &mut Vec<mant_ir::Inline>,
     ) -> (Vec<mant_ir::Inline>, u16) {
-        let mut builder = formatter.begin_inline_session(
+        let shared = !previous_output.is_empty();
+        let mut builder = formatter.begin_inline_session_on(
+            previous_output,
             formatter.spacing_enabled(),
             authors_section,
             inline::AuthorBreakEffect::Line,
         );
+        if shared {
+            builder.mark_section_handoff();
+        }
         builder.scope_posts = self.scope_posts.clone();
         inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
         match self.macro_set {
@@ -312,6 +318,9 @@ impl<'a> LoweringContext<'a> {
         // at the HEAD post. Consume the live native receipt before draining
         // this semantic owner; a rejected later pass still ended its row.
         builder.hard_break();
+        if shared {
+            *previous_output = builder.take_section_handoff_prefix();
+        }
         let completed_empty_rows = builder.completed_empty_rows();
         let mut output = formatter.finish_inline_line_with_rows(builder, true).output;
         // The heading consumer supplies the post's final line ending. Only

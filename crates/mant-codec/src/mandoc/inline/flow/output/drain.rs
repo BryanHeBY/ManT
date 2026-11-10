@@ -119,10 +119,39 @@ impl InlineBuilder {
         if !self.handoff_unprinted_plain_input() {
             return None;
         }
+        Some(self.take_closed_paragraph_projection(false))
+    }
+
+    /// Transfer already completed rows to the block owner without retiring
+    /// the native input or resetting the next owner's execution registers.
+    pub(in crate::mandoc) fn take_closed_paragraph_projection(
+        &mut self,
+        trim_terminator: bool,
+    ) -> (
+        Vec<Inline>,
+        bool,
+        Vec<CompletedRowOrigin>,
+        super::OutputRowEnd,
+    ) {
         let completed_rows = super::projection::trailing_paragraph_row_origins(&self.nodes);
         let closed_graph_tail = self.closed_graph_tail();
+        if !completed_rows.is_empty() {
+            self.retire_completed_paragraph_tail();
+        } else if trim_terminator {
+            super::consume_one_row_ending(&mut self.nodes);
+        }
         let output = self.drain_ir_nodes();
-        Some((output, false, completed_rows, closed_graph_tail))
+        (output, false, completed_rows, closed_graph_tail)
+    }
+
+    fn retire_completed_paragraph_tail(&mut self) {
+        let tail = self.nodes.iter().rposition(|node| {
+            !matches!(node, Inline::LineBreak { .. })
+                && has_rendered_formatter_glyph(std::slice::from_ref(node))
+        });
+        let mut identities = self.nodes.split_off(tail.map_or(0, |index| index + 1));
+        retain_inline_identities(&mut identities);
+        self.nodes.extend(identities);
     }
 
     /// Drain one IR paragraph without ending the formatter's execution
@@ -230,18 +259,7 @@ impl InlineBuilder {
             // The completed-row owner now accounts for this cell. The old
             // invisible-word fallback must not manufacture it a second time.
             invisible_formatter_cell &= !active_invisible_cell;
-            let mut identities = Vec::new();
-            while self.nodes.last().is_some_and(|node| {
-                matches!(node, Inline::LineBreak { .. })
-                    || !has_rendered_formatter_glyph(std::slice::from_ref(node))
-            }) {
-                if let Some(node) = self.nodes.pop() {
-                    identities.push(node);
-                }
-            }
-            identities.reverse();
-            retain_inline_identities(&mut identities);
-            self.nodes.extend(identities);
+            self.retire_completed_paragraph_tail();
         }
         let completed_invisible_row =
             invisible_formatter_cell && matches!(self.nodes.last(), Some(Inline::LineBreak { .. }));

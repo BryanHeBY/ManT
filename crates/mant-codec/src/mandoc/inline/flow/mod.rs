@@ -96,6 +96,7 @@ pub(in crate::mandoc) struct InlineBuilder {
     /// A detached definition HEAD occupies the native formatter row even
     /// though its term lives in a different IR output container.
     external_head_row_pending: bool,
+    section_handoff: Option<output::SectionHandoff>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

@@ -26,6 +26,15 @@ enum TrailingRow {
 }
 
 impl LiteralFlow {
+    pub(super) fn output_nodes_mut(&mut self) -> &mut Vec<Inline> {
+        &mut self.nodes
+    }
+
+    pub(super) fn finish_section_handoff(&mut self) {
+        self.row_occupied = false;
+        self.formatter_column = FormatterColumn::Origin;
+    }
+
     pub(super) fn note_source(&mut self, source: Option<SourceSpan>) {
         if self.source.is_none() {
             self.source = source;

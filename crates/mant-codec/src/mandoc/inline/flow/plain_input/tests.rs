@@ -228,6 +228,7 @@ fn empty_loop_classification_scans_each_accepted_cell_once() {
                     visits += end.saturating_sub(start);
                     buffer.printed_columns(start, end, 0, 0).is_some()
                 },
+                None,
             );
             assert_eq!(
                 usize::from(rows),
@@ -269,9 +270,14 @@ fn accepted_single_pass_never_scans_for_completed_loop_rows() {
         };
         assert_eq!(passes.len(), 1);
         assert_eq!(
-            completed_empty_plain_passes(&buffer, &passes, false, false, |_, _| {
-                panic!("there is no loop row to scan")
-            }),
+            completed_empty_plain_passes(
+                &buffer,
+                &passes,
+                false,
+                false,
+                |_, _| { panic!("there is no loop row to scan") },
+                None
+            ),
             0
         );
     }

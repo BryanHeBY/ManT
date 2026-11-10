@@ -200,6 +200,22 @@ pub(super) fn lower_scope_with_boundary(
     formatter: &mut crate::mandoc::formatter::FormatterState,
     flow: ScopeFlow<'_>,
 ) -> (Vec<Block>, bool) {
+    let next_column_entry = flow.column_nodes.as_ref().and_then(|nodes| nodes.next);
+    let row_boundary = flow.row_boundary;
+    walk_scope(nodes, context, paragraph_distance, formatter, flow).finish_into_before_column_entry(
+        formatter,
+        row_boundary,
+        next_column_entry,
+    )
+}
+
+fn walk_scope<'a, 'source>(
+    nodes: &[Node],
+    context: &'a LoweringContext<'source>,
+    paragraph_distance: &'a mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    flow: ScopeFlow<'_>,
+) -> BlockLowerer<'a, 'source> {
     let mut lowerer = BlockLowerer::new(
         context,
         flow.indent_columns,
@@ -231,11 +247,7 @@ pub(super) fn lower_scope_with_boundary(
         lowerer.state.begin_column_body(width, origin, last);
     }
     lowerer.push_nodes(nodes);
-    lowerer.finish_into_before_column_entry(
-        formatter,
-        flow.row_boundary,
-        flow.column_nodes.and_then(|nodes| nodes.next),
-    )
+    lowerer
 }
 
 const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
@@ -252,6 +264,8 @@ pub(super) enum FormatterRowBoundary {
     BeforeSection(SectionEntry),
     /// No section BLOCK pre newline; native-only cells pass into HEAD.
     SectionHeadHandoff,
+    /// HEAD has already consumed both the old and new projection ranges.
+    SectionHeadConsumed,
     /// The original mdoc It BODY has not executed its `term_newln` post yet.
     MdocItemBody,
     Column {
