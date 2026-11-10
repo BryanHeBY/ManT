@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use crate::ListKind;
+use crate::{InlineLayout, ListKind};
 
 /// Visible label, including its separating blank. Fixed labels borrow static
 /// text; ordered labels use the list's saturating source ordinal.
@@ -35,6 +35,23 @@ pub fn list_marker_width(kind: ListKind, index: usize) -> usize {
         width += 1;
     }
     width
+}
+
+/// Space between a visible list marker and its first paragraph, accounting
+/// for the paragraph's first visual line. When this returns `None`, the
+/// marker has its own line and consumes the gap before the paragraph.
+#[must_use]
+pub fn marker_paragraph_gap(
+    origin: i32,
+    marker_width: usize,
+    paragraph_indent: i32,
+    inline_layout: &InlineLayout,
+) -> Option<usize> {
+    let first = inline_layout
+        .row_layout(0)
+        .resolve(paragraph_indent, paragraph_indent)
+        .first_visual_origin;
+    super::marker_run_in_gap(origin, marker_width, first)
 }
 
 /// Resolve list or definition item spacing. Explicit zero stays tight;

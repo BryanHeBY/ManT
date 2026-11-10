@@ -109,3 +109,61 @@ fn unsupported_hard_breaks_do_not_weaken_terminal_control_masking() {
     );
     assert_eq!(rendered.search("SECOND\u{1b}THIRD").len(), 0);
 }
+
+#[test]
+fn blank_fallback_text_keeps_the_gap_budget_but_literal_rows_do_not() {
+    let layout = LayoutHint {
+        spacing_before_lines: 3000,
+        ..Default::default()
+    };
+    let fallback = |text: &str| Block::Unsupported {
+        name: None,
+        text: text.into(),
+        layout,
+        source: None,
+    };
+    let literal = Block::Preformatted {
+        children: vec![Inline::Text { value: " ".into() }],
+        inline_layout: mant_ir::InlineLayout::default(),
+        language: None,
+        layout,
+        source: None,
+    };
+    let capped = usize::from(mant_ir::geometry::MAX_GAP_ROWS) + 1;
+    for (block, distance, bounded) in [
+        (fallback(""), capped, true),
+        (fallback(" "), capped, true),
+        (fallback("\t\n\u{2003}"), capped, true),
+        (fallback("FALLBACK_A\n\nFALLBACK_B"), 6004, false),
+        (literal, 6002, false),
+    ] {
+        let mut query = bundle();
+        let document = query.document.as_mut().unwrap();
+        document.sections.clear();
+        document.blocks = vec![
+            paragraph("BEFORE"),
+            block,
+            Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: "AFTER".into(),
+                }],
+                inline_layout: mant_ir::InlineLayout::default(),
+                layout,
+                source: None,
+            },
+        ];
+        assert_eq!(mant_ir::validate_document(document), []);
+        assert_eq!(
+            mant_ir::geometry::has_bounded_gap(&document.blocks),
+            bounded
+        );
+        let text = mant_render::render_query_text(&query);
+        let row = |token: &str| text.lines().position(|line| line.contains(token)).unwrap();
+        assert_eq!(row("AFTER") - row("BEFORE"), distance);
+        let rendered = DocumentView::new(&query).render(80);
+        assert_eq!(
+            rendered.search("AFTER")[0].row - rendered.search("BEFORE")[0].row,
+            distance
+        );
+    }
+}

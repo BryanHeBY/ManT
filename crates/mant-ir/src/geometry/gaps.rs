@@ -1,7 +1,7 @@
 //! Validate the same visible-flow boundaries that consume resolved gaps.
 use super::{
-    GapPlan, block_gap, compose_origin, coordinate, list_item_spacing, list_marker_width,
-    marker_run_in_gap, table_requires_origin_preserving_stack,
+    GapPlan, block_gap, compose_origin, coordinate, has_plain_block_rows, list_item_spacing,
+    list_marker_width, marker_paragraph_gap, table_requires_origin_preserving_stack,
 };
 use crate::visit::Visit;
 use crate::{Block, Inline};
@@ -124,7 +124,7 @@ fn walk(blocks: &[Block], gap: &mut GapPlan, depth: usize, origin: i32) -> bool 
                 }
             }
             Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
-                if !value.trim().is_empty() {
+                if has_plain_block_rows(value) {
                     *gap = GapPlan::default();
                 }
             }
@@ -153,8 +153,13 @@ fn walk_list(
         let marker_width = list_marker_width(kind, index);
         if marker_width > 0 {
             // Run-in paragraph spacing belongs before the marker.
-            if let Some(Block::Paragraph { layout, .. }) = blocks.first()
-                && marker_run_in_gap(origin, marker_width, layout.indent_columns).is_some()
+            if let Some(Block::Paragraph {
+                layout,
+                inline_layout,
+                ..
+            }) = blocks.first()
+                && marker_paragraph_gap(origin, marker_width, layout.indent_columns, inline_layout)
+                    .is_some()
             {
                 if add(gap, layout.spacing_before_lines) {
                     return true;

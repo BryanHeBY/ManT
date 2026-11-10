@@ -17,7 +17,7 @@ pub use columns::{
 };
 
 mod list;
-pub use list::{list_item_spacing, list_marker, list_marker_width};
+pub use list::{list_item_spacing, list_marker, list_marker_width, marker_paragraph_gap};
 
 mod table;
 mod table_columns;
@@ -50,6 +50,14 @@ pub fn has_literal_rows(nodes: &[crate::Inline]) -> bool {
         | crate::Inline::Link { children, .. } => has_literal_rows(children),
         crate::Inline::Anchor { .. } => false,
     })
+}
+
+/// Whether a plain-text block, such as an equation or unsupported fallback,
+/// contributes rows. A whitespace-only payload does not consume its incoming
+/// gap. Authored inline rows are governed separately by [`has_literal_rows`].
+#[must_use]
+pub fn has_plain_block_rows(text: &str) -> bool {
+    !text.trim().is_empty()
 }
 
 /// Maximum explicit gap in one logical block boundary. The producer can report

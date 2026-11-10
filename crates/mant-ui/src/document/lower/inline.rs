@@ -29,12 +29,14 @@ impl DocumentBuilder<'_> {
         style: Style,
         wrap_mode: WrapMode,
     ) {
-        self.push_styled_lines(
-            styled_plain_text_lines(value, style),
-            indent,
-            LineSurface::Normal,
-            wrap_mode,
-        );
+        if mant_ir::geometry::has_plain_block_rows(value) {
+            self.push_styled_lines(
+                styled_plain_text_lines(value, style),
+                indent,
+                LineSurface::Normal,
+                wrap_mode,
+            );
+        }
     }
 
     #[cfg(test)]

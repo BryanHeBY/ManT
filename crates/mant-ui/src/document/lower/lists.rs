@@ -9,7 +9,7 @@ use super::super::{
 use super::DocumentBuilder;
 use mant_ir::geometry::{
     compose_origin, coordinate, list_item_spacing, list_marker, list_marker_width,
-    marker_run_in_gap, padding,
+    marker_paragraph_gap, marker_run_in_gap, padding,
 };
 use mant_ir::{DefinitionItem, ListItem};
 
@@ -31,14 +31,8 @@ impl DocumentBuilder<'_> {
                     layout,
                     ..
                 }) = item.blocks.first()
-                && let Some(gap) = marker_run_in_gap(
-                    indent,
-                    marker_width,
-                    inline_layout
-                        .row_layout(0)
-                        .resolve(layout.indent_columns, layout.indent_columns)
-                        .first_visual_origin,
-                )
+                && let Some(gap) =
+                    marker_paragraph_gap(indent, marker_width, layout.indent_columns, inline_layout)
             {
                 self.run_in_list_paragraph(&item.blocks[0], marker, indent, marker_width, gap);
                 self.blocks(

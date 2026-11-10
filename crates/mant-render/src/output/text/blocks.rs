@@ -4,7 +4,7 @@ use super::flow::Flow;
 use super::indent_lines;
 use super::layout::LayoutText;
 use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, visit_inline_text};
-use mant_ir::geometry::{compose_origin, coordinate, marker_run_in_gap, padding};
+use mant_ir::geometry::{compose_origin, coordinate, has_plain_block_rows, padding};
 use mant_ir::{
     Block, DefinitionItem, InlineContentRef, ListItem, ListKind, RowLayoutHint, Section,
 };
@@ -401,10 +401,10 @@ impl BlockRenderer<'_> {
 
     fn nonliteral_leaf(value: &LayoutText, origin: i32) -> Flow {
         let value = value.trim_newlines();
-        if value.visible.trim().is_empty() {
-            Flow::default()
-        } else {
+        if has_plain_block_rows(&value.visible) {
             Flow::text(value.indented(padding(origin)))
+        } else {
+            Flow::default()
         }
     }
 }

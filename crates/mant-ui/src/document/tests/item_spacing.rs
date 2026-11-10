@@ -161,3 +161,92 @@ fn container_and_item_boundary_share_one_bounded_gap_before_marker() {
         );
     }
 }
+
+#[test]
+fn marker_and_first_row_share_a_gap_budget_only_when_they_share_a_line() {
+    const URI: &str = "https://example.test/list-body";
+    for (indent, row_indent, first_indent, shares_line) in [
+        (0, 0, -1, false),
+        (-1, 1, 1, true),
+        (-1, 2, -2, false),
+        (1, -1, 0, true),
+    ] {
+        let body = Block::Paragraph {
+            children: vec![
+                Inline::anchor("body-target"),
+                Inline::Link {
+                    target: mant_ir::LinkTarget::External { uri: URI.into() },
+                    title: None,
+                    children: vec![Inline::Text {
+                        value: "BODY".into(),
+                    }],
+                },
+            ],
+            inline_layout: mant_ir::InlineLayout {
+                row_hints: vec![mant_ir::RowLayoutHint {
+                    indent_columns: row_indent,
+                    first_line_indent_columns: first_indent,
+                    ..Default::default()
+                }],
+            },
+            layout: LayoutHint {
+                indent_columns: indent,
+                spacing_before_lines: 3000,
+                ..Default::default()
+            },
+            source: None,
+        };
+        let mut query = bundle();
+        let document = query.document.as_mut().unwrap();
+        document.sections.clear();
+        document.blocks = vec![
+            paragraph("BEFORE"),
+            list(true, 0, vec![item(Some(3000), vec![body])]),
+        ];
+        assert_eq!(mant_ir::validate_document(document), []);
+        let wire = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+        let query: ResolvedContent = serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
+            .unwrap()
+            .into();
+        let blocks = &query.document.as_ref().unwrap().blocks;
+        let case = (indent, row_indent, first_indent);
+        let text = mant_render::render_query_text(&query)
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let rendered = DocumentView::new(&query).render(80);
+        let ui = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        for lines in [&text, &ui] {
+            let before = row(lines, "BEFORE");
+            let marker = row(lines, "•");
+            let body = row(lines, "BODY");
+            let distance = if shares_line {
+                usize::from(mant_ir::geometry::MAX_GAP_ROWS) + 1
+            } else {
+                3001
+            };
+            assert_eq!(marker - before, distance, "{case:?}");
+            assert_eq!(
+                body - marker,
+                if shares_line { 0 } else { 3001 },
+                "{case:?}"
+            );
+        }
+        let hit = &rendered.search("BODY")[0];
+        assert_eq!(rendered.anchor_row("body-target"), Some(hit.row));
+        assert_eq!(
+            rendered.link_target_at(hit.row, hit.start_column),
+            Some(&LinkTarget::External(ExternalUri::parse(URI).unwrap()))
+        );
+        assert_eq!(
+            mant_ir::geometry::has_bounded_gap(blocks),
+            shares_line,
+            "{case:?}"
+        );
+    }
+}

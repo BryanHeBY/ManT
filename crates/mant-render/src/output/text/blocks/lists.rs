@@ -1,9 +1,9 @@
 //! List labels and definition bodies compose into the caller's content flow.
 use super::{
     Block, BlockRenderer, DefinitionItem, Flow, LayoutText, ListItem, ListKind, ParagraphTail,
-    TextRole, compose_origin, coordinate, marker_run_in_gap, padding,
+    TextRole, compose_origin, coordinate, padding,
 };
-use mant_ir::geometry::{list_item_spacing, list_marker, list_marker_width};
+use mant_ir::geometry::{list_item_spacing, list_marker, list_marker_width, marker_paragraph_gap};
 
 impl BlockRenderer<'_> {
     pub(super) fn render_list(
@@ -35,13 +35,11 @@ impl BlockRenderer<'_> {
                     ..
                 },
             ) = item.blocks.first()
-                && let Some(gap) = marker_run_in_gap(
+                && let Some(gap) = marker_paragraph_gap(
                     base_indent,
                     marker_width,
-                    inline_layout
-                        .row_layout(0)
-                        .resolve(layout.indent_columns, layout.indent_columns)
-                        .first_visual_origin,
+                    layout.indent_columns,
+                    inline_layout,
                 )
             {
                 // The first paragraph's boundary precedes the whole item,

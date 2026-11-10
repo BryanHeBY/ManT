@@ -15,6 +15,9 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.14.0
 
+- Account for first-line offsets when checking whether list markers and
+  paragraphs share a spacing budget. Empty unsupported text no longer
+  adds a phantom TUI row or restarts the gap budget.
 - Highlight command synopses in ordinary paragraphs as well as code blocks,
   including nested usage sections. Distinguish command names, options,
   replaceable arguments and syntax delimiters while retaining source fonts,
