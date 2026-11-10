@@ -1,5 +1,5 @@
 //! Execute filled and literal source input against their existing flow owners.
-use super::{BlockState, InlineBuilder, InlineOutputRole};
+use super::{BlockState, InlineBuilder, InlineOutputRole, row::RowOwner};
 use crate::mandoc::inline::CompletedRowOrigin;
 use mant_ir::{Block, Inline};
 
@@ -20,13 +20,8 @@ impl BlockState {
                 && !builder.has_open_native_device_row()
         };
         let visible_before = self.formatter.execution.visible_content_checkpoint();
-        let closed = if self.inline_output_is_literal(self.formatter.no_fill) {
-            self.literal.with_inline_builder(&mut self.formatter, enter);
-            false
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, enter)
-        };
+        let owner = self.row_owner(self.formatter.no_fill);
+        let closed = self.with_row_builder(owner, enter) && owner == RowOwner::Paragraph;
         // A real macro pre can close the detached HEAD before any child
         // becomes visible. Deliver that same BODY observation before an IR
         // drain resets its leading boundary or subtracts the HEAD row again.
@@ -50,6 +45,35 @@ impl BlockState {
         }
     }
 
+    pub(in crate::mandoc::blocks) fn enter_name_body_node(
+        &mut self,
+        node: &libmandoc_rs::Node,
+        width: usize,
+    ) -> crate::mandoc::inline::names::NameBodyScope {
+        self.formatter.no_fill = node.flags.no_fill;
+        self.with_active_output_builder(|builder| {
+            builder.observe_no_fill_source_lines(true);
+            crate::mandoc::inline::names::enter_body(builder, node, width)
+        })
+    }
+
+    pub(in crate::mandoc::blocks) fn finish_name_body_node(
+        &mut self,
+        node: &libmandoc_rs::Node,
+        saved: crate::mandoc::inline::names::NameBodyScope,
+    ) {
+        let finish = |builder: &mut InlineBuilder| {
+            crate::mandoc::inline::names::finish_body(builder, node, saved);
+        };
+        self.with_row_boundary(self.row_owner(self.formatter.no_fill), finish);
+        if !self.inline_output_is_literal(self.formatter.no_fill) {
+            // The actual Nm BODY post has already flushed the native field.
+            // Its completed owner can now retain the BODY's resolved wrap
+            // origin before print_mdoc_node restores the source scope.
+            self.flush_paragraph();
+        }
+    }
+
     /// The no-fill source gate may have completed this owner before the
     /// next macro's own pre. Its row bookkeeping and native empty input,
     /// not the later handler's incoming cell count, identify that handoff.
@@ -62,7 +86,7 @@ impl BlockState {
 
     /// The real pre has consumed the old row; only its output owner remains.
     pub(in crate::mandoc::blocks) fn drain_closed_inline_owner(&mut self) {
-        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.formatter.retire_no_fill_row_projection();
         self.flush_preformatted();
         self.flush_paragraph();
     }
@@ -80,17 +104,9 @@ impl BlockState {
         &mut self,
         alignment: mant_ir::TextAlignment,
     ) {
-        if self.inline_output_is_literal(self.formatter.no_fill) {
-            self.literal
-                .with_inline_builder(&mut self.formatter, |builder| {
-                    builder.set_text_alignment(alignment);
-                });
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, |builder| {
-                    builder.set_text_alignment(alignment);
-                });
-        }
+        self.with_row_builder(self.row_owner(self.formatter.no_fill), |builder| {
+            builder.set_text_alignment(alignment);
+        });
     }
     pub(in crate::mandoc::blocks) fn literal_mode_boundary(&mut self) {
         // The request's native pre already executed term_newln, even when
@@ -310,17 +326,18 @@ impl BlockState {
             // Filled-to-no-fill entry still consumes the old destination:
             // the generated inset BODY word can be buffered there. Its
             // native anchors must not be applied to an empty literal Vec.
-            let ended_row = if paragraph_owns_row {
-                self.paragraph.with_inline_builder(
-                    &mut self.formatter,
+            let (owner, newline): (_, fn(&mut InlineBuilder) -> bool) = if paragraph_owns_row {
+                (
+                    RowOwner::Paragraph,
                     InlineBuilder::execute_native_newline_with_tail,
                 )
             } else {
-                self.literal.with_inline_builder(
-                    &mut self.formatter,
+                (
+                    RowOwner::Literal,
                     InlineBuilder::execute_native_literal_newline_with_tail,
                 )
             };
+            let ended_row = self.with_row_builder(owner, newline);
             if source_line && ended_row {
                 // NODE_LINE closed the actual inherited physical row.
                 // Deliver that fact before an owner drain clears its local
@@ -330,7 +347,7 @@ impl BlockState {
             // The native print receipt already delivered every completed
             // row to this literal owner. Retire the old cell classification
             // even if a buffered zero-advance glyph only printed at flush.
-            self.formatter.no_fill_inline.retire_consumed_cell();
+            self.formatter.retire_no_fill_row_projection();
             self.settle_definition_line_boundary();
             if paragraph_owns_row && self.inline_output_role == InlineOutputRole::SourceMode {
                 // The actual source event already consumed this row. Drain
@@ -403,29 +420,25 @@ impl BlockState {
         let close = |builder: &mut InlineBuilder| {
             builder.control_line_break_with_origin(CompletedRowOrigin::for_source_mode(no_fill));
         };
-        if self.inline_output_is_literal(no_fill) {
-            self.literal.with_inline_builder(&mut self.formatter, close);
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, close);
-            if let Some(origin) = self.hanging_origin
-                && self.formatter.execution.has_open_native_device_row()
-                && !self.paragraph.is_empty()
-            {
-                // A short HP field can retain viscol after pre_br's
-                // BRIND conversion. Preserve the requested reading line
-                // break, leaving the native device row for later requests.
-                self.formatter
-                    .execution
-                    .set_man_hanging_reading_origin(origin.physical_basic_units(), true);
-                self.paragraph
-                    .with_inline_builder(&mut self.formatter, |builder| {
-                        builder.force_output_line_break();
-                        builder.tighten_next_boundary();
-                    });
-            }
+        let owner = self.row_owner(no_fill);
+        self.with_row_builder(owner, close);
+        if owner == RowOwner::Paragraph
+            && let Some(origin) = self.hanging_origin
+            && self.formatter.execution.has_open_native_device_row()
+            && !self.paragraph.is_empty()
+        {
+            // A short HP field can retain viscol after pre_br's
+            // BRIND conversion. Preserve the requested reading line
+            // break, leaving the native device row for later requests.
+            self.formatter
+                .execution
+                .set_man_hanging_reading_origin(origin.physical_basic_units(), true);
+            self.with_row_builder(owner, |builder| {
+                builder.force_output_line_break();
+                builder.tighten_next_boundary();
+            });
         }
-        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.formatter.retire_no_fill_row_projection();
         self.settle_definition_line_boundary();
     }
 
@@ -451,25 +464,19 @@ impl BlockState {
             && (self.paragraph.is_empty()
                 || self.literal.has_output()
                 || self.literal.has_formatter_column());
-        if literal_owns_row {
-            let finish = if no_fill {
-                InlineBuilder::execute_native_literal_newline
-            } else {
-                InlineBuilder::execute_native_newline
-            };
-            self.literal
-                .with_inline_builder(&mut self.formatter, finish);
+        let owner = RowOwner::from_literal(literal_owns_row);
+        let finish: fn(&mut InlineBuilder) = if owner == RowOwner::Literal && no_fill {
+            InlineBuilder::execute_native_literal_newline
         } else {
             // A declaration can leave its row in ParagraphFlow after
             // restoring the source mode (mdoc_term.c::termp_nm_post).
             // The next real post must close that vector, not a new literal.
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
-        }
+            InlineBuilder::execute_native_newline
+        };
         // fi can leave historical no-fill bookkeeping while the live native
         // buffer already belongs to ParagraphFlow. The real post selected
         // that current owner above; retire the old classification either way.
-        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.with_row_boundary(owner, finish);
     }
 
     pub(in crate::mandoc::blocks) fn has_formatter_cell(&self) -> bool {

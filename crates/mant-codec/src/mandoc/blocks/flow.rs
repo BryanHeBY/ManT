@@ -9,6 +9,7 @@ mod input;
 mod literal;
 mod output;
 mod paragraph;
+mod row;
 #[cfg(test)]
 mod tests;
 use crate::mandoc::inline::OutputRowEnd;

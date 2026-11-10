@@ -307,6 +307,19 @@ impl FormatterState {
         nodes: &mut Vec<mant_ir::Inline>,
         operation: impl FnOnce(&mut InlineBuilder) -> R,
     ) -> R {
+        let mut builder = self.take_inline_builder(nodes);
+        builder.inherit_external_head_row(self.definition_head_row_pending());
+        let result = operation(&mut builder);
+        let (output, returned) = builder.into_parts();
+        *nodes = output;
+        // An ordinary owner drain can produce a projection receipt without
+        // consuming the literal sidecar. Only source boundaries or a
+        // detached session's explicit input receipt may retire it.
+        self.return_inline_execution(returned);
+        result
+    }
+
+    fn take_inline_builder(&mut self, nodes: &mut Vec<mant_ir::Inline>) -> InlineBuilder {
         let mut active = self
             .spare_execution
             .take()
@@ -316,13 +329,16 @@ impl FormatterState {
         builder
             .head_operand_capture
             .clone_from(&self.head_operand_capture);
-        builder.inherit_external_head_row(self.definition_head_row_pending());
-        let result = operation(&mut builder);
-        let (output, mut returned) = builder.into_parts();
-        *nodes = output;
-        std::mem::swap(&mut returned, &mut self.execution);
-        self.spare_execution = Some(returned);
-        result
+        builder
+    }
+
+    fn return_inline_execution(&mut self, mut execution: InlineExecutionState) {
+        std::mem::swap(&mut execution, &mut self.execution);
+        self.spare_execution = Some(execution);
+    }
+
+    pub(super) fn retire_no_fill_row_projection(&mut self) {
+        self.no_fill_inline.retire_consumed_cell();
     }
 
     pub(super) fn mark_trailing_literal_row(&mut self) {
@@ -353,15 +369,7 @@ impl FormatterState {
     ) -> InlineBuilder {
         let flow = self.author_flow();
         self.execution.set_spacing_enabled(spacing);
-        let mut active = self
-            .spare_execution
-            .take()
-            .expect("only one builder can borrow formatter execution");
-        std::mem::swap(&mut active, &mut self.execution);
-        let mut builder = InlineBuilder::from_parts(Vec::new(), active);
-        builder
-            .head_operand_capture
-            .clone_from(&self.head_operand_capture);
+        let mut builder = self.take_inline_builder(&mut Vec::new());
         builder.inherit_author_execution_with_effect(flow, authors_section, author_break_effect);
         builder
     }
@@ -466,7 +474,7 @@ impl FormatterState {
 
     fn return_inline_session(
         &mut self,
-        mut execution: InlineExecutionState,
+        execution: InlineExecutionState,
         retirement: NativeInputRetirement,
     ) {
         // term_flushln() retired input at the actual consumer (term.c:
@@ -475,10 +483,9 @@ impl FormatterState {
         // next output owner. This does not execute another endline or
         // change the surviving word, backtracking, or device registers.
         if retirement == NativeInputRetirement::Consumed {
-            self.no_fill_inline.retire_consumed_cell();
+            self.retire_no_fill_row_projection();
         }
-        std::mem::swap(&mut execution, &mut self.execution);
-        self.spare_execution = Some(execution);
+        self.return_inline_execution(execution);
     }
 
     /// Enter the body of a top-level mdoc AUTHORS section.

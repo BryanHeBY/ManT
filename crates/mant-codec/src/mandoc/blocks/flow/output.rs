@@ -1,5 +1,6 @@
 //! Drain output owners and settle their current row, target and spacing receipts.
 use super::paragraph::ParagraphDrain;
+use super::row::RowOwner;
 use super::{
     BlockState, ClosedOutputTail, InlineBuilder, OutputRowEnd, has_formatter_text_cell, layout,
 };
@@ -326,13 +327,7 @@ impl BlockState {
         } else {
             InlineBuilder::flush_execution_line
         };
-        if self.inline_output_is_literal(self.formatter.no_fill) {
-            self.literal.with_inline_builder(&mut self.formatter, flush);
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, flush);
-        }
-        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.with_row_boundary(self.row_owner(self.formatter.no_fill), flush);
         self.finish_aligned_row_output();
     }
 
@@ -401,14 +396,10 @@ impl BlockState {
             // destination. Its subsequent words and the actual It post
             // consume that same owner (mdoc_term.c:1482 with 953), so a
             // rejected receipt must not target an empty paragraph Vec.
-            column_closed_row = if self.uses_literal_output() {
-                self.literal
-                    .with_inline_builder(&mut self.formatter, finish_column)
-            } else {
-                self.paragraph
-                    .with_inline_builder(&mut self.formatter, finish_column)
-            };
-            self.formatter.no_fill_inline.retire_consumed_cell();
+            column_closed_row = self.with_row_boundary(
+                RowOwner::from_literal(self.uses_literal_output()),
+                finish_column,
+            );
             if let Some(node) = next_column_entry {
                 self.formatter.no_fill = node.flags.no_fill;
             }
@@ -422,7 +413,7 @@ impl BlockState {
                 crate::mandoc::inline::CompletedRowOrigin::Layout
             };
             self.with_active_output_builder(|builder| builder.finish_mdoc_item_body(origin));
-            self.formatter.no_fill_inline.retire_consumed_cell();
+            self.formatter.retire_no_fill_row_projection();
         } else if row_boundary == super::super::FormatterRowBoundary::Settle {
             // The caller identified a native BODY post, not an IR owner
             // return. mdoc_term.c::termp_it_post() executes term_newln()

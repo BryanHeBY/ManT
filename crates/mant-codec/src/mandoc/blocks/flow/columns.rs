@@ -1,90 +1,7 @@
 //! Execute native column entry and posts against the active output destination.
-use super::{BlockState, InlineBuilder, InlineOutputRole};
+use super::{BlockState, InlineBuilder, row::RowOwner};
 
 impl BlockState {
-    pub(in crate::mandoc::blocks) const fn inline_output_role(&self) -> InlineOutputRole {
-        self.inline_output_role
-    }
-
-    pub(in crate::mandoc::blocks) fn set_inline_output_role(
-        &mut self,
-        role: InlineOutputRole,
-    ) -> InlineOutputRole {
-        std::mem::replace(&mut self.inline_output_role, role)
-    }
-
-    pub(in crate::mandoc::blocks) fn inline_output_is_literal(&self, no_fill: bool) -> bool {
-        self.uses_literal_output()
-            || no_fill && self.inline_output_role == InlineOutputRole::SourceMode
-    }
-
-    pub(in crate::mandoc::blocks) fn note_inline_source(
-        &mut self,
-        source: Option<mant_ir::SourceSpan>,
-    ) {
-        self.adopt_inline_output_owner();
-        if self.inline_output_is_literal(self.formatter.no_fill) {
-            self.literal.note_source(source);
-        } else {
-            self.paragraph.note_source(source);
-        }
-    }
-
-    /// Native operations borrow the active destination and its one input
-    /// session. The walker dispatches source entry independently of owners.
-    pub(in crate::mandoc::blocks) fn with_active_output_builder<R>(
-        &mut self,
-        operation: impl FnOnce(&mut InlineBuilder) -> R,
-    ) -> R {
-        self.adopt_inline_output_owner();
-        let visible_before = self.formatter.execution.visible_content_checkpoint();
-        let result = if self.inline_output_is_literal(self.formatter.no_fill) {
-            self.literal
-                .with_inline_builder(&mut self.formatter, operation)
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, operation)
-        };
-        self.observe_inline_source_effects(visible_before);
-        result
-    }
-
-    pub(in crate::mandoc::blocks) fn enter_name_body_node(
-        &mut self,
-        node: &libmandoc_rs::Node,
-        width: usize,
-    ) -> crate::mandoc::inline::names::NameBodyScope {
-        self.formatter.no_fill = node.flags.no_fill;
-        self.with_active_output_builder(|builder| {
-            builder.observe_no_fill_source_lines(true);
-            crate::mandoc::inline::names::enter_body(builder, node, width)
-        })
-    }
-
-    pub(in crate::mandoc::blocks) fn finish_name_body_node(
-        &mut self,
-        node: &libmandoc_rs::Node,
-        saved: crate::mandoc::inline::names::NameBodyScope,
-    ) {
-        let finish = |builder: &mut InlineBuilder| {
-            crate::mandoc::inline::names::finish_body(builder, node, saved);
-        };
-        if self.inline_output_is_literal(self.formatter.no_fill) {
-            self.literal
-                .with_inline_builder(&mut self.formatter, finish);
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, finish);
-        }
-        self.formatter.no_fill_inline.retire_consumed_cell();
-        if !self.inline_output_is_literal(self.formatter.no_fill) {
-            // The actual Nm BODY post has already flushed the native field.
-            // Its completed owner can now retain the BODY's resolved wrap
-            // origin before print_mdoc_node restores the source scope.
-            self.flush_paragraph();
-        }
-    }
-
     /// A display changes the active IR destination, not its native field.
     /// Keep the exact vector/anchor coordinate system until its real post.
     pub(in crate::mandoc::blocks) fn enter_column_display_output(&mut self) {
@@ -95,12 +12,6 @@ impl BlockState {
                 || self.formatter.execution.has_open_native_device_row();
             self.literal.adopt_active_output(nodes, source, occupied);
         }
-    }
-
-    pub(super) fn uses_literal_output(&self) -> bool {
-        self.single_line_display_owner
-            || self.formatter.execution.has_column_output_scope()
-                && (self.column_display_owner || self.literal.has_output())
     }
 
     /// A no-fill word clears CVS skipvsp; its zero-width registers are
@@ -139,9 +50,7 @@ impl BlockState {
             // row stays in the surrounding no-fill owner's content.
             self.finish_native_line_in_source_mode(no_fill);
         } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
-            self.formatter.no_fill_inline.retire_consumed_cell();
+            self.with_row_boundary(RowOwner::Paragraph, InlineBuilder::execute_native_newline);
         }
     }
 
@@ -150,25 +59,14 @@ impl BlockState {
         kind: Option<libmandoc_rs::DisplayKind>,
     ) {
         let post = |builder: &mut InlineBuilder| builder.finish_display_body(kind);
-        if self.inline_output_is_literal(self.formatter.no_fill) {
-            self.literal.with_inline_builder(&mut self.formatter, post);
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, post);
-        }
-        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.with_row_boundary(self.row_owner(self.formatter.no_fill), post);
     }
 
     pub(in crate::mandoc::blocks) fn enter_column_node(&mut self, node: &libmandoc_rs::Node) {
         let enter = |builder: &mut InlineBuilder| {
             builder.begin_executed_node(node);
         };
-        if self.uses_literal_output() {
-            self.literal.with_inline_builder(&mut self.formatter, enter);
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, enter);
-        }
+        self.with_row_builder(RowOwner::from_literal(self.uses_literal_output()), enter);
     }
 
     pub(in crate::mandoc::blocks) fn enter_column_body_node(&mut self, node: &libmandoc_rs::Node) {
@@ -184,13 +82,6 @@ impl BlockState {
         let execute = |builder: &mut InlineBuilder| {
             builder.native_vertical_space(u16::try_from(rows.max(0)).unwrap_or(u16::MAX));
         };
-        if self.uses_literal_output() {
-            self.literal
-                .with_inline_builder(&mut self.formatter, execute);
-        } else {
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, execute);
-        }
-        self.formatter.no_fill_inline.retire_consumed_cell();
+        self.with_row_boundary(RowOwner::from_literal(self.uses_literal_output()), execute);
     }
 }

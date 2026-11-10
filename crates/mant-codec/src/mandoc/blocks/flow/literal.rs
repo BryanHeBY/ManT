@@ -313,7 +313,7 @@ impl LiteralFlow {
             formatter,
             crate::mandoc::inline::InlineBuilder::no_break_flush,
         );
-        formatter.no_fill_inline.retire_consumed_cell();
+        formatter.retire_no_fill_row_projection();
         // with_inline_builder already observed the consumed buffer's live
         // native row. Earlier accepted rows remain in nodes, but cannot
         // make the current row occupied after a marker pass ended it.
