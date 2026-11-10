@@ -21,6 +21,8 @@ that crate was not published for that change.
   normal paragraph wrapping, links, search and copied text. Share conservative
   argument recognition with validated entry forms and use a blue-cyan
   placeholder color through the existing theme system.
+- Keep synopsis and entry argument highlighting responsive on long runs of
+  ellipses or URI-like text. Link and argument recognition are unchanged.
 - Preserve explicit mathematical atom roles and distinguish opaque formula
   content from parsed atoms. Validate expression shape and operator arity at
   shared decoding boundaries. Retain malformed native operands through an

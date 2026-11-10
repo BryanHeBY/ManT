@@ -387,6 +387,83 @@ fn excessive_synopsis_owners_keep_the_original_appearance_as_a_whole() {
 }
 
 #[test]
+fn large_signature_lookahead_preserves_visible_text_and_link_coordinates() {
+    let label = "文件e\u{301}";
+    let target = LinkTarget::Section("synopsis".into());
+    for (repeats, expected_color) in [
+        (4_096, theme::SAPPHIRE),
+        (crate::code::MAX_BLOCK_BYTES / 4, theme::TEXT),
+    ] {
+        let run = "a...".repeat(repeats);
+        let split = run.len() / 2;
+        let children = vec![
+            text("tool [-f "),
+            Inline::Emphasis {
+                children: vec![text("F"), text("ILE")],
+            },
+            text("] ["),
+            text(&run[..split]),
+            text(&run[split..]),
+            text("] [<"),
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section {
+                    id: "synopsis".into(),
+                },
+                title: None,
+                children: vec![text(label)],
+            },
+            text(">]"),
+        ];
+        let content = content(children);
+        let document = content.document.as_ref().unwrap();
+        assert_eq!(mant_ir::validate_document(document), []);
+        let snapshot = serde_json::to_vec(document).unwrap();
+        let expected = format!("tool [-f FILE] [{run}] [<{label}>]");
+        let view = DocumentView::new(&content);
+        for width in [24, 120] {
+            let rendered = view.render(width);
+            assert!(
+                (0..rendered.search_record_count())
+                    .any(|index| rendered.search_record_text(index) == expected)
+            );
+            let file = style_at(&rendered, "FILE");
+            assert_eq!(file.fg, Some(expected_color));
+            assert!(file.add_modifier.contains(Modifier::ITALIC));
+            let hits = rendered.search(label);
+            let [hit] = hits.as_slice() else {
+                panic!("expected one link label match, got {hits:?}");
+            };
+            assert_eq!(
+                rendered.link_target_at(hit.row, hit.start_column),
+                Some(&target)
+            );
+            assert_eq!(style_at(&rendered, label).fg, Some(theme::LINK));
+            let (row, column) = hit
+                .additional_fragments
+                .last()
+                .map_or((hit.row, hit.end_column), |fragment| {
+                    (fragment.row, fragment.end_column)
+                });
+            let selected = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: hit.row,
+                    column: hit.start_column,
+                },
+                focus: TextPosition {
+                    row,
+                    column: column - 1,
+                },
+            });
+            assert_eq!(
+                selected.lines().map(str::trim_start).collect::<String>(),
+                label
+            );
+        }
+        assert_eq!(serde_json::to_vec(document).unwrap(), snapshot);
+    }
+}
+
+#[test]
 fn unrecognized_and_unaccented_synopsis_text_keeps_prose_font_precedence() {
     for source in ["explanatory prose", "curl [options / URLs]"] {
         let children = vec![Inline::Strong {

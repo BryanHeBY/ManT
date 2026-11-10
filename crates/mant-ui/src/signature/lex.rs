@@ -39,6 +39,14 @@ pub(super) struct Syntax {
 }
 
 pub(super) fn tokenize(value: &str, names: &[Range<usize>]) -> Option<Syntax> {
+    tokenize_with_lookahead(value, names, &mut UriLookahead::default())
+}
+
+fn tokenize_with_lookahead(
+    value: &str,
+    names: &[Range<usize>],
+    uri: &mut UriLookahead,
+) -> Option<Syntax> {
     let mut syntax = Syntax {
         tokens: Vec::new(),
         groups: Vec::new(),
@@ -67,9 +75,9 @@ pub(super) fn tokenize(value: &str, names: &[Range<usize>]) -> Option<Syntax> {
         } else if matches!(first, '\'' | '"' | '`') {
             byte = quoted_end(value, byte, first)?;
             kind = Kind::Opaque;
-        } else if url(&value[byte..]) {
+        } else if let Some(body) = uri.body_start(value, byte) {
             let close = group.map(|id| closing(syntax.groups[id].delimiter));
-            byte += url_end(&value[byte..], close);
+            byte = body + uri_body_end(&value[body..], close);
             kind = Kind::Opaque;
         } else if first == '\\' {
             byte += value[byte..]
@@ -227,7 +235,7 @@ fn closing(open: char) -> char {
 
 /// A URI owns balanced brackets within its atom (notably IPv6 hosts), while
 /// an unbalanced closing delimiter still belongs to the surrounding syntax.
-fn url_end(value: &str, outer_close: Option<char>) -> usize {
+fn uri_body_end(value: &str, outer_close: Option<char>) -> usize {
     let mut brackets = Vec::new();
     for (byte, character) in value.char_indices() {
         if character.is_whitespace() || brackets.is_empty() && outer_close == Some(character) {
@@ -242,14 +250,39 @@ fn url_end(value: &str, outer_close: Option<char>) -> usize {
     value.len()
 }
 
-fn url(value: &str) -> bool {
-    for (byte, character) in value.char_indices() {
-        if character == ':' {
-            return byte > 0 && value[byte..].starts_with("://");
-        }
-        if !character.is_ascii_alphanumeric() && !matches!(character, '+' | '-' | '.') {
-            return false;
-        }
-    }
-    false
+#[derive(Default)]
+struct UriLookahead {
+    scanned_until: usize,
+    #[cfg(test)]
+    scheme_bytes_examined: usize,
 }
+
+impl UriLookahead {
+    /// Only the first byte outside the ASCII scheme run can end a URI
+    /// prefix. After a miss, starting later inside that run would find the
+    /// same miss. After a match, the lexer consumes at least the prefix.
+    /// In both cases the next probe skips all scheme bytes already examined.
+    fn body_start(&mut self, value: &str, start: usize) -> Option<usize> {
+        if start < self.scanned_until {
+            return None;
+        }
+        let bytes = value.as_bytes();
+        for (offset, &character) in bytes[start..].iter().enumerate() {
+            #[cfg(test)]
+            {
+                self.scheme_bytes_examined += 1;
+            }
+            if !character.is_ascii_alphanumeric() && !matches!(character, b'+' | b'-' | b'.') {
+                let end = start + offset;
+                self.scanned_until = end + 1;
+                return (offset != 0 && character == b':' && bytes[end + 1..].starts_with(b"//"))
+                    .then_some(end + 3);
+            }
+        }
+        self.scanned_until = value.len();
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests;
