@@ -1,16 +1,16 @@
 //! Source-bound signature accents: never search names in unrelated body text.
 
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Range,
-};
+use std::collections::{HashMap, HashSet};
 
 use mant_ir::{
-    Document, EntryForm, EntryKind, EntryOwner, Inline, project_content_slice,
+    Document, EntryForm, EntryKind, EntryOwner, Inline,
     visit::{self, Visit},
 };
 
-use crate::entry::{self, Accent, EntryLabels, LabelStyles};
+use crate::{
+    code::source::Source,
+    entry::{self, Accent, EntryLabels, LabelStyles},
+};
 
 #[derive(Default)]
 pub(super) struct EntryStyles<'a> {
@@ -130,63 +130,34 @@ impl<'a> EntryStyles<'a> {
     }
 
     fn form(&self, owner: EntryOwner<'a>, form: &EntryForm) -> Option<PreparedForm> {
-        let mut text = String::new();
+        let mut source = Source::default();
         let mut names = Vec::new();
-        let mut emphasis = Vec::new();
-        let mut equations = Vec::new();
         let mut parts = Vec::new();
         let mut scalar = 0;
-        for part in &form.parts {
-            let projected = project_content_slice(owner, part)?;
-            let nodes = owner.inline_root(&projected.root)?;
+        for group in form.parts.chunk_by(|left, right| left.root == right.root) {
+            let nodes = owner.inline_root(&group[0].root)?;
             let root = nodes.as_ptr() as usize;
-            let mut cursor = 0;
-            let mut bounded = true;
-            crate::code::source::visit(nodes, |source, value| {
-                if cursor >= projected.chars.end || !bounded {
-                    return false;
-                }
-                let byte_start = text.len();
-                for character in value.chars() {
-                    if projected.chars.contains(&cursor) {
-                        if text.len() + character.len_utf8() <= entry::MAX_FORM_BYTES {
-                            text.push(character);
-                        } else {
-                            bounded = false;
-                        }
-                    }
-                    cursor += 1;
-                    if cursor >= projected.chars.end || !bounded {
-                        break;
-                    }
-                }
-                if source.emphasis && byte_start < text.len() {
-                    emphasis.push(byte_start..text.len());
-                }
-                if source.kind == crate::code::source::LeafKind::Equation && byte_start < text.len()
+            let mut names_in_root = self.names.ranges(nodes);
+            for range in source.append_slices(nodes, group, entry::MAX_FORM_BYTES)? {
+                let first = names_in_root.partition_point(|name| name.chars.end <= range.start);
+                names_in_root = &names_in_root[first..];
+                for name in names_in_root
+                    .iter()
+                    .take_while(|name| name.chars.start < range.end)
                 {
-                    equations.push(byte_start..text.len());
+                    let start = name.chars.start.max(range.start);
+                    let end = name.chars.end.min(range.end);
+                    if start < end {
+                        names.push(scalar + start - range.start..scalar + end - range.start);
+                    }
                 }
-                cursor < projected.chars.end && bounded
-            });
-            if !bounded {
-                return None;
+                let count = range.len();
+                parts.push((root, range, scalar));
+                scalar += count;
             }
-            for name in self.names.ranges(nodes) {
-                let overlap = name.chars.start.max(projected.chars.start)
-                    ..name.chars.end.min(projected.chars.end);
-                if !overlap.is_empty() {
-                    names.push(
-                        scalar + overlap.start - projected.chars.start
-                            ..scalar + overlap.end - projected.chars.start,
-                    );
-                }
-            }
-            parts.push((root, projected.chars.clone(), scalar));
-            scalar += projected.chars.len();
         }
-        names.sort_by_key(|range: &Range<usize>| range.start);
-        let accents = entry::form_accents(&text, &names, &emphasis, &equations);
+        let accents =
+            entry::form_accents(&source.text, &names, &source.emphasis, &source.protected);
         let mut pending = Vec::new();
         let mut part_index = 0;
         for accent in &accents {
@@ -216,7 +187,7 @@ impl<'a> EntryStyles<'a> {
             }
         }
         Some(PreparedForm {
-            text,
+            text: source.text,
             scalars: scalar,
             accents,
             projected: pending,

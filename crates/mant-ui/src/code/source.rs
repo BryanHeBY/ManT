@@ -5,13 +5,15 @@ use std::ops::Range;
 
 use mant_ir::Inline;
 
+mod slices;
+
 #[derive(Default)]
-pub(super) struct Source {
-    pub(super) text: String,
+pub(crate) struct Source {
+    pub(crate) text: String,
     pub(super) marked: Vec<Range<usize>>,
-    pub(super) emphasis: Vec<Range<usize>>,
+    pub(crate) emphasis: Vec<Range<usize>>,
     pub(super) code: Vec<Range<usize>>,
-    pub(super) protected: Vec<Range<usize>>,
+    pub(crate) protected: Vec<Range<usize>>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -29,55 +31,61 @@ pub(crate) struct Markup {
     pub(crate) kind: LeafKind,
 }
 
+enum SourceNode<'a> {
+    Text(&'a str, Markup),
+    Container(&'a [Inline], Markup),
+    Anchor,
+}
+
+fn source_node(node: &Inline, markup: Markup) -> SourceNode<'_> {
+    match node {
+        Inline::Text { value } => SourceNode::Text(value, markup),
+        Inline::Code { value } => SourceNode::Text(
+            value,
+            Markup {
+                marked: true,
+                kind: LeafKind::Code,
+                ..markup
+            },
+        ),
+        Inline::Equation { value, .. } => SourceNode::Text(
+            value,
+            Markup {
+                kind: LeafKind::Equation,
+                ..markup
+            },
+        ),
+        Inline::LineBreak { .. } => SourceNode::Text("\n", markup),
+        Inline::Anchor { .. } => SourceNode::Anchor,
+        Inline::Strong { children } => SourceNode::Container(
+            children,
+            Markup {
+                marked: true,
+                ..markup
+            },
+        ),
+        Inline::Emphasis { children } => SourceNode::Container(
+            children,
+            Markup {
+                marked: true,
+                emphasis: true,
+                ..markup
+            },
+        ),
+        Inline::Link { children, .. } => SourceNode::Container(children, markup),
+    }
+}
+
 pub(crate) fn visit(nodes: &[Inline], mut emit: impl FnMut(Markup, &str) -> bool) -> bool {
     walk(nodes, Markup::default(), &mut emit)
 }
 
 fn walk(nodes: &[Inline], markup: Markup, emit: &mut impl FnMut(Markup, &str) -> bool) -> bool {
-    for node in nodes {
-        let complete = match node {
-            Inline::Text { value } => emit(markup, value),
-            Inline::Code { value } => emit(
-                Markup {
-                    marked: true,
-                    kind: LeafKind::Code,
-                    ..markup
-                },
-                value,
-            ),
-            Inline::Equation { value, .. } => emit(
-                Markup {
-                    kind: LeafKind::Equation,
-                    ..markup
-                },
-                value,
-            ),
-            Inline::LineBreak { .. } => emit(markup, "\n"),
-            Inline::Anchor { .. } => true,
-            Inline::Strong { children } => walk(
-                children,
-                Markup {
-                    marked: true,
-                    ..markup
-                },
-                emit,
-            ),
-            Inline::Emphasis { children } => walk(
-                children,
-                Markup {
-                    marked: true,
-                    emphasis: true,
-                    ..markup
-                },
-                emit,
-            ),
-            Inline::Link { children, .. } => walk(children, markup, emit),
-        };
-        if !complete {
-            return false;
-        }
-    }
-    true
+    nodes.iter().all(|node| match source_node(node, markup) {
+        SourceNode::Text(text, markup) => emit(markup, text),
+        SourceNode::Container(children, markup) => walk(children, markup, emit),
+        SourceNode::Anchor => true,
+    })
 }
 
 impl Source {
@@ -93,7 +101,11 @@ impl Source {
     }
 
     fn push(&mut self, text: &str, markup: Markup) -> bool {
-        if text.len() > super::MAX_BLOCK_BYTES - self.text.len() {
+        self.push_bounded(text, markup, super::MAX_BLOCK_BYTES, true)
+    }
+
+    fn push_bounded(&mut self, text: &str, markup: Markup, limit: usize, coalesce: bool) -> bool {
+        if text.len() > limit.saturating_sub(self.text.len()) {
             return false;
         }
         let start = self.text.len();
@@ -106,7 +118,8 @@ impl Source {
             (markup.kind == LeafKind::Equation, &mut self.protected),
         ] {
             if enabled && !range.is_empty() {
-                if let Some(previous) = ranges.last_mut()
+                if coalesce
+                    && let Some(previous) = ranges.last_mut()
                     && previous.end == start
                 {
                     previous.end = range.end;

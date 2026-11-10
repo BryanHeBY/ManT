@@ -105,6 +105,9 @@ argument range past its source owner. Source names remain protected; ordinary
 description text is outside this classifier's evidence scope. A synopsis may
 remain a Paragraph, retaining its original wrapping and surface. This is a
 consumer presentation policy and adds no execution or coloring facts to IR.
+Ordered form slices in the same root share one traversal. Unselected content
+advances original scalar positions without entering the text sent to the
+classifier. Source font and formula boundaries remain available on each slice.
 
 Option inventories and source-marked references may also receive independent
 lexical decoration in ordinary descriptions. This does not create an Entry,
