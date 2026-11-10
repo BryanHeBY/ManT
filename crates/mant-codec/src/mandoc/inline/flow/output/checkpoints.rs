@@ -20,10 +20,14 @@ impl InlineBuilder {
         &mut self,
         edits: &row_origins::OutputNodeEdits,
     ) {
+        self.visit_output_checkpoints(|index| edits.remap(index));
+    }
+
+    fn visit_output_checkpoints(&mut self, mut visit: impl FnMut(&mut usize)) {
         if let Some(registry) = &self.output_positions {
             for position in registry.borrow().iter().filter_map(std::rc::Weak::upgrade) {
                 let mut index = position.get();
-                edits.remap(&mut index);
+                visit(&mut index);
                 position.set(index);
             }
         }
@@ -63,25 +67,9 @@ impl InlineBuilder {
         &mut self,
         edit: row_origins::OutputNodeEdit,
     ) {
-        if let Some(registry) = &self.output_positions {
-            for position in registry.borrow().iter().filter_map(std::rc::Weak::upgrade) {
-                let mut index = position.get();
-                edit.remap(&mut index);
-                position.set(index);
-            }
-        }
-        edit.remap(&mut self.execution.plain_input.output_start);
-        if let Some(author) = &mut self.execution.author_execution {
-            edit.remap(&mut author.field_output_start);
-        }
-        if let Some(definition) = &mut self.execution.definition {
-            if let Some(field) = &mut definition.no_break {
-                field.remap_output_positions(edit);
-            }
-            if let Some(index) = &mut definition.hang_row.provisional_trailing_break {
-                edit.remap(index);
-            }
-        }
+        self.visit_output_checkpoints(|index| edit.remap(index));
+        self.execution
+            .visit_output_positions(|index| edit.remap(index));
     }
 
     pub(in crate::mandoc) fn node_count(&self) -> usize {
@@ -151,16 +139,20 @@ impl super::super::InlineExecutionState {
         &mut self,
         edits: &row_origins::OutputNodeEdits,
     ) {
-        edits.remap(&mut self.plain_input.output_start);
+        self.visit_output_positions(|index| edits.remap(index));
+    }
+
+    fn visit_output_positions(&mut self, mut visit: impl FnMut(&mut usize)) {
+        visit(&mut self.plain_input.output_start);
         if let Some(author) = &mut self.author_execution {
-            edits.remap(&mut author.field_output_start);
+            visit(&mut author.field_output_start);
         }
         if let Some(definition) = &mut self.definition {
             if let Some(field) = &mut definition.no_break {
-                field.remap_output_projection(edits);
+                field.visit_output_positions(&mut visit);
             }
             if let Some(index) = &mut definition.hang_row.provisional_trailing_break {
-                edits.remap(index);
+                visit(index);
             }
         }
     }

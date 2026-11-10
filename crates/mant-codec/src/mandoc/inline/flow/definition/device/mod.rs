@@ -228,10 +228,7 @@ impl NativeFieldDevice {
         &mut self,
         edits: &super::super::output::row_origins::OutputNodeEdits,
     ) {
-        edits.remap(&mut self.output_start);
-        if let Some(field) = &mut self.separator_field {
-            field.remap_output_projection(edits);
-        }
+        self.visit_output_positions(|index| edits.remap(index));
     }
 
     pub(in crate::mandoc::inline::flow) const fn current_output_start(&self) -> usize {
@@ -242,9 +239,13 @@ impl NativeFieldDevice {
         &mut self,
         edit: super::super::output::row_origins::OutputNodeEdit,
     ) {
-        edit.remap(&mut self.output_start);
+        self.visit_output_positions(|index| edit.remap(index));
+    }
+
+    fn visit_output_positions(&mut self, mut visit: impl FnMut(&mut usize)) {
+        visit(&mut self.output_start);
         if let Some(field) = &mut self.separator_field {
-            field.remap_output_positions(edit);
+            field.visit_output_positions(visit);
         }
     }
 

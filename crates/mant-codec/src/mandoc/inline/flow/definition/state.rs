@@ -432,16 +432,15 @@ impl NoBreakField {
         &mut self,
         edits: &super::super::output::row_origins::OutputNodeEdits,
     ) {
-        edits.remap(&mut self.output_end_before_separator);
-        edits.remap(&mut self.resumed_output_start);
+        self.visit_output_positions(|index| edits.remap(index));
     }
 
-    pub(in crate::mandoc::inline::flow) fn remap_output_positions(
+    pub(in crate::mandoc::inline::flow) fn visit_output_positions(
         &mut self,
-        edit: super::super::output::row_origins::OutputNodeEdit,
+        mut visit: impl FnMut(&mut usize),
     ) {
-        edit.remap(&mut self.output_end_before_separator);
-        edit.remap(&mut self.resumed_output_start);
+        visit(&mut self.output_end_before_separator);
+        visit(&mut self.resumed_output_start);
     }
 }
 
