@@ -232,7 +232,7 @@ fn inline_text(children: &[Inline]) -> String {
 mod definition_execution_rows;
 #[path = "roff_lowering/definition_matrix.rs"]
 mod definition_matrix;
-#[path = "roff_lowering/entries.rs"]
+#[path = "roff_lowering/entries/mod.rs"]
 mod entries;
 #[path = "roff_lowering/escape_matrix.rs"]
 mod escape_matrix;
