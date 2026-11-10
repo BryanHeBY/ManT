@@ -1,4 +1,5 @@
 //! Drain output owners and settle their current row, target and spacing receipts.
+use super::paragraph::ParagraphDrain;
 use super::{
     BlockState, ClosedOutputTail, InlineBuilder, OutputRowEnd, has_formatter_text_cell, layout,
 };
@@ -123,14 +124,15 @@ impl BlockState {
     }
 
     pub(in crate::mandoc::blocks) fn flush_paragraph(&mut self) {
-        self.flush_paragraph_with(false);
+        self.flush_paragraph_with(ParagraphDrain::Ordinary);
     }
 
     pub(in crate::mandoc::blocks) fn flush_paragraph_for_line_request(&mut self) {
-        self.flush_paragraph_with(true);
+        self.flush_paragraph_with(ParagraphDrain::LineRequest);
     }
 
-    pub(super) fn flush_paragraph_with(&mut self, line_request: bool) {
+    fn flush_paragraph_with(&mut self, drain: ParagraphDrain) {
+        let line_request = drain == ParagraphDrain::LineRequest;
         if self.uses_literal_output() && self.paragraph.is_empty() {
             // The live column buffer belongs to LiteralFlow. Draining an
             // empty paragraph must not retire its native cells or claim its
@@ -151,7 +153,7 @@ impl BlockState {
             self.indent_columns,
             self.source_origin.offset_from(self.indent_columns),
             self.hanging_origin,
-            line_request,
+            drain,
         );
         let mut suppressed_head_row = false;
         if let Some(block) = block {
@@ -428,8 +430,17 @@ impl BlockState {
             self.paragraph
                 .with_inline_builder(&mut self.formatter, InlineBuilder::finish_run_in_field_row);
         }
+        let handoff = row_boundary == super::super::FormatterRowBoundary::SectionHeadHandoff;
+        if handoff && self.inline_output_is_literal(self.formatter.no_fill) {
+            self.literal
+                .handoff_pending_native_input(&mut self.formatter);
+        }
         self.flush_preformatted();
-        self.flush_paragraph();
+        if handoff {
+            self.flush_paragraph_with(ParagraphDrain::BeforeNativeFlush);
+        } else {
+            self.flush_paragraph();
+        }
         let closed_tail = self
             .closed_output_tail
             .filter(|tail| tail.output_end == self.output.len());

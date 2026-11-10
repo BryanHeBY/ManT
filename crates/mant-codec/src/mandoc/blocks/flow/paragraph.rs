@@ -10,6 +10,13 @@ pub(super) struct ParagraphFlow {
     hanging_first_line: Option<SourceIndent>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ParagraphDrain {
+    Ordinary,
+    LineRequest,
+    BeforeNativeFlush,
+}
+
 impl ParagraphFlow {
     pub(super) fn note_source(&mut self, source: Option<SourceSpan>) {
         if self.source.is_none() {
@@ -189,7 +196,7 @@ impl ParagraphFlow {
         indent: SourceIndent,
         continuation_indent: i32,
         hanging_origin: Option<SourceIndent>,
-        line_request: bool,
+        drain: ParagraphDrain,
     ) -> (
         Option<Block>,
         bool,
@@ -198,7 +205,12 @@ impl ParagraphFlow {
     ) {
         let (mut children, empty_word_end_break, completed_vertical_rows, closed_graph_tail) = self
             .with_inline_builder(formatter, |builder| {
-                builder.take_paragraph_segment(line_request)
+                if drain == ParagraphDrain::BeforeNativeFlush
+                    && let Some(retained) = builder.take_paragraph_before_native_flush()
+                {
+                    return retained;
+                }
+                builder.take_paragraph_segment(drain == ParagraphDrain::LineRequest)
             });
         let mut inline_layout = crate::mandoc::inline::take_inline_layout(&mut children);
         let first_line = self.hanging_first_line.take();

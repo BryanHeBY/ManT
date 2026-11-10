@@ -134,7 +134,6 @@ fn breakpoint_writes_do_not_claim_zero_width_graph_acceptance() {
             FieldWrite::Cell(FieldCell::Graph { text: 'Y', .. })
         ]
     ));
-    assert!(!execution.word_zero_graph);
     assert_eq!(mant_ir::inline_plain_text(&execution.output), "XY");
 }
 

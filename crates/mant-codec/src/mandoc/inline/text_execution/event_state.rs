@@ -40,7 +40,6 @@ impl TextEventState {
             graph_since_break: false,
             graph_count: 0,
             wiped: false,
-            zero_graph_seen: false,
         }
     }
 }

@@ -214,6 +214,9 @@ impl InlineBuilder {
         let project_delimiter = (exited_discarded_buffer && !exited_definition_row)
             || !has_projected_end
             || retiring_rejection && !closes_preceding_printed_row;
+        // This path reached the real input/device reset. In particular,
+        // an NBRZW-only buffer is consumed even without a projected glyph.
+        self.note_native_input_retired();
         self.finish_hard_break_projection(project_delimiter);
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
     }
@@ -282,7 +285,6 @@ impl InlineBuilder {
         self.execution.pending_field_spaces = 0;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;
-        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         if project_delimiter {
             let row_indent = self.take_definition_row_indent();

@@ -337,7 +337,6 @@ impl InlineBuilder {
         self.execution.pending_field_gap_origin = PendingFieldGapOrigin::Other;
         self.execution.word_end_break = WordEndBreak::Clear;
         self.execution.wipe_remainder = false;
-        self.execution.row_zero_graph = false;
         self.execution.formatter_column = FormatterColumn::Origin;
         if let Some(execution) = &mut self.execution.author_execution {
             execution.field_output_start = self.nodes.len();

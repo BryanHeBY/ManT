@@ -112,8 +112,6 @@ pub(in crate::mandoc) struct TextExecution {
     /// recorded any graph: the remainder of the unit is unprinted input
     /// (term.c:143-146 with 233-237).
     pub(in crate::mandoc) definitive_reject: bool,
-    /// This word armed `graph` only through zero-width cells (NBRZW).
-    pub(in crate::mandoc) word_zero_graph: bool,
 }
 
 // Native graph, break, blank and rejection flags can coexist during one word.
@@ -139,8 +137,6 @@ struct TextEventState {
     /// the pass with `nbr == 0` (term.c:143-146) and `term_flushln()` wiped
     /// the unprinted remainder of the flush unit (term.c:233-237).
     wiped: bool,
-    /// A zero-width graph class cell (NBRZW) armed `graph` this word.
-    zero_graph_seen: bool,
 }
 
 /// Decode a text node while retaining formatter state in its caller's inline
@@ -278,7 +274,6 @@ fn finish_text_execution(
             && text_state.saw_source_cell
             && !text_state.graph_since_blank,
         definitive_reject: text_state.wiped,
-        word_zero_graph: text_state.zero_graph_seen,
         trailing_output,
     }
 }

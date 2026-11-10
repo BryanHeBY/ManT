@@ -130,7 +130,7 @@ fn input(owner: Owner, prefix: Option<Contribution>, from_end: bool) -> Resolved
     value
 }
 
-fn key(app: &mut App, code: KeyCode) {
+pub(super) fn key(app: &mut App, code: KeyCode) {
     app.handle_key(KeyEvent::new(code, KeyModifiers::NONE));
 }
 
@@ -145,7 +145,7 @@ fn settle(app: &mut App) {
     }
 }
 
-fn draw(app: &mut App, terminal: &mut Terminal<TestBackend>) {
+pub(super) fn draw(app: &mut App, terminal: &mut Terminal<TestBackend>) {
     terminal.draw(|frame| app.draw(frame)).unwrap();
     settle(app);
     terminal.draw(|frame| app.draw(frame)).unwrap();
@@ -328,7 +328,7 @@ fn visual_label(
     expected_copy
 }
 
-fn copy_label(app: &mut App, first_cell: (u16, u16), last_cell: (u16, u16)) -> String {
+pub(super) fn copy_label(app: &mut App, first_cell: (u16, u16), last_cell: (u16, u16)) -> String {
     pointer(
         app,
         MouseEventKind::Down(MouseButton::Left),

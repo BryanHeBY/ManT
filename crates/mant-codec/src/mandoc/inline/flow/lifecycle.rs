@@ -54,7 +54,6 @@ impl InlineExecutionState {
             observe_no_fill_source_lines: SourceLineObservation::Disabled,
             no_fill_word_active: false,
             wipe_remainder: false,
-            row_zero_graph: false,
             native_word_writes: None,
             table_buffer_written: None,
             table_line_needs_width: false,
@@ -108,7 +107,6 @@ impl InlineExecutionState {
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;
         self.wipe_remainder = false;
-        self.row_zero_graph = false;
         self.leading_line_boundary = LeadingLineBoundary::None;
         self.zero_advance.reset_projection(armed_zero_advance);
         self.zero_advance_joined = false;

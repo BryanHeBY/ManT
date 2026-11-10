@@ -2,8 +2,8 @@
 
 use super::super::definition::{NativeFieldDevice, PreservedDefinitionField};
 use super::super::{
-    FormatterColumn, Inline, InlineBuilder, InlineExecutionState, PendingBoundary,
-    PreservedInlineState, WordEndBreak, has_printable_character,
+    FormatterColumn, Inline, InlineBuilder, InlineExecutionState, NativeInputRetirement,
+    PendingBoundary, PreservedInlineState, WordEndBreak, has_printable_character,
 };
 use super::CompletedRowOrigin;
 use super::projection::{
@@ -63,6 +63,66 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn finish_preserving_rows(mut self) -> Vec<Inline> {
         self.flush_zero_advance();
         self.drain_ir_nodes()
+    }
+
+    /// Detach a pending native control word at an IR owner boundary with no
+    /// native newline. `man_term.c::pre_SS/post_SH` let the HEAD be the first
+    /// owner to execute `term_newln()`. Only the earlier, completed rows
+    /// belong to the old owner; the unresolved control cells (including
+    /// their `term_word()` separators) are not a row yet.
+    pub(in crate::mandoc) fn handoff_unprinted_plain_input(&mut self) -> bool {
+        use super::super::field_buffer::FieldCell;
+        let cells = self.execution.plain_input.buffer.cells();
+        let output_start = self
+            .execution
+            .plain_input
+            .output_start
+            .min(self.nodes.len());
+        if self.execution.definition.is_some()
+            || self.execution.zero_advance.has_buffered_glyph()
+            || !cells.iter().any(|cell| {
+                matches!(
+                    cell,
+                    FieldCell::ZeroWidthGraph | FieldCell::Breakpoint | FieldCell::BreakMarker
+                )
+            })
+            || !cells.iter().all(|cell| {
+                matches!(
+                    cell,
+                    FieldCell::ZeroWidthGraph
+                        | FieldCell::Breakpoint
+                        | FieldCell::BreakMarker
+                        | FieldCell::TabReference
+                        | FieldCell::BreakableBlank
+                )
+            })
+            || has_rendered_formatter_glyph(&self.nodes[output_start..])
+        {
+            return false;
+        }
+        let mut provisional = self.nodes.split_off(output_start);
+        retain_inline_identities(&mut provisional);
+        self.nodes.extend(provisional);
+        self.execution.plain_input.detach_output_owner();
+        self.execution.retire_output_owner();
+        true
+    }
+
+    pub(in crate::mandoc) fn take_paragraph_before_native_flush(
+        &mut self,
+    ) -> Option<(
+        Vec<Inline>,
+        bool,
+        Vec<CompletedRowOrigin>,
+        super::OutputRowEnd,
+    )> {
+        if !self.handoff_unprinted_plain_input() {
+            return None;
+        }
+        let completed_rows = super::projection::trailing_paragraph_row_origins(&self.nodes);
+        let closed_graph_tail = self.closed_graph_tail();
+        let output = self.drain_ir_nodes();
+        Some((output, false, completed_rows, closed_graph_tail))
     }
 
     /// Drain one IR paragraph without ending the formatter's execution
@@ -265,7 +325,12 @@ impl InlineBuilder {
         mut self,
         preserve_rows: bool,
         boundary: FormatterLineBoundary,
-    ) -> (Vec<Inline>, InlineExecutionState, bool) {
+    ) -> (
+        Vec<Inline>,
+        InlineExecutionState,
+        bool,
+        NativeInputRetirement,
+    ) {
         let FormatterLineBoundary {
             native,
             invisible_native_row_end,
@@ -301,7 +366,12 @@ impl InlineBuilder {
         self.execution.native_word_spacing = super::super::NativeWordSpacing::NoSpace;
         self.execution.boundary = PendingBoundary::Tight;
         self.reset_native_tab_origin();
-        (output, self.execution, occupied_head_row)
+        (
+            output,
+            self.execution,
+            occupied_head_row,
+            self.input_retirement,
+        )
     }
 
     /// Execute the actual original mdoc It BODY post, exactly once.

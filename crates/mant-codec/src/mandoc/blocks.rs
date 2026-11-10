@@ -17,8 +17,8 @@ use super::{
         plain_text,
     },
     layout::{
-        add_leading_spacing, execute_section_spacing, layout, set_block_spacing,
-        update_paragraph_distance, vertical_space_delta,
+        add_leading_spacing, layout, set_block_spacing, update_paragraph_distance,
+        vertical_space_delta,
     },
     part_child_groups, source_span, targets,
 };
@@ -30,8 +30,8 @@ pub(super) use inline_flow::ends_with_line_continuation;
 use inline_flow::participates_in_inline_flow;
 
 mod sections;
-use sections::is_section;
 pub(super) use sections::lower_document_structure;
+use sections::{SectionEntry, is_section};
 mod structural;
 use structural::StructuralLowerer;
 pub(in crate::mandoc) mod synopsis;
@@ -245,11 +245,13 @@ const DEFAULT_MAN_TAG_WIDTH: i32 = 7;
 pub(super) enum FormatterRowBoundary {
     Preserve,
     Settle,
-    /// man SH/SS BODY post, or the first SS's leading paragraph distance
-    /// while the enclosing BODY still owns the preceding row.
-    ManSection {
-        before_subsection: bool,
-    },
+    /// SH/SS/Sh/Ss BODY post executes `term_newln` while this owner is live.
+    SectionBodyPost,
+    /// The next section's BLOCK pre may close this owner's row before its
+    /// heading starts. The first subsection is still inside the parent BODY.
+    BeforeSection(SectionEntry),
+    /// No section BLOCK pre newline; native-only cells pass into HEAD.
+    SectionHeadHandoff,
     /// The original mdoc It BODY has not executed its `term_newln` post yet.
     MdocItemBody,
     Column {
@@ -383,15 +385,19 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         row_boundary: FormatterRowBoundary,
         next_column_entry: Option<&Node>,
     ) -> (Vec<Block>, bool, flow::LiteralAssembly) {
-        if let FormatterRowBoundary::ManSection { before_subsection } = row_boundary
-            && (!before_subsection || *self.paragraph_distance > 0)
+        let row_boundary = if row_boundary == FormatterRowBoundary::SectionBodyPost
+            || matches!(row_boundary, FormatterRowBoundary::BeforeSection(entry)
+                if entry.needs_newline(*self.paragraph_distance))
         {
-            // man_term.c::post_SH/post_SS call term_newln() on BODY
-            // return; pre_SS calls it through term_vspace() when PD
-            // requests spacing. A preceding PD can change that distance
-            // during this scope, so consult it only after lowering.
+            // The pre/post runs before this owner drains. Consult the live
+            // PD here: its last request can occur inside the preceding BODY.
             self.state.finish_native_body_line();
-        }
+            row_boundary
+        } else if matches!(row_boundary, FormatterRowBoundary::BeforeSection(_)) {
+            FormatterRowBoundary::SectionHeadHandoff
+        } else {
+            row_boundary
+        };
         if row_boundary == FormatterRowBoundary::Settle {
             // Native BODY posts settle the field before its IR owner drains.
             // In a column, NOBREAK may leave the device row occupied afterwards.

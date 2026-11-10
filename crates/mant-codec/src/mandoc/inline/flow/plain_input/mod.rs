@@ -132,7 +132,10 @@ impl InlineBuilder {
         for edits in projections {
             self.remap_output_projection_checkpoints(&edits);
         }
-        ends_row
+        if ends_row.is_some() {
+            self.note_native_input_retired();
+        }
+        ends_row.unwrap_or_default()
     }
 
     /// Execution-state form shared with the no-fill row finisher, which
@@ -143,7 +146,7 @@ impl InlineBuilder {
         row_origin: super::output::CompletedRowOrigin,
     ) -> bool {
         Self::retire_plain_flush_unit_with_projections(execution, nodes, row_origin, None)
-            .rejected()
+            .is_some_and(PlainFlushOutcome::rejected)
     }
 
     fn retire_plain_flush_unit_with_projections(
@@ -151,13 +154,10 @@ impl InlineBuilder {
         nodes: &mut Vec<Inline>,
         row_origin: super::output::CompletedRowOrigin,
         projections: Option<&mut Vec<super::output::row_origins::OutputNodeEdits>>,
-    ) -> PlainFlushOutcome {
+    ) -> Option<PlainFlushOutcome> {
         use super::field_buffer::{FillTargets, FlushReceipt};
         let inherited_printed_row = plain_unit_inherits_printed_row(execution);
-        let Some((authorless_definition, unit)) = Self::take_plain_flush_unit(execution, nodes)
-        else {
-            return PlainFlushOutcome::Ordinary;
-        };
+        let (authorless_definition, unit) = Self::take_plain_flush_unit(execution, nodes)?;
         // BRNEVER-shaped (term.c:134,143-144): responsive reflow owns the
         // device width, so a plain pass only ever ends at authored markers.
         let targets = FillTargets {
@@ -168,7 +168,7 @@ impl InlineBuilder {
         let receipt = unit.buffer.flush_receipt(targets, false);
         let Some(passes) = receipt.passes() else {
             Self::retire_unmodeled_plain_flush(execution, nodes, authorless_definition, unit);
-            return PlainFlushOutcome::Ordinary;
+            return Some(PlainFlushOutcome::Ordinary);
         };
         let PlainInputUnit {
             mut buffer,
@@ -217,10 +217,10 @@ impl InlineBuilder {
             project_completed_empty_passes(execution, nodes, output_start, empty_rows, row_origin);
             super::output::deferred_blanks::project(nodes, &buffer, passes, output_start);
             Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
-            return PlainFlushOutcome::from_unprinted_tail(
+            return Some(PlainFlushOutcome::from_unprinted_tail(
                 empty_tail,
                 inherited_printed_row && passes.len() == 1,
-            );
+            ));
         };
         if !definitive {
             retain_blank_only_unit_output(
@@ -239,7 +239,10 @@ impl InlineBuilder {
             // nbr=0 over buffered ordinary blanks still reaches the
             // ordinary term_flushln tail endline. It is not a definitive
             // rejection and must not depend on earlier completed rows.
-            return PlainFlushOutcome::from_unprinted_tail(true, inherited_printed_row);
+            return Some(PlainFlushOutcome::from_unprinted_tail(
+                true,
+                inherited_printed_row,
+            ));
         }
 
         project_rejected_plain_prefix(
@@ -258,7 +261,7 @@ impl InlineBuilder {
         super::output::deferred_blanks::project(nodes, &buffer, &passes, output_start);
         let outcome = PlainFlushOutcome::rejected_prefix(&buffer, &passes);
         Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
-        outcome
+        Some(outcome)
     }
 
     fn retire_unmodeled_plain_flush(

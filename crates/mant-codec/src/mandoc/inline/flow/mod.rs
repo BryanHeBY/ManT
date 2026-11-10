@@ -89,6 +89,9 @@ pub(in crate::mandoc) struct InlineBuilder {
     // A cell executed by this builder, separate from an occupied formatter
     // row inherited from a detached HEAD or a prior output owner.
     produced_formatter_cell: CellProduction,
+    // A real source consumer retired the input that accompanied this
+    // builder. Its caller may still hold a no-fill projection of that cell.
+    input_retirement: NativeInputRetirement,
     pub(in crate::mandoc) execution: InlineExecutionState,
     /// A detached definition HEAD occupies the native formatter row even
     /// though its term lives in a different IR output container.
@@ -112,6 +115,14 @@ enum SourceLineObservation {
 
 #[cfg(test)]
 mod source_line_tests;
+
+/// Consumption of a native input cell, independent of a device endline.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::mandoc) enum NativeInputRetirement {
+    #[default]
+    Retained,
+    Consumed,
+}
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum CellProduction {
@@ -236,9 +247,6 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// The live ordinary input and its provisional IR owner interval.
     /// Output drains release only the interval; native flush consumes cells.
     pub(in crate::mandoc::inline::flow) plain_input: plain_input::PlainInputUnit,
-    /// A zero-width graph (`\&`, NBRZW recovery) occupied the current row;
-    /// it arms `graph` in `term_fill()` without printing (term.c:349).
-    pub(in crate::mandoc) row_zero_graph: bool,
     /// Whether `concat_next_word` was armed by a filled cleared field
     /// (term.c:250-253) rather than the request's `TERMP_NOSPACE`
     /// (`roff_term.c:78`); the two arm the same no-separator word but

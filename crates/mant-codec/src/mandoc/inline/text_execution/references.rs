@@ -23,7 +23,6 @@ pub(super) fn append_empty_destination(
     // glyphs. Those glyphs participate in overstrike and word break effects
     // even if their source spelling may later qualify for navigation.
     text_state.note_graph();
-    text_state.zero_graph_seen = true;
     append_text_event(
         "<>",
         WordOutput {

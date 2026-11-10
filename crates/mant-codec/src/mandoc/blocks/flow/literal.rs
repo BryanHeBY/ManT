@@ -332,6 +332,21 @@ impl LiteralFlow {
         crate::mandoc::inline::InlineBuilder::output_has_closed_graph_tail(&self.nodes)
     }
 
+    pub(super) fn handoff_pending_native_input(
+        &mut self,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) {
+        if self.with_inline_builder(
+            formatter,
+            crate::mandoc::inline::InlineBuilder::handoff_unprinted_plain_input,
+        ) {
+            // The old literal projects only its completed rows. The live
+            // formatter cells still belong to the next native consumer.
+            self.row_occupied = false;
+            self.formatter_column = FormatterColumn::Origin;
+        }
+    }
+
     pub(super) fn adopt(
         &mut self,
         nodes: Vec<Inline>,

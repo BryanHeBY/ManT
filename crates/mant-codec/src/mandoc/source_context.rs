@@ -358,7 +358,7 @@ impl<'a> LoweringContext<'a> {
         nodes: HeadNodes<'_>,
         formatter: &mut formatter::FormatterState,
         authors_section: bool,
-    ) -> Vec<mant_ir::Inline> {
+    ) -> (Vec<mant_ir::Inline>, u16) {
         let mut builder = formatter.begin_inline_session(
             formatter.spacing_enabled(),
             authors_section,
@@ -382,12 +382,22 @@ impl<'a> LoweringContext<'a> {
         // at the HEAD post. Consume the live native receipt before draining
         // this semantic owner; a rejected later pass still ended its row.
         builder.hard_break();
+        let completed_empty_rows = builder.completed_empty_rows();
         let mut output = formatter.finish_inline_line_with_rows(builder, true).output;
         // The heading consumer supplies the post's final line ending. Only
         // that one terminator is redundant; earlier executed empty rows are
-        // part of the heading and must not be trimmed with it.
-        inline::consume_one_row_ending(&mut output);
-        remove_structural_heading_bold(output)
+        // part of the heading and must not be trimmed with it. If no glyph
+        // survived a native rejection, project the completed rows as
+        // spacing at this owner rather than opening an extra inline row.
+        let blank_heading_rows =
+            if completed_empty_rows > 0 && !inline::has_rendered_formatter_glyph(&output) {
+                inline::retain_inline_identities(&mut output);
+                completed_empty_rows
+            } else {
+                inline::consume_one_row_ending(&mut output);
+                0
+            };
+        (remove_structural_heading_bold(output), blank_heading_rows)
     }
 
     pub(super) fn lower_text(

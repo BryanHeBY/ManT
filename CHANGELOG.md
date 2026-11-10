@@ -145,6 +145,14 @@ that crate was not published for that change.
 - Execute the empty `.HP` body’s closing space and section spacing against the
   active vertical-space debt. Keep literal source rows in their original owner
   when transparent structures finish a native line.
+- Execute man and mdoc section spacing from the native predecessor and active
+  spacing debt. Preserve the difference between empty man peers, empty mdoc
+  subsections, and mdoc sections with transparent BODY children.
+- Keep shared native cells in the old source row until a heading or field
+  consumes them. An invisible cell no longer creates a phantom literal or
+  blank paragraph, and a filled man link starts in its actual source mode.
+  Preserve completed empty rows when a word-end break suppresses a heading,
+  and distinguish live zero-width graphs from bare breaks after printed tags.
 - Keep printed separators and line breaks with their original words when
   native marker passes restart across multiple operands.
 

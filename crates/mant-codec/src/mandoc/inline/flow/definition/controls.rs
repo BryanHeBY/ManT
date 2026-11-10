@@ -561,26 +561,36 @@ impl InlineBuilder {
         self.execution.wipe_remainder = true;
     }
 
-    /// A zero-width graph class cell armed `graph` for the current row
-    /// without printing (term.c:349): a later marker decision must treat
-    /// the row as carrying input, not as whitespace-only.
-    pub(in crate::mandoc) fn note_row_zero_graph(&mut self) {
-        self.execution.row_zero_graph = true;
-    }
-
-    /// Whether the current device row carries any graph input: printable
-    /// projection, a buffered `\\z` glyph, or an NBRZW-class cell.
-    pub(in crate::mandoc) fn current_row_has_graph(&self) -> bool {
-        self.nodes
-            .iter()
-            .rev()
-            .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-            .any(|node| {
-                !mant_ir::inline_plain_text(std::slice::from_ref(node))
-                    .chars()
-                    .all(char::is_whitespace)
-            })
-            || self.execution.row_zero_graph
+    /// Whether a pending marker can close a row represented by readable
+    /// content rather than projecting a second row for an unprinted cell.
+    pub(in crate::mandoc::inline::flow) fn word_break_has_represented_row(&self) -> bool {
+        // post_TP(HEAD)/post_IP(HEAD) already printed a fitting tag via
+        // term_flushln() but left the device row open. In BODY the printed
+        // row lives in the detached HEAD, not in the current inline Vec.
+        // A live NBRZW is native graph and can close that represented row;
+        // a bare marker or ASCII_BREAK is not graph (term.c:287-366).
+        let plain = &self.execution.plain_input.buffer;
+        let detached_head_printed = self.external_head_row_pending
+            && self
+                .execution
+                .detached_device_row
+                .is_some_and(|row| row.page_origin_printed || row.viscol > 0)
+            && plain.cells()[plain.resume_offset().min(plain.cells().len())..]
+                .iter()
+                .any(|cell| matches!(cell, super::super::field_buffer::FieldCell::ZeroWidthGraph));
+        detached_head_printed
+            || self
+                .nodes
+                .iter()
+                .rev()
+                .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
+                .any(|node| {
+                    let mut readable = false;
+                    mant_ir::visit_inline_plain_text(std::slice::from_ref(node), |text| {
+                        readable |= text.chars().any(|ch| !ch.is_whitespace());
+                    });
+                    readable
+                })
             || self.execution.zero_advance.has_pending_glyph()
     }
 

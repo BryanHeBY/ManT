@@ -376,13 +376,15 @@ impl InlineBuilder {
                 .plain_input
                 .buffer
                 .has_non_ignorable_after(self.execution.plain_input.buffer.resume_offset(), false)
-            && self.current_row_has_graph()
+            && self.word_break_has_represented_row()
         {
             // A `.mc` no-break flush resets the native buffer (term.c:233-
             // 237), so the marker's unit holds no printable cell and its
             // pass can never accept a row. CVS loses the following word at
             // this edge; ManT keeps it on the row this blank ends
-            // (term.c:294-295) as the content-preserving deviation.
+            // (term.c:294-295) as the content-preserving deviation. A live
+            // NBRZW alone is a native graph, not readable content to save:
+            // term_fill() still needs it in the original pass (340-349).
             self.project_hard_break_with_origin(super::CompletedRowOrigin::Layout);
         }
         if next_is_visible
@@ -413,7 +415,7 @@ impl InlineBuilder {
                             self.execution.plain_input.buffer.resume_offset(),
                             false,
                         )))
-                && self.current_row_has_graph()
+                && self.word_break_has_represented_row()
             {
                 // The marker sits in a retired owner (a drained TAG field
                 // or scope), or its unit holds no printable cell at all

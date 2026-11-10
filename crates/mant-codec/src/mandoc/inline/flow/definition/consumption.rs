@@ -405,7 +405,6 @@ impl InlineBuilder {
             self.execution.formatter_column = FormatterColumn::Origin;
             self.execution.word_end_break = WordEndBreak::Clear;
             self.execution.wipe_remainder = false;
-            self.execution.row_zero_graph = false;
             self.execution.pending_word_spaces.clear();
             self.execution.trailing_output = TrailingOutput::None;
             if let Some(execution) = &mut self.execution.author_execution {
@@ -598,6 +597,14 @@ impl InlineBuilder {
             && device.is_some_and(|device| device.ends_row && device.printed_row.is_some())
         {
             self.record_device_row_end();
+        }
+        if self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| !state.field_buffer.is_empty())
+        {
+            self.note_native_input_retired();
         }
         if let Some(state) = &mut self.execution.definition {
             if let Some(device) = device {

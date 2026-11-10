@@ -616,5 +616,6 @@ mod outline_search;
 mod references;
 mod search;
 mod search_options;
+mod section_execution;
 mod snapshots;
 mod styles;

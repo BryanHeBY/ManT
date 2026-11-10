@@ -112,7 +112,6 @@ impl WordExecution {
             }
             RoffInlineEvent::ZeroWidthGlyph => {
                 self.text_state.note_graph();
-                self.text_state.zero_graph_seen = true;
             }
             RoffInlineEvent::Breakpoint => self.append_breakpoint(context),
             RoffInlineEvent::HorizontalMotion {

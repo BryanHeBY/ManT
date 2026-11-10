@@ -528,7 +528,17 @@ impl BlockLowerer<'_, '_> {
                 self.state.formatter.no_fill = node.flags.no_fill;
             }
             _ if node.flags.no_fill => self.state.formatter.no_fill = true,
-            _ if node.scope_end.is_none() && participates_in_inline_flow(node) => {
+            // UR/MT open a label owner before visiting BODY. Their BLOCK
+            // NODE_NOFILL flag already selects the output mode in
+            // man_term.c::print_man_node(), even though their children
+            // need structural rather than inline traversal.
+            _ if node.scope_end.is_none()
+                && (participates_in_inline_flow(node)
+                    || matches!(
+                        node.macro_token.as_ref(),
+                        Some(Man(ManMacro::Ur | ManMacro::Mt))
+                    )) =>
+            {
                 self.state.formatter.no_fill = false;
             }
             _ => {}

@@ -146,9 +146,6 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     if execution.definitive_reject {
         builder.note_definitive_word_rejection();
     }
-    if execution.word_zero_graph {
-        builder.note_row_zero_graph();
-    }
     if provisional_definition_break {
         builder.note_provisional_definition_break();
     }

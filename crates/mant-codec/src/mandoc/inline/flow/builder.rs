@@ -1,5 +1,7 @@
 //! Construct inline projection owners without changing persistent execution state.
-use super::{CellProduction, Inline, InlineBuilder, InlineExecutionState, output};
+use super::{
+    CellProduction, Inline, InlineBuilder, InlineExecutionState, NativeInputRetirement, output,
+};
 
 impl InlineBuilder {
     pub(in crate::mandoc) fn set_text_alignment(&mut self, alignment: mant_ir::TextAlignment) {
@@ -18,6 +20,7 @@ impl InlineBuilder {
             direct_word_operands: None,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
+            input_retirement: NativeInputRetirement::Retained,
             execution: InlineExecutionState::with_spacing(spacing_enabled),
             external_head_row_pending: false,
         }
@@ -34,6 +37,7 @@ impl InlineBuilder {
             direct_word_operands: None,
             asserted_vertical_row: false,
             produced_formatter_cell: CellProduction::None,
+            input_retirement: NativeInputRetirement::Retained,
             execution,
             external_head_row_pending: false,
         }
@@ -41,6 +45,14 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn inherit_external_head_row(&mut self, pending: bool) {
         self.external_head_row_pending = pending;
+    }
+
+    pub(in crate::mandoc) const fn native_input_retirement(&self) -> NativeInputRetirement {
+        self.input_retirement
+    }
+
+    pub(super) fn note_native_input_retired(&mut self) {
+        self.input_retirement = NativeInputRetirement::Consumed;
     }
 
     pub(in crate::mandoc) fn with_direct_word_operands<R>(

@@ -2,7 +2,8 @@
 use libmandoc_rs::AuthorMode;
 
 use super::inline::{
-    AuthorBreakEffect, InlineBuilder, InlineExecutionState, NoFillInlineState, PreservedInlineState,
+    AuthorBreakEffect, InlineBuilder, InlineExecutionState, NativeInputRetirement,
+    NoFillInlineState, PreservedInlineState,
 };
 
 pub(super) struct FinishedInlineLine {
@@ -389,15 +390,14 @@ impl FormatterState {
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed(boundary.native());
         let completed_empty_rows = builder.completed_empty_rows();
-        let (mut output, mut execution, occupied) =
+        let (mut output, execution, occupied, retirement) =
             builder.finish_captured_formatter_line(preserve_rows, boundary);
         let definition_term_breaks = super::inline::take_definition_term_breaks(&mut output);
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,
         };
-        std::mem::swap(&mut execution, &mut self.execution);
-        self.spare_execution = Some(execution);
+        self.return_inline_session(execution, retirement);
         FinishedInlineLine {
             output,
             definition_term_breaks,
@@ -431,9 +431,9 @@ impl FormatterState {
                 value: String::new(),
             });
         }
-        let (_, mut execution) = builder.into_parts();
-        std::mem::swap(&mut execution, &mut self.execution);
-        self.spare_execution = Some(execution);
+        let retirement = builder.native_input_retirement();
+        let (_, execution) = builder.into_parts();
+        self.return_inline_session(execution, retirement);
         output
     }
 
@@ -458,10 +458,27 @@ impl FormatterState {
             occupied,
             completed_empty_rows: builder.completed_empty_rows(),
         };
-        let (output, preserved, mut execution) = builder.finish_preserving_execution();
+        let retirement = builder.native_input_retirement();
+        let (output, preserved, execution) = builder.finish_preserving_execution();
+        self.return_inline_session(execution, retirement);
+        (output, preserved)
+    }
+
+    fn return_inline_session(
+        &mut self,
+        mut execution: InlineExecutionState,
+        retirement: NativeInputRetirement,
+    ) {
+        // term_flushln() retired input at the actual consumer (term.c:
+        // 233-237), possibly while HANG/NOBREAK kept viscol open. The old
+        // literal projection may not materialize that input again in the
+        // next output owner. This does not execute another endline or
+        // change the surviving word, backtracking, or device registers.
+        if retirement == NativeInputRetirement::Consumed {
+            self.no_fill_inline.retire_consumed_cell();
+        }
         std::mem::swap(&mut execution, &mut self.execution);
         self.spare_execution = Some(execution);
-        (output, preserved)
     }
 
     /// Enter the body of a top-level mdoc AUTHORS section.

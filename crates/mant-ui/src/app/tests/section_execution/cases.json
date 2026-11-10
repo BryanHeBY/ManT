@@ -1,0 +1,146 @@
+{
+  "oracle_sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "id": "sh-debt",
+      "source": ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh DESCRIPTION\nBEFOREMARK\n.sp -1\n.Sh NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "BEFOREMARK",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 0
+    },
+    {
+      "id": "ss-debt",
+      "source": ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh DESCRIPTION\nBEFOREMARK\n.sp -1\n.Ss NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "BEFOREMARK",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 0
+    },
+    {
+      "id": "empty-ss",
+      "source": ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh DESCRIPTION\n.Ss EMPTY\n.Ss NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "EMPTY",
+        "",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 1
+    },
+    {
+      "id": "empty-sh",
+      "source": ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh EMPTY\n.Sh NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "EMPTY",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 0
+    },
+    {
+      "id": "ss-transparent",
+      "source": ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh FIRST\n.Sm off\n.Ss NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 0
+    },
+    {
+      "id": "ss-nontransparent",
+      "source": ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh FIRST\n.No \"\\&\"\n.Ss NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "",
+        "",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 1
+    },
+    {
+      "id": "pd0-invisible",
+      "source": ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n.nf\n\\&\n.SS NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 0
+    },
+    {
+      "id": "pd1-invisible",
+      "source": ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 1\n.nf\n\\&\n.SS NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "",
+        "",
+        "NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 1
+    },
+    {
+      "id": "pd0-visible",
+      "source": ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n.nf\nALPHA\n.SS NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "ALPHA NEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 0,
+      "device_shared_heading": true
+    },
+    {
+      "id": "bare-z",
+      "source": ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh FIRST\n.No \"\\z\"\n.Ss NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "",
+        "EXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 1
+    },
+    {
+      "id": "continuation",
+      "source": ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n.nf\nALPHA\\c\n.SS NEXT\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "ALPHANEXT",
+        "AFTERMARK"
+      ],
+      "section_gap": 0,
+      "device_shared_heading": true
+    },
+    {
+      "id": "positive",
+      "source": ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n.nf\n\\&\n.SS NEXT\nBODYMARK\n.sp 1\nAFTERMARK\n",
+      "native_rows": [
+        "FIRST",
+        "NEXT",
+        "BODYMARK",
+        "",
+        "AFTERMARK"
+      ],
+      "section_gap": 0
+    },
+    {
+      "id": "linked",
+      "source": ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n.nf\n\\&\n.SS NEXT\n.UR https://example.test/\nAFTERMARK\n.UE\n",
+      "native_rows": [
+        "FIRST",
+        "NEXT",
+        "AFTERMARK <https://example.test/>"
+      ],
+      "section_gap": 0,
+      "link_target": "https://example.test/"
+    }
+  ]
+}

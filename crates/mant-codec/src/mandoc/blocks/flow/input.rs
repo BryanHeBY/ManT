@@ -447,17 +447,24 @@ impl BlockState {
     pub(in crate::mandoc::blocks) fn finish_native_line_in_source_mode(&mut self, no_fill: bool) {
         // A one-line display uses a literal destination without setting
         // NODE_NOFILL. Its rejected row is resolved layout, not authored text.
-        let finish: fn(&mut InlineBuilder) = if no_fill {
-            InlineBuilder::execute_native_literal_newline
-        } else {
-            InlineBuilder::execute_native_newline
-        };
-        if self.inline_output_is_literal(no_fill) {
+        let literal_owns_row = self.inline_output_is_literal(no_fill)
+            && (self.paragraph.is_empty()
+                || self.literal.has_output()
+                || self.literal.has_formatter_column());
+        if literal_owns_row {
+            let finish = if no_fill {
+                InlineBuilder::execute_native_literal_newline
+            } else {
+                InlineBuilder::execute_native_newline
+            };
             self.literal
                 .with_inline_builder(&mut self.formatter, finish);
         } else {
+            // A declaration can leave its row in ParagraphFlow after
+            // restoring the source mode (mdoc_term.c::termp_nm_post).
+            // The next real post must close that vector, not a new literal.
             self.paragraph
-                .with_inline_builder(&mut self.formatter, finish);
+                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
         }
         // fi can leave historical no-fill bookkeeping while the live native
         // buffer already belongs to ParagraphFlow. The real post selected

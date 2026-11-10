@@ -6,6 +6,10 @@ use super::{
 use crate::mandoc::formatter::FormatterState;
 use mant_ir::Inline;
 
+#[cfg(test)]
+#[path = "no_fill/session_tests.rs"]
+mod session_tests;
+
 /// Only physical-row facts live here. Font, keep, word boundaries, \z,
 /// \p, and source continuation belong to the formatter's execution state.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -130,7 +134,6 @@ impl InlineExecutionState {
         self.pending_line_indent = 0;
         self.word_end_break = WordEndBreak::Clear;
         self.wipe_remainder = false;
-        self.row_zero_graph = false;
         self.leading_line_boundary = super::LeadingLineBoundary::None;
         self.zero_advance.reset_projection(bare_armed);
         self.zero_advance_joined = false;

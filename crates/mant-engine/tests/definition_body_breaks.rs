@@ -156,6 +156,47 @@ fn pending_tag_row_distinguishes_invisible_and_printable_word_end_breaks() {
 }
 
 #[test]
+fn pending_break_needs_a_live_native_graph_to_continue_after_a_detached_tag() {
+    // These exact TP/IP/TQ pages ran all five fixed CVS profiles. Their
+    // HEAD posts already printed x, leaving the device row open (man_term.c
+    // post_TP/post_IP, term.c:233-253). NBRZW participates in graph
+    // acceptance without printing; a bare marker or breakpoint does not
+    // (term.c:287-366). Only the accepting pass reaches the BODY glyph.
+    const HEADER: &str = ".TH PROBE 1 \"November 10, 2026\"\n.SH NAME\nprobe \\- test pending HEAD\n.SH DESCRIPTION\n";
+    for (head, previous_term) in [
+        (".TP\n.B x\n", false),
+        (".IP x 7\n", false),
+        (".TP\n.B z\n.TQ\n.B x\n", true),
+    ] {
+        for (prefix, accepts_body) in [
+            ("\\&\\p", true),
+            ("\\p\\&", true),
+            ("\\p", false),
+            ("\\:\\p", false),
+        ] {
+            let source = format!("{HEADER}{head}{prefix}\nBODY\n.TP\n.B y\nNEXT\n");
+            let rendered = render_query_text(&load_roff_bytes(source.as_bytes()).unwrap());
+            let rows: Vec<_> = rendered
+                .lines()
+                .skip_while(|row| *row != "DESCRIPTION")
+                .skip(1)
+                .map(|row| row.trim_start_matches(' '))
+                .collect();
+            let mut expected = Vec::new();
+            if previous_term {
+                expected.push("z");
+            }
+            expected.push("x");
+            if accepts_body {
+                expected.push("BODY");
+            }
+            expected.extend(["", "y      NEXT"]);
+            assert_eq!(rows, expected, "{source}\n{rendered}");
+        }
+    }
+}
+
+#[test]
 fn buffered_zero_advance_glyph_precedes_definition_line_requests() {
     // Each exact input was checked with fixed CVS -Tutf8. man_term.c::pre_TP
     // leaves the tag row active; term.c::term_word buffers X before
