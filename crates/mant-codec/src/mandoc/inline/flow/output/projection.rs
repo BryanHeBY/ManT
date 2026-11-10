@@ -1,9 +1,6 @@
 //! Pure IR projection after native receipts have already decided output.
 
-use super::{
-    CompletedRowOrigin, INTERNAL_COMPLETED_ROW, INTERNAL_DEVICE_ROW_END, INTERNAL_FIELD_WORD,
-    INTERNAL_HARD_ROW, INTERNAL_LINK_SPLIT, INTERNAL_LITERAL_ROW, Inline, OutputRowEnd,
-};
+use super::{INTERNAL_FIELD_WORD, INTERNAL_LINK_SPLIT, Inline};
 
 impl super::super::InlineExecutionState {
     pub(in crate::mandoc) fn note_removed_plain_output_node(&mut self, index: usize) {
@@ -72,115 +69,6 @@ fn restore_plain_output_boundary(nodes: &mut Vec<Inline>, from: usize, marker: &
     nodes.extend(right);
     nodes.extend(tail);
     start
-}
-
-/// A row-end receipt can precede or follow the same projected delimiter.
-/// Accepted later cells start another row. Literal empty rows stay authored
-/// content, while spacing-request rows transfer to their separate gap owner.
-pub(in crate::mandoc) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> OutputRowEnd {
-    fn visit(nodes: &[Inline], protected: &mut OutputRowEnd) {
-        for node in nodes {
-            match node {
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_DEVICE_ROW_END => {
-                    *protected = OutputRowEnd::GeneratedClose;
-                }
-                Inline::Anchor { id, .. }
-                    if matches!(id.as_str(), INTERNAL_COMPLETED_ROW | INTERNAL_HARD_ROW) =>
-                {
-                    *protected = OutputRowEnd::CompletedClose;
-                }
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LITERAL_ROW => {
-                    // print_mdoc_node() empty no-fill TEXT executes vspace;
-                    // term.c:489-497 closes this actual empty literal row.
-                    *protected = OutputRowEnd::LiteralClose;
-                }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => visit(children, protected),
-                // Empty TEXT here is an executed formatter-word witness;
-                // transparent empty style/anchor scopes never enter this arm.
-                Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => {
-                    *protected = OutputRowEnd::Open;
-                }
-                _ => {}
-            }
-        }
-    }
-    let mut protected = OutputRowEnd::Open;
-    visit(nodes, &mut protected);
-    protected
-}
-
-/// Receipts are read only after native acceptance has removed rejected
-/// glyphs. Accepted intervening glyphs already represent earlier hard rows
-/// inside the paragraph; an unprinted suffix cannot hide their empty rows.
-pub(super) fn trailing_paragraph_row_origins(nodes: &[Inline]) -> Vec<CompletedRowOrigin> {
-    fn visit(nodes: &[Inline], rows: &mut Vec<CompletedRowOrigin>) {
-        for node in nodes {
-            match node {
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_COMPLETED_ROW => {
-                    rows.push(CompletedRowOrigin::Layout);
-                }
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_HARD_ROW => {
-                    rows.push(CompletedRowOrigin::HardLine);
-                }
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LITERAL_ROW => {
-                    rows.clear();
-                }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => visit(children, rows),
-                Inline::Text { value }
-                | Inline::Code { value }
-                | Inline::Equation { value, .. }
-                    if value.chars().any(|character| !character.is_whitespace()) =>
-                {
-                    rows.clear();
-                }
-                _ => {}
-            }
-        }
-    }
-    let mut rows = Vec::new();
-    visit(nodes, &mut rows);
-    rows
-}
-
-/// Preserve the order of completed source rows in the current accepted tail.
-/// Raw no-fill empty TEXT is literal content; spacing requests remain layout.
-/// Later accepted glyphs consume earlier tail ownership in this same Vec.
-pub(in crate::mandoc) fn trailing_completed_row_origins(
-    nodes: &[Inline],
-) -> Vec<CompletedRowOrigin> {
-    fn visit(nodes: &[Inline], rows: &mut Vec<CompletedRowOrigin>) {
-        for node in nodes {
-            match node {
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_COMPLETED_ROW => {
-                    rows.push(CompletedRowOrigin::Layout);
-                }
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_HARD_ROW => {
-                    rows.push(CompletedRowOrigin::HardLine);
-                }
-                Inline::Anchor { id, .. } if id.as_str() == INTERNAL_LITERAL_ROW => {
-                    rows.push(CompletedRowOrigin::LiteralText);
-                }
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => visit(children, rows),
-                Inline::Text { value }
-                | Inline::Code { value }
-                | Inline::Equation { value, .. }
-                    if !value.is_empty() =>
-                {
-                    rows.clear();
-                }
-                _ => {}
-            }
-        }
-    }
-    let mut rows = Vec::new();
-    visit(nodes, &mut rows);
-    rows
 }
 
 /// Locate the operand boundary recorded during execution. Styles and nested
@@ -273,29 +161,6 @@ pub(in crate::mandoc) fn retain_inline_identities(inlines: &mut Vec<Inline>) {
             }
         }
     });
-}
-
-/// Semantic identity/styling does not hide the physical output row end.
-/// An empty Text is an occupied row witness and deliberately stops the scan.
-pub(in crate::mandoc) fn ends_with_executed_line_break(nodes: &[Inline]) -> bool {
-    fn ending(nodes: &[Inline]) -> Option<bool> {
-        for node in nodes.iter().rev() {
-            match node {
-                Inline::Anchor { .. } => {}
-                Inline::LineBreak { .. } => return Some(true),
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => {
-                    if let Some(result) = ending(children) {
-                        return Some(result);
-                    }
-                }
-                _ => return Some(false),
-            }
-        }
-        None
-    }
-    ending(nodes) == Some(true)
 }
 
 /// Consume exactly one represented ending of an already closed native row.

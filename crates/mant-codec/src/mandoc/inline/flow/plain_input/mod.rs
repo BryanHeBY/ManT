@@ -15,6 +15,7 @@
 
 //! Plain native input retirement without resetting persistent execution state.
 
+use super::output::{CompletedRowOrigin, SectionHandoff, row_origins::OutputNodeEdits};
 use super::{Inline, InlineBuilder};
 
 mod projection;
@@ -29,6 +30,30 @@ mod tests;
 
 mod unit;
 pub(super) use unit::PlainInputUnit;
+
+/// Where this native flush's completed rows belong. Source literal rows
+/// publish their own empty TEXT and delimiter. A projected literal close
+/// instead keeps an existing reading row and publishes only uncovered rows.
+#[derive(Clone, Copy)]
+pub(super) enum PlainFlushBoundary {
+    Layout,
+    LiteralLineEnd,
+    LiteralSourceRow,
+}
+
+impl PlainFlushBoundary {
+    const fn row_origin(self) -> CompletedRowOrigin {
+        match self {
+            Self::Layout | Self::LiteralLineEnd => CompletedRowOrigin::Layout,
+            Self::LiteralSourceRow => CompletedRowOrigin::LiteralText,
+        }
+    }
+}
+
+struct PlainRetirement {
+    outcome: PlainFlushOutcome,
+    projection: Option<OutputNodeEdits>,
+}
 
 /// The exceptional row fact of this consumed plain flush, never history.
 #[derive(Clone, Copy, Default)]
@@ -125,63 +150,44 @@ impl InlineBuilder {
     /// through 143-146): a definitively rejected flush unit dies at its
     /// retirement boundary - the unprinted suffix is trimmed from IR back
     /// to the accepted prefix and the zero-advance register is discarded.
-    /// Returns whether the native buffer was definitively rejected.
-    pub(in crate::mandoc) fn retire_plain_flush_unit(&mut self) -> bool {
-        self.retire_plain_flush_unit_with_tail().rejected()
-    }
-
-    pub(in crate::mandoc::inline::flow) fn retire_plain_flush_unit_with_tail(
+    pub(super) fn retire_plain_flush_unit(
         &mut self,
+        boundary: PlainFlushBoundary,
     ) -> PlainFlushOutcome {
-        self.retire_plain_flush_unit_for_output(false)
-    }
-
-    pub(in crate::mandoc::inline::flow) fn retire_plain_flush_unit_for_output(
-        &mut self,
-        literal_owner: bool,
-    ) -> PlainFlushOutcome {
-        let mut projections = Vec::new();
-        let ends_row = Self::retire_plain_flush_unit_with_projections(
+        let Some(retired) = Self::consume_plain_flush_unit(
             &mut self.execution,
             &mut self.nodes,
-            super::output::CompletedRowOrigin::Layout,
-            literal_owner,
-            Some(&mut projections),
+            boundary,
             self.section_handoff.as_mut(),
-        );
+        ) else {
+            return PlainFlushOutcome::Ordinary;
+        };
         // Execution indices were mapped at the actual projection, before
         // retirement reset their cursors. Only live builder checkpoints
         // still need that same original-boundary receipt here.
-        for edits in projections {
+        if let Some(edits) = retired.projection {
             self.remap_output_projection_checkpoints(&edits);
         }
-        if ends_row.is_some() {
-            self.note_native_input_retired();
-        }
-        ends_row.unwrap_or_default()
+        self.note_native_input_retired();
+        retired.outcome
     }
 
     /// Execution-state form shared with the no-fill row finisher, which
     /// retires the same native buffer without a live builder.
-    pub(in crate::mandoc) fn retire_plain_flush_unit_at(
+    pub(super) fn retire_plain_literal_source_row_at(
         execution: &mut super::InlineExecutionState,
         nodes: &mut Vec<Inline>,
-        row_origin: super::output::CompletedRowOrigin,
     ) -> bool {
-        Self::retire_plain_flush_unit_with_projections(
-            execution, nodes, row_origin, false, None, None,
-        )
-        .is_some_and(PlainFlushOutcome::rejected)
+        Self::consume_plain_flush_unit(execution, nodes, PlainFlushBoundary::LiteralSourceRow, None)
+            .is_some_and(|retired| retired.outcome.rejected())
     }
 
-    fn retire_plain_flush_unit_with_projections(
+    fn consume_plain_flush_unit(
         execution: &mut super::InlineExecutionState,
         nodes: &mut Vec<Inline>,
-        row_origin: super::output::CompletedRowOrigin,
-        literal_owner: bool,
-        projections: Option<&mut Vec<super::output::row_origins::OutputNodeEdits>>,
-        mut handoff: Option<&mut super::output::SectionHandoff>,
-    ) -> Option<PlainFlushOutcome> {
+        boundary: PlainFlushBoundary,
+        mut handoff: Option<&mut SectionHandoff>,
+    ) -> Option<PlainRetirement> {
         use super::field_buffer::{FillTargets, FlushReceipt};
         let inherited_printed_row = plain_unit_inherits_printed_row(execution);
         let (authorless_definition, unit) = Self::take_plain_flush_unit(execution, nodes)?;
@@ -193,35 +199,35 @@ impl InlineBuilder {
             unbounded: true,
         };
         let receipt = unit.buffer.flush_receipt(targets, false);
-        let Some(passes) = receipt.passes() else {
+        let Some(accepted) = receipt.accepted_passes() else {
             Self::retire_unmodeled_plain_flush(execution, nodes, authorless_definition, unit);
-            return Some(PlainFlushOutcome::Ordinary);
+            return Some(PlainRetirement {
+                outcome: PlainFlushOutcome::Ordinary,
+                projection: None,
+            });
         };
         let PlainInputUnit {
             mut buffer,
             anchors,
             mut output_start,
         } = unit;
+        let passes = accepted.all();
         let edits =
             retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
         edits.remap(&mut output_start);
         if let Some(handoff) = &mut handoff {
             handoff.note_projection_start(output_start);
         }
-        if let Some(projections) = projections {
-            projections.push(edits);
-        }
         let mut empty_rows = completed_empty_plain_passes(
             &buffer,
-            passes,
-            matches!(&receipt, FlushReceipt::Rejected { .. }),
+            accepted,
             inherited_printed_row,
             |start, end| buffer.printed_columns(start, end, 0, 0).is_some(),
             handoff,
         );
-        let reprojected_literal_rows = matches!(&receipt, FlushReceipt::Rejected { .. })
+        let reprojected_literal_rows = accepted.rejected()
             && empty_rows > 0
-            && row_origin == super::output::CompletedRowOrigin::LiteralText;
+            && matches!(boundary, PlainFlushBoundary::LiteralSourceRow);
         // A deferred scanner can accept several authored-marker passes at
         // the actual term_flushln(). Acceptance still carries their row
         // events (term.c:165-220); retirement cannot silently omit them.
@@ -266,7 +272,7 @@ impl InlineBuilder {
                     &anchors,
                     passes,
                     output_start,
-                    row_origin,
+                    boundary.row_origin(),
                 );
                 // nbr=0 over buffered ordinary blanks reaches the same
                 // final endline, but does not reject an authored suffix.
@@ -275,22 +281,18 @@ impl InlineBuilder {
             }
             FlushReceipt::UnmodeledRewind => unreachable!("modeled plain pass receipt"),
         };
-        if matches!(receipt, FlushReceipt::Rejected { .. }) {
+        if accepted.rejected() {
             // term_flushln() clears both backtracking flags even when
             // term_field() printed nothing (term.c:233–237).
             execution.zero_advance.discard_at_row_end();
         }
-        project_completed_empty_passes(
-            execution,
-            nodes,
-            output_start,
-            empty_rows,
-            row_origin,
-            literal_owner,
-        );
+        project_completed_empty_passes(execution, nodes, output_start, empty_rows, boundary);
         super::output::deferred_blanks::project(nodes, &buffer, passes, output_start);
         Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
-        Some(outcome)
+        Some(PlainRetirement {
+            outcome,
+            projection: Some(edits),
+        })
     }
 
     fn retire_unmodeled_plain_flush(

@@ -235,7 +235,7 @@ impl InlineBuilder {
         projected: bool,
         origin: CompletedRowOrigin,
     ) -> super::super::plain_input::PlainFlushOutcome {
-        use super::super::plain_input::PlainFlushOutcome;
+        use super::super::plain_input::{PlainFlushBoundary, PlainFlushOutcome};
         let rejected = if projected {
             self.execution
                 .definition
@@ -247,8 +247,13 @@ impl InlineBuilder {
             // consume its receipt before the row reset retires the cells.
             self.discard_unprinted_definition_field_output()
         } else {
-            let outcome =
-                self.retire_plain_flush_unit_for_output(origin == CompletedRowOrigin::LiteralText);
+            let boundary = match origin {
+                CompletedRowOrigin::LiteralText => PlainFlushBoundary::LiteralLineEnd,
+                CompletedRowOrigin::Layout | CompletedRowOrigin::HardLine => {
+                    PlainFlushBoundary::Layout
+                }
+            };
+            let outcome = self.retire_plain_flush_unit(boundary);
             if let Some(from) = outcome.rejection_start() {
                 self.note_section_rejection(from);
             }

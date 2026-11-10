@@ -62,11 +62,7 @@ impl NoFillInlineState {
             }
         }
         let represented_marker_row = execution.plain_input.buffer.has_projected_rows();
-        let rejected_row = InlineBuilder::retire_plain_flush_unit_at(
-            execution,
-            output,
-            super::output::CompletedRowOrigin::LiteralText,
-        );
+        let rejected_row = InlineBuilder::retire_plain_literal_source_row_at(execution, output);
         if rejected_row {
             execution.word_end_break = WordEndBreak::Clear;
         }

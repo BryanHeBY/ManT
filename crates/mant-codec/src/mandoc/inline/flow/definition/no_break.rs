@@ -176,7 +176,7 @@ impl InlineBuilder {
         // `roff_term_pre_mc()` resets `tcol->buf` under NOBREAK, but the
         // reset consumes the unit's receipt first - a definitively
         // rejected suffix stays dead and its row event stays real.
-        let _plain_flush_rejection = self.retire_plain_flush_unit();
+        self.retire_plain_flush_unit(super::super::plain_input::PlainFlushBoundary::Layout);
         self.discard_unprinted_definition_field_output_no_break();
         if self.no_break_definition_field(consumed_output_start) {
             return;

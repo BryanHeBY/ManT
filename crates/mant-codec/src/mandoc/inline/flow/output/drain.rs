@@ -1,6 +1,7 @@
 //! Drain IR ownership after the live formatter's real boundary executes.
 
 use super::super::definition::{NativeFieldDevice, PreservedDefinitionField};
+use super::super::plain_input::PlainFlushBoundary;
 use super::super::{
     FormatterColumn, Inline, InlineBuilder, InlineExecutionState, NativeInputRetirement,
     PendingBoundary, PreservedInlineState, WordEndBreak, has_printable_character,
@@ -133,7 +134,7 @@ impl InlineBuilder {
         Vec<CompletedRowOrigin>,
         super::OutputRowEnd,
     ) {
-        let completed_rows = super::projection::trailing_paragraph_row_origins(&self.nodes);
+        let completed_rows = super::row_observation::trailing_paragraph_row_origins(&self.nodes);
         let closed_graph_tail = self.closed_graph_tail();
         if !completed_rows.is_empty() {
             self.retire_completed_paragraph_tail();
@@ -176,7 +177,7 @@ impl InlineBuilder {
         // every row in its receipt (term.c:143-146,220,250-253). Doing this
         // in finish_nodes() is too late: the block row count is already
         // detached, and trimming would erase the rejected pass's endline.
-        let plain_flush = self.retire_plain_flush_unit_with_tail();
+        let plain_flush = self.retire_plain_flush_unit(PlainFlushBoundary::Layout);
         if plain_flush.rejected() || line_request && plain_flush.closes_unprinted_row() {
             // A real block .sp/.br consumes this native tail here. Ordinary
             // blanks reach term_flushln's endline even when nbr == 0;
@@ -228,7 +229,8 @@ impl InlineBuilder {
         // Trailing LineBreak nodes own already closed rows; the current
         // invisible cell is a later row. A bare \p was excluded above and
         // is transferred separately through empty_word_end_break.
-        let mut completed_rows = super::projection::trailing_paragraph_row_origins(&self.nodes);
+        let mut completed_rows =
+            super::row_observation::trailing_paragraph_row_origins(&self.nodes);
         let extra_rows = usize::from(requested_invisible_row)
             + usize::from(trailing_invisible_rows).saturating_sub(completed_rows.len());
         completed_rows.extend(std::iter::repeat_n(CompletedRowOrigin::Layout, extra_rows));
@@ -571,14 +573,13 @@ impl InlineBuilder {
         // still ended a native row (term.c:143-146 with 233-237 and
         // 250-253). That row event must survive the terminator trim: the
         // empty row precedes whatever the next flow emits.
-        let retired_rejected_row = self.retire_plain_flush_unit();
+        self.retire_plain_flush_unit(PlainFlushBoundary::Layout);
         if self.execution.definition.is_none() {
             self.execution.plain_input.clear_input_at(0);
         }
-        if !super::projection::trailing_device_row_end_receipt(&self.nodes).is_closed() {
+        if !super::row_observation::trailing_device_row_end_receipt(&self.nodes).is_closed() {
             trim_output_terminators(&mut self.nodes);
         }
-        let _ = retired_rejected_row;
         self.drain_ir_nodes()
     }
 

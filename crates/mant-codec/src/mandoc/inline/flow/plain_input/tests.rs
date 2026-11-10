@@ -51,7 +51,7 @@ fn plain_tail_outcomes_distinguish_acceptance_blanks_and_rejection() {
                 });
             }
             builder.execution.plain_input.buffer.apply_writes(&writes);
-            let outcome = builder.retire_plain_flush_unit_with_tail();
+            let outcome = builder.retire_plain_flush_unit(PlainFlushBoundary::Layout);
             assert_eq!(outcome.rejected(), rejected);
             assert_eq!(outcome.closes_unprinted_row(), unprinted && !inherited);
             assert_eq!(outcome.closes_represented_row(), unprinted && inherited);
@@ -214,15 +214,14 @@ fn empty_loop_classification_scans_each_accepted_cell_once() {
                 },
                 false,
             );
-            let FlushReceipt::Rejected { passes, .. } = receipt else {
+            let FlushReceipt::Rejected { ref passes, .. } = receipt else {
                 panic!("a graphless leading marker rejects the suffix");
             };
             assert_eq!(passes.len(), count);
             let mut visits = 0;
             let rows = completed_empty_plain_passes(
                 &buffer,
-                &passes,
-                true,
+                receipt.accepted_passes().expect("modeled rejection"),
                 inherited_row,
                 |start, end| {
                     visits += end.saturating_sub(start);
@@ -258,22 +257,22 @@ fn accepted_single_pass_never_scans_for_completed_loop_rows() {
     ] {
         let mut buffer = FieldBuffer::default();
         buffer.apply_writes(&writes);
-        let FlushReceipt::Accepted { passes, .. } = buffer.flush_receipt(
+        let receipt = buffer.flush_receipt(
             FillTargets {
                 first: usize::MAX / 2,
                 rest: usize::MAX / 2,
                 unbounded: true,
             },
             false,
-        ) else {
+        );
+        let FlushReceipt::Accepted { ref passes, .. } = receipt else {
             panic!("one graphful pass is accepted");
         };
         assert_eq!(passes.len(), 1);
         assert_eq!(
             completed_empty_plain_passes(
                 &buffer,
-                &passes,
-                false,
+                receipt.accepted_passes().expect("modeled acceptance"),
                 false,
                 |_, _| { panic!("there is no loop row to scan") },
                 None
@@ -340,7 +339,7 @@ fn literal_source_whitespace_retains_its_accepted_nonprinting_row() {
         assert!(node.flags.no_fill && node.flags.line_start);
         let mut builder = InlineBuilder::new();
         crate::mandoc::inline::word_input::append_text_node(&mut builder, node);
-        let outcome = builder.retire_plain_flush_unit_with_tail();
+        let outcome = builder.retire_plain_flush_unit(PlainFlushBoundary::Layout);
         assert!(!outcome.rejected());
         assert!(outcome.closes_unprinted_row());
         assert_eq!(mant_ir::inline_plain_text(&builder.nodes), authored);
@@ -351,7 +350,7 @@ fn literal_source_whitespace_retains_its_accepted_nonprinting_row() {
             &mut generated,
             &format!("{authored}\\&"),
         );
-        generated.retire_plain_flush_unit_with_tail();
+        generated.retire_plain_flush_unit(PlainFlushBoundary::Layout);
         assert_eq!(mant_ir::inline_plain_text(&generated.nodes), "");
     }
 }
@@ -373,7 +372,7 @@ fn accepted_zero_width_tails_do_not_publish_deferred_native_padding() {
         let mut builder = InlineBuilder::new();
         builder.execution.no_fill_word_active = true;
         crate::mandoc::inline::word_input::append_normalized_word(&mut builder, source);
-        let outcome = builder.retire_plain_flush_unit_with_tail();
+        let outcome = builder.retire_plain_flush_unit(PlainFlushBoundary::Layout);
         assert!(!outcome.rejected(), "{source:?}");
         assert_eq!(
             mant_ir::inline_plain_text(&builder.nodes),
@@ -395,7 +394,7 @@ fn native_padding_receipts_preserve_independent_recovery_spelling() {
         let mut builder = InlineBuilder::new();
         builder.execution.no_fill_word_active = true;
         crate::mandoc::inline::word_input::append_normalized_word(&mut builder, source);
-        builder.retire_plain_flush_unit();
+        builder.retire_plain_flush_unit(PlainFlushBoundary::Layout);
         assert_eq!(
             mant_ir::inline_plain_text(&builder.nodes),
             "A\\[unknownname]"

@@ -45,11 +45,8 @@ impl InlineBuilder {
         rmargin: i64,
         resumed: Option<NoBreakField>,
     ) -> NativePassSweep {
-        let (passes, rejected) = match receipt {
-            FlushReceipt::UnmodeledRewind => (&[][..], false),
-            FlushReceipt::Accepted { passes, .. } => (passes.as_slice(), false),
-            FlushReceipt::Rejected { passes, .. } => (passes.as_slice(), true),
-        };
+        let accepted = receipt.accepted_passes().unwrap_or_default();
+        let loop_ends = accepted.with_remaining_field().len();
         let row = &state.hang_row;
         let mut sweep = NativeFieldSweep {
             presentation: self.execution.row_presentation,
@@ -78,7 +75,7 @@ impl InlineBuilder {
         let mut width = 0;
         let mut width_units = 0;
         let mut tab_offset = state.field_buffer.tab_offset();
-        for (index, pass) in passes.iter().enumerate() {
+        for (index, pass) in accepted.all().iter().enumerate() {
             vfield = placement.capacity(rmargin);
             let tab_target = if no_break {
                 // The responsive reading projection has no screen margin.
@@ -110,7 +107,7 @@ impl InlineBuilder {
                 // BRNEVER allowed an unbounded term_fill() pass.
                 .saturating_add(i64::try_from(width_units.min(tab_target)).unwrap_or(i64::MAX))
                 .saturating_add(24);
-            if index + 1 < passes.len() || rejected {
+            if index < loop_ends {
                 row_origin_units = end_native_loop_pass(&mut sweep, pass, state, flags, rmargin);
                 placement =
                     sweep
@@ -118,7 +115,7 @@ impl InlineBuilder {
                         .field_placement_signed(row_origin_units, 0, 0, false);
             }
         }
-        if rejected {
+        if accepted.rejected() {
             width = 0;
             width_units = 0;
             vfield = placement.capacity(rmargin);

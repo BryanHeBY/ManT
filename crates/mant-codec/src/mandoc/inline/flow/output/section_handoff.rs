@@ -194,7 +194,7 @@ impl InlineBuilder {
             }
         }
         previous.extend(std::iter::repeat_n(
-            Inline::anchor(super::INTERNAL_COMPLETED_ROW),
+            super::RowReceipt::Completed(super::CompletedRowOrigin::Layout).anchor(),
             usize::from(rows),
         ));
         if handoff.rejected_previous && !projection::has_rendered_formatter_glyph(&head) {
@@ -202,7 +202,7 @@ impl InlineBuilder {
             // suffix (term.c:143-146). It produced one final empty row,
             // while accepting no HEAD glyph. Publish that row with its
             // original input rather than as a phantom heading or BODY row.
-            previous.push(Inline::anchor(super::INTERNAL_COMPLETED_ROW));
+            previous.push(super::RowReceipt::Completed(super::CompletedRowOrigin::Layout).anchor());
             projection::retain_inline_identities(&mut head);
         }
         self.nodes = head;

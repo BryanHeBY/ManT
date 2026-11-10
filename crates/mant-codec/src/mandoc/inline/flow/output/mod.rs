@@ -6,9 +6,6 @@ use super::{
 // A private boundary carried only while one authored Link spans two native
 // term_flushln() fields. It is removed before any IR owner is returned.
 pub(in crate::mandoc::inline) const INTERNAL_LINK_SPLIT: &str = "\0mant:field-link-split";
-const INTERNAL_COMPLETED_ROW: &str = "\0mant:output-scope:completed-row";
-const INTERNAL_HARD_ROW: &str = "\0mant:output-scope:hard-row";
-const INTERNAL_LITERAL_ROW: &str = "\0mant:output-scope:literal-row";
 const INTERNAL_ROW_ORIGIN: &str = "\0mant:output-scope:row-origin:";
 pub(in crate::mandoc::inline::flow) const INTERNAL_FIELD_PREFIX: &str =
     "\0mant:output-scope:field-prefix:";
@@ -53,7 +50,6 @@ pub(super) fn is_term_alternative(node: &Inline) -> bool {
     matches!(node, Inline::Anchor { id, .. } if id.as_str() == INTERNAL_TERM_ALTERNATIVE)
 }
 
-const INTERNAL_DEVICE_ROW_END: &str = "\0mant:output-scope:device-row-end";
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output-scope:";
 pub(in crate::mandoc::inline::flow) const DEFERRED_SOURCE_BLANK: &str =
@@ -74,28 +70,29 @@ mod checkpoints;
 pub(in crate::mandoc::inline::flow) mod deferred_blanks;
 mod drain;
 mod hard_breaks;
-mod projected_tail;
 mod projection;
 mod row_layout;
+pub(super) mod row_observation;
 mod section_handoff;
 pub(super) use section_handoff::SectionHandoff;
 mod scopes;
 mod source_blanks;
 mod words;
 
-pub(super) use projected_tail::ProjectedTail;
 pub(in crate::mandoc) use projection::consume_one_row_ending;
-pub(in crate::mandoc) use projection::ends_with_executed_line_break;
 pub(in crate::mandoc) use projection::has_rendered_formatter_glyph;
 use projection::line_break_count;
 pub(in crate::mandoc) use projection::retain_inline_identities;
 pub(in crate::mandoc::inline) use projection::trailing_ascii_spaces;
-pub(in crate::mandoc) use projection::trailing_completed_row_origins;
 pub(in crate::mandoc) use projection::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) use projection::{
     native_row_origin, prepare_inline_output, split_output_scope_prefix,
     strip_native_projection_markers,
 };
+pub(super) use row_observation::ProjectedTail;
+use row_observation::RowReceipt;
+pub(in crate::mandoc) use row_observation::ends_with_executed_line_break;
+pub(in crate::mandoc) use row_observation::trailing_completed_row_origins;
 pub(in crate::mandoc::inline::flow) mod native_passes;
 mod record;
 pub(in crate::mandoc::inline::flow) mod row_origins;
@@ -108,13 +105,12 @@ pub(in crate::mandoc::inline::flow) mod split;
 impl InlineBuilder {
     /// Already executed empty endlines in the accepted output tail.
     pub(in crate::mandoc) fn completed_empty_rows(&self) -> u16 {
-        u16::try_from(projection::trailing_completed_row_origins(&self.nodes).len())
-            .unwrap_or(u16::MAX)
+        u16::try_from(trailing_completed_row_origins(&self.nodes).len()).unwrap_or(u16::MAX)
     }
     /// Retain one actual native graph-row end in its current output owner.
     /// This is a boundary receipt, not an additional completed empty row.
     pub(in crate::mandoc) fn record_device_row_end(&mut self) {
-        self.nodes.push(Inline::anchor(INTERNAL_DEVICE_ROW_END));
+        self.nodes.push(RowReceipt::DeviceEnd.anchor());
     }
 
     /// Read the accepted tail before its private execution proof is stripped.
@@ -123,7 +119,7 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn output_has_closed_graph_tail(nodes: &[Inline]) -> OutputRowEnd {
-        projection::trailing_device_row_end_receipt(nodes)
+        row_observation::trailing_device_row_end_receipt(nodes)
     }
 
     /// Record an executed empty row in its active output owner. A later
@@ -148,13 +144,8 @@ impl InlineBuilder {
         origin: CompletedRowOrigin,
     ) {
         execution.completed_vertical_rows = execution.completed_vertical_rows.saturating_add(rows);
-        let marker = match origin {
-            CompletedRowOrigin::Layout => INTERNAL_COMPLETED_ROW,
-            CompletedRowOrigin::HardLine => INTERNAL_HARD_ROW,
-            CompletedRowOrigin::LiteralText => INTERNAL_LITERAL_ROW,
-        };
         nodes.extend(std::iter::repeat_n(
-            Inline::anchor(marker),
+            RowReceipt::Completed(origin).anchor(),
             usize::from(rows),
         ));
     }

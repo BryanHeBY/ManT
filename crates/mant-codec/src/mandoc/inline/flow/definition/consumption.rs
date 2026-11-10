@@ -493,15 +493,13 @@ impl InlineBuilder {
 }
 
 fn receipt_has_authored_loop_rows(receipt: &super::super::field_buffer::FlushReceipt) -> bool {
-    use super::super::field_buffer::{FillBoundary, FlushReceipt};
-    let loop_passes = match receipt {
-        FlushReceipt::UnmodeledRewind => return false,
-        FlushReceipt::Accepted { passes, .. } => &passes[..passes.len().saturating_sub(1)],
-        FlushReceipt::Rejected { passes, .. } => passes.as_slice(),
-    };
-    loop_passes
-        .iter()
-        .any(|pass| pass.boundary == FillBoundary::WordEndBreak)
+    use super::super::field_buffer::FillBoundary;
+    receipt.accepted_passes().is_some_and(|accepted| {
+        accepted
+            .with_remaining_field()
+            .iter()
+            .any(|pass| pass.boundary == FillBoundary::WordEndBreak)
+    })
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@
 
 use super::super::output::retain_inline_identities as retain_unprinted_field_targets;
 use super::super::{Inline, InlineBuilder};
+use super::PlainFlushBoundary;
 
 /// Bind resolved layout to accepted source cells before output edits retire
 /// their stable owner coordinates. An IR drain is not this native flush.
@@ -86,14 +87,11 @@ fn accepted_prefix_endline(nodes: &[Inline]) -> Option<bool> {
     // An accepted invisible cell may keep an empty projection after an
     // already emitted boundary. The receipt counts additional empty loops
     // separately in project_completed_empty_passes().
-    nodes.iter().rev().find_map(|node| match node {
-        Inline::Anchor { .. } => None,
-        Inline::Text { value } | Inline::Code { value } if value.is_empty() => None,
+    super::super::output::row_observation::find_in_row_tail(nodes, &mut |node| match node {
+        Inline::Text { value } | Inline::Code { value } => (!value.is_empty()).then_some(false),
         Inline::LineBreak { .. } => Some(true),
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => accepted_prefix_endline(children),
-        _ => Some(false),
+        Inline::Equation { .. } => Some(false),
+        _ => None,
     })
 }
 
@@ -127,8 +125,7 @@ pub(super) fn project_completed_empty_passes(
     nodes: &mut Vec<Inline>,
     output_start: usize,
     rows: u16,
-    origin: super::super::output::CompletedRowOrigin,
-    literal_owner: bool,
+    boundary: PlainFlushBoundary,
 ) {
     use super::super::output::CompletedRowOrigin;
     if rows == 0 {
@@ -141,7 +138,7 @@ pub(super) fn project_completed_empty_passes(
         nodes.push(Inline::line_break());
     }
     let missing = usize::from(rows.saturating_sub(tail.empty_delimiters()));
-    if origin == CompletedRowOrigin::LiteralText {
+    if matches!(boundary, PlainFlushBoundary::LiteralSourceRow) {
         for _ in 0..missing {
             nodes.push(Inline::Text {
                 value: String::new(),
@@ -151,7 +148,7 @@ pub(super) fn project_completed_empty_passes(
         return;
     }
     nodes.extend(std::iter::repeat_n(Inline::line_break(), missing));
-    let rows = if literal_owner {
+    let rows = if matches!(boundary, PlainFlushBoundary::LiteralLineEnd) {
         rows.saturating_sub(tail.literal_owned_rows())
     } else {
         rows
@@ -165,8 +162,7 @@ pub(super) fn project_completed_empty_passes(
 /// their ordered inline boundaries before a later accepted printed pass.
 pub(super) fn completed_empty_plain_passes(
     buffer: &super::super::field_buffer::FieldBuffer,
-    passes: &[super::super::field_buffer::FillPass],
-    rejected: bool,
+    accepted: super::super::field_buffer::AcceptedPasses<'_>,
     mut printed_row: bool,
     mut interval_printed: impl FnMut(usize, usize) -> bool,
     mut handoff: Option<&mut super::super::output::SectionHandoff>,
@@ -174,9 +170,11 @@ pub(super) fn completed_empty_plain_passes(
     // One accepted pass never reaches loop endline (term.c:200-217).
     // Its possibly empty final row remains with retain_accepted_unit_output;
     // there are no completed empty loop rows to classify or print.
-    if !rejected && passes.len() <= 1 {
+    let loop_ends = accepted.with_remaining_field().len();
+    if loop_ends == 0 {
         return 0;
     }
+    let passes = accepted.all();
     let covered = if handoff.is_some() {
         buffer.covered_zero_width_retreats(passes)
     } else {
@@ -187,7 +185,7 @@ pub(super) fn completed_empty_plain_passes(
     for (index, pass) in passes.iter().enumerate() {
         let printed = interval_printed(pass.start, pass.end);
         printed_row |= printed;
-        let ends_line = index + 1 < passes.len() || rejected;
+        let ends_line = index < loop_ends;
         let closes_previous = handoff.as_deref_mut().is_some_and(|handoff| {
             handoff.observe_accepted_pass(
                 buffer,
@@ -296,24 +294,21 @@ pub(super) fn literal_tail_row(nodes: &[Inline]) -> Option<bool> {
 }
 
 pub(super) fn find_literal_tail_row(nodes: &[Inline], visit: &mut impl FnMut()) -> Option<bool> {
-    nodes.iter().rev().find_map(|node| match node {
+    super::super::output::row_observation::find_in_row_tail(nodes, &mut |node| match node {
         Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
             visit();
             Some(!value.ends_with('\n'))
         }
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => {
+        Inline::Strong { .. }
+        | Inline::Emphasis { .. }
+        | Inline::Link { .. }
+        | Inline::Anchor { .. } => {
             visit();
-            find_literal_tail_row(children, visit)
+            None
         }
         Inline::LineBreak { .. } => {
             visit();
             Some(false)
-        }
-        Inline::Anchor { .. } => {
-            visit();
-            None
         }
     })
 }

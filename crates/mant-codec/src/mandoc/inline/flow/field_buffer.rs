@@ -138,11 +138,13 @@ pub(super) enum FlushReceipt {
 }
 
 impl FlushReceipt {
-    pub(super) fn passes(&self) -> Option<&[FillPass]> {
-        match self {
-            Self::UnmodeledRewind => None,
-            Self::Accepted { passes, .. } | Self::Rejected { passes, .. } => Some(passes),
-        }
+    pub(super) fn accepted_passes(&self) -> Option<AcceptedPasses<'_>> {
+        let (passes, rejected) = match self {
+            Self::UnmodeledRewind => return None,
+            Self::Accepted { passes, .. } => (passes.as_slice(), false),
+            Self::Rejected { passes, .. } => (passes.as_slice(), true),
+        };
+        Some(AcceptedPasses { passes, rejected })
     }
 
     /// The normalized cells of this same `term_fill()` sweep. Source ownership
@@ -154,6 +156,33 @@ impl FlushReceipt {
                 native_cells
             }
         }
+    }
+}
+
+/// Borrowed `term_flushln()` pass order. A remaining field, including one
+/// subsequently rejected by `term_fill()`, reaches the loop endline
+/// (term.c:143–220). The field mode still decides which endlines to project
+/// and handles the separate final tail (term.c:233–253).
+#[derive(Clone, Copy, Default)]
+pub(super) struct AcceptedPasses<'a> {
+    passes: &'a [FillPass],
+    rejected: bool,
+}
+
+impl<'a> AcceptedPasses<'a> {
+    pub(super) const fn all(self) -> &'a [FillPass] {
+        self.passes
+    }
+
+    pub(super) fn with_remaining_field(self) -> &'a [FillPass] {
+        &self.passes[..self
+            .passes
+            .len()
+            .saturating_sub(usize::from(!self.rejected))]
+    }
+
+    pub(super) const fn rejected(self) -> bool {
+        self.rejected
     }
 }
 
