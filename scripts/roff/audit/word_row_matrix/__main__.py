@@ -17,6 +17,8 @@ def main():
     manifest = parser.add_mutually_exclusive_group()
     manifest.add_argument("--followup", action="store_true", help="freeze only the word follow-up")
     manifest.add_argument("--sections", action="store_true", help="freeze only the section follow-up")
+    manifest.add_argument("--pending-rows", action="store_true",
+                          help="freeze only the pending row handoff follow-up")
     parser.add_argument("--calibration", action="store_true")
     parser.add_argument("--cohort", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
@@ -27,7 +29,8 @@ def main():
     parser.add_argument("--follow", action="store_true")
     args = parser.parse_args()
     if args.action == "freeze":
-        result = freeze(args.directory, increment=args.followup, section=args.sections)
+        result = freeze(args.directory, increment=args.followup, section=args.sections,
+                        pending=args.pending_rows)
     elif args.action == "compare":
         result = compare_products(args.directory)
     elif args.action == "section-ledger":

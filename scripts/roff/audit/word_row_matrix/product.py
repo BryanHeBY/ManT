@@ -15,6 +15,7 @@ from .compare import (
 from .fidelity import chain_obligations
 from .manifest import jsonl, row_bytes
 from .oracle import BATCH, atomic_output, check_checkpoint, stream_bytes
+from .pending_observations import check_pending_rows
 from .section_observations import check_section
 
 ROUTES = ("roff", "default-1", "default-2", "addressable-1", "addressable-2")
@@ -61,6 +62,9 @@ def verdict(source, oracle, observations, binding):
         result["nativeWord"] = rewind_obligation(source, utf8, tree, observations.get("roff"))
     if any(cohort.startswith("SEC-") for cohort in source["cohorts"]):
         result["nativeSection"] = check_section(tree, utf8, observations.get("roff"))
+    if any(cohort.startswith("PH-") for cohort in source["cohorts"]):
+        result["nativePendingRow"] = check_pending_rows(source["source"], tree, utf8,
+                                                        observations.get("roff"))
     return result
 
 
@@ -127,7 +131,8 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
     product = dict(binary=str(binary), sha256=digest(binary.read_bytes()), native=binding,
                    profiles=list(ROUTES), verdictContract={
                        name: digest(Path(__file__).with_name(name).read_bytes())
-                       for name in ("product.py", "compare.py", "followup.py", "section_observations.py")
+                       for name in ("product.py", "compare.py", "followup.py", "section_observations.py",
+                                    "pending_observations.py")
                    })
     path = output / "binding.json"
     if path.exists() and json.loads(path.read_bytes()) != product:
@@ -142,6 +147,7 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
     routes = Counter()
     native_word = Counter()
     native_section = Counter()
+    native_pending = Counter()
     stream = jsonl(directory / "sources.jsonl.gz")
     for index, chunk in enumerate(iter(lambda: list(islice(stream, BATCH)), [])):
         checkpoint = native / f"{index:06}.jsonl.gz"
@@ -167,6 +173,8 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
                 native_word[obligation["state"]] += 1
             if obligation := row["verdict"].get("nativeSection"):
                 native_section[obligation["state"]] += 1
+            if obligation := row["verdict"].get("nativePendingRow"):
+                native_pending[obligation["state"]] += 1
         (output / "progress.json").write_bytes(row_bytes(dict(
             completed=completed, routes=dict(routes), nativeWord=dict(native_word), nativeSection=dict(native_section), artifactBytes=size,
             wallSeconds=monotonic() - start)))
@@ -174,6 +182,8 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
     summary = dict(planned=planned, completed=completed, uncovered=planned - completed,
                    routes=dict(routes), nativeWord=dict(native_word), nativeSection=dict(native_section), artifactBytes=size,
                    wallSeconds=monotonic() - start)
+    if native_pending:
+        summary["nativePendingRow"] = dict(native_pending)
     (output / "summary.json").write_bytes(row_bytes(summary))
     return summary
 
@@ -193,6 +203,8 @@ def compare_products(directory):
     review_reasons = Counter()
     section_axes = {}
     section_actions = Counter()
+    pending_transitions = Counter()
+    pending_axes = {}
     with atomic_output(directory / "classification-differences.jsonl.gz") as differences:
         for chunk in sorted(candidate.glob("*.jsonl.gz")):
             previous = baseline / chunk.name
@@ -247,11 +259,20 @@ def compare_products(directory):
                     for axis, evidence in section.get("axes", {}).items():
                         section_axes.setdefault(axis, Counter())[evidence[0]] += 1
                 section_failed = section and section["state"] != "asserted-axes-pass"
-                if changes or fidelity_differences or fidelity_review or section_failed:
+                pending = right["verdict"].get("nativePendingRow")
+                pending_before = left["verdict"].get("nativePendingRow")
+                if pending:
+                    pending_transitions[(pending_before["state"] if pending_before else "unclassified",
+                                         pending["state"])] += 1
+                    for axis, evidence in pending.get("axes", {}).items():
+                        pending_axes.setdefault(axis, Counter())[evidence[0]] += 1
+                pending_failed = pending and pending["state"] != "asserted-axes-pass"
+                if changes or fidelity_differences or fidelity_review or section_failed or pending_failed:
                     differences.write(row_bytes(dict(
                         sourceSha256=left["sourceSha256"], states=changes,
                         fidelity=fidelity_differences, reviewAxes=fidelity_review,
                         section=section if section_failed else None,
+                        **({"pendingRow": pending} if pending_failed else {}),
                         checkpoint=chunk.name, native=expected)))
     planned = json.loads((directory / "manifest.json").read_bytes())["sources"]
     summary = dict(planned=planned, paired=pairs, uncovered=planned - pairs, counts=dict(totals),
@@ -261,6 +282,10 @@ def compare_products(directory):
                    sectionAxes={key: dict(counts) for key, counts in section_axes.items()},
                    sectionActions={f"{macro}/{action}": count
                                    for (macro, action), count in sorted(section_actions.items())})
+    if pending_transitions:
+        summary["pendingRowTransitions"] = {f"{old}/{new}": count
+                                            for (old, new), count in pending_transitions.items()}
+        summary["pendingRowAxes"] = {key: dict(counts) for key, counts in pending_axes.items()}
     (directory / "classification.json").write_bytes(row_bytes(summary))
     return summary
 

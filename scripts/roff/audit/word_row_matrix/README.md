@@ -45,6 +45,15 @@ literal insertions, the ten source adapters, six field adapters, and
 bounded long prefixes. Keep its oracle and product checkpoints separate
 from the original manifest; hash is the join key across both manifests.
 
+Use `freeze --pending-rows` for the pending section handoff audit. This
+freezes 648 source and logical coordinates (432 marker controls, 144
+adjacent `.br` controls, and 72 `.br` followed by `\&`). `nativePendingRow`
+records authored and executed `.br` separately, exact row intervals, and
+the glyphs and source positions retained by the old section, new heading,
+and new body. Native rows shared across section owners use the explicit
+`allowed-owner-split` status; unknown row forms remain Review. Run the
+same oracle/product/compare commands against a separate directory.
+
 `compare` also reports Markdown obligations by source hash, route, stage,
 and axis. Both first readbacks are checked against the original transported
 IR, even outside the strict native prose lane. The second readback has both
