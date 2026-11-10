@@ -25,7 +25,7 @@ impl FieldBuffer {
     ///
     /// Returns `None` for the nbr=0 rejection (143-146): nothing in this
     /// slice may print and the caller wipes the remainder. Otherwise the
-    /// accepted slice is `cells[..end]`; the breaking blank (if
+    /// accepted slice is `cells[start..end]`; the breaking blank (if
     /// any) sits at `accepted_end` and is consumed separately by
     /// [`Self::consume_break_blanks`] (term.c:205-207).
     /// Continue a pass from its last inspected cell. Appending a word does
@@ -48,6 +48,12 @@ impl FieldBuffer {
     }
 
     pub(super) fn scan_fill_pass(&mut self, vtarget: usize, native: bool) -> Option<FillPass> {
+        let mut accepted = self.scan_fill_pass_at_cursor(vtarget, native)?;
+        accepted.start = self.resume;
+        Some(accepted)
+    }
+
+    fn scan_fill_pass_at_cursor(&mut self, vtarget: usize, native: bool) -> Option<FillPass> {
         // term_fill() compares basic units with half an EN of tolerance.
         let vtarget = vtarget.saturating_add(EN / 2);
         self.prepare_fill_scan(vtarget);

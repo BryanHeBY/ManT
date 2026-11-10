@@ -123,7 +123,7 @@ impl InlineBuilder {
                 });
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
-        let plain_flush = self.consume_hard_break_buffer(projected);
+        let plain_flush = self.consume_hard_break_buffer(projected, origin);
         let plain_flush_rejection = plain_flush.rejected();
         let closes_preceding_printed_row = captured
             .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row);
@@ -233,6 +233,7 @@ impl InlineBuilder {
     fn consume_hard_break_buffer(
         &mut self,
         projected: bool,
+        origin: CompletedRowOrigin,
     ) -> super::super::plain_input::PlainFlushOutcome {
         use super::super::plain_input::PlainFlushOutcome;
         let rejected = if projected {
@@ -246,7 +247,8 @@ impl InlineBuilder {
             // consume its receipt before the row reset retires the cells.
             self.discard_unprinted_definition_field_output()
         } else {
-            let outcome = self.retire_plain_flush_unit_with_tail();
+            let outcome =
+                self.retire_plain_flush_unit_for_output(origin == CompletedRowOrigin::LiteralText);
             if let Some(from) = outcome.rejection_start() {
                 self.note_section_rejection(from);
             }

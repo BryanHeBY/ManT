@@ -13,9 +13,16 @@ pub(in crate::mandoc::inline::flow) struct SectionHandoff {
     previous_word_serial: u64,
     rejected_previous: bool,
     previous_empty_passes: u16,
+    previous_literal: bool,
+    projection_start: usize,
+    last_pass_shares_unprinted_row: bool,
 }
 
 impl SectionHandoff {
+    pub(in crate::mandoc::inline::flow) fn note_projection_start(&mut self, start: usize) {
+        self.projection_start = start;
+    }
+
     fn owns_loop_end(&self, buffer: &FieldBuffer, pass: Range<usize>) -> bool {
         pass.end <= self.previous_cell_end
             || pass.start < self.previous_cell_end
@@ -43,6 +50,10 @@ impl SectionHandoff {
         covered: &mut &[usize],
     ) -> bool {
         let closes_previous = ends_line && self.owns_loop_end(buffer, pass.clone());
+        if !ends_line && !printed_row {
+            self.last_pass_shares_unprinted_row = pass.start < self.previous_cell_end
+                && buffer.projection_length(pass.start, pass.end.min(self.previous_cell_end)) > 0;
+        }
         if self.previous_empty_passes > 0
             && self.has_surviving_previous_glyph(buffer, pass, covered)
         {
@@ -94,12 +105,15 @@ impl InlineBuilder {
             ) || execution.zero_advance.has_buffered_glyph())
     }
 
-    pub(in crate::mandoc) fn mark_section_handoff(&mut self) {
+    pub(in crate::mandoc) fn mark_section_handoff(&mut self, previous_literal: bool) {
         self.section_handoff = Some(SectionHandoff {
             previous_cell_end: self.execution.plain_input.buffer.cells().len(),
             previous_word_serial: self.execution.native_owner_serial,
             rejected_previous: false,
             previous_empty_passes: 0,
+            previous_literal,
+            projection_start: 0,
+            last_pass_shares_unprinted_row: false,
         });
         self.nodes.push(Inline::anchor(BOUNDARY));
     }
@@ -167,9 +181,21 @@ impl InlineBuilder {
         let (mut previous, mut head, found) =
             projection::split_output_scope_prefix(std::mem::take(&mut self.nodes), BOUNDARY);
         assert!(found, "section owner boundary survives native acceptance");
+        let mut rows = handoff.previous_empty_passes;
+        if handoff.previous_literal && (rows > 0 || handoff.last_pass_shares_unprinted_row) {
+            let start = handoff.projection_start.min(previous.len());
+            let projected = super::ProjectedTail::of(&previous[start..]);
+            rows = rows.saturating_sub(projected.literal_owned_rows());
+            if handoff.last_pass_shares_unprinted_row && projected.has_open_reading_row() {
+                // The last accepted empty pass still spans the seam.
+                // The old literal's retained payload already supplies
+                // this final row; HEAD's endline is not another blank.
+                projection::retain_inline_identities(&mut head);
+            }
+        }
         previous.extend(std::iter::repeat_n(
             Inline::anchor(super::INTERNAL_COMPLETED_ROW),
-            usize::from(handoff.previous_empty_passes),
+            usize::from(rows),
         ));
         if handoff.rejected_previous && !projection::has_rendered_formatter_glyph(&head) {
             // The graphless pass began in the old owner's still-buffered

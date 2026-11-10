@@ -50,18 +50,18 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
 
     let mut lengths = BTreeMap::new();
     let covered = buffer.covered_zero_width_retreats(passes);
-    let mut previous_end = 0;
     let printed_ends: Vec<_> = passes
         .iter()
         .map(|pass| {
-            let printed_end = buffer.printed_content_end(previous_end, pass.end);
-            let printed = printed_end > previous_end;
+            let printed_end = buffer.printed_content_end(pass.start, pass.end);
+            let printed = printed_end > pass.start;
+            let projected = buffer.has_projected_pass(pass.end);
             // Acknowledged endlines already removed trailing SP from the
             // projection. Do not charge those old scalar slots to later
             // output when term_field's receipt retires unprinted padding.
             // Preserve any intervening authored recovery spelling.
             let mut projected_end = pass.end;
-            if buffer.has_projected_pass(pass.end) {
+            if projected {
                 while projected_end > printed_end {
                     let cell = projected_end - 1;
                     if !matches!(buffer.cells()[cell], FieldCell::BreakableBlank)
@@ -72,12 +72,10 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                     projected_end = cell;
                 }
             }
-            previous_end = next_native_pass_start(buffer, pass.end);
-            (printed_end, printed, projected_end)
+            (printed_end, printed, projected_end, projected)
         })
         .collect();
     let mut pass_index = 0;
-    let mut pass_start = 0;
     for (index, anchor) in anchors.iter().enumerate() {
         let owner = &anchor.owner;
         let content = &anchor.content;
@@ -102,16 +100,15 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
         {
             #[cfg(test)]
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
-            pass_start = next_native_pass_start(buffer, passes[pass_index].end);
             pass_index += 1;
         }
         let mut acceptance = OwnerAcceptance::default();
         while let Some(pass) = passes.get(pass_index) {
             #[cfg(test)]
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
-            let start = (*content).max(pass_start);
+            let start = (*content).max(pass.start);
             let accepted_end = end.min(pass.end);
-            let (printed_end, printed, projected_end) = printed_ends[pass_index];
+            let (printed_end, printed, projected_end, projected) = printed_ends[pass_index];
             if start < accepted_end {
                 let projected_end = projected_end.min(accepted_end);
                 let covered_start = covered.partition_point(|&cell| cell < start);
@@ -121,11 +118,10 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                 {
                     acceptance.omit_cell(buffer, start, cell);
                 }
-                let padding_start = if preserve_literal_whitespace
+                let source_literal = preserve_literal_whitespace
                     && anchor.projection
-                        == super::super::WordProjectionPolicy::SourceLiteralWhitespace
-                    && !printed
-                {
+                        == super::super::WordProjectionPolicy::SourceLiteralWhitespace;
+                let padding_start = if source_literal && !printed {
                     // A source literal row remains nonempty authored content
                     // even when term_field prints no deferred SP/TAB. This
                     // never changes native acceptance or revives rejected cells.
@@ -134,6 +130,13 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                     start.max(printed_end)
                 };
                 for cell in padding_start..projected_end {
+                    // An already projected literal TAB is source content.
+                    // In a filled word the same deferred device cell is
+                    // still omitted when term_field() did not print it.
+                    if source_literal && projected && matches!(buffer.cells()[cell], FieldCell::Tab)
+                    {
+                        continue;
+                    }
                     if matches!(
                         buffer.cells()[cell],
                         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
@@ -151,25 +154,11 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             if pass.end >= end {
                 break;
             }
-            pass_start = next_native_pass_start(buffer, pass.end);
             pass_index += 1;
         }
         lengths.insert(owner.clone(), acceptance);
     }
     lengths
-}
-
-fn next_native_pass_start(
-    buffer: &super::super::field_buffer::FieldBuffer,
-    mut cell: usize,
-) -> usize {
-    while matches!(
-        buffer.cells().get(cell),
-        Some(super::super::field_buffer::FieldCell::BreakableBlank)
-    ) {
-        cell += 1;
-    }
-    cell
 }
 
 /// Consume accepted `term_flushln()` passes at their real retirement point.
@@ -183,12 +172,12 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
 ) {
-    use super::super::field_buffer::{FieldCell, FillBoundary};
+    use super::super::field_buffer::FillBoundary;
 
     let count = passes.len().saturating_sub(1);
     let start = output_start.min(nodes.len());
     let mut boundaries: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
-    for pass in &passes[..count] {
+    for (pass, next) in passes[..count].iter().zip(passes.iter().skip(1)) {
         if buffer.has_projected_pass(pass.end) || pass.boundary == FillBoundary::Hyphen {
             // An encoded ASCII_HYPH candidate locates the final device row
             // for BODY. The responsive reading projection keeps that source
@@ -196,10 +185,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
             // (term.c:307-324); authored \p events remain independent.
             continue;
         }
-        let mut cell = pass.end;
-        while matches!(buffer.cells().get(cell), Some(FieldCell::BreakableBlank)) {
-            cell += 1;
-        }
+        let cell = next.start;
         let owner = anchors.partition_point(|anchor| anchor.content <= cell);
         if let Some(anchor) = owner.checked_sub(1).and_then(|index| anchors.get(index)) {
             boundaries

@@ -170,6 +170,9 @@ that crate was not published for that change.
   preceding section turn its trailing empty rows into interior rows.
   Execute the section's source-line entry before heading text so relative
   motion cannot consume the wrong buffered glyph or revive rejected text.
+- Keep retained literal spaces and hard lines without repeating a completed
+  row as extra spacing. Preserve the accepted word after horizontal motion
+  even when a later native pass rejects the following text.
 - Keep shared native cells in the old source row until a heading or field
   consumes them. An invisible cell no longer creates a phantom literal or
   blank paragraph, and a filled man link starts in its actual source mode.

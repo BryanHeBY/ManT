@@ -137,6 +137,11 @@ its words. The heading does not repeat them as spacing. If no later glyph
 from the preceding body survives, its trailing empty rows remain, even when
 the heading prints new text or covers a pending body glyph.
 
+A no-fill reading space from positive horizontal motion can occupy a row
+of the preceding literal even when mandoc defers the advance until the
+heading prints. The literal keeps that space and its hard lines. Completed
+rows already represented there do not also become section spacing.
+
 The following [man(7)](https://mandoc.bsd.lv/man/man.7.html) macros documented by mandoc have dedicated lowering behavior:
 
 | Macros | ManT result |

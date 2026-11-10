@@ -3,6 +3,9 @@
 #[path = "section_entry/borrowed.rs"]
 mod borrowed;
 
+#[path = "section_entry/padding_tail.rs"]
+mod padding_tail;
+
 #[path = "section_entry/pending_rows.rs"]
 mod pending_rows;
 

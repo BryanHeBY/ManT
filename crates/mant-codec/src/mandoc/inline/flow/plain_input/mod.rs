@@ -133,11 +133,19 @@ impl InlineBuilder {
     pub(in crate::mandoc::inline::flow) fn retire_plain_flush_unit_with_tail(
         &mut self,
     ) -> PlainFlushOutcome {
+        self.retire_plain_flush_unit_for_output(false)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn retire_plain_flush_unit_for_output(
+        &mut self,
+        literal_owner: bool,
+    ) -> PlainFlushOutcome {
         let mut projections = Vec::new();
         let ends_row = Self::retire_plain_flush_unit_with_projections(
             &mut self.execution,
             &mut self.nodes,
             super::output::CompletedRowOrigin::Layout,
+            literal_owner,
             Some(&mut projections),
             self.section_handoff.as_mut(),
         );
@@ -160,16 +168,19 @@ impl InlineBuilder {
         nodes: &mut Vec<Inline>,
         row_origin: super::output::CompletedRowOrigin,
     ) -> bool {
-        Self::retire_plain_flush_unit_with_projections(execution, nodes, row_origin, None, None)
-            .is_some_and(PlainFlushOutcome::rejected)
+        Self::retire_plain_flush_unit_with_projections(
+            execution, nodes, row_origin, false, None, None,
+        )
+        .is_some_and(PlainFlushOutcome::rejected)
     }
 
     fn retire_plain_flush_unit_with_projections(
         execution: &mut super::InlineExecutionState,
         nodes: &mut Vec<Inline>,
         row_origin: super::output::CompletedRowOrigin,
+        literal_owner: bool,
         projections: Option<&mut Vec<super::output::row_origins::OutputNodeEdits>>,
-        handoff: Option<&mut super::output::SectionHandoff>,
+        mut handoff: Option<&mut super::output::SectionHandoff>,
     ) -> Option<PlainFlushOutcome> {
         use super::field_buffer::{FillTargets, FlushReceipt};
         let inherited_printed_row = plain_unit_inherits_printed_row(execution);
@@ -194,10 +205,13 @@ impl InlineBuilder {
         let edits =
             retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
         edits.remap(&mut output_start);
+        if let Some(handoff) = &mut handoff {
+            handoff.note_projection_start(output_start);
+        }
         if let Some(projections) = projections {
             projections.push(edits);
         }
-        let empty_rows = completed_empty_plain_passes(
+        let mut empty_rows = completed_empty_plain_passes(
             &buffer,
             passes,
             matches!(&receipt, FlushReceipt::Rejected { .. }),
@@ -222,61 +236,59 @@ impl InlineBuilder {
                 output_start,
             );
         }
-        let FlushReceipt::Rejected {
-            passes,
-            rejected_from,
-            definitive,
-            ..
-        } = receipt
-        else {
-            let empty_tail =
-                retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start);
-            project_completed_empty_passes(execution, nodes, output_start, empty_rows, row_origin);
-            super::output::deferred_blanks::project(nodes, &buffer, passes, output_start);
-            Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
-            return Some(PlainFlushOutcome::from_unprinted_tail(
-                empty_tail,
+        let outcome = match &receipt {
+            FlushReceipt::Accepted { .. } => PlainFlushOutcome::from_unprinted_tail(
+                retain_accepted_unit_output(nodes, &buffer, &anchors, passes, output_start),
                 inherited_printed_row && passes.len() == 1,
-            ));
+            ),
+            FlushReceipt::Rejected {
+                definitive: true,
+                rejected_from,
+                ..
+            } => {
+                project_rejected_plain_prefix(
+                    nodes,
+                    &buffer,
+                    &anchors,
+                    passes,
+                    output_start,
+                    *rejected_from,
+                    reprojected_literal_rows,
+                );
+                PlainFlushOutcome::rejected_prefix(&buffer, passes, *rejected_from)
+            }
+            FlushReceipt::Rejected {
+                definitive: false, ..
+            } => {
+                retain_blank_only_unit_output(
+                    nodes,
+                    &buffer,
+                    &anchors,
+                    passes,
+                    output_start,
+                    row_origin,
+                );
+                // nbr=0 over buffered ordinary blanks reaches the same
+                // final endline, but does not reject an authored suffix.
+                empty_rows = 0;
+                PlainFlushOutcome::from_unprinted_tail(true, inherited_printed_row)
+            }
+            FlushReceipt::UnmodeledRewind => unreachable!("modeled plain pass receipt"),
         };
-        if !definitive {
-            retain_blank_only_unit_output(
-                nodes,
-                &buffer,
-                &anchors,
-                &passes,
-                output_start,
-                row_origin,
-            );
-            super::output::deferred_blanks::project(nodes, &buffer, &passes, output_start);
-            // The buffer was nonempty, so term_flushln() retires BACKAFTER
-            // along with it even though no term_field() ran (235-237).
+        if matches!(receipt, FlushReceipt::Rejected { .. }) {
+            // term_flushln() clears both backtracking flags even when
+            // term_field() printed nothing (term.c:233–237).
             execution.zero_advance.discard_at_row_end();
-            Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
-            // nbr=0 over buffered ordinary blanks still reaches the
-            // ordinary term_flushln tail endline. It is not a definitive
-            // rejection and must not depend on earlier completed rows.
-            return Some(PlainFlushOutcome::from_unprinted_tail(
-                true,
-                inherited_printed_row,
-            ));
         }
-
-        project_rejected_plain_prefix(
+        project_completed_empty_passes(
+            execution,
             nodes,
-            &buffer,
-            &anchors,
-            &passes,
             output_start,
-            rejected_from,
-            reprojected_literal_rows,
+            empty_rows,
+            row_origin,
+            literal_owner,
         );
-        // term.c::term_flushln() clears both backtracking flags; a rejected
-        // unit dies whole, including a still-buffered `\z` glyph.
-        execution.zero_advance.discard_at_row_end();
-        project_completed_empty_passes(execution, nodes, output_start, empty_rows, row_origin);
-        super::output::deferred_blanks::project(nodes, &buffer, &passes, output_start);
-        let outcome = PlainFlushOutcome::rejected_prefix(&buffer, &passes, rejected_from);
+        super::output::deferred_blanks::project(nodes, &buffer, passes, output_start);
         Self::restore_retired_buffer(execution, nodes, authorless_definition, buffer, anchors);
         Some(outcome)
     }

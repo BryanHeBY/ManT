@@ -161,7 +161,7 @@ fn span(block: &AstBlock) -> std::ops::Range<usize> {
     range.start.get() as usize..range.end.get() as usize
 }
 
-fn authored_blocks<'a>(
+pub(super) fn authored_blocks<'a>(
     mut blocks: &'a [AstBlock],
     artifact: &MarkdownArtifact<'_>,
     carried: &mut Option<String>,
@@ -194,7 +194,7 @@ fn authored_blocks<'a>(
     blocks
 }
 
-fn block_text(block: &AstBlock) -> String {
+pub(super) fn block_text(block: &AstBlock) -> String {
     match block {
         AstBlock::Paragraph { children, .. } | AstBlock::Preformatted { children, .. } => {
             inline_plain_text(children)

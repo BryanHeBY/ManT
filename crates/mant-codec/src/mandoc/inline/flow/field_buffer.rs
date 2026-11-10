@@ -53,6 +53,9 @@ const EN: usize = 24;
 /// line (`nbr` bytes, `vbr` visual width).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct FillPass {
+    /// Actual start after the previous endline's SP sweep. Later scans
+    /// can normalize NBRSP to SP, so it cannot be reconstructed at drain.
+    pub(super) start: usize,
     /// term.c `nbr`: buffer index ENDING the accepted slice (exclusive).
     pub(super) end: usize,
     /// term.c `vbr`, rounded to character columns for IR layout.
@@ -78,6 +81,7 @@ pub(super) enum FillBoundary {
 impl FillPass {
     fn new(accepted_end: usize, accepted_units: usize) -> Self {
         Self {
+            start: 0,
             end: accepted_end,
             width: columns(accepted_units),
             units: accepted_units,

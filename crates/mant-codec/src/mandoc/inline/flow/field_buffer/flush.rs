@@ -60,17 +60,16 @@ impl FieldBuffer {
     ) -> Vec<(super::cells::DeferredSourceBlank, usize)> {
         let mut next = self.deferred_blanks.iter().peekable();
         let mut output = Vec::new();
-        let mut start = 0;
         for pass in passes {
             // A pass's ordinary boundary SP is swept before the next
             // interval (term.c:205-207). Inside it, term_field() advances
             // an authored SP only in front of a real graph (389-427).
-            let printed_end = self.printed_content_end(start, pass.end);
+            let printed_end = self.printed_content_end(pass.start, pass.end);
             while let Some(run) = next.peek().filter(|run| run.start < pass.end) {
                 let count = run
                     .end
                     .min(printed_end)
-                    .saturating_sub(run.start.max(start));
+                    .saturating_sub(run.start.max(pass.start));
                 if count > 0 {
                     output.push((run.source, count));
                 }
@@ -82,7 +81,6 @@ impl FieldBuffer {
             if next.peek().is_none() {
                 break;
             }
-            start = self.after_break_blanks(pass.end);
         }
         output
     }
@@ -235,12 +233,12 @@ impl FieldBuffer {
     ) -> Vec<usize> {
         let mut retreats = self.zero_width_retreats.iter().peekable();
         let mut covered = Vec::new();
-        let mut start = 0;
         for pass in passes {
             let Some(&&(target, _)) = retreats.peek() else {
                 break;
             };
             if target < pass.end {
+                let start = pass.start;
                 let printed_end = self.printed_content_end(start, pass.end);
                 let last_advance = self.cells[start.min(printed_end)..printed_end]
                     .iter()
@@ -266,7 +264,6 @@ impl FieldBuffer {
                     retreats.next();
                 }
             }
-            start = self.after_break_blanks(pass.end);
         }
         covered
     }
@@ -285,12 +282,9 @@ impl FieldBuffer {
         let index = self
             .committed_passes
             .partition_point(|pass| pass.end <= start);
-        let mut pass_start = index.checked_sub(1).map_or(0, |previous| {
-            self.after_break_blanks(self.committed_passes[previous].end)
-        });
         let mut count = 0;
         for pass in &self.committed_passes[index..] {
-            let first = start.max(pass_start);
+            let first = start.max(pass.start);
             let last = end.min(pass.end);
             if first < last {
                 count += self
@@ -299,7 +293,6 @@ impl FieldBuffer {
             if pass.end >= end {
                 break;
             }
-            pass_start = self.after_break_blanks(pass.end);
         }
         count + self.projection_length(start.max(self.resume), end)
     }
@@ -329,12 +322,7 @@ impl FieldBuffer {
         let start = index
             .checked_sub(1)
             .map_or(0, |previous| self.committed_passes[previous].end);
-        let content = if index == 0 {
-            0
-        } else {
-            self.after_break_blanks(start)
-        };
-        let printed = content..self.printed_content_end(content, pass.end);
+        let printed = pass.start..self.printed_content_end(pass.start, pass.end);
         let accepted = printed.contains(&cell);
         *last_pass = Some((start..pass.end, printed));
         accepted

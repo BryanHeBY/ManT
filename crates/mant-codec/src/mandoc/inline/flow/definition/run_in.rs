@@ -304,6 +304,7 @@ mod tests {
             device.receipt = FlushReceipt::Rejected {
                 passes: (1..=end)
                     .map(|end| FillPass {
+                        start: end - 1,
                         end,
                         width: 1,
                         units: 24,

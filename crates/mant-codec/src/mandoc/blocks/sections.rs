@@ -128,13 +128,14 @@ fn lower_before_heading(
     {
         lowerer
             .state
-            .with_pending_section_output(|formatter, previous| {
+            .with_pending_section_output(|formatter, previous, literal| {
                 prepare_heading(
                     next,
                     context,
                     formatter,
                     MdocSectionContext::Other,
                     previous,
+                    literal,
                 )
             })
     } else {
@@ -154,6 +155,7 @@ fn prepare_heading(
     formatter: &mut FormatterState,
     section_context: MdocSectionContext,
     previous: &mut Vec<mant_ir::Inline>,
+    previous_literal: bool,
 ) -> PreparedHeading {
     let head = first_part_children(node, NodeKind::Head);
     // SH/Sh and SS/Ss assign their heading origin in pre, and BODY's
@@ -178,6 +180,7 @@ fn prepare_heading(
         formatter,
         section_context == MdocSectionContext::Authors,
         previous,
+        previous_literal,
     )
 }
 
@@ -200,7 +203,14 @@ fn lower_section(
         context.default_name,
     );
     let (mut heading, blank_heading_rows) = prepared.unwrap_or_else(|| {
-        prepare_heading(node, context, formatter, section_context, &mut Vec::new())
+        prepare_heading(
+            node,
+            context,
+            formatter,
+            section_context,
+            &mut Vec::new(),
+            false,
+        )
     });
     // Allocate IDs in visible document order. Besides being deterministic for
     // consumers, this makes `.Sx` resolution independent of tree recursion.

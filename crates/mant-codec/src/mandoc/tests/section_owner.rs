@@ -2,6 +2,8 @@
 
 use super::{Block, Inline, inline_text, parse_manual_bytes, visible_document_text};
 
+#[path = "section_owner/padding.rs"]
+mod padding;
 #[path = "section_owner/tail.rs"]
 mod tail;
 

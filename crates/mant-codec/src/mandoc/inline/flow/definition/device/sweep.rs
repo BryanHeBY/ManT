@@ -45,7 +45,6 @@ impl InlineBuilder {
         rmargin: i64,
         resumed: Option<NoBreakField>,
     ) -> NativePassSweep {
-        use super::super::super::field_buffer::FieldCell;
         let (passes, rejected) = match receipt {
             FlushReceipt::UnmodeledRewind => (&[][..], false),
             FlushReceipt::Accepted { passes, .. } => (passes.as_slice(), false),
@@ -75,7 +74,6 @@ impl InlineBuilder {
             row.minbl,
             sweep.printed_row.is_some(),
         );
-        let mut start = 0;
         let mut vfield = placement.capacity(rmargin);
         let mut width = 0;
         let mut width_units = 0;
@@ -94,7 +92,7 @@ impl InlineBuilder {
                 &mut sweep,
                 &PresentedPass {
                     print: NativeFieldPrint {
-                        start,
+                        start: pass.start,
                         end: pass.end,
                         first: index == 0,
                         padding_units: placement.projection_padding,
@@ -112,13 +110,6 @@ impl InlineBuilder {
                 // BRNEVER allowed an unbounded term_fill() pass.
                 .saturating_add(i64::try_from(width_units.min(tab_target)).unwrap_or(i64::MAX))
                 .saturating_add(24);
-            start = pass.end;
-            while matches!(
-                receipt.native_cells().get(start),
-                Some(FieldCell::BreakableBlank)
-            ) {
-                start += 1;
-            }
             if index + 1 < passes.len() || rejected {
                 row_origin_units = end_native_loop_pass(&mut sweep, pass, state, flags, rmargin);
                 placement =

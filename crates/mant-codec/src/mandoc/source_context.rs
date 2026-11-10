@@ -290,6 +290,7 @@ impl<'a> LoweringContext<'a> {
         formatter: &mut formatter::FormatterState,
         authors_section: bool,
         previous_output: &mut Vec<mant_ir::Inline>,
+        previous_literal: bool,
     ) -> (Vec<mant_ir::Inline>, u16) {
         let shared = !previous_output.is_empty();
         let mut builder = formatter.begin_inline_session_on(
@@ -307,7 +308,7 @@ impl<'a> LoweringContext<'a> {
         if shared {
             // The reference is a control in the still-live old interval;
             // it cannot transfer that interval's blank pass to the HEAD.
-            builder.mark_section_handoff();
+            builder.mark_section_handoff(previous_literal);
         }
         builder.scope_posts = self.scope_posts.clone();
         inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);

@@ -74,6 +74,7 @@ mod checkpoints;
 pub(in crate::mandoc::inline::flow) mod deferred_blanks;
 mod drain;
 mod hard_breaks;
+mod projected_tail;
 mod projection;
 mod row_layout;
 mod section_handoff;
@@ -82,6 +83,7 @@ mod scopes;
 mod source_blanks;
 mod words;
 
+pub(super) use projected_tail::ProjectedTail;
 pub(in crate::mandoc) use projection::consume_one_row_ending;
 pub(in crate::mandoc) use projection::ends_with_executed_line_break;
 pub(in crate::mandoc) use projection::has_rendered_formatter_glyph;

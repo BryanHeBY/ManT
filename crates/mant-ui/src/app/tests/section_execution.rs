@@ -5,6 +5,7 @@ use mant_protocol::{ContentSelector, ExcerptSelection, QueryBundle, QueryExcerpt
 use serde::Deserialize;
 
 mod markdown;
+mod padding_tail;
 mod pending_rows;
 mod reader;
 mod tail_receipts;

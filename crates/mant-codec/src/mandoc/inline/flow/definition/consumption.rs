@@ -270,13 +270,10 @@ impl InlineBuilder {
         passes: &[super::super::field_buffer::FillPass],
     ) {
         let definition = self.execution.definition.as_ref().expect("native field");
-        let mut pass_start = definition.field_buffer.resume_offset();
         let unprinted_padding = passes.iter().any(|pass| {
-            let unprinted = definition
+            definition
                 .field_buffer
-                .has_unprinted_padding(pass_start, pass.end);
-            pass_start = pass.end;
-            unprinted
+                .has_unprinted_padding(pass.start, pass.end)
         });
         if !unprinted_padding && !definition.field_buffer.has_zero_width_retreats() {
             return;

@@ -33,19 +33,17 @@ pub(super) fn retire_plain_presentation(
         .as_ref()
         .map_or(0, |state| state.field_offset_units);
     let mut presentation = execution.row_presentation;
-    let mut start = 0;
     let mut row_presentations = Vec::new();
     for pass in passes {
         if let Some(receipt) = super::super::presentation::pass_receipt(
             buffer,
             anchors,
-            start,
+            pass.start,
             pass.end,
             presentation.hint_at(execution.text_alignment, offset),
         ) {
             row_presentations.push(receipt);
         }
-        start = pass.end;
         presentation.endline_at(offset);
     }
     // Even nbr=0 reaches the ordinary tail endline over this nonempty
@@ -75,7 +73,7 @@ pub(super) fn project_rejected_plain_prefix(
         !passes.is_empty() && anchors.iter().any(|anchor| anchor.start < rejected_from);
     retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start, false);
     if literal_rows {
-        reproject_plain_literal_loops(nodes, buffer, anchors, passes, output_start);
+        reproject_plain_literal_loops(nodes, buffer, anchors, passes, output_start, rejected_from);
     } else if accepted_owned_prefix && accepted_prefix_endline(&nodes[output_start..]) != Some(true)
     {
         // term_flushln() ended the last accepted pass before discovering
@@ -130,6 +128,7 @@ pub(super) fn project_completed_empty_passes(
     output_start: usize,
     rows: u16,
     origin: super::super::output::CompletedRowOrigin,
+    literal_owner: bool,
 ) {
     use super::super::output::CompletedRowOrigin;
     if rows == 0 {
@@ -137,13 +136,11 @@ pub(super) fn project_completed_empty_passes(
     }
     // Reconcile only the surviving projection of this accepted suffix.
     // Acknowledged delimiters can be removed by later owner acceptance.
-    let mut delimiters = 0;
-    let visible = count_projected_tail_delimiters(&nodes[output_start..], &mut delimiters);
-    if visible && delimiters == 0 {
+    let tail = super::super::output::ProjectedTail::of(&nodes[output_start..]);
+    if tail.needs_prefix_close() {
         nodes.push(Inline::line_break());
     }
-    let projected_empty = delimiters.saturating_sub(usize::from(visible));
-    let missing = usize::from(rows).saturating_sub(projected_empty);
+    let missing = usize::from(rows.saturating_sub(tail.empty_delimiters()));
     if origin == CompletedRowOrigin::LiteralText {
         for _ in 0..missing {
             nodes.push(Inline::Text {
@@ -154,20 +151,12 @@ pub(super) fn project_completed_empty_passes(
         return;
     }
     nodes.extend(std::iter::repeat_n(Inline::line_break(), missing));
+    let rows = if literal_owner {
+        rows.saturating_sub(tail.literal_owned_rows())
+    } else {
+        rows
+    };
     InlineBuilder::record_completed_rows_at(execution, nodes, rows, CompletedRowOrigin::HardLine);
-}
-
-fn count_projected_tail_delimiters(nodes: &[Inline], delimiters: &mut usize) -> bool {
-    nodes.iter().rev().any(|node| match node {
-        Inline::LineBreak { .. } => {
-            *delimiters += 1;
-            false
-        }
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => count_projected_tail_delimiters(children, delimiters),
-        _ => super::super::output::has_rendered_formatter_glyph(std::slice::from_ref(node)),
-    })
 }
 
 /// Each real loop endline closes its accepted native interval, including
@@ -195,15 +184,14 @@ pub(super) fn completed_empty_plain_passes(
     };
     let mut covered = covered.as_slice();
     let mut rows = 0u16;
-    let mut start = 0;
     for (index, pass) in passes.iter().enumerate() {
-        let printed = interval_printed(start, pass.end);
+        let printed = interval_printed(pass.start, pass.end);
         printed_row |= printed;
         let ends_line = index + 1 < passes.len() || rejected;
         let closes_previous = handoff.as_deref_mut().is_some_and(|handoff| {
             handoff.observe_accepted_pass(
                 buffer,
-                start..pass.end,
+                pass.start..pass.end,
                 ends_line,
                 printed_row,
                 &mut covered,
@@ -216,13 +204,6 @@ pub(super) fn completed_empty_plain_passes(
         }
         if ends_line {
             printed_row = false;
-        }
-        start = pass.end;
-        while matches!(
-            buffer.cells().get(start),
-            Some(super::super::field_buffer::FieldCell::BreakableBlank)
-        ) {
-            start += 1;
         }
     }
     rows
@@ -238,15 +219,14 @@ fn reproject_plain_literal_loops(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
+    rejected_from: usize,
 ) {
-    use super::super::field_buffer::FieldCell;
     use std::collections::BTreeMap;
     let mut boundaries = BTreeMap::<String, Vec<usize>>::new();
     let mut accepted_scalars = vec![0; anchors.len()];
     let mut owner = 0;
-    let mut start = 0;
-    for pass in passes {
-        let mut cell = start;
+    for (index, pass) in passes.iter().enumerate() {
+        let mut cell = pass.start;
         while cell < pass.end && owner < anchors.len() {
             while anchors
                 .get(owner + 1)
@@ -264,10 +244,9 @@ fn reproject_plain_literal_loops(
             }
             cell = end.max(cell + 1);
         }
-        start = pass.end;
-        while matches!(buffer.cells().get(start), Some(FieldCell::BreakableBlank)) {
-            start += 1;
-        }
+        let start = passes
+            .get(index + 1)
+            .map_or(rejected_from, |next| next.start);
         // term_flushln()205-207 consumes the blank run at this loop
         // boundary. It contributes neither an accepted owner scalar nor
         // an offset into its filtered IR; rejected whitespace must not move
@@ -353,12 +332,10 @@ pub(super) fn retain_accepted_unit_output(
     // An accepted unit can still leave ordinary trailing blanks outside
     // its final nbr. Use exactly the same native ownership intervals as
     // rejection; provisional IR spaces do not prove printed native content.
-    let mut pass_start = buffer.resume_offset();
-    let unprinted_padding = passes.iter().any(|pass| {
-        let unprinted = buffer.has_unprinted_padding(pass_start, pass.end);
-        pass_start = pass.end;
-        unprinted
-    });
+    let pending_start = buffer.resume_offset();
+    let unprinted_padding = passes
+        .iter()
+        .any(|pass| buffer.has_unprinted_padding(pass.start, pass.end));
     if unprinted_padding
         || buffer.has_zero_width_retreats()
         || passes
@@ -367,14 +344,8 @@ pub(super) fn retain_accepted_unit_output(
     {
         retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start, true);
     }
-    let pending_start = buffer.resume_offset();
     let accepted_empty_tail = passes.last().is_some_and(|pass| {
-        let start = passes
-            .len()
-            .checked_sub(2)
-            .map_or(pending_start, |previous| {
-                passes[previous].end.max(pending_start)
-            });
+        let start = pass.start.max(pending_start);
         pass.end > start && buffer.printed_columns(start, pass.end, 0, 0).is_none()
     });
     if accepted_empty_tail

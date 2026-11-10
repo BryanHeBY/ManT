@@ -49,7 +49,11 @@ impl BlockState {
     /// Lend its exact projection vector, including native word coordinates.
     pub(in crate::mandoc::blocks) fn with_pending_section_output<R>(
         &mut self,
-        run: impl FnOnce(&mut crate::mandoc::formatter::FormatterState, &mut Vec<mant_ir::Inline>) -> R,
+        run: impl FnOnce(
+            &mut crate::mandoc::formatter::FormatterState,
+            &mut Vec<mant_ir::Inline>,
+            bool,
+        ) -> R,
     ) -> Option<R> {
         let owner = self.row_owner(self.formatter.no_fill);
         let nodes = match owner {
@@ -59,7 +63,7 @@ impl BlockState {
         if !InlineBuilder::has_live_section_input(&self.formatter.execution, nodes) {
             return None;
         }
-        let result = run(&mut self.formatter, nodes);
+        let result = run(&mut self.formatter, nodes, owner == RowOwner::Literal);
         if owner == RowOwner::Literal {
             self.literal.finish_section_handoff();
         }
