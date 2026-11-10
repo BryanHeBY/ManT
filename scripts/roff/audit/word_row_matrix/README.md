@@ -54,6 +54,17 @@ and new body. Native rows shared across section owners use the explicit
 `allowed-owner-split` status; unknown row forms remain Review. Run the
 same oracle/product/compare commands against a separate directory.
 
+Use `freeze --section-tail` to replay the ordered tail-pass follow-up
+separately. Its 600 sources cover 512 core coordinates, 24 styled and link
+wrappers, 32 HEAD variants, 16 boundary controls, 12 chained passes, and
+four horizontal-rewind controls. The native reader comparison preserves
+middle and trailing rows and separately certifies source ownership, heading
+identity, JSON/ANSI transport, and representative font/link wrappers.
+It admits only source-proven section splits, retained authored spaces, and
+the documented single initial literal-row policy. A removed adjacent
+`.br` and a retained `.br` have distinct tree evidence; a same-owner
+control has no new section. Markdown stages retain their own readback axes.
+
 `compare` also reports Markdown obligations by source hash, route, stage,
 and axis. Both first readbacks are checked against the original transported
 IR, even outside the strict native prose lane. The second readback has both

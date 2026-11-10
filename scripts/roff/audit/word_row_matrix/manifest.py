@@ -6,7 +6,7 @@ from pathlib import Path
 
 from scripts.roff.fixtures.reference_recipes import digest
 from .core import core_sources
-from . import followup, pending_handoff, rows, sections, word
+from . import followup, pending_handoff, rows, section_tail, sections, word
 
 SCHEMA = "mant.word-row-matrix/v1"
 BASELINE = "218edc22aa528651e824198708a6cbcb1e803ac8"
@@ -33,6 +33,11 @@ SECTION_MEMBERS = {
 }
 PENDING_BASELINE = "9583fc7e98331d34f1e7435ed476bd3ee42a41f6"
 PENDING_MEMBERS = {"PH-core": 432, "PH-br": 144, "PH-retained-br": 72}
+SECTION_TAIL_BASELINE = "0424b8057132ffdc1a4050fcbf510f7825b9bae2"
+SECTION_TAIL_MEMBERS = {
+    "PHT-core": 512, "PHT-wrapped": 24, "PHT-head": 32, "PHT-boundary": 16,
+    "PHT-chain": 12, "PHT-rewind": 4,
+}
 EXTRA_WIDTHS = {"A-blank", "A-glyph", "A-width"}
 
 
@@ -63,11 +68,14 @@ def jsonl(path):
             yield json.loads(line)
 
 
-def freeze(directory, *, increment=False, section=False, pending=False):
-    if sum((increment, section, pending)) > 1:
+def freeze(directory, *, increment=False, section=False, pending=False, tail=False):
+    if sum((increment, section, pending, tail)) > 1:
         raise ValueError("choose one follow-up manifest")
     generate, counts, baseline, extra_generators = (
-        (pending_handoff.pending_sources, PENDING_MEMBERS, PENDING_BASELINE, ("pending_handoff.py",))
+        (section_tail.section_tail_sources, SECTION_TAIL_MEMBERS, SECTION_TAIL_BASELINE,
+         ("pending_handoff.py", "section_tail.py"))
+        if tail else (pending_handoff.pending_sources, PENDING_MEMBERS, PENDING_BASELINE,
+                      ("pending_handoff.py",))
         if pending else (sections.section_sources, SECTION_MEMBERS, SECTION_BASELINE, ("sections.py",))
         if section else (followup_records, FOLLOWUP_MEMBERS, FOLLOWUP_BASELINE, ("followup.py",))
         if increment else (records, MEMBERS, BASELINE, ())
