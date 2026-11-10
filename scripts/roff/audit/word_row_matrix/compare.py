@@ -94,12 +94,12 @@ def product_prose(plain):
     return body.removesuffix("\n").split("\n") if body else []
 
 
-def group_witness(tree):
-    """Enumerate every alignment request and each direct child in native preorder."""
+def tree_nodes(tree):
+    """Decode the native preorder, retaining source coordinates and raw flags."""
     nodes = []
     stack = []
     pattern = re.compile(
-        r"^( *)(.*?) \((elem|text|block|head|body|tail|tbl|eqn)\) ([(*]*)(\d+):(\d+)(.*)$"
+        r"^( *)(.*?) \((elem|text|block|head|body|tail|tbl|eqn|comment)\) ([(*]*)(\d+):(\d+)(.*)$"
     )
     roots = 0
     for line in tree.decode().split("\n"):
@@ -125,9 +125,16 @@ def group_witness(tree):
             roots += 1
         node = dict(path=path, kind=kind, label=label, line=int(row), column=int(column),
                     lineStart="*" in flags, noFill="NOFILL" in suffix.split(),
+                    noPrint="NOPRT" in suffix.split(),
                     indent=indent, childIndent=indent + (2 if kind == "block" else 4), children=0)
         nodes.append(node)
         stack.append(node)
+    return nodes
+
+
+def group_witness(tree):
+    """Enumerate every alignment request and each direct child in native preorder."""
+    nodes = tree_nodes(tree)
     groups = []
     by_parent = {}
     for node in nodes:

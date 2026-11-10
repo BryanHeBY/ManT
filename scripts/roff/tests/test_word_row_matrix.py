@@ -181,6 +181,28 @@ class FirstReadbackTests(unittest.TestCase):
                          "difference")
         self.assertEqual(result["default-2"]["from-first"]["rendered-content-row"][0], "exact")
 
+    def test_exact_global_glyphs_do_not_prove_where_they_belong(self):
+        def document(*values):
+            return dict(sections=[], blocks=[dict(type="paragraph", children=[text(value)])
+                                             for value in values])
+        for source, wrong in ((document("ALPHA", "BETA"), document("ALPH", "ABETA")),
+                              (document("ALPHA", ""), document("", "ALPHA"))):
+            result = compare_direct(observe(source), observe(wrong))
+            self.assertEqual(result["glyph"][0], "exact")
+            self.assertEqual(result["owner"][0], "exact")
+            self.assertEqual(result["owner-content"][0], "difference")
+
+        source = document("ALPHA", "BETA")
+        wrong = document("ALPH", "ABETA")
+        for route in ("default", "addressable"):
+            result = readback(observe(source), observe(wrong), export=route)
+            self.assertEqual(result["glyph"][0], "exact")
+            self.assertEqual(result["owner"][0], "exact")
+            self.assertEqual(result["owner-content"][0], "difference")
+            unmapped = readback(observe(source), observe(document("ALPHABETA")), export=route)
+            self.assertEqual(unmapped["glyph"][0], "exact")
+            self.assertEqual(unmapped["owner-content"][0], "review")
+
     def test_exact_layout_and_markdown_framing_controls(self):
         def document(blocks):
             return dict(sections=[dict(id="body", heading=dict(content=[text("BODY")]),
@@ -195,6 +217,8 @@ class FirstReadbackTests(unittest.TestCase):
         self.assertEqual(readback(observe(source), observe(read), export="default")["author-space"][0],
                          "exact")
         self.assertEqual(readback(observe(source), observe(read), export="default")["trailing-row"][0],
+                         "exact")
+        self.assertEqual(readback(observe(source), observe(read), export="default")["owner-content"][0],
                          "exact")
         read["sections"][0]["blocks"][1]["children"][0]["value"] = "A\n   B\n"
         self.assertEqual(readback(observe(source), observe(read), export="default")["author-space"][0],
@@ -214,6 +238,7 @@ class FirstReadbackTests(unittest.TestCase):
         self.assertEqual(status["owner"][0], "exact")
         self.assertEqual(status["gap"][0], "exact")
         self.assertEqual(status["glyph"][0], "exact")
+        self.assertEqual(status["owner-content"][0], "exact")
         observed["heading"]["content"] = [text("chec")]
         observed["blocks"][1] = last
         status = readback(wire_source, observe(observed), export="default")
@@ -234,12 +259,19 @@ class FirstReadbackTests(unittest.TestCase):
         authored = '\\' + marker
         original = dict(sections=[dict(id="body", heading=dict(content=[text("BODY")]),
                                        spacingBeforeLines=1, blocks=[], children=[])])
-        read = dict(original, blocks=[dict(type="paragraph", children=[text(marker)],
-                                          source=dict(byteRange=dict(start=0, end=len(marker))))])
+        read = copy.deepcopy(original)
+        read["blocks"] = [dict(type="paragraph", children=[text(marker)],
+                               source=dict(byteRange=dict(start=0, end=len(marker))))]
+        read["sections"][0]["heading"]["source"] = dict(
+            byteRange=dict(start=len(marker) + 1, end=len(marker + "\n## BODY")))
         self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
                                   export="addressable")["owner"][0], "exact")
+        self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
+                                  export="addressable")["owner-content"][0], "exact")
         self.assertEqual(readback(observe(original), observe(read, markdown=authored + "\n## BODY"),
                                   export="addressable")["owner"][0], "difference")
+        self.assertEqual(readback(observe(original), observe(read, markdown=authored + "\n## BODY"),
+                                  export="addressable")["owner-content"][0], "review")
         read["blocks"][0]["layout"] = dict(spacingBeforeLines=1)
         self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
                                   export="addressable")["gap"][0], "difference")
@@ -253,6 +285,10 @@ class FirstReadbackTests(unittest.TestCase):
         md = '## PARENT\n<a id="child"></a>\n### CHILD\n<a id="next"></a>\n## NEXT'
         observed = copy.deepcopy(source)
         parent, child = observed["sections"][0], observed["sections"][0]["children"][0]
+        for node, heading in ((parent, "## PARENT"), (child, "### CHILD"),
+                              (observed["sections"][1], "## NEXT")):
+            start = md.index(heading)
+            node["heading"]["source"] = dict(byteRange=dict(start=start, end=start + len(heading)))
         for node, target in ((parent, "child"), (child, "next")):
             marker = f'<a id="{target}"></a>'
             start = md.index(marker)
@@ -264,6 +300,61 @@ class FirstReadbackTests(unittest.TestCase):
         child["blocks"][0]["source"]["byteRange"]["start"] += 1
         result = readback(observe(source), observe(observed, markdown=md), export="addressable")
         self.assertEqual(result["glyph"][0], "difference")
+
+    def test_addressable_slug_change_needs_an_exact_following_boundary(self):
+        marker = '<a id="original-界"></a>'
+        raw = f"{marker}\n\n## Heading"
+        source = dict(sections=[dict(id="original-界", heading=dict(content=[text("Heading")]),
+                                     spacingBeforeLines=1, blocks=[], children=[])])
+        restored = copy.deepcopy(source)
+        section = restored["sections"][0]
+        section["id"] = "heading"
+        start = len(f"{marker}\n\n".encode())
+        section["heading"]["source"] = dict(byteRange=dict(start=start, end=len(raw.encode())))
+        restored["blocks"] = [dict(type="paragraph", children=[text(marker)],
+                                   source=dict(byteRange=dict(start=0, end=len(marker.encode()))))]
+        result = readback(observe(source), observe(restored, markdown=raw), export="addressable")
+        self.assertEqual(result["owner-content"][0], "exact")
+        result = readback(observe(source), observe(restored, markdown=raw.replace("\n\n", "\nX")),
+                          export="addressable")
+        self.assertEqual(result["owner-content"][0], "review")
+
+    def test_addressable_marker_after_heading_cannot_use_matching_id_as_proof(self):
+        marker = '<a id="next"></a>'
+        heading = "## NEXT"
+        raw = f"{heading}\n\n{marker}"
+        source = dict(sections=[dict(id="next", heading=dict(content=[text("NEXT")]),
+                                     spacingBeforeLines=1, blocks=[], children=[])])
+        forged = copy.deepcopy(source)
+        forged["blocks"] = [dict(type="paragraph", children=[text(marker)], source=dict(
+            byteRange=dict(start=len(heading) + 2, end=len(raw))))]
+        for span in (None, dict(byteRange=dict(start=0, end=len(heading)))):
+            forged["sections"][0]["heading"]["source"] = span
+            result = readback(observe(source), observe(forged, markdown=raw), export="addressable")
+            self.assertEqual(result["glyph"][0], "difference")
+            self.assertEqual(result["owner-content"][0], "review")
+
+    def test_fallback_title_root_marker_requires_the_actual_source_owner_and_slot(self):
+        marker = '<a id="document-overview"></a>'
+        raw = f"# CHECK\n\n{marker}\n"
+        original = dict(sections=[], blocks=[dict(type="vertical-space", lines=0)])
+        observed = dict(sections=[], heading=dict(content=[text("CHECK")], source=dict(
+            byteRange=dict(start=0, end=8))), blocks=[
+                dict(type="paragraph", children=[text(marker)],
+                     source=dict(byteRange=dict(start=9, end=len(raw)))),
+            ])
+        wire = dict(json=json.dumps(dict(document=original, label="CHECK")), plain="")
+        positive = readback(wire, observe(observed, markdown=raw), export="addressable")
+        self.assertEqual(positive["glyph"][0], "exact")
+        self.assertEqual(positive["owner-content"][0], "exact")
+        for altered_raw in (raw.replace("# CHECK", "# WR0NG"), raw.replace("\n\n", "\nX")):
+            wrong = readback(wire, observe(observed, markdown=altered_raw), export="addressable")
+            self.assertEqual(wrong["glyph"][0], "difference")
+            self.assertEqual(wrong["owner-content"][0], "review")
+        original["blocks"] = []
+        wire["json"] = json.dumps(dict(document=original, label="CHECK"))
+        wrong = readback(wire, observe(observed, markdown=raw), export="addressable")
+        self.assertEqual(wrong["glyph"][0], "difference")
 
 
 if __name__ == "__main__":

@@ -128,7 +128,8 @@ run "test shared source-line receipts and row classifications" \
 run "test incoming word-separator state fixture bindings" \
   python3 -m unittest scripts.roff.tests.test_word_spacing_fixture
 run "test finite word and aligned-row audit" \
-  python3 -m unittest scripts.roff.tests.test_word_row_matrix
+  python3 -m unittest scripts.roff.tests.test_word_row_matrix \
+    scripts.roff.tests.test_section_word_matrix scripts.roff.tests.test_section_word_ledger
 run "test source-bound synopsis word observation corrections" \
   python3 -m unittest scripts.roff.tests.test_synopsis_word_observations
 run "test native enclosure operand identities and profile admission" \
@@ -182,6 +183,11 @@ run "check independent embedded reader consumer" bash scripts/checks/check-ui-co
 run "check isolated CLI capability combinations" python3 -m scripts.checks.check_cli_features
 run "test roff audit profilers" \
   cargo test --locked --package mant-engine --examples
+run "build Markdown owner fidelity profiler" \
+  cargo build --locked --package mant-engine --example markdown_owner_profile
+run "test owner-content transfers through Markdown readback" \
+  python3 -m scripts.roff.audit.word_row_matrix.owner_mutations \
+  "${CARGO_TARGET_DIR:-target}/debug/examples/markdown_owner_profile"
 run "test real terminal-cell geometry probe" \
   cargo test --locked --package mant-ui --example geometry_audit
 run "test optional libmandoc features" \

@@ -6,8 +6,9 @@ are explicit obligations, not passes inferred from two equal readbacks.
 import json
 import re
 
-AXES = ("glyph", "author-space", "hard-row", "owner", "link-label",
+AXES = ("glyph", "author-space", "hard-row", "owner", "owner-content", "link-label",
         "link-owner", "target", "gap", "trailing-row", "rendered-row", "rendered-content-row")
+STRUCTURAL_AXES = tuple(axis for axis in AXES if not axis.startswith("rendered-"))
 
 
 class Review(ValueError):
@@ -61,25 +62,42 @@ def anchor_lines(target):
         return ()
     identity = target["id"]
     ids = (identity, *(alias for alias in target.get("fragmentAliases", []) if alias != identity))
-    # Only the fixed alphabet emitted verbatim by the bounded source lane.
-    if any(not re.fullmatch(r"[a-zA-Z0-9_.:-]+", value) for value in ids):
+    # Admit only simple IDs the exporter emits verbatim, including the
+    # Unicode letters and numbers in Markdown-generated heading IDs.
+    if any(not value or any(not (ch.isalnum() or ch in "_.:-") for ch in value)
+           for value in ids):
         return ()
     return tuple(f'<a id="{value}"></a>' for value in ids)
+
+
+def syntax_adjacent(markdown, before, after):
+    """Prove a generated marker is on the intended heading boundary."""
+    left = (before.get("source") or {}).get("byteRange")
+    right = (after.get("source") or {}).get("byteRange")
+    if not left or not right:
+        return False
+    end, start = left["end"], right["start"]
+    # The parser may count the first newline in the preceding span. No
+    # other text or a run of authored blank lines can prove this boundary.
+    return (0 <= left["start"] < end <= start < right["end"] <= len(markdown)
+            and markdown[end:start] in (b"\n", b"\n\n"))
 
 
 def anchor_block(block, markdown, lines, *, predecessor=None, inherited=False):
     """Prove a standalone marker's spelling, span and source-owned identity."""
     if not lines or markdown is None or block["type"] != "paragraph":
         return False
-    span = block.get("source", {}).get("byteRange")
+    span = (block.get("source") or {}).get("byteRange")
     if not span or block["children"] != [{"type": "text", "value": " ".join(lines)}]:
+        return False
+    if not 0 <= span["start"] < span["end"] <= len(markdown):
         return False
     if block.get("inlineLayout"):
         return False
     gap = 0
     if predecessor is not None:
-        previous = predecessor.get("source", {}).get("byteRange")
-        if not previous or previous["end"] > span["start"]:
+        previous = (predecessor.get("source") or {}).get("byteRange")
+        if not previous or not 0 <= previous["start"] < previous["end"] <= span["start"]:
             return False
         # This examines only the syntax boundary, never the owner's text
         # contribution. A known framing blank cannot excuse a changed gap.
@@ -95,7 +113,19 @@ def anchor_block(block, markdown, lines, *, predecessor=None, inherited=False):
     return raw in (spelling.encode(), (spelling + "\n").encode())
 
 
-def section_anchors(document, markdown, source, inherited=None):
+def exact_generated_title(markdown, heading, label):
+    """The bounded fallback H1 is a simple, unescaped query label."""
+    span = (heading.get("source") or {}).get("byteRange")
+    if not span or not label or not re.fullmatch(r"[a-zA-Z0-9_-]+", label):
+        return False
+    if heading["content"] != [{"type": "text", "value": label}]:
+        return False
+    start, end = span["start"], span["end"]
+    spelling = f"# {label}".encode()
+    return start == 0 and 0 < end <= len(markdown) and markdown[:end] in (spelling, spelling + b"\n")
+
+
+def section_anchors(document, markdown, source, inherited=None, *, label=None):
     """Return proven block exclusions and their per-boundary source spellings."""
     exclusions, carried = set(), {}
     if markdown is None:
@@ -103,18 +133,26 @@ def section_anchors(document, markdown, source, inherited=None):
     markdown = markdown.encode()
     inherited = inherited or {}
 
-    def trailing(path, blocks, following):
+    def trailing(path, blocks, following, target):
+        if target is None or not blocks:
+            return False
         index = len(blocks) - 1
-        lines = anchor_lines(following)
-        if index >= 0 and anchor_block(blocks[index], markdown, lines,
-                                       predecessor=blocks[index - 1] if index else None):
+        lines = anchor_lines(target)
+        heading = following["heading"]
+        if (not syntax_adjacent(markdown, blocks[index], heading)
+                or not anchor_block(blocks[index], markdown, lines,
+                                    predecessor=blocks[index - 1] if index else None)):
+            return False
+        exclusions.add((path, index))
+        carried[path] = lines
+        index -= 1
+        if (index >= 0
+                and syntax_adjacent(markdown, blocks[index], blocks[index + 1])
+                and anchor_block(blocks[index], markdown, inherited.get(path),
+                                 predecessor=blocks[index - 1] if index else None,
+                                 inherited=True)):
             exclusions.add((path, index))
-            carried[path] = lines
-            index -= 1
-        if index >= 0 and anchor_block(blocks[index], markdown, inherited.get(path),
-                                       predecessor=blocks[index - 1] if index else None,
-                                       inherited=True):
-            exclusions.add((path, index))
+        return True
 
     def preorder(path, items):
         for index, section in enumerate(items):
@@ -127,32 +165,65 @@ def section_anchors(document, markdown, source, inherited=None):
     items = list(preorder(("sections",), document["sections"]))
     expected = dict(preorder(("sections",), source["sections"]))
 
-    def known_target(entry):
-        path, actual = entry
-        target = expected.get(path)
-        return target if target and target["id"] == actual["id"] else None
-
     blocks = document.get("blocks", [])
     root = dict(id="document-overview", fragmentAliases=source.get("fragmentAliases", []))
-    if source.get("heading") and blocks and anchor_block(blocks[0], markdown, anchor_lines(root)):
+    heading = document.get("heading")
+    if (source.get("heading") and heading and blocks
+            and syntax_adjacent(markdown, blocks[0], heading)
+            and anchor_block(blocks[0], markdown, anchor_lines(root))):
         exclusions.add((("root",), 0))
-    trailing(("root",), blocks, known_target(items[0]) if items else None)
-    for (owner, section), following in zip(items, [*items[1:], None], strict=True):
-        if following is not None and known_target((owner, section)):
-            trailing(owner + ("body",), section["blocks"], known_target(following))
+        carried[("heading",)] = anchor_lines(root)
+        # The next export escapes the first readback's root marker as an
+        # ordinary paragraph. Require the already-proven first-round marker
+        # and its exact new span after the heading, before any authored body.
+        if (len(blocks) > 1 and syntax_adjacent(markdown, heading, blocks[1])
+                and anchor_block(blocks[1], markdown, inherited.get(("heading",)),
+                                 predecessor=blocks[0], inherited=True)):
+            exclusions.add((("root",), 1))
+    elif (not source.get("heading") and (source.get("blocks") or source.get("fragmentAliases"))
+          and heading and blocks and exact_generated_title(markdown, heading, label)
+          and syntax_adjacent(markdown, heading, blocks[0])
+          and anchor_block(blocks[0], markdown, anchor_lines(root))):
+        # render_markdown_with_context emits a root destination after its
+        # fallback H1 when the source has root owners, even if those owners
+        # have no Markdown projection. Its raw span, title and slot must
+        # all agree before omitting it from source-owned glyphs.
+        exclusions.add((("root",), 0))
+        carried[("heading",)] = anchor_lines(root)
+
+    # Parsed headings can acquire a new slug while the export still carries
+    # the source ID. A marker at that exact heading boundary can prove this
+    # owner correspondence; matching text or a matching slug alone is not
+    # required for that evidence.
+    owner, blocks = ("root",), blocks
+    for path, section in items:
+        target = expected.get(path)
+        if owner is not None and trailing(owner, blocks, section, target):
+            owner, blocks = path + ("body",), section["blocks"]
+        elif target is not None and section["id"] == target["id"]:
+            owner, blocks = path + ("body",), section["blocks"]
+        else:
+            owner = None
     return exclusions, carried
 
 
-def document_signature(document, *, export=None, label=None, exclusions=()):
-    """Project owners separately from their content and layout obligations."""
-    axes = {key: [] for key in AXES if not key.startswith("rendered-")}
+def document_signature(document, *, export=None, label=None, exclusions=(), direct=False):
+    """Record normalized topology, its payloads, and independent layout evidence."""
+    axes = {key: [] for key in STRUCTURAL_AXES}
     retained = None if export is None else {"external", "email", "document"}
     if export == "addressable":
         retained |= {"section"}
 
-    def record(path, kind, value, links, gap):
+    def record(path, kind, value, links, gap, *, content_path=None):
         axes["owner"].append((path, kind))
-        axes["glyph"].append(re.sub(r"[ \t\n]", "", value))
+        glyphs = re.sub(r"[ \t\n]", "", value)
+        axes["glyph"].append(glyphs)
+        # Use the normalized owner path after applying the known export
+        # mappings below. Keep spaces and row boundaries on their own axes,
+        # and do not fold Unicode scalar spellings or combine adjacent owners.
+        if not direct or kind != "vertical-space":
+            axes["owner-content"].append((content_path if direct and content_path is not None
+                                         else path, kind, glyphs))
         axes["author-space"].append((path, tuple(
             (i, ch) for i, ch in enumerate(value.replace("\n", "")) if ch in " \t")))
         axes["hard-row"].append((path, tuple(
@@ -176,6 +247,7 @@ def document_signature(document, *, export=None, label=None, exclusions=()):
 
     def content(path, blocks):
         index = 0
+        owner_index = 0
         pending_gap = 0
         preceding_content = False
         for block_index, block in enumerate(blocks):
@@ -202,8 +274,17 @@ def document_signature(document, *, export=None, label=None, exclusions=()):
             value, links = inline_signature(nodes, retained_links=retained)
             gap = max(pending_gap, block.get("layout", {}).get("spacingBeforeLines", 0))
             pending_gap = 0
+            content_path = None
+            if direct:
+                content_path = (*path, owner_index)
+                owner_index += 1
             if not value and not links and not gap and (not nodes or kind == "paragraph"):
                 if kind != "thematic-break":
+                    if direct:
+                        # An empty IR owner cannot absorb another owner's
+                        # text. Unlike an export, direct comparison has no
+                        # reason to elide it from the correspondence.
+                        axes["owner-content"].append((content_path, kind, ""))
                     continue
             if export and kind == "preformatted":
                 if links:
@@ -215,7 +296,7 @@ def document_signature(document, *, export=None, label=None, exclusions=()):
                 record((*path, index), "paragraph", "\n", (), 0)
                 index += 1
                 gap = 0
-            record((*path, index), kind, value, links, gap)
+            record((*path, index), kind, value, links, gap, content_path=content_path)
             preceding_content = (bool(value) or kind == "thematic-break"
                                  or kind == "preformatted" and physical_receiver(block))
             index += 1
@@ -250,10 +331,18 @@ def document_signature(document, *, export=None, label=None, exclusions=()):
     return axes
 
 
-def fidelity(expected, observed):
+def fidelity(expected, observed, *, projected=False):
     """Return separate evidence for each axis; differences retain both values."""
-    return {axis: ("exact",) if value == observed[axis] else ("difference", value, observed[axis])
-            for axis, value in expected.items()}
+    result = {
+        axis: ("exact",) if value == observed[axis] else ("difference", value, observed[axis])
+        for axis, value in expected.items()
+    }
+    if projected and result["owner"][0] != "exact":
+        # No positional owner correspondence across an unaccounted-for
+        # export shape. Keep the topology and glyph evidence, but don't claim
+        # per-owner fidelity (or attribute arbitrary mismatches to owners).
+        result["owner-content"] = ("review", "unmapped Markdown owner topology")
+    return result
 
 
 def wire_document(observation):
@@ -264,8 +353,13 @@ def wire_document(observation):
 
 
 def compare_direct(expected, observed):
-    return fidelity(document_signature(wire_document(expected)),
-                    document_signature(wire_document(observed)))
+    if expected is None or observed is None:
+        return {axis: ("blocked",) for axis in STRUCTURAL_AXES}
+    try:
+        return fidelity(document_signature(wire_document(expected), direct=True),
+                        document_signature(wire_document(observed), direct=True))
+    except (KeyError, Review) as error:
+        return {axis: ("review", str(error)) for axis in STRUCTURAL_AXES}
 
 
 def readback(expected, observed, *, export, origin=None, previous=None):
@@ -281,24 +375,26 @@ def readback(expected, observed, *, export, origin=None, previous=None):
         actual = wire_document(observed)
         source_exclusions, actual_exclusions = (), ()
         if export == "addressable":
-            native = wire_document(origin) if origin is not None else source
+            native_bundle = json.loads(origin["json"]) if origin is not None else bundle
+            native = native_bundle["document"]
             prior = {}
             if previous is not None:
                 previous_document = wire_document(previous)
-                proven, prior = section_anchors(previous_document, previous.get("markdown"), native)
+                proven, prior = section_anchors(previous_document, previous.get("markdown"), native,
+                                                label=native_bundle.get("label"))
                 if expected is previous:
                     source_exclusions = proven
                 anchor_source = previous_document
             else:
                 anchor_source = source
             actual_exclusions, _ = section_anchors(
-                actual, observed.get("markdown"), anchor_source, prior,
+                actual, observed.get("markdown"), anchor_source, prior, label=bundle.get("label"),
             )
         states = fidelity(document_signature(source, export=export, label=bundle.get("label"),
                                              exclusions=source_exclusions),
-                          document_signature(actual, exclusions=actual_exclusions))
+                          document_signature(actual, exclusions=actual_exclusions), projected=True)
     except (KeyError, Review) as error:
-        states = {axis: ("review", str(error)) for axis in AXES if not axis.startswith("rendered-")}
+        states = {axis: ("review", str(error)) for axis in STRUCTURAL_AXES}
     if export == "default" and all(states[axis][0] == "exact" for axis in ("owner", "gap")):
         # Title framing differs: the roff label may have a manual section
         # suffix, but the rest is an exact projection in this shape.

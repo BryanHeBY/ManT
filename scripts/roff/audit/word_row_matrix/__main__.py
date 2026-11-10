@@ -7,13 +7,16 @@ import signal
 from .manifest import freeze
 from .oracle import collect
 from .product import collect_product, compare_products
+from .section_ledger import section_ledger
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
-    parser.add_argument("action", choices=("freeze", "oracle", "product", "compare"))
-    parser.add_argument("--followup", action="store_true", help="freeze only the follow-up cohorts")
+    parser.add_argument("action", choices=("freeze", "oracle", "product", "compare", "section-ledger"))
+    manifest = parser.add_mutually_exclusive_group()
+    manifest.add_argument("--followup", action="store_true", help="freeze only the word follow-up")
+    manifest.add_argument("--sections", action="store_true", help="freeze only the section follow-up")
     parser.add_argument("--calibration", action="store_true")
     parser.add_argument("--cohort", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
@@ -24,9 +27,11 @@ def main():
     parser.add_argument("--follow", action="store_true")
     args = parser.parse_args()
     if args.action == "freeze":
-        result = freeze(args.directory, increment=args.followup)
+        result = freeze(args.directory, increment=args.followup, section=args.sections)
     elif args.action == "compare":
         result = compare_products(args.directory)
+    elif args.action == "section-ledger":
+        result = section_ledger(args.directory)
     elif args.action == "product":
         if args.binary is None:
             parser.error("product requires --binary")

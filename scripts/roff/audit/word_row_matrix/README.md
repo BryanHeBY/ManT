@@ -55,7 +55,34 @@ standalone navigation markers have their own rules. Richer block shapes
 without a selected projection remain Review. These statuses do not change
 the direct native prose verdict or make a structured layout exact.
 
+`owner` still reports normalized path/kind topology; `glyph` still reports
+the global scalar sequence. The separate `owner-content` axis compares each
+mapped owner's non-layout scalars without Unicode folding. It is Review when
+Markdown topology has no proven correspondence, even if the global sequence
+is unchanged. Do not interpret historical `owner: exact` counts as proof of
+text ownership. The local gate exercises 24 validated IR mutations through
+direct comparison and both Markdown exporters (72 first observations). Both
+second exports are checked against the source and their first readbacks:
+
+```sh
+cargo build --locked -p mant-engine --example markdown_owner_profile
+python -m scripts.roff.audit.word_row_matrix.owner_mutations \
+  target/debug/examples/markdown_owner_profile
+```
+
 The follow-up summary also records `nativeWord`: exact W-core rows,
 unsupported literal-origin effects, protected ordinary-cell rewinds,
 extraction limits, and actual differences. The two named Review states
 retain the differing rows; they are never promoted to native passes.
+
+Use `freeze --sections` for the section-entry and row-owner follow-up.
+The manifest keeps 1,344 entry and 384 owner coordinates plus the fixed
+chain, reset, pending-word and display controls. `nativeSection` records
+the normalized predecessor, raw and filtered BODY children, admitted
+spacing requests and actual native action for each source. The compare
+summary reports resolved IR gap, heading and body row/owner axes separately.
+Unmapped device rows and marker intervals remain Review. After product
+collection, `section-ledger` writes the source receipt for each logical member
+and separates templates confirmed by the actual tree from templates
+normalized into a different branch. Source hashes join these rows to raw
+native streams and the five product observations.

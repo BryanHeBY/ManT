@@ -6,7 +6,7 @@ from pathlib import Path
 
 from scripts.roff.fixtures.reference_recipes import digest
 from .core import core_sources
-from . import followup, rows, word
+from . import followup, rows, sections, word
 
 SCHEMA = "mant.word-row-matrix/v1"
 BASELINE = "218edc22aa528651e824198708a6cbcb1e803ac8"
@@ -25,6 +25,12 @@ FOLLOWUP_MEMBERS = {
     "ROW-literal-owner": 600,
 }
 FOLLOWUP_BASELINE = "ee8ea0fa4931f84c983234b8fb0fd909457e7696"
+SECTION_BASELINE = "d72a17e1cc63b9b6fdb90027c43a1258a9039d1e"
+SECTION_MEMBERS = {
+    "SEC-entry": 1344, "SEC-owner": 384, "SEC-owner-sh": 8,
+    "SEC-chain": 8, "SEC-reset": 24, "SEC-display": 6, "SEC-pending": 84,
+    "SEC-shared-control": 20,
+}
 EXTRA_WIDTHS = {"A-blank", "A-glyph", "A-width"}
 
 
@@ -55,13 +61,20 @@ def jsonl(path):
             yield json.loads(line)
 
 
-def freeze(directory, *, increment=False):
+def freeze(directory, *, increment=False, section=False):
+    if increment and section:
+        raise ValueError("choose one follow-up manifest")
+    generate, counts, baseline, extra_generators = (
+        (sections.section_sources, SECTION_MEMBERS, SECTION_BASELINE, ("sections.py",))
+        if section else (followup_records, FOLLOWUP_MEMBERS, FOLLOWUP_BASELINE, ("followup.py",))
+        if increment else (records, MEMBERS, BASELINE, ())
+    )
     directory.mkdir(parents=True, exist_ok=True)
     count = Counter()
     unique = {}
     member_index = []
     with gzip.GzipFile(directory / "members.jsonl.gz", "wb", compresslevel=3, mtime=0) as output:
-        for cohort, coords, source in (followup_records() if increment else records()):
+        for cohort, coords, source in generate():
             source_hash = digest(source.encode())
             count[cohort] += 1
             identifier = cohort + "/" + row_bytes(coords).decode().removesuffix("\n")
@@ -74,7 +87,7 @@ def freeze(directory, *, increment=False):
                 raise ValueError("source hash collision")
             record["cohorts"].add(cohort)
             record["aliases"] += 1
-    if count != (FOLLOWUP_MEMBERS if increment else MEMBERS):
+    if count != counts:
         raise ValueError(f"cohort coordinates changed: {count!r}")
     member_index.sort()
     calibration = {source_hash for _, source_hash in member_index[::256]}
@@ -85,7 +98,7 @@ def freeze(directory, *, increment=False):
             record["calibration"] = source_hash in calibration
             output.write(row_bytes(record))
     manifest = dict(
-        schema=SCHEMA, baseline=FOLLOWUP_BASELINE if increment else BASELINE, members=sum(count.values()), cohorts=dict(count),
+        schema=SCHEMA, baseline=baseline, members=sum(count.values()), cohorts=dict(count),
         sources=len(unique), aliases=sum(count.values()) - len(unique),
         wideRecipes=sum(record["extraWidths"] for record in unique.values()),
         calibrationSources=len(calibration),
@@ -93,7 +106,7 @@ def freeze(directory, *, increment=False):
                 for path in (directory / "members.jsonl.gz", directory / "sources.jsonl.gz")},
         generator={name: digest(Path(__file__).with_name(name).read_bytes())
                    for name in ("manifest.py", "core.py", "word.py", "rows.py",
-                                *(("followup.py",) if increment else ()))},
+                                *extra_generators)},
     )
     manifest["nativeInvocations"] = 6 * manifest["sources"] + 5 * manifest["wideRecipes"]
     (directory / "manifest.json").write_bytes(row_bytes(manifest))
