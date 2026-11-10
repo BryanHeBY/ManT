@@ -120,6 +120,21 @@ impl InlineBuilder {
                 .flush_receipt(targets, false);
             &uncaptured
         };
+        if matches!(receipt, FlushReceipt::UnmodeledRewind) {
+            let state = self.execution.definition.as_mut().expect("native field");
+            let receipts = state.field_buffer.conservative_deferred_blanks();
+            if let Some(receiver) = &state.deferred_head_projection {
+                receiver.accept_blanks(&receipts);
+            }
+            let start = self
+                .execution
+                .author_execution
+                .as_ref()
+                .map_or(0, |author| author.field_output_start);
+            super::super::output::deferred_blanks::project_from(&mut self.nodes, start, &receipts);
+            state.hang_row.field_discarded = false;
+            return false;
+        }
 
         // term_flushln() only reaches loop endline (term.c:217) when an
         // accepted pass has a remaining field. Only authored marker ends
@@ -613,6 +628,7 @@ impl InlineBuilder {
 fn receipt_has_authored_loop_rows(receipt: &super::super::field_buffer::FlushReceipt) -> bool {
     use super::super::field_buffer::{FillBoundary, FlushReceipt};
     let loop_passes = match receipt {
+        FlushReceipt::UnmodeledRewind => return false,
         FlushReceipt::Accepted { passes, .. } => &passes[..passes.len().saturating_sub(1)],
         FlushReceipt::Rejected { passes, .. } => passes.as_slice(),
     };
@@ -707,6 +723,7 @@ mod tests {
                 false,
             );
             let passes = match &receipt {
+                FlushReceipt::UnmodeledRewind => panic!("test word has no entry motion"),
                 FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => {
                     passes
                 }

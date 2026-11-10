@@ -16,6 +16,116 @@
 use super::{FieldBuffer, FieldCell};
 
 #[test]
+fn rewind_treats_raw_and_deferred_spaces_as_the_same_native_write() {
+    use super::{DeferredSourceBlank, EntryRewind, FieldWrite, FillTargets, FlushReceipt};
+    use crate::mandoc::inline::Font;
+
+    // Pinned ALPHA\zX followed by -1n + "\p BETA" accepts ALPHAX then
+    // BETA. term.c:701–714 replaces TABREF at the rewound cursor; the
+    // source SP moves across the still existing automatic entry SP.
+    let source = DeferredSourceBlank {
+        owner: 42,
+        write: 0,
+        font: Font::Regular,
+    };
+    let mut reference = None;
+    for (blank, projected) in [
+        (FieldWrite::Cell(FieldCell::BreakableBlank), true),
+        (FieldWrite::UnprojectedBlank, false),
+        (FieldWrite::DeferredBlanks { source, count: 1 }, false),
+    ] {
+        let mut buffer = FieldBuffer::default();
+        let mut first = FieldWrite::literal("ALPHA");
+        first.push(FieldWrite::ArmBackafter);
+        FieldWrite::append_literal(&mut first, "X");
+        buffer.apply_writes(&first);
+        buffer.note_tab_reference();
+        let entry = buffer.cells().len();
+        buffer.begin_word(false, false);
+        let mut second = vec![
+            FieldWrite::RewindWordEntry(1),
+            FieldWrite::Cell(FieldCell::BreakMarker),
+            blank,
+        ];
+        FieldWrite::append_literal(&mut second, "BETA");
+        let outcome = buffer.rewind_word_entry(&mut second, entry, |_| entry);
+        assert!(matches!(
+            outcome,
+            EntryRewind::Executed {
+                retired_separator: 0,
+                traversed_source_blanks,
+                overwritten_glyph: None,
+            } if traversed_source_blanks.len() == usize::from(projected)
+        ));
+        let word = buffer.apply_writes(&second);
+        assert_eq!(word.first_content_cell, 6);
+        assert_eq!(word.end_cell, 12);
+        assert_eq!(buffer.surviving_word_separator(entry, 1), 1);
+        assert_eq!(buffer.projection_length(6, 8), 1);
+        assert!(!buffer.has_deferred_blanks());
+        let FlushReceipt::Accepted { passes, .. } = buffer.flush_receipt(
+            FillTargets {
+                first: 4096,
+                rest: 4096,
+                unbounded: true,
+            },
+            false,
+        ) else {
+            panic!("supported rewind must have authoritative passes");
+        };
+        assert_eq!(
+            passes.iter().map(|pass| pass.end).collect::<Vec<_>>(),
+            [7, 12]
+        );
+        if let Some(cells) = &reference {
+            assert_eq!(buffer.cells(), cells);
+        } else {
+            reference = Some(buffer.cells().to_vec());
+        }
+    }
+}
+
+#[test]
+fn unmodeled_rewind_leaves_the_old_buffer_and_cannot_issue_a_rejection() {
+    use super::{EntryRewind, FieldWrite, FillTargets, FlushReceipt};
+
+    // Native -3n + "\p\: BETA" can replace a nonpending A. This is
+    // outside the protected-word projection, unlike the -2n case.
+    let mut buffer = FieldBuffer::default();
+    let mut first = FieldWrite::literal("ALPHA");
+    first.push(FieldWrite::ArmBackafter);
+    FieldWrite::append_literal(&mut first, "X");
+    buffer.apply_writes(&first);
+    buffer.note_tab_reference();
+    let entry = buffer.cells().len();
+    buffer.begin_word(false, false);
+    let cells = buffer.cells().to_vec();
+    let mut second = vec![
+        FieldWrite::RewindWordEntry(3),
+        FieldWrite::Cell(FieldCell::BreakMarker),
+        FieldWrite::Cell(FieldCell::Breakpoint),
+    ];
+    FieldWrite::append_literal(&mut second, " BETA");
+    assert!(matches!(
+        buffer.rewind_word_entry(&mut second, entry, |_| entry),
+        EntryRewind::Unmodeled
+    ));
+    assert_eq!(buffer.cells(), cells);
+    buffer.apply_writes(&second);
+    assert!(matches!(
+        buffer.flush_receipt(
+            FillTargets {
+                first: 4096,
+                rest: 4096,
+                unbounded: true
+            },
+            false
+        ),
+        FlushReceipt::UnmodeledRewind
+    ));
+}
+
+#[test]
 fn backline_overwrites_the_occupied_cell_behind_zero_width_controls() {
     use super::FieldWrite;
 

@@ -33,8 +33,10 @@
 /// otherwise buffer `'\b'`); `term_word()` separator blanks 573-576.
 mod cells;
 mod flush;
+mod rewind;
 mod scan;
 mod writes;
+pub(in crate::mandoc::inline::flow) use rewind::{EntryRewind, RewoundGlyph};
 
 pub(in crate::mandoc::inline) use cells::DeferredSourceBlank;
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};
@@ -116,6 +118,9 @@ impl FillTargets {
 /// distinct from an inapplicable field and from acceptance.
 #[derive(Clone, Debug)]
 pub(super) enum FlushReceipt {
+    /// An out-of-scope entry motion changed native coordinates. The
+    /// responsive spelling survives, but cannot authorize a native cut.
+    UnmodeledRewind,
     Accepted {
         passes: Vec<FillPass>,
         native_cells: Vec<FieldCell>,
@@ -129,10 +134,18 @@ pub(super) enum FlushReceipt {
 }
 
 impl FlushReceipt {
+    pub(super) fn passes(&self) -> Option<&[FillPass]> {
+        match self {
+            Self::UnmodeledRewind => None,
+            Self::Accepted { passes, .. } | Self::Rejected { passes, .. } => Some(passes),
+        }
+    }
+
     /// The normalized cells of this same `term_fill()` sweep. Source ownership
     /// remains in `FieldBuffer`, while native skip/tail rules use these bytes.
     pub(super) fn native_cells(&self) -> &[FieldCell] {
         match self {
+            Self::UnmodeledRewind => &[],
             Self::Accepted { native_cells, .. } | Self::Rejected { native_cells, .. } => {
                 native_cells
             }
@@ -145,6 +158,7 @@ enum WordScanPolicy {
     #[default]
     Incremental,
     AwaitFlush,
+    UnmodeledRewind,
 }
 
 /// The unflushed input field of `term.c::term_flushln()`, kept across the
@@ -169,6 +183,9 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Latest occupied cell that an emitted backline could overwrite in
     /// this projection interval. Native BACKBEFORE can survive its retirement.
     backline_projection_target: Option<usize>,
+    /// Graph that armed BACKBEFORE, distinct from intervening entry blanks
+    /// which change the backline projection target but not its origin.
+    backbefore_graph: Option<usize>,
     /// `p->tcol->col`: the next pass resumes here (`term_field` advances it
     /// by `nbr`; 205-207 then consumes break blanks; 235 resets it).
     resume: usize,

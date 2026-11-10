@@ -580,7 +580,7 @@ impl InlineBuilder {
                 && (empty_word || !projection.prints_padding))
                 || !boundary.is_tight()
                 || self.execution.zero_advance_joined
-                || projection.preserve_retreated_separator)
+                || projection.preserve_native_separator)
         {
             // term_word()573-589 buffers this separator independently
             // of projected glyphs and authored leading/trailing blanks.

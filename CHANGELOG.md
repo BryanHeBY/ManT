@@ -127,6 +127,9 @@ that crate was not published for that change.
   definition body flushes its shared field, including spaces in link labels.
 - Preserve source blanks accepted around native word-end markers and
   breakpoint restarts.
+- Preserve accepted spaces, glyphs, and link labels when leading negative roff
+  motion rewinds a pending overstrike. A rewind outside the supported device
+  model no longer lets a partial execution result discard source text.
 - Preserve one hard row per native endline when a kept word pass rejects
   its remaining input.
 - Keep leading literal horizontal motion in native word acceptance when

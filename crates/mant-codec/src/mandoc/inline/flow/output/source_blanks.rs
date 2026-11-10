@@ -4,40 +4,152 @@ use super::super::Inline;
 use super::super::field_buffer::LeadingBlankRetreat;
 use super::native_passes::native_word_marker;
 
-/// A literal SP can advance the rewound native cursor without overwriting a
-/// tab reference (term.c:948-952). Those source blanks have no output cell.
-pub(super) fn remove_rewound_source_blanks(nodes: &mut [Inline], owner: &str, mut count: usize) {
-    fn remove(nodes: &mut [Inline], owner: &str, active: &mut bool, remaining: &mut usize) {
-        for node in nodes {
-            if *remaining == 0 {
-                break;
-            }
-            if let Some(marker) = native_word_marker(node) {
-                *active = marker == owner;
-                continue;
-            }
-            match node {
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => remove(children, owner, active, remaining),
-                Inline::Text { value } | Inline::Code { value } if *active => {
-                    let count = value
-                        .bytes()
-                        .take(*remaining)
-                        .take_while(|&byte| byte == b' ')
-                        .count();
-                    value.drain(..count);
-                    *remaining -= count;
-                    if !value.is_empty() {
-                        *remaining = 0;
+/// A checked negative HORIZ can replace a previous word's live BACKBEFORE
+/// glyph. Its native owner remains the same whether that glyph was settled
+/// before the word or released into the new word's borrowed projection.
+pub(super) fn remove_rewound_glyph(
+    nodes: &mut [Inline],
+    incoming: &mut [Inline],
+    owner: &str,
+    receipt: &super::super::field_buffer::RewoundGlyph,
+) {
+    struct ReverseOwnerCursor<'a, 'b> {
+        owner: &'a str,
+        remaining: usize,
+        group: usize,
+        candidate: Option<(&'b mut String, usize)>,
+    }
+
+    impl<'b> ReverseOwnerCursor<'_, 'b> {
+        fn reset_group(&mut self) {
+            self.group = 0;
+            self.candidate = None;
+        }
+
+        fn visit(&mut self, nodes: &'b mut [Inline]) -> bool {
+            for node in nodes.iter_mut().rev() {
+                if let Some(marker) = native_word_marker(node) {
+                    if marker == self.owner {
+                        if self.remaining < self.group {
+                            return true;
+                        }
+                        self.remaining -= self.group;
                     }
+                    self.reset_group();
+                    continue;
                 }
-                Inline::Equation { .. } | Inline::LineBreak { .. } if *active => *remaining = 0,
-                _ => {}
+                match node {
+                    Inline::Strong { children }
+                    | Inline::Emphasis { children }
+                    | Inline::Link { children, .. } => {
+                        if self.visit(children) {
+                            return true;
+                        }
+                    }
+                    Inline::Text { value } | Inline::Code { value } => {
+                        let scalars = value.chars().count();
+                        if let Some(relative) = self.remaining.checked_sub(self.group)
+                            && let Some((byte, _)) = value.char_indices().rev().nth(relative)
+                        {
+                            self.candidate = Some((value, byte));
+                        }
+                        self.group += scalars;
+                    }
+                    Inline::Equation { value, .. } => {
+                        // eqn_term.c's words are still private annotation
+                        // children here. Publication after acceptance
+                        // installs the structured expression and its cache;
+                        // never edit a published cache independently.
+                        self.group += value.chars().count();
+                    }
+                    Inline::Anchor { id, .. }
+                        if id.as_str().starts_with(super::INTERNAL_FIELD_PREFIX) =>
+                    {
+                        // Generated device minbl is not a word's scalar.
+                        self.reset_group();
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+    }
+
+    // A delayed glyph may re-enter the prior word after its earlier output
+    // marker. Count the recorded native owner's scalar suffix backwards
+    // across both fragments; wrapper and visual node boundaries add no cells.
+    let mut cursor = ReverseOwnerCursor {
+        owner,
+        remaining: receipt.following_scalars,
+        group: 0,
+        candidate: None,
+    };
+    let found = cursor.visit(incoming) || {
+        // A leading unqualified payload in the incoming word belongs to
+        // that word; its real marker is added by append_word_boundary().
+        // It cannot be assigned to the trailing marker in the old output.
+        cursor.reset_group();
+        cursor.visit(nodes)
+    };
+    if found
+        && let Some((value, byte)) = cursor.candidate
+        && value[byte..].starts_with(receipt.scalar)
+    {
+        value.remove(byte);
+    }
+}
+
+/// A raw SP can cross an old cell without writing (term.c:948–952).
+/// Remove the exact source scalar only when it has no projection cell;
+/// embedded surviving padding is represented by its source position.
+pub(super) fn remove_rewound_source_blanks(nodes: &mut [Inline], owner: &str, offsets: &[usize]) {
+    struct Cursor<'a> {
+        owner: &'a str,
+        active: bool,
+        scalar: usize,
+        offsets: std::iter::Peekable<std::slice::Iter<'a, usize>>,
+    }
+    impl Cursor<'_> {
+        fn remove(&mut self, nodes: &mut [Inline]) {
+            for node in nodes {
+                if self.offsets.peek().is_none() {
+                    break;
+                }
+                if let Some(marker) = native_word_marker(node) {
+                    self.active = marker == self.owner;
+                    continue;
+                }
+                match node {
+                    Inline::Strong { children }
+                    | Inline::Emphasis { children }
+                    | Inline::Link { children, .. } => self.remove(children),
+                    Inline::Text { value } | Inline::Code { value } if self.active => {
+                        value.retain(|character| {
+                            let removed = self.offsets.next_if(|&&offset| offset == self.scalar);
+                            self.scalar += 1;
+                            removed.is_none() || character != ' '
+                        });
+                    }
+                    Inline::Equation { value, .. } if self.active => {
+                        self.scalar += value.chars().count();
+                        while self
+                            .offsets
+                            .next_if(|&&offset| offset < self.scalar)
+                            .is_some()
+                        {}
+                    }
+                    _ => {}
+                }
             }
         }
     }
-    remove(nodes, owner, &mut true, &mut count);
+    Cursor {
+        owner,
+        active: true,
+        scalar: 0,
+        offsets: offsets.iter().peekable(),
+    }
+    .remove(nodes);
 }
 
 /// Remove the exact raw blank if it is still projected. When an ordinary

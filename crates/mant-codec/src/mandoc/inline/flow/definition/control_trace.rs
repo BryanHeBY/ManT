@@ -52,6 +52,7 @@ pub(super) fn capture(receipt: &FlushReceipt, flags: FieldFlags) {
             );
             trace.captures += 1;
             trace.accepted_ends = match receipt {
+                FlushReceipt::UnmodeledRewind => Vec::new(),
                 FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => {
                     passes.iter().map(|pass| pass.end).collect()
                 }

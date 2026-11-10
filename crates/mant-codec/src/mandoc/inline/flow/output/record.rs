@@ -1,7 +1,10 @@
 use super::super::WordProjectionPolicy;
+use super::super::field_buffer::{EntryRewind, FieldBuffer, FieldWrite, WordWriteReceipt};
 use super::super::{Inline, InlineBuilder, PendingBoundary};
 use super::native_passes::{RecordedRowSplit, split_recorded_native_passes};
-use super::source_blanks::{remove_rewound_source_blanks, take_retreated_source_blank};
+use super::source_blanks::{
+    remove_rewound_glyph, remove_rewound_source_blanks, take_retreated_source_blank,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
@@ -9,7 +12,7 @@ pub(super) struct WordPassProjection {
     pub(super) closes_before: Vec<usize>,
     pub(super) leading_padding: RestartedPadding,
     pub(super) native_separator: usize,
-    pub(super) preserve_retreated_separator: bool,
+    pub(super) preserve_native_separator: bool,
     pub(super) consumed_initial_separator: bool,
     pub(super) prints_padding: bool,
     pub(super) authored_separator: Option<Inline>,
@@ -74,7 +77,7 @@ impl WordPassProjection {
         surviving: usize,
     ) {
         self.native_separator = buffer.projectable_padding(word_start, word_start + surviving);
-        self.preserve_retreated_separator = written == 2 && surviving == 1;
+        self.preserve_native_separator = written == 2 && surviving == 1;
         self.consumed_initial_separator = surviving > 0 && self.native_separator == 0;
     }
 
@@ -84,6 +87,124 @@ impl WordPassProjection {
             // coordinates as its projected payload. The skipped prefix
             // must not reserve a slot in the current word.
             anchor.content = anchor.content.max(content);
+        }
+    }
+}
+
+struct ExecutedWordEntry {
+    receipt: WordWriteReceipt,
+    rewind: EntryRewind,
+    surviving_separator: usize,
+}
+
+impl ExecutedWordEntry {
+    fn execute(
+        buffer: &mut FieldBuffer,
+        mut writes: Vec<FieldWrite>,
+        start: usize,
+        separator: usize,
+        earlier: &[super::super::NativeWordAnchor],
+    ) -> Self {
+        let rewind = buffer.rewind_word_entry(&mut writes, start, |cell| {
+            earlier
+                .get(earlier_word_after_cell(earlier, cell))
+                .map_or(start, |next| next.start.min(next.content))
+        });
+        let mut receipt = buffer.apply_writes(&writes);
+        let retired_separator = match rewind {
+            EntryRewind::Executed {
+                retired_separator, ..
+            } => retired_separator,
+            EntryRewind::Absent | EntryRewind::Unmodeled => 0,
+        };
+        let surviving_separator =
+            buffer.surviving_word_separator(start, separator - retired_separator);
+        if matches!(rewind, EntryRewind::Executed { .. })
+            && surviving_separator > 0
+            && receipt.first_content_cell < start
+            && buffer.projection_length(receipt.first_content_cell, start) == 0
+        {
+            // A rewound control can precede the surviving entry blank.
+            // It still participates in fill, but it does not consume any
+            // scalar of the incoming word before that blank prints.
+            receipt.first_content_cell = start + surviving_separator;
+        }
+        Self {
+            receipt,
+            rewind,
+            surviving_separator,
+        }
+    }
+
+    fn project_rewind(
+        &self,
+        nodes: &mut [Inline],
+        incoming: &mut [Inline],
+        owner: &str,
+        earlier: &[super::super::NativeWordAnchor],
+    ) {
+        let EntryRewind::Executed {
+            ref traversed_source_blanks,
+            ref overwritten_glyph,
+            ..
+        } = self.rewind
+        else {
+            return;
+        };
+        remove_rewound_source_blanks(incoming, owner, traversed_source_blanks);
+        if let Some(glyph) = overwritten_glyph
+            && let Some(index) = earlier_word_after_cell(earlier, glyph.cell).checked_sub(1)
+        {
+            remove_rewound_glyph(nodes, incoming, &earlier[index].owner, glyph);
+        }
+    }
+
+    fn record_projection(&self, projection: &mut WordPassProjection) {
+        if let EntryRewind::Executed {
+            retired_separator, ..
+        } = self.rewind
+        {
+            projection.preserve_native_separator = true;
+            projection.consumed_initial_separator |=
+                retired_separator > 0 && self.surviving_separator == 0;
+        }
+    }
+
+    fn rewound(&self) -> bool {
+        matches!(self.rewind, EntryRewind::Executed { .. })
+    }
+}
+
+fn earlier_word_after_cell(earlier: &[super::super::NativeWordAnchor], cell: usize) -> usize {
+    earlier.partition_point(|anchor| anchor.content <= cell)
+}
+
+struct RecordedWordInput {
+    native_writes: Option<Vec<FieldWrite>>,
+    native_boundary: PendingBoundary,
+    sentence: bool,
+    projected_keep: bool,
+    projection: WordProjectionPolicy,
+}
+
+impl RecordedWordInput {
+    fn take(
+        execution: &mut super::super::InlineExecutionState,
+        boundary: PendingBoundary,
+        projection: WordProjectionPolicy,
+    ) -> Self {
+        let native_writes = execution.native_word_writes.take();
+        let native_boundary = execution.native_word_boundary.take().unwrap_or(boundary);
+        execution.observe_table_word_writes(
+            native_writes.as_deref().unwrap_or_default(),
+            !native_boundary.is_native_tight(),
+        );
+        Self {
+            native_writes,
+            native_boundary,
+            sentence: std::mem::take(&mut execution.native_word_sentence),
+            projected_keep: std::mem::take(&mut execution.projected_keep_separator),
+            projection,
         }
     }
 }
@@ -98,32 +219,17 @@ impl InlineBuilder {
         if self.execution.native_word_owner.is_none() {
             self.begin_native_word_owner();
         }
-        let native_writes = self.execution.native_word_writes.take();
-        let native_boundary = self
-            .execution
-            .native_word_boundary
-            .take()
-            .unwrap_or(boundary);
-        let sentence = std::mem::take(&mut self.execution.native_word_sentence);
-        let projected_keep = std::mem::take(&mut self.execution.projected_keep_separator);
-        self.execution.observe_table_word_writes(
-            native_writes.as_deref().unwrap_or_default(),
-            !native_boundary.is_native_tight(),
-        );
+        let input = RecordedWordInput::take(&mut self.execution, boundary, projection);
         if !self.execution.uses_definition_word_buffer() {
-            // Plain flow shares the field's ordered cell consumer: the
-            // paragraph is a degenerate flush unit (term.c runs one
-            // term_fill() over `tcol->buf` regardless of authorship), so
-            // its words take the same marker/pass/rejection arithmetic.
-            return self.record_plain_unit_word(
-                incoming,
-                native_boundary,
-                native_writes,
-                sentence,
-                projected_keep,
-                projection,
-            );
+            return self.record_plain_unit_word(incoming, input);
         }
+        let RecordedWordInput {
+            native_writes,
+            native_boundary,
+            sentence,
+            projected_keep,
+            projection,
+        } = input;
         let materialized_field_padding = self.projected_native_field_padding();
         let Some(definition) = &mut self.execution.definition else {
             return WordPassProjection::default();
@@ -154,15 +260,21 @@ impl InlineBuilder {
         // BACKBEFORE retreat (term.c:901-908) can pop the separator blank
         // recorded above, and a pre-execution content start would put
         // already-accepted cells into a later rejected interval.
-        let mut writes = native_writes.expect("formatter word native writes");
-        let (retired_entry, ignored_blanks) = definition
-            .field_buffer
-            .rewind_word_entry(&mut writes, native_word_start);
-        let receipt = definition.field_buffer.apply_writes(&writes);
-        remove_rewound_source_blanks(incoming, &anchor_ir_start, ignored_blanks);
-        let native_separator = definition
-            .field_buffer
-            .surviving_word_separator(native_word_start, separator - retired_entry);
+        let entry = ExecutedWordEntry::execute(
+            &mut definition.field_buffer,
+            native_writes.expect("formatter word native writes"),
+            native_word_start,
+            separator,
+            &definition.field_word_anchors,
+        );
+        entry.project_rewind(
+            &mut self.nodes,
+            incoming,
+            &anchor_ir_start,
+            &definition.field_word_anchors,
+        );
+        let receipt = &entry.receipt;
+        let native_separator = entry.surviving_separator;
         let authored_separator =
             take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
         definition
@@ -176,7 +288,8 @@ impl InlineBuilder {
                         || (self.execution.settled_boundary_glyph && !receipt.prints_padding)
                         || self.execution.zero_advance_joined
                         || receipt.leading_retreat.is_some()
-                        || projected_keep)
+                        || projected_keep
+                        || entry.rewound())
                 {
                     native_word_start
                 } else {
@@ -196,7 +309,7 @@ impl InlineBuilder {
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
         let (buffer, _) = self.execution.word_input();
         projection.record_separator(buffer, native_word_start, separator, native_separator);
-        projection.consumed_initial_separator |= retired_entry > 0 && native_separator == 0;
+        entry.record_projection(&mut projection);
         if let Some(anchor) = self
             .execution
             .definition
@@ -205,8 +318,7 @@ impl InlineBuilder {
         {
             projection.align_separator_owner(anchor, receipt.first_content_cell);
         }
-        projection.preserve_retreated_separator |=
-            receipt.leading_retreat.is_some() || projected_keep;
+        projection.preserve_native_separator |= receipt.leading_retreat.is_some() || projected_keep;
         projection.prints_padding = receipt.prints_padding;
         projection.authored_separator = authored_separator;
         projection
@@ -218,12 +330,15 @@ impl InlineBuilder {
     fn record_plain_unit_word(
         &mut self,
         incoming: &mut [Inline],
-        native_boundary: PendingBoundary,
-        native_writes: Option<Vec<super::super::field_buffer::FieldWrite>>,
-        sentence: bool,
-        projected_keep: bool,
-        projection: WordProjectionPolicy,
+        input: RecordedWordInput,
     ) -> WordPassProjection {
+        let RecordedWordInput {
+            native_writes,
+            native_boundary,
+            sentence,
+            projected_keep,
+            projection,
+        } = input;
         // term_flushln() retired the old native unit before this word.
         // The IR destination may since have changed (D1/Dl, heading, link
         // label). Establish its new output interval here, before writing
@@ -240,17 +355,21 @@ impl InlineBuilder {
             .native_word_owner
             .take()
             .expect("native word owner");
-        let mut writes = native_writes.unwrap_or_default();
-        let buffer = &mut self.execution.plain_input.buffer;
-        let (retired_entry, ignored_blanks) =
-            buffer.rewind_word_entry(&mut writes, native_word_start);
-        let receipt = buffer.apply_writes(&writes);
-        remove_rewound_source_blanks(incoming, &anchor_ir_start, ignored_blanks);
-        let native_separator = self
-            .execution
-            .plain_input
-            .buffer
-            .surviving_word_separator(native_word_start, separator - retired_entry);
+        let entry = ExecutedWordEntry::execute(
+            &mut self.execution.plain_input.buffer,
+            native_writes.unwrap_or_default(),
+            native_word_start,
+            separator,
+            &self.execution.plain_input.anchors,
+        );
+        entry.project_rewind(
+            &mut self.nodes,
+            incoming,
+            &anchor_ir_start,
+            &self.execution.plain_input.anchors,
+        );
+        let receipt = &entry.receipt;
+        let native_separator = entry.surviving_separator;
         let authored_separator =
             take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
         self.execution
@@ -264,7 +383,8 @@ impl InlineBuilder {
                     && (!self.execution.boundary.is_tight()
                         || self.execution.zero_advance_joined
                         || receipt.leading_retreat.is_some()
-                        || projected_keep)
+                        || projected_keep
+                        || entry.rewound())
                 {
                     native_word_start
                 } else {
@@ -296,11 +416,11 @@ impl InlineBuilder {
             cached_glyph,
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
-        result.consumed_initial_separator |= retired_entry > 0 && native_separator == 0;
+        entry.record_projection(&mut result);
         if let Some(anchor) = unit.anchors.last_mut() {
             result.align_separator_owner(anchor, receipt.first_content_cell);
         }
-        result.preserve_retreated_separator |= receipt.leading_retreat.is_some() || projected_keep;
+        result.preserve_native_separator |= receipt.leading_retreat.is_some() || projected_keep;
         result.prints_padding = receipt.prints_padding;
         result.authored_separator = authored_separator;
         result

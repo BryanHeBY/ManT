@@ -92,6 +92,9 @@ impl FieldBuffer {
         targets: FillTargets,
         brtrsp: bool,
     ) -> FlushReceipt {
+        if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind) {
+            return FlushReceipt::UnmodeledRewind;
+        }
         let mut scan = self.native_flush_scan();
         // A width prediction has not executed term_fill(). Start the real
         // remaining pass from its native col, preserving only committed
@@ -126,6 +129,15 @@ impl FieldBuffer {
         }
     }
 
+    pub(in crate::mandoc::inline::flow) fn conservative_deferred_blanks(
+        &self,
+    ) -> Vec<(super::cells::DeferredSourceBlank, usize)> {
+        self.deferred_blanks
+            .iter()
+            .map(|run| (run.source, run.end - run.start))
+            .collect()
+    }
+
     /// A final sweep needs native cells and tail/tab registers, not the
     /// projection prefix, word receipts or already-emitted owner ledger.
     /// Keep the same scanner; only avoid copying unrelated output state.
@@ -145,6 +157,7 @@ impl FieldBuffer {
             deferred_blanks: Vec::new(),
             zero_width_retreats: Vec::new(),
             backline_projection_target: None,
+            backbefore_graph: None,
             backbefore_armed: false,
             backafter_armed: false,
             committed_passes: Vec::new(),

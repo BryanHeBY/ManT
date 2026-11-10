@@ -65,7 +65,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     let settled_boundary_glyph = builder.begin_word_projection_with_break(
         true,
         !builder.in_definition_field() || has_glyph,
-        leading_event_needs_native_retreat(&events),
+        leading_event_needs_native_retreat(&events, builder.execution.zero_advance.is_armed()),
     );
     builder.execution.settled_boundary_glyph =
         settled_boundary_glyph && matches!(origin, WordSource::Text(_));
@@ -170,11 +170,21 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
 /// Whether a leading motion or marker needs the live BACKBEFORE glyph.
 /// HORIZ can consume it without writing a space, while a marker can
 /// redirect its retreat to an authored blank (term.c:678–705, 901–908).
-fn leading_event_needs_native_retreat(events: &[RoffInlineEvent]) -> bool {
+fn leading_event_needs_native_retreat(events: &[RoffInlineEvent], backafter: bool) -> bool {
     let mut seen_marker = false;
     for event in events {
         match event {
             RoffInlineEvent::LineBreak => seen_marker = true,
+            RoffInlineEvent::HorizontalMotion { argument, .. }
+                if !backafter
+                    && !seen_marker
+                    && negative_entry_columns(argument.as_deref()).is_some() =>
+            {
+                // HORIZ clears BACKBEFORE before any following marker.
+                // Keep the old glyph's semantic owner until the checked
+                // cursor plan proves whether a write actually replaces it.
+                return false;
+            }
             RoffInlineEvent::HorizontalMotion {
                 reading_blank: true,
                 argument,
@@ -207,4 +217,11 @@ fn leading_event_needs_native_retreat(events: &[RoffInlineEvent]) -> bool {
         }
     }
     false
+}
+
+pub(super) fn negative_entry_columns(argument: Option<&str>) -> Option<usize> {
+    let units = argument
+        .and_then(crate::mandoc::layout::Distance::parse)?
+        .basic_units();
+    (units < 0).then(|| units.unsigned_abs() as usize / 24)
 }

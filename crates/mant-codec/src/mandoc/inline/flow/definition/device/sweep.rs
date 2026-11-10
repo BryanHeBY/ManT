@@ -47,6 +47,7 @@ impl InlineBuilder {
     ) -> NativePassSweep {
         use super::super::super::field_buffer::FieldCell;
         let (passes, rejected) = match receipt {
+            FlushReceipt::UnmodeledRewind => (&[][..], false),
             FlushReceipt::Accepted { passes, .. } => (passes.as_slice(), false),
             FlushReceipt::Rejected { passes, .. } => (passes.as_slice(), true),
         };

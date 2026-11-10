@@ -63,6 +63,13 @@ pub(in crate::mandoc) enum FieldCell {
 #[derive(Clone, Debug)]
 pub(in crate::mandoc) enum FieldWrite {
     Cell(FieldCell),
+    /// The native font wrote an underline/bold overstrike prefix before
+    /// this graph. A rewind counts those bytes, whereas fill consumes the
+    /// one resulting display cell (term.c:894–926).
+    DecoratedGraph {
+        cell: FieldCell,
+        prefix: u8,
+    },
     /// A generated Unicode escaped space whose semantic column may already
     /// belong to the detached HEAD. It always executes encode1(U+00A0).
     OwnedBlank {
@@ -87,7 +94,8 @@ pub(in crate::mandoc) enum FieldWrite {
     CancelBackafter,
     /// A positive HORIZ first clears BACKBEFORE without buffering a cell.
     CancelBackbefore,
-    /// A leading negative relative HORIZ can overwrite word entry padding.
+    /// A negative relative HORIZ. The first write can use the bounded
+    /// entry plan; a later write cannot prove the word's cursor interval.
     RewindWordEntry(usize),
 }
 
@@ -117,21 +125,6 @@ pub(super) struct DeferredBlankRun {
 }
 
 impl FieldWrite {
-    pub(super) const fn overwrites_entry_padding(&self) -> bool {
-        matches!(
-            self,
-            Self::Cell(
-                FieldCell::Graph { .. }
-                    | FieldCell::Hyphen
-                    | FieldCell::ZeroWidthGraph
-                    | FieldCell::Tab
-                    | FieldCell::TabReference
-                    | FieldCell::BreakMarker
-                    | FieldCell::Breakpoint
-            ) | Self::RecoveryGlyph { .. }
-        )
-    }
-
     pub(in crate::mandoc) fn literal(value: &str) -> Vec<Self> {
         value.chars().map(Self::literal_cell).collect()
     }

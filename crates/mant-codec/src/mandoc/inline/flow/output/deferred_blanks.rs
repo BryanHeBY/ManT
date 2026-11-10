@@ -39,6 +39,14 @@ pub(in crate::mandoc::inline::flow) fn project_from(
     }
 }
 
+pub(in crate::mandoc::inline::flow) fn project_unmodeled(
+    nodes: &mut Vec<Inline>,
+    buffer: &FieldBuffer,
+    start: usize,
+) {
+    project_from(nodes, start, &buffer.conservative_deferred_blanks());
+}
+
 pub(in crate::mandoc::inline::flow) fn apply(
     terms: &mut [Vec<Inline>],
     receipts: &[(DeferredSourceBlank, usize)],

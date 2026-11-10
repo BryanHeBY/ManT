@@ -351,8 +351,9 @@ impl InlineBuilder {
         // (term.c:143-146,233-253); it is not an absent device receipt.
         let receipt = state.field_buffer.flush_receipt(targets, false);
         let (passes, rejected) = match &receipt {
-            FlushReceipt::Accepted { passes, .. } => (passes, false),
-            FlushReceipt::Rejected { passes, .. } => (passes, true),
+            FlushReceipt::UnmodeledRewind => (&[][..], false),
+            FlushReceipt::Accepted { passes, .. } => (passes.as_slice(), false),
+            FlushReceipt::Rejected { passes, .. } => (passes.as_slice(), true),
         };
         let (flags, rmargin, trailspace) = self.native_field_parameters(force_no_break, resumed)?;
         #[cfg(test)]

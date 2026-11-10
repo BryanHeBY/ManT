@@ -153,21 +153,8 @@ impl InlineBuilder {
         projections: Option<&mut Vec<super::output::row_origins::OutputNodeEdits>>,
     ) -> PlainFlushOutcome {
         use super::field_buffer::{FillTargets, FlushReceipt};
-        // An author-less definition session has no field geometry: its
-        // buffer is the same native `tcol->buf` as the plain unit (term.c
-        // runs one term_fill() regardless of authorship) and retires with
-        // the same receipt. Borrow whichever buffer is live.
-        let authorless_definition =
-            execution.definition.is_some() && execution.author_execution.is_none();
         let inherited_printed_row = plain_unit_inherits_printed_row(execution);
-        if execution.definition.is_some() && !authorless_definition {
-            return PlainFlushOutcome::Ordinary;
-        }
-        let Some(PlainInputUnit {
-            mut buffer,
-            anchors,
-            mut output_start,
-        }) = Self::take_plain_flush_unit(execution, nodes, authorless_definition)
+        let Some((authorless_definition, unit)) = Self::take_plain_flush_unit(execution, nodes)
         else {
             return PlainFlushOutcome::Ordinary;
         };
@@ -178,10 +165,16 @@ impl InlineBuilder {
             rest: usize::MAX / 2,
             unbounded: true,
         };
-        let receipt = buffer.flush_receipt(targets, false);
-        let passes = match &receipt {
-            FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => passes,
+        let receipt = unit.buffer.flush_receipt(targets, false);
+        let Some(passes) = receipt.passes() else {
+            Self::retire_unmodeled_plain_flush(execution, nodes, authorless_definition, unit);
+            return PlainFlushOutcome::Ordinary;
         };
+        let PlainInputUnit {
+            mut buffer,
+            anchors,
+            mut output_start,
+        } = unit;
         let edits =
             retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
         edits.remap(&mut output_start);
@@ -268,13 +261,35 @@ impl InlineBuilder {
         outcome
     }
 
+    fn retire_unmodeled_plain_flush(
+        execution: &mut super::InlineExecutionState,
+        nodes: &mut Vec<Inline>,
+        authorless_definition: bool,
+        unit: PlainInputUnit,
+    ) {
+        super::output::deferred_blanks::project_unmodeled(nodes, &unit.buffer, unit.output_start);
+        Self::restore_retired_buffer(
+            execution,
+            nodes,
+            authorless_definition,
+            unit.buffer,
+            unit.anchors,
+        );
+    }
+
     /// Move the selected native buffer and its owner interval as one unit;
     /// an output Vec or helper return cannot retire either independently.
     fn take_plain_flush_unit(
         execution: &mut super::InlineExecutionState,
         nodes: &[Inline],
-        authorless_definition: bool,
-    ) -> Option<PlainInputUnit> {
+    ) -> Option<(bool, PlainInputUnit)> {
+        // An author-less definition has no field geometry and can retire
+        // with the same native pass receipt as the plain input buffer.
+        let authorless_definition =
+            execution.definition.is_some() && execution.author_execution.is_none();
+        if execution.definition.is_some() && !authorless_definition {
+            return None;
+        }
         let (buffer, anchors) = if authorless_definition {
             let definition = execution.definition.as_mut().expect("session");
             let buffer = std::mem::take(&mut definition.field_buffer);
@@ -290,11 +305,14 @@ impl InlineBuilder {
             }
             execution.plain_input.take_input()
         };
-        Some(PlainInputUnit {
-            buffer,
-            anchors,
-            output_start: execution.plain_input.output_start.min(nodes.len()),
-        })
+        Some((
+            authorless_definition,
+            PlainInputUnit {
+                buffer,
+                anchors,
+                output_start: execution.plain_input.output_start.min(nodes.len()),
+            },
+        ))
     }
 
     /// Output ownership of the current physical row, including a native

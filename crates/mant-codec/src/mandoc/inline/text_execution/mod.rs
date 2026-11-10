@@ -189,6 +189,7 @@ fn execute_formatter_word_events(
     let mut word = WordExecution::new(&context);
     context.zero_advance.begin_fragment();
     for (index, event) in events.iter().enumerate() {
+        let write_start = word.native_writes.len();
         // These native writes have no reading-text glyph. Keep their receipt
         // separate from FieldBuffer's graph/width model. Once any column has
         // buffered input its later flush retires BACKAFTER for the whole row.
@@ -226,6 +227,11 @@ fn execute_formatter_word_events(
             );
         }
         word.append_source_event(event, &mut context, index + 1 == events.len());
+        native_writes::qualify_rewound_graphs(
+            &mut word.native_writes,
+            write_start,
+            context.font.current,
+        );
     }
     word.finish_content_prefix();
     word.flush_segment();

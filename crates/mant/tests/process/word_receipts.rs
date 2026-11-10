@@ -289,6 +289,129 @@ fn leading_horizontal_motion_changes_native_acceptance_without_replaying_padding
 }
 
 #[test]
+fn negative_word_entry_preserves_each_surviving_cell_and_owner() {
+    // These exact inputs were run with the pinned CVS. term.c:701–714
+    // rewinds without shortening lastcol; an SP advances across the old
+    // cells without overwriting them (term.c:948–952). Markers can replace
+    // the tab reference or the live BACKBEFORE glyph before term_fill().
+    let heading = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    for (word, expected, label) in [
+        (r#".No "\h'-1n'   BETA""#, "ALPHAX  BETA\nOMEGA", None),
+        (r#".No "\h'-2n'   BETA""#, "ALPHAX BETA\nOMEGA", None),
+        (r#".No "\h'-1n'    BETA""#, "ALPHAX   BETA\nOMEGA", None),
+        (r#".No "\h'-2n' BETA""#, "ALPHAXBETA\nOMEGA", None),
+        (r#".No "\h'-1n'\p BETA""#, "ALPHAX\nBETA\nOMEGA", None),
+        (r#".No "\h'-2n'\p BETA""#, "ALPHABETA\nOMEGA", None),
+        (r#".No "\h'-2n'\: BETA""#, "ALPHABETA\nOMEGA", None),
+        (
+            r#".No "\h'-1n'\p\:    BETA""#,
+            "ALPHAX\n    BETA\nOMEGA",
+            None,
+        ),
+        (r#".No "\h'-24u'\p BETA""#, "ALPHAX\nBETA\nOMEGA", None),
+        (r#".No "\h'-25u'\p BETA""#, "ALPHAX\nBETA\nOMEGA", None),
+        (r#".No "\h'-47u'\p BETA""#, "ALPHAX\nBETA\nOMEGA", None),
+        (r#".No "\h'-48u'\p\: BETA""#, "ALPHA\n BETA\nOMEGA", None),
+        (r#".Em "\h'-2n'\p\: BETA""#, "ALPHA\n BETA\nOMEGA", None),
+        (
+            r#".Lk https://x.io "\h'-2n'\p\: BETA""#,
+            "ALPHA\n BETA: https://x.io\nOMEGA",
+            Some("BETA"),
+        ),
+        // Zero distance does not take the negative HORIZ branch. The
+        // unchanged marker position rejects BETA in the actual pass.
+        (r#".No "\h'0n'\p\: BETA""#, "ALPHAX\n\nOMEGA", None),
+    ] {
+        let source = format!("{heading}.No \"ALPHA\\zX\"\n{word}\n.No \"\"\n.br\n.No OMEGA\n");
+        assert_readbacks(&source, expected, label);
+    }
+}
+
+#[test]
+fn unmodeled_word_entry_cannot_authorize_a_native_rejection() {
+    // This exact pinned CVS input moves back far enough to replace the
+    // ordinary A, yielding ALPH / BETA / OMEGA. ManT's documented bounded
+    // rewind excludes ordinary authored glyphs; its conservative spelling
+    // preserves both words instead of pruning from mispositioned markers.
+    let source = r#".Dd November 10, 2026
+.Dt CHECK 1
+.Os
+.Sh NAME
+.Nm check
+.Nd word audit
+.Sh DESCRIPTION
+.No "ALPHA\zX"
+.No "\h'-3n'\p\: BETA"
+.No ""
+.br
+.No OMEGA
+"#;
+    assert_readbacks(source, "ALPHAX BETA\nOMEGA", None);
+    // If motion occurs inside one operand, the independent leading-word
+    // plan is not applicable either. Retain the new label even when the
+    // native terminal moves the cursor and changes the marker's pass.
+    for distance in ["-1n", "-2n"] {
+        let inline = format!(
+            "{}.No \"ALPHA\\zX \\h'{distance}'\\p\\: BETA\"\n.br\n.No OMEGA\n",
+            source.split_once(".No").unwrap().0
+        );
+        assert_readbacks(&inline, "ALPHAX  BETA\nOMEGA", None);
+    }
+}
+
+#[test]
+fn negative_word_entry_keeps_the_exact_prior_scalar_and_backafter_order() {
+    // Pinned term.c:678–681 cancels an armed BACKAFTER without moving
+    // the cursor. With BACKBEFORE alone, only its final X can be
+    // replaced; the identically spelled earlier X keeps its own style.
+    let heading = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    for (first, second, expected) in [
+        (r"ALPHA\zX", r"\h'-2n'\p\: BETA", "ALPHA\n BETA\nOMEGA"),
+        (r"ALPHAX\zX", r"\h'-2n'\p\: BETA", "ALPHAX\n BETA\nOMEGA"),
+        (
+            r"ALPHA\fBX\fR\zX",
+            r"\h'-2n'\p\: BETA",
+            "ALPHAX\n BETA\nOMEGA",
+        ),
+        (r"ALPHA\zX\z", r"\h'-1n'\:\p BETA", "ALPHAX BETA\nOMEGA"),
+        (r"ALPHA\z ", r"\h'-47u' BETA", "ALPHA   BETA\nOMEGA"),
+    ] {
+        let source = format!("{heading}.No \"{first}\"\n.No \"{second}\"\n.br\n.No OMEGA\n");
+        assert_readbacks(&source, expected, None);
+    }
+}
+
+#[test]
+fn negative_word_entry_places_crossed_spaces_at_their_source_position() {
+    // Fixed CVS term.c:948–952 lets an internal source SP cross TABREF
+    // (no visible contribution) or the automatic SP (represented once
+    // at its new position). encode1() writes style backspaces before the
+    // graph, so in the link case it also replaces the old padding.
+    let heading = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    for (word, expected, label) in [
+        (r#".No "\h'-1n'B ETA""#, "ALPHAXB ETA\nOMEGA", None),
+        (r#".No "\h'-2n'B ETA""#, "ALPHABETA\nOMEGA", None),
+        (r#".Em "\h'-2n'BE TA""#, "ALPHABE TA\nOMEGA", None),
+        (r#".No "\h'-2n'B  ETA""#, "ALPHAB ETA\nOMEGA", None),
+        (r#".No "\h'-2n'B   ETA""#, "ALPHAB  ETA\nOMEGA", None),
+        (
+            r#".Lk https://x.io "\h'-1n'B ETA""#,
+            "ALPHAXB ETA: https://x.io\nOMEGA",
+            Some("B ETA"),
+        ),
+        (
+            r#".Lk https://x.io "\h'-2n'B ETA""#,
+            "ALPHAB ETA: https://x.io\nOMEGA",
+            Some("B ETA"),
+        ),
+        (r#".No "\h'-2n'\p\zY  BETA""#, "ALPHAY\nBETA\nOMEGA", None),
+    ] {
+        let source = format!("{heading}.No \"ALPHA\\zX\"\n{word}\n.br\n.No OMEGA\n");
+        assert_readbacks(&source, expected, label);
+    }
+}
+
+#[test]
 fn rewound_literal_spaces_keep_existing_cells_before_word_end_breaks() {
     // Fixed CVS ran these exact words with ASCII, UTF-8, HTML, tree and
     // lint. term.c::encode() advances across old cells for raw SP but

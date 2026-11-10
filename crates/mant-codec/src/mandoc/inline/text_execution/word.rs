@@ -187,26 +187,19 @@ impl WordExecution {
                 ));
         let mut rewind_entry = false;
         if context.policy.record_native_cells {
-            if !armed {
-                if self.native_writes.is_empty()
-                    && let Some(distance) =
-                        argument.and_then(crate::mandoc::layout::Distance::parse)
-                    && distance.basic_units() < 0
-                {
-                    let columns = distance.basic_units().unsigned_abs() as usize / 24;
+            if let Some(columns) = super::super::word_input::negative_entry_columns(argument) {
+                rewind_entry = self.native_writes.is_empty();
+                self.native_writes
+                    .push(FieldWrite::RewindWordEntry(columns));
+            } else if !armed && reading_blank {
+                if pending {
+                    // The first positive advance clears BACKBEFORE
+                    // without overwriting the previous graph (term.c:692).
+                    self.native_writes.push(FieldWrite::CancelBackbefore);
+                }
+                if preserves_advance {
                     self.native_writes
-                        .push(FieldWrite::RewindWordEntry(columns));
-                    rewind_entry = true;
-                } else if reading_blank {
-                    if pending {
-                        // The first positive advance clears BACKBEFORE
-                        // without overwriting the previous graph (term.c:692).
-                        self.native_writes.push(FieldWrite::CancelBackbefore);
-                    }
-                    if preserves_advance {
-                        self.native_writes
-                            .push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
-                    }
+                        .push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
                 }
             }
             if !rewind_entry {
@@ -215,7 +208,7 @@ impl WordExecution {
         }
         // ESCAPE_HORIZ clears BACKAFTER before parsing the operand. Omit
         // only this generated approximation; never remove an author blank.
-        if armed || !(reading_blank || rewind_entry) {
+        if armed || !(rewind_entry || reading_blank) {
             return;
         }
         if pending {

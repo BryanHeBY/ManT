@@ -105,6 +105,7 @@ impl InlineBuilder {
         };
         let boundaries = std::mem::take(&mut state.run_in_boundaries);
         let passes = match &device.receipt {
+            FlushReceipt::UnmodeledRewind => return,
             FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => passes,
         };
         let mut pass = 0;
