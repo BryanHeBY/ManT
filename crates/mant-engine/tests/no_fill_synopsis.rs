@@ -209,10 +209,16 @@ fn synopsis_field_posts_keep_empty_rows_and_restore_the_body_budget() {
                 .expect("original empty TEST section remains addressable");
             assert_eq!(section.blocks.len(), 0, "{}", case.id);
             assert_eq!(section.children.len(), 0, "{}", case.id);
-            let before_next = text.split_once("\nNEXT\n").unwrap().0;
-            assert!(before_next.ends_with("\nTEST"), "{}: {text}", case.id);
-            continue;
         }
+        // Every source retains a SY block in TEST even when that block
+        // projects no body. man_term.c::pre_SH sees the native child and
+        // contributes one PD row before NEXT, independently of TEST's IR.
+        let next = document
+            .sections
+            .iter()
+            .find(|section| section.id.as_str() == "next")
+            .expect("NEXT section remains addressable");
+        assert_eq!(next.spacing_before_lines, 1, "{}", case.id);
         let region = text
             .split_once("\nTEST\n")
             .unwrap()
@@ -220,11 +226,16 @@ fn synopsis_field_posts_keep_empty_rows_and_restore_the_body_budget() {
             .split_once("\nNEXT\n")
             .unwrap()
             .0;
-        let rows: Vec<_> = region.lines().map(str::to_owned).collect();
+        let rows: Vec<_> = region.split('\n').collect();
         let reading_rows = case.reading_rows.as_ref().unwrap_or(&case.expected_rows);
-        if rows != *reading_rows {
+        let expected: Vec<_> = reading_rows
+            .iter()
+            .map(String::as_str)
+            .chain(std::iter::once(""))
+            .collect();
+        if rows != expected {
             failures.push(format!(
-                "{}\nnative {:?}\nreading {reading_rows:?}\nproduct {rows:?}",
+                "{}\nnative body {:?}\nreading with NEXT spacing {expected:?}\nproduct {rows:?}",
                 case.id, case.expected_rows,
             ));
         }
