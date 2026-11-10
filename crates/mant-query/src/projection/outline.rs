@@ -2,11 +2,10 @@
 use super::{ProjectionError, TLDR_TITLE, content_complete, semantics_complete};
 use crate::{
     ResolvedContent,
-    selectors::{
-        DOCUMENT_ROOT_TITLE, DocumentSelectorIndex, TLDR_ID, collect_selection_root_entries,
-        collect_selection_sections,
-    },
+    selectors::{DOCUMENT_ROOT_TITLE, TLDR_ID},
 };
+
+mod rooted;
 use mant_ir::{
     DOCUMENT_ROOT_ID, EntryKindCount, EntrySummary, OutlinePath, Section, SemanticEntry,
     SemanticIndex,
@@ -75,70 +74,28 @@ pub fn build_outline_with_references(
         .map_or_else(Vec::new, |document| document.diagnostics.clone());
     let semantics_complete = semantics_complete(&diagnostics);
     let content_complete = content_complete(&diagnostics);
-    let materialized_entries =
-        if root.is_some() && !matches!(entries, EntryProjection::None | EntryProjection::Summary) {
-            EntryProjection::All
-        } else {
-            entries.clone()
-        };
-    let mut nodes = Vec::new();
-    if query.tldr.is_some() && !matches!(&materialized_entries, EntryProjection::Kinds { .. }) {
-        nodes.push(OutlineNode::Tldr {
-            path: OutlinePath::Tldr.to_string().into(),
-            id: TLDR_ID.into(),
-            title: TLDR_TITLE.to_owned(),
-        });
-    }
-    if let Some(manual) = &query.document {
-        // Compact outlines inspect borrowed facts only. Forms and names are
-        // materialized exclusively when entry rows are actually requested.
-        let index = (!matches!(
-            materialized_entries,
-            EntryProjection::None | EntryProjection::Summary
-        ))
-        .then(|| SemanticIndex::build(manual));
-        if manual.heading.is_some() || !manual.blocks.is_empty() {
-            let root_entries = index.as_ref().map_or(&[][..], SemanticIndex::root);
-            let children = project_entries(
-                root_entries,
-                None,
-                &[],
-                &materialized_entries,
-                query.address.as_ref(),
-                &|path| index.as_ref()?.owner_at(path).cloned(),
-            );
-            let root = OutlineNode::DocumentRoot {
-                path: OutlinePath::DocumentRoot.to_string().into(),
-                id: DOCUMENT_ROOT_ID.into(),
-                title: DOCUMENT_ROOT_TITLE.to_owned(),
-                entry_summary: if index.is_some() {
-                    projected_summary(root_entries, &materialized_entries)
-                } else {
-                    borrowed_summary(&manual.blocks, &materialized_entries)
-                },
-                children,
-            };
-            if !matches!(&materialized_entries, EntryProjection::Kinds { .. })
-                || !root.children().is_empty()
-            {
-                nodes.push(root);
-            }
-        }
-        nodes.extend(outline_nodes(
-            &manual.sections,
-            &[],
-            index.as_ref(),
-            &materialized_entries,
-            query.address.as_ref(),
-        ));
-    }
-    if let Some(selector) = root.as_ref() {
-        let mut selected = resolve_outline_root(query, &nodes, selector, &entries)?;
-        reproject_selected_node(&mut selected, &entries, true);
-        nodes = vec![selected];
-    }
+    let (nodes, references) = if let Some(selector) = root.as_ref() {
+        let selected = rooted::RootedOutline::resolve(query, selector)?;
+        (
+            vec![selected.project(query, &entries)],
+            selected.references(query, reference_policy),
+        )
+    } else {
+        let references = query.document.as_ref().map_or_else(
+            || mant_protocol::ReferenceInventory::not_scanned(reference_policy.clone()),
+            |document| {
+                super::project_references(
+                    document,
+                    query.address.as_ref(),
+                    mant_ir::ReferenceScope::Document,
+                    reference_policy,
+                )
+            },
+        );
+        (project_document(query, &entries), references)
+    };
     Ok(QueryOutline {
-        references: reference_inventory(query, root.as_ref(), reference_policy)?,
+        references,
         display_title: query
             .document
             .as_ref()
@@ -185,49 +142,64 @@ fn validate_outline_request(
     Ok(())
 }
 
-fn reference_inventory(
-    query: &ResolvedContent,
-    root: Option<&ContentSelector>,
-    policy: &mant_protocol::ReferenceProjection,
-) -> Result<mant_protocol::ReferenceInventory, ProjectionError> {
-    use mant_ir::{EntryOwnerLocationRef, ReferenceScope};
-    let Some(document) = &query.document else {
-        return Ok(mant_protocol::ReferenceInventory::not_scanned(
-            policy.clone(),
-        ));
-    };
-    let scan = |scope| super::project_references(document, query.address.as_ref(), scope, policy);
-    let Some(root) = root else {
-        return Ok(scan(ReferenceScope::Document));
-    };
-    if super::excerpt::selector_matches(root, &OutlinePath::Tldr, TLDR_ID) {
-        return Ok(mant_protocol::ReferenceInventory::not_scanned(
-            policy.clone(),
-        ));
+fn tldr_node() -> OutlineNode {
+    OutlineNode::Tldr {
+        path: OutlinePath::Tldr.to_string().into(),
+        id: TLDR_ID.into(),
+        title: TLDR_TITLE.to_owned(),
     }
-    if super::excerpt::selector_matches(root, &OutlinePath::DocumentRoot, DOCUMENT_ROOT_ID) {
-        return Ok(scan(ReferenceScope::Overview));
+}
+
+fn overview_node(entry_summary: Option<EntrySummary>, children: Vec<OutlineNode>) -> OutlineNode {
+    OutlineNode::DocumentRoot {
+        path: OutlinePath::DocumentRoot.to_string().into(),
+        id: DOCUMENT_ROOT_ID.into(),
+        title: DOCUMENT_ROOT_TITLE.to_owned(),
+        entry_summary,
+        children,
     }
-    let mut located = Vec::new();
-    collect_selection_root_entries(&document.blocks, &mut located);
-    collect_selection_sections(&document.sections, &mut located);
-    let index = DocumentSelectorIndex::new(&located);
-    let candidate = index.resolve(&query.label, root)?;
-    let sections = candidate
-        .coordinates()
-        .iter()
-        .map(|value| u32::try_from(value - 1).expect("addressable section"))
-        .collect::<Vec<_>>();
-    Ok(match candidate {
-        crate::selectors::LocatedNode::Section { .. } => scan(ReferenceScope::Section(&sections)),
-        crate::selectors::LocatedNode::Entry { entry, .. } => {
-            scan(ReferenceScope::Owner(EntryOwnerLocationRef {
-                sections: &sections,
-                blocks: entry.block_path(),
-                item_index: u32::try_from(entry.item_index()).expect("addressable item"),
-            }))
+}
+
+fn project_document(query: &ResolvedContent, entries: &EntryProjection) -> Vec<OutlineNode> {
+    let mut nodes = Vec::new();
+    if query.tldr.is_some() && !matches!(entries, EntryProjection::Kinds { .. }) {
+        nodes.push(tldr_node());
+    }
+    if let Some(manual) = &query.document {
+        // Compact outlines inspect borrowed facts only. Forms and names are
+        // materialized exclusively when entry rows are actually requested.
+        let index = (!matches!(entries, EntryProjection::None | EntryProjection::Summary))
+            .then(|| SemanticIndex::build(manual));
+        if manual.heading.is_some() || !manual.blocks.is_empty() {
+            let root_entries = index.as_ref().map_or(&[][..], SemanticIndex::root);
+            let children = project_entries(
+                root_entries,
+                None,
+                &[],
+                entries,
+                query.address.as_ref(),
+                &|path| index.as_ref()?.owner_at(path).cloned(),
+            );
+            if !matches!(entries, EntryProjection::Kinds { .. }) || !children.is_empty() {
+                nodes.push(overview_node(
+                    if index.is_some() {
+                        projected_summary(root_entries, entries)
+                    } else {
+                        borrowed_summary(&manual.blocks, entries)
+                    },
+                    children,
+                ));
+            }
         }
-    })
+        nodes.extend(outline_nodes(
+            &manual.sections,
+            &[],
+            index.as_ref(),
+            entries,
+            query.address.as_ref(),
+        ));
+    }
+    nodes
 }
 
 fn outline_nodes(
@@ -398,49 +370,68 @@ fn project_entries(
             if !selected && children.is_empty() {
                 return None;
             }
-            let title = mant_protocol::entry_label(
-                mant_protocol::EntryLabelMode::Forms,
-                &entry.id,
-                &entry.names,
-                &entry.forms,
-            );
             let path = OutlinePath::nested_entry(section, &coordinates)?;
             let owner = owner_at(&path)?;
-            Some(OutlineNode::DocumentEntry {
-                owner: Box::new(owner),
-                path: path.to_string().into(),
-                id: entry.id.clone(),
-                title,
-                entry_kind: entry.kind,
-                case: entry.case,
-                names: entry.names.clone(),
-                alias_groups: entry.alias_groups.clone(),
-                alias_of: entry.alias_of.clone(),
-                forms: entry.forms.clone(),
-                document_targets: entry
-                    .document_targets
-                    .iter()
-                    .map(|target| EntryDocumentTarget {
-                        label: target.label.clone(),
-                        reference: target.reference.clone(),
-                        address: match target.reference {
-                            // A term citation is a query, even with a section.
-                            // Only catalog resolution can select its address.
-                            mant_ir::DocumentReference::Manual { .. } => None,
-                            mant_ir::DocumentReference::Document { .. } => current_address
-                                .and_then(|address| target.reference.resolve_from(address)),
-                        },
-                    })
-                    .collect(),
-                value_domain: entry
-                    .value_domain
-                    .as_ref()
-                    .map(|domain| Box::new(project_value_domain(domain, current_address))),
-                entry_summary: projected_summary(&entry.children, projection),
+            Some(entry_node(
+                entry,
+                &path,
+                owner,
+                current_address,
+                projected_summary(&entry.children, projection),
                 children,
-            })
+            ))
         })
         .collect()
+}
+
+fn entry_node(
+    entry: &SemanticEntry,
+    path: &OutlinePath,
+    owner: mant_ir::ContentReveal,
+    current_address: Option<&mant_ir::DocumentAddress>,
+    entry_summary: Option<EntrySummary>,
+    children: Vec<OutlineNode>,
+) -> OutlineNode {
+    let title = mant_protocol::entry_label(
+        mant_protocol::EntryLabelMode::Forms,
+        &entry.id,
+        &entry.names,
+        &entry.forms,
+    );
+    OutlineNode::DocumentEntry {
+        owner: Box::new(owner),
+        path: path.to_string().into(),
+        id: entry.id.clone(),
+        title,
+        entry_kind: entry.kind,
+        case: entry.case,
+        names: entry.names.clone(),
+        alias_groups: entry.alias_groups.clone(),
+        alias_of: entry.alias_of.clone(),
+        forms: entry.forms.clone(),
+        document_targets: entry
+            .document_targets
+            .iter()
+            .map(|target| EntryDocumentTarget {
+                label: target.label.clone(),
+                reference: target.reference.clone(),
+                address: match target.reference {
+                    // A term citation is a query, even with a section.
+                    // Only catalog resolution can select its address.
+                    mant_ir::DocumentReference::Manual { .. } => None,
+                    mant_ir::DocumentReference::Document { .. } => {
+                        current_address.and_then(|address| target.reference.resolve_from(address))
+                    }
+                },
+            })
+            .collect(),
+        value_domain: entry
+            .value_domain
+            .as_ref()
+            .map(|domain| Box::new(project_value_domain(domain, current_address))),
+        entry_summary,
+        children,
+    }
 }
 
 fn project_value_domain(
@@ -461,209 +452,4 @@ fn project_value_domain(
             entry_kinds: entry_kinds.clone(),
         },
     }
-}
-
-fn find_outline_node<'a>(
-    nodes: &'a [OutlineNode],
-    predicate: &impl Fn(&OutlineNode) -> bool,
-) -> Option<&'a OutlineNode> {
-    for node in nodes {
-        if predicate(node) {
-            return Some(node);
-        }
-        if let Some(found) = find_outline_node(node.children(), predicate) {
-            return Some(found);
-        }
-    }
-    None
-}
-
-fn resolve_outline_root(
-    query: &ResolvedContent,
-    nodes: &[OutlineNode],
-    selector: &ContentSelector,
-    entries: &EntryProjection,
-) -> Result<OutlineNode, ProjectionError> {
-    let mut located = Vec::new();
-    if let Some(manual) = &query.document {
-        collect_selection_root_entries(&manual.blocks, &mut located);
-        collect_selection_sections(&manual.sections, &mut located);
-    }
-    let index = DocumentSelectorIndex::new(&located);
-    if super::excerpt::selector_matches(selector, &OutlinePath::Tldr, TLDR_ID)
-        && query.tldr.is_some()
-    {
-        index.validate_synthetic_identity(&query.label, selector, TLDR_ID, "0")?;
-        return find_outline_node(nodes, &|node| node.path() == OutlinePath::Tldr.to_string())
-            .cloned()
-            .ok_or_else(|| ProjectionError::UnknownSelector {
-                document: query.label.clone(),
-                selector: selector.to_string(),
-            });
-    }
-    if super::excerpt::selector_matches(selector, &OutlinePath::DocumentRoot, DOCUMENT_ROOT_ID)
-        && query
-            .document
-            .as_ref()
-            .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
-    {
-        index.validate_synthetic_identity(&query.label, selector, DOCUMENT_ROOT_ID, "root")?;
-        return find_outline_node(nodes, &|node| {
-            node.path() == OutlinePath::DocumentRoot.to_string()
-        })
-        .cloned()
-        .ok_or_else(|| ProjectionError::UnknownSelector {
-            document: query.label.clone(),
-            selector: selector.to_string(),
-        });
-    }
-
-    let selected = index.resolve(&query.label, selector)?;
-    if let Some(node) = find_outline_node(nodes, &|node| node.path() == selected.path().to_string())
-    {
-        return Ok(node.clone());
-    }
-    let crate::selectors::LocatedNode::Entry { entry, .. } = selected else {
-        return Err(ProjectionError::UnknownSelector {
-            document: query.label.clone(),
-            selector: selector.to_string(),
-        });
-    };
-    let mut metadata =
-        SemanticEntry::from_owner_shallow(entry.owner()).expect("located semantic owner");
-    if metadata.alias_of.is_some()
-        && query.document.as_ref().is_some_and(|document| {
-            mant_ir::entry_relation_issues(document)
-                .iter()
-                .any(|issue| {
-                    issue.owner == metadata.id
-                        && matches!(
-                            issue.kind,
-                            mant_ir::EntryRelationIssueKind::AliasOf
-                                | mant_ir::EntryRelationIssueKind::Cycle
-                        )
-                })
-        })
-    {
-        metadata.alias_of = None;
-    }
-    let mut node = project_entries(
-        &[metadata],
-        None,
-        &[],
-        &EntryProjection::All,
-        query.address.as_ref(),
-        &|_| {
-            Some(mant_ir::ContentReveal::Owner {
-                sections: selected
-                    .coordinates()
-                    .iter()
-                    .map(|index| u32::try_from(index - 1).unwrap_or(u32::MAX))
-                    .collect(),
-                blocks: entry.block_path().to_vec(),
-                item_index: u32::try_from(entry.item_index()).unwrap_or(u32::MAX),
-            })
-        },
-    )
-    .pop()
-    .expect("projected selected owner");
-    if let OutlineNode::DocumentEntry {
-        path,
-        entry_summary,
-        ..
-    } = &mut node
-    {
-        *path = selected.path().to_string().into();
-        *entry_summary = borrowed_summary(entry.owner().blocks(), entries);
-    }
-    Ok(node)
-}
-
-fn reproject_selected_node(
-    node: &mut OutlineNode,
-    projection: &EntryProjection,
-    keep_self: bool,
-) -> bool {
-    match node {
-        OutlineNode::Tldr { .. } => true,
-        OutlineNode::DocumentRoot {
-            entry_summary,
-            children,
-            ..
-        }
-        | OutlineNode::DocumentSection {
-            entry_summary,
-            children,
-            ..
-        } => {
-            if matches!(projection, EntryProjection::None) {
-                *entry_summary = None;
-            }
-            children.retain_mut(|child| reproject_selected_node(child, projection, false));
-            if let EntryProjection::Kinds { kinds } = projection {
-                *entry_summary = projected_outline_summary(children, kinds);
-            }
-            true
-        }
-        OutlineNode::DocumentEntry {
-            entry_kind,
-            entry_summary,
-            children,
-            ..
-        } => {
-            if matches!(projection, EntryProjection::None) {
-                *entry_summary = None;
-            }
-            if matches!(projection, EntryProjection::None | EntryProjection::Summary) {
-                children.clear();
-            } else {
-                children.retain_mut(|child| reproject_selected_node(child, projection, false));
-            }
-            if let EntryProjection::Kinds { kinds } = projection {
-                *entry_summary = projected_outline_summary(children, kinds);
-            }
-            keep_self
-                || match projection {
-                    EntryProjection::All => true,
-                    EntryProjection::Kinds { kinds } => {
-                        kinds.contains(entry_kind) || !children.is_empty()
-                    }
-                    EntryProjection::None | EntryProjection::Summary => false,
-                }
-        }
-    }
-}
-
-fn projected_outline_summary(
-    nodes: &[OutlineNode],
-    kinds: &[mant_ir::EntryKind],
-) -> Option<EntrySummary> {
-    fn visit(
-        node: &OutlineNode,
-        kinds: &[mant_ir::EntryKind],
-        summary: &mut EntrySummary,
-        direct: bool,
-    ) {
-        let OutlineNode::DocumentEntry {
-            entry_kind,
-            forms,
-            children,
-            ..
-        } = node
-        else {
-            return;
-        };
-        if kinds.contains(entry_kind) {
-            record_projected_summary(summary, *entry_kind, forms.len(), direct);
-        }
-        for child in children {
-            visit(child, kinds, summary, false);
-        }
-    }
-
-    let mut summary = EntrySummary::default();
-    for node in nodes {
-        visit(node, kinds, &mut summary, true);
-    }
-    (!summary.is_empty()).then_some(summary)
 }

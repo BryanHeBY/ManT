@@ -18,6 +18,9 @@ that crate was not published for that change.
 - Account for first-line offsets when checking whether list markers and
   paragraphs share a spacing budget. Empty unsupported text no longer
   adds a phantom TUI row or restarts the gap budget.
+- Resolve a rooted outline's selector once and project only the selected
+  subtree. Its entry rows and references share the original location,
+  including when a synthetic overview or quick-reference node is absent.
 - Highlight command synopses in ordinary paragraphs as well as code blocks,
   including nested usage sections. Distinguish command names, options,
   replaceable arguments and syntax delimiters while retaining source fonts,

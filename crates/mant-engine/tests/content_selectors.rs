@@ -288,3 +288,82 @@ fn rooted_references_use_original_owner_coordinates_independent_of_entry_visibil
     .unwrap();
     assert_eq!(overview.references.records.len(), 2);
 }
+
+#[test]
+fn rooted_outline_keeps_original_subtree_paths_and_filters_only_entry_rows() {
+    let query = load_markdown_text(
+        "# Tool\n\nOverview.\n\n## Unrelated\n\nOther.\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `run`: Main.\n\n  <!-- mant:entries role=option case=sensitive -->\n  - `--help`: Help.\n\n### Empty subsection\n\nNothing to index.\n",
+        None,
+    )
+    .unwrap();
+    for projection in [
+        EntryProjection::None,
+        EntryProjection::Summary,
+        EntryProjection::All,
+    ] {
+        let all = build_outline_projection(&query, projection.clone(), None).unwrap();
+        let rooted =
+            build_outline_projection(&query, projection, Some(ContentSelector::path("2"))).unwrap();
+        assert_eq!(
+            rooted.nodes.as_slice(),
+            &[all.nodes.last().unwrap().clone()]
+        );
+    }
+
+    let kind = mant_ir::EntryKind::Parameter {
+        parameter_kind: mant_ir::ParameterKind::Option,
+    };
+    let projection = EntryProjection::Kinds { kinds: vec![kind] };
+    let rooted =
+        build_outline_projection(&query, projection.clone(), Some(ContentSelector::path("2")))
+            .unwrap();
+    let mant_protocol::OutlineNode::DocumentSection {
+        entry_summary,
+        children,
+        ..
+    } = &rooted.nodes[0]
+    else {
+        panic!("section")
+    };
+    assert_eq!(entry_summary.as_ref().unwrap().descendants, 1);
+    assert_eq!(entry_summary.as_ref().unwrap().direct, 0);
+    assert_eq!(
+        children
+            .iter()
+            .map(mant_protocol::OutlineNode::path)
+            .collect::<Vec<_>>(),
+        ["2/e1", "2.1"]
+    );
+    assert_eq!(children[0].children()[0].path(), "2/e1/e1");
+    let selected =
+        build_outline_projection(&query, projection, Some(ContentSelector::path("2/e1"))).unwrap();
+    assert_eq!(selected.nodes.as_slice(), &children[..1]);
+}
+
+#[test]
+fn absent_synthetic_root_does_not_shadow_selected_reference_scope() {
+    let mut query = load_markdown_text(
+        "## First\n\n[One](one.md).\n\n## Second\n\n[Two](two.md).\n",
+        None,
+    )
+    .unwrap();
+    let policy = mant_protocol::ReferenceProjection {
+        mode: mant_protocol::ReferenceProjectionMode::All,
+        ..Default::default()
+    };
+    for id in ["tldr", mant_ir::DOCUMENT_ROOT_ID] {
+        query.document.as_mut().unwrap().sections[0].id = id.into();
+        let outline = mant_query::build_outline_with_references(
+            &query,
+            EntryProjection::Summary,
+            Some(ContentSelector::id(id)),
+            &policy,
+        )
+        .unwrap();
+        assert_eq!(outline.nodes[0].path(), "1");
+        assert!(matches!(
+            outline.references.records.as_slice(),
+            [record] if matches!(&record.target, mant_ir::LinkTarget::Document { name, .. } if name == "one")
+        ));
+    }
+}

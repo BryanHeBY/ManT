@@ -71,6 +71,10 @@ typed target, optional validated form association and resolution state. A
 not the occurrence position and does not follow the target.
 Entry-kind filtering does not prune the source range of reference traversal;
 an explicit outline root does. Pagination counts occurrences, not groups.
+Rooted outlines resolve the selector once against the full snapshot for
+ambiguity checks, then materialize entry metadata and scan references only
+for the resolved subtree. Neither step reinterprets a reserved ID as a
+synthetic node that is absent from the snapshot.
 
 Counts are closed variants `exact { value }`, `lower-bound { value }` and
 `unknown { reason }`. Scan completion, count precision and returned truncation
