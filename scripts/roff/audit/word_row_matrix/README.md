@@ -55,6 +55,10 @@ standalone navigation markers have their own rules. Richer block shapes
 without a selected projection remain Review. These statuses do not change
 the direct native prose verdict or make a structured layout exact.
 
+`navigation_evidence.py` proves generated destinations from raw Markdown and
+source spans. `content_signature.py` projects independent owner and layout axes,
+and `fidelity.py` compares those observations across readback stages.
+
 `owner` still reports normalized path/kind topology; `glyph` still reports
 the global scalar sequence. The separate `owner-content` axis compares each
 mapped owner's non-layout scalars without Unicode folding. It is Review when

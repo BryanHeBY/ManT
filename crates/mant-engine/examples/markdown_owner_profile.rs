@@ -2,12 +2,12 @@
 
 use std::io::{self, Write};
 
-use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 use mant_ir::{Block, Document, Inline, ResolvedContent, validate_document};
-use mant_protocol::QueryBundle;
 use serde_json::{Value, json};
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+#[path = "support/readback.rs"]
+mod readback;
+use readback::{Result, WireObservation, transport, visit_readbacks};
 
 #[derive(Clone, Copy)]
 enum Boundary {
@@ -109,10 +109,12 @@ fn observe(content: &ResolvedContent, markdown: Option<&str>) -> Result<(Resolve
         validate_document(content.document.as_ref().expect("source document")),
         []
     );
-    let encoded = serde_json::to_string(&QueryBundle::from(content))?;
-    let bundle: QueryBundle = serde_json::from_str(&encoded)?;
-    assert_eq!(serde_json::to_string(&bundle)?, encoded);
-    let transported: ResolvedContent = bundle.into();
+    let WireObservation {
+        json: encoded,
+        equivalent,
+        content: transported,
+    } = transport(content)?;
+    assert!(equivalent, "the mutation must survive exact JSON transport");
     assert_eq!(
         validate_document(transported.document.as_ref().expect("transported document")),
         []
@@ -128,22 +130,11 @@ fn observe(content: &ResolvedContent, markdown: Option<&str>) -> Result<(Resolve
 fn chain(content: &ResolvedContent) -> Result<Value> {
     let (transported, direct) = observe(content, None)?;
     let mut stages = serde_json::Map::from_iter([("roff".to_owned(), direct)]);
-    for (options, routes) in [
-        (MarkdownOptions::default(), ["default-1", "default-2"]),
-        (
-            MarkdownOptions::ADDRESSABLE,
-            ["addressable-1", "addressable-2"],
-        ),
-    ] {
-        let mut current = transported.clone();
-        for route in routes {
-            let markdown = render_markdown_with_options(&current, options);
-            let parsed = mant_loader::load_markdown_text(&markdown, None)?;
-            let (transported, record) = observe(&parsed, Some(&markdown))?;
-            stages.insert(route.to_owned(), record);
-            current = transported;
-        }
-    }
+    visit_readbacks(&transported, |route, parsed, markdown| {
+        let (transported, record) = observe(parsed, Some(markdown))?;
+        stages.insert(route.to_owned(), record);
+        Ok(transported)
+    })?;
     Ok(Value::Object(stages))
 }
 

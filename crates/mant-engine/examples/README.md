@@ -10,12 +10,14 @@ not product query interfaces or independent pristine renderers.
 | `roff_semantic_profile.rs` | Entry declarations, conversions and public evidence queries |
 | `roff_target_profile.rs` | Native and lowered link/reference targets |
 | `roff_projection_profile.rs` | Visible projection and consumer coordinates |
+| `roff_word_row_profile.rs` | Roff, wire, and two-round Markdown observations for the finite word/row audit |
 | `markdown_owner_profile.rs` | Validated direct and two-round Markdown observations of controlled text transfers between owners |
 
 An observer's private modules, tests and fixtures belong in its matching
-subdirectory. `support/` contains helpers shared by examples: JSONL transport
-and load/operation measurements. Private modules use ordinary functions and
-explicit imports; moving code does not change an observer's schema or rules.
+subdirectory. `support/` contains helpers shared by examples: JSONL transport,
+wire and Markdown readback, and load/operation measurements. Private modules
+use ordinary functions and explicit imports; moving code does not change an
+observer's schema or rules.
 
 The structure observer deliberately parses twice: the first pass records the
 owned native tree, and the second follows the normal indexed-page loader.

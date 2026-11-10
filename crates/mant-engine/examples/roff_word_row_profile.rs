@@ -2,11 +2,13 @@
 
 use std::io::{self, BufRead, BufWriter, Write};
 
-use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 use mant_ir::{ResolvedContent, validate_document};
-use mant_protocol::QueryBundle;
 use serde::Deserialize;
 use serde_json::json;
+
+#[path = "support/readback.rs"]
+mod readback;
+use readback::{Result, WireObservation, transport, visit_readbacks};
 
 #[derive(Deserialize)]
 struct Request {
@@ -14,7 +16,7 @@ struct Request {
     source: String,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     let mut output = BufWriter::new(io::stdout().lock());
     for line in io::stdin().lock().lines() {
         let request: Request = serde_json::from_str(&line?)?;
@@ -37,12 +39,12 @@ fn observe(
     route: &str,
     content: &ResolvedContent,
     markdown: Option<&str>,
-) -> Result<ResolvedContent, Box<dyn std::error::Error>> {
-    let bundle = QueryBundle::from(content);
-    let encoded = serde_json::to_string(&bundle)?;
-    let decoded: QueryBundle = serde_json::from_str(&encoded)?;
-    let equivalent = encoded == serde_json::to_string(&decoded)?;
-    let transported: ResolvedContent = decoded.into();
+) -> Result<ResolvedContent> {
+    let WireObservation {
+        json: encoded,
+        equivalent,
+        content: transported,
+    } = transport(content)?;
     let plain = mant_render::render_query_man(&transported);
     let decorated = mant_render::render_query_text_with(&transported, |_, text| {
         format!("\x1b[1m{text}\x1b[0m")
@@ -64,22 +66,10 @@ fn observe(
     Ok(transported)
 }
 
-fn profile(request: &Request, output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
+fn profile(request: &Request, output: &mut impl Write) -> Result<()> {
     let original = mant_loader::load_roff_bytes(request.source.as_bytes())?;
     let original = observe(output, &request.id, "roff", &original, None)?;
-    for (options, routes) in [
-        (MarkdownOptions::default(), ["default-1", "default-2"]),
-        (
-            MarkdownOptions::ADDRESSABLE,
-            ["addressable-1", "addressable-2"],
-        ),
-    ] {
-        let mut current = original.clone();
-        for route in routes {
-            let markdown = render_markdown_with_options(&current, options);
-            let readback = mant_loader::load_markdown_text(&markdown, None)?;
-            current = observe(output, &request.id, route, &readback, Some(&markdown))?;
-        }
-    }
-    Ok(())
+    visit_readbacks(&original, |route, readback, markdown| {
+        observe(output, &request.id, route, readback, Some(markdown))
+    })
 }
