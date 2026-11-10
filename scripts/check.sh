@@ -61,10 +61,8 @@ run "check native append run bounds and retirement" \
   python3 crates/libmandoc-rs/tests/native/run_append_growth.py
 run "test CVS snapshot freezing" \
   python3 crates/libmandoc-rs/scripts/test_freeze_cvs_snapshot.py
-run "test registered mandoc oracle identity" \
-  python3 -m scripts.roff.tests.test_mandoc_oracle
-run "test repository tool entrypoints" \
-  python3 -m unittest scripts.roff.tests.test_tool_entrypoints
+run "test roff tooling, fixtures and audit classifiers" \
+  python3 -m unittest discover -s scripts/roff/tests -t .
 run "test tagged release tool paths" \
   python3 -m unittest scripts.release.tests.test_source_tool_paths
 run "test verification cache and scratch cleanup" \
@@ -76,92 +74,8 @@ run "test bounded native dependency mirror fallback" \
 run "test paired measurement scopes and statistics" \
   python3 -m unittest scripts.dev.performance.tests
 run "check roff fidelity audit" python3 -m scripts.roff.audit.audit_roff_fidelity --self-check
-run "test fidelity source-reader orchestration" \
-  python3 -m unittest scripts.roff.tests.test_audit_roff_fidelity
 run "test bidirectional roff content comparison" python3 -m scripts.roff.lib.roff_content_compare
-run "test source-bound presentation explanations" python3 -m scripts.roff.tests.test_roff_content_explanations
-run "test source-bound roff layout geometry" python3 -m scripts.roff.tests.test_roff_layout_geometry
-run "test source-owned hard lines and empty-row mutations" \
-  python3 -m unittest scripts.roff.tests.test_roff_line_observations
-run "test roff acceptance axes and structural edges" \
-  python3 -m unittest scripts.roff.tests.test_acceptance_replay
-run "test finite rule registry and mutation boundaries" \
-  python3 -m unittest scripts.roff.tests.test_rule_boundary_replay
-run "test pristine profile recipes and cache provenance" \
-  python3 -m unittest scripts.roff.tests.test_reference_recipes
-run "test escape grammar fixture bindings" \
-  python3 -m unittest scripts.roff.tests.test_escape_rule_fixtures
-run "test field rule source and owner bindings" \
-  python3 -m unittest scripts.roff.tests.test_field_rule_fixtures
-run "test exact row presentation source and profile bindings" \
-  python3 -m unittest scripts.roff.tests.test_row_presentation_fixtures
-run "test Markdown hard-row fixture bindings" \
-  python3 -m unittest scripts.roff.tests.test_markdown_rule_fixtures
-run "test Markdown reader structural observation" \
-  python3 -m unittest scripts.roff.tests.test_markdown_reader_observer
-run "test definition relation fixture identities and profile admission" \
-  python3 -m unittest scripts.roff.tests.test_definition_relation_fixture
-run "test definition consumer fixture identities and profile admission" \
-  python3 -m unittest scripts.roff.tests.test_definition_consumer_fixture
-run "test controlled omission fixture bindings" \
-  python3 -m unittest scripts.roff.tests.test_integrity_rule_fixtures
-run "test source recovery card scopes" \
-  python3 -m unittest scripts.roff.tests.test_source_recovery_cards
-run "test generated device cell card scopes" \
-  python3 -m unittest scripts.roff.tests.test_rule_projection_cards
-run "test immutable roff consumer fixture bindings" \
-  python3 -m unittest scripts.roff.tests.test_consumer_fixture_contract
-run "test table layout source and real-manual fixture identities" \
-  python3 -m unittest scripts.roff.tests.test_table_fixture_contract
-run "test literal initial-row source identities and native profiles" \
-  python3 -m unittest scripts.roff.tests.test_literal_leading_rows
-run "test native table execution domains and profile bindings" \
-  python3 -m unittest scripts.roff.tests.test_table_execution_fixture
-run "test deferred annotation source members and consumer bindings" \
-  python3 -m unittest scripts.roff.tests.test_deferred_ownership_fixture
-run "test annotation publication source and oracle matrix" \
-  python3 -m unittest scripts.roff.tests.test_annotation_publication_fixture
-run "test complete source-sequence receipts and recovery classification" \
-  python3 -m unittest scripts.roff.tests.test_source_sequence_fixtures
-run "test shared source-line receipts and row classifications" \
-  python3 -m unittest scripts.roff.tests.test_shared_source_line_fixtures
-run "test incoming word-separator state fixture bindings" \
-  python3 -m unittest scripts.roff.tests.test_word_spacing_fixture
-run "test finite word and aligned-row audit" \
-  python3 -m unittest scripts.roff.tests.test_word_row_matrix \
-    scripts.roff.tests.test_section_word_matrix scripts.roff.tests.test_section_word_ledger \
-    scripts.roff.tests.test_pending_row_handoff scripts.roff.tests.test_section_tail_handoff \
-    scripts.roff.tests.test_section_padding_handoff
-run "test source-bound synopsis word observation corrections" \
-  python3 -m unittest scripts.roff.tests.test_synopsis_word_observations
-run "test native enclosure operand identities and profile admission" \
-  python3 -m unittest scripts.roff.tests.test_enclosure_operands
-run "test complete name-field session identities and profile admission" \
-  python3 -m unittest scripts.roff.tests.test_name_field_session_fixture
-run "test ordinary name-body handoff identities and native profiles" \
-  python3 -m unittest scripts.roff.tests.test_name_body_handoff_fixture
-run "test name-body source origins and native profiles" \
-  python3 -m unittest scripts.roff.tests.test_name_body_origin_fixture
-run "test native margin-flush word and cell fixture bindings" \
-  python3 -m unittest scripts.roff.tests.test_margin_flush_fixture
-run "test scoped native layout fixture" \
-  python3 -m unittest scripts.roff.tests.test_scoped_layout_fixture
-run "test complete scoped layout sources" \
-  python3 -m unittest scripts.roff.tests.test_scoped_layout_sources
-run "test native execution scope fixture identities" \
-  python3 -m unittest scripts.roff.tests.test_execution_scope_fixture
-run "test complete field boundary sources" \
-  python3 -m unittest scripts.roff.tests.test_field_boundary_sources
-run "test exact roff fixture checkout across newline settings" \
-  python3 -m unittest scripts.roff.tests.test_fixture_checkout
-run "test mathematical export real-source identities" \
-  python3 -m unittest scripts.roff.tests.test_math_export_sources
-run "test source-line real-manual identity" \
-  python3 -m unittest scripts.roff.tests.test_real_source_lines
 run "test rendering matrix mutation sensitivity" python3 -m scripts.roff.audit.check_roff_behavior_matrix --self-test
-run "test bounded rendering census" python3 -m scripts.roff.audit.audit_roff_rendering --self-test
-run "test roff audit parallelism planning" python3 -m scripts.roff.tests.test_roff_audit_common
-run "test full-corpus audit orchestration" python3 -m scripts.roff.tests.test_audit_roff_all
 run "check roff structure audit" python3 -m scripts.roff.audit.audit_roff_structure --self-check
 run "check roff CommonMark projection audit" \
   python3 -m scripts.roff.audit.audit_roff_projection --self-check
