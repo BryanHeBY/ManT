@@ -102,3 +102,77 @@ def rs_sources():
         body = ('OUTERMARK\n' + before + begin + 'BEFOREMARK\n' + inside + 'INSIDEMARK\n'
                 + end + exit_break + after + 'AFTERMARK\n')
         yield 'RS-review', [scope, inside, before, after, exit_break], MAN + body + END
+
+
+HP_SUCCESSORS = {
+    'PP': '.PP\nAFTERMARK\n',
+    'HP': '.HP 12\nAFTERMARK\n',
+    'TP': '.TP 8\nTAGMARK\nAFTERMARK\n',
+    'IP': '.IP TAGMARK 8\nAFTERMARK\n',
+    'SH': '.SH NEXT\nAFTERMARK\n',
+    'SS': '.SS NEXT\nAFTERMARK\n',
+    'UR': '.UR https://example.test/\nAFTERMARK\n.UE\n',
+    'MT': '.MT check@example.test\nAFTERMARK\n.ME\n',
+    'EOF': '',
+}
+HP_CHILDREN = {
+    'empty': '',
+    'nbrzw': '\\&\n',
+    'bare-zero-advance': '\\z\n',
+    'empty-text': '.B ""\n',
+    'word': 'BODYWORD\n',
+    'control-word': '.ft B\nBODYWORD\n',
+}
+ROW_SCOPES = {
+    'root': ('', ''),
+    'RS0': ('.RS 0\n', '.RE\n'),
+    'RS4n': ('.RS 4n\n', '.RE\n'),
+    'nested-RS': ('.RS 0\n.RS 0\n', '.RE\n.RE\n'),
+}
+LITERAL_PREFIX = {
+    'nbrzw': '\\&\n',
+    'empty-text': '\n',
+    'author-spaces': '\\&   \\&\n',
+    'author-tab': '\t\n',
+    'nonbreaking-space': '\\~\n',
+}
+
+
+def hanging_source(pd, debt, children, count, filled, scope, successor):
+    start, close = ROW_SCOPES[scope]
+    fill_start, fill_end = mode(filled)
+    # Do not put fi directly after HP: it becomes a real BODY child.
+    tail = HP_SUCCESSORS[successor] + fill_end + END if successor != 'EOF' else ''
+    return (MAN + f'.PD {pd}\n' + fill_start + start + 'BEFOREMARK\n'
+            + (f'.sp -{debt}\n' if debt else '')
+            + ('.HP 16\n' + HP_CHILDREN[children]) * count + close + tail)
+
+
+def hanging_post_sources():
+    for pd, debt, count, filled, successor in product(range(3), range(4), range(1, 5),
+                                                       (True, False), HP_SUCCESSORS):
+        yield ('ROW-hp-debt', [pd, debt, count, filled, successor],
+               hanging_source(pd, debt, 'empty', count, filled, 'root', successor))
+    for children, pd, filled, successor in product(HP_CHILDREN, range(3), (True, False),
+                                                    HP_SUCCESSORS):
+        yield ('ROW-hp-child', [children, pd, filled, successor],
+               hanging_source(pd, 0, children, 1, filled, 'root', successor))
+    for children, debt, scope, successor, filled in product(
+            ('empty', 'nbrzw', 'word'), range(2), ROW_SCOPES, ('PP', 'SH', 'EOF'), (True, False)):
+        yield ('ROW-hp-scope', [children, debt, scope, successor, filled],
+               hanging_source(0, debt, children, 1, filled, scope, successor))
+
+
+def literal_owner_sources():
+    boundaries = {key: ROW_SCOPES[key] for key in ('root', 'RS0', 'nested-RS', 'RS4n')}
+    boundaries['fi-nf'] = ('.fi\n.nf\n', '')
+    for count, first, boundary, insert, after in product(
+            range(4), LITERAL_PREFIX, boundaries, ('first', 'after-first', 'last'), (False, True)):
+        # Keep the three coordinate labels when two resolve to the same
+        # position. The manifest deduplicates their exact source bytes.
+        index = {'first': 0, 'after-first': min(1, count), 'last': count}[insert]
+        prefix = [LITERAL_PREFIX[first], *(['\\&\n'] * (count - 1))] if count else []
+        begin, end = boundaries[boundary]
+        body = (''.join(prefix[:index]) + begin + ''.join(prefix[index:])
+                + ('AFTERMARK\n' if after else '') + end)
+        yield 'ROW-literal-owner', [count, first, boundary, insert, after], MAN + '.PD 0\n.nf\n' + body + '.fi\n'

@@ -38,3 +38,24 @@ The calibration, cohort, full-native and product summaries report coverage
 and budget stops independently. The local gate runs the small manifest and
 comparator tests, while the dedicated fixtures test the confirmed behavior
 through the actual rendering consumers.
+
+The horizontal-rewind and literal-owner follow-up is frozen independently
+with `freeze --followup`: 54,260 logical coordinates, including degenerate
+literal insertions, the ten source adapters, six field adapters, and
+bounded long prefixes. Keep its oracle and product checkpoints separate
+from the original manifest; hash is the join key across both manifests.
+
+`compare` also reports Markdown obligations by source hash, route, stage,
+and axis. Both first readbacks are checked against the original transported
+IR, even outside the strict native prose lane. The second readback has both
+a source check and a stability check. The bounded projection distinguishes
+scalars, author blanks, hard rows and tails, positive gaps, semantic
+owners, and target/label ownership. Renderer framing and verified
+standalone navigation markers have their own rules. Richer block shapes
+without a selected projection remain Review. These statuses do not change
+the direct native prose verdict or make a structured layout exact.
+
+The follow-up summary also records `nativeWord`: exact W-core rows,
+unsupported literal-origin effects, protected ordinary-cell rewinds,
+extraction limits, and actual differences. The two named Review states
+retain the differing rows; they are never promoted to native passes.

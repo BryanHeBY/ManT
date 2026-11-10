@@ -13,6 +13,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("action", choices=("freeze", "oracle", "product", "compare"))
+    parser.add_argument("--followup", action="store_true", help="freeze only the follow-up cohorts")
     parser.add_argument("--calibration", action="store_true")
     parser.add_argument("--cohort", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
@@ -23,7 +24,7 @@ def main():
     parser.add_argument("--follow", action="store_true")
     args = parser.parse_args()
     if args.action == "freeze":
-        result = freeze(args.directory)
+        result = freeze(args.directory, increment=args.followup)
     elif args.action == "compare":
         result = compare_products(args.directory)
     elif args.action == "product":

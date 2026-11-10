@@ -9,7 +9,10 @@ from tempfile import TemporaryFile
 from time import monotonic, sleep
 
 from scripts.roff.fixtures.reference_recipes import digest
-from .compare import (STRICT, UnsupportedExtraction, group_witness, native_prose, product_prose)
+from .compare import (
+    STRICT, UnsupportedExtraction, group_witness, native_prose, product_prose, word_comparison,
+)
+from .fidelity import chain_obligations
 from .manifest import jsonl, row_bytes
 from .oracle import BATCH, atomic_output, check_checkpoint, stream_bytes
 
@@ -53,7 +56,26 @@ def verdict(source, oracle, observations, binding):
             except UnsupportedExtraction:
                 state = "strict-row-difference"
         result["routes"][route] = state
+    if "W-core" in source["cohorts"]:
+        result["nativeWord"] = rewind_obligation(source, utf8, tree, observations.get("roff"))
     return result
+
+
+def rewind_obligation(source, receipt, tree, observation):
+    if observation is None:
+        return dict(state="blocked")
+    if not all(observation[key] for key in ("jsonEquivalent", "validDocument", "ansiEquivalent")):
+        return dict(state="public-invariant-failure")
+    try:
+        native = native_prose(receipt, tree)["rows"]
+    except UnsupportedExtraction as error:
+        return dict(state="review-extractor", reason=str(error))
+    try:
+        actual = product_prose(observation["plain"])
+    except UnsupportedExtraction as error:
+        return dict(state="difference", native=native, reason=str(error))
+    state = word_comparison(source["source"], native, actual)
+    return dict(state=state) if state == "exact" else dict(state=state, native=native, actual=actual)
 
 
 def product_batch(binary, chunk, checkpoint, output, binding):
@@ -100,7 +122,10 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
     output.mkdir(parents=True, exist_ok=True)
     binary = binary.resolve()
     product = dict(binary=str(binary), sha256=digest(binary.read_bytes()), native=binding,
-                   profiles=list(ROUTES))
+                   profiles=list(ROUTES), verdictContract={
+                       name: digest(Path(__file__).with_name(name).read_bytes())
+                       for name in ("product.py", "compare.py", "followup.py")
+                   })
     path = output / "binding.json"
     if path.exists() and json.loads(path.read_bytes()) != product:
         raise ValueError("product binary or oracle cache changed")
@@ -112,6 +137,7 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
     size = sum(p.stat().st_size for p in output.glob("*.jsonl.gz"))
     completed = 0
     routes = Counter()
+    native_word = Counter()
     stream = jsonl(directory / "sources.jsonl.gz")
     for index, chunk in enumerate(iter(lambda: list(islice(stream, BATCH)), [])):
         checkpoint = native / f"{index:06}.jsonl.gz"
@@ -133,12 +159,15 @@ def collect_product(directory, binary, name, *, wall_budget, artifact_budget, fo
                 raise ValueError("cached product checkpoint source order changed")
             completed += 1
             routes.update(row["verdict"]["routes"].values())
+            if obligation := row["verdict"].get("nativeWord"):
+                native_word[obligation["state"]] += 1
         (output / "progress.json").write_bytes(row_bytes(dict(
-            completed=completed, routes=dict(routes), artifactBytes=size,
+            completed=completed, routes=dict(routes), nativeWord=dict(native_word), artifactBytes=size,
             wallSeconds=monotonic() - start)))
     planned = json.loads((directory / "manifest.json").read_bytes())["sources"]
     summary = dict(planned=planned, completed=completed, uncovered=planned - completed,
-                   routes=dict(routes), artifactBytes=size, wallSeconds=monotonic() - start)
+                   routes=dict(routes), nativeWord=dict(native_word), artifactBytes=size,
+                   wallSeconds=monotonic() - start)
     (output / "summary.json").write_bytes(row_bytes(summary))
     return summary
 
@@ -154,6 +183,8 @@ def compare_products(directory):
     totals = Counter()
     states = {route: Counter() for route in ROUTES}
     pairs = 0
+    fidelity_axes = {}
+    review_reasons = Counter()
     with atomic_output(directory / "classification-differences.jsonl.gz") as differences:
         for chunk in sorted(candidate.glob("*.jsonl.gz")):
             previous = baseline / chunk.name
@@ -170,9 +201,12 @@ def compare_products(directory):
                 for route in ROUTES:
                     old = public_state(left["observations"].get(route), expected)
                     new = public_state(right["observations"].get(route), expected)
-                    if old[0] == "review" and new[0] == "review":
-                        classification = "review"
-                    elif old[0] in ("exact", "review"):
+                    if old[0] == "review":
+                        classification = {
+                            "review": "review",
+                            "exact": "newly-asserted-pass",
+                        }.get(new[0], "failure-without-baseline")
+                    elif old[0] == "exact":
                         classification = "retained-pass" if new[0] == "exact" else "new-regression"
                     elif new[0] == "exact":
                         classification = "fixed"
@@ -184,12 +218,29 @@ def compare_products(directory):
                     states[route][classification] += 1
                     if classification not in ("retained-pass", "review"):
                         changes[route] = dict(classification=classification, before=old, after=new)
-                if changes:
-                    differences.write(row_bytes(dict(sourceSha256=left["sourceSha256"], states=changes,
-                                                       checkpoint=chunk.name, native=expected)))
+                fidelity_differences = {}
+                fidelity_review = {}
+                for route, stages in chain_obligations(right["observations"]).items():
+                    for stage, axes in stages.items():
+                        for axis, evidence in axes.items():
+                            key = f"{route}/{stage}/{axis}"
+                            fidelity_axes.setdefault(key, Counter())[evidence[0]] += 1
+                            if evidence[0] == "difference":
+                                fidelity_differences[key] = evidence[1:]
+                            elif evidence[0] == "review":
+                                reason = evidence[1]
+                                fidelity_review.setdefault(reason, []).append(key)
+                                review_reasons[reason] += 1
+                if changes or fidelity_differences or fidelity_review:
+                    differences.write(row_bytes(dict(
+                        sourceSha256=left["sourceSha256"], states=changes,
+                        fidelity=fidelity_differences, reviewAxes=fidelity_review,
+                        checkpoint=chunk.name, native=expected)))
     planned = json.loads((directory / "manifest.json").read_bytes())["sources"]
     summary = dict(planned=planned, paired=pairs, uncovered=planned - pairs, counts=dict(totals),
-                   byRoute={route: dict(counts) for route, counts in states.items()})
+                   byRoute={route: dict(counts) for route, counts in states.items()},
+                   readbackAxes={key: dict(counts) for key, counts in fidelity_axes.items()},
+                   readbackReviewReasons=dict(review_reasons))
     (directory / "classification.json").write_bytes(row_bytes(summary))
     return summary
 

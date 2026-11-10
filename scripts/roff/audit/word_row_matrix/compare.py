@@ -3,6 +3,9 @@ from base64 import b64decode
 import re
 import unicodedata
 
+from .core import MDOC
+from .followup import HORIZ, MODE, PREFIX, operand
+
 # The four core word generators have a fixed prose origin.
 STRICT = {"A-atomic", "A-phase", "A-rearm", "A-seam"}
 HEADING = "DESCRIPTION"
@@ -136,3 +139,45 @@ def group_witness(tree):
                                starts=[i for i, child in enumerate(children[1:], 1)
                                        if i == 1 or child["kind"] == "text" and child["lineStart"]]))
     return groups
+
+
+def word_comparison(source, expected, actual):
+    """Classify only the source-proven device differences in W-core.
+
+    Keep the unmodified row evidence. These are Review, not exact passes:
+    deep rewinds may change an already authored ordinary cell, and the
+    literal device's temporary-origin update is not a supported IR action.
+    """
+    if expected == actual:
+        return "exact"
+    body = source.removeprefix(MDOC)
+    mode = next((i for i, (enter, _) in enumerate(MODE) if enter and body.startswith(enter)), 0)
+    body = body.removeprefix(MODE[mode][0])
+    first, _, later = body.partition("\n")
+    second = later.partition("\n")[0]
+    # The frozen reference proves the thresholds in both units. Do not
+    # infer a motion size from a changed row or from the spelling alone.
+    motion = next((i for i, entry in enumerate(HORIZ[2:], 2) if entry in second), None)
+    units = {2: 24, 3: 48, 4: 72, 5: 24, 6: 25, 7: 47, 8: 48}.get(motion, 0)
+    # term_word divides by the native cell width for a buffered rewind.
+    # If it moves the origin instead, ascii_advance rounds at half a cell.
+    columns, origin = units // 24, (units + 11) // 24
+    if (mode == 3 and origin and expected and actual and expected[0] == actual[0]
+            and len(expected) == len(actual)
+            and all(a == b or (b and a == " " * origin + b)
+                    for a, b in zip(expected[1:], actual[1:]))):
+        # term.c:709-714 moves offset/ti on an empty input row. Exact
+        # source whitespace and the accepted rows still match after this
+        # one proven origin; a mismatch elsewhere must remain a difference.
+        return "review-literal-origin"
+    if (first + "\n" in (operand(".No", PREFIX[0]), operand(".No", PREFIX[1]))
+            and (mode in (0, 2) and columns == 3 or mode == 1 and columns in (2, 3))):
+        # The unsupported cursor can overwrite a suffix of ALPHA and
+        # reject further native cells. It cannot remove the still-accepted
+        # prefix, the explicit tail word, or any surviving BETA text.
+        if (actual and actual[0].startswith("ALP")
+                and all(not any(word in row for row in expected)
+                        or any(word in row for row in actual)
+                        for word in ("BETA", "OMEGA"))):
+            return "review-protected-cell"
+    return "difference"
