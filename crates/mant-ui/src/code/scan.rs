@@ -21,7 +21,7 @@ enum Mode {
     Arithmetic,
 }
 
-pub(super) fn accents(value: &str) -> Vec<Accent> {
+pub(super) fn accents(value: &str) -> Option<Vec<Accent>> {
     let mut scanner = Scanner {
         value,
         accents: Vec::new(),
@@ -57,11 +57,7 @@ pub(super) fn accents(value: &str) -> Vec<Accent> {
             .protected(offset, command_line)
             .unwrap_or_else(|| scanner.token(offset, &mut command_line));
     }
-    if scanner.limited {
-        Vec::new()
-    } else {
-        scanner.accents
-    }
+    (!scanner.limited).then_some(scanner.accents)
 }
 
 struct Scanner<'a> {

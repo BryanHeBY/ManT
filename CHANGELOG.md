@@ -15,6 +15,12 @@ that crate was not published for that change.
 
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.14.0
 
+- Highlight command synopses in ordinary paragraphs as well as code blocks,
+  including nested usage sections. Distinguish command names, options,
+  replaceable arguments and syntax delimiters while retaining source fonts,
+  normal paragraph wrapping, links, search and copied text. Share conservative
+  argument recognition with validated entry forms and use a blue-cyan
+  placeholder color through the existing theme system.
 - Preserve explicit mathematical atom roles and distinguish opaque formula
   content from parsed atoms. Validate expression shape and operator arity at
   shared decoding boundaries. Retain malformed native operands through an

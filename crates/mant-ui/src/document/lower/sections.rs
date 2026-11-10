@@ -39,6 +39,8 @@ impl DocumentBuilder<'_> {
             section.children.is_empty(),
         );
         self.heading(&section.heading, coordinate(depth.saturating_mul(4)));
+        let previous_context = self.highlight_context;
+        self.highlight_context.synopsis |= synopsis_heading(&section.heading.single_line_text());
         self.blocks(
             &section.blocks,
             coordinate(depth.saturating_mul(4).saturating_add(3)),
@@ -53,5 +55,23 @@ impl DocumentBuilder<'_> {
                 Some(&section.id),
             );
         }
+        self.highlight_context = previous_context;
     }
+}
+
+/// Heading labels only delimit candidates. Each owner still has to satisfy
+/// the bounded signature grammar, including in inherited child sections.
+fn synopsis_heading(heading: &str) -> bool {
+    matches!(
+        heading.trim().to_uppercase().as_str(),
+        "SYNOPSIS"
+            | "SYNTAX"
+            | "USAGE"
+            | "SINTASSI"
+            | "SKŁADNIA"
+            | "СИНТАКСИС"
+            | "書式"
+            | "用法"
+            | "概要"
+    )
 }

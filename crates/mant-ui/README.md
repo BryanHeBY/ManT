@@ -193,8 +193,9 @@ Parameter, command and configuration-key signatures also accent matched
 code palette's defaults without coupling future customization. Only validated
 authored form slices are scanned, not descriptions or ordinary terms; symbols
 inside bound names (such as `operator[]`), quotes, escapes and URLs remain
-protected. Value words retain their source styling rather than acquiring an
-inferred type. Missing/invalid form references and signatures above 64 KiB
+protected. Explicit argument placeholders and source-emphasized argument slots
+use blue-cyan (`#74C7EC`) through the independent `EntryPlaceholder` role.
+Other value words retain their source styling. Missing/invalid form references and signatures above 64 KiB
 stay undecorated; scans above 64 nested contexts fall back without changing text.
 The body and complete outline labels share the cached source-bound accents.
 Compact name-only labels remain unchanged; form-label accents retain their
@@ -229,8 +230,7 @@ shell programs or require a language tag.
 `${...}`, `$(...)`, `$((...))` and process substitutions retain nested quote
 contexts and symmetric delimiter accents. Dollar/variable names stay pink,
 parameter modifiers use the operator role and fallback words use string style.
-Like tldr presentation,
-`{{values}}` and `<values>` retain neutral text, but every marker and option
+`{{values}}` and `<values>` use the blue-cyan placeholder role, while every marker and option
 alternative remains unchanged; explicit `{{[-c|--create]}}` candidates retain
 both option accents and structural markers. The tldr parser's rewriting is not
 reused.
@@ -260,6 +260,27 @@ fall back as a whole without changing text. Incomplete and mismatched snippets
 do not produce syntax errors or invented characters. Theme values remain
 hardcoded; no code palette configuration or runtime selector is exposed.
 Accents are prepared during document construction, never during resize/search.
+
+Command signatures share a bounded, dependency-free classifier across literal
+examples, ordinary synopsis paragraphs and validated entry forms. `SYNOPSIS`,
+`SYNTAX`, `USAGE` and recognized translated headings provide a candidate scope,
+inherited by child sections and restored before sibling sections. Each complete
+inline owner must still satisfy the signature grammar. Section titles alone do
+not turn prose, C declarations or arbitrary configuration text into commands.
+Source emphasis is evidence for a replaceable argument, not an unconditional
+rule: a command name can itself be italic, and an entire usage can be bold.
+Explicit `<path>` and optional argument slots such as `[-i[SUFFIX]]` retain
+their original text. Hyphenated argument names are consumed as complete words;
+uncertain option-spelling suffixes such as `-V[ersion]` stay conservative.
+Recognition does not establish command-line option arity or execute anything.
+
+Highlighting context is independent of surface and wrapping: an ordinary
+synopsis keeps its normal background and word wrapping, while a literal block
+keeps its code surface and character wrapping. Original fonts, exact bound
+names, links and coordinates remain authoritative. Multi-part entry forms
+project argument colors through every intersecting original inline root;
+descriptions and compact name-only labels do not inherit argument guesses.
+There are no new public IR fields, language dependencies or theme settings.
 
 Outline and body adapters request semantic styles from the private `theme`
 module. `StyleRole` distinguishes text, source markup, entry kinds, outline

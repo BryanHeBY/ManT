@@ -497,6 +497,7 @@ mod reference_rows;
 mod references;
 mod row_origins;
 mod search;
+mod signature_highlighting;
 mod source_execution;
 mod source_geometry;
 mod styles;

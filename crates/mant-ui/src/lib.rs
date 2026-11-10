@@ -10,6 +10,7 @@ mod layout;
 mod navigation;
 mod reader;
 mod scrollbar;
+mod signature;
 mod text;
 mod theme;
 

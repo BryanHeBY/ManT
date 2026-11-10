@@ -27,6 +27,7 @@ pub(crate) enum StyleRole {
     EntryDelimiter,
     EntryOperator,
     EntrySeparator,
+    EntryPlaceholder,
     OutlineRoot,
     OutlineSection,
     OutlineEntries,

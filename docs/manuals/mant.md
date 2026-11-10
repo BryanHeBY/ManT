@@ -873,6 +873,14 @@ control string. Terminals can disable OSC 52 writes; in that case ManT can
 confirm that it emitted the request but cannot observe whether the outer
 terminal accepted it.
 
+Command synopses also receive syntax colors when authored as ordinary
+paragraphs, including usage subsections. Command names are peach, options
+green, replaceable arguments blue-cyan, and syntax brackets purple. Original
+bold/italic fonts, paragraph backgrounds and wrapping remain intact.
+Recognition is best effort; explanatory prose and ambiguous syntax retain
+their original appearance. Validated entry signatures use the same argument
+conventions. Colors do not change searched or copied text.
+
 ### Page Search
 
 - `Ctrl+F`, `/`: Open forward search in the bottom `Find Page` field.

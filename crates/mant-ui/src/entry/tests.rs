@@ -84,8 +84,8 @@ fn cached_roles_survive_inline_boundaries_and_custom_theme_values() {
         .chain(std::iter::once(text.len()))
     {
         let mut cursor = AccentCursor::new(&accents);
-        let mut spans = cursor.spans(&text[..split], base, &theme);
-        spans.extend(cursor.spans(&text[split..], base, &theme));
+        let mut spans = cursor.spans(&text[..split], base, &theme, false);
+        spans.extend(cursor.spans(&text[split..], base, &theme, false));
         assert_eq!(
             spans
                 .iter()

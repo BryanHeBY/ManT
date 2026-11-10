@@ -129,6 +129,7 @@ fn source_bound_signature_accents_preserve_names_modifiers_and_body_text() {
         }
     }
     let value = style_at(head, start + LABEL.find('文').unwrap());
+    assert_eq!(value.fg, Some(theme::LINK));
     assert!(
         value
             .add_modifier
@@ -184,6 +185,80 @@ fn signature_reflow_keeps_link_copy_search_and_navigation_coordinates() {
         );
         assert!(rendered.anchor_row("output").is_some());
         assert_eq!(rendered.text, view.render(width).text);
+    }
+}
+
+#[test]
+fn parameter_words_cross_form_parts_without_painting_outside_the_form() {
+    let mut content = content();
+    let item = item(&mut content);
+    item.terms = vec![
+        vec![text("--output=<文")].into(),
+        vec![text("件e\u{301}> untouched")].into(),
+    ];
+    item.description.clear();
+    let facts = item.entry.as_mut().unwrap();
+    facts.forms = vec![EntryForm {
+        parts: vec![
+            EntryContentSlice {
+                root: EntryInlineRoot::Term { index: 0 },
+                path: vec![],
+                bytes: None,
+            },
+            EntryContentSlice {
+                root: EntryInlineRoot::Term { index: 1 },
+                path: vec![0],
+                bytes: Some(0.."件e\u{301}>".len()),
+            },
+        ],
+    }];
+    facts.name_bindings[0].occurrences = vec![EntryForm {
+        parts: vec![EntryContentSlice {
+            root: EntryInlineRoot::Term { index: 0 },
+            path: vec![0],
+            bytes: Some(0..8),
+        }],
+    }];
+    assert_eq!(
+        mant_ir::validate_document(content.document.as_ref().unwrap()),
+        []
+    );
+    let view = DocumentView::new(&content);
+    let rendered = view.render(120);
+    for token in ["文", "件e\u{301}"] {
+        let hit = &rendered.search(token)[0];
+        let line = &rendered.text.lines[hit.row];
+        let visible = line.to_string();
+        assert_eq!(
+            style_at(line, visible.find(token).unwrap()).fg,
+            Some(theme::SAPPHIRE)
+        );
+        assert_eq!(
+            rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: hit.row,
+                    column: hit.start_column
+                },
+                focus: TextPosition {
+                    row: hit.row,
+                    column: hit.end_column - 1
+                },
+            }),
+            token
+        );
+    }
+    let hit = &rendered.search("untouched")[0];
+    let line = &rendered.text.lines[hit.row];
+    assert_eq!(
+        style_at(line, line.to_string().find("untouched").unwrap()).fg,
+        Some(theme::TEXT)
+    );
+    let label = &view.entry_labels["output"];
+    for token in ["文", "件e\u{301}"] {
+        assert_eq!(
+            label.role_at(label.text.find(token).unwrap()),
+            Some(theme::StyleRole::EntryPlaceholder)
+        );
     }
 }
 

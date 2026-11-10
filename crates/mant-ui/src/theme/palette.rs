@@ -21,6 +21,7 @@ pub(crate) const SELECTED_TEXT: Color = Color::Rgb(245, 224, 220);
 pub(crate) const HEADING: Color = Color::Rgb(148, 226, 213);
 pub(crate) const LINK: Color = Color::Rgb(137, 220, 235);
 pub(crate) const BLUE: Color = Color::Rgb(137, 180, 250);
+pub(crate) const SAPPHIRE: Color = Color::Rgb(116, 199, 236);
 pub(crate) const GREEN: Color = Color::Rgb(166, 227, 161);
 pub(crate) const YELLOW: Color = Color::Rgb(249, 226, 175);
 pub(crate) const PEACH: Color = Color::Rgb(250, 179, 135);

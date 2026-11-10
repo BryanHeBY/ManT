@@ -52,7 +52,7 @@ fn code_state_crosses_authored_styles_links_anchors_and_structural_breaks() {
         theme::style(theme::StyleRole::Text),
         None,
         names.as_slice().into(),
-        true,
+        true.into(),
         &HashMap::default(),
     );
     assert_eq!(lines.len(), 3);
@@ -169,7 +169,7 @@ fn long_inline_code_blocks_keep_authored_styles_on_neutral_fallback() {
         theme::style(theme::StyleRole::Text),
         None,
         crate::document::entries::InlineStyles::default(),
-        true,
+        true.into(),
         &HashMap::default(),
     );
     assert!(

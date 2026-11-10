@@ -4,8 +4,8 @@ use ratatui::style::{Modifier, Style};
 
 use super::palette::{
     BASE, BLUE, CONTENT, GREEN, HEADING, LAVENDER, LINK, MAROON, MAUVE, OVERLAY, PEACH, PINK,
-    SEARCH_ACTIVE, SEARCH_MATCH, SELECTED, SELECTED_TEXT, SIDEBAR, STRONG, SUBTEXT, SUBTEXT_BRIGHT,
-    SURFACE, TEXT, TLDR_NAV, TLDR_SELECTED, TLDR_SURFACE, YELLOW,
+    SAPPHIRE, SEARCH_ACTIVE, SEARCH_MATCH, SELECTED, SELECTED_TEXT, SIDEBAR, STRONG, SUBTEXT,
+    SUBTEXT_BRIGHT, SURFACE, TEXT, TLDR_NAV, TLDR_SELECTED, TLDR_SURFACE, YELLOW,
 };
 use super::{InteractionRole as Interaction, StyleRole as Role, Theme};
 
@@ -69,6 +69,7 @@ const fn entries(theme: &mut Theme) {
     theme.set_style(Role::EntryDelimiter, Style::new().fg(MAUVE));
     theme.set_style(Role::EntryOperator, Style::new().fg(BLUE));
     theme.set_style(Role::EntrySeparator, Style::new().fg(MAUVE));
+    theme.set_style(Role::EntryPlaceholder, Style::new().fg(SAPPHIRE));
 }
 
 const fn outline(theme: &mut Theme) {
@@ -105,7 +106,7 @@ const fn code(theme: &mut Theme) {
     theme.set_style(Role::CodeOption, Style::new().fg(GREEN));
     theme.set_style(Role::CodeVariable, Style::new().fg(PINK));
     theme.set_style(Role::CodePrompt, Style::new().fg(SUBTEXT));
-    theme.set_style(Role::CodePlaceholder, Style::new().fg(TEXT));
+    theme.set_style(Role::CodePlaceholder, Style::new().fg(SAPPHIRE));
     theme.set_style(Role::CodeDelimiter, Style::new().fg(MAUVE));
     theme.set_style(Role::CodeOperator, Style::new().fg(BLUE));
     theme.set_style(Role::CodeNumber, Style::new().fg(YELLOW));

@@ -93,7 +93,18 @@ this coordinate domain.
 Code, Link and validated-name roles. Adapters apply base style, source markup,
 then the more specific name foreground. Code and Link never clear inherited
 bold or italic. Link affordance and its target survive type coloring. Lexical
-code accents are weaker than explicit source/name roles.
+code accents retain source font modifiers and remain weaker than validated
+name and link affordances. Signature punctuation has its own entry roles.
+
+The TUI's private signature classifier shares argument evidence between
+validated entry forms and command synopses. It produces source-relative byte
+ranges and semantic roles; the theme supplies colors. Entry adapters translate
+those ranges to Unicode scalars and split them at every intersecting form part
+before projecting onto original roots. They never extend a multi-character
+argument range past its source owner. Source names remain protected; ordinary
+description text is outside this classifier's evidence scope. A synopsis may
+remain a Paragraph, retaining its original wrapping and surface. This is a
+consumer presentation policy and adds no execution or coloring facts to IR.
 
 Match decoration is supplied only by a reported query location. Interactive
 search and selection apply their own final overlay; they do not mutate cached

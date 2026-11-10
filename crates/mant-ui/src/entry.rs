@@ -116,6 +116,46 @@ pub(crate) fn accents(text: &str, names: &[Range<usize>]) -> Vec<Accent> {
     result
 }
 
+/// Form bindings use scalar coordinates, while the shared signature scanner
+/// uses bytes. Convert once for the complete owner, before source projection.
+pub(crate) fn form_accents(
+    text: &str,
+    names: &[Range<usize>],
+    emphasis: &[Range<usize>],
+) -> Vec<Accent> {
+    if text.len() > MAX_FORM_BYTES {
+        return Vec::new();
+    }
+    let mut result = accents(text, names);
+    let boundaries: Vec<_> = text
+        .char_indices()
+        .map(|(byte, _)| byte)
+        .chain(std::iter::once(text.len()))
+        .collect();
+    let names = names
+        .iter()
+        .filter_map(|name| Some(*boundaries.get(name.start)?..*boundaries.get(name.end)?))
+        .collect::<Vec<_>>();
+    for accent in
+        crate::signature::accents(text, crate::signature::Context::Entry, emphasis, &names)
+    {
+        if accent.role == crate::signature::Role::Placeholder {
+            let start = boundaries
+                .binary_search(&accent.bytes.start)
+                .expect("token UTF-8 boundary");
+            let end = boundaries
+                .binary_search(&accent.bytes.end)
+                .expect("token UTF-8 boundary");
+            result.push(Accent {
+                range: start..end,
+                role: StyleRole::EntryPlaceholder,
+            });
+        }
+    }
+    result.sort_by_key(|accent| accent.range.start);
+    result
+}
+
 fn url_start(text: &str, byte: usize) -> bool {
     text[byte..].starts_with("://")
         && text[..byte]
@@ -140,7 +180,13 @@ impl<'a> AccentCursor<'a> {
         }
     }
 
-    pub(crate) fn spans(&mut self, text: &str, base: Style, theme: &Theme) -> Vec<Span<'static>> {
+    pub(crate) fn spans(
+        &mut self,
+        text: &str,
+        base: Style,
+        theme: &Theme,
+        linked: bool,
+    ) -> Vec<Span<'static>> {
         if self.accents.is_empty() {
             return vec![Span::styled(text.to_owned(), base)];
         }
@@ -159,7 +205,16 @@ impl<'a> AccentCursor<'a> {
                 .accents
                 .get(self.index)
                 .filter(|accent| accent.range.contains(&self.scalar))
-                .map_or(base, |accent| base.patch(theme.style(accent.role)));
+                .map_or(base, |accent| {
+                    // Argument guesses stay below authored link colors, just
+                    // as in code/synopsis spans. Existing structural accents
+                    // keep their independent delimiter/operator affordance.
+                    if linked && accent.role == StyleRole::EntryPlaceholder {
+                        base
+                    } else {
+                        base.patch(theme.style(accent.role))
+                    }
+                });
             if next != style {
                 if byte > start {
                     spans.push(Span::styled(text[start..byte].to_owned(), style));

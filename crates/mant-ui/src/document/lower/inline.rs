@@ -9,6 +9,7 @@ impl DocumentBuilder<'_> {
     /// Headings use the same original inline path as prose: links, anchors,
     /// hard lines and nested source styles must not pass through a plain label.
     pub(in crate::document) fn heading(&mut self, heading: &mant_ir::Heading, indent: i32) {
+        let context = std::mem::take(&mut self.highlight_context);
         self.inline_lines_with_surface(
             mant_ir::InlineContentRef {
                 content: &heading.content,
@@ -18,6 +19,7 @@ impl DocumentBuilder<'_> {
             theme::style(theme::StyleRole::Heading),
             LineSurface::Normal,
         );
+        self.highlight_context = context;
     }
 
     pub(super) fn plain_block_lines(
@@ -60,7 +62,7 @@ impl DocumentBuilder<'_> {
             style,
             self.address.as_ref(),
             self.entry_styles.ranges(content.content),
-            false,
+            self.highlight_context,
             &self.reference_origins,
         )
     }
@@ -109,7 +111,10 @@ impl DocumentBuilder<'_> {
             base_style,
             self.address.as_ref(),
             self.entry_styles.ranges(nodes),
-            surface == LineSurface::Code,
+            crate::code::HighlightContext {
+                literal: surface == LineSurface::Code,
+                ..self.highlight_context
+            },
             &self.reference_origins,
         );
         let mut deferred_targets = if trim_paragraph_tail {

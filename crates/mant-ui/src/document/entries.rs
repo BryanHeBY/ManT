@@ -132,6 +132,7 @@ impl<'a> EntryStyles<'a> {
     fn form(&self, owner: EntryOwner<'a>, form: &EntryForm) -> Option<PreparedForm> {
         let mut text = String::new();
         let mut names = Vec::new();
+        let mut emphasis = Vec::new();
         let mut parts = Vec::new();
         let mut scalar = 0;
         for part in &form.parts {
@@ -140,10 +141,11 @@ impl<'a> EntryStyles<'a> {
             let root = nodes.as_ptr() as usize;
             let mut cursor = 0;
             let mut bounded = true;
-            mant_render::visit_inline_text(nodes, &[], |_, _, value| {
+            mant_render::visit_inline_text(nodes, &[], |source, _, value| {
                 if cursor >= projected.chars.end || !bounded {
                     return;
                 }
+                let byte_start = text.len();
                 for character in value.chars() {
                     if projected.chars.contains(&cursor) {
                         if text.len() + character.len_utf8() <= entry::MAX_FORM_BYTES {
@@ -156,6 +158,9 @@ impl<'a> EntryStyles<'a> {
                     if cursor >= projected.chars.end || !bounded {
                         break;
                     }
+                }
+                if source.emphasis && byte_start < text.len() {
+                    emphasis.push(byte_start..text.len());
                 }
             });
             if !bounded {
@@ -175,7 +180,7 @@ impl<'a> EntryStyles<'a> {
             scalar += projected.chars.len();
         }
         names.sort_by_key(|range: &Range<usize>| range.start);
-        let accents = entry::accents(&text, &names);
+        let accents = entry::form_accents(&text, &names, &emphasis);
         let mut pending = Vec::new();
         let mut part_index = 0;
         for accent in &accents {
@@ -185,12 +190,20 @@ impl<'a> EntryStyles<'a> {
             {
                 part_index += 1;
             }
-            if let Some((root, range, start)) = parts.get(part_index) {
+            for (root, range, start) in parts[part_index..]
+                .iter()
+                .take_while(|(_, _, start)| *start < accent.range.end)
+            {
+                let overlap =
+                    accent.range.start.max(*start)..accent.range.end.min(*start + range.len());
+                if overlap.is_empty() {
+                    continue;
+                }
                 pending.push((
                     *root,
                     Accent {
-                        range: range.start + accent.range.start - start
-                            ..range.start + accent.range.end - start,
+                        range: range.start + overlap.start - start
+                            ..range.start + overlap.end - start,
                         role: accent.role,
                     },
                 ));

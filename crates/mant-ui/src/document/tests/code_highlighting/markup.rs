@@ -88,13 +88,13 @@ fn lexical_colors_cross_nested_fonts_without_changing_prose_rules() {
             }],
         }],
     }];
-    let render = |code| {
+    let render = |code: bool| {
         styled_reference_inline_lines(
             &nodes,
             theme::style(theme::StyleRole::Text),
             None,
             crate::document::entries::InlineStyles::default(),
-            code,
+            code.into(),
             &HashMap::default(),
         )
     };

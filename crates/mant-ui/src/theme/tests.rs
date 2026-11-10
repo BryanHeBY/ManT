@@ -101,10 +101,9 @@ fn code_commands_options_and_synopsis_markers_follow_semantic_roles() {
         style(StyleRole::CodeDelimiter).fg,
         style(StyleRole::CodeComment).fg
     );
-    assert_eq!(
-        style(StyleRole::CodePlaceholder).fg,
-        style(StyleRole::Text).fg
-    );
+    assert_eq!(style(StyleRole::CodePlaceholder).fg, Some(SAPPHIRE));
+    assert_ne!(style(StyleRole::CodePlaceholder).fg, Some(HEADING));
+    assert_ne!(style(StyleRole::CodePlaceholder).fg, Some(LINK));
 }
 
 #[test]
@@ -113,6 +112,7 @@ fn entry_structure_roles_align_by_default_but_customize_independently() {
         (StyleRole::EntryDelimiter, StyleRole::CodeDelimiter),
         (StyleRole::EntryOperator, StyleRole::CodeOperator),
         (StyleRole::EntrySeparator, StyleRole::CodeDelimiter),
+        (StyleRole::EntryPlaceholder, StyleRole::CodePlaceholder),
     ] {
         assert_eq!(style(entry), style(code));
     }

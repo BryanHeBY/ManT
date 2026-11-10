@@ -86,7 +86,7 @@ pub(super) fn styled_display_inline_lines(
         style,
         current_address,
         names.into(),
-        code,
+        code.into(),
         &std::collections::HashMap::default(),
     )
 }
@@ -96,7 +96,7 @@ pub(super) fn styled_reference_inline_lines(
     style: Style,
     current_address: Option<&DocumentAddress>,
     decorations: super::entries::InlineStyles<'_>,
-    code: bool,
+    code: crate::code::HighlightContext,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
@@ -115,7 +115,7 @@ pub(super) fn styled_reference_content_lines(
     style: Style,
     current_address: Option<&DocumentAddress>,
     decorations: super::entries::InlineStyles<'_>,
-    code: bool,
+    code: crate::code::HighlightContext,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
     let mut lines = styled_reference_inline_lines(
@@ -232,27 +232,11 @@ fn append_inline(
     style: Style,
     current_address: Option<&DocumentAddress>,
     decorations: super::entries::InlineStyles<'_>,
-    code: bool,
+    code: crate::code::HighlightContext,
     lines: &mut Vec<StyledInlineLine>,
 ) {
-    let mut code = if code {
-        let mut value = String::new();
-        let mut bounded = true;
-        mant_render::visit_inline_text(nodes, &[], |_, _, text| {
-            if bounded && text.len() <= crate::code::MAX_BLOCK_BYTES - value.len() {
-                value.push_str(text);
-            } else {
-                bounded = false;
-            }
-        });
-        Some(if bounded {
-            crate::code::CodeHighlights::new(&value)
-        } else {
-            crate::code::CodeHighlights::default()
-        })
-    } else {
-        None
-    };
+    let literal = code.literal;
+    let mut code = crate::code::CodeHighlights::for_inlines(nodes, code);
     let mut entry = crate::entry::AccentCursor::new(decorations.accents);
     let mut scalar_cursor = 0;
     mant_render::visit_inline_text(nodes, decorations.names, |source, target, text| {
@@ -262,12 +246,17 @@ fn append_inline(
             // Fonts supply fallback appearance before lexical colors. The
             // theme then preserves their modifiers, links and validated names
             // without allowing generic emphasis colors to erase code roles.
-            let base = theme::DEFAULT_THEME.code_base_style(style, source);
+            let base = if literal {
+                theme::DEFAULT_THEME.code_base_style(style, source)
+            } else {
+                theme::inline_style(style, source)
+            };
             for span in code.spans(text, base, theme::DEFAULT_THEME.code_styles()) {
                 for decorated in entry.spans(
                     &span.content,
                     theme::DEFAULT_THEME.code_inline_style(span.style, source),
                     &theme::DEFAULT_THEME,
+                    source.link,
                 ) {
                     append_text(
                         &decorated.content,
@@ -282,6 +271,7 @@ fn append_inline(
                 text,
                 theme::inline_style(style, source),
                 &theme::DEFAULT_THEME,
+                source.link,
             ) {
                 append_text(&span.content, span.style, lines, &mut scalar_cursor);
             }
