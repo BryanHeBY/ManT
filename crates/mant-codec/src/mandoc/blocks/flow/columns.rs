@@ -129,17 +129,20 @@ impl BlockState {
     /// Borrow the active destination so a detached HEAD row is consumed even
     /// when the BODY has no local glyph (`mdoc_term.c::termp_bl_pre`).
     pub(in crate::mandoc::blocks) fn finish_native_structural_row(&mut self) {
+        let no_fill = self.formatter.no_fill;
         if self.uses_literal_output()
             || (!self.formatter.execution.has_column_output_scope()
-                && self.inline_output_is_literal(self.formatter.no_fill))
+                && self.inline_output_is_literal(no_fill))
         {
-            self.literal
-                .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
+            // A structural term_newln closes the currently occupied source
+            // row, not a separate layout gap. In man_term.c::pre_RS that
+            // row stays in the surrounding no-fill owner's content.
+            self.finish_native_line_in_source_mode(no_fill);
         } else {
             self.paragraph
                 .with_inline_builder(&mut self.formatter, InlineBuilder::execute_native_newline);
+            self.formatter.no_fill_inline.retire_consumed_cell();
         }
-        self.formatter.no_fill_inline.retire_consumed_cell();
     }
 
     pub(in crate::mandoc::blocks) fn finish_column_display_body(

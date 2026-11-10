@@ -27,12 +27,19 @@ pub(in crate::mandoc) fn execute_man_paragraph_spacing(
     if !has_predecessor {
         return 0;
     }
+    execute_man_vertical_spacing(formatter, paragraph_distance)
+}
+
+fn execute_man_vertical_spacing(
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    requested: u16,
+) -> u16 {
     // man_term.c::print_bvspace() calls term_vspace() once for every PD row.
     // term_vspace() first consumes the skipvsp debt left by a negative .sp;
     // the layout hint receives only rows that actually remain visible.
     let rows = formatter
         .execution
-        .resolve_vertical_space(i32::from(paragraph_distance));
+        .resolve_vertical_space(i32::from(requested));
     if rows > 0 {
         // Each actual term_vspace endline consumes ti. A skipvsp-cancelled
         // row does not; the following macro pre separately assigns offset.
@@ -73,26 +80,30 @@ pub(in crate::mandoc) fn update_paragraph_distance(node: &Node, paragraph_distan
 }
 
 /// Determine the visible spacing before a section heading.
-pub(in crate::mandoc) fn section_spacing(
+pub(in crate::mandoc) fn execute_section_spacing(
     node: &Node,
     is_first: bool,
-    has_preceding_content: bool,
+    has_predecessor: bool,
     paragraph_distance: u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> u16 {
     match node.macro_token.as_ref() {
         // man(7) uses the current `.PD` value, except before the first heading
         // at a level and after an empty peer section.
         Some(Man(ManMacro::Sh | ManMacro::Ss)) => {
-            if has_preceding_content {
-                paragraph_distance
+            if has_predecessor {
+                // man_term.c::pre_SH/pre_SS execute the same term_vspace
+                // loop as print_bvspace. Their source entry has already
+                // settled the preceding BODY at the correct boundary.
+                execute_man_vertical_spacing(formatter, paragraph_distance)
             } else {
                 0
             }
         }
         // mdoc(7) gives top-level sections one row even before the first Sh;
         // Ss only receives it when visible content precedes the heading.
-        Some(Mdoc(MdocMacro::Sh)) => u16::from(is_first || has_preceding_content),
-        Some(Mdoc(MdocMacro::Ss)) => u16::from(has_preceding_content),
+        Some(Mdoc(MdocMacro::Sh)) => u16::from(is_first || has_predecessor),
+        Some(Mdoc(MdocMacro::Ss)) => u16::from(has_predecessor),
         _ => 0,
     }
 }

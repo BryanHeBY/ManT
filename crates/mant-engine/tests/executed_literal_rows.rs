@@ -126,6 +126,43 @@ fn empty_man_text_settles_a_pending_word_end_before_the_next_row() {
 }
 
 #[test]
+fn transparent_relative_scopes_keep_literal_rows_through_markdown() {
+    // These exact sources were run with pinned ASCII, UTF-8, HTML, tree and
+    // lint before the assertions. term_newln() at RS only closes an
+    // occupied row. A real TAB or protected source SP can be unprinted by
+    // term_field() but remains an authored literal scalar in ManT.
+    let head =
+        ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH DESCRIPTION\n.PD 0\n.nf\n";
+    for (prefix, suffix, expected) in [
+        ("\\&\n", "", "AFTERMARK"),
+        ("\\&\n", "\\&\n", "\n\nAFTERMARK"),
+        ("\n\\&\n\\&\n", "", "\n\n\nAFTERMARK"),
+        ("\t\n", "\\&\n", "\t\n\nAFTERMARK"),
+        ("\\&   \\&\n", "\\&\n", "   \n\nAFTERMARK"),
+        ("\\~\n", "\\&\n", "\u{a0}\n\nAFTERMARK"),
+    ] {
+        let source = format!("{head}{prefix}.RS 0\n{suffix}AFTERMARK\n.RE\n.fi\n");
+        let original = load_roff_bytes(source.as_bytes()).unwrap();
+        for options in [
+            mant_codec::encode::MarkdownOptions::default(),
+            mant_codec::encode::MarkdownOptions::ADDRESSABLE,
+        ] {
+            let mut query = original.clone();
+            for _ in 0..=2 {
+                let text = render_query_text(&query);
+                assert_eq!(
+                    text.split_once("\nDESCRIPTION\n").unwrap().1,
+                    expected,
+                    "{source}"
+                );
+                let markdown = mant_codec::encode::render_markdown_with_options(&query, options);
+                query = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
 fn macro_expansion_rows_do_not_use_call_site_line_numbers_as_identity() {
     for mode in ["nf", "EX", "SY", "literal", "unfilled"] {
         let text = rendered(mode, ".de ZZ\nALPHA\n\n\nBETA\n..\n.ZZ\n.ZZ");

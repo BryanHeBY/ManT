@@ -1,8 +1,8 @@
 //! Section/root ownership and source-ordered heading reconstruction.
 use super::{
     Block, FormatterRowBoundary, LoweringContext, Node, NodeKind, ScopeFlow, Section,
-    first_part_children, is_native_transparent_sibling, lower_scope, section_spacing, source_span,
-    update_paragraph_distance,
+    execute_section_spacing, first_part_children, is_native_transparent_sibling, lower_scope,
+    source_span, update_paragraph_distance,
 };
 use crate::mandoc::inline::authored_section_phrase;
 use libmandoc_rs::{
@@ -23,7 +23,12 @@ pub(in crate::mandoc) fn lower_document_structure(
     let mut sections = Vec::new();
     let mut root_start = 0;
     let mut previous_section_has_children = false;
+    let mut previous_native = None;
     for (index, node) in root.children.iter().enumerate() {
+        let predecessor = previous_native;
+        if !is_native_transparent_sibling(node) {
+            previous_native = Some(node);
+        }
         update_paragraph_distance(node, &mut paragraph_distance);
         // Accept both `.SH` and a `.SS` that appears directly at the document
         // root. Well-formed pages nest `.SS` inside a `.SH` body, but pages
@@ -48,18 +53,25 @@ pub(in crate::mandoc) fn lower_document_structure(
         // mdoc_term.c::termp_sh_pre() tests the preceding Sh BODY's
         // child pointer, including executed state-only nodes. An empty IR
         // owner does not prove that the native section BODY was empty.
-        let has_preceding_content = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Sh)) {
-            previous_section_has_children || root_blocks.iter().any(block_has_visible_content)
-        } else {
-            sections.last().is_some_and(section_has_body)
-                || root_blocks.iter().any(block_has_visible_content)
+        let has_predecessor = match node.macro_token.as_ref() {
+            Some(Man(ManMacro::Sh | ManMacro::Ss)) => {
+                man_section_has_predecessor(node, predecessor)
+            }
+            Some(Mdoc(MdocMacro::Sh)) => {
+                previous_section_has_children || root_blocks.iter().any(block_has_visible_content)
+            }
+            _ => {
+                sections.last().is_some_and(section_has_body)
+                    || root_blocks.iter().any(block_has_visible_content)
+            }
         };
         previous_section_has_children = !first_part_children(node, NodeKind::Body).is_empty();
-        let spacing_before_lines = section_spacing(
+        let spacing_before_lines = execute_section_spacing(
             node,
             sections.is_empty(),
-            has_preceding_content,
+            has_predecessor,
             paragraph_distance,
+            &mut formatter,
         );
         sections.push(lower_section(
             node,
@@ -176,30 +188,14 @@ fn lower_section(
         formatter,
         flow,
     );
-    let mut has_preceding_content = !blocks.is_empty();
-    let mut children = Vec::new();
-    for child in &body[first_subsection..] {
-        update_paragraph_distance(child, paragraph_distance);
-        if !is_section(child, false) {
-            continue;
-        }
-        let child_spacing = section_spacing(
-            child,
-            children.is_empty(),
-            has_preceding_content,
-            *paragraph_distance,
-        );
-        let child = lower_section(
-            child,
-            context,
-            child_spacing,
-            paragraph_distance,
-            formatter,
-            false,
-        );
-        has_preceding_content = section_has_body(&child);
-        children.push(child);
-    }
+    let children = lower_subsections(
+        body,
+        first_subsection,
+        !blocks.is_empty(),
+        context,
+        paragraph_distance,
+        formatter,
+    );
     context.replace_mdoc_section(previous_section);
     Section {
         id: id.into(),
@@ -218,6 +214,67 @@ fn lower_section(
         children,
         source: source_span(node),
     }
+}
+
+fn lower_subsections(
+    body: &[Node],
+    first_subsection: usize,
+    mut has_preceding_content: bool,
+    context: &mut LoweringContext<'_>,
+    paragraph_distance: &mut u16,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+) -> Vec<Section> {
+    let (body, subsections) = body.split_at(first_subsection);
+    let mut previous_native = body
+        .iter()
+        .rev()
+        .find(|node| !is_native_transparent_sibling(node));
+    let mut children = Vec::new();
+    for child in subsections {
+        let predecessor = previous_native;
+        if !is_native_transparent_sibling(child) {
+            previous_native = Some(child);
+        }
+        update_paragraph_distance(child, paragraph_distance);
+        if !is_section(child, false) {
+            continue;
+        }
+        let has_predecessor = if child.macro_token.as_ref() == Some(&Man(ManMacro::Ss)) {
+            man_section_has_predecessor(child, predecessor)
+        } else {
+            has_preceding_content
+        };
+        let child_spacing = execute_section_spacing(
+            child,
+            children.is_empty(),
+            has_predecessor,
+            *paragraph_distance,
+            formatter,
+        );
+        let child = lower_section(
+            child,
+            context,
+            child_spacing,
+            paragraph_distance,
+            formatter,
+            false,
+        );
+        has_preceding_content = section_has_body(&child);
+        children.push(child);
+    }
+    children
+}
+
+fn man_section_has_predecessor(node: &Node, predecessor: Option<&Node>) -> bool {
+    // pre_SH/pre_SS skip both a missing roff_node_prev() and an empty
+    // previous section of the same type. Executed spacing may have left
+    // no IR block, so use roff_node_child()'s native transparency rule.
+    predecessor.is_some_and(|previous| {
+        previous.macro_token != node.macro_token
+            || first_part_children(previous, NodeKind::Body)
+                .iter()
+                .any(|child| !is_native_transparent_sibling(child))
+    })
 }
 
 /// Consume the parser's normalized `sec` rather than reconstructing it from

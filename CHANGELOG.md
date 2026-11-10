@@ -142,6 +142,9 @@ that crate was not published for that change.
   reading and excerpts.
 - Preserve native blank rows at hanging, paragraph and section boundaries.
   Apply alignment to each accepted row across styled text and link labels.
+- Execute the empty `.HP` body’s closing space and section spacing against the
+  active vertical-space debt. Keep literal source rows in their original owner
+  when transparent structures finish a native line.
 - Keep printed separators and line breaks with their original words when
   native marker passes restart across multiple operands.
 

@@ -299,6 +299,13 @@ impl StructuralLowerer<'_, '_, '_> {
         // man_term.c::post_HP() closes its BODY row. PP/P/LP have no post
         // handler and execute in the caller's live BlockState instead.
         lowerer.state.finish_native_body_line();
+        if children.is_empty() {
+            // An actually empty BODY then calls term_vspace(). Its blank
+            // row is layout, even in no-fill mode, and consumes skipvsp.
+            lowerer
+                .state
+                .with_active_output_builder(|builder| builder.native_vertical_space(1));
+        }
         let nested = lowerer.finish_into(self.formatter, super::FormatterRowBoundary::Preserve);
         if filled_field {
             self.formatter.execution.finish_man_hanging_field();

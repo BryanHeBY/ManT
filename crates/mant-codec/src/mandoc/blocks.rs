@@ -17,8 +17,8 @@ use super::{
         plain_text,
     },
     layout::{
-        add_leading_spacing, layout, section_spacing, set_block_spacing, update_paragraph_distance,
-        vertical_space_delta,
+        add_leading_spacing, execute_section_spacing, layout, set_block_spacing,
+        update_paragraph_distance, vertical_space_delta,
     },
     part_child_groups, source_span, targets,
 };

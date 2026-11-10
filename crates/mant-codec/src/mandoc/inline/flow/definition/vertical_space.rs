@@ -81,7 +81,24 @@ impl InlineBuilder {
         // the device after the flush, not the pre-flush buffer or IR tail.
         let closes_printed_row = rows > 0 && self.execution.has_open_native_device_row();
         let completed_rows = rows.saturating_sub(u16::from(closes_printed_row));
-        self.retain_line_breaks(usize::from(rows));
+        let literal_source_row = spacing_origin == CompletedRowOrigin::LiteralText
+            && !self.in_definition_field()
+            && !self.execution.has_column_output_scope();
+        if literal_source_row {
+            self.retain_line_breaks(usize::from(rows - completed_rows));
+            for _ in 0..completed_rows {
+                // A visited empty TEXT is itself a physical source row.
+                // Materialize it here, before later invisible TEXT can
+                // occupy another row in the same owner (term.c:489-497).
+                // The owner's tail drain must not claim those later rows.
+                self.nodes.push(mant_ir::Inline::Text {
+                    value: String::new(),
+                });
+                self.retain_line_breaks(1);
+            }
+        } else {
+            self.retain_line_breaks(usize::from(rows));
+        }
         self.finish_native_vertical_row(usize::from(rows));
         if closes_printed_row && self.execution.has_column_output_scope() {
             // term_vspace's first backend endline closed accepted graph;
@@ -90,10 +107,11 @@ impl InlineBuilder {
             self.record_device_row_end();
         }
         self.asserted_vertical_row |= completed_rows > 0;
-        // term_vspace() already emitted these empty rows after resolving
-        // skipvsp. They survive an output-owner return independently of
-        // the ordinary row end from its leading term_newln().
-        self.record_completed_rows(completed_rows, spacing_origin);
+        if !literal_source_row {
+            // These separate gap rows survive an output-owner return
+            // independently of the close in the leading term_newln().
+            self.record_completed_rows(completed_rows, spacing_origin);
+        }
     }
 }
 

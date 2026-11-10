@@ -2,6 +2,8 @@
 
 use super::{Block, Inline, inline_text, parse_manual_bytes};
 
+const ROW_HEADER: &str =
+    ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH DESCRIPTION\n.PD 0\n.nf\n";
 const MAN_DISPLAY: &str = ".TH TEST 3\n.SH SYNOPSIS\n.nf\n.B #include <regex.h>\n.P\n.BI \"int regcomp(regex_t *\" preg \");\"\n.sp 2\n.in +4n\n.B typedef struct {\n.B } regex_t;\n.in -4n\n.RS 3\n.B INNER\n.RE\n.B AFTER\n.fi\n.SH DESCRIPTION\nprose\n";
 const MDOC_DISPLAY: &str = ".Dd October 15, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh SYNOPSIS\n.Bd -literal -offset indent\nALPHA\n.Pp\nBETA\n.sp 2\nGAMMA\n.Ed\n.Bd -literal -offset indent\nDELTA\n.Ed\n.Sh DESCRIPTION\nprose\n";
 
@@ -186,4 +188,106 @@ fn relative_scope_transfer_keeps_nested_fill_boundaries() {
     assert_eq!(inline_text(second), "GAMMA\nDELTA");
     assert_eq!(first_layout.row_layout(1).indent_columns, 3);
     assert_eq!(second_layout.row_layout(1).indent_columns, -3);
+}
+
+#[test]
+fn relative_scope_drains_keep_completed_source_rows_in_one_literal() {
+    // All exact sources ran pinned ASCII/UTF-8/HTML/tree/lint. The source
+    // gate and pre_RS/post_RS each call guarded term_newln() (man_term.c:
+    // 769-823,918-926). Empty TEXT additionally calls term_vspace();
+    // its completed endline must not claim a later NBRZW cell's row.
+    for (source_first, retained_first) in [
+        ("\\&\n", ""),
+        ("\n", ""),
+        ("\\&   \\&\n", "   "),
+        ("\t\n", "\t"),
+        ("\\~\n", "\u{a0}"),
+    ] {
+        for count in 1_usize..=3 {
+            let prefix: Vec<_> = std::iter::once(source_first)
+                .chain(std::iter::repeat_n("\\&\n", count - 1))
+                .collect();
+            for index in [0, 1, count] {
+                for (open, close) in [
+                    ("", ""),
+                    (".RS 0\n", ".RE\n"),
+                    (".RS 0\n.RS 0\n", ".RE\n.RE\n"),
+                ] {
+                    for after in ["", "AFTERMARK\n"] {
+                        let source = format!(
+                            "{ROW_HEADER}{}{open}{}{after}{close}.fi\n",
+                            prefix[..index].concat(),
+                            prefix[index..].concat(),
+                        );
+                        let assert_rows = |document: &mant_ir::Document, omit: bool| {
+                            let [Block::Preformatted { children, .. }] =
+                                document.sections[1].blocks.as_slice()
+                            else {
+                                panic!("{source}: {:#?}", document.sections[1].blocks);
+                            };
+                            let mut rows = vec![retained_first];
+                            rows.extend(std::iter::repeat_n("", count - 1));
+                            if !after.is_empty() {
+                                rows.push("AFTERMARK");
+                                if omit && count == 1 && retained_first.is_empty() {
+                                    rows.remove(0);
+                                }
+                            }
+                            assert_eq!(inline_text(children), rows.join("\n"), "{source}");
+                            assert_eq!(
+                                mant_ir::logical_row_count(children),
+                                rows.len(),
+                                "{source}"
+                            );
+                        };
+                        let native = super::super::parse_native_manual(
+                            std::path::Path::new("literal-owner.1"),
+                            source.as_bytes(),
+                        )
+                        .unwrap();
+                        assert_rows(&native, false);
+                        assert_rows(&document(&source), true);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn real_fill_transitions_preserve_all_empty_displays_and_normalize_separately() {
+    // These exact matrix members were run against pinned CVS before adding
+    // assertions. Unlike RS, fi/nf changes the fill mode and opens a second
+    // literal owner (roff_term.c::roff_term_pre_br, man_term.c::pre_literal).
+    for (first, expected_first) in [("\\&\n", ""), ("\n", ""), ("\t\n", "\t")] {
+        for rest in 1..=2 {
+            let source = format!(
+                "{ROW_HEADER}{first}.fi\n.nf\n{}AFTERMARK\n.fi\n",
+                "\\&\n".repeat(rest)
+            );
+            let document = document(&source);
+            let [
+                Block::Preformatted {
+                    children: first, ..
+                },
+                Block::Preformatted {
+                    children: second, ..
+                },
+            ] = document.sections[1].blocks.as_slice()
+            else {
+                panic!("{source}: {:#?}", document.sections[1].blocks);
+            };
+            assert_eq!(inline_text(first), expected_first, "{source}");
+            assert_eq!(mant_ir::logical_row_count(first), 1, "{source}");
+            assert_eq!(
+                inline_text(second),
+                if rest == 1 {
+                    "AFTERMARK"
+                } else {
+                    "\n\nAFTERMARK"
+                },
+                "{source}"
+            );
+        }
+    }
 }
