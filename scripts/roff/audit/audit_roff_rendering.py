@@ -28,7 +28,7 @@ import sys
 
 from scripts.roff.oracle import mandoc_oracle
 from scripts.roff.lib.roff_content_compare import compare_content
-from scripts.roff.lib.roff_content_explanations import assess_content
+from scripts.roff.lib.roff_content_explanations import IMPLEMENTATION_FILES, assess_content
 from scripts.roff.lib.roff_audit_common import default_audit_batch_size, resolve_audit_parallelism
 from scripts.roff.lib.roff_layout_geometry import compare_layout_geometry
 from scripts.roff.lib.roff_reference import MAX_INPUT_BYTES, reference_environment, run_renderer
@@ -381,7 +381,7 @@ def census(args, report):
               "manifestSha256": args._manifest_sha256,
               "comparators": {name: file_hash(ROOT / name) for name in (
                   "scripts/roff/lib/roff_content_compare.py", "scripts/roff/lib/roff_layout_geometry.py", "scripts/roff/lib/roff_rendering_frame.py",
-                  "scripts/roff/lib/roff_reference.py", "scripts/roff/lib/roff_content_explanations.py", "scripts/roff/lib/roff_review_queue.py", "scripts/roff/audit/audit_roff_rendering.py")},
+                  "scripts/roff/lib/roff_reference.py", *IMPLEMENTATION_FILES, "scripts/roff/lib/roff_review_queue.py", "scripts/roff/audit/audit_roff_rendering.py")},
               "parameters": {key: str(value) if isinstance(value, Path) else value
                              for key, value in vars(args).items()
                              if not key.startswith("_") and key != "parallelism"},

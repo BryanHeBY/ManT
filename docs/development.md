@@ -1067,6 +1067,14 @@ still contain uncovered pages and pending candidates. Run the separate content
 and source-geometry census and reduced multi-width reader matrix below too;
 legacy layout scores alone do not establish exact indentation or blank rows.
 
+Content assessment keeps its public orchestration in
+`scripts/roff/lib/roff_content_explanations.py`. Private proof families under
+`content_explanations/` cover literal NAME prefixes, glyphs, equations, lists
+and external links; compatibility projection remains separate from raw
+comparison and source-bound explanation. Both census runners hash the shared
+`IMPLEMENTATION_FILES` contract, including every proof module. A rule move
+must preserve its evidence and admission conditions and update that contract.
+
 The two manifest-bound runners choose their default worker count from the
 effective CPU affinity/cgroup capacity, available memory (reserving 1 GiB per
 worker), and the soft file-descriptor limit, with a hard ceiling of 16. They

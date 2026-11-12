@@ -1,9 +1,11 @@
 """Adversarial occurrence and source-scope tests for content triage."""
 from copy import deepcopy
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 from scripts.roff.lib.roff_content_compare import ContentLimits, compare_content
+from scripts.roff.lib import roff_content_explanations as explanations
 from scripts.roff.lib.roff_content_explanations import ExplanationLimits, assess_content, explain_content
 
 
@@ -13,6 +15,14 @@ MANT = 'NAME\nprobe — inspect text\nDESCRIPTION\nBODY – dash\n'
 
 
 class ExplanationTests(unittest.TestCase):
+    def test_implementation_contract_covers_every_source_proof_module(self):
+        facade = Path(explanations.__file__).resolve()
+        root = facade.parents[3]
+        expected = {facade, *facade.with_name('content_explanations').glob('*.py')}
+        recorded = [root / name for name in explanations.IMPLEMENTATION_FILES]
+        self.assertEqual(len(recorded), len(set(recorded)))
+        self.assertEqual(set(recorded), expected)
+
     def test_exact_source_bound_separator_preserves_raw_findings(self):
         result = explain_content(REFERENCE, MANT, SOURCE)
         self.assertEqual(result['status'], 'explained')
