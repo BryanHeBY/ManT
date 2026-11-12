@@ -274,6 +274,14 @@ and output completion. Inline builder and execution lifecycle methods operate
 on the original owner and register structs; module boundaries do not drain,
 clone or recreate the active formatter.
 
+Within inline output, word recording delegates native writes and rewind
+execution to `record/input`, and authored pass projection with borrowed
+prefix ownership to `record/passes`. Boundary dispatch delegates recorded-word
+assembly to `boundary/word` and deferred padding to `boundary/spacing`.
+These are phases over the same live registers and output owners, not new
+execution scopes. Their existing receipts retain separator, row and input
+retirement distinctions; module extraction must preserve their call order.
+
 UI lowering keeps one `DocumentBuilder` with its pending gaps and anchors.
 Private block, inline, section, list, table and quick-reference modules add
 logical content through that builder. Styled inline projection and navigation
