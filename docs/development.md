@@ -137,6 +137,14 @@ They also run that package with `--all-features`, as does native macOS CI, so
 its default-off reference renderers and Serde contract execute on every
 supported target without enabling unrelated workspace maintenance features.
 
+Keep large test entry files as module hubs organized by behavior. CLI host
+tests separate terminal policy, document output, protocol inputs, queries and
+maintenance commands, with shared host/document fixtures in `tests/support`.
+Argument tests separate presentation, source selection, query views, Markdown
+and actions. Native navigation tests separate content, references, target
+identity and target ownership. Preserve test inputs, assertions and feature
+guards when moving cases; do not turn shared fixtures into another harness.
+
 ### Verification disk usage and cleanup
 
 The one-shot verification scripts disable Cargo incremental compilation and
