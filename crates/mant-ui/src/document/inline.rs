@@ -96,7 +96,7 @@ pub(super) fn styled_reference_inline_lines(
     style: Style,
     current_address: Option<&DocumentAddress>,
     decorations: super::entries::InlineStyles<'_>,
-    code: crate::code::HighlightContext,
+    code: crate::highlight::HighlightContext,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
@@ -115,7 +115,7 @@ pub(super) fn styled_reference_content_lines(
     style: Style,
     current_address: Option<&DocumentAddress>,
     decorations: super::entries::InlineStyles<'_>,
-    code: crate::code::HighlightContext,
+    code: crate::highlight::HighlightContext,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
     let mut lines = styled_reference_inline_lines(
@@ -232,12 +232,12 @@ fn append_inline(
     style: Style,
     current_address: Option<&DocumentAddress>,
     decorations: super::entries::InlineStyles<'_>,
-    code: crate::code::HighlightContext,
+    code: crate::highlight::HighlightContext,
     lines: &mut Vec<StyledInlineLine>,
 ) {
     let literal = code.literal;
-    let mut code = crate::code::CodeHighlights::for_inlines(nodes, code);
-    let mut entry = crate::entry::AccentCursor::new(decorations.accents);
+    let mut code = crate::highlight::CodeHighlights::for_inlines(nodes, code);
+    let mut entry = crate::highlight::entry::AccentCursor::new(decorations.accents);
     let mut scalar_cursor = 0;
     mant_render::visit_inline_text(nodes, decorations.names, |source, target, text| {
         let first_line = lines.len() - 1;

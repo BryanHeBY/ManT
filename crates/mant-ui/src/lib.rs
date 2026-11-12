@@ -1,17 +1,14 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-mod accent;
 mod app;
 mod clipboard;
-mod code;
 mod document;
-mod entry;
+mod highlight;
 mod layout;
 mod navigation;
 mod reader;
 mod scrollbar;
-mod signature;
 mod text;
 mod theme;
 

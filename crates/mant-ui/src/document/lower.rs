@@ -16,7 +16,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
     /// A heading is evidence for signature recognition, never a new IR owner.
-    highlight_context: crate::code::HighlightContext,
+    highlight_context: crate::highlight::HighlightContext,
     pending_anchors: Vec<String>,
     pending_gap: mant_ir::geometry::GapPlan,
     /// An inherited cursor has already emitted its rows in the actual parent.
@@ -63,7 +63,7 @@ impl DocumentBuilder<'_> {
             navigation: Vec::new(),
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
-            highlight_context: crate::code::HighlightContext {
+            highlight_context: crate::highlight::HighlightContext {
                 prose: true,
                 ..Default::default()
             },

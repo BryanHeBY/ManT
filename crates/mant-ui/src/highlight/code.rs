@@ -11,9 +11,10 @@ use ratatui::{style::Style, text::Span};
 use crate::theme::{CodeStyles, StyleRole};
 
 mod command;
+mod composition;
 mod keywords;
 mod scan;
-pub(crate) mod source;
+use super::source;
 mod synopsis;
 
 pub(crate) const MAX_BLOCK_BYTES: usize = 64 * 1024;
@@ -111,64 +112,12 @@ impl CodeHighlights {
         } else {
             opaque.clone()
         };
-        let protected_ranges = crate::accent::union(&source.protected, &lexical_protected);
-        let signature_text = source::syntax_text(value, &protected_ranges);
-        let signature_context = if context.synopsis {
-            crate::signature::Context::Synopsis
-        } else {
-            crate::signature::Context::Inferred
+        let protected_ranges =
+            crate::highlight::ranges::union(&source.protected, &lexical_protected);
+        let Some(syntax) = composition::usage_accents(source, context, &protected_ranges) else {
+            return Self::default();
         };
-        let mut syntax = if context.literal || context.synopsis {
-            crate::signature::accents(&signature_text, signature_context, &source.emphasis, &[])
-        } else {
-            Vec::new()
-        };
-        let prose = if context.prose {
-            let Some(prose) = crate::signature::checked_prose_accents(
-                value,
-                &source.marked,
-                &source.emphasis,
-                &protected_ranges,
-            ) else {
-                return Self::default();
-            };
-            prose
-        } else {
-            Vec::new()
-        };
-        crate::signature::overlay(&mut syntax, prose);
-        let mut protected = 0;
-        let mut opaque_index = 0;
-        let signature = syntax
-            .into_iter()
-            .filter_map(|accent| {
-                while accents
-                    .get(protected)
-                    .is_some_and(|base| base.bytes.end <= accent.bytes.start)
-                {
-                    protected += 1;
-                }
-                let masked = accents[protected..]
-                    .iter()
-                    .take_while(|base| base.bytes.start < accent.bytes.end)
-                    .any(|base| protected_role(base.role));
-                while opaque
-                    .get(opaque_index)
-                    .is_some_and(|range: &Range<usize>| range.end <= accent.bytes.start)
-                {
-                    opaque_index += 1;
-                }
-                let masked = masked
-                    || opaque
-                        .get(opaque_index)
-                        .is_some_and(|range| range.start < accent.bytes.end);
-                (!masked).then_some(Accent {
-                    bytes: accent.bytes,
-                    role: signature_role(accent.role),
-                })
-            })
-            .collect();
-        overlay(&mut accents, signature);
+        composition::merge(&mut accents, syntax, &opaque);
         exclude(&mut accents, &source.protected);
         Self {
             accents,
@@ -290,8 +239,8 @@ fn exclude(accents: &mut Vec<Accent>, protected: &[Range<usize>]) {
     *accents = result;
 }
 
-const fn signature_role(role: crate::signature::Role) -> StyleRole {
-    use crate::signature::Role;
+const fn signature_role(role: crate::highlight::usage::Role) -> StyleRole {
+    use crate::highlight::usage::Role;
     match role {
         Role::Command => StyleRole::CodeCommand,
         Role::Option => StyleRole::CodeOption,
@@ -305,7 +254,7 @@ const fn signature_role(role: crate::signature::Role) -> StyleRole {
 /// Both streams are source-ordered; each base accent is split only at actual
 /// token boundaries, never at viewport or inline-wrapper boundaries.
 fn overlay(base: &mut Vec<Accent>, signature: Vec<Accent>) {
-    crate::accent::overlay(
+    crate::highlight::ranges::overlay(
         base,
         signature,
         |accent| accent.bytes.clone(),

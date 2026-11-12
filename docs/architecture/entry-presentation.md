@@ -119,6 +119,14 @@ before scalar projection; they must not repeatedly scan suffixes or every
 font range for each token. The private URI probe retains one monotonic cursor
 per complete owner, including when ellipsis tokens split a scheme-like run.
 
+The TUI keeps these adapters together in its private `highlight` module.
+Original inline projection and ordered slice collection are shared by code
+and entry decoration; they belong to neither recognizer. Literal, usage and
+prose rules retain separate evidence policies. Composition combines their
+ordered byte ranges before the existing theme and scalar-coordinate adapters
+apply them. Moving or extending a recognizer must retain the single-traversal
+slice collector and the URI/font/range work-count bounds.
+
 Match decoration is supplied only by a reported query location. Interactive
 search and selection apply their own final overlay; they do not mutate cached
 styles, facts, anchors, copied text or link hit regions.

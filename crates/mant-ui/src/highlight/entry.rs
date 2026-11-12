@@ -159,25 +159,26 @@ pub(crate) fn form_accents(
                     .expect("protected UTF-8 end")
         })
         .collect();
-    let scan_text = crate::code::source::syntax_text(text, protected);
+    let scan_text = crate::highlight::source::syntax_text(text, protected);
     let mut result = structure_accents(text, &scan_text, names, &protected_scalars);
     let names = names
         .iter()
         .filter_map(|name| Some(*boundaries.get(name.start)?..*boundaries.get(name.end)?))
         .collect::<Vec<_>>();
-    let mut syntax = crate::signature::accents(
+    let mut syntax = crate::highlight::usage::accents(
         &scan_text,
-        crate::signature::Context::Entry,
+        crate::highlight::usage::Context::Entry,
         emphasis,
         &names,
     );
     let marked = (!text.is_empty()).then_some(0..text.len());
-    let prose = crate::signature::prose_accents(text, marked.as_slice(), emphasis, protected);
-    crate::signature::overlay(&mut syntax, prose);
+    let prose =
+        crate::highlight::usage::prose_accents(text, marked.as_slice(), emphasis, protected);
+    crate::highlight::usage::overlay(&mut syntax, prose);
     let mut placeholders = Vec::new();
     let mut name_index = 0;
     for accent in syntax {
-        if accent.role == crate::signature::Role::Placeholder {
+        if accent.role == crate::highlight::usage::Role::Placeholder {
             while names
                 .get(name_index)
                 .is_some_and(|name| name.end <= accent.bytes.start)
@@ -202,7 +203,7 @@ pub(crate) fn form_accents(
             });
         }
     }
-    crate::accent::overlay(
+    crate::highlight::ranges::overlay(
         &mut result,
         placeholders,
         |accent| accent.range.clone(),

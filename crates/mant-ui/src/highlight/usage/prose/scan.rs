@@ -3,7 +3,7 @@
 use std::ops::Range;
 
 use super::{MAX_DEPTH, Work};
-use crate::signature::lex::{UriLookahead, uri_body_end};
+use crate::highlight::usage::lex::{UriLookahead, uri_body_end};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Kind {

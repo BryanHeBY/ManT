@@ -361,7 +361,7 @@ impl LabelPiece {
 
 fn label_spans(
     pieces: &[LabelPiece],
-    label: Option<&crate::entry::LabelStyles>,
+    label: Option<&crate::highlight::entry::LabelStyles>,
     kind: crate::NavKind,
     selected: bool,
 ) -> Vec<Span<'static>> {

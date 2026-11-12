@@ -376,7 +376,10 @@ fn definition_heads_can_carry_filled_command_synopses() {
 #[test]
 fn excessive_synopsis_owners_keep_the_original_appearance_as_a_whole() {
     for source in [
-        format!("lua [script] {}", "x".repeat(crate::code::MAX_BLOCK_BYTES)),
+        format!(
+            "lua [script] {}",
+            "x".repeat(crate::highlight::MAX_BLOCK_BYTES)
+        ),
         format!("lua {}script{}", "[".repeat(65), "]".repeat(65)),
     ] {
         let rendered = DocumentView::new(&content(vec![text(&source)])).render(120);
@@ -392,7 +395,7 @@ fn large_signature_lookahead_preserves_visible_text_and_link_coordinates() {
     let target = LinkTarget::Section("synopsis".into());
     for (repeats, expected_color) in [
         (4_096, theme::SAPPHIRE),
-        (crate::code::MAX_BLOCK_BYTES / 4, theme::TEXT),
+        (crate::highlight::MAX_BLOCK_BYTES / 4, theme::TEXT),
     ] {
         let run = "a...".repeat(repeats);
         let split = run.len() / 2;

@@ -65,7 +65,7 @@ impl DocumentBuilder<'_> {
             style,
             self.address.as_ref(),
             self.entry_styles.ranges(content.content),
-            crate::code::HighlightContext {
+            crate::highlight::HighlightContext {
                 prose: self.highlight_context.prose && prose,
                 ..self.highlight_context
             },
@@ -117,7 +117,7 @@ impl DocumentBuilder<'_> {
             base_style,
             self.address.as_ref(),
             self.entry_styles.ranges(nodes),
-            crate::code::HighlightContext {
+            crate::highlight::HighlightContext {
                 literal: surface == LineSurface::Code,
                 ..self.highlight_context
             },

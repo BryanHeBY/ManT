@@ -8,8 +8,8 @@ use mant_ir::{
 };
 
 use crate::{
-    code::source::Source,
-    entry::{self, Accent, EntryLabels, LabelStyles},
+    highlight::entry::{self, Accent, EntryLabels, LabelStyles},
+    highlight::source::Source,
 };
 
 #[derive(Default)]

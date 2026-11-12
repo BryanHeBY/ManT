@@ -156,7 +156,7 @@ fn code_style_sets_resolve_the_same_semantics_through_custom_theme_values() {
         DEFAULT_THEME.style(StyleRole::CodeCommand)
     );
     let base = Style::new().bg(SURFACE).add_modifier(Modifier::UNDERLINED);
-    let mut code = crate::code::CodeHighlights::new(source);
+    let mut code = crate::highlight::CodeHighlights::new(source);
     let spans = code.spans(source, base, styles);
     assert_eq!(
         spans
@@ -218,7 +218,7 @@ fn display_composition_separates_fallback_fonts_token_colors_and_affordances() {
     // No accent (including bounded whole-block fallback) is ordinary markup.
     assert_eq!(theme.code_inline_style(base, source), base);
 
-    let mut code = crate::code::CodeHighlights::new("return");
+    let mut code = crate::highlight::CodeHighlights::new("return");
     let spans = code.spans("return", base, theme.code_styles());
     let token = theme.code_inline_style(spans[0].style, source);
     assert_eq!(token.fg, Some(Color::Green));

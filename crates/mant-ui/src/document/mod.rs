@@ -142,7 +142,7 @@ pub struct DocumentView {
     content_complete: bool,
     lines: Vec<LogicalLine>,
     navigation: Vec<NavNode>,
-    entry_labels: crate::entry::EntryLabels,
+    entry_labels: crate::highlight::entry::EntryLabels,
     anchors: HashMap<String, usize>,
     targets: Arc<targets::TargetIndex>,
     references: Vec<references::ReferenceRecord>,
@@ -342,7 +342,7 @@ impl DocumentView {
         &self.label
     }
 
-    pub(crate) const fn entry_labels(&self) -> &crate::entry::EntryLabels {
+    pub(crate) const fn entry_labels(&self) -> &crate::highlight::entry::EntryLabels {
         &self.entry_labels
     }
 

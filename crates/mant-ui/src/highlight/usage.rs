@@ -37,7 +37,7 @@ pub(crate) struct Accent {
 }
 
 pub(crate) fn overlay(base: &mut Vec<Accent>, patches: Vec<Accent>) {
-    crate::accent::overlay(
+    crate::highlight::ranges::overlay(
         base,
         patches,
         |accent| accent.bytes.clone(),

@@ -84,7 +84,7 @@ fn linked_templates_keep_cell_targets_copy_and_search_across_width_changes() {
 #[test]
 fn excessive_body_owners_fall_back_without_partial_reference_coloring() {
     for source in [
-        format!("--help {}", "x".repeat(crate::code::MAX_BLOCK_BYTES)),
+        format!("--help {}", "x".repeat(crate::highlight::MAX_BLOCK_BYTES)),
         format!("--help {}FILE{}", "[".repeat(65), "]".repeat(65)),
     ] {
         let original = content(vec![strong(&source)]);

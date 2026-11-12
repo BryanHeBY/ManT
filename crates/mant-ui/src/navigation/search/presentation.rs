@@ -350,7 +350,7 @@ fn styled_graphemes(
 
 #[derive(Clone, Copy)]
 struct LabelDecoration<'a> {
-    label: Option<&'a crate::entry::LabelStyles>,
+    label: Option<&'a crate::highlight::entry::LabelStyles>,
     kind: NavKind,
     selected: bool,
 }

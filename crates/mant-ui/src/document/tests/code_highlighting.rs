@@ -160,7 +160,7 @@ fn wrapped_highlighted_unicode_links_remain_searchable_and_copyable() {
 
 #[test]
 fn long_inline_code_blocks_keep_authored_styles_on_neutral_fallback() {
-    let value = "return 12;\n".repeat(crate::code::MAX_BLOCK_BYTES / 11 + 1);
+    let value = "return 12;\n".repeat(crate::highlight::MAX_BLOCK_BYTES / 11 + 1);
     let nodes = vec![Inline::Strong {
         children: vec![text(&value)],
     }];

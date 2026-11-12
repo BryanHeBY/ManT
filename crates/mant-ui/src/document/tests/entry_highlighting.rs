@@ -279,7 +279,7 @@ fn invalid_unrecorded_generic_and_oversized_forms_do_not_gain_accents() {
             _ => {
                 item.terms[0] = vec![text(&format!(
                     "--output=<{}>",
-                    "x".repeat(crate::entry::MAX_FORM_BYTES)
+                    "x".repeat(crate::highlight::entry::MAX_FORM_BYTES)
                 ))]
                 .into();
             }
