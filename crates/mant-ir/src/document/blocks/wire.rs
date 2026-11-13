@@ -149,15 +149,15 @@ enum BlockWire {
 
 impl<'de> Deserialize<'de> for Block {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let block = BlockWire::deserialize(deserializer)?;
+        let mut block = BlockWire::deserialize(deserializer)?;
         if let Self::Equation {
             value,
             expression: Some(expression),
             ..
-        } = &block
+        } = &mut block
         {
             expression
-                .validate_projection(value)
+                .normalize_readable_cache(value)
                 .map_err(serde::de::Error::custom)?;
         }
         if let Self::Paragraph {

@@ -57,6 +57,9 @@ that crate was not published for that change.
   across full documents, excerpts and explanation reports. Individual formula
   errors and aggregate mathematical budgets preserve readable document content.
   Addressable artifacts expose bounded conversion reports and final-byte ranges.
+- Preserve custom lower-decoration symbols in shared formula reading text.
+  Normalize the exact former collapsed-bottom cache when decoding formula
+  JSON after bounded validation. In-memory cache checks remain strict.
 - Charge failed formula validation and readable-cache checks against cumulative
   Markdown math budgets. Preserve complete readable output after exhaustion.
   Add a single-pass validation work report and align checked/default limit

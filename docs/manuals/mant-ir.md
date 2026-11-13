@@ -210,6 +210,11 @@ the shared, source-neutral text projection; a block's `value` is a compatibility
 cache and must agree with that projection whenever `expression` is present.
 Validation reports a content-coverage error for a mismatch. This projection is
 readable text, not a math layout or a second independently editable source.
+Standard lower underlines read as `_`. Custom lower decorations retain their
+exact symbol in ` _ (symbol)`, and an explicitly empty lower decoration adds
+no glyph. Mathematical encoders continue to consume the authoritative
+`top`/`bottom` strings directly.
+
 The roff producer counts JSON container depth from the final document position,
 including enclosing sections, lists, definitions, tables, and styled inlines.
 When a complete formula exceeds the remaining reader budget, the affected
@@ -244,6 +249,11 @@ Expression decoding checks local shape and operation arity. All formula owners
 also require `value` to equal the structure's readable projection, including
 formulas returned inside excerpts and explanations. Operation, decoration and
 matrix views borrow existing authoritative content rather than duplicating it.
+After bounded validation, decoding accepts the exact former readable cache
+that collapsed lower decorations to `_` and replaces it with the canonical
+projection. Other stale values are rejected. In-memory
+`validate_projection()` remains strict. Text-only legacy equation blocks keep
+their supplied readable value.
 Matrix interpretation can fail for a retained nonstandard payload. It never
 authorizes dropping operands or truncating later columns to the first column.
 

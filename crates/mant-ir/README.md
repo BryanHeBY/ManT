@@ -330,6 +330,9 @@ or fence wrappers. Scripts remain distinct from upper/lower limits. Exact
 `top`/`bottom` strings are authoritative. `top_decoration()` and
 `bottom_decoration()` expose recognized accent meanings plus the original
 symbol, or `Custom`, without storing a second editable representation.
+The shared reading spells a standard underline as `_` and a custom lower
+decoration as ` _ (symbol)`. An explicitly empty lower decoration adds no
+glyph. Exact stored symbols remain available to mathematical encoders.
 
 Matrices retain column order, including columns with unequal row counts.
 `matrix_view()` borrows the original columns group, piles and expression rows.
@@ -353,6 +356,10 @@ validation policy, not mathematical content or a promise that a JSON reader
 accepts every such depth. Formula block and inline decoding checks the shared
 readable cache after bounded validation, including formulas embedded directly
 inside excerpts and explanation forms rather than a full document envelope.
+At that decoding boundary, an exact legacy cache that collapsed every lower
+decoration to `_` is normalized to the current reading. Other cache mismatches
+are rejected. `validate_projection()` keeps strict canonical-cache validation
+for independently constructed in-memory expressions.
 
 `validate_with_report(EquationValidationLimits)` returns the result and consumed
 work from that same traversal. The report counts entered nodes, checked UTF-8

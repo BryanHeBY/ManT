@@ -9,6 +9,12 @@ enum ProjectionContext {
     PileRow,
 }
 
+#[derive(Clone, Copy)]
+enum BottomProjection {
+    PreserveSymbol,
+    LegacyUnderline,
+}
+
 struct ProjectionFences<'a> {
     left: Option<&'a str>,
     right: Option<&'a str>,
@@ -41,16 +47,29 @@ impl EquationExpression {
     /// of equation text used by downstream compatibility consumers.
     #[must_use]
     pub fn readable_text(&self) -> String {
+        self.readable_text_with_bottom(BottomProjection::PreserveSymbol)
+    }
+
+    pub(super) fn legacy_bottom_readable_text(&self) -> String {
+        self.readable_text_with_bottom(BottomProjection::LegacyUnderline)
+    }
+
+    fn readable_text_with_bottom(&self, bottom: BottomProjection) -> String {
         let mut output = String::new();
-        self.append_readable(&mut output);
+        self.append_readable(&mut output, bottom);
         output
     }
 
-    fn append_readable(&self, output: &mut String) {
-        self.append_in_context(output, ProjectionContext::Root);
+    fn append_readable(&self, output: &mut String, bottom: BottomProjection) {
+        self.append_in_context(output, ProjectionContext::Root, bottom);
     }
 
-    fn append_in_context(&self, output: &mut String, context: ProjectionContext) {
+    fn append_in_context(
+        &self,
+        output: &mut String,
+        context: ProjectionContext,
+        bottom: BottomProjection,
+    ) {
         let fences = self.projection_fences();
         let incomplete_fence = self.has_fence() && !self.has_scope_fence_pair();
         let grouped = match context {
@@ -78,14 +97,14 @@ impl EquationExpression {
             output.push_str(text);
         }
         if self.kind == EquationKind::Matrix {
-            self.append_matrix(output);
+            self.append_matrix(output, bottom);
         } else if self.kind == EquationKind::Operation
             && self.operator != EquationOperator::None
             && self.operator != EquationOperator::SquareRoot
         {
             let mut children = self.children.iter();
             if let Some(base) = children.next() {
-                base.append_in_context(output, ProjectionContext::Operand);
+                base.append_in_context(output, ProjectionContext::Operand, bottom);
             }
             let operator = match self.operator {
                 EquationOperator::Fraction => " / ",
@@ -94,7 +113,7 @@ impl EquationExpression {
             };
             if let Some(argument) = children.next() {
                 output.push_str(operator);
-                argument.append_in_context(output, ProjectionContext::Operand);
+                argument.append_in_context(output, ProjectionContext::Operand, bottom);
             }
             if matches!(
                 self.operator,
@@ -102,11 +121,11 @@ impl EquationExpression {
             ) && let Some(upper) = children.next()
             {
                 output.push_str(" ^ ");
-                upper.append_in_context(output, ProjectionContext::Operand);
+                upper.append_in_context(output, ProjectionContext::Operand, bottom);
             }
             for extra in children {
                 output.push(' ');
-                extra.append_readable(output);
+                extra.append_readable(output, bottom);
             }
         } else {
             for (index, child) in self.children.iter().enumerate() {
@@ -130,14 +149,25 @@ impl EquationExpression {
                         has_sibling: self.children.len() > 1,
                     }
                 };
-                child.append_in_context(output, child_context);
+                child.append_in_context(output, child_context, bottom);
             }
         }
         if let Some(top) = &self.top {
             output.push_str(top);
         }
-        if self.bottom.is_some() {
-            output.push('_');
+        if let Some(symbol) = &self.bottom {
+            match bottom {
+                BottomProjection::LegacyUnderline => output.push('_'),
+                BottomProjection::PreserveSymbol => match symbol.as_str() {
+                    "" => {}
+                    "_" | "\u{0332}" => output.push('_'),
+                    _ => {
+                        output.push_str(" _ (");
+                        output.push_str(symbol);
+                        output.push(')');
+                    }
+                },
+            }
         }
         fences.append_close(output);
         if self.operator == EquationOperator::SquareRoot {
@@ -148,7 +178,7 @@ impl EquationExpression {
         }
     }
 
-    fn append_matrix(&self, output: &mut String) {
+    fn append_matrix(&self, output: &mut String, bottom: BottomProjection) {
         const MAX_MATRIX_RECTANGULAR_SLOTS: usize = 16 * 1024;
         const MAX_MATRIX_RECTANGULAR_SEPARATOR_BYTES: usize = 32 * 1024;
 
@@ -162,7 +192,7 @@ impl EquationExpression {
                 if index > 0 {
                     output.push(' ');
                 }
-                child.append_readable(output);
+                child.append_readable(output, bottom);
             }
             output.push(')');
             return;
@@ -209,7 +239,7 @@ impl EquationExpression {
                     if row_index > 0 {
                         output.push_str("; ");
                     }
-                    row.append_readable(output);
+                    row.append_readable(output, bottom);
                 }
                 output.push(')');
             }
@@ -226,7 +256,7 @@ impl EquationExpression {
                     output.push_str(", ");
                 }
                 if let Some(cell) = column.children.get(row) {
-                    cell.append_readable(output);
+                    cell.append_readable(output, bottom);
                 }
             }
         }

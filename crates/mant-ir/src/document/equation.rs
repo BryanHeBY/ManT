@@ -2,6 +2,7 @@
 //!
 //! Native execution is resolved before publication. Mathematical encoders consume
 //! this tree directly; the shared readable projection is not `MathML` or LaTeX.
+mod compat;
 mod readable;
 #[cfg(test)]
 mod tests;

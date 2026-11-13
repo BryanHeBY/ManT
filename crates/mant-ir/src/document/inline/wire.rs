@@ -45,10 +45,10 @@ enum InlineWire {
 
 impl<'de> Deserialize<'de> for Inline {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let inline = InlineWire::deserialize(deserializer)?;
-        if let Self::Equation { value, expression } = &inline {
+        let mut inline = InlineWire::deserialize(deserializer)?;
+        if let Self::Equation { value, expression } = &mut inline {
             expression
-                .validate_projection(value)
+                .normalize_readable_cache(value)
                 .map_err(serde::de::Error::custom)?;
         }
         Ok(inline)
