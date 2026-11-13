@@ -6,6 +6,9 @@ use mant_ir::{
 };
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
+#[path = "mathml_tests.rs"]
+mod mathml_export;
+
 fn atom(value: &str) -> Expr {
     Expr {
         kind: EquationKind::Text,
@@ -157,7 +160,7 @@ fn default_export_retains_all_content_when_formula_tracking_fills() {
 
 #[test]
 fn temporary_projection_owners_never_reuse_a_previous_expression_cache() {
-    let context = MathContext::export(false);
+    let context = MathContext::export(false, MarkdownMath::Latex);
     let mut expression = atom("x");
     assert_eq!(context.latex(&expression, "x"), Some("{x}".into()));
     expression.text = Some("y".into());
@@ -169,7 +172,7 @@ fn exhausted_tracking_still_updates_known_owners_in_the_final_readable_branch() 
     let nodes = (0..=MAX_MARKDOWN_MATH_FORMULAS)
         .map(|_| inline(atom("x")))
         .collect::<Vec<_>>();
-    let context = MathContext::export(true);
+    let context = MathContext::export(true, MarkdownMath::Latex);
     for node in &nodes {
         let Inline::Equation { expression, value } = node else {
             unreachable!("equation fixture");
@@ -360,7 +363,7 @@ fn issue_details_are_bounded_but_counts_and_strictness_are_complete() {
 #[test]
 fn rejected_candidates_do_not_commit_their_losses_or_strict_context_errors() {
     let expression = atom("x");
-    let context = MathContext::new(MathPolicy::Strict);
+    let context = MathContext::new(MathPolicy::Strict, MarkdownMath::Latex);
     context.reading(&expression, "x", MarkdownMathIssueKind::DelimiterContext);
     assert!(context.latex(&expression, "x").is_some());
     let (issues, summary) = context.finish().unwrap();
@@ -458,7 +461,7 @@ fn final_readable_branch_suppresses_rejected_encoding_losses() {
     let mut expression = atom("x");
     expression.kind = EquationKind::Opaque;
     expression.atom_role = Role::Unknown;
-    let context = MathContext::new(MathPolicy::BestEffort);
+    let context = MathContext::new(MathPolicy::BestEffort, MarkdownMath::Latex);
     assert!(context.latex(&expression, "x").is_some());
     context.reading(&expression, "x", MarkdownMathIssueKind::DelimiterContext);
     let (issues, summary) = context.finish().unwrap();
@@ -471,7 +474,7 @@ fn portable_backtick_rows_are_charged_before_their_framing_is_allocated() {
     let mut expression = atom(&"`\n".repeat(MAX_MARKDOWN_MATH_OUTPUT_BYTES / 16));
     expression.kind = EquationKind::Opaque;
     expression.atom_role = Role::Unknown;
-    let context = MathContext::new(MathPolicy::BestEffort);
+    let context = MathContext::new(MathPolicy::BestEffort, MarkdownMath::Latex);
     context.reading(
         &expression,
         expression.text.as_deref().unwrap(),

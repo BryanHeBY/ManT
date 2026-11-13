@@ -4,7 +4,7 @@ use super::{
     MAX_MARKDOWN_MATH_NODES, MAX_MARKDOWN_MATH_OUTPUT_BYTES, MarkdownMathError, MarkdownMathIssue,
     MarkdownMathIssueKind, MarkdownMathLimit, MarkdownMathSummary,
 };
-use crate::encode::MarkdownOptions;
+use crate::encode::{MarkdownMath, MarkdownOptions};
 use crate::math::{MathFormat, MathLoss, MathOptions, MathPolicy, encode_equation};
 use mant_ir::{
     Block, EquationExpression, EquationValidationError, EquationValidationLimits, Inline,
@@ -60,7 +60,7 @@ enum FormulaKey {
 
 struct Formula {
     blocked: bool,
-    latex: Option<String>,
+    markup: [Option<String>; 2],
     losses: Vec<MathLoss>,
     first_loss: Option<MathLoss>,
     loss_count: usize,
@@ -84,6 +84,7 @@ struct State {
 }
 
 pub(in crate::encode) struct MathContext {
+    mode: MarkdownMath,
     policy: MathPolicy,
     recover_errors: bool,
     memoize: bool,
@@ -91,8 +92,9 @@ pub(in crate::encode) struct MathContext {
 }
 
 impl MathContext {
-    pub(in crate::encode) fn new(policy: MathPolicy) -> Self {
+    pub(in crate::encode) fn new(policy: MathPolicy, mode: MarkdownMath) -> Self {
         Self {
+            mode,
             policy,
             recover_errors: false,
             memoize: true,
@@ -100,8 +102,9 @@ impl MathContext {
         }
     }
 
-    pub(in crate::encode) fn export(memoize: bool) -> Self {
+    pub(in crate::encode) fn export(memoize: bool, mode: MarkdownMath) -> Self {
         Self {
+            mode,
             policy: MathPolicy::BestEffort,
             recover_errors: true,
             memoize,
@@ -128,7 +131,7 @@ impl MathContext {
         }
         state.formulas.push(Formula {
             blocked: false,
-            latex: None,
+            markup: [None, None],
             losses: Vec::new(),
             first_loss: None,
             loss_count: 0,
@@ -213,25 +216,37 @@ impl MathContext {
         Some(formula)
     }
 
-    pub(in crate::encode) fn latex(
+    #[cfg(test)]
+    pub(super) fn latex(&self, expression: &EquationExpression, value: &str) -> Option<String> {
+        self.encoded(expression, value, false)
+    }
+
+    pub(in crate::encode) fn encoded(
         &self,
         expression: &EquationExpression,
         value: &str,
+        display: bool,
     ) -> Option<String> {
+        let format = match self.mode {
+            MarkdownMath::Latex => MathFormat::Latex,
+            MarkdownMath::Mathml => MathFormat::Mathml,
+            MarkdownMath::Readable => return None,
+        };
+        let slot = usize::from(format == MathFormat::Mathml && display);
         let formula = self.register(expression, value)?;
         let mut state = self.state.borrow_mut();
         if state.error.is_some() || state.formulas[formula].blocked {
             return None;
         }
-        if state.formulas[formula].latex.is_none() {
+        if state.formulas[formula].markup[slot].is_none() {
             // Strictness is applied to the final accepted branch at finish.
             // A rejected style/link candidate must not poison a later safe
             // mathematical candidate or report losses for bytes never used.
             let result = encode_equation(
                 expression,
                 MathOptions {
-                    format: MathFormat::Latex,
-                    display: false,
+                    format,
+                    display: format == MathFormat::Mathml && display,
                     policy: MathPolicy::BestEffort,
                 },
             );
@@ -246,7 +261,22 @@ impl MathContext {
                     return None;
                 }
             };
-            let framed_bytes = artifact.text.len().saturating_add(16);
+            let text = if format == MathFormat::Mathml {
+                match super::mathml::markdown_fragment(&artifact.text) {
+                    Ok(text) => text,
+                    Err(error) => {
+                        self.reject(
+                            &mut state,
+                            Some(formula),
+                            MarkdownMathError::Encoding { formula, error },
+                        );
+                        return None;
+                    }
+                }
+            } else {
+                artifact.text
+            };
+            let framed_bytes = text.len().saturating_add(16);
             if framed_bytes > MAX_MARKDOWN_MATH_OUTPUT_BYTES.saturating_sub(state.output_bytes) {
                 self.reject(
                     &mut state,
@@ -256,19 +286,23 @@ impl MathContext {
                 return None;
             }
             state.output_bytes += framed_bytes;
-            let available = MAX_MARKDOWN_MATH_ISSUES.saturating_sub(state.details);
-            let loss_count = artifact.losses.len();
-            let first_loss = artifact.losses.first().cloned();
-            let losses: Vec<_> = artifact.losses.into_iter().take(available).collect();
-            state.details += losses.len();
-            state.formulas[formula].latex = Some(artifact.text);
-            state.formulas[formula].loss_count = loss_count;
-            state.formulas[formula].first_loss = first_loss;
-            state.formulas[formula].losses = losses;
+            // Inline/display variants have the same tree losses. Charge details
+            // once for this owner while charging both retained markup strings.
+            if state.formulas[formula].markup.iter().all(Option::is_none) {
+                let available = MAX_MARKDOWN_MATH_ISSUES.saturating_sub(state.details);
+                let loss_count = artifact.losses.len();
+                let first_loss = artifact.losses.first().cloned();
+                let losses: Vec<_> = artifact.losses.into_iter().take(available).collect();
+                state.details += losses.len();
+                state.formulas[formula].loss_count = loss_count;
+                state.formulas[formula].first_loss = first_loss;
+                state.formulas[formula].losses = losses;
+            }
+            state.formulas[formula].markup[slot] = Some(text);
         }
         state.formulas[formula].encoded = true;
         state.formulas[formula].fallback = None;
-        state.formulas[formula].latex.clone()
+        state.formulas[formula].markup[slot].clone()
     }
 
     pub(in crate::encode) fn reading(

@@ -141,6 +141,14 @@ The element vocabulary follows [MathML Core](https://www.w3.org/TR/mathml-core/)
 Expression fonts select inherited mathematical text styling. Fences, accents
 and generated operation glyphs retain their mathematical glyph behavior.
 
+Operation, script, limit, accent, pile and matrix relationships follow the
+pinned native HTML formula path. The Core output uses explicit fences,
+resolved text styles and Unicode-aware atom roles. Best-effort output for
+unequal matrix columns retains every stored row, with empty cells for missing
+entries. Recovered unbraced pile prefixes remain inline before the actual vertical rows. These
+choices preserve the complete resolved IR in valid mathematical markup.
+[Pinned eqn HTML implementation](../libmandoc-rs/vendor/mandoc-cvs-20261013T025419Z/eqn_html.c).
+
 LaTeX returns a mathematical body without dollar delimiters. Its fixed command
 subset includes `frac`, `sqrt`, scripts, `overset`/`underset`, `matrix`, common
 accents, mathematical alphabets, literal-text wrappers and an explicit symbol
@@ -185,9 +193,16 @@ of encoded output. Preflight bounds the whole input before recursive encoding
 or readable fallback. Errors return no partial markup.
 
 Document and fragment exports default to `MarkdownMath::Latex`. Set the `math`
-field of `MarkdownOptions` or `MarkdownFragmentOptions` to `Readable` for code
-spans and unlabelled display fences. `MarkdownOptions::READABLE` provides that
-policy for ordinary full-document exports.
+field of `MarkdownOptions` or `MarkdownFragmentOptions` to `Mathml` for direct
+`MathML`, or `Readable` for code spans and unlabelled display fences.
+`MarkdownOptions::READABLE` provides readable full-document exports.
+
+`MarkdownMath::Mathml` embeds a namespaced `<math>` element as a single-line
+raw HTML fragment with `display="inline"` or `display="block"`. Markdown
+metacharacters inside mathematical text are entity-escaped so surrounding
+styles and links retain their content boundaries. The destination renderer
+must retain raw HTML and support `MathML`. CLI callers select the same policies
+with `--markdown-math latex|mathml|readable`.
 
 Default exports recover individual malformed, oversized or unrepresentable
 formulas through their readable payload. Mathematical tracking and encoding
@@ -209,9 +224,9 @@ fallible `MathMarkdownArtifact`. Its `markdown()` accessor exposes the final
 bytes and source-bound ranges, while `issues()` and `summary()` describe the
 accepted conversion branches. Strict policy rejects conversion losses or a
 context requiring readable fallback. Best effort reports these approximations.
-For LaTeX mode, invalid expressions, inconsistent readable caches and resource
-limits fail under both policies. An explicit `Readable` option selects ordinary
-readable export.
+For LaTeX and `MathML` modes, invalid expressions, inconsistent readable caches
+and resource limits fail under both policies. An explicit `Readable` option
+selects ordinary readable export.
 
 Formula delimiters are checked in their final inline, style and link contexts.
 Literal blocks and portable reading tables keep readable formulas with context
@@ -219,8 +234,8 @@ issues. Legacy display formulas without an expression retain their readable
 payload with a missing-structure issue. Whole-operation formula, node, input,
 output and issue-detail allowances are public constants in `encode`.
 
-Checked LaTeX export rejects `preserve_semantics`. Ordinary semantic export
-omits declarations when mathematical output prevents the supported reimport
+Checked mathematical export rejects `preserve_semantics`. Ordinary semantic
+export omits declarations when mathematical output prevents the supported reimport
 contract. Markdown parsing preserves math delimiters as unsupported reading
 content. Search coordinates declare `mant.markdown/v2` and `math: "readable"`.
 Use `MarkdownOptions::READABLE_ADDRESSABLE` to reproduce that symbol-preserving

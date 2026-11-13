@@ -13,7 +13,7 @@ pub(super) fn supported(document: &Document, math: super::MarkdownMath) -> bool 
             visit::walk_definition_item(self, item);
         }
         fn visit_block(&mut self, block: &'a Block) {
-            if matches!(block, Block::Equation { .. }) && self.1 == super::MarkdownMath::Latex {
+            if matches!(block, Block::Equation { .. }) && self.1 != super::MarkdownMath::Readable {
                 self.0 = false;
             }
             if let Block::List { items, .. } = block
@@ -42,7 +42,7 @@ pub(super) fn supported(document: &Document, math: super::MarkdownMath) -> bool 
         }
         fn visit_inline(&mut self, inline: &'a mant_ir::Inline) {
             if matches!(inline, mant_ir::Inline::Equation { .. })
-                && self.1 == super::MarkdownMath::Latex
+                && self.1 != super::MarkdownMath::Readable
             {
                 self.0 = false;
             }

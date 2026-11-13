@@ -51,6 +51,8 @@ pub enum MarkdownMath {
     /// Encode structured formulas as LaTeX with readable best-effort fallback.
     #[default]
     Latex,
+    /// Embed structured formulas as namespaced `MathML` Core elements.
+    Mathml,
     /// Use the shared readable projection in code spans and plain fences.
     Readable,
 }

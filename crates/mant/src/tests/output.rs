@@ -112,3 +112,68 @@ fn man_format_rejects_a_tldr_only_result() {
         "mant: manual page is unavailable; --format man cannot render tldr-only content\n"
     );
 }
+
+#[test]
+fn mathml_cli_selection_reaches_documents_excerpts_and_explanations() {
+    use mant_ir::{
+        EquationAtomRole, EquationExpression, EquationFont, EquationKind, EquationOperandScope,
+        EquationOperator,
+    };
+    let expression = EquationExpression {
+        kind: EquationKind::Text,
+        font: EquationFont::None,
+        operator: EquationOperator::None,
+        atom_role: EquationAtomRole::Identifier,
+        operand_scope: EquationOperandScope::Atomic,
+        text: Some("x".into()),
+        left: None,
+        right: None,
+        top: None,
+        bottom: None,
+        children: Vec::new(),
+    };
+    let mut document = explainable_manual();
+    let Block::DefinitionList { items, .. } = &mut document.sections[1].blocks[1] else {
+        panic!("explainable entry");
+    };
+    let Block::Paragraph { children, .. } = &mut items[0].description[0] else {
+        panic!("entry description");
+    };
+    children.push(Inline::Equation {
+        value: expression.readable_text(),
+        expression,
+    });
+    let host = FakeHost {
+        document: Some(document),
+        ..FakeHost::new()
+    };
+    for arguments in [
+        vec!["demo", "--markdown-math", "mathml"],
+        vec!["demo", "--node", "2", "--markdown-math", "mathml"],
+        vec![
+            "demo",
+            "--explain",
+            "--exclude",
+            "--markdown-math",
+            "mathml",
+        ],
+    ] {
+        let (status, output, diagnostics) = invoke(&arguments, b"", &host);
+        assert_eq!(status, 0, "{arguments:?}: {diagnostics}");
+        assert_eq!(diagnostics, "");
+        assert!(
+            output.contains("<math xmlns=\"http://www.w3.org/1998/Math/MathML\""),
+            "{output}"
+        );
+        assert!(output.contains("<mi>x</mi>"), "{output}");
+    }
+    let input = br#"{"schema":"mant.request/v0.14","input":{"kind":"document","selector":"demo"},"view":{"kind":"full"}}"#;
+    let (status, output, diagnostics) = invoke(
+        &["--request-json", "--markdown-math", "mathml"],
+        input,
+        &host,
+    );
+    assert_eq!(status, 0, "{diagnostics}");
+    assert!(output.contains("<mi>x</mi>"));
+    assert_eq!(host.document.as_ref().unwrap().sections.len(), 2);
+}

@@ -23,6 +23,7 @@ fn mathematical_markdown_uses_the_same_policy_for_documents_and_reports() {
     for (mode, expected) in [
         ("readable", super::MarkdownMathMode::Readable),
         ("latex", super::MarkdownMathMode::Latex),
+        ("mathml", super::MarkdownMathMode::Mathml),
     ] {
         assert!(matches!(
             parse(&args(&["git", "--markdown-math", mode])).unwrap(),

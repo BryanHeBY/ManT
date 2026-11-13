@@ -28,7 +28,7 @@ impl MarkdownFragmentOptions {
         };
         RenderOptions {
             options,
-            math: (self.math == MarkdownMath::Latex).then_some(math),
+            math: (self.math != MarkdownMath::Readable).then_some(math),
         }
     }
 }
@@ -36,7 +36,7 @@ impl MarkdownFragmentOptions {
 /// Encode a detached inline root without semantic declaration metadata.
 #[must_use]
 pub fn render_inline_fragment(children: &[Inline], options: MarkdownFragmentOptions) -> String {
-    let math = MathContext::export(true);
+    let math = MathContext::export(true, options.math);
     super::inline::render_inline(children, options.document_options(&math))
 }
 
@@ -47,7 +47,7 @@ pub fn render_inline_content_fragment(
     content: InlineContentRef<'_>,
     options: MarkdownFragmentOptions,
 ) -> String {
-    let math = MathContext::export(true);
+    let math = MathContext::export(true, options.math);
     super::inline::render_inline_content(content, options.document_options(&math))
 }
 
@@ -56,7 +56,7 @@ pub fn render_inline_content_fragment(
 /// Returned fragments can be joined with a blank Markdown source line.
 #[must_use]
 pub fn render_blocks_fragment(blocks: &[Block], options: MarkdownFragmentOptions) -> Vec<String> {
-    let math = MathContext::export(true);
+    let math = MathContext::export(true, options.math);
     super::blocks::render_blocks(blocks, options.document_options(&math))
 }
 
@@ -72,7 +72,7 @@ pub fn render_located_blocks_fragment(
 ) -> Vec<String> {
     // A projected root can own temporary expression copies. Their addresses
     // remain valid only for that root, so this route avoids pointer memoization.
-    let math = MathContext::export(projection.is_none());
+    let math = MathContext::export(projection.is_none(), options.math);
     super::blocks::render_located_blocks(blocks, options.document_options(&math), projection)
 }
 
@@ -83,7 +83,7 @@ pub fn render_sections_fragment(
     depth: usize,
     options: MarkdownFragmentOptions,
 ) {
-    let math = MathContext::export(true);
+    let math = MathContext::export(true, options.math);
     super::render_sections(output, sections, depth, options.document_options(&math));
 }
 
@@ -94,7 +94,7 @@ pub fn render_heading_fragment(
     heading: &Heading,
     options: MarkdownFragmentOptions,
 ) -> String {
-    let math = MathContext::export(true);
+    let math = MathContext::export(true, options.math);
     super::render_heading(depth, heading, options.document_options(&math))
 }
 

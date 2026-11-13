@@ -1,9 +1,12 @@
 //! Explicit mathematical Markdown with operation-local conversion accounting.
 mod context;
+pub(in crate::encode) mod mathml;
 mod preflight;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+use super::MarkdownMath;
 use super::{MarkdownArtifact, MarkdownOptions};
 use crate::ResolvedContent;
 use crate::math::{MathError, MathLossKind, MathPolicy};
@@ -16,7 +19,7 @@ pub const MAX_MARKDOWN_MATH_FORMULAS: usize = 4096;
 pub const MAX_MARKDOWN_MATH_NODES: usize = 65_536;
 /// Maximum cumulative stored mathematical UTF-8 bytes charged by one operation.
 pub const MAX_MARKDOWN_MATH_INPUT_BYTES: usize = 4 * 1024 * 1024;
-/// Maximum cached LaTeX bodies and mathematical framing.
+/// Maximum cached mathematical markup and framing.
 /// Checked export also reserves eight bytes per readable input byte and 32
 /// framing bytes. Default best effort emits readable payloads independently.
 pub const MAX_MARKDOWN_MATH_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
@@ -202,7 +205,7 @@ pub fn render_math_markdown(
         return Err(MarkdownMathError::PreserveSemantics);
     }
     preflight::check(query)?;
-    let context = MathContext::new(policy);
+    let context = MathContext::new(policy, options.math);
     let mut markdown = super::artifact::render_markdown_with_context(
         query,
         RenderOptions {

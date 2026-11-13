@@ -23,19 +23,21 @@ pub(super) fn render(block: &Block, options: RenderOptions<'_>) -> Option<Mapped
                 context.missing(block);
                 None
             },
-            |expression| context.latex(expression, value),
+            |expression| context.encoded(expression, value, *display),
         )
     });
     if options.math.is_some_and(MathContext::failed) {
         return None;
     }
     if let Some(body) = mathematical {
-        let source = if *display {
+        let source = if options.options.math == crate::encode::MarkdownMath::Mathml {
+            body.clone()
+        } else if *display {
             format!("$${body}$$")
         } else {
             format!("Equation: ${body}$")
         };
-        if mathematical_block_is_valid(&source, &body, *display) {
+        if mathematical_block_is_valid(&source, &body, *display, options.options.math) {
             Some(
                 MappedText::from(source)
                     .syntax_site(BlockSyntax::Phrasing)
@@ -67,8 +69,16 @@ fn portable_equation(value: &str, display: bool) -> Option<MappedText> {
     }
 }
 
-fn mathematical_block_is_valid(source: &str, body: &str, display: bool) -> bool {
+fn mathematical_block_is_valid(
+    source: &str,
+    body: &str,
+    display: bool,
+    mode: crate::encode::MarkdownMath,
+) -> bool {
     use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+    if mode == crate::encode::MarkdownMath::Mathml {
+        return super::super::math_markdown::mathml::is_phrasing(source);
+    }
     let mut found = false;
     for event in Parser::new_ext(source, Options::ENABLE_MATH) {
         match event {

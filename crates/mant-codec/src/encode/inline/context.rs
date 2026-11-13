@@ -229,8 +229,14 @@ fn inline_pieces<'source>(
             }
             PhrasingNode::Node(Inline::Equation { value, expression }) => {
                 if let Some(context) = options.math {
-                    if let Some(body) = context.latex(expression, value) {
-                        pieces.push(InlinePiece::plain(format!("${body}$")));
+                    if let Some(body) = context.encoded(expression, value, false) {
+                        pieces.push(InlinePiece::plain(
+                            if options.options.math == crate::encode::MarkdownMath::Mathml {
+                                body
+                            } else {
+                                format!("${body}$")
+                            },
+                        ));
                     } else {
                         pieces.push(InlinePiece::code(value));
                     }

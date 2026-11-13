@@ -1253,7 +1253,7 @@ mant tar --explain=--exclude
 - `--display MODE`: Select `auto`, `direct`, `pager`, or `tui`, independently of the content format.
 - `--compact`: Omit JSON indentation.
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
-- `--markdown-math MODE`: Select `latex` (default) or `readable` formulas for Markdown documents, excerpts and reports.
+- `--markdown-math MODE`: Select `latex` (default), `mathml`, or `readable` formulas for Markdown documents, excerpts and reports.
 
 Clean Markdown output normally omits internal HTML anchors. A heading with a
 document-local link automatically retains addressable anchors so its target is
@@ -1273,8 +1273,10 @@ Markdown formulas default to `$...$` inline and `$$...$$` display LaTeX.
 For example, `mant --input ./formula.1 --format markdown` converts resolved
 roff formulas using the bounded mathematical/amsmath subset. The destination
 renderer needs math support. `--markdown-math readable` selects shared readable
-formulas in code spans and unlabelled fences. Either explicit math mode also
-selects `--format markdown` when no format is given. The same mode applies to
+formulas in code spans and unlabelled fences. `--markdown-math mathml` embeds
+single-line, namespaced `<math>` HTML fragments with `display="inline"` or
+`display="block"`. Its renderer must preserve raw HTML and support MathML.
+Any explicit math mode also selects `--format markdown` when no format is given. The same mode applies to
 full documents, selected nodes, explanations and cross-document reports,
 including requests supplied through `--request-json`.
 
@@ -1291,6 +1293,8 @@ Mathematical Export section of mant-markdown(7). KaTeX supports the exported
 literal text escapes directly. Quoted POSIX `^` and ordinary underscore
 spellings retain their literal meaning. Conversion warnings can describe
 font, symbol and spacing approximations while preserving the formula content.
+LaTeX and MathML share conversion budgets and issue reporting. Semantic
+reimport declarations require `--markdown-math readable`.
 
 Search JSON declares its coordinate projection as `mant.markdown/v2` with
 `math: "readable"`, preserving literal mathematical symbols for visible search.

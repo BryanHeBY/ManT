@@ -26,6 +26,7 @@ include = [
   "/tests/support/table_scope_witness.rs",
   "/tests/native_payload_consumers.rs", "/tests/native_payload_consumers/**",
   "/tests/query_report_boundary.rs",
+  "/tests/mathml_reference.rs",
   "/tests/support/semantic_read.rs",
   "/tests/support/link_meaning.rs", "/tests/support/link_evidence.rs",
   "/tests/support/decoded_content.rs", "/tests/support/enclosure_operands.rs",

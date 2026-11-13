@@ -457,6 +457,11 @@ EQ displays before publishing IR. Code and other literal content retain their
 own hard rows.
 
 Default Markdown export selects LaTeX with readable best-effort fallback.
+`--markdown-math mathml` embeds direct MathML as single-line raw HTML fragments.
+Each formula is a `<math xmlns="http://www.w3.org/1998/Math/MathML">` element
+with `display="inline"` or `display="block"`. A viewer must preserve raw HTML
+and support MathML. This mode uses the same resolved formula owners, bounded
+conversion, loss reports and source-coordinate accounting as LaTeX export.
 `--markdown-math readable` selects code spans and unlabelled display fences.
 Literal blocks, portable reading tables and legacy
 formulas without structure keep readable content even with mathematical
@@ -465,14 +470,23 @@ symbols, fonts and fences also produce conversion findings. Invalid or
 oversized formulas use their readable payload. Exhausting the mathematical
 budget makes further formulas readable while retaining the document content.
 
-Library consumers select `MarkdownOptions::math` or `MarkdownFragmentOptions::math`
-for the same document and fragment policy. Addressable artifacts expose
+Library consumers select `MarkdownMath::Latex`, `Mathml`, or `Readable` through
+`MarkdownOptions::math` or `MarkdownFragmentOptions::math` for the same document
+and fragment policy. Addressable artifacts expose
 final-byte source ranges, bounded mathematical findings and tracked counts.
 The fallible `render_math_markdown` API provides checked strict/best-effort
 conversion, including hard resource errors. Producer diagnostics describe
 source coverage independently of target-format conversion issues. Semantic
 reimport declarations require `--markdown-math readable`. Markdown math input
 continues to retain its delimiters as unsupported reading content.
+
+MathML operation, script, limit, accent, pile and matrix relationships follow
+the pinned mandoc HTML formula path. ManT emits Core-compatible explicit
+fences and resolved text styles and uses Unicode-aware atom roles. Best-effort
+output for unequal matrix columns retains all rows, with empty cells for
+missing entries. An unbraced recovered pile prefix stays inline before its actual vertical rows.
+Custom decorations and source-neutral literal spellings retain their owned
+content throughout conversion.
 
 ### Renderer configuration
 

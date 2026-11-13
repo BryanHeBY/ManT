@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use mant_codec::encode::{
-    MarkdownMathIssueKind, MarkdownOptions, render_addressable_markdown,
+    MarkdownMath, MarkdownMathIssueKind, MarkdownOptions, render_addressable_markdown_with_options,
     render_markdown_with_options,
 };
 use mant_codec::math::{MathFormat, MathOptions, MathPolicy, encode_equation};
@@ -73,11 +73,14 @@ fn fixture(file: &str) -> ResolvedContent {
     }
 }
 
-fn equations(markdown: &str) -> Vec<bool> {
+fn equations(markdown: &str, mode: MarkdownMath) -> Vec<bool> {
     Parser::new_ext(markdown, Options::ENABLE_MATH)
         .filter_map(|event| match event {
             Event::InlineMath(_) => Some(false),
             Event::DisplayMath(_) => Some(true),
+            Event::InlineHtml(tag) if mode == MarkdownMath::Mathml && tag.starts_with("<math ") => {
+                Some(tag.contains("display=\"block\""))
+            }
             _ => None,
         })
         .collect()
@@ -139,26 +142,37 @@ fn real_formulas_keep_their_owners_after_json_and_mathematical_export() {
                 assert!(!artifact.text.is_empty(), "{file}: {format:?}");
             }
         }
-        let artifact = render_addressable_markdown(&content);
-        let summary = artifact.math_summary();
-        assert_eq!(summary.formulas, total, "{file}");
-        assert_eq!(summary.encoded_formulas, total - fallbacks, "{file}");
-        assert_eq!(summary.fallback_formulas, fallbacks, "{file}");
-        assert!(!summary.budget_exhausted, "{file}");
-        assert_eq!(
-            artifact
-                .math_issues()
-                .iter()
-                .filter(|issue| issue.kind == MarkdownMathIssueKind::LiteralContext)
-                .count(),
-            fallbacks,
-            "{file}: readable literal contexts"
-        );
-        let events = equations(artifact.text());
-        assert_eq!(events.len(), total - fallbacks, "{file}");
-        assert_eq!(events.iter().filter(|display| **display).count(), displays);
+        for mode in [MarkdownMath::Latex, MarkdownMath::Mathml] {
+            let artifact = render_addressable_markdown_with_options(
+                &content,
+                MarkdownOptions {
+                    math: mode,
+                    ..MarkdownOptions::ADDRESSABLE
+                },
+            );
+            let summary = artifact.math_summary();
+            assert_eq!(summary.formulas, total, "{file}");
+            assert_eq!(summary.encoded_formulas, total - fallbacks, "{file}");
+            assert_eq!(summary.fallback_formulas, fallbacks, "{file}");
+            assert!(!summary.budget_exhausted, "{file}");
+            assert_eq!(
+                artifact
+                    .math_issues()
+                    .iter()
+                    .filter(|issue| issue.kind == MarkdownMathIssueKind::LiteralContext)
+                    .count(),
+                fallbacks,
+                "{file}: readable literal contexts"
+            );
+            let events = equations(artifact.text(), mode);
+            assert_eq!(events.len(), total - fallbacks, "{file}");
+            assert_eq!(events.iter().filter(|display| **display).count(), displays);
+        }
         let readable = render_markdown_with_options(&content, MarkdownOptions::READABLE);
-        assert!(equations(&readable).is_empty(), "{file}");
+        assert!(
+            equations(&readable, MarkdownMath::Readable).is_empty(),
+            "{file}"
+        );
     }
 }
 

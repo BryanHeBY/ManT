@@ -173,7 +173,7 @@ pub(super) fn render_markdown_artifact(
     if options.math == super::MarkdownMath::Readable {
         return render_markdown_with_context(query, RenderOptions::portable(options), track);
     }
-    let context = super::math_markdown::MathContext::export(true);
+    let context = super::math_markdown::MathContext::export(true, options.math);
     let mut artifact = render_markdown_with_context(
         query,
         RenderOptions {

@@ -53,10 +53,14 @@ that crate was not published for that change.
   resource exhaustion always fail without returning partial markup.
 - Default Markdown documents and fragments to inline/display LaTeX with
   readable best-effort fallback. Add `MarkdownOptions::math` and
-  `MarkdownFragmentOptions::math`, and support `--markdown-math readable|latex`
+  `MarkdownFragmentOptions::math`, and support `--markdown-math latex|mathml|readable`
   across full documents, excerpts and explanation reports. Individual formula
   errors and aggregate mathematical budgets preserve readable document content.
   Addressable artifacts expose bounded conversion reports and final-byte ranges.
+- Add `MarkdownMath::Mathml` for namespaced inline/display MathML embedded
+  directly as single-line HTML fragments. MathML shares the mathematical
+  conversion budgets, loss reports and readable fallbacks. Viewers must retain
+  HTML and support MathML. LaTeX remains the default Markdown math mode.
 - Normalize recovered eqn piles with no actual rows into transparent sequences.
   Keep unbraced prefixes and subsequent actual rows in separate owners, and
   preserve matrix column roles. MathML follows the pinned native HTML operation

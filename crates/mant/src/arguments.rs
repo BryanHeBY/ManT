@@ -42,6 +42,7 @@ pub(crate) enum QueryFormat {
 pub(crate) enum MarkdownMathMode {
     Readable,
     Latex,
+    Mathml,
 }
 
 impl From<MarkdownMathMode> for mant_codec::encode::MarkdownMath {
@@ -49,6 +50,7 @@ impl From<MarkdownMathMode> for mant_codec::encode::MarkdownMath {
         match mode {
             MarkdownMathMode::Readable => Self::Readable,
             MarkdownMathMode::Latex => Self::Latex,
+            MarkdownMathMode::Mathml => Self::Mathml,
         }
     }
 }

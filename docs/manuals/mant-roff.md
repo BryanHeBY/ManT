@@ -1443,12 +1443,21 @@ continue to occupy their original place among prose words.
 Text, search and TUI consumers use the shared readable projection. JSON retains
 the mathematical structure, and `mant-codec::math` can encode that structure as
 `MathML` Core or a restricted LaTeX body. Markdown defaults to inline/display
-LaTeX with reported best effort. `--markdown-math readable` selects the shared
-reading projection. Renderer configuration and approximation boundaries are
+LaTeX with reported best effort. `--markdown-math mathml` emits namespaced
+inline/display `<math>` elements as single-line raw HTML fragments for viewers
+that retain HTML and support MathML. `--markdown-math readable` selects the
+shared reading projection. Both mathematical modes share conversion budgets
+and loss reporting. Semantic reimport declarations require readable mode.
+Renderer configuration and approximation boundaries are
 documented in [mant-markdown(7)](mant-markdown.md#mathematical-export).
 Each mathematical encoder reports target-format losses separately from the
 producer's source diagnostics. Opaque table cells keep the native executed
 word payload in the ordinary text path.
+
+MathML follows the native HTML operation relationships using Core-compatible
+explicit fences, resolved text styles and Unicode-aware atom roles. Every
+stored matrix row is retained, including rows in columns taller than the
+first column. This preserves accepted mathematical content through conversion.
 
 Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix. A separate native construction guard stops input dispatch after a syntax node exceeds 512 parent levels, before finalization and validation; that larger violation returns a whole-document parse error. Native reference renderers reject syntax or equation nesting beyond 256 levels independently of output size. Native tree cleanup is iterative.
 Nested native escape arguments are likewise limited to 256 levels; a deeper
