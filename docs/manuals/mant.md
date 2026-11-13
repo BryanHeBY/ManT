@@ -1296,6 +1296,14 @@ font, symbol and spacing approximations while preserving the formula content.
 LaTeX and MathML share conversion budgets and issue reporting. Semantic
 reimport declarations require `--markdown-math readable`.
 
+```sh
+mant --input ./formula.3 --markdown-math mathml
+mant --input ./formula.3 --preserve-anchors --markdown-math readable
+```
+
+For the 0.14 native client migration, see
+[mant-protocol(5)](mant-protocol.md#native-client-migration).
+
 Search JSON declares its coordinate projection as `mant.markdown/v2` with
 `math: "readable"`, preserving literal mathematical symbols for visible search.
 Reproduce its complete Markdown using `--format markdown --preserve-anchors

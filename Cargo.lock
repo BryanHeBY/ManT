@@ -1062,7 +1062,7 @@ dependencies = [
 
 [[package]]
 name = "mant-sources"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "flate2",
  "libc",

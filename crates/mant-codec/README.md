@@ -147,7 +147,7 @@ resolved text styles and Unicode-aware atom roles. Best-effort output for
 unequal matrix columns retains every stored row, with empty cells for missing
 entries. Recovered unbraced pile prefixes remain inline before the actual vertical rows. These
 choices preserve the complete resolved IR in valid mathematical markup.
-[Pinned eqn HTML implementation](../libmandoc-rs/vendor/mandoc-cvs-20261013T025419Z/eqn_html.c).
+[Pinned eqn HTML implementation](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/vendor/mandoc-cvs-20261013T025419Z/eqn_html.c).
 
 LaTeX returns a mathematical body without dollar delimiters. Its fixed command
 subset includes `frac`, `sqrt`, scripts, `overset`/`underset`, `matrix`, common

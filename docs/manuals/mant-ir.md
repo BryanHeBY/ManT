@@ -198,6 +198,8 @@ fences and future HTML code surfaces; consumers do not infer continuations
 from neighboring blocks. Normalization can change block paths, which are always
 relative to the resulting snapshot.
 
+### Mathematical expressions
+
 An equation expression retains mathematical structure, not parser boxes or
 argument counters. `EquationKind` distinguishes `Text`, `Operation`, `Sequence`,
 `Group`, `Pile`, `Matrix`, and `Opaque`. A sequence orders expressions without introducing

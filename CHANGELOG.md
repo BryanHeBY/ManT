@@ -13,6 +13,14 @@ that crate was not published for that change.
 
 ## Unreleased
 
+## 0.14.0 - 2026-11-13
+
+This release selects the ten native/IR/reader crates at
+`0.14.0` and `mant-sources` at `0.10.3`. Native process clients migrate to the
+complete `v0.14` family. Markdown mathematical output defaults to LaTeX, with
+explicit MathML and readable selections. The compatibility notes below cover
+those migrations and the updated independently published package requirements.
+
 ### mant-ir, mant-protocol, mant-codec, mant-loader, mant-query, mant-render, mant-engine, mant-ui and mant 0.14.0
 
 - Account for first-line offsets when checking whether list markers and
@@ -106,6 +114,13 @@ that crate was not published for that change.
   inside code examples. Align the structure audit with executed inline origin
   and native single-character glyphs, retaining detection of missing formulas.
 
+### mant-sources 0.10.3
+
+- Publish the inherited dependency requirements for toml, ureq, zip, zstd and
+  libc under a new patch version. The loader and executable require
+  `mant-sources ^0.10.3` so Cargo installations receive these dependency floors.
+  The package remains independently versioned.
+
 ### Dependency maintenance
 
 - Upgrade the paired rmcp SDK and macros to 3.9.0 to resolve
@@ -133,7 +148,7 @@ that crate was not published for that change.
   clipboard dependency with clipboard-win 5.4.3 and refresh distributable
   dependency notices. Compression limits and supported formats are unchanged.
 
-### mant-codec, mant-ir and mant-ui
+### mant-codec, mant-ir and mant-ui 0.14.0
 
 - Preserve word and link content across roff zero-width controls and accepted
   line breaks. Keep the spaces that print and the original ownership of
@@ -369,7 +384,7 @@ that crate was not published for that change.
   padding out of field-fit decisions while preserving source ownership;
   generic Markdown and IR TAB layout remains source-neutral.
 
-### mant-query
+### mant-query 0.14.0
 
 - Validate and count search occurrences before fine range construction. Build
   presented lines and scalar indexes lazily for retained results, avoiding
@@ -404,7 +419,7 @@ that crate was not published for that change.
   actual owned copy while retaining shared-layout and separate equation limits;
   reject over-budget transfers without leaving a live native session.
 
-### mant-render and mant-ui
+### mant-render and mant-ui 0.14.0
 
 - Add title separators only when the document or excerpt body contributes a
   physical row. Zero-width navigation stays addressable without adding a

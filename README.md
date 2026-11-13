@@ -119,6 +119,11 @@ Parameter, command and configuration-key signatures accent structural brackets,
 assignment signs and candidate separators in both the body and complete Outline
 labels, while keeping name colors, original text and source emphasis intact.
 
+Command synopses, option summaries and source-marked option references also
+receive semantic colors for commands, options, replaceable arguments and syntax
+delimiters. Ordinary synopsis paragraphs keep their normal wrapping and source
+fonts, and search and copied text follow the original content.
+
 - The reader starts with **Content** keyboard focus. `Tab` / `Shift+Tab`
   switches between Content and the visible Outline without moving the page;
   clicking a region also focuses it. The English bottom hint identifies the
@@ -264,6 +269,19 @@ mant git --format markdown
 mant --input README.md --format text
 mant git --format json --compact
 ```
+
+Native mathematical expressions export as inline/display LaTeX in Markdown.
+Select MathML for viewers that retain HTML and support MathML, or select the
+shared readable form for code spans and plain display fences.
+
+```sh
+mant --input ./formula.3 --markdown-math mathml
+mant --input ./formula.3 --markdown-math readable
+```
+
+The same selection applies to excerpts and explanation reports. See the
+[mathematical export guide](docs/manuals/mant-markdown.md#mathematical-export)
+for renderer setup, conversion reports and resource limits.
 
 Discover machine contracts from the installed binary rather than copying
 request shapes from documentation:
