@@ -13,14 +13,18 @@ use mant_ir::{
 /// independently addressable here; the complete document position determines
 /// the wire-safe budget after structural lowering.
 pub(super) fn expression_from_ast(box_node: &EquationBox) -> EquationExpression {
-    expression_from_box(box_node)
+    expression_from_box(box_node, BoxContext::Expression)
 }
 
-fn expression_from_box(box_node: &EquationBox) -> EquationExpression {
-    expression_from_box_in_row(box_node, false)
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BoxContext {
+    Expression,
+    PileRow,
+    MatrixColumns,
+    MatrixColumn,
 }
 
-fn expression_from_box_in_row(box_node: &EquationBox, pile_row: bool) -> EquationExpression {
+fn expression_from_box(box_node: &EquationBox, context: BoxContext) -> EquationExpression {
     let text = box_node.normalized_text().map(super::visible_text);
     let mut expression = EquationExpression {
         kind: match box_node.kind {
@@ -33,7 +37,8 @@ fn expression_from_box_in_row(box_node: &EquationBox, pile_row: bool) -> Equatio
             // eqn_term.c also skips a Pile's singleton row wrapper. Resolve
             // both distinctions here; consumers must not interpret counters.
             EquationKind::List
-                if box_node.expected_args == 1 || pile_row && box_node.actual_args <= 1 =>
+                if box_node.expected_args == 1
+                    || context == BoxContext::PileRow && box_node.actual_args <= 1 =>
             {
                 IrKind::Sequence
             }
@@ -74,9 +79,24 @@ fn expression_from_box_in_row(box_node: &EquationBox, pile_row: bool) -> Equatio
         children: box_node
             .children
             .iter()
-            .map(|child| expression_from_box_in_row(child, box_node.kind == EquationKind::Pile))
+            .map(|child| {
+                let child_context = match box_node.kind {
+                    EquationKind::Pile => BoxContext::PileRow,
+                    EquationKind::Matrix if is_pile_row(child) => BoxContext::MatrixColumns,
+                    _ if context == BoxContext::MatrixColumns
+                        && child.kind == EquationKind::Pile =>
+                    {
+                        BoxContext::MatrixColumn
+                    }
+                    _ => BoxContext::Expression,
+                };
+                expression_from_box(child, child_context)
+            })
             .collect(),
     };
+    if box_node.kind == EquationKind::Pile && context != BoxContext::MatrixColumn {
+        normalize_pile(box_node, &mut expression);
+    }
     if expression.validate_shallow().is_err() {
         // CVS eqn.c permits incomplete operators such as `a over` and `sqrt`.
         // Retain the whole owned readable payload rather than dropping extra
@@ -101,6 +121,54 @@ fn expression_from_box_in_row(box_node: &EquationBox, pile_row: bool) -> Equatio
         };
     }
     expression
+}
+
+fn is_pile_row(box_node: &EquationBox) -> bool {
+    box_node.kind == EquationKind::List && box_node.expected_args > 1
+}
+
+fn normalize_pile(box_node: &EquationBox, expression: &mut EquationExpression) {
+    // CVS eqn_html.c::eqn_box builds a table only when its first child owns
+    // a row List. A bare pile or font-wrapped atom is a transparent sequence.
+    // Matrix columns have a separate resolved axis role and bypass this rule.
+    if !box_node.children.is_empty() && box_node.children.iter().all(is_pile_row) {
+        return;
+    }
+    expression.kind = IrKind::Sequence;
+    let mut children = box_node
+        .children
+        .iter()
+        .zip(std::mem::take(&mut expression.children))
+        .peekable();
+    while let Some((native, child)) = children.next() {
+        if !is_pile_row(native) {
+            expression.children.push(child);
+            continue;
+        }
+        // eqn.c accepts a missing initial row brace before `above`. Keep
+        // that inline prefix and every subsequent actual row in their own
+        // content owners instead of inventing a row around the prefix.
+        let mut rows = vec![child];
+        while children
+            .peek()
+            .is_some_and(|(native, _)| is_pile_row(native))
+        {
+            rows.push(children.next().expect("checked next row").1);
+        }
+        expression.children.push(EquationExpression {
+            kind: IrKind::Pile,
+            font: IrFont::None,
+            operator: IrOperator::None,
+            atom_role: EquationAtomRole::Unknown,
+            operand_scope: EquationOperandScope::Atomic,
+            text: None,
+            left: None,
+            right: None,
+            top: None,
+            bottom: None,
+            children: rows,
+        });
+    }
 }
 
 fn atom_role(native: NativeAtomRole, text: &str) -> EquationAtomRole {

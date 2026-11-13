@@ -1411,6 +1411,16 @@ owners preserve their own hard rows and readable formulas. Configuration-only
 Quoted POSIX notation such as `2"^" N` and ordinary `X_ i` spellings stays
 literal. Native `2 sup N` and `X sub i` operations become structured scripts.
 
+Vertical piles retain actual row owners. Recovered `pile`, `pile x` and
+`pile roman x` inputs become transparent sequences. `pile {}` and
+`pile { x }` retain their authored empty or singleton row. For a recovered
+`pile x above y`, the unbraced prefix stays inline before a pile containing
+the actual `y` row. Matrix columns retain their axis role even when a column
+contains an empty or font-wrapped row. This resolution follows the pinned
+`eqn.c` row construction and `eqn_html.c` container selection. The readable
+projection uses these resolved sequences, with grouping parentheses supplied
+by explicit authored groups.
+
 Equation control requests follow native input-line recognition. An `.EN`
 embedded after mathematical text on the same line remains equation content.
 The resulting atom text and native diagnostics retain that source spelling.

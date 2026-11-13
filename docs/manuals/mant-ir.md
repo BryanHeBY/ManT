@@ -215,6 +215,12 @@ exact symbol in ` _ (symbol)`, and an explicitly empty lower decoration adds
 no glyph. Mathematical encoders continue to consume the authoritative
 `top`/`bottom` strings directly.
 
+A `Pile` owns actual vertical rows. Native recovery with no actual rows
+produces a transparent `Sequence`. An unbraced prefix followed by real rows
+becomes a sequence containing that prefix and a pile of the remaining rows.
+Matrix columns keep their axis role for empty and font-wrapped rows. Each
+resolved owner is shared by all consumers.
+
 The roff producer counts JSON container depth from the final document position,
 including enclosing sections, lists, definitions, tables, and styled inlines.
 When a complete formula exceeds the remaining reader budget, the affected

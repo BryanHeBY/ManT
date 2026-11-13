@@ -57,6 +57,11 @@ that crate was not published for that change.
   across full documents, excerpts and explanation reports. Individual formula
   errors and aggregate mathematical budgets preserve readable document content.
   Addressable artifacts expose bounded conversion reports and final-byte ranges.
+- Normalize recovered eqn piles with no actual rows into transparent sequences.
+  Keep unbraced prefixes and subsequent actual rows in separate owners, and
+  preserve matrix column roles. MathML follows the pinned native HTML operation
+  structure with explicit Core fences, resolved fonts and Unicode atom roles,
+  retaining all rows in unequal-height matrix columns.
 - Preserve custom lower-decoration symbols in shared formula reading text.
   Normalize the exact former collapsed-bottom cache when decoding formula
   JSON after bounded validation. In-memory cache checks remain strict.

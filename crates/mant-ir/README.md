@@ -334,6 +334,12 @@ The shared reading spells a standard underline as `_` and a custom lower
 decoration as ` _ (symbol)`. An explicitly empty lower decoration adds no
 glyph. Exact stored symbols remain available to mathematical encoders.
 
+`Pile` owns actual vertical rows. The roff producer resolves a recovered pile
+with no row structure into a `Sequence`. If an unbraced inline prefix precedes
+actual rows, a sequence owns that prefix followed by a pile of those rows.
+Matrix columns retain their separate axis role, including empty and
+font-wrapped rows. These resolved owners apply to every consumer.
+
 Matrices retain column order, including columns with unequal row counts.
 `matrix_view()` borrows the original columns group, piles and expression rows.
 Axis fonts remain available, and individual rows retain their own fences and

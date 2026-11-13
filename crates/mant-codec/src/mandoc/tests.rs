@@ -21,6 +21,7 @@ mod breakpoint_controls;
 mod equations;
 mod equations_evidence;
 mod equations_literals;
+mod equations_piles;
 mod equations_placement;
 mod literal_owners;
 mod literal_space_rows;
