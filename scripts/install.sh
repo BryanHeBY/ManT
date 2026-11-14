@@ -557,7 +557,7 @@ install_linux() {
 install_macos() {
   require cargo
   cargo_root="$temporary/cargo-root"
-  cargo install --locked --root "$cargo_root" --version "$version" mant
+  PATH="$cargo_root/bin:$PATH" cargo install --locked --root "$cargo_root" --version "$version" mant
   manual_dir="$temporary/manuals"
   if [ "$install_manual" = true ]; then
     manual_archive="mant-$version-manuals.tar.gz"

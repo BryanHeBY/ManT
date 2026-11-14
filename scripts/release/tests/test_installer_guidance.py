@@ -12,6 +12,48 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class InstallerGuidanceTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "Unix Cargo staging execution")
+    def test_macos_staging_bin_is_on_the_cargo_child_path(self):
+        source = (ROOT / "scripts/install.sh").read_text()
+        body = source.split("install_macos() {\n", 1)[1].split("\n}", 1)[0]
+        with tempfile.TemporaryDirectory(prefix="mant cargo staging ") as directory:
+            root = Path(directory)
+            tool_bin = root / "tools"
+            tool_bin.mkdir()
+            cargo = tool_bin / "cargo"
+            cargo.write_text('''#!/bin/sh
+set -eu
+[ "$1" = install ] && [ "$2" = --locked ] && [ "$3" = --root ]
+[ "$4" = "$MANT_TEST_ROOT/cargo-root" ]
+[ "$5" = --version ] && [ "$6" = 0.14.0 ] && [ "$7" = mant ]
+[ "${PATH%%:*}" = "$4/bin" ]
+mkdir -p "$4/bin"
+printf 'staged executable' > "$4/bin/mant"
+''')
+            cargo.chmod(0o755)
+            command = '''set -eu
+require() { command -v "$1" >/dev/null; }
+install_files() {
+  [ "$1" = "$temporary/cargo-root/bin/mant" ] && [ -f "$1" ]
+}
+temporary=$MANT_TEST_ROOT
+version=0.14.0
+install_manual=false
+original_path=$PATH
+install_macos() {
+''' + body + '''
+}
+install_macos
+[ "$PATH" = "$original_path" ]
+'''
+            result = subprocess.run(
+                ["sh", "-c", command], cwd=root,
+                env={**os.environ, "MANT_TEST_ROOT": str(root),
+                     "PATH": f"{tool_bin}{os.pathsep}{os.environ['PATH']}"},
+                capture_output=True, text=True, timeout=10, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def check_output(self, output, receipt):
         self.assertIn(f"receipt:    {receipt}", output)
         for text in ["Keep this receipt", "not automatically removed",
