@@ -527,6 +527,8 @@ literal mathematical content. Parsed `2 sup N` and `X sub i` operations produce
 structured scripts. For example, POSIX `stdint.h` uses a quoted caret, and
 `drand48` mixes `X_ i` with the structural `X sub {n+1}` form. The resulting
 text characters and scripts preserve those distinct source declarations.
+Digit-prefixed names such as `330E_16` remain identifier atoms. ASCII
+comparisons such as `>=` retain their authored spelling inside one relation.
 Plain-text mathematical descriptions and code examples
 retain their supplied content. Markdown math reimport retains source spelling
 and follows the unsupported-syntax rules below.
@@ -549,7 +551,11 @@ exports reject reported losses. Resource and structure failures follow the
 checked/default export policies described above.
 
 Full-document CLI warnings retain up to eight issue details plus a summary.
-Several quoted spaces in a formula can each contribute a spacing finding.
+Ordinary spaces in formula atoms use explicit LaTeX spaces or nonbreaking
+MathML character references, preserving leading, trailing and repeated blanks
+without spacing findings. MathML retains other Unicode spaces in their tokens.
+Tabs and line endings still report spacing losses, and MathML encodes these
+characters as numeric references to keep the surrounding HTML on one line.
 `--markdown-math readable` selects the shared reading representation for
 viewers using ordinary code spans and fences.
 

@@ -177,14 +177,8 @@ fn atom_role(native: NativeAtomRole, text: &str) -> EquationAtomRole {
         NativeAtomRole::Literal => return EquationAtomRole::Literal,
         NativeAtomRole::Unknown => {}
     }
-    let mut characters = text.chars();
-    let Some(first) = characters.next() else {
+    if text.is_empty() {
         return EquationAtomRole::Unknown;
-    };
-    if (first.is_alphabetic() || first == '_')
-        && characters.all(|character| character.is_alphanumeric() || character == '_')
-    {
-        return EquationAtomRole::Identifier;
     }
     let mut decimal_points = 0;
     if text.bytes().any(|byte| byte.is_ascii_digit())
@@ -198,6 +192,14 @@ fn atom_role(native: NativeAtomRole, text: &str) -> EquationAtomRole {
         })
     {
         return EquationAtomRole::Number;
+    }
+    // eqn_html.c uses mi for nondecimal words, including digit-prefixed names
+    // retained by an explicit font scope. Authored underscores stay literal.
+    if text
+        .chars()
+        .all(|character| character.is_alphanumeric() || character == '_')
+    {
+        return EquationAtomRole::Identifier;
     }
     if text.chars().all(|character| {
         matches!(

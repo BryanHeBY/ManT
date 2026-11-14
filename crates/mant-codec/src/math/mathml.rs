@@ -166,7 +166,10 @@ fn token(
     font: EquationFont,
     normal_identifier: bool,
 ) -> Result<(), MathError> {
-    if unsupported_whitespace(text) {
+    if text
+        .chars()
+        .any(|character| matches!(character, '\t' | '\n' | '\r'))
+    {
         encoder.loss(MathLossKind::LiteralWhitespace)?;
     }
     encoder.push("<")?;
@@ -263,6 +266,12 @@ fn matrix(
 fn text_xml(encoder: &mut Encoder, text: &str) -> Result<(), MathError> {
     for character in text.chars() {
         match character {
+            // MathML token normalization trims and collapses ASCII spaces.
+            // A nonbreaking space keeps each authored blank inside its atom.
+            ' ' => encoder.push("&#xA0;")?,
+            '\t' => encoder.push("&#x9;")?,
+            '\n' => encoder.push("&#xA;")?,
+            '\r' => encoder.push("&#xD;")?,
             '&' => encoder.push("&amp;")?,
             '<' => encoder.push("&lt;")?,
             '>' => encoder.push("&gt;")?,

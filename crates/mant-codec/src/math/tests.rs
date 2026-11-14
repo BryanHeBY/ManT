@@ -156,6 +156,85 @@ fn quoted_literals_are_single_math_atoms_and_source_cannot_inject_markup() {
 }
 
 #[test]
+fn ascii_relations_keep_their_spelling_as_one_operator() {
+    for value in [">=", "<=", "!=", "=="] {
+        for font in [Font::None, Font::Roman, Font::Italic, Font::Bold] {
+            let mut expression = atom(value, Role::Operator);
+            expression.font = font;
+            let tex = render(&expression, MathFormat::Latex);
+            assert_eq!(tex.losses, []);
+            assert!(tex.text.starts_with("\\mathrel{"));
+            assert!(
+                tex.text.contains(
+                    &value
+                        .replace('>', "\\textgreater{}")
+                        .replace('<', "\\textless{}")
+                )
+            );
+        }
+    }
+}
+
+#[test]
+fn literal_ascii_spaces_are_preserved_without_conversion_losses() {
+    for value in ["", " ", "  ", " a  b ", "a b"] {
+        let expression = atom(value, Role::Literal);
+        let before = expression.clone();
+        let xml = render(&expression, MathFormat::Mathml);
+        assert!(xml.losses.is_empty(), "{value:?}: {:?}", xml.losses);
+        assert!(
+            xml.text
+                .contains(&format!("<mi>{}</mi>", value.replace(' ', "&#xA0;")))
+        );
+        let tex = render(&expression, MathFormat::Latex);
+        assert!(tex.losses.is_empty(), "{value:?}: {:?}", tex.losses);
+        assert_eq!(
+            tex.text,
+            format!("\\mathord{{\\textrm{{{}}}}}", value.replace(' ', "\\ "))
+        );
+        assert_eq!(expression, before);
+    }
+}
+
+#[test]
+fn mathml_preserves_unicode_spaces_in_their_token() {
+    for value in ["\u{a0}", " a\u{2009}b ", "\u{3000}"] {
+        let expression = atom(value, Role::Literal);
+        let xml = render(&expression, MathFormat::Mathml);
+        assert!(xml.losses.is_empty(), "{value:?}: {:?}", xml.losses);
+        assert!(xml.text.contains(&value.replace(' ', "&#xA0;")));
+    }
+}
+
+#[test]
+fn literal_control_whitespace_keeps_its_loss_report_and_single_line_markup() {
+    for (value, entity) in [("\t", "&#x9;"), ("\n", "&#xA;"), ("\r", "&#xD;")] {
+        let expression = atom(value, Role::Literal);
+        for format in [MathFormat::Mathml, MathFormat::Latex] {
+            assert!(matches!(
+                encode_equation(
+                    &expression,
+                    MathOptions {
+                        format,
+                        ..Default::default()
+                    }
+                ),
+                Err(MathError::Loss(MathLoss {
+                    kind: MathLossKind::LiteralWhitespace,
+                    ..
+                }))
+            ));
+            let artifact = best(&expression, format);
+            assert_eq!(artifact.losses.len(), 1);
+            assert!(!artifact.text.contains(['\t', '\n', '\r']));
+            if format == MathFormat::Mathml {
+                assert!(artifact.text.contains(entity));
+            }
+        }
+    }
+}
+
+#[test]
 fn function_role_and_inherited_font_are_retained() {
     let function = atom("sin", Role::Function);
     let function_xml = render(&function, MathFormat::Mathml).text;

@@ -8,7 +8,6 @@ use super::{
     Encoder, MathError, MathLossKind, effective_font, irregular_matrix, matrix_loss,
     safe_character,
     symbols::{latex_accent, latex_fence, latex_symbol},
-    unsupported_whitespace,
 };
 
 pub(super) fn encode(
@@ -209,6 +208,11 @@ fn atom(
             literal(encoder, text, font)
         }
         EquationAtomRole::Literal => literal(encoder, text, font),
+        EquationAtomRole::Operator if matches!(text, ">=" | "<=" | "!=" | "==") => {
+            encoder.push("\\mathrel{")?;
+            literal(encoder, text, font)?;
+            encoder.push("}")
+        }
         EquationAtomRole::Function => {
             encoder.push("\\mathop{")?;
             literal(
@@ -348,9 +352,6 @@ fn greek_lowercase(character: char) -> bool {
 }
 
 fn literal(encoder: &mut Encoder, value: &str, font: EquationFont) -> Result<(), MathError> {
-    if unsupported_whitespace(value) {
-        encoder.loss(MathLossKind::LiteralWhitespace)?;
-    }
     encoder.push(match font {
         EquationFont::None | EquationFont::Roman => "\\mathord{\\textrm{",
         EquationFont::Italic => "\\mathord{\\textit{",
@@ -390,6 +391,9 @@ fn literal_text(encoder: &mut Encoder, value: &str) -> Result<(), MathError> {
         if let Some(escaped) = escaped {
             encoder.push(escaped)?;
         } else {
+            if character.is_whitespace() {
+                encoder.loss(MathLossKind::LiteralWhitespace)?;
+            }
             if !character.is_ascii() && latex_symbol(character).is_none() {
                 encoder.loss(MathLossKind::UnsupportedSymbol)?;
             }

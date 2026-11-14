@@ -13,6 +13,17 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-codec
+
+- Preserve leading, trailing and repeated ordinary spaces in mathematical
+  exports with explicit LaTeX spacing and nonbreaking MathML references.
+  Remove false spacing-loss warnings for representable blanks. Retain
+  diagnostics for control whitespace and encode MathML tabs and line endings
+  as numeric references so formula HTML stays on one line.
+- Recognize native digit-prefixed identifier spellings and encode common ASCII
+  comparison operators as single LaTeX relations, retaining authored text
+  without unnecessary unknown-role or unsupported-atom findings.
+
 ## 0.14.0 - 2026-11-14
 
 This release selects the ten native/IR/reader crates at

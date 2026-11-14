@@ -303,11 +303,40 @@ fn native_fonts_and_atom_roles_survive_core_attribute_translation() {
     );
     assert_eq!(
         atom_payloads(single_math(&literal.markdown)),
-        ["a &lt; &amp; &gt;"]
+        ["a&#xA0;&lt;&#xA0;&amp;&#xA0;&gt;"]
     );
     let empty = formula("\"\"");
     assert_eq!(atom_payloads(single_math(&empty.native)), [""]);
     assert_eq!(atom_payloads(single_math(&empty.markdown)), [""]);
+}
+
+#[test]
+fn quoted_spaces_survive_mathml_token_normalization() {
+    // Pristine CVS eqn.c keeps quoted bytes. eqn_html.c::eqn_box emits them
+    // through html.c::print_encode, whose print_endword collapses repeated
+    // blanks. The exact input below produced ` a b ` in the reference HTML
+    // before this assertion. Explicit NBSPs retain the original four blanks.
+    let output = formula("\" a  b \"");
+    assert_eq!(atom_payloads(single_math(&output.native)), [" a b "]);
+    assert_eq!(
+        atom_payloads(single_math(&output.markdown)),
+        ["&#xA0;a&#xA0;&#xA0;b&#xA0;"]
+    );
+    assert_eq!(output.issues, []);
+}
+
+#[test]
+fn digit_prefixed_names_keep_the_native_identifier_role() {
+    // Before this assertion, pristine eqn_html.c::eqn_box classified the
+    // complete explicitly roman-scoped `330E_16` spelling as one mi token.
+    let output = formula("roman 330E_16");
+    assert_eq!(atom_payloads(single_math(&output.native)), ["330E_16"]);
+    // Markdown protects the authored underscore with an equivalent entity.
+    assert_eq!(
+        atom_payloads(single_math(&output.markdown)),
+        ["330E&#95;16"]
+    );
+    assert_eq!(output.issues, []);
 }
 
 #[test]

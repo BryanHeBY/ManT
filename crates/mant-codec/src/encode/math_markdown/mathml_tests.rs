@@ -77,7 +77,8 @@ fn mathematical_text_cannot_create_markdown_or_html_owners() {
                 other => panic!("unexpected event for {value:?}: {other:?}"),
             }
         }
-        assert_eq!(recovered, value);
+        // Token blanks use NBSP so MathML retains their count and edges.
+        assert_eq!(recovered, value.replace(' ', "\u{a0}"));
     }
     let markup = "<math><mi>&amp;ast; &lt; &#42; *</mi></math>";
     assert_eq!(

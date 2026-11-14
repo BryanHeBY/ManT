@@ -177,6 +177,30 @@ fn real_formulas_keep_their_owners_after_json_and_mathematical_export() {
 }
 
 #[test]
+fn posix_drand48_exports_without_spurious_math_findings() {
+    // The complete page ran through pristine CVS HTML before these assertions.
+    // eqn.c retains quoted blanks and the roman-scoped 330E_ name. eqn_html.c
+    // emits >= as one mo token, preserving its authored ASCII spelling.
+    let content = fixture("posix-drand48.3p");
+    for math in [MarkdownMath::Latex, MarkdownMath::Mathml] {
+        let artifact = render_addressable_markdown_with_options(
+            &content,
+            MarkdownOptions {
+                math,
+                ..MarkdownOptions::default()
+            },
+        );
+        assert_eq!(artifact.math_summary().formulas, 27);
+        assert_eq!(artifact.math_summary().fallback_formulas, 0);
+        assert!(
+            artifact.math_issues().is_empty(),
+            "{math:?}: {:?}",
+            artifact.math_issues()
+        );
+    }
+}
+
+#[test]
 fn posix_inline_formulas_preserve_complete_sentences_and_literal_notation() {
     // roff_eqndelim's generated EQ can start a source line while remaining
     // inline. The exact complete drand48/stdint sources and their prose ran
