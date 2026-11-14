@@ -13,7 +13,7 @@ that crate was not published for that change.
 
 ## Unreleased
 
-## 0.14.0 - 2026-11-13
+## 0.14.0 - 2026-11-14
 
 This release selects the ten native/IR/reader crates at
 `0.14.0` and `mant-sources` at `0.10.3`. Native process clients migrate to the
