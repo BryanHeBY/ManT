@@ -62,6 +62,51 @@ def case_collisions(paths):
 
 
 class SourceToolPathTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix" and BASH,
+                         "release artifact downloads require POSIX Bash")
+    def test_artifact_downloads_use_the_current_run_and_require_every_platform(self):
+        command = workflow_command("Download every platform archive")
+        for failure in ["", "mant-linux-arm64"]:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory(
+                prefix="mant artifact download "
+            ) as directory:
+                root = Path(directory)
+                tool = root / "gh"
+                tool.write_text('''#!/usr/bin/env bash
+set -eu
+[[ $1 == run && $2 == download && $3 == 12345 ]]
+[[ $4 == --repo && $5 == BryanHeBY/ManT ]]
+[[ $6 == --name && $8 == --dir && $9 == release ]]
+printf '%s\\n' "$7" >> calls
+[[ $7 != "$MANT_TEST_FAILURE" ]] || exit 1
+mkdir -p release
+printf '%s\\n' "$7" > "release/$7.tar.gz"
+''')
+                tool.chmod(0o755)
+                environment = {
+                    **os.environ,
+                    "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
+                    "GITHUB_RUN_ID": "12345",
+                    "GITHUB_REPOSITORY": "BryanHeBY/ManT",
+                    "MANT_TEST_FAILURE": failure,
+                }
+                result = subprocess.run(
+                    [BASH, "-euo", "pipefail", "-c", command], cwd=root,
+                    env=environment, capture_output=True, text=True,
+                    timeout=10, check=False,
+                )
+                expected = ["mant-linux-x64", "mant-linux-arm64"]
+                if not failure:
+                    expected.append("mant-windows-x64")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(
+                        sorted(path.name for path in (root / "release").iterdir()),
+                        sorted(f"{name}.tar.gz" for name in expected),
+                    )
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                self.assertEqual((root / "calls").read_text().splitlines(), expected)
+
     @unittest.skipUnless(BASH, "manual ref validation requires a usable Bash")
     def test_manual_publication_requires_the_selected_tag_ref(self):
         command = workflow_command("Validate manual publication ref")
