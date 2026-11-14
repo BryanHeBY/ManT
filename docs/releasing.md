@@ -171,6 +171,19 @@ link. For a storage/protocol change, include old and new paths/contracts and
 both installer and manual/Cargo migration instructions. Generated commit notes
 alone are not the final user-facing release notes.
 
+## Packaging and runner diagnostics
+
+Cargo currently warns for automatically discovered integration tests and
+profiling examples excluded by a package's explicit `include` list. The
+repository suite covers these checkout-only targets, while the packaged-source
+gate tests the exact shipped sources separately. Review the selected file list
+when these messages change. Cargo tracks the implicit-target warning noise in
+[issue #14290](https://github.com/rust-lang/cargo/issues/14290).
+
+GitHub may also annotate macOS arm64 jobs with a runner-capacity notice. This
+describes hosted-runner availability. The job's completed checks remain the
+release evidence.
+
 ## Configure crates.io publication
 
 The crates.io packages form one dependency graph. `mant-ui` first entered

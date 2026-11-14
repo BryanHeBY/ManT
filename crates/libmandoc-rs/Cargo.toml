@@ -6,7 +6,6 @@ rust-version.workspace = true
 license = "Apache-2.0 AND ISC AND BSD-2-Clause AND BSD-3-Clause"
 description = "Safe Rust interface to the vendored libmandoc parser and reference renderers"
 repository.workspace = true
-homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "mdoc", "roff", "mandoc", "parser"]
 categories = ["parser-implementations", "text-processing"]

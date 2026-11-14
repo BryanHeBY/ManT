@@ -31,7 +31,6 @@ edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
 repository = "https://github.com/BryanHeBY/ManT"
-homepage = "https://github.com/BryanHeBY/ManT"
 publish = true
 
 [workspace.lints.rust]

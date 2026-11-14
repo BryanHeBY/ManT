@@ -7,7 +7,6 @@ license.workspace = true
 publish.workspace = true
 description = "Structured manual and Markdown document engine used by ManT"
 repository.workspace = true
-homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "mdoc", "roff", "markdown", "parser"]
 categories = ["parser-implementations", "text-processing"]

@@ -7,7 +7,6 @@ license.workspace = true
 publish.workspace = true
 description = "Deterministic document and query report presentation for ManT"
 repository.workspace = true
-homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "markdown", "documentation", "rendering"]
 categories = ["text-processing"]

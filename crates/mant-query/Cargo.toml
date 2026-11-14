@@ -7,7 +7,6 @@ license.workspace = true
 publish.workspace = true
 description = "Bounded semantic queries over existing ManT document snapshots"
 repository.workspace = true
-homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "markdown", "documentation", "search"]
 categories = ["text-processing"]

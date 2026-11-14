@@ -7,7 +7,6 @@ license.workspace = true
 publish.workspace = true
 description = "Transport-neutral query contracts and projections for ManT"
 repository.workspace = true
-homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "markdown", "schema", "protocol", "mcp"]
 categories = ["data-structures", "text-processing"]
