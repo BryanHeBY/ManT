@@ -51,36 +51,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         .find(|item| item.entry.as_ref().unwrap().names == ["git-add"])
         .unwrap();
     assert_eq!(add.source.unwrap().line, 351);
-    let [term] = add.terms.as_slice() else {
-        panic!("one git-add definition term");
-    };
-    assert_eq!(inline_plain_text(term), "git-add(1)");
-    // The pinned HTML formatter renders this fixture's \fBgit-add\fR(1)
-    // as a bold name followed by a roman section number.
-    let [
-        Inline::Anchor { .. },
-        Inline::Link {
-            target:
-                LinkTarget::Manual {
-                    name,
-                    manual_section,
-                },
-            children,
-            ..
-        },
-    ] = term.content.as_slice()
-    else {
-        panic!("one anchored manual reference: {:?}", term.content);
-    };
-    assert_eq!(
-        (name.as_str(), manual_section.as_deref()),
-        ("git-add", Some("1"))
-    );
-    assert!(matches!(
-        children.as_slice(),
-        [Inline::Strong { children }, Inline::Text { value }]
-            if inline_plain_text(children) == "git-add" && value == "(1)"
-    ));
+    assert_git_add_reference(add);
     assert!(
         serde_json::to_string(&add.description)
             .unwrap()
@@ -117,6 +88,39 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     ));
 
     common::assert_bounded_vertical_spacing(&document.sections, "fedora44/git");
+}
+
+fn assert_git_add_reference(add: &mant_ir::DefinitionItem) {
+    let [term] = add.terms.as_slice() else {
+        panic!("one git-add definition term");
+    };
+    assert_eq!(inline_plain_text(term), "git-add(1)");
+    // The pinned HTML formatter renders this fixture's \fBgit-add\fR(1)
+    // as a bold name followed by a roman section number.
+    let [
+        Inline::Anchor { .. },
+        Inline::Link {
+            target:
+                LinkTarget::Manual {
+                    name,
+                    manual_section,
+                },
+            children,
+            ..
+        },
+    ] = term.content.as_slice()
+    else {
+        panic!("one anchored manual reference: {:?}", term.content);
+    };
+    assert_eq!(
+        (name.as_str(), manual_section.as_deref()),
+        ("git-add", Some("1"))
+    );
+    assert!(matches!(
+        children.as_slice(),
+        [Inline::Strong { children }, Inline::Text { value }]
+            if inline_plain_text(children) == "git-add" && value == "(1)"
+    ));
 }
 
 /// No roff escapes leak into text.

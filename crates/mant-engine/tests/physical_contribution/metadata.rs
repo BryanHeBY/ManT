@@ -26,6 +26,9 @@ fn root_excerpt_framing_without_a_heading_and_with_tldr() {
                 let document = original.document.as_mut().unwrap();
                 if !heading {
                     document.heading = None;
+                    // base() parses a title, which also leaves a root alias.
+                    // Model a document with no heading or authored root alias.
+                    document.fragment_aliases.clear();
                 }
                 document.blocks = body.blocks();
                 assert_eq!(validate_document(document), []);
@@ -61,8 +64,7 @@ fn root_excerpt_framing_without_a_heading_and_with_tldr() {
                         };
                         assert_eq!(render_excerpt_text(&excerpt), expected, "{id}");
                     } else {
-                        // A document with neither a heading nor root blocks has
-                        // no DocumentRoot selection, regardless of its TLDR.
+                        // An absent overview has no DocumentRoot selection.
                         assert!(
                             matches!(
                                 excerpt,
@@ -87,6 +89,31 @@ fn root_excerpt_framing_without_a_heading_and_with_tldr() {
         }
     }
     assert_eq!(cases, 32);
+}
+
+#[test]
+fn alias_only_overview_is_selectable_without_a_source_row() {
+    let mut original = base(0);
+    original.label = LABEL.into();
+    let document = original.document.as_mut().unwrap();
+    document.heading = None;
+    document.fragment_aliases = vec!["Catalog.Alias".into()];
+    assert_eq!(document.blocks, []);
+    assert_eq!(validate_document(document), []);
+
+    let query = query_wire(&original);
+    for selector in [
+        ContentSelector::path("root"),
+        ContentSelector::id(DOCUMENT_ROOT_ID),
+    ] {
+        let excerpt = mant_query::select_excerpt(&query, &[selector]).unwrap();
+        let restored = excerpt_wire(&excerpt);
+        assert_eq!(
+            render_excerpt_text(&restored),
+            "Catalog\n\nOutline root: OVERVIEW"
+        );
+    }
+    assert_eq!(render_query_text(&query), LABEL);
 }
 
 fn assert_combined_excerpt(
