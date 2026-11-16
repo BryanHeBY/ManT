@@ -92,6 +92,34 @@ pub(super) fn native_option_occurrences(
     result
 }
 
+/// A TQ term's accepted native key is independent of the original HEAD's
+/// role. Its exact ranges survive alongside an independent lexical term.
+pub(super) fn retain_continued_option_names(
+    terms: &[impl AsRef<[Inline]>],
+    operands: HeadOperands<'_>,
+    occurrences: &mut [Vec<RecognizedName>],
+    limit: &mut Option<super::DeclarationLimit>,
+) -> bool {
+    let mut found = false;
+    for (index, (term, names)) in terms.iter().zip(occurrences).enumerate().skip(1) {
+        let Some(ranges) = operands.for_term(index) else {
+            continue;
+        };
+        if !ranges
+            .iter()
+            .any(|operand| operand.role == crate::definitions::NativeOperandRole::ExplicitOption)
+            || !super::scan::has_leading_explicit_option(&plain_text(term.as_ref()), ranges)
+        {
+            continue;
+        }
+        let recognized = super::scan::option_head(term.as_ref(), ranges);
+        found |= !recognized.names.is_empty();
+        *limit = limit.or(recognized.limit);
+        *names = recognized.names;
+    }
+    found
+}
+
 pub(in crate::definitions) fn parameter_occurrences(
     terms: &[impl AsRef<[Inline]>],
     operands: HeadOperands<'_>,

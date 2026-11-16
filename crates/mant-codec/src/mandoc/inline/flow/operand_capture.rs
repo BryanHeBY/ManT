@@ -15,6 +15,7 @@ use mant_ir::Inline;
 #[derive(Clone, Default)]
 pub(in crate::mandoc) struct HeadOperandCapture {
     roles: HashMap<u64, NativeOperandRole>,
+    optional_keys: HashMap<u64, usize>,
     captured: CapturedHeadOperands,
     last_owner: Option<u64>,
     operand_role: Option<NativeOperandRole>,
@@ -26,7 +27,10 @@ impl HeadOperandCapture {
     }
 
     pub(in crate::mandoc) fn take(&mut self) -> CapturedHeadOperands {
-        std::mem::take(&mut self.captured)
+        let mut captured = std::mem::take(&mut self.captured);
+        self.optional_keys.clear();
+        captured.qualify_optional_keys();
+        captured
     }
 
     pub(in crate::mandoc) fn observe_accepted_output(&mut self, nodes: &[Inline]) {
@@ -59,7 +63,9 @@ impl HeadOperandCapture {
     fn append(&mut self, text: &str, owner: Option<u64>) {
         let start = self.captured.text.len();
         self.captured.text.push_str(text);
-        let Some(role) = owner.and_then(|serial| self.roles.get(&serial)).copied() else {
+        let Some((serial, mut role)) =
+            owner.and_then(|serial| self.roles.get(&serial).map(|&role| (serial, role)))
+        else {
             self.last_owner = owner;
             return;
         };
@@ -74,6 +80,17 @@ impl HeadOperandCapture {
         {
             previous.bytes.end = end;
         } else {
+            // A single OP key can split at a formatter boundary. Its
+            // surviving fragments cannot each introduce an independent key.
+            if role == NativeOperandRole::OptionalKey
+                && let Some(previous) = self
+                    .optional_keys
+                    .insert(serial, self.captured.operands.len())
+            {
+                role = NativeOperandRole::Argument;
+                self.captured.operands[previous].role = role;
+                self.roles.insert(serial, role);
+            }
             self.captured.operands.push(NativeOperand {
                 bytes: start..end,
                 role,

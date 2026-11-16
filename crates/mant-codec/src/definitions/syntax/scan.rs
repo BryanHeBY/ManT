@@ -121,6 +121,34 @@ pub(super) fn option_head(nodes: &[Inline], operands: &[NativeOperand]) -> Optio
     Scanner::new(&view).scan()
 }
 
+/// The executed key can follow a generated optional opener. Only a leading
+/// accepted option, and not a later operand in an unrelated label, supplies
+/// a stronger role than the section's default.
+pub(super) fn has_leading_explicit_option(text: &str, operands: &[NativeOperand]) -> bool {
+    let head = text.trim_start_matches(|ch: char| {
+        ch.is_whitespace() || closing(ch).is_some() || quote_closer(ch).is_some()
+    });
+    if !head.starts_with('-') {
+        return false;
+    }
+    let start = text.len() - head.len();
+    if operands
+        .iter()
+        .take_while(|operand| operand.bytes.start < start)
+        .any(|operand| {
+            operand.role.is_parameter()
+                && text
+                    .get(operand.bytes.clone())
+                    .is_some_and(|prefix| !prefix.trim().is_empty())
+        })
+    {
+        return false;
+    }
+    operands.iter().any(|operand| {
+        operand.role == NativeOperandRole::ExplicitOption && operand.bytes.contains(&start)
+    })
+}
+
 struct Scanner<'a> {
     view: &'a HeadView<'a>,
     cursor: usize,

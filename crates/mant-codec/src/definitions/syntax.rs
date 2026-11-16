@@ -44,40 +44,13 @@ pub(super) fn infer_identity(
         .first()
         .map_or_else(String::new, |term| plain_text(term));
     let trimmed = first.trim();
+    let leading_option = hint.is_none()
+        && operands
+            .for_term(0)
+            .is_some_and(|ranges| scan::has_leading_explicit_option(&first, ranges));
+    let hint = hint.or(leading_option.then_some(super::NativeHeadRole::Option));
     let (mut kind, mut case) = decision::select_kind(trimmed, context, hint);
-    let mut limit = None;
-    let mut occurrences = if hint == Some(super::NativeHeadRole::LiteralTerm) {
-        item.terms
-            .iter()
-            .map(|term| {
-                let text = plain_text(term);
-                vec![super::RecognizedName::contiguous(
-                    text.trim(),
-                    text.len() - text.trim_start().len(),
-                )]
-            })
-            .collect()
-    } else if hint == Some(super::NativeHeadRole::Option) {
-        let found = options::native_option_occurrences(&item.terms, operands);
-        // Only a complete accepted native Fl receipt establishes known
-        // selector loss. A weak candidate or constructed owner role alone
-        // cannot turn an unsupported grammar into a coverage finding.
-        if operands.proves_option() {
-            limit = found.limit;
-        }
-        found.occurrences
-    } else if hint == Some(super::NativeHeadRole::Environment) {
-        item.terms
-            .iter()
-            .map(|term| {
-                forms::environment_prefix(term)
-                    .and_then(|prefix| named::environment_occurrences(&prefix))
-                    .unwrap_or_default()
-            })
-            .collect()
-    } else {
-        name_occurrences_with_operands(item, kind, operands)
-    };
+    let (mut occurrences, mut limit) = head_occurrences(item, kind, hint, operands);
     constrain_names(&mut occurrences, operands);
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
         occurrences = name_occurrences(item, EntryKind::Command);
@@ -115,6 +88,21 @@ pub(super) fn infer_identity(
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
+    if (hint.is_none() || leading_option)
+        && item.terms.len() > 1
+        && operands.proves_option()
+        && let Some(mixed_kind) = continued_occurrences(
+            item,
+            &first,
+            operands,
+            leading_option,
+            &mut occurrences,
+            &mut limit,
+        )
+    {
+        kind = mixed_kind;
+        case = NameCase::Sensitive;
+    }
     let names = ordered_names(&occurrences, kind);
     let (kind, case) = if names.is_empty()
         && !matches!(
@@ -134,25 +122,109 @@ pub(super) fn infer_identity(
     }
 }
 
+fn head_occurrences(
+    item: &DefinitionItem,
+    kind: EntryKind,
+    hint: Option<super::NativeHeadRole>,
+    operands: HeadOperands<'_>,
+) -> (Vec<Vec<RecognizedName>>, Option<DeclarationLimit>) {
+    let occurrences = match hint {
+        Some(super::NativeHeadRole::LiteralTerm) => item
+            .terms
+            .iter()
+            .map(|term| {
+                let text = plain_text(term);
+                vec![RecognizedName::contiguous(
+                    text.trim(),
+                    text.len() - text.trim_start().len(),
+                )]
+            })
+            .collect(),
+        Some(super::NativeHeadRole::Option) => {
+            let found = options::native_option_occurrences(&item.terms, operands);
+            // A complete accepted native option receipt establishes known
+            // selector loss; a weak candidate alone cannot prove coverage loss.
+            let limit = if operands.proves_option() {
+                found.limit
+            } else {
+                None
+            };
+            return (found.occurrences, limit);
+        }
+        Some(super::NativeHeadRole::Environment) => item
+            .terms
+            .iter()
+            .map(|term| {
+                forms::environment_prefix(term)
+                    .and_then(|prefix| named::environment_occurrences(&prefix))
+                    .unwrap_or_default()
+            })
+            .collect(),
+        _ => name_occurrences_with_operands(item, kind, operands),
+    };
+    (occurrences, None)
+}
+
+fn continued_occurrences(
+    item: &DefinitionItem,
+    first: &str,
+    operands: HeadOperands<'_>,
+    leading_option: bool,
+    occurrences: &mut [Vec<RecognizedName>],
+    limit: &mut Option<DeclarationLimit>,
+) -> Option<EntryKind> {
+    if leading_option {
+        let mut mixed = false;
+        for (index, (term, names)) in item.terms.iter().zip(occurrences).enumerate().skip(1) {
+            if names.is_empty() {
+                *names = named::term_occurrences(&plain_text(term)).unwrap_or_default();
+                constrain_term_names(names, operands.for_term(index));
+                mixed |= !names.is_empty();
+            }
+        }
+        return mixed.then_some(EntryKind::Term);
+    }
+    if options::retain_continued_option_names(&item.terms, operands, occurrences, limit)
+        && occurrences[0].is_empty()
+    {
+        occurrences[0] = named::term_occurrences(first).unwrap_or_default();
+        constrain_term_names(&mut occurrences[0], operands.for_term(0));
+        if occurrences[0].is_empty() {
+            return Some(EntryKind::Parameter {
+                parameter_kind: ParameterKind::Option,
+            });
+        }
+        return Some(EntryKind::Term);
+    }
+    None
+}
+
 fn constrain_names(occurrences: &mut [Vec<RecognizedName>], operands: HeadOperands<'_>) {
     for (index, names) in occurrences.iter_mut().enumerate() {
-        let Some(ranges) = operands.for_term(index) else {
-            names.clear();
-            continue;
-        };
-        names.retain(|name| {
-            !name.parts.iter().any(|part| {
-                let start = ranges.partition_point(|range| range.bytes.end <= part.start);
-                ranges[start..]
-                    .iter()
-                    .take_while(|range| range.bytes.start < part.end)
-                    .any(|range| {
-                        range.role == super::NativeOperandRole::Argument
-                            || name.name.starts_with(['-', '+']) && range.role.is_parameter()
-                    })
-            })
-        });
+        constrain_term_names(names, operands.for_term(index));
     }
+}
+
+fn constrain_term_names(
+    names: &mut Vec<RecognizedName>,
+    operands: Option<&[super::NativeOperand]>,
+) {
+    let Some(ranges) = operands else {
+        names.clear();
+        return;
+    };
+    names.retain(|name| {
+        !name.parts.iter().any(|part| {
+            let start = ranges.partition_point(|range| range.bytes.end <= part.start);
+            ranges[start..]
+                .iter()
+                .take_while(|range| range.bytes.start < part.end)
+                .any(|range| {
+                    range.role == super::NativeOperandRole::Argument
+                        || name.name.starts_with(['-', '+']) && range.role.is_parameter()
+                })
+        })
+    });
 }
 
 fn ordered_names(occurrences: &[Vec<RecognizedName>], kind: EntryKind) -> Vec<String> {

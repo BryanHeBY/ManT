@@ -40,6 +40,9 @@ pub(crate) enum NativeOperandRole {
     /// An `Ar` spelling may name an authored operand definition directly.
     #[cfg(feature = "roff")]
     Placeholder,
+    /// The first actual man OP operand still has to spell a complete flag.
+    #[cfg(feature = "roff")]
+    OptionalKey,
     ExplicitOption,
 }
 
@@ -48,7 +51,7 @@ impl NativeOperandRole {
         match self {
             Self::Argument => true,
             #[cfg(feature = "roff")]
-            Self::Placeholder => true,
+            Self::Placeholder | Self::OptionalKey => true,
             _ => false,
         }
     }
@@ -65,6 +68,23 @@ pub(crate) struct NativeOperand {
 pub(crate) struct CapturedHeadOperands {
     pub(crate) text: String,
     pub(crate) operands: Vec<NativeOperand>,
+}
+
+#[cfg(feature = "roff")]
+impl CapturedHeadOperands {
+    pub(crate) fn qualify_optional_keys(&mut self) {
+        for operand in &mut self.operands {
+            if operand.role != NativeOperandRole::OptionalKey {
+                continue;
+            }
+            let key = self.text.get(operand.bytes.clone()).map(str::trim);
+            operand.role = if key.is_some_and(|key| super::option_prefix(key) == Some(key)) {
+                NativeOperandRole::ExplicitOption
+            } else {
+                NativeOperandRole::Argument
+            };
+        }
+    }
 }
 
 struct OperandWitness {

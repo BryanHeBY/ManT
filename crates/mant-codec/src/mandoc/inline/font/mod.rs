@@ -1,5 +1,6 @@
 //! Stateful roff font decoding shared by prose, macro operands and table cells.
 use super::{Font, FontState, Inline, InlineBuilder, Node, append_inline_nodes};
+use crate::definitions::NativeOperandRole;
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 pub(super) mod style;
@@ -46,9 +47,9 @@ pub(super) fn lower_man_font_scope(
                 output.tighten_next_boundary();
             }
             let role = if (if index % 2 == 0 { first } else { second }) == Font::Emphasis {
-                crate::definitions::NativeOperandRole::Argument
+                NativeOperandRole::Argument
             } else {
-                crate::definitions::NativeOperandRole::Literal
+                NativeOperandRole::Literal
             };
             output.with_native_operand_role(role, |output| {
                 output.with_direct_word_operands(|output| {
@@ -84,14 +85,21 @@ pub(super) fn lower_man_font_scope(
             } else {
                 Font::Emphasis
             });
-            output.with_direct_word_operands(|output| {
-                super::append_inline_node_with_siblings(
-                    output,
-                    child,
-                    None,
-                    operands.get(index + 1),
-                    default_name,
-                );
+            let role = if index == 0 {
+                NativeOperandRole::OptionalKey
+            } else {
+                NativeOperandRole::Argument
+            };
+            output.with_native_operand_role(role, |output| {
+                output.with_direct_word_operands(|output| {
+                    super::append_inline_node_with_siblings(
+                        output,
+                        child,
+                        None,
+                        operands.get(index + 1),
+                        default_name,
+                    );
+                });
             });
         }
         // OP resets for its closing bracket, then the man macro scope resets

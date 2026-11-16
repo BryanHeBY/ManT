@@ -235,7 +235,7 @@ fn continuation_retains_independent_operand_states() {
     let proof = evidence.operands(&composed);
     assert_eq!(proof.for_term(0).unwrap()[0].bytes, 0..4);
     assert!(proof.for_term(1).is_none());
-    assert!(proof.for_term(2).unwrap().is_empty());
+    assert_eq!(proof.for_term(2), Some([].as_slice()));
     assert_eq!(
         evidence.operands(&original).for_term(0).unwrap()[0].bytes,
         0..4
