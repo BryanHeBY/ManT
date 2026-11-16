@@ -21,9 +21,23 @@ that crate was not published for that change.
 - Capture native diagnostic codes and positions separately from display text.
   Path spelling no longer changes completeness findings, and Unix path bytes
   outside UTF-8 no longer prevent loading recoverable manual pages.
+- Resolve strict Unix include roots consistently across relative and absolute
+  source labels while preserving the approved directory boundary.
+- The 0.15 Rust AST exposes the executed first IP operand's number-register
+  provenance through `NodeFlags::ip_incremented_register`. Initialize it
+  explicitly or use `..NodeFlags::default()` in exhaustive flag literals.
 
 ### mant-codec
 
+- The 0.15 roff APIs use `libmandoc-rs` 0.15. Preserve literal numeric
+  definitions when a discarded macro argument performed the register increment.
+- Preserve per-term option and argument evidence across man `TP` and
+  `TQ`, and bind `OP` names only from complete executed keys.
+- Bind supported mdoc errors, constants, variables and function names to their
+  original definition heads. Complex declarators keep their complete readable
+  form and description.
+- Resolve qualified `Sx` references only for a unique authored target and
+  retain BR/IR operand styling and neighboring text inside and outside the link.
 - Preserve leading, trailing and repeated ordinary spaces in mathematical
   exports with explicit LaTeX spacing and nonbreaking MathML references.
   Remove false spacing-loss warnings for representable blanks. Retain
@@ -32,6 +46,27 @@ that crate was not published for that change.
 - Recognize native digit-prefixed identifier spellings and encode common ASCII
   comparison operators as single LaTeX relations, retaining authored text
   without unnecessary unknown-role or unsupported-atom findings.
+
+### mant-loader
+
+- The 0.15 roff report and error APIs use the native types from
+  `libmandoc-rs` 0.15.
+- Resolve standalone installed roff aliases using the native control marks,
+  opening BOM, ordinary comments, and allowed whitespace and empty requests.
+
+### mant-engine
+
+- The 0.15 resolver and query error APIs use the loading types from
+  `mant-loader` 0.15.
+
+### mant-ir, mant-query, mant-render and mant-ui
+
+- Report conflicts with the document overview and keep exact path-based access
+  to the corresponding content. Reject malformed typed Markdown destinations
+  consistently across validation, lookup, navigation and export while
+  preserving their readable labels. Document and query wire schemas use v0.14.
+- The 0.15 `mant-render` Markdown option APIs accept the option types from
+  `mant-codec` 0.15.
 
 ## 0.14.0 - 2026-11-14
 
