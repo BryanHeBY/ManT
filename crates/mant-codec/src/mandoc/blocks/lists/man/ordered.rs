@@ -82,7 +82,7 @@ enum IpOrdinalStyle {
 ///
 /// A bare resolved integer is ambiguous: option manuals routinely use the
 /// same spelling for a real value domain. It is therefore accepted only when
-/// the source line used roff's pre-increment register form. Punctuation is
+/// its executed operand carries pre-increment register evidence. Punctuation is
 /// retained as a sequence style so `1.` followed by `2)` cannot accidentally
 /// merge across unrelated tagged paragraphs.
 pub(in crate::mandoc::blocks) fn ordinal_marker(

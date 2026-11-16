@@ -72,6 +72,10 @@ Patch `0039` captures the native kind, severity, and location in the active
 embedding session before the ordinary diagnostic writer formats them. It
 keeps raw path and message bytes outside the owned AST text contract.
 
+Patch `0040` follows pre-increment register bytes through native argument
+expansion. Only the actual first `IP` operand can publish the resulting
+producer flag. Macro call coordinates and unrelated arguments cannot set it.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

@@ -94,16 +94,33 @@ struct	roffreq {
  * A macro processing context.
  * More than one is needed when macro calls are nested.
  */
+struct	macro_arg {
+	char		*text;
+	int		 incremented;
+};
+
 struct	mctx {
-	char		**argv;
+	struct macro_arg *argv;
 	int		 argc;
 	int		 argsz;
+};
+
+struct	number_range {
+	int		 start;
+	int		 end;
+};
+
+struct	number_origins {
+	struct number_range *ranges;
+	size_t		 count;
+	size_t		 capacity;
 };
 
 struct	roff {
 	struct roff_man	*man; /* mdoc or man parser */
 	struct roffnode	*last; /* leaf of stack */
 	struct mctx	*mstack; /* stack of macro contexts */
+	struct number_origins numbers; /* incremented register expansions */
 	int		*rstack; /* stack of inverted `ie' values */
 	struct ohash	*reqtab; /* request lookup table */
 	struct roffreg	*regtab; /* number registers */
@@ -198,9 +215,9 @@ static	int		 roff_evalpar(int, const char *, int *, int *,
 				char, int);
 static	int		 roff_evalstrcond(const char *, int *);
 static	int		 roff_expand(struct roff *, struct buf *,
-				int, int, char);
+			    int, int, char, struct number_origins *);
 static	void		 roff_expand_patch(struct buf *, int,
-				const char *, int);
+			    const char *, int, struct number_origins *);
 static	void		 roff_free1(struct roff *);
 static	void		 roff_freereg(struct roffreg *);
 static	void		 roff_freestr(struct roffkv *);
@@ -208,7 +225,7 @@ static	size_t		 roff_getname(char **, int, int);
 static	int		 roff_getnum(const char *, int *, int *, char, int);
 static	int		 roff_getop(const char *, int *, char *);
 static	int		 roff_getregn(struct roff *,
-				const char *, size_t, char);
+				const char *, size_t, char, int *);
 static	int		 roff_getregro(const struct roff *,
 				const char *name);
 static	const char	*roff_getstrn(struct roff *,
@@ -761,6 +778,9 @@ static void
 roff_free1(struct roff *r)
 {
 	int		 i;
+
+	free(r->numbers.ranges);
+	memset(&r->numbers, 0, sizeof(r->numbers));
 
 	tbl_free(r->first_tbl);
 	r->first_tbl = r->last_tbl = r->tbl = NULL;
@@ -1493,13 +1513,76 @@ roff_parse_comment(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 	return ROFF_CONT;
 }
 
+/* An expansion can replace an enclosing escape or move a later operand.
+ * Retain only ranges left intact by that buffer rewrite. */
+static void
+number_replaced(struct number_origins *numbers, int start, int end, int len)
+{
+	struct number_range range;
+	size_t i, kept;
+	int delta;
+
+	if (numbers == NULL || numbers->count == 0 ||
+	    numbers->ranges[numbers->count - 1].end <= start)
+		return;
+	delta = len - (end - start);
+	for (i = kept = 0; i < numbers->count; i++) {
+		range = numbers->ranges[i];
+		if (range.end > start) {
+			if (range.start < end)
+				continue;
+			range.start += delta;
+			range.end += delta;
+		}
+		numbers->ranges[kept++] = range;
+	}
+	numbers->count = kept;
+}
+
+static void
+number_expanded(struct number_origins *numbers, int start, int len)
+{
+	size_t i;
+
+	if (numbers == NULL || len == 0)
+		return;
+	if (numbers->count == numbers->capacity) {
+		numbers->capacity = numbers->capacity == 0 ? 8 :
+		    numbers->capacity * 2;
+		numbers->ranges = mandoc_reallocarray(numbers->ranges,
+		    numbers->capacity, sizeof(*numbers->ranges));
+	}
+	for (i = numbers->count++; i > 0 &&
+	    numbers->ranges[i - 1].start > start; i--)
+		numbers->ranges[i] = numbers->ranges[i - 1];
+	numbers->ranges[i].start = start;
+	numbers->ranges[i].end = start + len;
+}
+
+static int
+number_operand(const struct number_origins *numbers, int start, int len)
+{
+	size_t lo, hi, mid;
+
+	for (lo = 0, hi = numbers->count; lo < hi; ) {
+		mid = lo + (hi - lo) / 2;
+		if (numbers->ranges[mid].start < start)
+			lo = mid + 1;
+		else
+			hi = mid;
+	}
+	return lo < numbers->count && numbers->ranges[lo].start == start &&
+	    numbers->ranges[lo].end == start + len;
+}
+
 /*
  * In the current line, expand escape sequences that produce parsable
  * input text.  Also check the syntax of the remaining escape sequences,
  * which typically produce output glyphs or change formatter state.
  */
 static int
-roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
+roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec,
+    struct number_origins *numbers)
 {
 	char		 ubuf[24];	/* buffer to print a number */
 	struct mctx	*ctx;		/* current macro call context */
@@ -1520,6 +1603,7 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 	int		 rsz;		/* length of the rest of the string */
 	int		 npos;		/* position in numeric expression */
 	int		 expand_count;	/* to avoid infinite loops */
+	int		 incremented;	/* replacement from an incremented register */
 
 	expand_count = 0;
 	while (buf->buf[pos] != '\0') {
@@ -1533,7 +1617,8 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 
 		if (buf->buf[pos] != ec) {
 			if (buf->buf[pos] == '\\') {
-				roff_expand_patch(buf, pos, "\\e", pos + 1);
+				roff_expand_patch(buf, pos, "\\e", pos + 1,
+				    numbers);
 				pos++;
 			}
 			pos++;
@@ -1557,7 +1642,7 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 						pos++;
 				} else if (buf->buf[pos] == '\\') {
 					roff_expand_patch(buf,
-					    pos, "\\e", pos + 1);
+					    pos, "\\e", pos + 1, numbers);
 					pos++;
 					iend++;
 				}
@@ -1584,6 +1669,7 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 		/* Handle expansion. */
 
 		res = NULL;
+		incremented = 0;
 		switch (buf->buf[inam]) {
 		case '*':
 			if (iendarg == iarg)
@@ -1619,8 +1705,10 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 			ctx = r->mstack + r->mstackpos;
 			argi = buf->buf[iarg] - '1';
 			if (argi >= 0 && argi <= 8) {
-				if (argi < ctx->argc)
-					res = ctx->argv[argi];
+				if (argi < ctx->argc) {
+					res = ctx->argv[argi].text;
+					incremented = ctx->argv[argi].incremented;
+				}
 				break;
 			}
 			if (buf->buf[iarg] == '*')
@@ -1638,8 +1726,9 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 					asz++;  /* blank */
 				if (quote_args)
 					asz += 2;  /* quotes */
-				asz += strlen(ctx->argv[argi]);
+				asz += strlen(ctx->argv[argi].text);
 			}
+			number_replaced(numbers, iesc, iend, asz);
 			if (asz != iend - iesc) {
 				rsz = buf->sz - iend;
 				if (asz < iend - iesc)
@@ -1657,7 +1746,10 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 					*dst++ = ' ';
 				if (quote_args)
 					*dst++ = '"';
-				src = ctx->argv[argi];
+				src = ctx->argv[argi].text;
+				if (ctx->argv[argi].incremented)
+					number_expanded(numbers, dst - buf->buf,
+					    strlen(src));
 				while (*src != '\0')
 					*dst++ = *src++;
 				if (quote_args)
@@ -1681,8 +1773,8 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 		case 'V':
 			mandoc_msg(MANDOCERR_UNSUPP, ln, iesc,
 			    "%.*s", iend - iesc, buf->buf + iesc);
-			roff_expand_patch(buf, iendarg, "}", iend);
-			roff_expand_patch(buf, iesc, "${", iarg);
+			roff_expand_patch(buf, iendarg, "}", iend, numbers);
+			roff_expand_patch(buf, iesc, "${", iarg, numbers);
 			continue;
 		case 'g':
 			break;
@@ -1690,7 +1782,8 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 			if (iendarg > iarg)
 				(void)snprintf(ubuf, sizeof(ubuf), "%d",
 				    roff_getregn(r, buf->buf + iarg,
-				    iendarg - iarg, buf->buf[inam + 1]));
+				    iendarg - iarg, buf->buf[inam + 1],
+				    &incremented));
 			else
 				ubuf[0] = '\0';
 			res = ubuf;
@@ -1736,7 +1829,9 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
 			mandoc_msg(MANDOCERR_ROFFLOOP, ln, iesc, NULL);
 			return ROFF_IGN;
 		}
-		roff_expand_patch(buf, iesc, res, iend);
+		roff_expand_patch(buf, iesc, res, iend, numbers);
+		if (incremented)
+			number_expanded(numbers, iesc, strlen(res));
 	}
 	return ROFF_CONT;
 }
@@ -1746,10 +1841,12 @@ roff_expand(struct roff *r, struct buf *buf, int ln, int pos, char ec)
  * to end position (exclusive) with the repl(acement) string.
  */
 static void
-roff_expand_patch(struct buf *buf, int start, const char *repl, int end)
+roff_expand_patch(struct buf *buf, int start, const char *repl, int end,
+    struct number_origins *numbers)
 {
 	char	*nbuf;
 
+	number_replaced(numbers, start, end, strlen(repl));
 	buf->sz = mandoc_asprintf(&nbuf, "%.*s%s%s", start, buf->buf,
 	    repl, buf->buf + end) + 1;
 	free(buf->buf);
@@ -1768,7 +1865,15 @@ roff_expand_patch(struct buf *buf, int start, const char *repl, int end)
 char *
 roff_getarg(struct roff *r, char **cpp, int ln, int *pos)
 {
+	return roff_getarg_origin(r, cpp, ln, pos, NULL);
+}
+
+char *
+roff_getarg_origin(struct roff *r, char **cpp, int ln, int *pos,
+    int *incremented)
+{
 	struct buf	 buf;
+	struct number_origins numbers = {0};
 	char		*cp, *start;
 	int		 newesc, pairs, quoted, white;
 
@@ -1839,6 +1944,11 @@ roff_getarg(struct roff *r, char **cpp, int ln, int *pos)
 	if (1 == quoted)
 		mandoc_msg(MANDOCERR_ARG_QUOTE, ln, *pos, NULL);
 
+	if (incremented != NULL)
+		*incremented = pairs == 0 &&
+		    number_operand(&r->numbers, *pos + (start != *cpp),
+		    cp - start);
+
 	/* NUL-terminate this argument and move to the next one. */
 	if (pairs)
 		cp[-pairs] = '\0';
@@ -1860,10 +1970,14 @@ roff_getarg(struct roff *r, char **cpp, int ln, int *pos)
 	buf.buf = start;
 	buf.sz = strlen(start) + 1;
 	buf.next = NULL;
-	if (roff_expand(r, &buf, ln, 0, '\\') == ROFF_IGN) {
+	if (roff_expand(r, &buf, ln, 0, '\\',
+	    incremented == NULL ? NULL : &numbers) == ROFF_IGN) {
 		free(buf.buf);
 		buf.buf = mandoc_strdup("");
 	}
+	if (incremented != NULL)
+		*incremented = number_operand(&numbers, 0, strlen(buf.buf));
+	free(numbers.ranges);
 	return buf.buf;
 }
 
@@ -1939,7 +2053,8 @@ roff_parsetext(struct roff *r, struct buf *buf, int pos, int *offs)
 }
 
 int
-roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
+roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len,
+    int first_pass)
 {
 	enum roff_tok	 t;
 	int		 e;
@@ -1948,6 +2063,8 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
 	int		 ppos;	/* original offset in buf->buf */
 	int		 ctl;	/* macro line (boolean) */
 
+	if (first_pass)
+		r->numbers.count = 0;
 	ppos = pos = *offs;
 
 	if (len > 80 && r->tbl == NULL && r->eqn == NULL &&
@@ -1976,7 +2093,7 @@ roff_parseln(struct roff *r, int ln, struct buf *buf, int *offs, size_t len)
 		return e;
 	assert(e == ROFF_CONT);
 
-	e = roff_expand(r, buf, ln, pos, r->escape);
+	e = roff_expand(r, buf, ln, pos, r->escape, &r->numbers);
 	if ((e & ROFF_MASK) == ROFF_IGN)
 		return e;
 	assert(e == ROFF_CONT);
@@ -2111,7 +2228,7 @@ roff_userret(struct roff *r)
 	assert(r->mstackpos >= 0);
 	ctx = r->mstack + r->mstackpos;
 	for (i = 0; i < ctx->argc; i++)
-		free(ctx->argv[i]);
+		free(ctx->argv[i].text);
 	ctx->argc = 0;
 	r->mstackpos--;
 }
@@ -3236,11 +3353,12 @@ roff_getregro(const struct roff *r, const char *name)
 int
 roff_getreg(struct roff *r, const char *name)
 {
-	return roff_getregn(r, name, strlen(name), '\0');
+	return roff_getregn(r, name, strlen(name), '\0', NULL);
 }
 
 static int
-roff_getregn(struct roff *r, const char *name, size_t len, char sign)
+roff_getregn(struct roff *r, const char *name, size_t len, char sign,
+    int *incremented)
 {
 	struct roffreg	*reg;
 	int		 val;
@@ -3257,6 +3375,8 @@ roff_getregn(struct roff *r, const char *name, size_t len, char sign)
 			switch (sign) {
 			case '+':
 				reg->val += reg->step;
+				if (incremented != NULL)
+					*incremented = 1;
 				break;
 			case '-':
 				reg->val -= reg->step;
@@ -4065,7 +4185,7 @@ roff_shift(ROFF_ARGS)
 	if (levels == 0)
 		return ROFF_IGN;
 	for (i = 0; i < levels; i++)
-		free(ctx->argv[i]);
+		free(ctx->argv[i].text);
 	ctx->argc -= levels;
 	for (i = 0; i < ctx->argc; i++)
 		ctx->argv[i] = ctx->argv[i + levels];
@@ -4131,6 +4251,7 @@ roff_userdef(ROFF_ARGS)
 	struct mctx	 *ctx;
 	char		 *arg, *ap, *dst, *src;
 	size_t		  sz;
+	int		  incremented;
 
 	/* If the macro is empty, ignore it altogether. */
 
@@ -4159,11 +4280,12 @@ roff_userdef(ROFF_ARGS)
 			ctx->argv = mandoc_reallocarray(ctx->argv,
 			    ctx->argsz, sizeof(*ctx->argv));
 		}
-		arg = roff_getarg(r, &src, ln, &pos);
+		arg = roff_getarg_origin(r, &src, ln, &pos, &incremented);
 		sz = 1;  /* For the terminating NUL. */
 		for (ap = arg; *ap != '\0'; ap++)
 			sz += *ap == '"' ? 4 : 1;
-		ctx->argv[ctx->argc++] = dst = mandoc_malloc(sz);
+		dst = mandoc_malloc(sz);
+		ctx->argv[ctx->argc++] = (struct macro_arg){dst, incremented};
 		for (ap = arg; *ap != '\0'; ap++) {
 			if (*ap == '"') {
 				memcpy(dst, "\\(dq", 4);
@@ -4194,9 +4316,13 @@ static int
 roff_renamed(ROFF_ARGS)
 {
 	char	*nbuf;
+	const char *separator;
 
+	separator = buf->buf[pos] == '\0' ? "" : " ";
+	number_replaced(&r->numbers, 0, pos,
+	    1 + strlen(r->current_string) + strlen(separator));
 	buf->sz = mandoc_asprintf(&nbuf, ".%s%s%s", r->current_string,
-	    buf->buf[pos] == '\0' ? "" : " ", buf->buf + pos) + 1;
+	    separator, buf->buf + pos) + 1;
 	free(buf->buf);
 	buf->buf = nbuf;
 	*offs = 0;

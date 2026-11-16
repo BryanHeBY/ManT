@@ -123,8 +123,6 @@ fn inline_text(children: &[Inline]) -> String {
         .collect()
 }
 
-mod entries;
-
 mod column_post_rows;
 mod navigation;
 mod synopsis_rows;

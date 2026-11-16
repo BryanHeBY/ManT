@@ -62,3 +62,6 @@
 
 # Typed embedding diagnostics
 0039-capture-typed-diagnostics.patch
+
+# Executed man(7) label provenance
+0040-retain-executed-ip-register-labels.patch

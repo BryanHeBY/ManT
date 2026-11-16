@@ -29,6 +29,7 @@ const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
 const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
 const NODE_TABLE_START: u32 = 1 << 10;
 const NODE_EQUATION_INLINE: u32 = 1 << 12;
+const NODE_IP_INCREMENT: u32 = 1 << 13;
 const MAX_OWNED_NODE_DEPTH: usize = 256;
 
 #[derive(Default)]
@@ -241,6 +242,7 @@ fn node_flags(bits: u32, line_continuation: bool) -> NodeFlags {
         delimiter_close: bits & NODE_DELIMITER_CLOSE != 0,
         synopsis_pretty: bits & NODE_SYNOPSIS_PRETTY != 0,
         table_start: bits & NODE_TABLE_START != 0,
+        ip_incremented_register: bits & NODE_IP_INCREMENT != 0,
         line_continuation,
     }
 }

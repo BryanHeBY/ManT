@@ -66,6 +66,8 @@ mod glyphs;
 mod hanging_owners;
 #[path = "roff_lowering/inline_boundaries.rs"]
 mod inline_boundaries;
+#[path = "roff_lowering/ip_operand_provenance.rs"]
+mod ip_operand_provenance;
 #[path = "roff_lowering/link_seams.rs"]
 mod link_seams;
 #[path = "roff_lowering/row_presentation.rs"]

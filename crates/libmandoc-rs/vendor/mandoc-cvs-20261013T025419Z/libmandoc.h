@@ -73,7 +73,8 @@ void		 roff_reset(struct roff *);
 void		 roff_man_free(struct roff_man *);
 struct roff_man	*roff_man_alloc(struct roff *, const char *, int);
 void		 roff_man_reset(struct roff_man *);
-int		 roff_parseln(struct roff *, int, struct buf *, int *, size_t);
+int		 roff_parseln(struct roff *, int, struct buf *, int *, size_t,
+			int);
 void		 roff_userret(struct roff *);
 void		 roff_endparse(struct roff *);
 void		 roff_setreg(struct roff *, const char *, int, char);
@@ -81,6 +82,7 @@ int		 roff_getreg(struct roff *, const char *);
 int		 roff_evalnum(int, const char *, int *, int *, char, int);
 char		*roff_strdup(const struct roff *, const char *);
 char		*roff_getarg(struct roff *, char **, int, int *);
+char		*roff_getarg_origin(struct roff *, char **, int, int *, int *);
 int		 roff_getcontrol(const struct roff *,
 			const char *, int *);
 int		 roff_getformat(const struct roff *);

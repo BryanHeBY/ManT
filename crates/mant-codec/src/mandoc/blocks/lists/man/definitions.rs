@@ -69,7 +69,9 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
             ordinal_marker(
                 &item,
                 macro_name == Some(&Man(ManMacro::Ip))
-                    && context.man_ip_uses_incrementing_register(node.line),
+                    && first_part_children(node, NodeKind::Head)
+                        .first()
+                        .is_some_and(|operand| operand.flags.ip_incremented_register),
             )
         })
         .flatten();

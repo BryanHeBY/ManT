@@ -395,39 +395,6 @@ impl<'a> LoweringContext<'a> {
         zero_advance.finish_into(&mut output);
         output
     }
-
-    /// Whether a source-level `.IP` marker uses roff's pre-increment form.
-    ///
-    /// libmandoc resolves number registers before exposing the owned AST, so
-    /// `\n+[step]` and a literal value such as `1` otherwise become
-    /// indistinguishable.  Retain only this narrow source fact: it proves an
-    /// author-controlled sequence without teaching lowering a second roff
-    /// parser or reinterpreting literal numeric option values.
-    pub(super) fn man_ip_uses_incrementing_register(&self, line: u32) -> bool {
-        let Some(source_line) = self
-            .source_lines
-            .as_ref()
-            .and_then(|source| source.line(line))
-        else {
-            return false;
-        };
-        let Some(request) = source_line
-            .trim_start()
-            .strip_prefix(['.', '\''])
-            .map(str::trim_start)
-        else {
-            return false;
-        };
-        let Some(arguments) = request
-            .strip_prefix("IP")
-            .filter(|rest| rest.chars().next().is_none_or(char::is_whitespace))
-        else {
-            return false;
-        };
-        inline::roff_macro_arguments(arguments)
-            .first()
-            .is_some_and(|head| head.contains("\\n+"))
-    }
 }
 
 /// Heading strength is carried by `Heading`, not by its inline children.

@@ -365,6 +365,13 @@ pub struct NodeFlags {
     /// First executed span of a distinct native tbl table, including a leading
     /// rule or empty row. A `T&` layout change does not begin another table.
     pub table_start: bool,
+    /// The first man IP operand is the executed result of a pre-incremented
+    /// number register, possibly forwarded through a macro argument.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "std::ops::Not::not")
+    )]
+    pub ip_incremented_register: bool,
 }
 
 /// An owned syntax node with no pointers into the C parser.

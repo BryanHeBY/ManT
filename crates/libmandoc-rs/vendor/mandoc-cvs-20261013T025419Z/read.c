@@ -171,7 +171,7 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
 	size_t		 pos; /* byte number in the ln buffer */
 	size_t		 spos; /* at the start of the current line parse */
 	int		 bundle_status, line_result, result;
-	int		 of;
+	int		 of, first_pass;
 	int		 lnn; /* line number in the real file */
 #ifndef MANDOC_MEMORY_ONLY
 	int		 fd;
@@ -301,12 +301,14 @@ mparse_buf_r(struct mparse *curp, struct buf blk, size_t i, int start)
 		 * data, so we pass them in wholesale.
 		 */
 
+		first_pass = 1;
 		of = 0;
 rerun:
 		if (curp->man->tree_depth_exceeded)
 			goto out;
 		line_result = roff_parseln(curp->roff, curp->line,
-		    &ln, &of, start && spos == 0 ? pos : 0);
+		    &ln, &of, start && spos == 0 ? pos : 0, first_pass);
+		first_pass = 0;
 
 		/* Process options. */
 
@@ -488,6 +490,7 @@ rerun:
 			if (ln.sz < loop->sz)
 				resize_buf(&ln, loop->sz);
 			(void)strlcat(ln.buf, loop->buf, ln.sz);
+			first_pass = 1;
 			of = 0;
 			goto rerun;
 		}

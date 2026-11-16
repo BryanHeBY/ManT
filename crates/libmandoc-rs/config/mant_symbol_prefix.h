@@ -130,6 +130,7 @@
 #define roff_escape mant_vendored_roff_escape
 #define roff_free mant_vendored_roff_free
 #define roff_getarg mant_vendored_roff_getarg
+#define roff_getarg_origin mant_vendored_roff_getarg_origin
 #define roff_getcontrol mant_vendored_roff_getcontrol
 #define roff_getformat mant_vendored_roff_getformat
 #define roff_getreg mant_vendored_roff_getreg

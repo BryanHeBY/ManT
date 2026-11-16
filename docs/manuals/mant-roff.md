@@ -538,7 +538,9 @@ presentation only, not aliasless semantic entries; a nonnumeric label remains
 eligible for its ordinary term grammar. Adjacent, same-style,
 consecutively increasing marks join one list; a gap or style change begins a
 new list at the explicit number. A bare integer is treated as ordered only
-when the original `IP` call uses roff's pre-increment number-register form.
+when the executed first `IP` operand is the complete result of a native
+pre-increment operation, including via a forwarded macro argument. The
+call's source coordinates cannot establish that relationship.
 This preserves real option value domains such as `0`/`1` as definitions while
 keeping numbered instructions and references out of the semantic-entry index.
 An immediately following `RS` region remains content of the current item, as

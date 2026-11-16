@@ -31,12 +31,6 @@ impl<'a> SourceLineIndex<'a> {
         Self { source, starts }
     }
 
-    /// Return one physical source line addressed by a one-based coordinate.
-    pub(super) fn line(&self, line: u32) -> Option<&'a str> {
-        let index = usize::try_from(line).ok()?.checked_sub(1)?;
-        self.line_at_index(index)
-    }
-
     /// Iterate physical source lines starting at a one-based coordinate.
     pub(super) fn lines_from(&self, first_line: u32) -> impl Iterator<Item = (u32, &'a str)> + '_ {
         let first = usize::try_from(first_line)
@@ -76,10 +70,10 @@ mod tests {
     fn converts_one_based_coordinates_once_at_the_boundary() {
         let index = SourceLineIndex::new("first\nsecond\nthird\nfourth\n");
 
-        assert_eq!(index.line(0), None);
-        assert_eq!(index.line(1), Some("first"));
-        assert_eq!(index.line(4), Some("fourth"));
-        assert_eq!(index.line(5), None);
+        assert_eq!(index.lines_from(0).next(), None);
+        assert_eq!(index.lines_from(1).next(), Some((1, "first")));
+        assert_eq!(index.lines_from(4).next(), Some((4, "fourth")));
+        assert_eq!(index.lines_from(5).next(), None);
         assert_eq!(
             index.lines_from(3).collect::<Vec<_>>(),
             vec![(3, "third"), (4, "fourth")]
@@ -90,9 +84,9 @@ mod tests {
     fn matches_rust_line_ending_and_trailing_newline_semantics() {
         let index = SourceLineIndex::new("first\r\nsecond\n\n");
 
-        assert_eq!(index.line(1), Some("first"));
-        assert_eq!(index.line(2), Some("second"));
-        assert_eq!(index.line(3), Some(""));
-        assert_eq!(index.line(4), None);
+        assert_eq!(
+            index.lines_from(1).collect::<Vec<_>>(),
+            [(1, "first"), (2, "second"), (3, "")]
+        );
     }
 }

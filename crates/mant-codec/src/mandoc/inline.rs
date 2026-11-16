@@ -35,7 +35,6 @@ pub(in crate::mandoc) use flow::{
 };
 pub(super) use flow::{FontScope, FontState, InlineBuilder};
 mod node;
-mod source;
 mod word_input;
 pub(super) use node::append_isolated_inline_node;
 pub(in crate::mandoc) use node::{
@@ -52,8 +51,6 @@ pub(super) use font::{
 };
 pub(super) use font::{lower_inline_nodes_with_font_state, parse_roff_text};
 pub(in crate::mandoc) use source_fragment::lower_source_fragment_with_formatter_state;
-
-pub(super) use source::roff_macro_arguments;
 
 use super::{
     first_part_children,

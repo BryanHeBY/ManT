@@ -29,6 +29,8 @@ snapshot_node_flags(const struct roff_node *source)
 		flags |= MANT_MANDOC_NODE_SYNOPSIS_PRETTY;
 	if (source->type == ROFFT_EQN && source->flags & NODE_EQN_INLINE)
 		flags |= MANT_MANDOC_NODE_EQUATION_INLINE;
+	if (source->flags & NODE_IP_INCREMENT)
+		flags |= MANT_MANDOC_NODE_IP_INCREMENT;
 	if (source->type == ROFFT_TBL && source->span != NULL) {
 		/* tbl_data.c links every span owned by one tbl_node, including
 		 * leading whole-row rules and empty data rows.  A T& layout restart

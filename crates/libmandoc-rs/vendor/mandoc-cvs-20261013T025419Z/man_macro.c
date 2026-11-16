@@ -41,7 +41,7 @@ static	void		 blk_exp(MACRO_PROT_ARGS);
 static	void		 blk_imp(MACRO_PROT_ARGS);
 static	void		 in_line_eoln(MACRO_PROT_ARGS);
 static	int		 man_args(struct roff_man *, int,
-				int *, char *, char **);
+				int *, char *, char **, int *);
 static	void		 rew_scope(struct roff_man *, enum roff_tok);
 
 static const struct man_macro man_macros[MAN_MAX - MAN_TH] = {
@@ -215,7 +215,7 @@ blk_close(MACRO_PROT_ARGS)
 	case MAN_RE:
 		ntok = MAN_RS;
 		la = *pos;
-		if ( ! man_args(man, line, pos, buf, &p))
+		if ( ! man_args(man, line, pos, buf, &p, NULL))
 			break;
 		for (nn = man->last->parent; nn; nn = nn->parent)
 			if (nn->tok == ntok && nn->type == ROFFT_BLOCK)
@@ -312,7 +312,7 @@ blk_exp(MACRO_PROT_ARGS)
 	head = roff_head_alloc(man, line, ppos, tok);
 
 	la = *pos;
-	if (man_args(man, line, pos, buf, &p)) {
+	if (man_args(man, line, pos, buf, &p, NULL)) {
 		roff_word_alloc(man, line, la, p);
 		if (tok == MAN_RS) {
 			if (roff_getreg(man->roff, "an-margin") == 0)
@@ -343,7 +343,7 @@ blk_exp(MACRO_PROT_ARGS)
 void
 blk_imp(MACRO_PROT_ARGS)
 {
-	int		 la;
+	int		 la, incremented;
 	char		*p;
 	struct roff_node *n;
 
@@ -358,9 +358,13 @@ blk_imp(MACRO_PROT_ARGS)
 
 	for (;;) {
 		la = *pos;
-		if ( ! man_args(man, line, pos, buf, &p))
+		incremented = 0;
+		if ( ! man_args(man, line, pos, buf, &p,
+		    tok == MAN_IP && n->child == NULL ? &incremented : NULL))
 			break;
 		roff_word_alloc(man, line, la, p);
+		if (incremented)
+			man->last->flags |= NODE_IP_INCREMENT;
 		free(p);
 	}
 
@@ -410,7 +414,7 @@ in_line_eoln(MACRO_PROT_ARGS)
 			break;
 		}
 		la = *pos;
-		if ( ! man_args(man, line, pos, buf, &p))
+		if ( ! man_args(man, line, pos, buf, &p, NULL))
 			break;
 		if (man_macro(tok)->flags & MAN_JOIN &&
 		    man->last->type == ROFFT_TEXT)
@@ -464,7 +468,8 @@ man_endparse(struct roff_man *man)
 }
 
 static int
-man_args(struct roff_man *man, int line, int *pos, char *buf, char **v)
+man_args(struct roff_man *man, int line, int *pos, char *buf, char **v,
+    int *incremented)
 {
 	char	 *start;
 
@@ -475,6 +480,6 @@ man_args(struct roff_man *man, int line, int *pos, char *buf, char **v)
 	if ('\0' == *start)
 		return 0;
 
-	*v = roff_getarg(man->roff, v, line, pos);
+	*v = roff_getarg_origin(man->roff, v, line, pos, incremented);
 	return 1;
 }

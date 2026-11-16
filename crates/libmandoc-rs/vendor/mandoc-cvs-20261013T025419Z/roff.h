@@ -542,6 +542,7 @@ struct	roff_node {
 #define	NODE_ID		 (1 << 11) /* Target for deep linking. */
 #define	NODE_HREF	 (1 << 12) /* Link to another place in this page. */
 #define	NODE_EQN_INLINE	 (1 << 13) /* Originated in equation delimiters. */
+#define	NODE_IP_INCREMENT (1 << 14) /* IP label expands an incremented register. */
 	int		  prev_font; /* Before entering this node. */
 	int		  aux;     /* Decoded node data, type-dependent. */
 	enum roff_tok	  tok;     /* Request or macro ID. */
