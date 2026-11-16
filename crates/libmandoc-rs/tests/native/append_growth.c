@@ -37,6 +37,7 @@
 #include "mandoc_aux.h"
 #include "roff.h"
 #include "mandoc_parse.h"
+#include "mant_mandoc_diagnostic_capture.h"
 #include "mant_mandoc_shim.h"
 
 /* Parser hooks only: the probe receives fully materialized memory sources. */
@@ -62,6 +63,23 @@ mant_mandoc_source_open(const char *name, int flags, ...)
 void
 mant_mandoc_note_escape_depth_limit(void)
 {
+}
+
+/* The maintenance probe has no owned shim session. Keep the native writer. */
+int
+mant_mandoc_capture_diagnostic(enum mandocerr kind, enum mandoclevel level,
+    const char *source, int line, int column, const char *base,
+    const char *format, va_list *arguments)
+{
+	(void)kind;
+	(void)level;
+	(void)source;
+	(void)line;
+	(void)column;
+	(void)base;
+	(void)format;
+	(void)arguments;
+	return 0;
 }
 
 static void
