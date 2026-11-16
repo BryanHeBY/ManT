@@ -16,7 +16,7 @@ The Rust crate is a library contract for trusted semantic components. It is not 
 Markdown ─┐
 man/mdoc ─┼─> mant-codec ─> mant-ir ─┬─> mant-ui
 tldr ─────┘                          ├─> mant-render (body text)
-                                    └─> mant-query ─> mant-protocol DTOs
+                                     └─> mant-query ─> mant-protocol DTOs
 ```
 
 Source parsers retain syntax-specific facts only until they can be expressed as shared document semantics. Protocol projections may omit internal data, add schema discriminators, or reshape fields for a stable host or process boundary.
