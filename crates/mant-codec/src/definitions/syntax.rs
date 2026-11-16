@@ -11,6 +11,8 @@ mod declaration;
 mod forms;
 mod head;
 mod named;
+#[cfg(feature = "roff")]
+mod native_subject;
 mod options;
 mod scan;
 pub(super) use head::is_inferred_head;
@@ -43,6 +45,10 @@ pub(super) fn infer_identity(
         .terms
         .first()
         .map_or_else(String::new, |term| plain_text(term));
+    #[cfg(feature = "roff")]
+    if let Some(identity) = native_subject::identify(item, &first, operands) {
+        return identity;
+    }
     let trimmed = first.trim();
     let leading_option = hint.is_none()
         && operands
@@ -128,8 +134,8 @@ fn head_occurrences(
     hint: Option<super::NativeHeadRole>,
     operands: HeadOperands<'_>,
 ) -> (Vec<Vec<RecognizedName>>, Option<DeclarationLimit>) {
-    let occurrences = match hint {
-        Some(super::NativeHeadRole::LiteralTerm) => item
+    if hint == Some(super::NativeHeadRole::LiteralTerm) {
+        let occurrences = item
             .terms
             .iter()
             .map(|term| {
@@ -139,7 +145,10 @@ fn head_occurrences(
                     text.len() - text.trim_start().len(),
                 )]
             })
-            .collect(),
+            .collect();
+        return (occurrences, None);
+    }
+    let occurrences = match hint {
         Some(super::NativeHeadRole::Option) => {
             let found = options::native_option_occurrences(&item.terms, operands);
             // A complete accepted native option receipt establishes known
@@ -220,7 +229,7 @@ fn constrain_term_names(
                 .iter()
                 .take_while(|range| range.bytes.start < part.end)
                 .any(|range| {
-                    range.role == super::NativeOperandRole::Argument
+                    range.role.blocks_lexical_name()
                         || name.name.starts_with(['-', '+']) && range.role.is_parameter()
                 })
         })

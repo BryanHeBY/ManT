@@ -234,7 +234,15 @@ pub(super) fn definition_item(
         &description,
     );
     let layout = geometry.layout(indent_columns, body_origin, &terms);
-    let item = assemble_definition_item(terms, description, layout, node, head, context);
+    let item = assemble_definition_item(
+        terms,
+        description,
+        layout,
+        node,
+        head,
+        context,
+        closed_head_row,
+    );
     session.finish(formatter);
     item
 }
@@ -267,6 +275,7 @@ fn assemble_definition_item(
     node: &Node,
     head: &[Node],
     context: &LoweringContext<'_>,
+    retired_break: bool,
 ) -> DefinitionItem {
     let mut item = DefinitionItem {
         head_body_relation,
@@ -276,7 +285,7 @@ fn assemble_definition_item(
         terms: terms.into_iter().map(finalize_definition_term).collect(),
         description,
     };
-    record_definition_item(&mut item, node, head, context);
+    record_definition_item(&mut item, node, head, context, retired_break);
     item
 }
 
@@ -285,6 +294,7 @@ fn record_definition_item(
     node: &Node,
     head: &[Node],
     context: &LoweringContext<'_>,
+    retired_break: bool,
 ) {
     // A source coordinate identifies authored text, not one executed macro
     // invocation: expansion can produce the same coordinate and head several
@@ -299,7 +309,7 @@ fn record_definition_item(
     context
         .native_heads
         .borrow_mut()
-        .record_operands(item, head.as_ptr() as usize);
+        .record_operands(item, head.as_ptr() as usize, retired_break);
     if context.macro_set == libmandoc_rs::MacroSet::Mdoc
         && let Some(role) = super::evidence::leading_role(head)
     {

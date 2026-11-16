@@ -54,6 +54,8 @@ pub(super) enum Event<'a> {
     /// A complete Fo BODY. Its direct Fa children use generated argument
     /// output, while every child retains this same original parent sequence.
     FunctionChildren(&'a [Node]),
+    /// The validated Fo HEAD, before the parenthesized arguments.
+    FunctionHead(&'a Node),
     /// Real Fo BODY pre/post, shared with inline Fn field execution.
     FunctionBodyBegin(bool),
     FunctionBodyEnd(bool),
@@ -355,7 +357,7 @@ fn emit_structural_function<'a>(
                     emit(Event::Anchor(target, super::source_span(part)));
                 }
                 emit(Event::EnterFont(RoffFont::Strong, None));
-                emit(Event::Children(&part.children));
+                emit(Event::FunctionHead(part));
                 emit(Event::ExitFont(None));
                 emit(Event::EndNode(part));
             }

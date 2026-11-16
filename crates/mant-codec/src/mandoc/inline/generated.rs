@@ -20,6 +20,7 @@ use super::{
     Font, Inline, InlineBuilder, Node, append_isolated_inline_node, inline_children,
     navigation_anchor, plain_text,
 };
+use crate::definitions::{NativeOperandRole, NativeSubject};
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 /// Fn pre executes direct `term_word` operands, rather than entering their
@@ -30,11 +31,16 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
         return;
     };
     let append_name = |builder: &mut InlineBuilder| {
-        builder.with_font_scope(Font::Strong, |builder| {
-            builder.with_direct_word_operands(|builder| {
-                append_isolated_inline_node(builder, head, name);
-            });
-        });
+        builder.with_native_operand_role(
+            NativeOperandRole::Subject(NativeSubject::Function, node.id),
+            |builder| {
+                builder.with_font_scope(Font::Strong, |builder| {
+                    builder.with_direct_word_operands(|builder| {
+                        append_isolated_inline_node(builder, head, name);
+                    });
+                });
+            },
+        );
     };
     if node.flags.synopsis_pretty {
         builder.with_function_name_field(append_name);
@@ -45,16 +51,18 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
     builder.append_text("(");
     builder.tighten_next_boundary();
     for (index, argument) in arguments.iter().enumerate() {
-        builder.with_font_scope(Font::Emphasis, |builder| {
-            if node.flags.synopsis_pretty {
-                builder.with_nonbreaking_word_operand(|builder| {
-                    append_isolated_inline_node(builder, argument, name);
-                });
-            } else {
-                builder.with_direct_word_operands(|builder| {
-                    append_isolated_inline_node(builder, argument, name);
-                });
-            }
+        builder.with_native_operand_role(NativeOperandRole::Argument, |builder| {
+            builder.with_font_scope(Font::Emphasis, |builder| {
+                if node.flags.synopsis_pretty {
+                    builder.with_nonbreaking_word_operand(|builder| {
+                        append_isolated_inline_node(builder, argument, name);
+                    });
+                } else {
+                    builder.with_direct_word_operands(|builder| {
+                        append_isolated_inline_node(builder, argument, name);
+                    });
+                }
+            });
         });
         if index + 1 < arguments.len() {
             builder.tighten_next_boundary();
@@ -91,9 +99,11 @@ pub(in crate::mandoc) fn function_argument(
             append_isolated_inline_node(builder, operand, name);
             continue;
         }
-        builder.with_font_scope(Font::Emphasis, |builder| {
-            builder.with_nonbreaking_word_operand(|builder| {
-                append_isolated_inline_node(builder, operand, name);
+        builder.with_native_operand_role(NativeOperandRole::Argument, |builder| {
+            builder.with_font_scope(Font::Emphasis, |builder| {
+                builder.with_nonbreaking_word_operand(|builder| {
+                    append_isolated_inline_node(builder, operand, name);
+                });
             });
         });
         let comma = crate::mandoc::adjacency::next(&operands[index + 1..])

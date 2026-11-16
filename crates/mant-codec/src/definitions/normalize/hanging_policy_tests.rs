@@ -531,7 +531,7 @@ fn accepted_native_name_limit_survives_the_h_owner_change_without_partial_names(
                     operands,
                 },
             );
-            evidence.record_operands(&witness, 20);
+            evidence.record_operands(&witness, 20, false);
             documents.push(roundtrip(&identify(sections(head, "OPTIONS"), &evidence)));
         }
         let baseline = document_owner(&documents[0]);

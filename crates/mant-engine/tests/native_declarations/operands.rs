@@ -9,15 +9,18 @@ mod json_roundtrip;
 
 const MAN_HEADER: &str = ".TH TEST 1 2026-11-17\n.SH DESCRIPTION\n";
 
-fn load(source: &str) -> ResolvedContent {
+pub(super) fn load(source: &str) -> ResolvedContent {
     let original = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let query = json_roundtrip::json_string_roundtrip(&original);
-    assert!(mant_ir::validate_document(query.document.as_ref().unwrap()).is_empty());
+    assert_eq!(
+        mant_ir::validate_document(query.document.as_ref().unwrap()),
+        []
+    );
     assert_eq!(query.document, original.document);
     query
 }
 
-fn explain(query: &ResolvedContent, name: &str) -> mant_protocol::QueryExplanation {
+pub(super) fn explain(query: &ResolvedContent, name: &str) -> mant_protocol::QueryExplanation {
     mant_query::explain_query(
         query,
         &ExplanationQuery {
@@ -71,7 +74,7 @@ fn tq_keeps_each_heads_executed_argument_ranges_in_source_order() {
                 order.iter().map(|&term| forms[term]).collect::<Vec<_>>(),
                 "{source}"
             );
-            assert!(facts.alias_groups.is_empty());
+            assert_eq!(facts.alias_groups.len(), 0);
             assert_eq!(owner.validated_names(), Some(facts.names.as_slice()));
             for (index, binding) in facts.name_bindings.iter().enumerate() {
                 assert!(

@@ -43,7 +43,24 @@ pub(crate) enum NativeOperandRole {
     /// The first actual man OP operand still has to spell a complete flag.
     #[cfg(feature = "roff")]
     OptionalKey,
+    #[cfg(feature = "roff")]
+    Subject(NativeSubject, u32),
+    #[cfg(feature = "roff")]
+    Enclosure,
     ExplicitOption,
+}
+
+#[cfg(feature = "roff")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NativeSubject {
+    Constant,
+    Error,
+    Variable,
+    Type,
+    ReturnType,
+    Field,
+    Function,
+    FunctionBlock,
 }
 
 impl NativeOperandRole {
@@ -51,8 +68,16 @@ impl NativeOperandRole {
         match self {
             Self::Argument => true,
             #[cfg(feature = "roff")]
-            Self::Placeholder | Self::OptionalKey => true,
+            Self::Placeholder | Self::OptionalKey | Self::Subject(..) => true,
             _ => false,
+        }
+    }
+
+    pub(super) fn blocks_lexical_name(self) -> bool {
+        match self {
+            #[cfg(feature = "roff")]
+            Self::Subject(..) => true,
+            _ => self == Self::Argument,
         }
     }
 }
@@ -170,8 +195,13 @@ impl NativeHeadEvidence {
     }
 
     #[cfg(feature = "roff")]
-    pub(crate) fn record_operands(&mut self, item: &DefinitionItem, key: usize) {
-        let Some(captured) = self.pending_operands.remove(&key) else {
+    pub(crate) fn record_operands(
+        &mut self,
+        item: &DefinitionItem,
+        key: usize,
+        retired_break: bool,
+    ) {
+        let Some(mut captured) = self.pending_operands.remove(&key) else {
             return;
         };
         let Some(source) = item.source else { return };
@@ -180,11 +210,25 @@ impl NativeHeadEvidence {
         };
         // Geometry may split/trim accepted HEAD output. A complete original
         // receipt, not a matching substring, is necessary to reuse operands.
-        let operands = match item.terms.as_slice() {
-            [term] if mant_ir::inline_plain_text(term) == captured.text => {
-                vec![TermOperands::Accepted(Rc::new(captured.operands))]
+        let operands = if let [term] = item.terms.as_slice() {
+            let actual = mant_ir::inline_plain_text(term);
+            if retired_break && captured.text.strip_suffix('\n') == Some(&actual) {
+                // Definition layout moved one actual HEAD endline into
+                // the head/body boundary. Only that known trailing cell
+                // can disappear without invalidating the original proof.
+                captured.operands.retain_mut(|operand| {
+                    operand.bytes.end = operand.bytes.end.min(actual.len());
+                    operand.bytes.start < operand.bytes.end
+                });
+                captured.text.truncate(actual.len());
             }
-            terms => vec![TermOperands::Unavailable; terms.len()],
+            if actual == captured.text {
+                vec![TermOperands::Accepted(Rc::new(captured.operands))]
+            } else {
+                vec![TermOperands::Unavailable]
+            }
+        } else {
+            vec![TermOperands::Unavailable; item.terms.len()]
         };
         let terms = self.shared_head(item);
         self.operand_witnesses.insert(

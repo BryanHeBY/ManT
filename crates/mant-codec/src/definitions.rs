@@ -20,7 +20,7 @@ use context::DefinitionContext;
 #[cfg(feature = "roff")]
 pub(crate) use diagnostics::manual_discovery_diagnostics;
 #[cfg(feature = "roff")]
-pub(crate) use evidence::CapturedHeadOperands;
+pub(crate) use evidence::{CapturedHeadOperands, NativeSubject};
 pub(crate) use evidence::{NativeHeadEvidence, NativeHeadRole, NativeOperand, NativeOperandRole};
 #[cfg(feature = "roff")]
 pub(crate) use groups::mark_native_definition_owner;

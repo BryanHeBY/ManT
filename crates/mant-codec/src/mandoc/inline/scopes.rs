@@ -5,6 +5,7 @@ use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_include, append_inline_nodes,
     authored_section_phrase, inline_children, navigation_anchor,
 };
+use crate::definitions::{NativeOperandRole, NativeSubject};
 mod nested;
 use nested::{append_column_list, append_nested_list};
 
@@ -163,32 +164,32 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
                 append_inline_nodes(builder, children, name);
             });
         }
-        Some(Mdoc(MdocMacro::Ar)) => builder.with_native_operand_role(
-            crate::definitions::NativeOperandRole::Placeholder,
-            |builder| {
+        Some(Mdoc(MdocMacro::Ar)) => {
+            builder.with_native_operand_role(NativeOperandRole::Placeholder, |builder| {
                 // `Ar` dispatches through termp_under_pre, then its actual
                 // children. A child's font escape does not rename the
                 // argument macro as another literal declaration.
                 builder.with_font_scope(Font::Emphasis, |builder| {
                     append_inline_nodes(builder, children, name);
                 });
-            },
-        ),
+            });
+        }
         Some(Mdoc(
-            MdocMacro::Pa
-            | MdocMacro::Em
-            | MdocMacro::Va
+            MdocMacro::Va
             | MdocMacro::Vt
             | MdocMacro::Ft
             | MdocMacro::Fa
-            | MdocMacro::Ad
-            | MdocMacro::Fr,
+            | MdocMacro::Dv
+            | MdocMacro::Er,
         )) => {
+            append_native_subject(builder, node, children, name);
+        }
+        Some(Mdoc(MdocMacro::Pa | MdocMacro::Em | MdocMacro::Ad | MdocMacro::Fr)) => {
             builder.with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         }
-        Some(Mdoc(MdocMacro::No | MdocMacro::Dv)) => {
+        Some(Mdoc(MdocMacro::No)) => {
             builder.with_font_scope(Font::Regular, |builder| {
                 append_inline_nodes(builder, children, name);
             });
@@ -226,6 +227,32 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         }
         _ => append_inline_nodes(builder, children, name),
     }
+}
+
+fn append_native_subject(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    children: &[Node],
+    name: Option<&str>,
+) {
+    // mdoc_term.c dispatches each role through its normal children: Er
+    // inherits font, Dv selects Roman, and Va/Vt/Fa select emphasis.
+    let (subject, font) = match node.macro_token.as_ref() {
+        Some(Mdoc(MdocMacro::Va)) => (NativeSubject::Variable, Some(Font::Emphasis)),
+        Some(Mdoc(MdocMacro::Vt)) => (NativeSubject::Type, Some(Font::Emphasis)),
+        Some(Mdoc(MdocMacro::Ft)) => (NativeSubject::ReturnType, Some(Font::Emphasis)),
+        Some(Mdoc(MdocMacro::Fa)) => (NativeSubject::Field, Some(Font::Emphasis)),
+        Some(Mdoc(MdocMacro::Dv)) => (NativeSubject::Constant, Some(Font::Regular)),
+        Some(Mdoc(MdocMacro::Er)) => (NativeSubject::Error, None),
+        _ => unreachable!("typed mdoc subject"),
+    };
+    builder.with_native_operand_role(NativeOperandRole::Subject(subject, node.id), |builder| {
+        if let Some(font) = font {
+            builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
+        } else {
+            append_inline_nodes(builder, children, name);
+        }
+    });
 }
 
 fn append_option(builder: &mut InlineBuilder, children: &[Node], name: Option<&str>) {
@@ -416,7 +443,12 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
             Event::AlignedChildren(nodes) => self.builder.with_grouped_line_dispatch(|builder| {
                 append_inline_nodes(builder, nodes, self.name);
             }),
-            Event::Glyph(value) => self.builder.append_text(&value),
+            Event::Glyph(value) => {
+                self.builder
+                    .with_native_operand_role(NativeOperandRole::Enclosure, |builder| {
+                        builder.append_text(&value);
+                    });
+            }
             Event::Tight => self.builder.tighten_next_boundary(),
             Event::Release => self.builder.release_next_boundary(),
             Event::Word(super::super::containers::NativeWord::Empty) => {
@@ -433,6 +465,10 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
             Event::FunctionChildren(nodes) => {
                 super::append_function_children(self.builder, nodes, self.name);
             }
+            Event::FunctionHead(node) => self.builder.with_native_operand_role(
+                NativeOperandRole::Subject(NativeSubject::FunctionBlock, node.id),
+                |builder| append_inline_nodes(builder, &node.children, self.name),
+            ),
             Event::FunctionBodyBegin(pretty) => self.builder.begin_function_body(pretty),
             Event::FunctionBodyEnd(pretty) => self.builder.finish_function_body(pretty),
             _ => unreachable!("the shared container driver owns source and font events"),

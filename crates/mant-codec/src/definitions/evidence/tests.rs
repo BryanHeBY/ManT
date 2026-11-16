@@ -139,7 +139,7 @@ fn recorded_owner() -> (DefinitionItem, NativeHeadEvidence) {
             }],
         },
     );
-    evidence.record_operands(&original, 20);
+    evidence.record_operands(&original, 20, false);
     (original, evidence)
 }
 
@@ -224,7 +224,7 @@ fn continuation_retains_independent_operand_states() {
             }],
         },
     );
-    evidence.record_operands(&stale, 40);
+    evidence.record_operands(&stale, 40, false);
     stale.source.as_mut().unwrap().column += 1;
     let neutral = item();
     let operands = evidence.combine_operands([&original, &stale, &neutral].into_iter());
@@ -308,7 +308,7 @@ fn publication_rebinds_only_the_proved_owner_once() {
             }],
         },
     );
-    evidence.record_operands(&original, 20);
+    evidence.record_operands(&original, 20, false);
 
     let mut invalid = original.clone();
     super::super::remove_native_definition_owner_markers_from_items(std::slice::from_mut(

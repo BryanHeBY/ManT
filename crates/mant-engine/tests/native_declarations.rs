@@ -13,6 +13,8 @@ mod hanging;
 mod operands;
 #[path = "native_declarations/roles.rs"]
 mod roles;
+#[path = "native_declarations/subjects.rs"]
+mod subjects;
 
 fn definitions(document: &Document) -> Vec<&DefinitionItem> {
     struct Items<'a>(Vec<&'a DefinitionItem>);

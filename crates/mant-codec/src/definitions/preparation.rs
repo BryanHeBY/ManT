@@ -182,7 +182,7 @@ pub(super) fn record_limit(
             impact: mant_ir::DiagnosticImpact::SemanticCoverage,
             level: mant_ir::DiagnosticLevel::Warning,
             code: Some("manual.semantic-entry.name-limit".to_owned()),
-            message: "explicit option declaration exceeded the 256-name recognition limit; complete readable forms are retained".to_owned(),
+            message: "explicit native declaration exceeded the 256-name recognition limit. Complete readable forms are retained".to_owned(),
             source,
         });
     }

@@ -280,6 +280,7 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
             Event::FunctionChildren(nodes) => {
                 self.lowerer.push_function_children(nodes);
             }
+            Event::FunctionHead(node) => self.event(Event::Children(&node.children)),
             event => self
                 .lowerer
                 .push_generated_container_event(self.emission_source, event),

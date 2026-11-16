@@ -11,8 +11,8 @@ use mant_ir::Inline;
 
 use crate::definitions::{NativeOperand, NativeOperandRole, RecognizedName};
 
-const MAX_NAMES: usize = 256;
-const MAX_NESTING: usize = 64;
+pub(super) const MAX_NAMES: usize = 256;
+pub(super) const MAX_NESTING: usize = 64;
 
 mod lexical;
 use lexical::LexicalState;
@@ -338,6 +338,13 @@ impl<'a> Scanner<'a> {
 
     fn consume_name(&mut self) -> bool {
         let start = self.cursor;
+        if self.view.explicit_option(start)
+            && let Some(marker) = self.explicit_marker(start)
+        {
+            self.names.push(RecognizedName::contiguous(marker, start));
+            self.cursor += marker.len();
+            return true;
+        }
         let mut end = start + 1;
         for (index, next) in self.view.text[end..].char_indices() {
             let offset = start + 1 + index;
@@ -378,6 +385,25 @@ impl<'a> Scanner<'a> {
             return true;
         }
         false
+    }
+
+    // Keep literal mdoc Fl spellings even through generated wrappers or
+    // font escapes. Every emitted byte has to belong to a Fl receipt; one
+    // generated dash does not prove a following Ar/template or Cm literal.
+    fn explicit_marker(&self, start: usize) -> Option<&'static str> {
+        let remaining = &self.view.text[start..];
+        ["--%", "--"].into_iter().find(|marker| {
+            remaining.strip_prefix(marker).is_some_and(|suffix| {
+                suffix.chars().next().is_none_or(|ch| {
+                    ch.is_whitespace()
+                        || matches!(ch, ',' | '|' | '/')
+                        || self
+                            .wrappers
+                            .last()
+                            .is_some_and(|wrapper| wrapper.closer() == ch)
+                })
+            }) && (start..start + marker.len()).all(|offset| self.view.explicit_option(offset))
+        })
     }
 
     fn next_is_parameter_token(&self) -> bool {
@@ -558,7 +584,7 @@ fn option_character(character: char) -> bool {
     character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?' | '.' | '+')
 }
 
-fn closing(character: char) -> Option<char> {
+pub(super) fn closing(character: char) -> Option<char> {
     match character {
         '[' => Some(']'),
         '{' => Some('}'),
@@ -568,7 +594,7 @@ fn closing(character: char) -> Option<char> {
     }
 }
 
-fn quote_closer(character: char) -> Option<char> {
+pub(super) fn quote_closer(character: char) -> Option<char> {
     match character {
         '"' | '\'' => Some(character),
         '“' => Some('”'),

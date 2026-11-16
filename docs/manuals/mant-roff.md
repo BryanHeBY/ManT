@@ -624,6 +624,20 @@ Layout-inferred paragraph heads must pass a complete declaration check before an
 
 An mdoc definition headed by `Fl` or `Ev` retains that option or environment-variable evidence independently of its section heading. This includes punctuation flags such as `-@`, `-%`, and `-,`, and an environment name followed by an `Ar` placeholder. `Ic` and `Cm` preserve literal naming evidence but do not alone prove that a definition is a command; a named Term is valid when context is inconclusive. Unsupported name syntax does not erase a proved native role. The same macros in ordinary body text remain inline mentions, not new definitions.
 
+An existing mdoc definition head can bind the executed error code in
+`Bq Er EINVAL`, the symbol in `Dv BIOCGBLEN Fa "u_int *"`, and the
+identifier in a supported `Va`, `Fn`, or `Fo` declaration. The complete
+form retains brackets, types, and arguments. Simple `Va` declarations use
+the variable category. Function signatures, errors, constants, and standalone
+types or argument labels use term entries. Arrays, C function-pointer
+declarators, and ambiguous multiple-variable forms retain their complete
+forms with no guessed identifier.
+
+In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
+first operand independently of the section heading. The second operand
+remains an argument across font changes. Each `TQ` term retains its own name
+and argument evidence after the terms are combined under one owner.
+
 Complete named heads can retain bounded trailing parenthesized annotations or angle-bracket placeholders without adding those suffixes to names: `AUTO_CD (-J) <D>`, `NAME <TLS backend>`, and `update (-u)` preserve their full forms. Nested parenthesized defaults and literal key bindings such as `C-[` remain intact. A single assignment binds its left-hand name, not its value; assignment spelling alone does not prove an Option or ConfigurationKey role (`if=FILE` can remain a named Term). Configuration contexts support exact dotted keys. Templates such as `[url-protocol]_PROXY`, malformed groups and prose suffixes are not expanded into guessed names, and neither case variants nor annotations create alias relationships.
 
 Complete command, configuration-key and variable heads can use the same paragraph-plus-indented-description shape as options. Command/variable recovery requires a complete head in a matching context; an inferred command paragraph additionally needs explicit invocation syntax or a typed manual reference whose visible label names the command. Bold prose alone does not establish a command owner. Explicit definition labels can still name a bare command. Variable recovery requires literal styling; configuration/variable contexts also accept complete unstyled dotted keys. A mixed-case assignment label such as `WorkingDirectory=` can establish a configuration head under a topical section, including when styled in italics. Spacing-only runs between a validated head and its deeper body are preserved, not treated as new owners. Recovery stops at outer content, another same-level head, a table boundary or the end of the container. A complete local dash declaration takes precedence over inherited value/configuration hints without changing its place in the document tree.
