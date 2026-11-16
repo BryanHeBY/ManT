@@ -1,0 +1,19 @@
+Subject: allow empty tbl cells to own vertical spans
+Upstream-Status: Candidate (not submitted)
+
+A continued cell can close before appending any text. Its NULL payload
+means there was no input row, but the cell is still a valid span owner.
+Only compare the continuation token when an actual string exists.
+
+--- a/tbl_data.c
++++ b/tbl_data.c
+@@ -123,7 +123,8 @@
+ 			if (pdat == NULL)
+ 				break;
+ 			if (pdat->layout->pos != TBL_CELL_DOWN &&
+-			    strcmp(pdat->string, "\\^") != 0) {
++			    (pdat->string == NULL ||
++			     strcmp(pdat->string, "\\^") != 0)) {
+ 				pdat->vspans++;
+ 				break;
+ 			}

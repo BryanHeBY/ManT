@@ -392,6 +392,46 @@ fn keeps_tbl_vertical_span_markers_out_of_visible_cells() {
 }
 
 #[test]
+fn keeps_native_span_topology_and_reading_order_for_an_empty_table_block() {
+    // The pinned tbl_data.c lookup can extend an existing cell even when
+    // tbl_cdata() has not attached a text row. The pristine renderer cannot
+    // format this null-owner case. The adjacent reference case with one
+    // empty T{} line confirms the same two-row span and sentinel order.
+    let source = b".TH PROBE 1\n.SH DESCRIPTION\nBEFORE\n.TS\nl l.\n\
+                   T{\nT}\tUPPER\n\\^\tLOWER\n.TE\nAFTER\n";
+    let content = mant_loader::load_roff_bytes(source).unwrap();
+    let restored = json_roundtrip::json_string_roundtrip(&content);
+    let document = restored.document.as_ref().unwrap();
+    assert!(mant_ir::validate_document(document).is_empty());
+    let table = document.sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Table { rows, .. } => Some(rows),
+            _ => None,
+        })
+        .expect("spanning table");
+    assert_eq!(table.len(), 2);
+    assert_eq!(table[0].cells[0].row_span, 2);
+    assert!(table[0].cells[0].blocks.is_empty());
+    assert!(table[1].cells[0].blocks.is_empty());
+
+    let markdown = mant_codec::encode::render_markdown(&restored);
+    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    for output in [
+        mant_render::render_query_man(&restored),
+        mant_render::render_query_man(&readback),
+    ] {
+        let mut remaining = output.as_str();
+        for token in ["BEFORE", "UPPER", "LOWER", "AFTER"] {
+            assert_eq!(output.matches(token).count(), 1, "{output}");
+            remaining = remaining.split_once(token).unwrap().1;
+        }
+        assert!(!output.contains(r"\^"), "{output}");
+    }
+}
+
+#[test]
 fn preserves_tbl_rows_nested_in_unfilled_mdoc_displays() {
     let document = parse_manual_bytes(
         std::path::Path::new("unfilled-table.7"),

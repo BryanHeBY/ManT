@@ -56,3 +56,6 @@
 
 # Native HTML scope unwinding after detachment
 0037-unwind-replacement-html-scopes.patch
+
+# Nullable table span owners
+0038-allow-empty-tbl-span-owners.patch

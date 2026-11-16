@@ -561,7 +561,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree is the pinned pristine source subset plus the
-37 ordered patches in `patches/series`. The stack follows build prerequisites,
+38 ordered patches in `patches/series`. The stack follows build prerequisites,
 parser safety, embedding, execution evidence, compatibility, rendering,
 allocation performance, and HTML scope lifetime. Patch numbers identify the
 patch stack. Cargo features select compiled capabilities.
@@ -728,6 +728,9 @@ they never refer to a patch number in the current series.
   boundary by tag opening order when a man or mdoc node's saved tag detaches.
   It closes structural scopes opened by that node while preserving enclosing
   scopes and the normal paragraph or literal continuation.
+
+- `0038-allow-empty-tbl-span-owners.patch` keeps immediately closed table
+  text cells available as vertical span owners without inventing text.
 
 Upstream already provides `MR`, modern standard names, root-element scope
 cleanup, and the `tag_put` explicit-tag guard; these are not duplicate local

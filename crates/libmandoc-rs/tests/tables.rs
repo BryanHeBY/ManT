@@ -12,6 +12,70 @@ fn table_rows(node: &Node) -> Vec<&Node> {
 }
 
 #[test]
+fn vertical_continuations_keep_empty_and_blank_block_owners_distinct() {
+    // tbl_data.c::getdata accepts an actual cell owner with a NULL payload.
+    // The pristine reference has no layout result for that unguarded path.
+    // Its tree and renderers distinguish the adjacent controls: a blank
+    // T{} input line owns an empty string, and a whole-row rule stops lookup.
+    let upper_cells = [
+        ("T{\nT}", None, false),
+        ("T{\n.br\nT}", None, false),
+        ("T{\n\nT}", Some(""), true),
+        ("T{\n.B\nT}", Some(""), true),
+        ("T{\nCELL_TEXT\nT}", Some("CELL_TEXT"), true),
+        ("", Some(""), false),
+    ];
+    for (upper, text, text_block) in upper_cells {
+        for (layout, lower, extends) in [
+            ("l l", "NEW_CELL", false),
+            ("l l", r"\^", true),
+            ("l l, ^ l", "", true),
+        ] {
+            for (between, rule) in [("", false), ("_\n", true)] {
+                for options in ["", "allbox;\n"] {
+                    let source = format!(
+                        ".TH PROBE 1\n.SH DESCRIPTION\nBEFORE\n.TS\n{options}{layout}.\n\
+                         {upper}\tUPPER\n{between}{lower}\tLOWER\n.TE\nAFTER\n"
+                    );
+                    let parsed = Parser::default()
+                        .parse_bytes("empty-span.1", source.as_bytes())
+                        .unwrap();
+                    let rows = table_rows(&parsed.document.root);
+                    assert_eq!(rows.len(), 2 + usize::from(rule), "{source}");
+                    let cell = &rows[0].table_cells[0];
+                    assert_eq!(cell.text.as_deref(), text, "{source}");
+                    assert_eq!(cell.text_block, text_block, "{source}");
+                    assert_eq!(cell.row_span, if extends && !rule { 2 } else { 1 });
+                    assert_eq!(
+                        rows.last().unwrap().table_cells[0].vertical_continuation,
+                        extends
+                    );
+                    assert_eq!(rows[0].table_cells[1].text.as_deref(), Some("UPPER"));
+                    assert_eq!(
+                        rows.last().unwrap().table_cells[1].text.as_deref(),
+                        Some("LOWER")
+                    );
+
+                    #[cfg(feature = "render")]
+                    for format in [
+                        libmandoc_rs::RenderFormat::Ascii,
+                        libmandoc_rs::RenderFormat::Utf8,
+                        libmandoc_rs::RenderFormat::Html,
+                    ] {
+                        let rendered = libmandoc_rs::Renderer::new(format)
+                            .render_bytes("empty-span.1", source.as_bytes())
+                            .unwrap();
+                        for text in ["BEFORE", "UPPER", "LOWER", "AFTER"] {
+                            assert_eq!(rendered.output.matches(text).count(), 1, "{source}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn whole_table_options_follow_span_identity_and_final_layout() {
     // Fixed CVS -Ttree/-Tutf8/-Tlint checked this exact input. tbl_opts.c
     // aliases centre to center, tbl_layout.c::cell_alloc grows the shared

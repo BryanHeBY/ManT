@@ -64,6 +64,10 @@ detached boundary. The shared node unwind can then close replacement
 structures such as a synopsis table. It retains the original paragraph and
 literal continuation rules and the saved tag's reference lifecycle.
 
+Patch `0038` permits a vertical span to start at an immediately closed
+`T{...T}` cell. Only cells with text can contain the continuation token.
+An absent payload remains distinct from a cell containing an empty input row.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

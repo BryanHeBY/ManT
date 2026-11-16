@@ -123,7 +123,8 @@ getdata(struct tbl_node *tbl, struct tbl_span *dp,
 			if (pdat == NULL)
 				break;
 			if (pdat->layout->pos != TBL_CELL_DOWN &&
-			    strcmp(pdat->string, "\\^") != 0) {
+			    (pdat->string == NULL ||
+			     strcmp(pdat->string, "\\^") != 0)) {
 				pdat->vspans++;
 				break;
 			}

@@ -13,6 +13,12 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### libmandoc-rs
+
+- Keep empty tbl text blocks as valid vertical span owners. Parsing and
+  rendering a spanning table preserve surrounding content and distinguish a
+  cell with no text from a cell containing an empty input row.
+
 ### mant-codec
 
 - Preserve leading, trailing and repeated ordinary spaces in mathematical
