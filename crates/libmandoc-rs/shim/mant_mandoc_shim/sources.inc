@@ -177,6 +177,87 @@ unsafe:
 }
 
 #ifndef MANDOC_MEMORY_ONLY
+static char *
+join_source_path(const char *base, const char *path)
+{
+	char *joined;
+
+	joined = malloc(strlen(base) + strlen(path) + 2);
+	if (joined != NULL)
+		sprintf(joined, "%s/%s", base, path);
+	return joined;
+}
+
+/* Skip redundant separators and current-directory components only. */
+static size_t
+path_component(const char **cursor)
+{
+	size_t length;
+
+	for (;;) {
+		*cursor += strspn(*cursor, "/");
+		length = strcspn(*cursor, "/");
+		if (length != 1 || **cursor != '.')
+			return length;
+		(*cursor)++;
+	}
+}
+
+static void
+set_source_root_directory(const char *directory, const char *path)
+{
+	char		 cwd[PATH_MAX];
+	char		*absolute_path, *last_slash;
+	const char	*base, *root, *relative;
+	size_t		 root_length, path_length;
+
+	free(source_root);
+	free(source_dir);
+	source_root = source_dir = NULL;
+	source_root_strict = 1;
+	if (*directory == '\0')
+		return;
+	base = NULL;
+	if (*directory != '/' || (path != NULL && *path != '/'))
+		base = getcwd(cwd, sizeof(cwd));
+	if (*directory == '/')
+		source_root = copy_string(directory);
+	else if (base != NULL)
+		source_root = join_source_path(base, directory);
+	if (source_root == NULL || path == NULL)
+		return;
+	if (*path == '/')
+		absolute_path = copy_string(path);
+	else if (base != NULL)
+		absolute_path = join_source_path(base, path);
+	else
+		return;
+	if (absolute_path == NULL)
+		return;
+
+	/* Compare path components from the same cwd. Keep the original source
+	 * label for diagnostics and resolve the relative parent from the approved
+	 * root descriptor, without following any descendant symlinks. */
+	root = source_root;
+	relative = absolute_path;
+	while ((root_length = path_component(&root)) != 0) {
+		path_length = path_component(&relative);
+		if (root_length != path_length ||
+		    memcmp(root, relative, root_length) != 0)
+			goto done;
+		root += root_length;
+		relative += path_length;
+	}
+	if (path_component(&relative) == 0 || !is_safe_relative_path(relative))
+		goto done;
+	if ((last_slash = strrchr(relative, '/')) != NULL) {
+		*last_slash = '\0';
+		source_dir = copy_string(relative);
+	}
+done:
+	free(absolute_path);
+}
+
 /* Open `path` under `base`, leaving errno describing any failure. */
 static int
 open_under_base(const char *base, const char *path, int flags, mode_t mode)
@@ -188,12 +269,11 @@ open_under_base(const char *base, const char *path, int flags, mode_t mode)
 		errno = ENOENT;
 		return -1;
 	}
-	resolved = malloc(strlen(base) + strlen(path) + 2);
+	resolved = join_source_path(base, path);
 	if (resolved == NULL) {
 		errno = ENOMEM;
 		return -1;
 	}
-	sprintf(resolved, "%s/%s", base, path);
 	fd = openat(AT_FDCWD, resolved, flags, mode);
 	saved_errno = errno;
 	free(resolved);
@@ -276,33 +356,18 @@ open_beneath_root(const char *path, int flags, mode_t mode)
 static int
 open_beside_source(const char *path, int flags, mode_t mode)
 {
-	const char	*relative;
-	char		*combined;
-	size_t		 root_length;
-	int		 fd, saved_errno;
+	char	*combined;
+	int	 fd, saved_errno;
 
 	if (source_root == NULL || source_dir == NULL) {
 		errno = ENOENT;
 		return -1;
 	}
-	root_length = strlen(source_root);
-	if (strncmp(source_dir, source_root, root_length) != 0 ||
-	    (root_length != 1 && source_dir[root_length] != '/' &&
-	    source_dir[root_length] != '\0')) {
-		errno = EPERM;
-		return -1;
-	}
-	relative = source_dir + root_length;
-	while (*relative == '/')
-		relative++;
-	if (*relative == '\0')
-		return open_beneath_root(path, flags, mode);
-	combined = malloc(strlen(relative) + strlen(path) + 2);
+	combined = join_source_path(source_dir, path);
 	if (combined == NULL) {
 		errno = ENOMEM;
 		return -1;
 	}
-	sprintf(combined, "%s/%s", relative, path);
 	fd = open_beneath_root(combined, flags, mode);
 	saved_errno = errno;
 	free(combined);
@@ -379,7 +444,8 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 		return fd;
 	saved_errno = errno;
 	if (source_dir != NULL &&
-	    (source_root == NULL || strcmp(source_dir, source_root) != 0)) {
+	    (source_root_strict || source_root == NULL ||
+	    strcmp(source_dir, source_root) != 0)) {
 		fd = source_root_strict ? open_beside_source(path, flags, mode) :
 		    open_under_base(source_dir, path, flags, mode);
 		if (fd != -1)

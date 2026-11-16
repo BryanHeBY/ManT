@@ -12,6 +12,7 @@
 #include <ctype.h>
 #ifndef MANDOC_MEMORY_ONLY
 #include <fcntl.h>
+#include <limits.h>
 #endif
 #include <stdio.h>
 #include <stdarg.h>
@@ -278,43 +279,6 @@ set_source_root_from_path(const char *path)
 		last_slash = strrchr(source_root, '/');
 		if (last_slash != NULL && last_slash != source_root)
 			*last_slash = '\0';
-	}
-}
-
-static void
-set_source_root_directory(const char *directory, const char *path)
-{
-	char	*last_slash;
-	size_t	 root_length;
-
-	free(source_root);
-	free(source_dir);
-	source_dir = NULL;
-	source_root_strict = 1;
-	source_root = copy_string(directory);
-	if (source_root == NULL || path == NULL)
-		return;
-
-	/* Bare redirects may resolve beside the source, but only inside root. */
-	root_length = strlen(source_root);
-	if (root_length == 0)
-		return;
-	while (root_length > 1 && source_root[root_length - 1] == '/')
-		source_root[--root_length] = '\0';
-	if (strncmp(path, source_root, root_length) != 0 ||
-	    (root_length != 1 && path[root_length] != '/'))
-		return;
-	source_dir = copy_string(path);
-	if (source_dir == NULL)
-		return;
-	last_slash = strrchr(source_dir, '/');
-	if (last_slash == NULL) {
-		free(source_dir);
-		source_dir = NULL;
-	} else if (last_slash == source_dir) {
-		last_slash[1] = '\0';
-	} else {
-		*last_slash = '\0';
 	}
 }
 

@@ -242,8 +242,9 @@ Unix-only. `Root(path)` is the strict cross-platform policy: it resolves `.so`
 requests only below a caller-approved directory, rejects absolute and lexical
 parent paths, refuses to traverse symbolic links or Windows reparse points
 below that root, and never falls back to the process working directory. The
-approved root itself may be a link. Unix opens included files relative to
-directory descriptors; Windows reads them through the Rust boundary, verifies
+approved root itself may be a link. Unix accepts equivalent absolute and
+relative root and source spellings, then opens includes relative to directory
+descriptors. Windows reads them through the Rust boundary, verifies
 the opened file's final path remains below the approved root, and then passes
 owned bytes to memory-only libmandoc. Both an explicit `.so target.gz` and the
 usual `.so target` fallback to `target.gz` are decoded on Windows. To avoid
