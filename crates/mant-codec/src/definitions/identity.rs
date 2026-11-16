@@ -94,7 +94,7 @@ pub(super) fn identity_plan(
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
-    operands: Option<&[Vec<super::NativeOperand>]>,
+    operands: super::evidence::HeadOperands<'_>,
 ) -> IdentityPlan {
     let inferred = item.entry.is_none();
     let (kind, case, names, occurrences, value_domain, limit) = item.entry.as_ref().map_or_else(

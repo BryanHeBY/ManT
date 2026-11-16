@@ -37,7 +37,21 @@ pub(crate) enum NativeOperandRole {
     #[cfg(any(feature = "roff", test))]
     Literal,
     Argument,
+    /// An `Ar` spelling may name an authored operand definition directly.
+    #[cfg(feature = "roff")]
+    Placeholder,
     ExplicitOption,
+}
+
+impl NativeOperandRole {
+    pub(super) fn is_parameter(self) -> bool {
+        match self {
+            Self::Argument => true,
+            #[cfg(feature = "roff")]
+            Self::Placeholder => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,7 +70,49 @@ pub(crate) struct CapturedHeadOperands {
 struct OperandWitness {
     source: SourceSpan,
     terms: HeadSnapshot,
-    operands: Vec<Vec<NativeOperand>>,
+    operands: Vec<TermOperands>,
+    #[cfg(feature = "roff")]
+    composed: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(crate) enum OperandEvidence<T> {
+    #[default]
+    Absent,
+    Accepted(T),
+    Unavailable,
+}
+
+pub(crate) type TermOperands = OperandEvidence<Rc<Vec<NativeOperand>>>;
+pub(super) type HeadOperands<'a> = OperandEvidence<&'a [TermOperands]>;
+
+impl<'a> HeadOperands<'a> {
+    /// A missing receipt permits ordinary lexical recognition. A rejected
+    /// receipt must not resurrect an argument as a font-derived name.
+    pub(super) fn for_term(self, index: usize) -> Option<&'a [NativeOperand]> {
+        match self {
+            Self::Absent => Some(&[]),
+            Self::Accepted(terms) => match terms.get(index)? {
+                TermOperands::Absent => Some(&[]),
+                TermOperands::Accepted(operands) => Some(operands),
+                TermOperands::Unavailable => None,
+            },
+            Self::Unavailable => None,
+        }
+    }
+
+    pub(super) fn proves_option(self) -> bool {
+        let Self::Accepted(terms) = self else {
+            return false;
+        };
+        (0..terms.len()).any(|index| {
+            self.for_term(index).is_some_and(|operands| {
+                operands
+                    .iter()
+                    .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
+            })
+        })
+    }
 }
 
 /// Actual native owners index witnesses directly. The complete source and
@@ -72,7 +128,7 @@ pub(crate) struct NativeHeadEvidence {
     pub(crate) continuations: std::collections::HashSet<(u32, u32)>,
     witnesses: HashMap<(u32, u32), Vec<HeadWitness>>,
     native_witnesses: HashMap<usize, HeadWitness>,
-    operand_witnesses: HashMap<usize, OperandWitness>,
+    operand_witnesses: HashMap<usize, Vec<OperandWitness>>,
     #[cfg(feature = "roff")]
     pending_operands: HashMap<usize, CapturedHeadOperands>,
 }
@@ -102,30 +158,110 @@ impl NativeHeadEvidence {
         let Some(owner) = native_owner(item) else {
             return;
         };
-        let [term] = item.terms.as_slice() else {
-            return;
-        };
         // Geometry may split/trim accepted HEAD output. A complete original
         // receipt, not a matching substring, is necessary to reuse operands.
-        if mant_ir::inline_plain_text(term) != captured.text {
-            return;
-        }
+        let operands = match item.terms.as_slice() {
+            [term] if mant_ir::inline_plain_text(term) == captured.text => {
+                vec![TermOperands::Accepted(Rc::new(captured.operands))]
+            }
+            terms => vec![TermOperands::Unavailable; terms.len()],
+        };
         let terms = self.shared_head(item);
         self.operand_witnesses.insert(
             owner,
-            OperandWitness {
+            vec![OperandWitness {
                 source,
                 terms,
-                operands: vec![captured.operands],
-            },
+                operands,
+                composed: false,
+            }],
         );
     }
 
-    pub(super) fn operands(&self, item: &DefinitionItem) -> Option<&[Vec<NativeOperand>]> {
+    fn matching_operand_witness(
+        &self,
+        item: &DefinitionItem,
+        owner: usize,
+    ) -> Option<(usize, &OperandWitness)> {
         let source = item.source?;
-        let witness = self.operand_witnesses.get(&native_owner(item)?)?;
-        (witness.source == source && head_matches(&item.terms, &witness.terms))
-            .then_some(witness.operands.as_slice())
+        self.operand_witnesses
+            .get(&owner)?
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, witness)| {
+                witness.source == source && publication_matches(&item.terms, &witness.terms)
+            })
+    }
+
+    pub(super) fn operands(&self, item: &DefinitionItem) -> HeadOperands<'_> {
+        let Some(owner) = native_owner(item) else {
+            return HeadOperands::Absent;
+        };
+        if let Some((_, witness)) = self.matching_operand_witness(item, owner) {
+            HeadOperands::Accepted(&witness.operands)
+        } else if self.operand_witnesses.contains_key(&owner) {
+            HeadOperands::Unavailable
+        } else {
+            HeadOperands::Absent
+        }
+    }
+
+    /// Snapshot each input independently before TQ moves its terms. Every
+    /// term stays in source order, including those with no native receipt.
+    #[cfg(feature = "roff")]
+    pub(crate) fn combine_operands<'a>(
+        &self,
+        inputs: impl Iterator<Item = &'a DefinitionItem>,
+    ) -> Vec<TermOperands> {
+        let mut combined = Vec::new();
+        for input in inputs {
+            match self.operands(input) {
+                HeadOperands::Absent => {
+                    combined.resize(combined.len() + input.terms.len(), TermOperands::Absent);
+                }
+                HeadOperands::Accepted(terms) => combined.extend_from_slice(terms),
+                HeadOperands::Unavailable => {
+                    combined.resize(
+                        combined.len() + input.terms.len(),
+                        TermOperands::Unavailable,
+                    );
+                }
+            }
+        }
+        combined
+    }
+
+    /// Issue a new proof only for the structure-approved TQ continuation.
+    /// Preserve the original proof, and share the composed styled snapshot
+    /// with group evidence instead of keeping another history of merged heads.
+    #[cfg(feature = "roff")]
+    pub(crate) fn continue_definition(
+        &mut self,
+        item: &DefinitionItem,
+        last_key: usize,
+        operands: Vec<TermOperands>,
+    ) {
+        self.groups.continued(item, last_key);
+        if operands
+            .iter()
+            .all(|term| matches!(term, TermOperands::Absent))
+        {
+            return;
+        }
+        debug_assert_eq!(item.terms.len(), operands.len());
+        let (Some(owner), Some(source)) = (native_owner(item), item.source) else {
+            return;
+        };
+        let terms = self.shared_head(item);
+        let witnesses = self.operand_witnesses.entry(owner).or_default();
+        witnesses.retain(|witness| !witness.composed);
+        witnesses.push(OperandWitness {
+            source,
+            terms,
+            operands,
+            composed: true,
+        });
     }
     #[cfg(any(feature = "roff", test))]
     pub(crate) fn record(&mut self, item: &DefinitionItem, role: NativeHeadRole) {
@@ -184,7 +320,6 @@ pub(super) fn head_matches(actual: &[impl AsRef<[Inline]>], expected: &[Vec<Inli
             .all(|(a, e)| inline_matches(a.as_ref(), e, false))
 }
 
-#[cfg(feature = "roff")]
 pub(super) fn publication_matches(
     actual: &[impl AsRef<[Inline]>],
     expected: &[Vec<Inline>],

@@ -1,7 +1,7 @@
 //! Source-neutral grammars for semantic definition names and lexical evidence.
 //! Context selects a grammar; one recognition result carries both selectable
 //! spellings and their original ranges to the binding mapper.
-use super::{RecognizedName, context::DefinitionContext};
+use super::{RecognizedName, context::DefinitionContext, evidence::HeadOperands};
 use mant_ir::inline_plain_text as plain_text;
 use mant_ir::{DefinitionItem, EntryKind, NameCase, ParameterKind};
 
@@ -37,7 +37,7 @@ pub(super) fn infer_identity(
     item: &DefinitionItem,
     context: DefinitionContext,
     hint: Option<super::NativeHeadRole>,
-    operands: Option<&[Vec<super::NativeOperand>]>,
+    operands: HeadOperands<'_>,
 ) -> InferredIdentity {
     let first = item
         .terms
@@ -62,12 +62,7 @@ pub(super) fn infer_identity(
         // Only a complete accepted native Fl receipt establishes known
         // selector loss. A weak candidate or constructed owner role alone
         // cannot turn an unsupported grammar into a coverage finding.
-        if operands.is_some_and(|terms| {
-            terms
-                .iter()
-                .flatten()
-                .any(|operand| operand.role == super::NativeOperandRole::ExplicitOption)
-        }) {
+        if operands.proves_option() {
             limit = found.limit;
         }
         found.occurrences
@@ -83,8 +78,10 @@ pub(super) fn infer_identity(
     } else {
         name_occurrences_with_operands(item, kind, operands)
     };
+    constrain_names(&mut occurrences, operands);
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
         occurrences = name_occurrences(item, EntryKind::Command);
+        constrain_names(&mut occurrences, operands);
         if occurrences.iter().all(Vec::is_empty) {
             occurrences = item
                 .terms
@@ -102,6 +99,7 @@ pub(super) fn infer_identity(
                     }
                 })
                 .collect();
+            constrain_names(&mut occurrences, operands);
         }
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
@@ -113,6 +111,7 @@ pub(super) fn infer_identity(
         )
     {
         occurrences = name_occurrences(item, EntryKind::Term);
+        constrain_names(&mut occurrences, operands);
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
@@ -132,6 +131,27 @@ pub(super) fn infer_identity(
         names,
         occurrences,
         limit,
+    }
+}
+
+fn constrain_names(occurrences: &mut [Vec<RecognizedName>], operands: HeadOperands<'_>) {
+    for (index, names) in occurrences.iter_mut().enumerate() {
+        let Some(ranges) = operands.for_term(index) else {
+            names.clear();
+            continue;
+        };
+        names.retain(|name| {
+            !name.parts.iter().any(|part| {
+                let start = ranges.partition_point(|range| range.bytes.end <= part.start);
+                ranges[start..]
+                    .iter()
+                    .take_while(|range| range.bytes.start < part.end)
+                    .any(|range| {
+                        range.role == super::NativeOperandRole::Argument
+                            || name.name.starts_with(['-', '+']) && range.role.is_parameter()
+                    })
+            })
+        });
     }
 }
 
@@ -162,13 +182,13 @@ pub(super) fn name_occurrences(
     item: &DefinitionItem,
     kind: EntryKind,
 ) -> Vec<Vec<super::RecognizedName>> {
-    name_occurrences_with_operands(item, kind, None)
+    name_occurrences_with_operands(item, kind, HeadOperands::Absent)
 }
 
 fn name_occurrences_with_operands(
     item: &DefinitionItem,
     kind: EntryKind,
-    operands: Option<&[Vec<super::NativeOperand>]>,
+    operands: HeadOperands<'_>,
 ) -> Vec<Vec<super::RecognizedName>> {
     if let EntryKind::Parameter { parameter_kind } = kind {
         if parameter_kind == ParameterKind::Option {

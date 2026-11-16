@@ -9,6 +9,8 @@ use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
 mod boundaries;
 #[path = "native_declarations/hanging.rs"]
 mod hanging;
+#[path = "native_declarations/operands.rs"]
+mod operands;
 #[path = "native_declarations/roles.rs"]
 mod roles;
 

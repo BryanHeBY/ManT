@@ -150,12 +150,18 @@ fn shared_owner_proofs_still_reject_source_style_and_identity_changes() {
     // Sharing must not make a group snapshot authorize another owner.
     let (original, evidence) = recorded_owner();
     assert_eq!(evidence.role(&original), Some(NativeHeadRole::Environment));
-    assert!(evidence.operands(&original).is_some());
+    assert!(matches!(
+        evidence.operands(&original),
+        HeadOperands::Accepted(_)
+    ));
 
     let mut changed = original.clone();
     changed.source.as_mut().unwrap().end_column = Some(9);
     assert_eq!(evidence.role(&changed), None);
-    assert!(evidence.operands(&changed).is_none());
+    assert!(matches!(
+        evidence.operands(&changed),
+        HeadOperands::Unavailable
+    ));
 
     changed = original.clone();
     changed.terms[0].content[1] = Inline::Emphasis {
@@ -164,12 +170,15 @@ fn shared_owner_proofs_still_reject_source_style_and_identity_changes() {
         }],
     };
     assert_eq!(evidence.role(&changed), None);
-    assert!(evidence.operands(&changed).is_none());
+    assert!(matches!(
+        evidence.operands(&changed),
+        HeadOperands::Unavailable
+    ));
 
     changed = original;
     changed.terms[0].content[0] = Inline::anchor("\0mant-native-definition-owner:1e");
     assert_eq!(evidence.role(&changed), None);
-    assert!(evidence.operands(&changed).is_none());
+    assert!(matches!(evidence.operands(&changed), HeadOperands::Absent));
 }
 
 #[test]
@@ -188,9 +197,55 @@ fn a_continued_group_cannot_rewrite_an_earlier_operand_or_role_proof() {
     evidence.groups.continued(&continued, 30);
     assert!(evidence.groups.shared_head(&continued).is_some());
     assert_eq!(evidence.role(&continued), None);
-    assert!(evidence.operands(&continued).is_none());
+    assert!(matches!(
+        evidence.operands(&continued),
+        HeadOperands::Unavailable
+    ));
     assert_eq!(evidence.role(&original), Some(NativeHeadRole::Environment));
-    assert!(evidence.operands(&original).is_some());
+    assert!(matches!(
+        evidence.operands(&original),
+        HeadOperands::Accepted(_)
+    ));
+}
+
+#[test]
+#[cfg(feature = "roff")]
+fn continuation_retains_independent_operand_states() {
+    let (original, mut evidence) = recorded_owner();
+    let mut stale = item();
+    super::super::groups::mark_native_definition_owner(&mut stale, 30);
+    evidence.capture_operands(
+        40,
+        CapturedHeadOperands {
+            text: "PATH".into(),
+            operands: vec![NativeOperand {
+                bytes: 0..4,
+                role: NativeOperandRole::Argument,
+            }],
+        },
+    );
+    evidence.record_operands(&stale, 40);
+    stale.source.as_mut().unwrap().column += 1;
+    let neutral = item();
+    let operands = evidence.combine_operands([&original, &stale, &neutral].into_iter());
+    let mut composed = original.clone();
+    composed.terms.extend(stale.terms);
+    composed.terms.extend(neutral.terms);
+    evidence.continue_definition(&composed, 50, operands);
+    let proof = evidence.operands(&composed);
+    assert_eq!(proof.for_term(0).unwrap()[0].bytes, 0..4);
+    assert!(proof.for_term(1).is_none());
+    assert!(proof.for_term(2).unwrap().is_empty());
+    assert_eq!(
+        evidence.operands(&original).for_term(0).unwrap()[0].bytes,
+        0..4
+    );
+    // Equal text and source coordinates cannot authorize a different owner.
+    composed.terms[1].content[0] = Inline::anchor("\0mant-native-definition-owner:40");
+    assert!(matches!(
+        evidence.operands(&composed),
+        HeadOperands::Unavailable
+    ));
 }
 
 #[test]
@@ -291,7 +346,10 @@ fn publication_rebinds_only_the_proved_owner_once() {
         unreachable!()
     };
     assert_eq!(evidence.role(&items[0]), Some(NativeHeadRole::Environment));
-    assert_eq!(evidence.operands(&items[0]).unwrap()[0][0].bytes, 0..4);
+    assert_eq!(
+        evidence.operands(&items[0]).for_term(0).unwrap()[0].bytes,
+        0..4
+    );
     assert!(evidence.groups.shared_head(&items[0]).is_some());
     assert_eq!(evidence.role(&items[1]), None);
     assert!(evidence.groups.shared_head(&items[1]).is_none());
@@ -314,7 +372,7 @@ fn publication_refuses_duplicated_owner_markers() {
     };
     for item in items {
         assert_eq!(evidence.role(item), None);
-        assert!(evidence.operands(item).is_none());
+        assert!(matches!(evidence.operands(item), HeadOperands::Unavailable));
         assert!(evidence.groups.shared_head(item).is_none());
     }
 }

@@ -80,8 +80,12 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     // pair. Joining it to a prior empty TP would attach its BODY to the
     // earlier declaration and invalidate its exact head-role evidence.
     let merge = if macro_name == Some(&Man(ManMacro::Tq)) && !independent_mark {
-        last_definition_location(output, indent_columns)
-            .map_or(DefinitionMerge::None, DefinitionMerge::From)
+        last_definition_location(output, indent_columns).map_or(DefinitionMerge::None, |location| {
+            DefinitionMerge::From {
+                location,
+                last_key: std::ptr::from_ref(node) as usize,
+            }
+        })
     } else {
         DefinitionMerge::None
     };
@@ -105,6 +109,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     emit_man_definition(
         output,
         list_state,
+        context,
         ManDefinitionEmission {
             item,
             source: source_span(node),
@@ -116,17 +121,6 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
             ip_run,
         },
     );
-    if macro_name == Some(&Man(ManMacro::Tq))
-        && !independent_mark
-        && let Some(Block::DefinitionList { items, .. }) = output.last()
-        && let Some(item) = items.last()
-    {
-        context
-            .native_heads
-            .borrow_mut()
-            .groups
-            .continued(item, std::ptr::from_ref(node) as usize);
-    }
 }
 
 struct ManDefinitionEmission {
@@ -143,43 +137,31 @@ struct ManDefinitionEmission {
 fn emit_man_definition(
     output: &mut Vec<Block>,
     list_state: &mut ManListState,
+    context: &LoweringContext<'_>,
     emission: ManDefinitionEmission,
 ) {
-    let ManDefinitionEmission {
-        item,
-        source,
-        indent_columns,
-        spacing_before,
-        max_width,
-        ordinal,
-        merge,
-        ip_run,
-    } = emission;
-    if let Some(run) = ip_run {
+    if let Some(run) = emission.ip_run {
         list_state.reset();
-        append_ip_marked_list(output, item, indent_columns, spacing_before, source, run);
-    } else {
-        if let Some(marker) = ordinal {
-            append_ordered(
-                output,
-                item,
-                indent_columns,
-                spacing_before,
-                source,
-                marker,
-                list_state,
-            );
-            return;
-        }
-        append_definition(
+        append_ip_marked_list(
             output,
-            item,
-            indent_columns,
-            spacing_before,
-            source,
-            max_width,
-            merge,
+            emission.item,
+            emission.indent_columns,
+            emission.spacing_before,
+            emission.source,
+            run,
         );
+    } else if let Some(marker) = emission.ordinal {
+        append_ordered(
+            output,
+            emission.item,
+            emission.indent_columns,
+            emission.spacing_before,
+            emission.source,
+            marker,
+            list_state,
+        );
+    } else {
+        append_definition(output, context, emission);
         list_state.reset();
     }
 }
@@ -268,7 +250,10 @@ struct DefinitionLocation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DefinitionMerge {
     None,
-    From(DefinitionLocation),
+    From {
+        location: DefinitionLocation,
+        last_key: usize,
+    },
 }
 
 fn last_definition_location(
@@ -370,13 +355,18 @@ fn append_ip_continuation(
 
 fn append_definition(
     output: &mut Vec<Block>,
-    mut item: DefinitionItem,
-    indent_columns: crate::mandoc::layout::SourceIndent,
-    paragraph_distance: u16,
-    source: Option<mant_ir::SourceSpan>,
-    max_term_width: usize,
-    merge: DefinitionMerge,
+    context: &LoweringContext<'_>,
+    emission: ManDefinitionEmission,
 ) -> DefinitionLocation {
+    let ManDefinitionEmission {
+        mut item,
+        indent_columns,
+        spacing_before: paragraph_distance,
+        source,
+        max_width: max_term_width,
+        merge,
+        ..
+    } = emission;
     let block_index = output.len().saturating_sub(1);
     if let Some(Block::DefinitionList { items, compact, .. }) = output
         .last_mut()
@@ -384,19 +374,23 @@ fn append_definition(
     {
         {
             let first_pending = match merge {
-                DefinitionMerge::From(location)
+                DefinitionMerge::From { location, last_key }
                     if location.block == block_index
                         && location.item < items.len()
                         && items[location.item..]
                             .iter()
                             .all(|pending| pending.description.is_empty()) =>
                 {
-                    Some(location.item)
+                    Some((location.item, last_key))
                 }
-                DefinitionMerge::None | DefinitionMerge::From(_) => None,
+                DefinitionMerge::None | DefinitionMerge::From { .. } => None,
             };
-            if let Some(first_pending) = first_pending {
+            if let Some((first_pending, last_key)) = first_pending {
+                let mut evidence = context.native_heads.borrow_mut();
+                let operands = evidence
+                    .combine_operands(items[first_pending..].iter().chain(std::iter::once(&item)));
                 prepend_definition_heads(&mut item, items.drain(first_pending..));
+                evidence.continue_definition(&item, last_key, operands);
                 // Explicit TQ tags retain their source order and one owner;
                 // this does not assert semantic name equivalence.
                 // Adding earlier TQ heads can tighten width fitting, but

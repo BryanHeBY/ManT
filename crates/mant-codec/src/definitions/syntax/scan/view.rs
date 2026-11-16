@@ -33,7 +33,7 @@ impl<'a> HeadView<'a> {
         view.literal_starts = operands
             .iter()
             .filter_map(|operand| {
-                if operand.role == NativeOperandRole::Argument {
+                if operand.role.is_parameter() {
                     return None;
                 }
                 let text = view.text.get(operand.bytes.clone())?;
@@ -105,11 +105,11 @@ impl<'a> HeadView<'a> {
 
     pub(super) fn is_parameter(&self, offset: usize) -> bool {
         if let Some(operand) = self.operand(offset) {
-            match operand.role {
-                NativeOperandRole::Argument => return true,
-                NativeOperandRole::ExplicitOption => return false,
-                #[cfg(any(feature = "roff", test))]
-                NativeOperandRole::Literal => {}
+            if operand.role.is_parameter() {
+                return true;
+            }
+            if operand.role == NativeOperandRole::ExplicitOption {
+                return false;
             }
         }
         let style = self.style(offset);
@@ -122,7 +122,7 @@ impl<'a> HeadView<'a> {
 
     pub(super) fn explicit_argument(&self, offset: usize) -> bool {
         self.operand(offset)
-            .is_some_and(|operand| operand.role == NativeOperandRole::Argument)
+            .is_some_and(|operand| operand.role.is_parameter())
     }
 
     pub(super) fn explicit_option(&self, offset: usize) -> bool {

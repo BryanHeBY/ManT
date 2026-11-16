@@ -164,7 +164,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             });
         }
         Some(Mdoc(MdocMacro::Ar)) => builder.with_native_operand_role(
-            crate::definitions::NativeOperandRole::Argument,
+            crate::definitions::NativeOperandRole::Placeholder,
             |builder| {
                 // `Ar` dispatches through termp_under_pre, then its actual
                 // children. A child's font escape does not rename the

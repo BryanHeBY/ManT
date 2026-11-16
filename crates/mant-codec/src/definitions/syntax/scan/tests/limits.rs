@@ -32,7 +32,7 @@ fn name_limit_is_distinct_from_an_unsupported_weak_head() {
             &item,
             crate::definitions::context::DefinitionContext::Generic,
             Some(crate::definitions::NativeHeadRole::Option),
-            None,
+            crate::definitions::evidence::HeadOperands::Absent,
         );
         assert_eq!(inferred.limit, None);
     }

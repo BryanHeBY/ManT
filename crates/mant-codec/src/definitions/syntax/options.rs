@@ -1,6 +1,6 @@
 //! options recognition; complete forms retain their role-specific grammar.
 use super::forms;
-use crate::definitions::RecognizedName;
+use crate::definitions::{RecognizedName, evidence::HeadOperands};
 #[cfg(test)]
 use mant_ir::DefinitionItem;
 use mant_ir::Inline;
@@ -24,12 +24,12 @@ pub(crate) fn option_names_from_terms(terms: &[impl AsRef<[Inline]>]) -> Vec<Str
 pub(crate) fn option_occurrences_from_terms(
     terms: &[impl AsRef<[Inline]>],
 ) -> Vec<Vec<RecognizedName>> {
-    option_occurrences_with_operands(terms, None)
+    option_occurrences_with_operands(terms, HeadOperands::Absent)
 }
 
 fn option_occurrences_with_operands(
     terms: &[impl AsRef<[Inline]>],
-    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
+    operands: HeadOperands<'_>,
 ) -> Vec<Vec<RecognizedName>> {
     scan_option_occurrences(terms, operands).occurrences
 }
@@ -41,19 +41,18 @@ pub(super) struct OptionOccurrences {
 
 fn scan_option_occurrences(
     terms: &[impl AsRef<[Inline]>],
-    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
+    operands: HeadOperands<'_>,
 ) -> OptionOccurrences {
     let mut result = OptionOccurrences {
         occurrences: Vec::with_capacity(terms.len()),
         limit: None,
     };
     for (index, term) in terms.iter().enumerate() {
-        let scanned = super::scan::option_head(
-            term.as_ref(),
-            operands
-                .and_then(|terms| terms.get(index))
-                .map_or(&[], Vec::as_slice),
-        );
+        let Some(operands) = operands.for_term(index) else {
+            result.occurrences.push(Vec::new());
+            continue;
+        };
+        let scanned = super::scan::option_head(term.as_ref(), operands);
         result.limit = result.limit.or(scanned.limit);
         result.occurrences.push(scanned.names);
     }
@@ -65,7 +64,7 @@ fn scan_option_occurrences(
 /// alias punctuation; styled arguments still stop the literal prefix.
 pub(super) fn native_option_occurrences(
     terms: &[impl AsRef<[Inline]>],
-    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
+    operands: HeadOperands<'_>,
 ) -> OptionOccurrences {
     let mut result = scan_option_occurrences(terms, operands);
     if result.limit.is_some() {
@@ -95,7 +94,7 @@ pub(super) fn native_option_occurrences(
 
 pub(in crate::definitions) fn parameter_occurrences(
     terms: &[impl AsRef<[Inline]>],
-    operands: Option<&[Vec<crate::definitions::NativeOperand>]>,
+    operands: HeadOperands<'_>,
 ) -> Vec<Vec<RecognizedName>> {
     let mut found = option_occurrences_with_operands(terms, operands);
     for (term, names) in terms.iter().zip(&mut found) {

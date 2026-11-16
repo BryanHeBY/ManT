@@ -1,12 +1,16 @@
 //! Carry already proved native heads through the one publication of their
 //! accepted inline roots. Neither source coordinates nor label text can
 //! select a witness for another owner.
-use super::{NativeHeadEvidence, NativeOperand, head_snapshot, native_owner, publication_matches};
+use super::{
+    NativeHeadEvidence, NativeOperand, TermOperands, head_snapshot, native_owner,
+    publication_matches,
+};
 use mant_ir::{
     Block, DefinitionItem, Heading, Inline, Section,
     visit::{self, Visit, VisitMut},
 };
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Default)]
 struct Owners(HashMap<usize, usize>);
@@ -134,17 +138,12 @@ impl<F: FnMut(&mut Vec<Inline>) -> bool> Publisher<'_, F> {
                         && publication_matches(&item.terms, &witness.terms)
                 });
         let operands = unique
-            && self
-                .evidence
-                .operand_witnesses
-                .get(&owner)
-                .is_some_and(|witness| {
-                    Some(witness.source) == item.source
-                        && publication_matches(&item.terms, &witness.terms)
-                });
+            .then(|| self.evidence.matching_operand_witness(item, owner))
+            .flatten()
+            .map(|(index, _)| index);
         let changed = self.publish_terms(item);
         let same_owner = unique && native_owner(item) == Some(owner);
-        let head = (changed && same_owner && (group.is_some() || role || operands))
+        let head = (changed && same_owner && (group.is_some() || role || operands.is_some()))
             .then(|| head_snapshot(&item.terms));
 
         self.evidence
@@ -157,20 +156,34 @@ impl<F: FnMut(&mut Vec<Inline>) -> bool> Publisher<'_, F> {
         {
             witness.terms = head.clone();
         }
-        if !same_owner || !operands {
-            self.evidence.operand_witnesses.remove(&owner);
-        } else if let Some(head) = head
-            && let Some(witness) = self.evidence.operand_witnesses.get_mut(&owner)
-        {
-            for ((operands, before), after) in witness
-                .operands
-                .iter_mut()
-                .zip(witness.terms.iter())
-                .zip(head.iter())
-            {
-                retain_unchanged_operands(operands, before, after);
+        if let Some(witnesses) = self.evidence.operand_witnesses.get_mut(&owner) {
+            if let Some(index) = operands.filter(|_| same_owner) {
+                let mut witness = witnesses.swap_remove(index);
+                witnesses.clear();
+                if let Some(head) = head {
+                    for ((term, before), after) in witness
+                        .operands
+                        .iter_mut()
+                        .zip(witness.terms.iter())
+                        .zip(head.iter())
+                    {
+                        if let TermOperands::Accepted(operands) = term {
+                            let operands = Rc::make_mut(operands);
+                            let count = operands.len();
+                            retain_unchanged_operands(operands, before, after);
+                            if operands.len() != count {
+                                *term = TermOperands::Unavailable;
+                            }
+                        }
+                    }
+                    witness.terms = head;
+                }
+                witnesses.push(witness);
+            } else {
+                // A failed receipt is distinct from a head with no native
+                // constraints. Keep this owner's rejection through lookup.
+                witnesses.clear();
             }
-            witness.terms = head;
         }
     }
 }
