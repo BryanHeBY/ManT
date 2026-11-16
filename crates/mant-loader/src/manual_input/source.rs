@@ -388,6 +388,64 @@ mod tests {
     }
 
     #[test]
+    fn indexed_aliases_follow_the_static_roff_request_lexicon() {
+        struct Scratch(std::path::PathBuf);
+        impl Drop for Scratch {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+
+        let root = std::env::temp_dir().join(format!("mant-alias-lexicon-{}", process::id()));
+        fs::create_dir(&root).expect("create scratch");
+        let scratch = Scratch(root);
+        let section = scratch.0.join("man1");
+        fs::create_dir(&section).unwrap();
+        fs::write(
+            section.join("target.1"),
+            ".TH ALIAS-TARGET 1\n.SH NAME\nUNIQUE_TARGET_BODY\n",
+        )
+        .unwrap();
+        let page = ManualPage {
+            name: "alias".to_owned(),
+            section: "1".to_owned(),
+            path: section.join("alias.1"),
+            manual_root: scratch.0.clone(),
+        };
+
+        // Every source here resolved to the named page in fixed CVS UTF-8.
+        // read.c skips the opening BOM. roff_getcontrol skips horizontal
+        // whitespace after the mark, and roff_parseln skips empty requests.
+        for bom in ["", "\u{feff}"] {
+            for control in [".", ". ", ".\t", "' ", r"\."] {
+                for prefix in ["", "\n", ". \t\n", ". \t\\\" ignored\n"] {
+                    for request in ["so", "soquiet"] {
+                        for newline in ["\n", "\r\n"] {
+                            let source = format!("{bom}{prefix}{control}{request} target.1\n")
+                                .replace('\n', newline);
+                            fs::write(&page.path, &source).unwrap();
+                            let document = parse_manual_page(&page)
+                                .unwrap_or_else(|error| panic!("{source:?}: {error}"));
+                            assert_eq!(document.meta.alias_target.as_deref(), Some("target.1"));
+                            assert_eq!(document.meta.title.as_deref(), Some("ALIAS-TARGET"));
+                            assert_eq!(
+                                document.source.path.as_deref(),
+                                Some(page.path.to_string_lossy().as_ref())
+                            );
+                            let [mant_ir::Block::Paragraph { children, .. }] =
+                                document.sections[0].blocks.as_slice()
+                            else {
+                                panic!("redirect lost the target's paragraph: {source:?}");
+                            };
+                            assert_eq!(mant_ir::inline_plain_text(children), "UNIQUE_TARGET_BODY");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn redirect_chains_find_compressed_targets_under_the_manual_root() {
         let root = std::env::temp_dir().join(format!("mant-root-so-{}", process::id()));
         let man1 = root.join("man1");

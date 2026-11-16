@@ -18,69 +18,89 @@ impl std::error::Error for RedirectSyntaxError {}
 /// # Errors
 /// Returns [`RedirectSyntaxError`] when an alias has missing or extra operands.
 pub fn redirect_target(source: &[u8]) -> Result<Option<Vec<u8>>, RedirectSyntaxError> {
-    let mut payloads = Vec::new();
-    let mut has_other_content = false;
+    // read.c skips the UTF-8 BOM only at the beginning of the input.
+    let source = source.strip_prefix(b"\xef\xbb\xbf").unwrap_or(source);
+    let mut payload = None;
 
     for raw_line in source.split(|byte| *byte == b'\n') {
         let line = raw_line.strip_suffix(b"\r").unwrap_or(raw_line);
-        if trim_ascii(line).is_empty() || is_roff_comment(line) {
+        let Some(line) = static_line(line) else {
+            return Ok(None);
+        };
+        if line.iter().copied().all(horizontal_space) {
             continue;
         }
-        let Some(payload) = so_request_payload(line) else {
-            has_other_content = true;
-            continue;
+        // roff.c::roff_getcontrol accepts . / ' / \. and skips horizontal
+        // space *after* the control character. Source that changes the
+        // control character or executes another request stays with the parser.
+        let Some(request) = line
+            .strip_prefix(b".")
+            .or_else(|| line.strip_prefix(b"'"))
+            .or_else(|| line.strip_prefix(b"\\."))
+        else {
+            return Ok(None);
         };
-        payloads.push(payload);
+        let request = trim_horizontal(request);
+        if request.is_empty() {
+            continue;
+        }
+        let name_end = request
+            .iter()
+            .copied()
+            .position(horizontal_space)
+            .unwrap_or(request.len());
+        if !matches!(&request[..name_end], b"so" | b"soquiet")
+            || payload.replace(&request[name_end..]).is_some()
+        {
+            return Ok(None);
+        }
     }
 
-    match (payloads.as_slice(), has_other_content) {
-        ([payload], false) => parse_so_target(payload).map(Some),
-        // An embedded include is not an alias. Leave it in the source so the
-        // safe libmandoc policy emits a diagnostic and preserves surrounding
-        // content instead of rejecting the complete page before parsing.
+    // An embedded include stays in the source, so libmandoc can apply its
+    // include policy while preserving the surrounding content.
+    // Interpolated paths belong to roff execution.
+    match payload {
+        Some(payload) if !payload.contains(&b'\\') => parse_so_target(payload).map(Some),
         _ => Ok(None),
     }
 }
 
-fn so_request_payload(line: &[u8]) -> Option<&[u8]> {
-    let request = line
-        .strip_prefix(b".")
-        .or_else(|| line.strip_prefix(b"'"))?;
-    let name_end = request
-        .iter()
-        .position(u8::is_ascii_whitespace)
-        .unwrap_or(request.len());
-    matches!(&request[..name_end], b"so" | b"soquiet").then_some(&request[name_end..])
+fn static_line(line: &[u8]) -> Option<&[u8]> {
+    // roff_parse_comment runs before the control lookup. A hash comment
+    // or a trailing escape joins physical lines, so neither proves an
+    // independent static redirect. The parser owns those cases.
+    let mut rest = line;
+    while let Some(index) = rest.iter().position(|byte| *byte == b'\\') {
+        match rest.get(index + 1) {
+            Some(b'"') => return Some(&line[..line.len() - rest.len() + index]),
+            Some(b'#') | None => return None,
+            _ => rest = &rest[index + 2..],
+        }
+    }
+    Some(line)
 }
 
 fn parse_so_target(payload: &[u8]) -> Result<Vec<u8>, RedirectSyntaxError> {
-    let payload = trim_ascii(payload);
-    let target_end = payload
-        .iter()
-        .position(u8::is_ascii_whitespace)
-        .unwrap_or(payload.len());
-    let target = &payload[..target_end];
-    let trailing = trim_ascii(&payload[target_end..]);
+    let target = trim_horizontal(payload);
     if target.is_empty()
-        || target.contains(&0)
-        || (!trailing.is_empty() && !trailing.starts_with(b"\\\"") && !trailing.starts_with(b"\\#"))
+        || target
+            .iter()
+            .any(|byte| byte.is_ascii_control() || *byte == b' ')
     {
         return Err(RedirectSyntaxError);
     }
     Ok(target.to_vec())
 }
 
-fn is_roff_comment(line: &[u8]) -> bool {
-    [b".\\\"".as_slice(), b"'\\\"", b".\\#", b"'\\#"]
-        .into_iter()
-        .any(|prefix| line.starts_with(prefix))
+fn horizontal_space(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t')
 }
 
-fn trim_ascii(mut value: &[u8]) -> &[u8] {
-    while value.first().is_some_and(u8::is_ascii_whitespace) {
+fn trim_horizontal(mut value: &[u8]) -> &[u8] {
+    while value.first().copied().is_some_and(horizontal_space) {
         value = &value[1..];
     }
-    while value.last().is_some_and(u8::is_ascii_whitespace) {
+    while value.last().copied().is_some_and(horizontal_space) {
         value = &value[..value.len() - 1];
     }
     value
@@ -95,7 +115,7 @@ mod tests {
         for source in [
             b".so man1/target.1\n".as_slice(),
             b".\\\" comment\r\n\r\n'so man1/target.1 \\\" trailing comment\r\n",
-            b".\\# comment\n.so man1/target.1 \\# trailing comment\n",
+            b"\xef\xbb\xbf. \t\n\\\" comment\n. so man1/target.1\\\" trailing comment\n",
         ] {
             assert_eq!(
                 redirect_target(source).unwrap().as_deref(),
@@ -106,6 +126,11 @@ mod tests {
             b".TH INLINE 1\n.so target.1\n".as_slice(),
             b".so first\n.so second\n",
             b".some text\n",
+            b".\\# comment\n.so man1/target.1\n",
+            b".so man1/target.1 \\# joins the subsequent line\n",
+            b".de alias\n.so man1/target.1\n..\n.alias\n",
+            b".so \\*[path]\n",
+            b" .so man1/target.1\n",
             b"",
         ] {
             assert_eq!(redirect_target(source).unwrap(), None);

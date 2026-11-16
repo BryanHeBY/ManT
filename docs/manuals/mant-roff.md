@@ -31,6 +31,12 @@ Input bytes use libmandoc's deterministic UTF-8/Latin-1 detection. A leading UTF
 
 Indexed redirect-only pages containing `.so target` may resolve only to another discovered page inside the same approved manual hierarchy. Standalone `--input` files reject `.so` redirects because no trusted hierarchy accompanies them. An embedded `.so` request is not followed; libmandoc reports the denied include while ManT preserves the surrounding page content.
 
+A redirect-only page may begin with a UTF-8 BOM and contain blank lines,
+empty requests or ordinary roff comments. One static `so` or `soquiet`
+request is recognized after a default roff control mark and optional
+horizontal whitespace. Line continuations and interpolated paths remain
+with the parser.
+
 libmandoc file inclusion is disabled. Requests that read, write, execute, pipe, or include arbitrary files remain denied or ignored by the upstream safe parser. ManT never invokes the host `man`, `groff`, `nroff`, or shell executable.
 
 ## Native-to-IR Semantic Mapping
