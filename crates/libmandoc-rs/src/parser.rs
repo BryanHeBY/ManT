@@ -365,7 +365,7 @@ impl Parser {
             kind: ParseErrorKind::Parse,
             message,
         })?;
-        let mut findings = diagnostics::report_diagnostics(&raw.diagnostics, raw.escape_truncated);
+        let mut findings = diagnostics::report_diagnostics(raw.diagnostics, raw.escape_truncated);
         if raw.node_truncated {
             findings.push(Diagnostic {
                 code: Some(crate::DiagnosticCode::SyntaxTreeDepthLimit),

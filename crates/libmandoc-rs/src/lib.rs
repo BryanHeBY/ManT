@@ -53,7 +53,7 @@ pub const LIBMANDOC_VERSION: &str = "cvs-20261013T025419Z";
 /// Private output of the FFI boundary before diagnostics become public values.
 struct RawDocument {
     document: Document,
-    diagnostics: String,
+    diagnostics: Vec<Diagnostic>,
     node_truncated: bool,
     equation_truncated: bool,
     escape_truncated: bool,
@@ -62,7 +62,7 @@ struct RawDocument {
 #[cfg(feature = "render")]
 struct RawRender {
     output: Vec<u8>,
-    diagnostics: String,
+    diagnostics: Vec<Diagnostic>,
     escape_truncated: bool,
 }
 

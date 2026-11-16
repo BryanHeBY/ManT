@@ -75,7 +75,6 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
 	struct roff_meta			*meta;
-	FILE				*messages;
 	int				 options;
 #ifndef MANDOC_MEMORY_ONLY
 	int				 fd, saved_errno;
@@ -105,9 +104,9 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		return document;
 	}
 #endif
-	if (resolver != NULL && source_resolver != NULL) {
+	if (active_document != NULL) {
 		document->error = copy_string(
-		    "recursive libmandoc source resolver entry is unsupported");
+		    "recursive libmandoc session entry is unsupported");
 		return document;
 	}
 
@@ -128,20 +127,14 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	if (allow_include)
 		options |= MPARSE_SO;
 
-	messages = tmpfile();
-	if (messages == NULL) {
-		document->error = copy_string(
-		    "could not create private diagnostic capture file");
-		return document;
-	}
 #if HAVE_PROGNAME
 	pthread_once(&mant_progname_once, set_mant_progname);
 #else
 	setprogname("mant");
 #endif
-	mandoc_msg_setoutfile(messages);
+	mandoc_msg_setoutfile(NULL);
 	mandoc_msg_setmin(MANDOCERR_BASE);
-	active_escape_document = document;
+	active_document = document;
 	source_resolver = resolver;
 	source_resolver_context = resolver_context;
 #ifndef MANDOC_MEMORY_ONLY
@@ -206,11 +199,14 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	}
 
 cleanup:
-	active_escape_document = NULL;
+	active_document = NULL;
 	mandoc_msg_setinfilename(NULL);
-	mandoc_msg_setoutfile(stderr);
-	document->diagnostics = read_diagnostics(messages);
-	fclose(messages);
+	if (document->diagnostic_error != NULL &&
+	    (document->ok || document->error == NULL)) {
+		document->ok = 0;
+		free(document->error);
+		document->error = copy_string(document->diagnostic_error);
+	}
 	if (parser != NULL)
 		mparse_free(parser);
 	mchars_free();

@@ -252,12 +252,10 @@ and call `parse_bundle`; exact bundle paths and paths beside the including
 source are resolved without callbacks or filesystem fallback. Harmless `.`
 components in an `.so` request are normalized before either the virtual bundle
 or strict Windows root is consulted; `..`, absolute paths, backslashes, and
-empty components remain rejected. Diagnostic
-capture currently uses one
-private anonymous temporary file per native call on platforms where
-`tmpfile(3)` is filesystem-backed. If that capture cannot be created, the call
-returns a typed parse/render failure instead of writing diagnostics to the host
-process's standard error.
+empty components remain rejected. Parser and renderer sessions capture
+diagnostic type, severity, and location directly at native emission. Diagnostic
+source labels are byte strings, and display messages replace invalid UTF-8
+with the Unicode replacement character.
 
 ```rust
 use libmandoc_rs::{Parser, SourceBundle};
@@ -311,7 +309,7 @@ subsequent calls and concurrent sessions cannot inherit it. These codes are
 preserved by the optional Serde feature and by `Diagnostic::code()`, independently
 of the human-readable message. Ordinary native libmandoc findings retain their
 severity and message with no machine code, except for the pinned native
-input-budget error. Its complete Error finding receives
+input-budget error. That native error receives
 `DiagnosticCode::InputProcessingLimit`: macro recursion, expansion or replay
 stopped, even when the safe partial AST retains the rejected syntax as literal
 words. The code does not raise the native limits or replace fatal parse errors.
@@ -333,8 +331,13 @@ when their Rust storage is actually shared. Strings do not consume extra
 syntax items. Equations retain their independent node/byte truncation limits.
 A rejected transfer returns an error and releases the native session; it does
 not return an apparently complete, silently shortened syntax tree. These are
-Rust transfer limits, not a native allocation or process-RSS bound: libmandoc
-may already have accumulated its diagnostic buffer before transfer starts.
+Rust transfer limits, not a process-RSS bound. The native diagnostic collector
+also caps each source label and display message at 4 KiB, with a truncation
+notice on shortened messages. The collector retains up to 4,096 ordinary
+records and 4 MiB of message detail. On reaching these limits it reports
+omitted detail and separately retains the first suppressed input-processing
+limit finding with its source position. The safe parsed or rendered content
+remains available.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.

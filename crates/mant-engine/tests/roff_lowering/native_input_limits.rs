@@ -115,3 +115,93 @@ fn native_input_limits_survive_json_and_all_query_summaries() {
         assert_eq!(excerpt.semantics_complete, !case.limited);
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn native_diagnostic_source_labels_leave_loader_and_query_coverage_intact() {
+    use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt as _, path::PathBuf};
+
+    use mant_loader::{DocumentLoader, LoadPolicy, LoadSpec};
+    use mant_protocol::InputFormat;
+
+    struct Scratch(PathBuf);
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let scratch = Scratch(
+        std::env::temp_dir().join(format!("mant-native-diagnostics-{}", std::process::id())),
+    );
+    fs::create_dir(&scratch.0).unwrap();
+    let loader = DocumentLoader::from_system();
+    let search = SearchQuery {
+        pattern: "AFTER".into(),
+        syntax: mant_protocol::SearchSyntax::Literal,
+        case: mant_protocol::SearchCase::Sensitive,
+        scope: mant_protocol::SearchScope::Visible,
+        word: false,
+        context_lines: 0,
+        limit: 10,
+        offset: 0,
+    };
+    const PREAMBLE: &str =
+        ".TH PROBE 1 2026-11-17\n.SH NAME\nprobe \\- diagnostic capture\n.SH DESCRIPTION\nBEFORE\n";
+    let saturated = ".ab\n".repeat(4097);
+    let late_limit = format!("{saturated}.de A\n.A\n..\n.A\n");
+    for (body, limited) in [
+        (".ZZ input stack limit exceeded, infinite loop?\n", false),
+        (".de A\n.A\n..\n.A\n", true),
+        (saturated.as_str(), false),
+        (late_limit.as_str(), true),
+    ] {
+        // The pinned CVS emits MANDOCERR_MACRO for the first input and
+        // MANDOCERR_ROFFLOOP for the second, retaining BEFORE and AFTER.
+        let source = format!("{PREAMBLE}{body}AFTER\n");
+        let baseline = scratch.0.join("probe.1");
+        fs::write(&baseline, &source).unwrap();
+        let expected = mant_loader::parse_manual_source_with_report(&baseline).unwrap();
+        for name in [
+            OsString::from("probe: ERROR: page.1"),
+            OsString::from("probe: UNSUPP: page.1"),
+            OsString::from_vec(b"probe-\xff.1".to_vec()),
+        ] {
+            let path = scratch.0.join(name);
+            fs::write(&path, &source).unwrap();
+            let (document, report) = mant_loader::parse_manual_source_with_report(&path).unwrap();
+            assert_eq!(report, expected.1, "{path:?}");
+            assert_eq!(document.diagnostics, expected.0.diagnostics, "{path:?}");
+            assert_eq!(mant_ir::content_complete(&document.diagnostics), !limited);
+            let Some(path) = path.to_str() else {
+                // This is an actual opaque Unix path. The Path API above
+                // has no obligation to invent UTF-8 for the CLI.
+                continue;
+            };
+            let content = loader
+                .load(
+                    LoadSpec::File {
+                        path,
+                        format: InputFormat::Roff,
+                    },
+                    LoadPolicy::Combined,
+                )
+                .unwrap();
+            let encoded = serde_json::to_string(&QueryBundle::from(&content)).unwrap();
+            let decoded: QueryBundle = serde_json::from_str(&encoded).unwrap();
+            let restored: ResolvedContent = decoded.into();
+            let searched = mant_query::search_query(&restored, &search).unwrap();
+            assert_eq!(searched.total, 1);
+            assert_eq!(searched.content_complete, !limited);
+            let explained = mant_query::explain_query(
+                &restored,
+                &ExplanationQuery {
+                    entry: "AFTER".into(),
+                    options: mant_protocol::ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert_eq!(explained.content_complete, !limited);
+            assert_eq!(explained.semantics_complete, !limited);
+        }
+    }
+}

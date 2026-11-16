@@ -377,7 +377,7 @@ impl Renderer {
         })?;
         Ok(RenderReport {
             output,
-            diagnostics: diagnostics::report_diagnostics(&raw.diagnostics, raw.escape_truncated),
+            diagnostics: diagnostics::report_diagnostics(raw.diagnostics, raw.escape_truncated),
         })
     }
 

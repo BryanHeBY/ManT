@@ -2,7 +2,7 @@
 #[cfg(windows)]
 use super::windows_root;
 use super::{
-    owned::optional_string,
+    owned::{TransferBudget, copy_diagnostics, optional_string},
     raw::{self, CDocument},
     session::{BundleSources, DocumentHandle, input_format_code},
 };
@@ -172,15 +172,15 @@ fn copy_render(pointer: *mut CDocument) -> Result<RawRender, NativeRenderError> 
             message: "libmandoc returned an invalid render buffer".to_owned(),
         });
     }
+    let diagnostics = copy_diagnostics(&handle, &mut TransferBudget::default())
+        .map_err(|message| NativeRenderError { status: 2, message })?;
     Ok(RawRender {
         output: if length == 0 {
             Vec::new()
         } else {
             unsafe { std::slice::from_raw_parts(output, length) }.to_vec()
         },
-        diagnostics: unsafe {
-            optional_string(raw::mant_mandoc_document_diagnostics(document)).unwrap_or_default()
-        },
+        diagnostics,
         escape_truncated: unsafe { raw::mant_mandoc_document_escape_depth_truncated(document) }
             != 0,
     })

@@ -59,3 +59,6 @@
 
 # Nullable table span owners
 0038-allow-empty-tbl-span-owners.patch
+
+# Typed embedding diagnostics
+0039-capture-typed-diagnostics.patch

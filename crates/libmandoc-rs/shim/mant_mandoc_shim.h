@@ -264,7 +264,25 @@ int mant_mandoc_source_open(const char *, int, ...);
 
 int mant_mandoc_document_ok(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_error(const struct mant_mandoc_document *);
-const char *mant_mandoc_document_diagnostics(const struct mant_mandoc_document *);
+
+/* Owned by the document. Source and message are raw display bytes. */
+struct mant_mandoc_diagnostic_view {
+	const unsigned char	*source;
+	size_t			 source_length;
+	const unsigned char	*message;
+	size_t			 message_length;
+	unsigned int		 kind;
+	unsigned int		 level;
+	unsigned int		 line;
+	unsigned int		 column;
+};
+size_t mant_mandoc_document_diagnostic_count(const struct mant_mandoc_document *);
+int mant_mandoc_document_diagnostic(const struct mant_mandoc_document *,
+    size_t, struct mant_mandoc_diagnostic_view *);
+size_t mant_mandoc_diagnostic_view_size(void);
+size_t mant_mandoc_diagnostic_view_align(void);
+const size_t *mant_mandoc_diagnostic_view_offsets(size_t *);
+
 int mant_mandoc_document_macroset(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_title(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_section(const struct mant_mandoc_document *);

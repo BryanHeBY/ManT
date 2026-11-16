@@ -1,0 +1,38 @@
+Subject: capture native diagnostic metadata before display formatting
+Upstream-Status: Inappropriate [private synchronous embedding result]
+
+Pass diagnostic code, severity, source and formatted detail to the embedding
+session before introducing any display prefix. The ordinary writer remains
+available outside an embedding session.
+
+--- a/mandoc_msg.c
++++ b/mandoc_msg.c
+@@ -25,6 +25,7 @@
+ #include <stdlib.h>
+ 
+ #include "mandoc.h"
++#include "mant_mandoc_diagnostic_capture.h"
+ 
+ static	const enum mandocerr lowest_type[MANDOCLEVEL_MAX] = {
+ 	MANDOCERR_OK,
+@@ -348,6 +349,7 @@
+ {
+ 	va_list			 ap;
+ 	enum mandoclevel	 level;
++	int			 captured;
+ 
+ 	if (t < min_type)
+ 		return;
+@@ -357,7 +359,11 @@
+ 		level--;
+ 	mandoc_msg_setrc(level);
+ 
+-	if (fileptr == NULL)
++	va_start(ap, fmt);
++	captured = mant_mandoc_capture_diagnostic(t, level, filename, line, col,
++	    type_message[t], fmt, &ap);
++	va_end(ap);
++	if (captured || fileptr == NULL)
+ 		return;
+ 
+ 	fprintf(fileptr, "%s:", getprogname());

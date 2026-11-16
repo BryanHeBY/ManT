@@ -25,6 +25,7 @@
 #include <stdlib.h>
 
 #include "mandoc.h"
+#include "mant_mandoc_diagnostic_capture.h"
 
 static	const enum mandocerr lowest_type[MANDOCLEVEL_MAX] = {
 	MANDOCERR_OK,
@@ -348,6 +349,7 @@ mandoc_msg(enum mandocerr t, int line, int col, const char *fmt, ...)
 {
 	va_list			 ap;
 	enum mandoclevel	 level;
+	int			 captured;
 
 	if (t < min_type)
 		return;
@@ -357,7 +359,11 @@ mandoc_msg(enum mandocerr t, int line, int col, const char *fmt, ...)
 		level--;
 	mandoc_msg_setrc(level);
 
-	if (fileptr == NULL)
+	va_start(ap, fmt);
+	captured = mant_mandoc_capture_diagnostic(t, level, filename, line, col,
+	    type_message[t], fmt, &ap);
+	va_end(ap);
+	if (captured || fileptr == NULL)
 		return;
 
 	fprintf(fileptr, "%s:", getprogname());

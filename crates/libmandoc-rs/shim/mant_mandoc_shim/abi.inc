@@ -184,3 +184,33 @@ mant_mandoc_eqn_box_view_offsets(size_t *count)
 	return offsets;
 }
 
+size_t
+mant_mandoc_diagnostic_view_size(void)
+{
+	return sizeof(struct mant_mandoc_diagnostic_view);
+}
+
+size_t
+mant_mandoc_diagnostic_view_align(void)
+{
+	return MANT_VIEW_ALIGNOF(struct mant_mandoc_diagnostic_view);
+}
+
+const size_t *
+mant_mandoc_diagnostic_view_offsets(size_t *count)
+{
+	static const size_t offsets[] = {
+		offsetof(struct mant_mandoc_diagnostic_view, source),
+		offsetof(struct mant_mandoc_diagnostic_view, source_length),
+		offsetof(struct mant_mandoc_diagnostic_view, message),
+		offsetof(struct mant_mandoc_diagnostic_view, message_length),
+		offsetof(struct mant_mandoc_diagnostic_view, kind),
+		offsetof(struct mant_mandoc_diagnostic_view, level),
+		offsetof(struct mant_mandoc_diagnostic_view, line),
+		offsetof(struct mant_mandoc_diagnostic_view, column),
+	};
+	if (count != NULL)
+		*count = sizeof(offsets) / sizeof(offsets[0]);
+	return offsets;
+}
+

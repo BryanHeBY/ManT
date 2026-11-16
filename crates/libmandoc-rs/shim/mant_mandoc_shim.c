@@ -33,6 +33,7 @@
 #include "out.h"
 #include "mandoc_parse.h"
 
+#include "mant_mandoc_diagnostic_capture.h"
 #include "mant_mandoc_shim.h"
 #ifdef _MSC_VER
 #define MANT_VIEW_ALIGNOF(type) __alignof(type)
@@ -47,10 +48,21 @@
 #include "term_tag.h"
 #endif
 
+struct mant_mandoc_diagnostic {
+	struct mant_mandoc_diagnostic_view view;
+	unsigned char		*storage;
+};
+
 struct mant_mandoc_document {
 	int			 ok;
 	char			*error;
-	char			*diagnostics;
+	struct mant_mandoc_diagnostic *diagnostics;
+	size_t			 diagnostic_count;
+	size_t			 diagnostic_capacity;
+	size_t			 diagnostic_message_bytes;
+	struct mant_mandoc_diagnostic_view omitted_input_limit;
+	const char		*diagnostic_omission;
+	const char		*diagnostic_error;
 	int			 escape_depth_truncated;
 	struct mparse		*parser;
 	const struct roff_meta	*meta;
@@ -66,13 +78,13 @@ struct mant_mandoc_document {
  * diagnostic number or message. The pointer is cleared on every cleanup
  * path before its owning result can be released.
  */
-MANT_THREAD_LOCAL struct mant_mandoc_document *active_escape_document;
+MANT_THREAD_LOCAL struct mant_mandoc_document *active_document;
 
 void
 mant_mandoc_note_escape_depth_limit(void)
 {
-	if (active_escape_document != NULL)
-		active_escape_document->escape_depth_truncated = 1;
+	if (active_document != NULL)
+		active_document->escape_depth_truncated = 1;
 }
 
 int
@@ -173,7 +185,6 @@ static struct mant_mandoc_document *parse_input(const char *,
     int, size_t, int, size_t, mant_mandoc_source_resolver, void *, int);
 static struct mant_mandoc_document *parse_bundle_mode(const char *,
     const struct mant_mandoc_source *, size_t, int, const char *, int);
-static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
 static char *normalize_requested_bundle_path(const char *);
 static int is_safe_bundle_path(const char *);
@@ -194,6 +205,7 @@ static int render_document(struct mant_mandoc_document *,
     const struct roff_meta *, int, size_t, int, size_t);
 #endif
 
+#include "mant_mandoc_shim/diagnostics.inc"
 #include "mant_mandoc_shim/session.inc"
 
 #include "mant_mandoc_shim/render_dispatch.inc"
@@ -201,9 +213,13 @@ static int render_document(struct mant_mandoc_document *,
 void
 mant_mandoc_document_free(struct mant_mandoc_document *document)
 {
+	size_t i;
+
 	if (document == NULL)
 		return;
 	free(document->error);
+	for (i = 0; i < document->diagnostic_count; i++)
+		free(document->diagnostics[i].storage);
 	free(document->diagnostics);
 	if (document->parser != NULL)
 		mparse_free(document->parser);
@@ -301,27 +317,8 @@ set_source_root_directory(const char *directory, const char *path)
 		*last_slash = '\0';
 	}
 }
+
 #endif
-
-static char *
-read_diagnostics(FILE *stream)
-{
-	char	*buffer;
-	long	 length;
-	size_t	 count;
-
-	if (fflush(stream) != 0 || fseek(stream, 0, SEEK_END) != 0)
-		return NULL;
-	length = ftell(stream);
-	if (length <= 0 || fseek(stream, 0, SEEK_SET) != 0)
-		return NULL;
-	buffer = malloc((size_t)length + 1);
-	if (buffer == NULL)
-		return NULL;
-	count = fread(buffer, 1, (size_t)length, stream);
-	buffer[count] = '\0';
-	return buffer;
-}
 
 #include "mant_mandoc_shim/snapshot_normalized.inc"
 static int
@@ -347,12 +344,6 @@ const char *
 mant_mandoc_document_error(const struct mant_mandoc_document *document)
 {
 	return document == NULL ? NULL : document->error;
-}
-
-const char *
-mant_mandoc_document_diagnostics(const struct mant_mandoc_document *document)
-{
-	return document == NULL ? NULL : document->diagnostics;
 }
 
 int

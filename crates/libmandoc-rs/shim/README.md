@@ -12,6 +12,7 @@ compile them separately or define another copy of the session state.
 | Fragment | Responsibility |
 | --- | --- |
 | `session.inc` | Parse entry points and the shared session setup, execution, and cleanup path. |
+| `diagnostics.inc` | Bounded typed diagnostic capture and borrowed record views. |
 | `sources.inc` | Bundle and resolver reads, path validation, and Unix source authorization. |
 | `render_dispatch.inc` | Optional render entry points, depth preflight, and renderer dispatch. |
 | `snapshot_normalized.inc` | Borrowed node flags and normalized macro facts. |

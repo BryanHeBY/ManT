@@ -7,7 +7,7 @@ pub(super) const MAX_OWNED_SYNTAX_ITEMS: usize = 250_000;
 pub(super) const MAX_OWNED_SYNTAX_BYTES: usize = 128 * 1024 * 1024;
 
 #[cfg_attr(not(test), derive(Default))]
-pub(super) struct TransferBudget {
+pub(in crate::ffi) struct TransferBudget {
     pub(super) items: usize,
     pub(super) bytes: usize,
 }

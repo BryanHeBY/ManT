@@ -1,5 +1,6 @@
 //! Immediate borrowed snapshot to owned Rust AST transfer.
 mod budget;
+mod diagnostics;
 mod equations;
 mod nodes;
 mod strings;
@@ -12,7 +13,9 @@ use super::{
     session::DocumentHandle,
 };
 use crate::{Document, Metadata, RawDocument};
-use budget::{EquationBudget, TransferBudget};
+use budget::EquationBudget;
+pub(super) use budget::TransferBudget;
+pub(super) use diagnostics::copy_diagnostics;
 use nodes::{IdentityState, copy_node, macro_set};
 use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
 use strings::checked_string;
@@ -104,13 +107,7 @@ pub(super) fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, Stri
             },
             root,
         },
-        diagnostics: unsafe {
-            checked_string(
-                raw::mant_mandoc_document_diagnostics(document),
-                &mut transfer_budget,
-            )
-        }?
-        .unwrap_or_default(),
+        diagnostics: copy_diagnostics(&handle, &mut transfer_budget)?,
         node_truncated,
         equation_truncated: equation_budget.truncated,
         escape_truncated: unsafe { raw::mant_mandoc_document_escape_depth_truncated(document) }

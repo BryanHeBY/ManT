@@ -18,6 +18,9 @@ that crate was not published for that change.
 - Keep empty tbl text blocks as valid vertical span owners. Parsing and
   rendering a spanning table preserve surrounding content and distinguish a
   cell with no text from a cell containing an empty input row.
+- Capture native diagnostic codes and positions separately from display text.
+  Path spelling no longer changes completeness findings, and Unix path bytes
+  outside UTF-8 no longer prevent loading recoverable manual pages.
 
 ### mant-codec
 

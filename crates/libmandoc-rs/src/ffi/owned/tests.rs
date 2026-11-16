@@ -114,9 +114,13 @@ fn transfer_usage(raw: &RawDocument) -> (usize, usize) {
             visit(child, items, bytes, layouts);
         }
     }
-    let mut items = 0;
+    let mut items = raw.diagnostics.len();
     let metadata = &raw.document.metadata;
-    let mut bytes = raw.diagnostics.len()
+    let mut bytes = raw
+        .diagnostics
+        .iter()
+        .map(|finding| size_of::<crate::Diagnostic>() + finding.message.len())
+        .sum::<usize>()
         + [
             metadata.title.as_deref(),
             metadata.section.as_deref(),
@@ -237,7 +241,7 @@ fn ordinary_fields_columns_metadata_diagnostics_and_table_cells_share_reservatio
     assert_eq!(document.metadata.title.as_deref(), Some("BUDGET"));
     assert_ne!(
         native_report("budget.1", format!("{HEADER}{FIELDS}").as_bytes()).diagnostics,
-        ""
+        [] as [crate::Diagnostic; 0]
     );
     let cells = assert_exact_boundaries("budget.1", CELLS);
     assert!(

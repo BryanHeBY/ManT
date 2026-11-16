@@ -156,6 +156,18 @@ pub(super) struct CResolvedSource {
     pub(super) length: usize,
 }
 
+#[repr(C)]
+pub(super) struct CDiagnosticView {
+    pub(super) source: *const u8,
+    pub(super) source_length: usize,
+    pub(super) message: *const u8,
+    pub(super) message_length: usize,
+    pub(super) kind: u32,
+    pub(super) level: u32,
+    pub(super) line: u32,
+    pub(super) column: u32,
+}
+
 pub(super) type CSourceResolver =
     extern "C" fn(*mut c_void, *const c_char, *const c_char, *mut CResolvedSource) -> i32;
 
@@ -274,7 +286,18 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_document_free(document: *mut CDocument);
     pub(super) fn mant_mandoc_document_ok(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_error(document: *const CDocument) -> *const c_char;
-    pub(super) fn mant_mandoc_document_diagnostics(document: *const CDocument) -> *const c_char;
+    pub(super) fn mant_mandoc_document_diagnostic_count(document: *const CDocument) -> usize;
+    pub(super) fn mant_mandoc_document_diagnostic(
+        document: *const CDocument,
+        index: usize,
+        view: *mut CDiagnosticView,
+    ) -> i32;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_diagnostic_view_size() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_diagnostic_view_align() -> usize;
+    #[cfg(test)]
+    pub(super) fn mant_mandoc_diagnostic_view_offsets(count: *mut usize) -> *const usize;
     pub(super) fn mant_mandoc_document_escape_depth_truncated(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_macroset(document: *const CDocument) -> i32;
     pub(super) fn mant_mandoc_document_title(document: *const CDocument) -> *const c_char;

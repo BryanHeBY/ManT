@@ -1,0 +1,239 @@
+{
+  "oracle": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "preamble": ".TH PROBE 1 2026-11-17\n.SH NAME\nprobe \\- diagnostic capture\n.SH DESCRIPTION\nBEFORE\n",
+  "trailer": "AFTER\n",
+  "utf8Labels": [
+    "probe.1",
+    "手册.1",
+    "probe: page.1",
+    "probe: ERROR: page.1",
+    "probe: UNSUPP: page.1",
+    "probe\n:2:1: ERROR: extra.1"
+  ],
+  "unixOpaqueLabelHex": "70726f62652dff2e31",
+  "oracleBasis": [
+    "mandoc_msg.c::mandoc_msg",
+    "roff.c::roff_unsupp",
+    "read.c input limit"
+  ],
+  "entryPoints": {
+    "bytes": "Parser::parse_bytes and Renderer::render_bytes over each case and label",
+    "files": "Parser::parse_file and Renderer::render_file over Unix labels, portable filename subset on Windows"
+  },
+  "assertions": [
+    "severity",
+    "stable kind",
+    "one-based location",
+    "one record per native emission under the detail limit",
+    "same AST and rendering after changing the path",
+    "safe prefix and suffix",
+    "record and message budgets",
+    "bounded later input loss",
+    "clean follow-up session"
+  ],
+  "cases": [
+    {
+      "id": "plain",
+      "body": "",
+      "finding": null,
+      "sha256": "26d4f57e23d49f6a98faa27f7994bacf43a191ba6ac663b65a63df49b96190ce",
+      "oracleExit": {
+        "tree": 0,
+        "ascii": 0,
+        "utf8": 0,
+        "html": 0,
+        "lint": 0
+      }
+    },
+    {
+      "id": "style",
+      "body": ".fi\n",
+      "finding": {
+        "level": "style",
+        "line": 6,
+        "column": 2,
+        "message": "fill mode already enabled, skipping: fi"
+      },
+      "sha256": "ee2b60fdda3fb5a3fb5be925c6037a8ed681961c1ced551ccf1107a43950e0d7",
+      "oracleExit": {
+        "tree": 1,
+        "ascii": 1,
+        "utf8": 1,
+        "html": 1,
+        "lint": 1
+      }
+    },
+    {
+      "id": "warning",
+      "body": "text\twith tabs\n",
+      "finding": {
+        "level": "warning",
+        "line": 6,
+        "column": 5,
+        "message": "tab in filled text"
+      },
+      "sha256": "87d2051bd476175aa49429f23aa38fff68f8db687c3e6f5e419c778224e8b729",
+      "oracleExit": {
+        "tree": 2,
+        "ascii": 2,
+        "utf8": 2,
+        "html": 2,
+        "lint": 2
+      }
+    },
+    {
+      "id": "unsupported",
+      "body": ".ab\n",
+      "finding": {
+        "level": "unsupported",
+        "line": 6,
+        "column": 2,
+        "message": "unsupported roff request: ab"
+      },
+      "sha256": "60154bb90305f01a0a40f57d5b8eaeaec1a2479587b6700b225011750303f3d1",
+      "oracleExit": {
+        "tree": 4,
+        "ascii": 4,
+        "utf8": 4,
+        "html": 4,
+        "lint": 4
+      }
+    },
+    {
+      "id": "ordinary-error-same-words",
+      "body": ".ZZ input stack limit exceeded, infinite loop?\n",
+      "finding": {
+        "level": "error",
+        "line": 6,
+        "column": 2,
+        "message": "skipping unknown macro: .ZZ input stack limit exceeded, infinite loop?"
+      },
+      "sha256": "c1ec276f89784898f0e3af40abc61e23350f1653887ec1779179876facb93473",
+      "oracleExit": {
+        "tree": 3,
+        "ascii": 3,
+        "utf8": 3,
+        "html": 3,
+        "lint": 3
+      }
+    },
+    {
+      "id": "ordinary-error-display-marker",
+      "body": ".ZZ : UNSUPP: input stack limit exceeded, infinite loop?\n",
+      "finding": {
+        "level": "error",
+        "line": 6,
+        "column": 2,
+        "message": "skipping unknown macro: .ZZ : UNSUPP: input stack limit exceeded, infinite loop?"
+      },
+      "sha256": "f957307bf2aca97f1fdd7dd917a2ec5b3668bbf7b5a64bf1875e35bb99665441",
+      "oracleExit": {
+        "tree": 3,
+        "ascii": 3,
+        "utf8": 3,
+        "html": 3,
+        "lint": 3
+      }
+    },
+    {
+      "id": "input-limit",
+      "body": ".de A\n.A\n..\n.A\n",
+      "finding": {
+        "level": "error",
+        "line": 9,
+        "column": 4,
+        "message": "input stack limit exceeded, infinite loop?",
+        "kind": "inputProcessingLimit"
+      },
+      "sha256": "6b45da1d7d12dd5c0920d2b2ef1ac5f2c19e09b8ab90a2df36572be1450dbdbe",
+      "oracleExit": {
+        "tree": 3,
+        "ascii": 3,
+        "utf8": 3,
+        "html": 3,
+        "lint": 3
+      }
+    }
+  ],
+  "generatedCases": [
+    {
+      "id": "single-long-detail",
+      "recipe": "one .ZZ request with 5000 x bytes",
+      "retained": 1,
+      "sha256": "493cae8d3d8c8ec06e7abdfec18f0a86ab6e58989243ebb6000a5ca230ae5a57",
+      "oracleExit": {
+        "tree": 3,
+        "ascii": 3,
+        "utf8": 3,
+        "html": 3,
+        "lint": 3
+      }
+    },
+    {
+      "id": "exact-record-limit",
+      "recipe": "4096 .ab requests",
+      "retained": 4096,
+      "sha256": "4ef3b7facea7da7b809647cbec162e5a5440053556fa549933a63d0db3c63134",
+      "oracleExit": {
+        "tree": 4,
+        "ascii": 4,
+        "utf8": 4,
+        "html": 4,
+        "lint": 4
+      }
+    },
+    {
+      "id": "record-budget",
+      "recipe": "4097 .ab requests",
+      "retained": 4096,
+      "sha256": "70970cd3c701d7c1df9c6cfc0cc30d2370477258268da2d62b2494fa8188338e",
+      "oracleExit": {
+        "tree": 4,
+        "ascii": 4,
+        "utf8": 4,
+        "html": 4,
+        "lint": 4
+      }
+    },
+    {
+      "id": "record-budget-then-input-limit",
+      "recipe": "4097 .ab requests followed by input-limit body",
+      "retained": 4098,
+      "sha256": "522929ed9296b049c77ef2fc1e4ca7c54ffe85ecea6312fb477b72a14465c314",
+      "oracleExit": {
+        "tree": 4,
+        "ascii": 4,
+        "utf8": 4,
+        "html": 4,
+        "lint": 4
+      }
+    },
+    {
+      "id": "byte-budget",
+      "recipe": "1025 distinct .Z0 through .Z1024 requests, each with 5000 x bytes",
+      "retained": 1024,
+      "sha256": "551d5655cc81fd3dccc6576034919bc70671959bcb47bbbf6af578df51317bf4",
+      "oracleExit": {
+        "tree": 3,
+        "ascii": 3,
+        "utf8": 3,
+        "html": 3,
+        "lint": 3
+      }
+    },
+    {
+      "id": "byte-budget-then-input-limit",
+      "recipe": "1025 distinct .Z0 through .Z1024 requests, each with 5000 x bytes followed by input-limit body",
+      "retained": 1026,
+      "sha256": "5b7332b4c1daf2c694b637e0894bc0b637d4d6edd3d7f214d5ff15a6e076b0eb",
+      "oracleExit": {
+        "tree": 3,
+        "ascii": 3,
+        "utf8": 3,
+        "html": 3,
+        "lint": 3
+      }
+    }
+  ]
+}

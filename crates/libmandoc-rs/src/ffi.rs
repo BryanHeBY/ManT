@@ -246,6 +246,32 @@ mod tests {
     }
 
     #[test]
+    fn diagnostic_view_matches_the_native_abi() {
+        use super::raw::{
+            CDiagnosticView, mant_mandoc_diagnostic_view_align,
+            mant_mandoc_diagnostic_view_offsets, mant_mandoc_diagnostic_view_size,
+        };
+
+        check_view!(
+            "diagnostic",
+            CDiagnosticView,
+            mant_mandoc_diagnostic_view_size,
+            mant_mandoc_diagnostic_view_align,
+            mant_mandoc_diagnostic_view_offsets,
+            [
+                source,
+                source_length,
+                message,
+                message_length,
+                kind,
+                level,
+                line,
+                column,
+            ]
+        );
+    }
+
+    #[test]
     fn owned_transfer_preserves_semantic_edges_after_parser_release() {
         assert_owned_transfer(
             "semantic-man.1",

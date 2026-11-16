@@ -68,6 +68,10 @@ Patch `0038` permits a vertical span to start at an immediately closed
 `T{...T}` cell. Only cells with text can contain the continuation token.
 An absent payload remains distinct from a cell containing an empty input row.
 
+Patch `0039` captures the native kind, severity, and location in the active
+embedding session before the ordinary diagnostic writer formats them. It
+keeps raw path and message bytes outside the owned AST text contract.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`
