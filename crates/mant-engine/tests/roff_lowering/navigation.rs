@@ -4,6 +4,9 @@ use super::*;
 #[path = "navigation/content.rs"]
 mod content;
 
+#[path = "navigation/contracts.rs"]
+mod contracts;
+
 #[path = "navigation/references.rs"]
 mod references;
 

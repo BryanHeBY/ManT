@@ -1,4 +1,4 @@
-//! Resolves same-document references after the full section tree is known.
+//! Publishes navigation annotations after the full section tree is known.
 //!
 //! libmandoc validates `.Sx` syntax but represents its target as display text.
 //! This pass converts that temporary title into `ManT`'s stable section ID and
@@ -9,29 +9,23 @@ use std::collections::{HashMap, HashSet};
 use super::reference::{is_manual_reference_name, is_manual_section};
 use mant_ir::{
     Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section,
-    visit::{self, Visit, VisitMut},
+    visit::{self, VisitMut},
 };
 
 type SectionTargets = HashMap<String, Option<String>>;
 
-pub(super) fn resolve_navigation(
-    root_blocks: &mut [Block],
-    sections: &mut [Section],
-    authored_section_targets: &SectionTargets,
-    retained_targets: &HashSet<String>,
+pub(super) fn publish_inline_navigation(
+    nodes: &mut Vec<Inline>,
+    targets: &SectionTargets,
     diagnostics: &mut Vec<Diagnostic>,
-) {
+) -> bool {
     // Navigation names belong to the authored heading namespace.  Formatter
     // execution can change the visible heading (for example, a preceding
     // zero-width glyph can consume its first character), but that projection
     // must neither create aliases nor make a distinct authored heading
     // ambiguous.
-    let targets = authored_section_targets.clone();
-    resolve_blocks(root_blocks, &targets, retained_targets, diagnostics);
-    promote_manual_references(root_blocks);
-    for section in sections {
-        resolve_section(section, &targets, retained_targets, diagnostics);
-    }
+    let changed = resolve_section_references(nodes, targets, diagnostics);
+    promote_manual_reference_inlines(nodes) || changed
 }
 
 /// Normalize and uniquely allocate formatter-generated native anchors.
@@ -103,262 +97,146 @@ pub(super) fn normalize_generated_anchors(
     }
 }
 
-/// Collect every normalized native anchor before navigation pruning.
-///
-/// These zero-width nodes are part of the navigation contract even when they
-/// do not also become semantic definitions. Keeping the complete set prevents
-/// an automatic function or paragraph target from disappearing merely because
-/// its normalized spelling collides with a section identity.
-pub(super) fn native_anchor_ids(root_blocks: &[Block], sections: &[Section]) -> HashSet<String> {
-    #[derive(Default)]
-    struct Collector {
-        ids: HashSet<String>,
+fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) -> bool {
+    // Most inline roots have no split reference to publish.
+    if !nodes.windows(2).any(|pair| {
+        matches!(pair, [Inline::Strong { .. } | Inline::Emphasis { .. }, Inline::Text { value }]
+            if value.starts_with('('))
+    }) {
+        return false;
     }
-
-    impl<'ir> Visit<'ir> for Collector {
-        fn visit_inline(&mut self, inline: &'ir Inline) {
-            if let Inline::Anchor { id, .. } = inline {
-                if !crate::definitions::is_internal_definition_owner_marker(id.as_str()) {
-                    self.ids.insert(id.to_string());
-                }
-            } else {
-                visit::walk_inline(self, inline);
-            }
-        }
-    }
-
-    let mut collector = Collector::default();
-    for block in root_blocks {
-        collector.visit_block(block);
-    }
-    for section in sections {
-        collector.visit_section(section);
-    }
-    collector.ids
-}
-
-fn resolve_section(
-    section: &mut Section,
-    targets: &SectionTargets,
-    retained_targets: &HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    resolve_inlines(
-        &mut section.heading.content,
-        targets,
-        retained_targets,
-        diagnostics,
-    );
-    promote_manual_reference_inlines(&mut section.heading.content);
-    resolve_blocks(&mut section.blocks, targets, retained_targets, diagnostics);
-    promote_manual_references(&mut section.blocks);
-    for child in &mut section.children {
-        resolve_section(child, targets, retained_targets, diagnostics);
-    }
-}
-
-fn promote_manual_references(blocks: &mut [Block]) {
-    for block in blocks {
-        match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                promote_manual_reference_inlines(children);
-            }
-            Block::List { items, .. } => {
-                for item in items {
-                    promote_manual_references(&mut item.blocks);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    for term in &mut item.terms {
-                        promote_manual_reference_inlines(&mut term.content);
-                    }
-                    promote_manual_references(&mut item.description);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
-                    promote_manual_references(&mut cell.blocks);
-                }
-            }
-            Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-}
-
-fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
+    let mut changed = false;
     let mut promoted = Vec::with_capacity(nodes.len());
     let mut source = std::mem::take(nodes).into_iter().peekable();
     while let Some(node) = source.next() {
         // Traditional `.BR name (section)` references use bold, while
-        // groff's portable `.MR` fallback expands to `.IR` and therefore
-        // reaches us as emphasis followed by the parenthesized section.
+        // groff's portable `.MR` fallback uses the emphasis pair `.IR`.
+        // CVS man_term.c::pre_alternate applies fonts to individual
+        // operands, so keep that original subtree within the new link.
         let (Inline::Strong { children } | Inline::Emphasis { children }) = &node else {
             promoted.push(node);
             continue;
         };
-        let name = mant_ir::inline_plain_text(children);
         let Some(Inline::Text { value }) = source.peek() else {
             promoted.push(node);
             continue;
         };
-        let Some((section, remainder)) = manual_section_suffix(value) else {
+        let Some((section, end)) = manual_section_prefix(value) else {
             promoted.push(node);
             continue;
         };
-        if !is_manual_reference_name(&name) {
+        let name = mant_ir::inline_plain_text(children);
+        if !is_manual_reference_name(&name) || !can_annotate_name(children) {
             promoted.push(node);
             continue;
         }
 
-        source.next();
+        let manual_section = Some(section.to_owned());
+        let Some(Inline::Text { mut value }) = source.next() else {
+            unreachable!("the peeked section operand was text");
+        };
+        let remainder = value.split_off(end);
         promoted.push(Inline::Link {
             target: LinkTarget::Manual {
-                name: name.clone(),
-                manual_section: Some(section.clone()),
+                name,
+                manual_section,
             },
             title: None,
-            children: vec![Inline::Text {
-                value: format!("{name}({section})"),
-            }],
+            children: vec![node, Inline::Text { value }],
         });
-        // A styled reference proves the name and section only. Publication
-        // may have consumed an independently witnessed Sphinx marker; any
-        // suffix still present here is authored visible text.
+        // Publication may have consumed an independently witnessed Sphinx
+        // marker. Any suffix still present here is authored visible text.
         if !remainder.is_empty() {
             promoted.push(Inline::Text { value: remainder });
         }
+        changed = true;
     }
     *nodes = promoted;
+    changed
 }
 
-fn manual_section_suffix(value: &str) -> Option<(String, String)> {
-    let value = value.strip_prefix('(')?;
+/// Keep existing navigation and structured content out of heuristic links,
+/// even when their flattened display happens to be a valid manual name.
+fn can_annotate_name(nodes: &[Inline]) -> bool {
+    nodes.iter().all(|node| match node {
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => true,
+        Inline::Strong { children } | Inline::Emphasis { children } => can_annotate_name(children),
+        Inline::Link { .. } | Inline::Equation { .. } | Inline::LineBreak { .. } => false,
+    })
+}
+
+fn manual_section_prefix(value: &str) -> Option<(&str, usize)> {
     let closing = value.find(')')?;
-    let section = &value[..closing];
-    if !is_manual_section(section) {
-        return None;
-    }
-    Some((section.to_owned(), value[closing + 1..].to_owned()))
+    let section = value.get(..closing)?.strip_prefix('(')?;
+    is_manual_section(section).then_some((section, closing + 1))
 }
 
-fn resolve_blocks(
-    blocks: &mut [Block],
-    targets: &SectionTargets,
-    explicit_targets: &HashSet<String>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for block in blocks {
-        match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                resolve_inlines(children, targets, explicit_targets, diagnostics);
-            }
-            Block::List { items, .. } => {
-                for item in items {
-                    resolve_blocks(&mut item.blocks, targets, explicit_targets, diagnostics);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    for term in &mut item.terms {
-                        resolve_inlines(&mut term.content, targets, explicit_targets, diagnostics);
-                    }
-                    resolve_blocks(
-                        &mut item.description,
-                        targets,
-                        explicit_targets,
-                        diagnostics,
-                    );
-                }
-            }
-            Block::Table { rows, .. } => {
-                for row in rows {
-                    for cell in &mut row.cells {
-                        resolve_blocks(&mut cell.blocks, targets, explicit_targets, diagnostics);
-                    }
-                }
-            }
-            Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-}
-
-fn resolve_inlines(
+fn resolve_section_references(
     nodes: &mut Vec<Inline>,
     targets: &SectionTargets,
-    explicit_targets: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
-) {
-    let mut resolved = Vec::with_capacity(nodes.len());
-    for node in std::mem::take(nodes) {
+) -> bool {
+    let mut changed = false;
+    let mut unwrap = false;
+    for node in nodes.iter_mut() {
         match node {
-            Inline::Strong { mut children } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                resolved.push(Inline::Strong { children });
-            }
-            Inline::Emphasis { mut children } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                resolved.push(Inline::Emphasis { children });
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link {
+                target:
+                    LinkTarget::External { .. }
+                    | LinkTarget::Email { .. }
+                    | LinkTarget::Manual { .. }
+                    | LinkTarget::Document { .. },
+                children,
+                ..
+            } => {
+                changed |= resolve_section_references(children, targets, diagnostics);
             }
             Inline::Link {
-                target: LinkTarget::Section { id },
-                title,
-                mut children,
+                target: LinkTarget::Section { .. },
+                ..
             } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                if let Some(section_id) = resolve_section_target(targets, id.as_str()) {
-                    resolved.push(Inline::Link {
-                        target: LinkTarget::Section {
-                            id: section_id.into(),
-                        },
-                        title,
-                        children,
-                    });
-                } else {
-                    diagnostics.push(Diagnostic {
-                        impact: mant_ir::DiagnosticImpact::None,
-                        level: DiagnosticLevel::Warning,
-                        code: Some("unresolved-section-reference".to_owned()),
-                        message: format!("cannot resolve section reference: {id}"),
-                        source: None,
-                    });
-                    resolved.extend(children);
-                }
+                unwrap = true;
             }
-            Inline::Link {
-                target,
-                title,
-                mut children,
-            } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                resolved.push(Inline::Link {
-                    target,
-                    title,
-                    children,
-                });
-            }
-            Inline::Anchor {
-                id,
-                fragment_aliases,
-                owner_source,
-            } if !fragment_aliases.is_empty() || explicit_targets.contains(id.as_str()) => {
-                resolved.push(Inline::Anchor {
-                    id,
-                    fragment_aliases,
-                    owner_source,
-                });
-            }
-            Inline::Anchor { .. } => {}
-            leaf => resolved.push(leaf),
+            _ => {}
         }
     }
+    if !unwrap {
+        return changed;
+    }
+
+    let mut resolved = Vec::with_capacity(nodes.len());
+    for mut node in std::mem::take(nodes) {
+        if let Inline::Link {
+            target: LinkTarget::Section { id },
+            children,
+            ..
+        } = &mut node
+        {
+            changed |= resolve_section_references(children, targets, diagnostics);
+            if let Some(section_id) = resolve_section_target(targets, id.as_str()) {
+                if id.as_str() != section_id {
+                    *id = section_id.into();
+                    changed = true;
+                }
+            } else {
+                diagnostics.push(Diagnostic {
+                    impact: mant_ir::DiagnosticImpact::None,
+                    level: DiagnosticLevel::Warning,
+                    code: Some("unresolved-section-reference".to_owned()),
+                    message: format!("cannot resolve section reference: {id}"),
+                    source: None,
+                });
+                resolved.append(children);
+                changed = true;
+                continue;
+            }
+        }
+        resolved.push(node);
+    }
     *nodes = resolved;
+    changed
 }
 
 /// Resolve an `.Sx` title without guessing across arbitrary headings.
@@ -369,19 +247,20 @@ fn resolve_inlines(
 /// (Field Splitting)`.  Accept that form only when it identifies one target;
 /// every other prefix remains unresolved rather than becoming a surprising
 /// navigation jump.
-fn resolve_section_target(targets: &SectionTargets, reference: &str) -> Option<String> {
-    match targets.get(reference) {
-        Some(Some(section_id)) => return Some(section_id.clone()),
-        Some(None) => return None,
-        None => {}
+fn resolve_section_target<'a>(targets: &'a SectionTargets, reference: &str) -> Option<&'a str> {
+    if let Some(exact) = targets.get(reference) {
+        return exact.as_deref();
     }
-    let mut candidates = targets.iter().filter_map(|(title, section_id)| {
-        is_parenthetical_section_qualification(reference, title)
-            .then_some(section_id.as_deref())
-            .flatten()
-    });
-    let candidate = candidates.next()?;
-    candidates.next().is_none().then(|| candidate.to_owned())
+    let mut candidates = targets
+        .iter()
+        .filter(|(title, _)| is_parenthetical_section_qualification(reference, title));
+    let (_, candidate) = candidates.next()?;
+    // An ambiguous authored title still occupies a candidate slot.
+    // Discarding it here would promote another title to a false unique match.
+    if candidates.next().is_some() {
+        return None;
+    }
+    candidate.as_deref()
 }
 
 fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool {
@@ -455,7 +334,7 @@ impl LoweringContext<'_> {
 mod tests {
     use std::collections::HashMap;
 
-    use mant_ir::Inline;
+    use mant_ir::{Inline, LinkTarget};
 
     use super::{SectionTargets, promote_manual_reference_inlines, resolve_section_target};
 
@@ -471,7 +350,7 @@ mod tests {
 
         assert_eq!(
             resolve_section_target(&targets, "White Space Splitting"),
-            Some("white-space-splitting-field-splitting-36".to_owned())
+            Some("white-space-splitting-field-splitting-36")
         );
     }
 
@@ -582,6 +461,47 @@ mod tests {
                 if name == "btrfs" && manual_section == "5"
         ));
         assert!(matches!(&nodes[1], Inline::Text { value } if value == " <>, next"));
+    }
+
+    #[test]
+    fn wraps_only_the_original_subtree_that_can_take_a_new_link() {
+        let original = Inline::Strong {
+            children: vec![
+                Inline::anchor("source-head"),
+                Inline::Emphasis {
+                    children: vec![Inline::Text {
+                        value: "tool".into(),
+                    }],
+                },
+            ],
+        };
+        let existing_link = Inline::Strong {
+            children: vec![Inline::Link {
+                target: LinkTarget::External {
+                    uri: "https://example.test".into(),
+                },
+                title: None,
+                children: vec![Inline::Text {
+                    value: "tool".into(),
+                }],
+            }],
+        };
+        let suffix = Inline::Text {
+            value: "(3)".into(),
+        };
+        let mut nodes = vec![
+            original.clone(),
+            suffix.clone(),
+            existing_link.clone(),
+            suffix.clone(),
+        ];
+        assert!(promote_manual_reference_inlines(&mut nodes));
+        let [Inline::Link { children, .. }, unmodified, trailing] = nodes.as_slice() else {
+            panic!("one manual annotation and the original unrelated link")
+        };
+        assert_eq!(children, &[original, suffix.clone()]);
+        assert_eq!(unmodified, &existing_link);
+        assert_eq!(trailing, &suffix);
     }
 
     #[test]

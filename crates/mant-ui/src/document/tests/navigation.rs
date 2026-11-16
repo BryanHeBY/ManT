@@ -2,6 +2,71 @@
 use super::*;
 
 #[test]
+fn traditional_manual_links_preserve_original_modifiers_and_copy_ranges() {
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        style::Modifier,
+        widgets::{Paragraph, Widget},
+    };
+
+    // Fixed CVS man_term.c::pre_alternate gives BR its first-operand bold
+    // and IR its emphasis; the parenthesized section is roman in both.
+    for (macro_name, modifier) in [("BR", Modifier::BOLD), ("IR", Modifier::ITALIC)] {
+        let source = format!(
+            ".TH NAVPROBE 1 \"November 17, 2026\"\n.SH DESCRIPTION\n.{macro_name} printf \"(3) ordinary\"\nBodyWord.\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        for width in [12, 40, 78] {
+            let rendered = DocumentView::new(&query).render(width);
+            let regions: Vec<_> = rendered
+                .links
+                .iter()
+                .filter(|region| {
+                    matches!(
+                        &region.target,
+                        LinkTarget::Manual { name, manual_section: Some(section) }
+                            if name == "printf" && section == "3"
+                    )
+                })
+                .collect();
+            let first = regions.first().unwrap();
+            let last = regions.last().unwrap();
+            let area = Rect::new(0, 0, width, rendered.row_count.try_into().unwrap());
+            let mut cells = Buffer::empty(area);
+            Paragraph::new(rendered.text.clone()).render(area, &mut cells);
+            let mut label = String::new();
+            for region in &regions {
+                let row = u16::try_from(region.row).unwrap();
+                for column in region.start_column..region.end_column {
+                    let cell = &cells[(u16::try_from(column).unwrap(), row)];
+                    assert_eq!(
+                        cell.modifier.contains(modifier),
+                        label.len() < "printf".len(),
+                        "{macro_name} width={width} label prefix={label:?}"
+                    );
+                    label.push_str(cell.symbol());
+                }
+            }
+            assert_eq!(label, "printf(3)");
+            assert_eq!(
+                rendered.selected_text(crate::document::RenderedSelection {
+                    anchor: crate::document::TextPosition {
+                        row: first.row,
+                        column: first.start_column
+                    },
+                    focus: crate::document::TextPosition {
+                        row: last.row,
+                        column: last.end_column - 1
+                    },
+                }),
+                label,
+            );
+        }
+    }
+}
+
+#[test]
 fn ordinary_list_entry_anchors_preserve_rows_and_numbering() {
     let mut query = bundle();
     let paragraph = |name: &str| Block::Paragraph {

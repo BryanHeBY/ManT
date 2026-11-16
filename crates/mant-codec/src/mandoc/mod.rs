@@ -141,6 +141,13 @@ fn lower_mandoc_document_with_source(
         &mut root_blocks,
         &mut sections,
         &mut context.native_heads.borrow_mut(),
+        |nodes| {
+            navigation::publish_inline_navigation(
+                nodes,
+                &context.authored_section_targets,
+                &mut diagnostics,
+            )
+        },
     );
     diagnostics.extend(context.annotations.take_diagnostics());
     diagnostics.extend(context.take_diagnostics());
@@ -154,8 +161,6 @@ fn lower_mandoc_document_with_source(
         InitialCodeRow::RetainExecuted => {}
     }
     navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, explicit_targets);
-    let mut retained_targets = navigation::native_anchor_ids(&root_blocks, &sections);
-    retained_targets.extend(explicit_targets.iter().cloned());
     let identified = crate::definitions::identify_definitions_with_evidence(
         &mut root_blocks,
         &mut sections,
@@ -163,7 +168,6 @@ fn lower_mandoc_document_with_source(
         parsed.metadata.name.as_deref(),
         &context.native_heads.borrow(),
     );
-    retained_targets.extend(identified.targets);
     diagnostics.extend(identified.diagnostics);
     diagnostics.extend(crate::producer_identity::outline_identity_diagnostics(
         &root_blocks,
@@ -171,13 +175,6 @@ fn lower_mandoc_document_with_source(
         "manual",
     ));
     diagnostics.extend(crate::definitions::manual_discovery_diagnostics(&sections));
-    navigation::resolve_navigation(
-        &mut root_blocks,
-        &mut sections,
-        &context.authored_section_targets,
-        &retained_targets,
-        &mut diagnostics,
-    );
     let mut document = Document {
         heading: None,
         parser: Some(ParserInfo {

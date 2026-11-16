@@ -97,6 +97,7 @@ fn rejected_candidates_cannot_reassign_committed_members_or_later_receivers() {
                 &mut blocks,
                 &mut sections,
                 &mut context.native_heads.borrow_mut(),
+                |_| false,
             );
             let mut output = Output::default();
             for block in &blocks {

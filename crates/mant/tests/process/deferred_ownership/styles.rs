@@ -58,3 +58,45 @@ pub(super) fn assert_recovery_styles(ansi: &str, case: &Value) {
         }
     }
 }
+
+#[test]
+fn annotated_traditional_manual_links_keep_actual_cli_modifiers() {
+    use super::super::process_support::run_text_input;
+
+    // Pinned CVS man_term.c::pre_alternate leaves the second operand roman.
+    // Only the first operand receives the original alternating modifier.
+    for (macro_name, strong, emphasis) in [("BR", true, false), ("IR", false, true)] {
+        let source = format!(
+            ".TH NAVPROBE 1 \"November 17, 2026\"\n.SH DESCRIPTION\n.{macro_name} printf \"(3) ordinary\"\nBodyWord.\n"
+        );
+        let output = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--format",
+                "text",
+                "--display",
+                "direct",
+                "--color",
+                "always",
+            ],
+            &source,
+        );
+        assert!(output.status.success(), "{output:?}");
+        let ansi = String::from_utf8(output.stdout).unwrap();
+        assert!(ansi.contains("\u{1b}["));
+        assert!(super::super::execution_scopes::without_sgr(&ansi).contains("printf(3) ordinary"));
+        assert_recovery_styles(
+            &ansi,
+            &serde_json::json!({
+                "id": macro_name,
+                "recoveries": [
+                    {"text": "printf", "ordinal": 0, "style": {"strong": strong, "emphasis": emphasis}},
+                    {"text": "(3) ordinary", "ordinal": 0, "style": {"strong": false, "emphasis": false}},
+                ],
+            }),
+        );
+    }
+}

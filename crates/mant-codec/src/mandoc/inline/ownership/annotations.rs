@@ -274,14 +274,18 @@ impl AnnotationPool {
         blocks: &mut [Block],
         sections: &mut [Section],
         evidence: &mut crate::definitions::NativeHeadEvidence,
+        mut publish_navigation: impl FnMut(&mut Vec<Inline>) -> bool,
     ) {
         let has_source_candidates = self.0.borrow().source_candidates > 0;
-        if self.0.borrow().targets.is_empty() && !has_source_candidates {
-            return;
+        let has_annotations = !self.0.borrow().targets.is_empty() || has_source_candidates;
+        if has_annotations {
+            self.check_document_equation_carriers(blocks, sections);
         }
-        self.check_document_equation_carriers(blocks, sections);
         evidence.publish_annotations(blocks, sections, |nodes| {
-            self.finish_inline_root(nodes, has_source_candidates)
+            let changed = has_annotations && self.finish_inline_root(nodes, has_source_candidates);
+            // Link wrappers change the leaf paths even when every glyph
+            // remains identical. Publish before deriving public name bindings.
+            publish_navigation(nodes) || changed
         });
     }
 
