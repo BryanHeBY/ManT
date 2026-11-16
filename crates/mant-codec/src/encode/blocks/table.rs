@@ -17,7 +17,7 @@ pub(super) fn render_table(
     // Empty data rows and native rules are authored structure, not fence
     // delimiters. Keep them in the same source-order portable row plan.
     let markers = if options.preserve_anchors {
-        table_markers(rows)
+        table_markers(rows, options)
     } else {
         String::new()
     };
@@ -54,13 +54,14 @@ pub(super) fn render_table(
 
 /// Destinations are transparent regardless of a sibling glyph or container.
 /// Keep them outside the fence; mapped insertion rebases the original owners.
-fn table_markers(rows: &[TableRow]) -> String {
+fn table_markers(rows: &[TableRow], options: RenderOptions<'_>) -> String {
     #[derive(Default)]
-    struct Markers<'a> {
+    struct Markers<'a, 'ctx> {
         seen: HashSet<&'a str>,
         output: Vec<String>,
+        options: RenderOptions<'ctx>,
     }
-    impl<'a> Visit<'a> for Markers<'a> {
+    impl<'a> Visit<'a> for Markers<'a, '_> {
         fn visit_inline(&mut self, inline: &'a Inline) {
             if let Inline::Anchor {
                 id,
@@ -71,7 +72,7 @@ fn table_markers(rows: &[TableRow]) -> String {
                 for target in std::iter::once(id.as_str())
                     .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
                 {
-                    if self.seen.insert(target) {
+                    if self.options.emits_anchor(target) && self.seen.insert(target) {
                         self.output.push(html_anchor(target));
                     }
                 }
@@ -80,7 +81,10 @@ fn table_markers(rows: &[TableRow]) -> String {
             }
         }
     }
-    let mut markers = Markers::default();
+    let mut markers = Markers {
+        options,
+        ..Markers::default()
+    };
     for row in rows {
         for cell in &row.cells {
             for block in &cell.blocks {

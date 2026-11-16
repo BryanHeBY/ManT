@@ -1,6 +1,81 @@
 //! Heading labels are derived; body rendering retains the original inline facts.
 use super::*;
 
+#[test]
+fn virtual_overview_rows_use_one_verified_destination() {
+    let mut content = bundle();
+    let document = content.document.as_mut().unwrap();
+    document.heading = Some(mant_ir::Heading {
+        content: vec![
+            Inline::anchor(mant_ir::DOCUMENT_ROOT_ID),
+            Inline::Text {
+                value: "ROOTHEADING".into(),
+            },
+        ],
+        ..mant_ir::Heading::default()
+    });
+    for conflict in [false, true] {
+        if conflict {
+            content.document.as_mut().unwrap().sections[0].id = mant_ir::DOCUMENT_ROOT_ID.into();
+        }
+        let view = DocumentView::new(&content);
+        assert_eq!(
+            view.validate_fragment(mant_ir::DOCUMENT_ROOT_ID).is_err(),
+            conflict
+        );
+        for width in [12, 40, 78] {
+            let rendered = view.render(width);
+            assert_eq!(
+                rendered.anchor_row(mant_ir::DOCUMENT_ROOT_ID).is_none(),
+                conflict
+            );
+            if let Some(row) = rendered.anchor_row(mant_ir::DOCUMENT_ROOT_ID) {
+                assert_eq!(rendered.text.lines[row].to_string().trim(), "ROOTHEADING");
+            }
+            assert!(rendered.text.to_string().contains("ROOTHEADING"));
+            assert!(rendered.text.to_string().contains("Description"));
+        }
+    }
+}
+
+#[test]
+fn typed_relative_document_links_share_grammar_before_activation() {
+    let mut content = bundle();
+    content.address = Some(mant_ir::DocumentAddress::Markdown {
+        path: "dir/source".into(),
+        origin: mant_ir::MarkdownOrigin::Documents,
+    });
+    for (name, fragment, allowed) in [
+        ("a?b", None, false),
+        ("page", Some(""), false),
+        ("scope:page", None, false),
+        ("../peer", Some("一 二"), true),
+    ] {
+        let target = mant_ir::LinkTarget::Document {
+            name: name.into(),
+            fragment: fragment.map(str::to_owned),
+        };
+        let mut block = paragraph("LINKLABEL");
+        let Block::Paragraph { children, .. } = &mut block else {
+            unreachable!("test helper returns a paragraph");
+        };
+        let original = std::mem::take(children);
+        children.push(Inline::Link {
+            target: target.clone(),
+            title: None,
+            children: original,
+        });
+        content.document.as_mut().unwrap().sections[0].blocks = vec![block];
+        let view = DocumentView::new(&content);
+        assert_eq!(view.activation_target(&target).is_some(), allowed);
+        for width in [12, 40, 78] {
+            let rendered = view.render(width);
+            assert!(rendered.text.to_string().contains("LINKLABEL"));
+            assert_eq!(!rendered.links.is_empty(), allowed);
+        }
+    }
+}
+
 fn link(value: &str, target: mant_ir::LinkTarget) -> Inline {
     Inline::Link {
         target,

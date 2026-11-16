@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 /// Virtual identity used for content before the first section heading.
 pub const DOCUMENT_ROOT_ID: &str = "document-overview";
 
+/// Validation code for another content owner claiming the document overview ID.
+pub const OVERVIEW_IDENTITY_COLLISION: &str = "ir.overview-identity-collision";
+
 /// Exact source-authored fragment spelling for one local navigation target.
 ///
 /// A fragment alias is not a [`NodeId`]: formats such as mdoc deliberately

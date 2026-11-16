@@ -32,7 +32,7 @@ pub use identity::*;
 pub use index::*;
 pub use inline_layout::*;
 pub use inline_text::*;
-pub use link_uri::markdown_document_reference;
+pub use link_uri::{is_valid_document_reference, markdown_document_reference};
 pub use outline::*;
 pub use references::*;
 pub use resolved::*;

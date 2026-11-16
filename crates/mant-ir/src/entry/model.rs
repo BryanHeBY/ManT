@@ -145,14 +145,7 @@ impl DocumentReference {
     pub fn is_well_formed(&self) -> bool {
         match self {
             Self::Document { name, fragment } => {
-                !name.is_empty()
-                    && !name.starts_with('/')
-                    && !name.contains(['\\', '?', '#'])
-                    && !name.chars().any(char::is_control)
-                    && name.split('/').all(|component| !component.is_empty())
-                    && fragment.as_deref().is_none_or(|fragment| {
-                        !fragment.is_empty() && !fragment.chars().any(char::is_control)
-                    })
+                crate::is_valid_document_reference(name, fragment.as_deref())
             }
             Self::Manual {
                 name,
@@ -203,7 +196,11 @@ impl DocumentReference {
     #[must_use]
     pub fn resolve_from(&self, from: &crate::DocumentAddress) -> Option<crate::DocumentAddress> {
         match self {
-            Self::Document { name, .. } => from.resolve_document_reference(name),
+            Self::Document { name, fragment }
+                if crate::is_valid_document_reference(name, fragment.as_deref()) =>
+            {
+                from.resolve_document_reference(name)
+            }
             Self::Manual {
                 name,
                 manual_section: Some(manual_section),
@@ -211,7 +208,8 @@ impl DocumentReference {
                 name: name.clone(),
                 manual_section: manual_section.clone(),
             }),
-            Self::Manual {
+            Self::Document { .. }
+            | Self::Manual {
                 manual_section: None,
                 ..
             } => None,

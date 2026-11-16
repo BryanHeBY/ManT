@@ -19,6 +19,22 @@ pub fn validate_document(document: &Document) -> Vec<Diagnostic> {
     crate::DocumentValidation::new(document).into_diagnostics()
 }
 
+impl DocumentIndex {
+    /// Project the shared overview ownership finding without validating unrelated content.
+    #[must_use]
+    pub fn overview_conflict_diagnostic(&self) -> Option<Diagnostic> {
+        self.has_overview_conflict().then(|| {
+            invariant(
+                crate::OVERVIEW_IDENTITY_COLLISION,
+                format!(
+                    "identity '{}' is shared by the document overview and another owner",
+                    crate::DOCUMENT_ROOT_ID
+                ),
+            )
+        })
+    }
+}
+
 pub(super) fn validate_with_index(
     document: &Document,
     index: &DocumentIndex,
@@ -48,7 +64,11 @@ pub(super) fn validate_with_index(
                 format!("identity '{id}' is not a normalized document-local ID"),
             ));
         }
-        if node.roles().len() > 1
+        if id.as_str() == crate::DOCUMENT_ROOT_ID
+            && let Some(collision) = index.overview_conflict_diagnostic()
+        {
+            diagnostics.push(collision);
+        } else if node.roles().len() > 1
             && !(node.roles().len() == 2
                 && node.has_role(IndexedRole::Entry)
                 && node.has_role(IndexedRole::Anchor))
@@ -89,16 +109,26 @@ pub(super) fn validate_with_index(
         }
     }
     for (alias, targets) in index.ambiguous_fragments() {
-        diagnostics.push(invariant(
-            "ir.ambiguous-fragment-alias",
+        let detail = if targets.len() > 1 {
             format!(
-                "fragment '{alias}' resolves to multiple document-local IDs: {}",
+                "multiple document-local IDs: {}",
                 targets
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(", ")
-            ),
+            )
+        } else {
+            if alias.as_str() == crate::DOCUMENT_ROOT_ID {
+                // The dedicated overview-identity finding already reports
+                // this canonical spelling when its owners differ.
+                continue;
+            }
+            format!("multiple owners of '{}'", crate::DOCUMENT_ROOT_ID)
+        };
+        diagnostics.push(invariant(
+            "ir.ambiguous-fragment-alias",
+            format!("fragment '{alias}' resolves to {detail}"),
         ));
     }
 

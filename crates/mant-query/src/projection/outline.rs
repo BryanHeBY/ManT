@@ -170,7 +170,7 @@ fn project_document(query: &ResolvedContent, entries: &EntryProjection) -> Vec<O
         // materialized exclusively when entry rows are actually requested.
         let index = (!matches!(entries, EntryProjection::None | EntryProjection::Summary))
             .then(|| SemanticIndex::build(manual));
-        if manual.heading.is_some() || !manual.blocks.is_empty() {
+        if manual.has_overview() {
             let root_entries = index.as_ref().map_or(&[][..], SemanticIndex::root);
             let children = project_entries(
                 root_entries,

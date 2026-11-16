@@ -233,7 +233,11 @@ fn source_target<'ir>(
     match event {
         NavigationEvent::Link(link) => {
             let target = match link.target {
-                mant_ir::LinkTarget::Document { name, .. } => ScopeTarget::Document(name),
+                mant_ir::LinkTarget::Document { name, fragment }
+                    if mant_ir::is_valid_document_reference(name, fragment.as_deref()) =>
+                {
+                    ScopeTarget::Document(name)
+                }
                 mant_ir::LinkTarget::Manual {
                     name,
                     manual_section,

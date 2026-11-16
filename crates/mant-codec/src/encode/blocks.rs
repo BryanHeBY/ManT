@@ -246,7 +246,7 @@ fn render_literal(
     }
     let code = accepted_fenced_code(&flatten_inline_content(content), language);
     let markers = if options.preserve_anchors {
-        preformatted_anchor_markers(content.content)
+        preformatted_anchor_markers(content.content, options)
     } else {
         String::new()
     };

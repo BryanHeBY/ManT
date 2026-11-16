@@ -4,14 +4,24 @@ pub(crate) fn html_anchor(id: &str) -> String {
     format!("<a id=\"{}\"></a>", escape_html_attribute(id))
 }
 
-pub(crate) fn html_anchors(id: &str, aliases: &[mant_ir::FragmentAlias]) -> String {
-    std::iter::once(id)
-        .chain(
-            aliases
-                .iter()
-                .map(mant_ir::FragmentAlias::as_str)
-                .filter(|alias| *alias != id),
-        )
+pub(crate) fn html_anchors(
+    id: &str,
+    aliases: &[mant_ir::FragmentAlias],
+    include: impl FnMut(&str) -> bool,
+) -> String {
+    render_html_anchors(
+        std::iter::once(id).chain(aliases.iter().map(mant_ir::FragmentAlias::as_str)),
+        include,
+    )
+}
+
+pub(in crate::encode) fn render_html_anchors<'a>(
+    fragments: impl Iterator<Item = &'a str>,
+    mut include: impl FnMut(&str) -> bool,
+) -> String {
+    let mut seen = std::collections::HashSet::new();
+    fragments
+        .filter(|fragment| include(fragment) && seen.insert(*fragment))
         .map(html_anchor)
         .collect::<Vec<_>>()
         .join("\n")

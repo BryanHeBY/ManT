@@ -25,7 +25,8 @@ pub use artifact::{
 pub use fragments::{
     MarkdownFragmentOptions, commonmark_code_span, escape_commonmark, html_anchor,
     render_blocks_fragment, render_heading_fragment, render_inline_content_fragment,
-    render_inline_fragment, render_located_blocks_fragment, render_sections_fragment,
+    render_inline_fragment, render_located_blocks_fragment, render_overview_fragment,
+    render_sections_fragment,
 };
 use math_markdown::RenderOptions;
 pub use math_markdown::{
@@ -115,7 +116,8 @@ fn render_sections(
         if options.preserve_anchors {
             output.push(format!(
                 "{}\n\n{}",
-                inline::html_anchors(&section.id, &section.fragment_aliases),
+                inline::html_anchors(&section.id, &section.fragment_aliases, |fragment| options
+                    .emits_anchor(fragment),),
                 render_heading(depth, &section.heading, options)
             ));
         } else {

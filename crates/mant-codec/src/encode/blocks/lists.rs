@@ -63,6 +63,7 @@ pub(super) fn render_list(
             if !options.preserve_semantics
                 && options.preserve_anchors
                 && let Some(facts) = &item.entry
+                && options.emits_anchor(&facts.id)
             {
                 // A retained anchor uses the actual first block's syntax;
                 // it cannot be glued to a fence or steal a child's receiver.

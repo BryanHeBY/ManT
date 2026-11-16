@@ -174,10 +174,7 @@ impl ReferenceNavigation {
             budget: &mut budget,
         };
         let checked = (|| {
-            if document.heading.is_some()
-                || !document.blocks.is_empty()
-                || !document.fragment_aliases.is_empty()
-            {
+            if document.has_overview() {
                 census.count(ROOT_ID, 0)?;
             }
             census.entries(index.root(), 0)?;

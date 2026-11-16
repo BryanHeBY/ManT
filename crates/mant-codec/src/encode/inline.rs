@@ -18,6 +18,7 @@ pub(crate) use code::code_span;
 pub(super) use code::{accepted_fenced_code, code_fences, fenced_code};
 pub(super) use links::link_destination;
 pub(super) use links::render_uri;
+pub(super) use text::render_html_anchors;
 pub(super) use text::{block_prefix_escape_position, protect_block_prefix};
 pub(crate) use text::{escape_text, html_anchor, html_anchors};
 
@@ -179,7 +180,10 @@ pub(super) fn flatten_inline_content(content: InlineContentRef<'_>) -> String {
 /// Fenced code cannot contain active HTML anchors. Project its zero-width
 /// destinations immediately before the fence, preserving their source order
 /// and aliases while the code text remains one preformatted block.
-pub(super) fn preformatted_anchor_markers(children: &[Inline]) -> String {
+pub(super) fn preformatted_anchor_markers(
+    children: &[Inline],
+    options: RenderOptions<'_>,
+) -> String {
     let mut markers = Vec::new();
     let mut seen = HashSet::new();
     let mut stack: Vec<_> = children.iter().rev().collect();
@@ -193,7 +197,7 @@ pub(super) fn preformatted_anchor_markers(children: &[Inline]) -> String {
                 for target in std::iter::once(id.as_str())
                     .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
                 {
-                    if seen.insert(target) {
+                    if options.emits_anchor(target) && seen.insert(target) {
                         markers.push(html_anchor(target));
                     }
                 }
@@ -283,7 +287,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            super::preformatted_anchor_markers(&children),
+            super::preformatted_anchor_markers(&children, super::RenderOptions::default()),
             "<a id=\"first\"></a>\n<a id=\"second\"></a>"
         );
     }

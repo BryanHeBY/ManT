@@ -159,7 +159,10 @@ fn render_unstyled_framed<'source>(
         }
         return render_unstyled_framed(
             nodes,
-            RenderOptions::portable(options.options),
+            RenderOptions {
+                overview_identity: options.overview_identity,
+                ..RenderOptions::portable(options.options)
+            },
             manual_links,
             framing,
         );
@@ -266,6 +269,7 @@ fn inline_pieces<'source>(
                 let mut seen = std::collections::HashSet::new();
                 let markers = std::iter::once(id.as_str())
                     .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
+                    .filter(|target| options.emits_anchor(target))
                     .filter(|target| seen.insert(*target))
                     .map(html_anchor)
                     .collect();

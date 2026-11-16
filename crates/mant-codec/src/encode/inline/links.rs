@@ -231,6 +231,9 @@ fn link_presentation(
         // a URI/proof that will never participate in the serialized output.
         return LinkPresentation::OmittedByPolicy;
     }
+    if matches!(target, LinkTarget::Section { id } if !options.allows_destination(id)) {
+        return LinkPresentation::Invalid;
+    }
     let Some(destination) = CheckedDestination::from_target(target) else {
         // Invalid target facts and diagnostics belong to the original IR;
         // transparent labels preserve content without inventing another URI.

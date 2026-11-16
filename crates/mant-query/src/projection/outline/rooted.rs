@@ -40,13 +40,10 @@ impl<'ir> RootedOutline<'ir> {
         let target = if query.tldr.is_some() && matches(selector, &OutlinePath::Tldr, TLDR_ID) {
             index.validate_synthetic_identity(&query.label, selector, TLDR_ID, "0")?;
             Target::Tldr
-        } else if query
-            .document
-            .as_ref()
-            .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
+        } else if query.document.as_ref().is_some_and(Document::has_overview)
             && matches(selector, &OutlinePath::DocumentRoot, DOCUMENT_ROOT_ID)
         {
-            index.validate_synthetic_identity(&query.label, selector, DOCUMENT_ROOT_ID, "root")?;
+            index.validate_overview_identity(query, selector)?;
             Target::Overview
         } else {
             Target::Located(index.resolve(&query.label, selector)?.order())

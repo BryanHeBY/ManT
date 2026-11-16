@@ -3,16 +3,14 @@
 #[cfg(test)]
 mod tests;
 
-use mant_ir::DOCUMENT_ROOT_ID;
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
 use mant_codec::encode::{
-    MarkdownFragmentOptions, heading, heading_has_local_link,
-    render_heading_fragment as render_heading, render_sections_fragment as render_sections,
-    render_tldr, section_headings_have_local_links,
+    MarkdownFragmentOptions, heading, heading_has_local_link, render_overview_fragment,
+    render_sections_fragment as render_sections, render_tldr, section_headings_have_local_links,
 };
 use mant_codec::encode::{
-    commonmark_code_span as code_span, escape_commonmark as escape_text, html_anchor,
+    commonmark_code_span as code_span, escape_commonmark as escape_text,
     render_blocks_fragment as render_blocks,
 };
 
@@ -84,6 +82,10 @@ pub fn render_excerpt_markdown_with_options(
     if !excerpt.semantics_complete {
         output.push("Semantic entries are incomplete; use search to inspect unclassified or rejected content.".to_owned());
     }
+    let ambiguous_overview = excerpt
+        .diagnostics
+        .iter()
+        .any(|finding| finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION));
     for (index, selection) in excerpt.selections.iter().enumerate() {
         if index > 0 {
             output.push("---".to_owned());
@@ -94,13 +96,13 @@ pub fn render_excerpt_markdown_with_options(
             ExcerptSelection::DocumentRoot {
                 heading, blocks, ..
             } => {
-                if let Some(heading) = heading {
-                    if options.preserve_anchors {
-                        output.push(html_anchor(DOCUMENT_ROOT_ID));
-                    }
-                    output.push(render_heading(2, heading, options));
-                }
-                output.extend(render_blocks(blocks, options));
+                output.extend(render_overview_fragment(
+                    heading.as_ref(),
+                    blocks,
+                    2,
+                    options,
+                    ambiguous_overview,
+                ));
             }
             ExcerptSelection::DocumentSection { section, .. } => {
                 render_sections(&mut output, std::slice::from_ref(section), 2, options);

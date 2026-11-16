@@ -7,7 +7,8 @@ use super::{
 use crate::encode::{MarkdownMath, MarkdownOptions};
 use crate::math::{MathFormat, MathLoss, MathOptions, MathPolicy, encode_equation};
 use mant_ir::{
-    Block, EquationExpression, EquationValidationError, EquationValidationLimits, Inline,
+    Block, DOCUMENT_ROOT_ID, DocumentIndex, EquationExpression, EquationValidationError,
+    EquationValidationLimits, Inline,
 };
 use std::{cell::RefCell, collections::HashMap};
 
@@ -19,6 +20,17 @@ mod tests;
 pub(in crate::encode) struct RenderOptions<'ctx> {
     pub(in crate::encode) options: MarkdownOptions,
     pub(in crate::encode) math: Option<&'ctx MathContext>,
+    pub(in crate::encode) overview_identity: OverviewIdentity<'ctx>,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(in crate::encode) enum OverviewIdentity<'ctx> {
+    #[default]
+    Absent,
+    Indexed(&'ctx DocumentIndex),
+    Detached {
+        ambiguous: bool,
+    },
 }
 
 impl RenderOptions<'_> {
@@ -28,8 +40,27 @@ impl RenderOptions<'_> {
                 math: crate::encode::MarkdownMath::Readable,
                 ..options
             },
-            math: None,
+            ..Self::default()
         }
+    }
+
+    pub(in crate::encode) fn allows_destination(self, fragment: &str) -> bool {
+        match self.overview_identity {
+            OverviewIdentity::Absent => true,
+            OverviewIdentity::Indexed(index) => !index.is_fragment_ambiguous(fragment),
+            OverviewIdentity::Detached { ambiguous } => !ambiguous || fragment != DOCUMENT_ROOT_ID,
+        }
+    }
+
+    pub(in crate::encode) fn emits_anchor(self, fragment: &str) -> bool {
+        self.allows_destination(fragment)
+            && match self.overview_identity {
+                OverviewIdentity::Absent => true,
+                OverviewIdentity::Indexed(index) => {
+                    fragment != DOCUMENT_ROOT_ID && !index.is_overview_alias(fragment)
+                }
+                OverviewIdentity::Detached { .. } => fragment != DOCUMENT_ROOT_ID,
+            }
     }
 }
 

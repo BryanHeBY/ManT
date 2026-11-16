@@ -249,6 +249,16 @@ impl<'ir> Visit<'ir> for InvariantCollector {
         }
         match inline {
             Inline::Link {
+                target: LinkTarget::Document { name, fragment },
+                ..
+            } if !crate::is_valid_document_reference(name, fragment.as_deref()) => {
+                self.diagnostics.push(invariant(
+                    "ir.invalid-document-reference",
+                    "document link target does not follow the relative Markdown reference grammar"
+                        .to_owned(),
+                ));
+            }
+            Inline::Link {
                 target: LinkTarget::Section { id },
                 ..
             } => self.section_targets.push(id.clone()),
@@ -285,10 +295,7 @@ fn validate_semantic_document_reference(
 ) {
     let empty = match reference {
         DocumentReference::Document { name, fragment } => {
-            name.trim().is_empty()
-                || fragment
-                    .as_deref()
-                    .is_some_and(|fragment| fragment.trim().is_empty())
+            name.is_empty() || fragment.as_deref().is_some_and(str::is_empty)
         }
         DocumentReference::Manual {
             name,

@@ -70,6 +70,7 @@ struct Scan<'ir, F> {
     blocks: Vec<Step>,
     path: Vec<u32>,
     owners: OwnerFrames<'ir>,
+    overview_anchor: bool,
 }
 
 impl<'ir, F> Scan<'ir, F>
@@ -86,6 +87,7 @@ where
             blocks: Vec::new(),
             path: Vec::new(),
             owners: OwnerFrames::default(),
+            overview_anchor: false,
         }
     }
 
@@ -167,11 +169,7 @@ where
 
     fn overview(&mut self, document: &'ir Document) -> Result<(), ReferenceScanStop> {
         self.charge(0, 1, 0)?;
-        if self.options.targets
-            && (document.heading.is_some()
-                || !document.blocks.is_empty()
-                || !document.fragment_aliases.is_empty())
-        {
+        if self.options.targets && document.has_overview() {
             static ROOT: std::sync::LazyLock<crate::NodeId> =
                 std::sync::LazyLock::new(|| crate::NodeId::from(crate::DOCUMENT_ROOT_ID));
             self.target(&ROOT, &document.fragment_aliases, TargetSite::Document)?;
@@ -346,11 +344,19 @@ where
                     ..
                 } = node
             {
-                let site = self
-                    .owners
-                    .semantic()
-                    .filter(|frame| frame.owner.facts().is_some_and(|facts| facts.id == *id))
-                    .map_or(TargetSite::Inline(root), TargetSite::Owner);
+                let direct_overview_anchor = id.as_str() == crate::DOCUMENT_ROOT_ID
+                    && self.sections.is_empty()
+                    && (matches!(root, Root::DocumentHeading)
+                        || (self.blocks.len() == 1 && self.owners.content().is_none()));
+                let site = if direct_overview_anchor && !self.overview_anchor {
+                    self.overview_anchor = true;
+                    TargetSite::Document
+                } else {
+                    self.owners
+                        .semantic()
+                        .filter(|frame| frame.owner.facts().is_some_and(|facts| facts.id == *id))
+                        .map_or(TargetSite::Inline(root), TargetSite::Owner)
+                };
                 self.target(id, fragment_aliases, site)?;
             }
             if let Inline::Link {

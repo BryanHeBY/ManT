@@ -54,6 +54,32 @@ impl<'a> DocumentSelectorIndex<'a> {
         })
     }
 
+    /// The overview can also collide with an inline anchor that is not an
+    /// outline node. A path remains an exact way to read the overview.
+    pub(crate) fn validate_overview_identity(
+        &self,
+        query: &mant_ir::ResolvedContent,
+        selector: &ContentSelector,
+    ) -> Result<(), ProjectionError> {
+        let root = mant_ir::DOCUMENT_ROOT_ID;
+        self.validate_synthetic_identity(&query.label, selector, root, "root")?;
+        if matches!(selector, ContentSelector::Id { id } if id.as_str() == root)
+            && query.document.as_ref().is_some_and(|document| {
+                mant_ir::DocumentIndex::build(document).has_overview_conflict()
+            })
+        {
+            return Err(ProjectionError::AmbiguousSelector {
+                document: query.label.clone(),
+                selector: selector.to_string(),
+                candidates: vec![super::SelectorCandidate {
+                    path: "root".into(),
+                    id: root.into(),
+                }],
+            });
+        }
+        Ok(())
+    }
+
     pub(crate) fn resolve(
         &self,
         document: &str,

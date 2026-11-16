@@ -3,9 +3,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    DOCUMENT_ROOT_ID, DefinitionItem, Document, FragmentAlias, Inline, NodeId, Section,
+    DOCUMENT_ROOT_ID, DefinitionItem, Document, EntryFacts, FragmentAlias, Inline, NodeId, Section,
     visit::{self, Visit},
 };
+
+const OVERVIEW_OWNER: usize = 0;
 
 /// Semantic roles that can share one document-local identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -61,6 +63,14 @@ pub struct DocumentIndex {
     duplicates: Vec<DuplicateIdentity>,
     fragment_targets: BTreeMap<FragmentAlias, BTreeSet<NodeId>>,
     authored_fragments: BTreeSet<FragmentAlias>,
+    overview_aliases: BTreeMap<FragmentAlias, OverviewAlias>,
+    overview_conflict: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct OverviewAlias {
+    owner: usize,
+    conflicting_owners: bool,
 }
 
 impl DocumentIndex {
@@ -68,17 +78,15 @@ impl DocumentIndex {
     #[must_use]
     pub fn build(document: &Document) -> Self {
         let mut builder = IndexBuilder::default();
+        if document.has_overview() {
+            let root = NodeId::from(DOCUMENT_ROOT_ID);
+            builder.register(&root, IndexedRole::Anchor);
+            builder.has_overview = true;
+            for alias in &document.fragment_aliases {
+                builder.register_fragment(alias.clone(), &root, true, Some(OVERVIEW_OWNER));
+            }
+        }
         builder.visit_document(document);
-        if (document.heading.is_some()
-            || !document.blocks.is_empty()
-            || !document.fragment_aliases.is_empty())
-            && !builder.index.nodes.contains_key(DOCUMENT_ROOT_ID)
-        {
-            builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
-        }
-        for alias in &document.fragment_aliases {
-            builder.register_fragment(alias.clone(), &NodeId::from(DOCUMENT_ROOT_ID), true);
-        }
         builder.index
     }
 
@@ -110,15 +118,53 @@ impl DocumentIndex {
         &self.duplicates
     }
 
+    /// Whether a section, entry or independent anchor claims the actual overview's ID.
+    ///
+    /// A direct root anchor may share the synthetic destination. Without an overview
+    /// this spelling has the same identity rules as any other ID.
+    #[must_use]
+    pub fn has_overview_conflict(&self) -> bool {
+        self.overview_conflict
+    }
+
     /// Resolve one canonical or source-authored fragment without guessing.
     ///
-    /// `None` means the fragment is absent or names more than one target.
+    /// `None` means the fragment is absent, names more than one target,
+    /// or its canonical ID cannot distinguish conflicting overview owners.
+    /// Use the range-aware navigation scan to recover a unique exact alias
+    /// at its original reveal site in the last case.
     #[must_use]
     pub fn fragment_target(&self, fragment: &str) -> Option<&NodeId> {
         let targets = self.fragment_targets.get(fragment)?;
-        let mut targets = targets.iter();
-        let target = targets.next()?;
-        targets.next().is_none().then_some(target)
+        let target = targets.first()?;
+        (targets.len() == 1 && !(self.overview_conflict && target.as_str() == DOCUMENT_ROOT_ID))
+            .then_some(target)
+    }
+
+    /// Whether a fragment addresses different canonical IDs or multiple owners of the overview ID.
+    #[must_use]
+    pub fn is_fragment_ambiguous(&self, fragment: &str) -> bool {
+        self.fragment_has_conflicting_owners(fragment)
+            || self
+                .fragment_targets
+                .get(fragment)
+                .is_some_and(|targets| targets.len() > 1)
+    }
+
+    /// Exact aliases contributed by the overview and its shared inline anchor.
+    pub fn overview_aliases(&self) -> impl Iterator<Item = &FragmentAlias> {
+        self.overview_aliases
+            .iter()
+            .filter(|(_, alias)| alias.owner == OVERVIEW_OWNER)
+            .map(|(fragment, _)| fragment)
+    }
+
+    /// Whether the overview or its shared inline anchor declares this exact alias.
+    #[must_use]
+    pub fn is_overview_alias(&self, fragment: &str) -> bool {
+        self.overview_aliases
+            .get(fragment)
+            .is_some_and(|alias| alias.owner == OVERVIEW_OWNER)
     }
 
     /// Iterate exact aliases contributed by document producers.
@@ -126,11 +172,21 @@ impl DocumentIndex {
         self.authored_fragments.iter()
     }
 
-    /// Iterate fragments that resolve to more than one canonical target.
+    /// Iterate ambiguous fragments and their canonical IDs.
+    ///
+    /// Independent owners of the overview ID share one canonical spelling.
     pub fn ambiguous_fragments(&self) -> impl Iterator<Item = (&FragmentAlias, &BTreeSet<NodeId>)> {
-        self.fragment_targets
-            .iter()
-            .filter(|(_, targets)| targets.len() > 1)
+        self.fragment_targets.iter().filter(|(fragment, targets)| {
+            targets.len() > 1 || self.fragment_has_conflicting_owners(fragment)
+        })
+    }
+
+    fn fragment_has_conflicting_owners(&self, fragment: &str) -> bool {
+        (fragment == DOCUMENT_ROOT_ID && self.overview_conflict)
+            || self
+                .overview_aliases
+                .get(fragment)
+                .is_some_and(|alias| alias.conflicting_owners)
     }
 }
 
@@ -138,11 +194,26 @@ impl DocumentIndex {
 struct IndexBuilder {
     index: DocumentIndex,
     section_stack: Vec<NodeId>,
+    has_overview: bool,
+    overview_anchor: bool,
+    competing_overview_owners: usize,
+    entry_overview_owner: Option<usize>,
+    content_depth: usize,
 }
 
 impl IndexBuilder {
+    fn register_independent(&mut self, id: &NodeId, role: IndexedRole) -> Option<usize> {
+        let owner = (self.has_overview && id.as_str() == DOCUMENT_ROOT_ID).then(|| {
+            self.index.overview_conflict = true;
+            self.competing_overview_owners += 1;
+            self.competing_overview_owners
+        });
+        self.register(id, role);
+        owner
+    }
+
     fn register(&mut self, id: &NodeId, role: IndexedRole) {
-        self.register_fragment(FragmentAlias::from(id.as_str()), id, false);
+        self.register_fragment(FragmentAlias::from(id.as_str()), id, false, None);
         let containing_section = self.section_stack.last().cloned();
         let node = self
             .index
@@ -160,9 +231,29 @@ impl IndexBuilder {
         }
     }
 
-    fn register_fragment(&mut self, alias: FragmentAlias, id: &NodeId, authored: bool) {
+    fn register_fragment(
+        &mut self,
+        alias: FragmentAlias,
+        id: &NodeId,
+        authored: bool,
+        overview_owner: Option<usize>,
+    ) {
         if authored {
             self.index.authored_fragments.insert(alias.clone());
+        }
+        if let Some(owner) = overview_owner {
+            let claim = self
+                .index
+                .overview_aliases
+                .entry(alias.clone())
+                .or_insert(OverviewAlias {
+                    owner,
+                    conflicting_owners: false,
+                });
+            claim.conflicting_owners |= claim.owner != owner;
+            // Keep the overview declaration visible to the root exporter even
+            // when the competing declaration was encountered first.
+            claim.owner = claim.owner.min(owner);
         }
         self.index
             .fragment_targets
@@ -170,19 +261,32 @@ impl IndexBuilder {
             .or_default()
             .insert(id.clone());
     }
+
+    fn enter_item(&mut self, facts: Option<&EntryFacts>) -> Option<usize> {
+        let previous = self.entry_overview_owner;
+        if let Some(facts) = facts {
+            self.entry_overview_owner = self.register_independent(&facts.id, IndexedRole::Entry);
+        }
+        self.content_depth += 1;
+        previous
+    }
+
+    fn leave_item(&mut self, previous: Option<usize>) {
+        self.content_depth -= 1;
+        self.entry_overview_owner = previous;
+    }
 }
 
 impl<'ir> Visit<'ir> for IndexBuilder {
     fn visit_list_item(&mut self, item: &'ir crate::ListItem) {
-        if let Some(facts) = &item.entry {
-            self.register(&facts.id, IndexedRole::Entry);
-        }
+        let previous = self.enter_item(item.entry.as_ref());
         visit::walk_list_item(self, item);
+        self.leave_item(previous);
     }
     fn visit_section(&mut self, section: &'ir Section) {
-        self.register(&section.id, IndexedRole::Section);
+        let owner = self.register_independent(&section.id, IndexedRole::Section);
         for alias in &section.fragment_aliases {
-            self.register_fragment(alias.clone(), &section.id, true);
+            self.register_fragment(alias.clone(), &section.id, true, owner);
         }
         self.section_stack.push(section.id.clone());
         visit::walk_section(self, section);
@@ -190,10 +294,16 @@ impl<'ir> Visit<'ir> for IndexBuilder {
     }
 
     fn visit_definition_item(&mut self, item: &'ir DefinitionItem) {
-        if let Some(identity) = &item.entry {
-            self.register(&identity.id, IndexedRole::Entry);
-        }
+        let previous = self.enter_item(item.entry.as_ref());
         visit::walk_definition_item(self, item);
+        self.leave_item(previous);
+    }
+
+    fn visit_block(&mut self, block: &'ir crate::Block) {
+        let table = usize::from(matches!(block, crate::Block::Table { .. }));
+        self.content_depth += table;
+        visit::walk_block(self, block);
+        self.content_depth -= table;
     }
 
     fn visit_inline(&mut self, inline: &'ir Inline) {
@@ -203,9 +313,22 @@ impl<'ir> Visit<'ir> for IndexBuilder {
             ..
         } = inline
         {
-            self.register(id, IndexedRole::Anchor);
+            let owner = if id.as_str() == DOCUMENT_ROOT_ID && self.has_overview {
+                if self.section_stack.is_empty() && self.content_depth == 0 && !self.overview_anchor
+                {
+                    self.overview_anchor = true;
+                    Some(OVERVIEW_OWNER)
+                } else if let Some(owner) = self.entry_overview_owner {
+                    self.register(id, IndexedRole::Anchor);
+                    Some(owner)
+                } else {
+                    self.register_independent(id, IndexedRole::Anchor)
+                }
+            } else {
+                self.register_independent(id, IndexedRole::Anchor)
+            };
             for alias in fragment_aliases {
-                self.register_fragment(alias.clone(), id, true);
+                self.register_fragment(alias.clone(), id, true, owner);
             }
         }
         visit::walk_inline(self, inline);

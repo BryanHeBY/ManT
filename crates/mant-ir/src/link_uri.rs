@@ -41,6 +41,9 @@ impl LinkTarget {
     pub fn to_uri(&self) -> Option<String> {
         let destination = match self {
             Self::Document { name, fragment } => {
+                if !is_valid_document_reference(name, fragment.as_deref()) {
+                    return None;
+                }
                 let mut value = format!("{}.md", encode(name, true));
                 if let Some(fragment) = fragment {
                     value.push('#');
@@ -73,6 +76,23 @@ impl LinkTarget {
     }
 }
 
+/// Test whether decoded document reference components can round trip as a
+/// relative Markdown destination. This does not grant filesystem access.
+#[must_use]
+pub fn is_valid_document_reference(name: &str, fragment: Option<&str>) -> bool {
+    !name.is_empty()
+        && !name.starts_with('/')
+        && !name.contains(['\\', '?', '#'])
+        && !name.chars().any(char::is_control)
+        && name
+            .split('/')
+            .next()
+            .is_some_and(|first| !first.contains(':'))
+        && name.split('/').all(|component| !component.is_empty())
+        && fragment
+            .is_none_or(|fragment| !fragment.is_empty() && !fragment.chars().any(char::is_control))
+}
+
 /// Parse a relative Markdown link into its extension-free logical name and
 /// optional decoded fragment, without using platform filesystem conventions.
 ///
@@ -97,10 +117,7 @@ pub fn markdown_document_reference(destination: &str) -> Option<(String, Option<
         (destination, None)
     };
     let path = decode_path(path)?;
-    if path.split('/').next()?.contains(':') {
-        return None;
-    }
-    if path.contains(['\\', '?']) || path.starts_with('/') || path.chars().any(char::is_control) {
+    if path.starts_with('/') {
         return None;
     }
     let (parent, leaf) = path
@@ -118,11 +135,7 @@ pub fn markdown_document_reference(destination: &str) -> Option<(String, Option<
     } else {
         format!("{parent}/{filename}")
     };
-    let valid = logical.split('/').all(|component| {
-        !component.is_empty()
-            && (matches!(component, "." | "..") || !component.chars().any(char::is_control))
-    });
-    valid.then_some((logical, fragment))
+    is_valid_document_reference(&logical, fragment.as_deref()).then_some((logical, fragment))
 }
 
 fn decode_fragment(value: &str) -> Option<String> {

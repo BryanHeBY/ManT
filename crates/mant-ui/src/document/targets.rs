@@ -130,6 +130,10 @@ impl TargetIndex {
             Ok(())
         }
     }
+
+    pub(super) fn is_ambiguous(&self, fragment: &str) -> bool {
+        matches!(self.targets.get(fragment), Some(Target::Ambiguous))
+    }
 }
 
 fn retained_bytes(key: &str, reveal: ContentRevealRef<'_>) -> usize {

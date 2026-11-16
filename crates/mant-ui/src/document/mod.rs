@@ -268,10 +268,7 @@ impl DocumentView {
             let semantic_index = SemanticIndex::build(document);
             references.check_source_owners(document, &semantic_index);
             builder.entry_styles = Arc::new(entries::EntryStyles::for_document(document));
-            if document.heading.is_some()
-                || !document.blocks.is_empty()
-                || !document.fragment_aliases.is_empty()
-            {
+            if document.has_overview() {
                 let entries = semantic_index.root();
                 builder.anchor(NavNode {
                     id: ROOT_ID.to_owned(),
@@ -442,6 +439,11 @@ impl DocumentView {
                 }),
             )
         }));
+        // A malformed document cannot make the same outline ID reveal one
+        // arbitrary owner, even if the caller skips link activation.
+        if self.targets.is_ambiguous(ROOT_ID) {
+            anchor_rows.remove(ROOT_ID);
+        }
 
         RenderedDocument {
             row_count: rows.len(),

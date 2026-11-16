@@ -2,7 +2,7 @@
 use crate::{Diagnostic, DiagnosticLevel, SourceSpan};
 
 // Internal classification of this validator's own findings. Consumers read
-// Diagnostic::impact, never these codes or another producer's private list.
+// Diagnostic::impact for completeness.
 pub(super) fn is_semantic_completeness_diagnostic(code: &str) -> bool {
     matches!(
         code,
@@ -16,10 +16,12 @@ pub(super) fn is_semantic_completeness_diagnostic(code: &str) -> bool {
             | "ir.cyclic-entry-alias"
             | "ir.invalid-identity"
             | "ir.identity-role-collision"
+            | crate::OVERVIEW_IDENTITY_COLLISION
             | "ir.duplicate-identity"
             | "ir.empty-fragment-alias"
             | "ir.invalid-fragment-alias"
             | "ir.ambiguous-fragment-alias"
+            | "ir.invalid-document-reference"
             | "ir.empty-semantic-document-reference"
             | "ir.invalid-semantic-document-reference"
             | "ir.empty-entry-value-domain"

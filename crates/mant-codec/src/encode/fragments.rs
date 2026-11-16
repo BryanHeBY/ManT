@@ -2,8 +2,8 @@
 
 use mant_ir::{Block, Heading, Inline, InlineContentRef, Section};
 
-use super::math_markdown::MathContext;
 use super::math_markdown::RenderOptions;
+use super::math_markdown::{MathContext, OverviewIdentity};
 use super::{MarkdownInlineProjection, MarkdownMath, MarkdownOptions};
 
 /// Presentation controls for detached report fragments.
@@ -29,6 +29,7 @@ impl MarkdownFragmentOptions {
         RenderOptions {
             options,
             math: (self.math != MarkdownMath::Readable).then_some(math),
+            ..RenderOptions::default()
         }
     }
 }
@@ -96,6 +97,35 @@ pub fn render_heading_fragment(
 ) -> String {
     let math = MathContext::export(true, options.math);
     super::render_heading(depth, heading, options.document_options(&math))
+}
+
+/// Encode the selected document overview as independently joinable blocks.
+///
+/// The overview anchor is emitted once, even when the source also carries
+/// its explicit inline destination. If validation found another owner of
+/// that ID, retain the excerpt text without activating the disputed target.
+#[must_use]
+pub fn render_overview_fragment(
+    heading: Option<&Heading>,
+    blocks: &[Block],
+    depth: usize,
+    options: MarkdownFragmentOptions,
+    ambiguous_overview: bool,
+) -> Vec<String> {
+    let math = MathContext::export(true, options.math);
+    let mut options = options.document_options(&math);
+    options.overview_identity = OverviewIdentity::Detached {
+        ambiguous: ambiguous_overview,
+    };
+    let mut output = Vec::new();
+    if options.preserve_anchors && !ambiguous_overview {
+        output.push(html_anchor(mant_ir::DOCUMENT_ROOT_ID));
+    }
+    if let Some(heading) = heading {
+        output.push(super::render_heading(depth, heading, options));
+    }
+    output.extend(super::blocks::render_blocks(blocks, options));
+    output
 }
 
 /// Encode literal text as a `CommonMark` code span with safe delimiters.

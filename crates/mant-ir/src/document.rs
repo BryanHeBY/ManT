@@ -52,6 +52,14 @@ pub struct Document {
     pub sections: Vec<Section>,
 }
 
+impl Document {
+    /// Whether the synthetic document-overview identity addresses this document.
+    #[must_use]
+    pub fn has_overview(&self) -> bool {
+        self.heading.is_some() || !self.blocks.is_empty() || !self.fragment_aliases.is_empty()
+    }
+}
+
 /// Parser implementation that produced this normalized document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

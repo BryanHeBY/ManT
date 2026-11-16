@@ -7,7 +7,9 @@ use crate::{
         collect_root_entries, collect_sections,
     },
 };
-use mant_ir::{DOCUMENT_ROOT_ID, OutlinePath};
+use mant_ir::{
+    DOCUMENT_ROOT_ID, Diagnostic, DiagnosticImpact, Document, DocumentIndex, OutlinePath,
+};
 use mant_protocol::{
     ContentSelector, ExcerptSchema, ExcerptSelection, MAX_NODE_SELECTORS, OutlineNodeReference,
     OutlineReference, OutlineTrail, QueryExcerpt,
@@ -115,6 +117,7 @@ pub fn select_excerpt(
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
+    let diagnostics = excerpt_diagnostics(document, document_root_selected);
 
     Ok(QueryExcerpt {
         display_title: query
@@ -125,17 +128,33 @@ pub fn select_excerpt(
         schema: ExcerptSchema::V0Dot14,
         label: query.label.clone(),
         address: query.address.clone(),
-        semantics_complete: document
-            .is_none_or(|document| semantics_complete(&document.diagnostics)),
-        content_complete: document.is_none_or(|document| content_complete(&document.diagnostics)),
+        semantics_complete: semantics_complete(&diagnostics),
+        content_complete: content_complete(&diagnostics),
         producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),
         meta: document.map(|document| document.meta.clone()),
-        diagnostics: document
-            .map(|document| document.diagnostics.clone())
-            .unwrap_or_default(),
+        diagnostics,
         selections,
     })
+}
+
+fn excerpt_diagnostics(document: Option<&Document>, overview_selected: bool) -> Vec<Diagnostic> {
+    let Some(document) = document else {
+        return Vec::new();
+    };
+    let mut diagnostics = document.diagnostics.clone();
+    // An exact path can read an ambiguous overview. Retain its identity
+    // finding before detaching the selected content from other owners.
+    if overview_selected
+        && !diagnostics.iter().any(|finding| {
+            finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION)
+                && finding.impact == DiagnosticImpact::SemanticCoverage
+        })
+        && let Some(collision) = DocumentIndex::build(document).overview_conflict_diagnostic()
+    {
+        diagnostics.push(collision);
+    }
+    diagnostics
 }
 
 fn resolve_excerpt_candidates<'a>(
@@ -157,9 +176,9 @@ fn resolve_excerpt_candidates<'a>(
             && query
                 .document
                 .as_ref()
-                .is_some_and(|document| document.heading.is_some() || !document.blocks.is_empty())
+                .is_some_and(mant_ir::Document::has_overview)
         {
-            index.validate_synthetic_identity(&query.label, selector, DOCUMENT_ROOT_ID, "root")?;
+            index.validate_overview_identity(query, selector)?;
             document_root_selected = true;
             continue;
         }

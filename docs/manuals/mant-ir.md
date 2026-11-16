@@ -864,7 +864,23 @@ Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, a requi
 `validate_document` checks invariants after parsing or deserialization, including document-local identity validity, uniqueness, link targets, and structural consistency. Custom producers should validate before handing a document to indexes or frontends.
 
 `DocumentIndex` is an immutable content-navigation index over a validated
-document. `SemanticIndex` independently projects semantic definitions for
+document. The synthetic `document-overview` ID belongs to the original
+heading, root blocks, or exact root fragment aliases when any are present.
+A direct root anchor may share that destination. A section, entry, or
+independent nested anchor claiming the same ID produces a semantic diagnostic,
+and a structural path can still read the original content.
+Distinct exact aliases can keep their independent reveal positions through
+the navigation scan. An exact alias claimed by multiple overview owners is
+ambiguous and does not generate a destination in addressable Markdown.
+Canonical ID lookup requires a unique owner before returning an ID.
+
+Typed relative document targets use the same decoded name and fragment
+grammar in inline links, entry-set references and Markdown destinations.
+Invalid targets remain in the document for diagnostics and preserve their
+visible labels. Validation of the reference syntax is independent of
+catalog lookup and namespace authorization.
+
+`SemanticIndex` independently projects semantic definitions for
 outline discovery and can always be rebuilt from the document. `NodePath` and
 outline paths are ephemeral coordinates derived from the current tree; nested
 semantic entries use paths such as `2.3/e4/e2`. These coordinates are not

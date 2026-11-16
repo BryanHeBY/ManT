@@ -1,5 +1,5 @@
 //! Canonical Markdown bytes and borrowed source-coordinate maps.
-use super::math_markdown::RenderOptions;
+use super::math_markdown::{OverviewIdentity, RenderOptions};
 use super::{
     MarkdownOptions,
     anchors::anchor_markers,
@@ -8,7 +8,7 @@ use super::{
     section_headings_have_local_links, semantic,
 };
 use crate::ResolvedContent;
-use mant_ir::{DOCUMENT_ROOT_ID, EntryOwner, OutlinePath, Section, SourceSpan};
+use mant_ir::{DOCUMENT_ROOT_ID, DocumentIndex, EntryOwner, OutlinePath, Section, SourceSpan};
 use std::ops::Range;
 
 /// Canonical Markdown bytes and coordinates borrowing their exact source snapshot.
@@ -179,6 +179,7 @@ pub(super) fn render_markdown_artifact(
         RenderOptions {
             options,
             math: Some(&context),
+            ..RenderOptions::default()
         },
         track,
     );
@@ -215,6 +216,17 @@ pub(super) fn render_markdown_with_context<'src>(
     // over optional entry metadata for that document.
     options.preserve_anchors =
         heading_links || (options.preserve_anchors && !options.preserve_semantics);
+    let index = query
+        .document
+        .as_ref()
+        .filter(|document| options.preserve_anchors && document.has_overview())
+        .map(DocumentIndex::build);
+    let options = RenderOptions {
+        overview_identity: index
+            .as_ref()
+            .map_or(OverviewIdentity::Absent, OverviewIdentity::Indexed),
+        ..options
+    };
     let mut output = ArtifactBuilder {
         track,
         ..ArtifactBuilder::default()
@@ -224,15 +236,8 @@ pub(super) fn render_markdown_with_context<'src>(
         .as_ref()
         .and_then(|document| document.heading.as_ref())
     {
-        if options.preserve_anchors {
-            output.push(&inline::html_anchors(
-                DOCUMENT_ROOT_ID,
-                &query
-                    .document
-                    .as_ref()
-                    .expect("heading owner")
-                    .fragment_aliases,
-            ));
+        if let Some(index) = &index {
+            output.push(&overview_anchors(index, options));
         }
         let range = output.push(&render_heading(1, heading, options));
         if track {
@@ -263,13 +268,10 @@ pub(super) fn render_markdown_with_context<'src>(
         if !document.blocks.is_empty()
             || (document.heading.is_none() && !document.fragment_aliases.is_empty())
         {
-            let start = if options.preserve_anchors && document.heading.is_none() {
-                output
-                    .push(&inline::html_anchors(
-                        DOCUMENT_ROOT_ID,
-                        &document.fragment_aliases,
-                    ))
-                    .start
+            let start = if let Some(index) = &index
+                && document.heading.is_none()
+            {
+                output.push(&overview_anchors(index, options)).start
             } else {
                 output.text.len()
             };
@@ -280,6 +282,14 @@ pub(super) fn render_markdown_with_context<'src>(
         render_artifact_sections(&mut output, &document.sections, &[], None, 2, options);
     }
     output.finish()
+}
+
+fn overview_anchors(index: &DocumentIndex, options: RenderOptions<'_>) -> String {
+    inline::render_html_anchors(
+        std::iter::once(DOCUMENT_ROOT_ID)
+            .chain(index.overview_aliases().map(mant_ir::FragmentAlias::as_str)),
+        |fragment| options.allows_destination(fragment),
+    )
 }
 
 #[derive(Default)]
@@ -406,15 +416,17 @@ fn render_artifact_sections<'src>(
     options: RenderOptions<'_>,
 ) {
     for (index, section) in sections.iter().enumerate() {
-        let rendered_heading = if options.preserve_anchors {
-            format!(
-                "{}\n\n{}",
-                inline::html_anchors(&section.id, &section.fragment_aliases),
-                render_heading(depth, &section.heading, options)
-            )
-        } else {
-            render_heading(depth, &section.heading, options)
-        };
+        let mut rendered_heading = String::new();
+        if options.preserve_anchors {
+            rendered_heading =
+                inline::html_anchors(&section.id, &section.fragment_aliases, |fragment| {
+                    options.emits_anchor(fragment)
+                });
+            if !rendered_heading.is_empty() {
+                rendered_heading.push_str("\n\n");
+            }
+        }
+        rendered_heading.push_str(&render_heading(depth, &section.heading, options));
         let range = output.push(&rendered_heading);
         if !output.track {
             // Stream one scope at a time without retaining the whole document

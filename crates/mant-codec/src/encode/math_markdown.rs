@@ -10,7 +10,7 @@ use super::MarkdownMath;
 use super::{MarkdownArtifact, MarkdownOptions};
 use crate::ResolvedContent;
 use crate::math::{MathError, MathLossKind, MathPolicy};
-pub(super) use context::{MathContext, RenderOptions};
+pub(super) use context::{MathContext, OverviewIdentity, RenderOptions};
 use std::{error::Error, fmt};
 
 /// Maximum independently owned formulas in one mathematical Markdown operation.
@@ -211,6 +211,7 @@ pub fn render_math_markdown(
         RenderOptions {
             options,
             math: Some(&context),
+            ..RenderOptions::default()
         },
         true,
     );

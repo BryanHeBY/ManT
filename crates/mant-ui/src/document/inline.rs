@@ -292,7 +292,9 @@ pub(super) fn local_link_target(
             .as_deref()
             .and_then(ExternalUri::parse)
             .map(LinkTarget::External),
-        mant_ir::LinkTarget::Document { name, fragment } => {
+        mant_ir::LinkTarget::Document { name, fragment }
+            if mant_ir::is_valid_document_reference(name, fragment.as_deref()) =>
+        {
             markdown_reference_address(current, name).map(|address| LinkTarget::Document {
                 address,
                 fragment: fragment.clone(),
@@ -305,7 +307,7 @@ pub(super) fn local_link_target(
             name: name.clone(),
             manual_section: manual_section.clone(),
         }),
-        mant_ir::LinkTarget::Manual { .. } => None,
+        mant_ir::LinkTarget::Document { .. } | mant_ir::LinkTarget::Manual { .. } => None,
         mant_ir::LinkTarget::Section { id } => Some(LinkTarget::Section(id.to_string())),
     }
 }
