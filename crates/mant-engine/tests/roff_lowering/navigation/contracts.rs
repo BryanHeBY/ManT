@@ -232,7 +232,7 @@ fn a_link_in_an_option_head_does_not_move_name_bindings() {
     let query = mant_loader::load_roff_bytes(source).unwrap();
     let query = crate::json_roundtrip::json_string_roundtrip(&query);
     let document = query.document.as_ref().unwrap();
-    assert!(mant_ir::validate_document(document).is_empty());
+    assert_eq!(mant_ir::validate_document(document), []);
     let [mant_ir::Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice()
     else {
         panic!("original TP owner")

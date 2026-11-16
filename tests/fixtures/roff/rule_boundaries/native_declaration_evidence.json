@@ -1,0 +1,139 @@
+{
+  "schema": "mant.native-declaration-regression-evidence/v1",
+  "reviewBase": "80afb34c63b1fe1974eb8ae7a5d0397fd89e0b46",
+  "rustTestTarget": "crates/mant-engine/tests/native_declarations.rs",
+  "reference": {
+    "snapshot": "20261013T025419Z",
+    "identity": "cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible",
+    "sha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+    "profileOrder": [
+      "tree",
+      "ascii",
+      "utf8",
+      "html",
+      "lint"
+    ],
+    "profileColumns": [
+      "exit",
+      "stdoutSha256",
+      "stderrSha256"
+    ],
+    "arguments": {
+      "tree": [
+        "-Ttree",
+        "-Ios=ManT",
+        "-C",
+        "/dev/null",
+        "-M",
+        "tests/fixtures/roff/rule_boundaries"
+      ],
+      "ascii": [
+        "-Tascii",
+        "-Owidth=80",
+        "-Ios=ManT",
+        "-C",
+        "/dev/null",
+        "-M",
+        "tests/fixtures/roff/rule_boundaries"
+      ],
+      "utf8": [
+        "-Tutf8",
+        "-Owidth=80",
+        "-Ios=ManT",
+        "-C",
+        "/dev/null",
+        "-M",
+        "tests/fixtures/roff/rule_boundaries"
+      ],
+      "html": [
+        "-Thtml",
+        "-Ios=ManT",
+        "-C",
+        "/dev/null",
+        "-M",
+        "tests/fixtures/roff/rule_boundaries"
+      ],
+      "lint": [
+        "-Tlint",
+        "-Ios=ManT",
+        "-C",
+        "/dev/null",
+        "-M",
+        "tests/fixtures/roff/rule_boundaries"
+      ]
+    },
+    "environment": {
+      "LC_ALL": "C.UTF-8",
+      "TZ": "UTC"
+    },
+    "stdin": "UTF-8 source including final newline, or the unchanged fixture bytes. Null stream hashes indicate an observed empty stream.",
+    "workingDirectory": "Repository root",
+    "manualSearch": "The rule_boundaries directory contains no installed manuals. Use it as the sole manual path so lint does not depend on local manual packages.",
+    "lintNotes": {
+      "op-ignored-third": "Error for the excess OP operand.",
+      "tq-follows-description": "Warning for the missing TH date in the existing test.",
+      "fo-ignored-operand": "Error for the excess Fo operand.",
+      "openbsd-bpf": "Style diagnostics for function markup and unresolved cross-references with the recorded manual path."
+    }
+  },
+  "scope": [
+    "These are representative, byte-exact receipts for inputs in the named Rust regressions. The original review used some different headings and body sentinels.",
+    "Witnesses describe native execution. Name, category, range, owner and query assertions are ManT-specific and live in the named Rust tests. Cargo does not invoke the reference binary.",
+    "This receipt set does not include the full role-by-section or font-by-wrapper cross products, every TQ isolation boundary, R10 field commit/drop, or R10 layout variants.",
+    "R11 tables, R12 publication and budget, consumer viewport, copy and reveal, performance and peak memory are outside this native receipt set."
+  ],
+  "priorAudit": {
+    "path": "target/audits/native-role-review-80afb34c",
+    "evidence": [
+      "identity.json",
+      "reference-preflight.log",
+      "symbols/matrix.json",
+      "options/matrix.json",
+      "options/additional-matrix.json",
+      "options/continuation-matrix.json",
+      "root/real-query-summary.json"
+    ],
+    "purpose": "Baseline diagnosis and broader input matrix from the original review."
+  },
+  "caseColumns": [
+    "caseId",
+    "axes",
+    "rustTest",
+    "sourceOrFixture",
+    "sourceSha256",
+    "nativeWitness",
+    "profiles"
+  ],
+  "cases": [
+    ["va-environment", ["R01", "R08"], "subjects::native_subjects_precede_inherited_section_categories", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Va local_value\nSUBJECT_BODY\n.El\n", "3b76346f4c641b684f43fd80bd0f5e3c62fd46a3aee3c44591da3f780a077add", "The It HEAD contains a Va element under ENVIRONMENT and the terminal displays local_value.", [[0, "9461558c71963be6e087e6ec26afbe8ef37726eee5c41a16be5b31f4d826cf23", null], [0, "4f32a7c1a4a0240fa30a241d319866c71e25ff8f66514ae487cc9efbd39687e0", null], [0, "21202ff900453ecbed3ed2ea20d55e548ba0f7836b29e4cc3d9e291a4e25f896", null], [0, "a79e1b90ad2a6af69fa552c5e52aaa7dc95b238db2fd6e058d97bd89014e3a9e", null], [0, null, null]]],
+    ["er-commands", ["R01", "R08"], "subjects::native_subjects_precede_inherited_section_categories", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Er EIO\nSUBJECT_BODY\n.El\n", "db74c743e86ee2c7c974ec7f1c560a73a64f2f97845839b78321c5e42c8963d8", "The COMMANDS title leaves the It HEAD as an Er element.", [[0, "a17be53b223bd44090aefce97ff1406033dc4f0a896b6d9f6492cf0930c86fcb", null], [0, "b9ad4f49b4f1b1ca9e02aa018534a082df868f08f2cce7eaa1722c57fc203eea", null], [0, "aec60369bf541cad730f3e5ada46b1d048559d542f0a1d07ee5b384485652c07", null], [0, "ee621ce3c8524e10de3cd47494866c0ab030742c3c6ef89ead1e3d0a54a2e3c1", null], [0, null, null]]],
+    ["synopsis-owned-function", ["R02", "R07"], "subjects::actual_head_owners_distinguish_symbol_uses_and_synopsis_declarations", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n.It Fn checked \"int x\"\nSUBJECT_BODY\n.El\n", "f3dded0b45c337f4c689a66c8bc34d8438ea59979a6bf12fb9badc9fa6c97205", "The Fn executes inside a real It HEAD in SYNOPSIS, with distinct checked and int x operands.", [[0, "07d3a6de96044b9b8669531773f5e8c0c5ca0a690e8c5689b9f24440a289f208", null], [0, "c491d1b5485438d7d62890a42a35d130359a0d058a63725abb2b736d0c7f0e10", null], [0, "4c2ddd527914d8eea412d0d5046c015711ad5a523392b6794aa0df1178431b36", null], [0, "2084ceddfb47e81698e1650bdaabcf116f807f09e703ba9320c9014c36ec5d0d", null], [0, null, null]]],
+    ["owned-and-unowned-occurrences", ["R02", "R07"], "subjects::actual_head_owners_distinguish_symbol_uses_and_synopsis_declarations", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh SYNOPSIS\n.Ft void\n.Fn unowned \"int x\"\n.Sh DESCRIPTION\n.Fn unowned \"int x\"\n.Va plain_variable\n.Bl -tag -width Ds\n.It Sy owner\n.Fn unowned \"int x\"\n.Er EUNOWNED\n.Bl -tag -width Ds\n.It Bq Er ENESTED\nNESTED_BODY\n.El\n.El\n", "16d3bf7883a1bbef218fd5362b074ce576f0e89795424b05eb90db9e24b820cf", "The tree has Fn uses in SYNOPSIS, DESCRIPTION, and an It BODY, and a nested It HEAD with Bq Er ENESTED.", [[0, "13184ea416f753aa6ad888e69a1d7938ec41d06188b80414e0dd0f7cbeaf940e", null], [0, "88aa144f91389f4bf398ec4fbee8ac0038055f0058dea4d0f5aee89021b35989", null], [0, "78a408c399b02aba0fc791dff36b5a906cb6fd1376e1ff6813a7002f718da501", null], [0, "9d38b76e98fdb33a903b0c8a3b729b26007ef5e2e262a4c63607dc32780f3b33", null], [0, null, null]]],
+    ["qq-variable", ["R01", "R03"], "subjects::generated_qq_quotes_can_wrap_roles_while_authored_quotes_remain_in_the_form", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Qq Va local_value\nSUBJECT_BODY\n.El\n", "826c213badbad5d3ed29b58c0e438582ac10b9bfad17a46dba4a115f97d9676a", "Qq BODY encloses Va and generates ASCII double quotes.", [[0, "48f37521a39b17dc77e8d9f353fc65fc0b221b567e95ea1084d5d1ace8783abb", null], [0, "0b5ad3e994f320bf82fd3b595780131727f08192ceedc6652e8318274b5a8786", null], [0, "f15ed08b3c2a0cd5a13f08846d5058dd28a802a5fd44e200c1abc996d7ef1b64", null], [0, "416f227efbbd416a96ebd58e67905da104c4bc1de8dbe1a73d8cd91fe359eb8a", null], [0, null, null]]],
+    ["qq-error", ["R03", "R08"], "subjects::generated_qq_quotes_can_wrap_roles_while_authored_quotes_remain_in_the_form", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Qq Er EIO\nSUBJECT_BODY\n.El\n", "5da89ae1e738be5451b15cd4a0052441719e060656e537c6825b7694b41ec568", "Qq BODY encloses Er and the terminal displays EIO in ASCII double quotes.", [[0, "cd85834344c221507e042065df2fccc3cb524c5cbe5be206940f8219e159589f", null], [0, "313d935c4e5170ede59f68b3ba924b552e5bae6b64f7f5ddb481663442204b06", null], [0, "72d3a52c4631e47475868e3a6348acfc74e2be96a30ea8a01f326a454f486746", null], [0, "768fc8d876d2921a8b570978b27ced7b81950fe9d44f3c55940df2a29c0bcc9c", null], [0, null, null]]],
+    ["qq-function", ["R03", "R07"], "subjects::generated_qq_quotes_can_wrap_roles_while_authored_quotes_remain_in_the_form", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It Qq Fn checked \"int x\"\nSUBJECT_BODY\n.El\n", "9a2de34a021ead61dd32676723433197146ea7b362a84439d665adff5019cd44", "Qq BODY encloses Fn and the terminal quotes the entire function form.", [[0, "2953c73f1f443376cac2e3d48e0c9736ef34c198ba6608969babab28abce9e47", null], [0, "fbe1e01428695fcaa6590422009facaf285f643916c5dd56e7edaac484222ffe", null], [0, "cba20f32ca1117f0893a9d40af956984530ad31c8c2669423173d1401be2f480", null], [0, "d51ad4e85b75638459598aaf7cfe91a41587af75ac39270400f63c5fb2695604", null], [0, null, null]]],
+    ["authored-quote", ["R03", "R08"], "subjects::generated_qq_quotes_can_wrap_roles_while_authored_quotes_remain_in_the_form", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh ENVIRONMENT\n.Bl -tag -width Ds\n.It No \\[dq] Ns Va local_value Ns No \\[dq]\nSUBJECT_BODY\n.El\n", "29c365b06efe2f11e79da4c0d336637e9059007caaa50ff912d739ee4aa54c08", "The terminal displays the same quotes as Qq Va, while the tree attributes the quotes to No text and Ns boundaries.", [[0, "3995640e9471e8265f43272a5df242fa159e23a4265653b47b54cea80d423137", null], [0, "0b5ad3e994f320bf82fd3b595780131727f08192ceedc6652e8318274b5a8786", null], [0, "f15ed08b3c2a0cd5a13f08846d5058dd28a802a5fd44e200c1abc996d7ef1b64", null], [0, "27a2d0721a62d93b75a479eb67a3ab91d219883c4497d7767229de9edc25d149", null], [0, null, null]]],
+    ["styled-error", ["R03", "R08", "R10"], "subjects::generated_head_wrappers_and_font_changes_leave_exact_subject_ranges", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Bq Er \\fREIO\nSUBJECT_BODY\n.El\n", "d7f328a436ba651e1bdfe70be092ba3e0bec0278f21550bc96ca9fbde452da7a", "The Bq contains an Er operand with a Roman escape. The terminal displays [EIO].", [[0, "d0400eae9bb02e766365af2d102439235fd5cb4ab2dce75e9c5130afcc62f714", null], [0, "9c53f163749d982109a1fcf34a0d904ff2616d7bf1c04b060a8efaf729d82eb6", null], [0, "7f33c29b57bdab824db1efb05a71ea015db24ac7088fbbe2ae9920cbf5e70b0b", null], [0, "7909f7fefaec18d27fde036feba3fe9cd8ea031a26791a1e9afc039942a9a1a0", null], [0, null, null]]],
+    ["op-fake-value", ["R04", "R09"], "operands::optional_man_keys_keep_arguments_out_of_names_across_fonts_and_sections", ".TH TEST 1 2026-11-17\n.SH OPTIONS\n.TP\n.OP \\-\\-color \"\\fB--fake, --phantom\"\nOP_BODY\n", "c49b3e5a67223c6d0c4c9d3be5c4ee8bd861167d46d729ab23fdf7841361822c", "The tree records a key operand and a single quoted value. Both fake names display in the value inside the brackets.", [[0, "87076faacdd54a395f21f0741bb1b9d573de328de76fb17e1b2a6622592a6256", null], [0, "18b127a38334571c2f82589fca07d62c9624cd8bbe65fcdafbf17a2552181179", null], [0, "18b127a38334571c2f82589fca07d62c9624cd8bbe65fcdafbf17a2552181179", null], [0, "4e87627ae7b632003bc013c7b8e254ac53141b022286e2a5ed32170b884be8d8", null], [0, null, null]]],
+    ["op-ignored-third", ["R04", "R09"], "operands::optional_man_keys_keep_arguments_out_of_names_across_fonts_and_sections", ".TH TEST 1 2026-11-17\n.SH DESCRIPTION\n.TP\n.OP \\-\\-color \"\\fB--fake\" --ignored\nOP_BODY\n", "515a0194de246546741e8a00b657eb087f70dccc2feba192f6b5804b2eefaca2", "The OP tree retains the third operand. The terminal and HTML render the first two. Lint reports the excess argument.", [[0, "b56ba9180cd6139ccea499c2983c7a7bc65b06930229545604874b7add7c646e", null], [0, "bd3a4831207f60e94dd2dbbcae4242de4051e4c1654787996466c3796cff7315", null], [0, "bd3a4831207f60e94dd2dbbcae4242de4051e4c1654787996466c3796cff7315", null], [0, "1becb66c29bbc937c49f3016589e943f40256d53089017bbc80fec779aabd40d", null], [3, "a13c4b21d1c564e435dc097baf8229bae9475feefaeb0f2ab20a6db431ae2523", null]]],
+    ["op-empty-key", ["R04", "R09"], "operands::optional_man_keys_keep_arguments_out_of_names_across_fonts_and_sections", ".TH TEST 1 2026-11-17\n.SH OPTIONS\n.TP\n.OP \"\" \"\\fB--fake\"\nOP_BODY\n", "25c4fe5f64c61ca2ec305266bcbf2e71c7cd8310ecc4f2ace8076cd4e7316f75", "The OP tree retains the empty key before the second operand, and the bracketed output begins with a space.", [[0, "98e4742fad5b5ca207ae408f64f0b41c57035bd2c2c012bc36e634f78951a077", null], [0, "910fb4af6e5ec0bace95343d6d2e0931b680107ed26e6b4f73a7d66f14a86e98", null], [0, "910fb4af6e5ec0bace95343d6d2e0931b680107ed26e6b4f73a7d66f14a86e98", null], [0, "1d0ddf5ba861a31fda4781ebda8df759722a06762fb06bc50af16ec1249dca76", null], [0, null, null]]],
+    ["tq-optional-key-later", ["R04", "R05"], "operands::a_tq_optional_key_stays_addressable_after_an_unrelated_or_unrecognized_first_term", ".TH TEST 1 2026-11-17\n.SH DESCRIPTION\n.TP\n.B normal\n.TQ\n.OP \\-\\-color WHEN\nBODY\n", "489011642d3d2caf13c9352ed45b6a5c868d505dc1c78c6519d0f0e3cce94af4", "TP owns the plain bold label and TQ owns the OP and its operands before the description.", [[0, "d1d261b96ffe211d584d64b81a1c67ccd78cbf316db2c6c0c74e888eed089cd1", null], [0, "28737c3044218c33767c5da24231f86cff378b0cf89ab0c40db5be7e898b2da9", null], [0, "28737c3044218c33767c5da24231f86cff378b0cf89ab0c40db5be7e898b2da9", null], [0, "491032dab96342bc826ff1c4c513b472abf48bd2058c08912130036c8c0b0edf", null], [0, null, null]]],
+    ["tq-optional-key-first", ["R04", "R05"], "operands::a_qualified_optional_key_does_not_erase_a_later_independent_term_name", ".TH TEST 1 2026-11-17\n.SH DESCRIPTION\n.TP\n.OP \\-\\-color WHEN\n.TQ\n.B normal\nBODY\n", "bb64c7978d9553f5a8a88090fea9ff1af1dde57328bb81d7cdaa25ed851eb14f", "Reversed order puts OP in TP and the independent bold label in TQ ahead of its description.", [[0, "a068d5410099b567a822c45eb864a178243512de73f3362ce595547719e4bf90", null], [0, "8035d26e5b639be7773618cc1e422217ca2adaeea7736a578a3cf3225a86c097", null], [0, "8035d26e5b639be7773618cc1e422217ca2adaeea7736a578a3cf3225a86c097", null], [0, "8fa26b8dfcdc1b0ba4e8b39199d6ad21a04118258c899b63f4efe99e97ef0148", null], [0, null, null]]],
+    ["tq-bi-middle", ["R05", "R09"], "operands::tq_keeps_each_heads_executed_argument_ranges_in_source_order", ".TH TEST 1 2026-11-17\n.SH DESCRIPTION\n.TP\n.B \\-R\n.TQ\n.BI \\-L \"dir,\\fB--fake\"\n.TQ\n.B \\-S\nUNIQUE_BODY\n", "547081184530b4f798bcdccaf772a6cf4f2f09b7250159ccf56911efe2452ac8", "The middle label has two BI operands. The fake option remains visible as text before the independent third label.", [[0, "b0811d3aca86824f6c535b280d15dc3aca613f9b5a2fcbfbc7930e3ef7bbd6bd", null], [0, "e62d6f1f4cc17d9fecf9c70bc79bae477a0e711c3c55cf3f961e9bf8a77c22b8", null], [0, "e62d6f1f4cc17d9fecf9c70bc79bae477a0e711c3c55cf3f961e9bf8a77c22b8", null], [0, "234aeeef8b32a797f9175df9d82fe8b86ab8410e116ab0d31e884cb5b403d099", null], [0, null, null]]],
+    ["tq-repeated-coordinate", ["R05", "R06", "R10"], "operands::continued_heads_with_equal_source_coordinates_keep_independent_owners", ".TH TEST 1 2026-11-17\n.SH DESCRIPTION\n.de PAIR\n.TP\n.BI \\-L \"dir,\\fB--fake\"\n.TQ\n.B \\-R\n\\\\$1\n..\n.de PAIRS\n.PAIR FIRST_BODY\n.PAIR SECOND_BODY\n..\n.PAIRS\n", "8bb210fc279eea83ef99451f6eed104ed802c630249274a3a01135b3412e4c95", "Repeated macro calls emit two TP/TQ pairs at line 14 in the tree, with two distinct descriptions.", [[0, "06c998b297d7ffe6ac4af743ce002c5aafbd0f369e5d9c5f2d96f9acdecb4b77", null], [0, "39c0ea66261027b5e9b1dac9d2b9edb1655fde1562403ef980d0673e0ed79904", null], [0, "39c0ea66261027b5e9b1dac9d2b9edb1655fde1562403ef980d0673e0ed79904", null], [0, "ddda6ab36fd5b8681443559c7dc9a9967fd9fefa7eb774b367744e7710b660aa", null], [0, null, null]]],
+    ["tq-follows-description", ["R06"], "an_explicit_tq_after_a_body_does_not_steal_that_body", ".TH PROBE 1\n.SH OPTIONS\n.TP\n.B --first\nFIRST_BODY\n.TQ\n.B --second\nSECOND_BODY\n", "710cfd9484e022971c00cc5d869550fe4216991a110a9e664f458c850a9a844a", "TP and TQ each have their own BODY in the native tree.", [[0, "fe698b624627bcd5d4e2bbd3b9a4bf9e05c4d00c6bbd1e4c54b2cdde37779a38", null], [0, "b9b9b0aad566388a27a868838afb24ff443507b5271e3d495a6c86d0f73842e6", null], [0, "b9b9b0aad566388a27a868838afb24ff443507b5271e3d495a6c86d0f73842e6", null], [0, "539f958788808be421326eb466a12b748b46190ee5991a021907dc891eda29a3", null], [2, "7bab6d46755fc9277d022088d5d7cff002a332fdf776d0b5c6b302e971617871", null]]],
+    ["fn-quoted-return-type", ["R07"], "subjects::accepted_function_operands_bind_the_subject_and_keep_types_and_arguments", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fn \"int checked\" \"int x\"\nSUBJECT_BODY\n.El\n", "bcfa24845e0c074f0e99a614ee26fc291f37b68f767b7170a9d2661200c7cf84", "Fn receives the single first operand int checked. HTML emits checked as the Fn name after int as Ft.", [[0, "615619f7938b2ea012974cafdd26f8fa58a4a70ddf073f07a72d60928c1b3c63", null], [0, "e1518bd393b774d7632cd162ba19fded1b667d8528ea15276b4064755da5cf25", null], [0, "c30aef1661b162a7c7d99bc1445e805c94cb32954b09d2d9c2c13bf3619362a0", null], [0, "967fa4e61891cdb4caac3fb9e94643fdf6b1a3d6ed15b4d3ffd32023c51b7f4b", null], [0, null, null]]],
+    ["fn-unquoted-return-type", ["R07"], "subjects::accepted_function_operands_bind_the_subject_and_keep_types_and_arguments", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Fn int checked \"int x\"\nSUBJECT_BODY\n.El\n", "d39bccfdccb3acee8bb23e2aa0055a983aaba8cd088340b1e1b9b179320f5266", "Fn receives separate int, checked and int x operands. The terminal displays int(checked, int x).", [[0, "9b98aff799b451ac18804f97e6402c5a77945bc8b28d74335036e42db4eaf578", null], [0, "f5f7840ceeef019e7e637ec72803f22f373b199b948358f8a620e73edc8510dc", null], [0, "e95eed178ff4d05d66439a50b4d7df17d4d185237f0e73e3b8757593e14378ab", null], [0, "b0c2f23e3651619330e1ac90f76357c038c04d318a3894c88fb40eafc41f42c9", null], [0, null, null]]],
+    ["fo-ignored-operand", ["R07"], "subjects::accepted_function_operands_bind_the_subject_and_keep_types_and_arguments", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Xo\n.Fo checked ignored\n.Fa \"int x\"\n.Fc\n.Xc\nSUBJECT_BODY\n.El\n", "a3333623f553851f773dc3038f2f28b1a4a7bccc1d525ad758f98f389d113d14", "The validated Fo HEAD contains checked. The ignored argument is absent even from the native tree.", [[0, "0d4f40ceb4561ac6b6eb564d2966262cdadc6409f8e2174e9d2f93f7ace11eaf", null], [0, "f4310c688aa8d45d36f949e238e43e0bb9bcdd6ae221342e9face6ebe3d9dfc5", null], [0, "5564e7d14faefdcb09feac34c8aa5ce9ddb357dfb0037fd0bafa6d8cbcd14a24", null], [0, "b432ff0a8e1bb1aaf09584ba4491d8407a5c4f8e00336f7049857f04023edc50", null], [3, "8a03b84eefe5c0e35a5563f79bbedbb57528542a45ec72b150152756a0dce9c4", null]]],
+    ["va-function-pointer", ["R08"], "subjects::accepted_variables_and_symbols_bind_the_subject_and_keep_other_content", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Va \"void (*handler)(int)\"\nSUBJECT_BODY\n.El\n", "111bfa007a466c1614f0b0dfdf96e3634d16292004ba1508430848e068e614df", "The complete declarator is a single Va operand and remains visible.", [[0, "bdceb5fb60f464621a7e270893e42d066a13a5f38cb0c0470897f04e32f36d8e", null], [0, "dc172778a483349c32822c6292eaec662541e8eccbd96ee0eb1ae54e86a37607", null], [0, "54fb642bcfd461026d106386ceb73d8674a4c1f8574f9f332c7d7afeb7729b40", null], [0, "955ee9fa5fd787d1219efcdcb9f34d83c77e2b9bac6df2ff9542387c0ec9be32", null], [0, null, null]]],
+    ["ar-before-complex-va", ["R08", "R09"], "subjects::an_argument_or_type_prefix_cannot_lend_a_name_to_an_unproved_subject", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Ar file , Va \"void (*handler)(int)\"\nSUBJECT_BODY\n.El\n", "d1c9a45666d43ea792bf73c4763b6f8101ff8575bb1779762d5e8b8a5e7c3dda", "Ar file, a comma, and the Va operand are separate executed tree children.", [[0, "8fc4a5364dd7937716aa940881b7a773aba108c888bf310293999bf5bd3be3b7", null], [0, "f00bd2519a97a34cc79f2ed3f9682b4014e6d134f265dbeade0e41bd0b5e4d47", null], [0, "8402eb599572bf7cdea091e007a0a342cd7da787a84c070e641766396662b5f4", null], [0, "dca9878dd4247056b094ae1d85990fb45ac0beaaf1e70713e55c114f50300136", null], [0, null, null]]],
+    ["ft-before-complex-va", ["R07", "R08"], "subjects::an_argument_or_type_prefix_cannot_lend_a_name_to_an_unproved_subject", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Ft void Va \"(*handler)(int)\"\nSUBJECT_BODY\n.El\n", "7bb10fee85e09b4d64765a43a898330d49ac7a91a6b5b456d811e6b693e33e3d", "Ft owns void and Va owns (*handler)(int). Both stay visible.", [[0, "e2cd990d2b8276385eeedd7b3c01e3a4524fc3abcd0295e63ba233e27d4cbc9f", null], [0, "dc172778a483349c32822c6292eaec662541e8eccbd96ee0eb1ae54e86a37607", null], [0, "54fb642bcfd461026d106386ceb73d8674a4c1f8574f9f332c7d7afeb7729b40", null], [0, "35dbb892e2ad68463fac8a3a93ba16664aeb3751f646e032c0738b75db4849ad", null], [0, null, null]]],
+    ["fl-wrapped-marker", ["R03", "R09", "R10"], "subjects::wrapped_fl_marker_names_need_their_full_native_spelling", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Pq Fl \\fI\\-%\nSUBJECT_BODY\n.El\n", "90f04f66fec53705a99c29a413861a2e7e1960376ac5901d4c87fc800409b568", "Pq wraps the Fl operand including its font escape. The terminal displays the full (--%) marker spelling.", [[0, "ef9fe84599aff38cdb8a00ddec973b93119c6195d9dbfb4be7d5ef95172dfbf7", null], [0, "11274bc44df607cf86a82a61ac8b4c6e1eafa4cc6be72ac9573c0ef331afff1f", null], [0, "1b7c82919e73d58b9a2f9876b88193eff80e5236fc457471d804a76d533ec437", null], [0, "9ce314b3d86dc0a1a53fcd6237960372b14c70ce0f1721a2032117c3977e4b99", null], [0, null, null]]],
+    ["fl-survives", ["R09", "R10"], "subjects::wrapped_fl_marker_names_need_their_full_native_spelling", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Xo\n.Ar \\&\n.Fl real\n.Xc\nSUBJECT_BODY\n.El\n", "363f757c8e30eb50460e60b9b2a59ded4e5992c9e9f096e6726d2dc2bdb5ae79", "The Ar has a zero-width operand. The generated Fl dash remains in the rendered label.", [[0, "5f5b6446735adfb0d59ee464a54d52de8ca7c64a767090d52396cde9b32cccf7", null], [0, "c73d6b869c95ca2f6d7da400c01bac90ad20750bfa4d65c26580f380d1ee2a79", null], [0, "f05caec893811b3132afd947e4b772185214713574c3033fd9dedaf8a308ee05", null], [0, "aa7fb7ad1b5549a5def6876806671d2b9b6ded64afd03ad98c0494363cd1956f", null], [0, null, null]]],
+    ["fl-overwritten-dash", ["R09", "R10"], "subjects::wrapped_fl_marker_names_need_their_full_native_spelling", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Xo\n.Ar \\z\\&\n.Fl real\n.Xc\nSUBJECT_BODY\n.El\n", "83701aee90f2658f5966edf924f3e61a01124ede8717ebfa82f63705f0890f28", "Ar arms zero advance before Fl. The terminal overstrikes the dash with r.", [[0, "984066c2832eb40bf14a769daf2f696f0b9ebdef2e63aa558e0befe8fb0cf86a", null], [0, "c8fd2c1b62a259a21eb64735c063a43066c7bd0c368411bd9bd0e06eba24222d", null], [0, "b6911455e5ca6fb98c6c1543bc8081732dbd59699f230687ca495d669eeb268e", null], [0, "aa7fb7ad1b5549a5def6876806671d2b9b6ded64afd03ad98c0494363cd1956f", null], [0, null, null]]],
+    ["er-expanded-string", ["R08", "R10"], "subjects::symbol_bindings_use_executed_text_and_group_evidence_still_follows_source", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.ds ECODE EIO\n.Bl -tag -width Ds\n.It Bq Er \\*[ECODE]\nSUBJECT_BODY\n.El\n", "967f6623cf64a33a6410191a65127dc595a25d2a070f71a3749a7f3dd38f749b", "The .ds string expands to EIO in the Er operand within Bq.", [[0, "840012287a45510c7bfc410fc9e3961cc9a6e95ea5788c9c385c05292c126e9c", null], [0, "9c53f163749d982109a1fcf34a0d904ff2616d7bf1c04b060a8efaf729d82eb6", null], [0, "7f33c29b57bdab824db1efb05a71ea015db24ac7088fbbe2ae9920cbf5e70b0b", null], [0, "7909f7fefaec18d27fde036feba3fe9cd8ea031a26791a1e9afc039942a9a1a0", null], [0, null, null]]],
+    ["va-overwritten-glyph", ["R08", "R10"], "subjects::symbol_bindings_use_executed_text_and_group_evidence_still_follows_source", ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Va \\zSAVED\nSUBJECT_BODY\n.El\n", "a45bd4c61c292f1f3c794e5b697cac8ac0102c20ceae8aa7fc1fd073e70d0a09", "The Va tree retains the original escape. Terminal backspace processing leaves AVED as the visible operand.", [[0, "d60a983cacb690688dd597a3d61394c844b447807f4bf5ec999b607029013e01", null], [0, "474cfc3d8c9115bf68e1d748bc15af4cc921c1680499a6d9367b6349b1b6e658", null], [0, "5506962fa7125bd3b83d1006f94b29166aef8e6eb9b7ed03eeaef5ac1fd4db2e", null], [0, "f7e23c9b66ec3a6cc83f02f0f7c191371cabd626882916b657addd099ff6143b", null], [0, null, null]]],
+    ["openbsd-bpf", ["R02", "R06", "R08"], "subjects::openbsd_bpf_symbols_keep_their_distinct_definition_bodies_and_erf_stays_prose", {"fixture": "tests/fixtures/roff/real/scoped-layout/openbsd-bpf.4"}, "be17bd1768ef2ef074d67b1d8a81ae350b8d58ce4125ddce456b45de5c853998", "Native HTML preserves BIOCGBLEN with its buffer-length description and two separate EINVAL explanations.", [[0, "194ff14bf94f8b2d757576343bbd708f80630e46794e53e01600de143a5f1846", null], [0, "1907152503eed7f9fca0a1e56dc21e092b715e7060d9db6bd8cfa5fd80067f55", null], [0, "19a1f4689147a468568ef3d9706b5791a28df0b1b9ebf0f6de362b489869a347", null], [0, "5b777cac912ebcbb16447175a177eda44caf922d106ac7fd36298c86bcb489c7", null], [1, "0a7a2a0c6e625a04d944ecdfad354ac3298726c963d45d78200ea9ef36ce8e8f", null]]],
+    ["openbsd-erf", ["R02", "R07"], "subjects::openbsd_bpf_symbols_keep_their_distinct_definition_bodies_and_erf_stays_prose", {"fixture": "tests/fixtures/roff/real/mathematical-export/openbsd-erf.3"}, "975ddb1cab2d67d7118dda0828539bcc1c445c3806ada4465ca2c6408c9ea278", "SYNOPSIS and ordinary body contain Fn uses of erf, erff and erfc.", [[0, "2b5c7309958b52ca69d8b2f10e970990fd569abfc71559a030ba6f4d8334be4b", null], [0, "7f07ecbb2eed606e4f90c6e1873de726361552e2a9e8bd1af4375c3f887f5a9c", null], [0, "b6103fe8d666992b4a63698dec66ca29d6792d2b0acc78039af031b5e1d1ad54", null], [0, "7eb5843efa7e739b14069205e1feb6caaeed3a558568425cb75536c5fb3ff10a", null], [0, null, null]]]
+  ]
+}

@@ -402,7 +402,7 @@ fn keeps_native_span_topology_and_reading_order_for_an_empty_table_block() {
     let content = mant_loader::load_roff_bytes(source).unwrap();
     let restored = json_roundtrip::json_string_roundtrip(&content);
     let document = restored.document.as_ref().unwrap();
-    assert!(mant_ir::validate_document(document).is_empty());
+    assert_eq!(mant_ir::validate_document(document), []);
     let table = document.sections[0]
         .blocks
         .iter()
@@ -413,8 +413,8 @@ fn keeps_native_span_topology_and_reading_order_for_an_empty_table_block() {
         .expect("spanning table");
     assert_eq!(table.len(), 2);
     assert_eq!(table[0].cells[0].row_span, 2);
-    assert!(table[0].cells[0].blocks.is_empty());
-    assert!(table[1].cells[0].blocks.is_empty());
+    assert_eq!(table[0].cells[0].blocks, []);
+    assert_eq!(table[1].cells[0].blocks, []);
 
     let markdown = mant_codec::encode::render_markdown(&restored);
     let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();

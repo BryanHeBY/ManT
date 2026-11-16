@@ -3,6 +3,63 @@ use super::super::*;
 use super::fixtures::generic_linked_cell;
 
 #[test]
+fn native_spans_keep_empty_text_blocks_and_later_rows_readable() {
+    // Pinned tbl_data.c preserves the horizontal owner and extends it
+    // across T& and both down rows. The reference control has a single
+    // CELL line in T{}; the product also supports the absent payload.
+    let source = b".TH PROBE 1\n.SH DESCRIPTION\nBEFORE\n.TS\nallbox;\nl s l.\n\
+                   T{\nT}\tUPPER\n.T&\nl s l.\n\\^\tMIDDLE\n\\^\tLOWER\n.TE\nAFTER\n";
+    let bundle = mant_loader::load_roff_bytes(source).unwrap();
+    let wire = mant_render::render_query_json(&bundle, false).unwrap();
+    let restored: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
+    let restored: ResolvedContent = restored.into();
+    let rows = restored.document.as_ref().unwrap().sections[0]
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Table { rows, .. } => Some(rows),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(rows.len(), 3);
+    let owner = &rows[0].cells[0];
+    assert_eq!((owner.column_span, owner.row_span), (2, 3));
+    assert_eq!(owner.blocks, []);
+
+    let view = DocumentView::new(&restored);
+    for width in [24, 80] {
+        let rendered = view.render(width);
+        let markers = ["BEFORE", "UPPER", "MIDDLE", "LOWER", "AFTER"];
+        let hits = markers.map(|marker| {
+            let hits = rendered.search(marker);
+            assert_eq!(hits.len(), 1, "{marker}/{width}");
+            hits.into_iter().next().unwrap()
+        });
+        assert!(hits.windows(2).all(|pair| pair[0].row < pair[1].row));
+        if width == 80 {
+            assert_eq!(hits[1].start_column, hits[2].start_column);
+            assert_eq!(hits[2].start_column, hits[3].start_column);
+        }
+        for (hit, marker) in hits.iter().zip(markers) {
+            assert_eq!(
+                rendered.selected_text(RenderedSelection {
+                    anchor: TextPosition {
+                        row: hit.row,
+                        column: hit.start_column,
+                    },
+                    focus: TextPosition {
+                        row: hit.row,
+                        column: hit.end_column - 1,
+                    },
+                }),
+                marker,
+                "{width}"
+            );
+        }
+    }
+}
+
+#[test]
 fn empty_and_ruled_table_rows_keep_distinct_terminal_surfaces() {
     let paragraph = |value: &str| Block::Paragraph {
         inline_layout: mant_ir::InlineLayout::default(),

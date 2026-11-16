@@ -124,6 +124,8 @@ fn native_diagnostic_source_labels_leave_loader_and_query_coverage_intact() {
     use mant_loader::{DocumentLoader, LoadPolicy, LoadSpec};
     use mant_protocol::InputFormat;
 
+    const PREAMBLE: &str =
+        ".TH PROBE 1 2026-11-17\n.SH NAME\nprobe \\- diagnostic capture\n.SH DESCRIPTION\nBEFORE\n";
     struct Scratch(PathBuf);
     impl Drop for Scratch {
         fn drop(&mut self) {
@@ -145,8 +147,6 @@ fn native_diagnostic_source_labels_leave_loader_and_query_coverage_intact() {
         limit: 10,
         offset: 0,
     };
-    const PREAMBLE: &str =
-        ".TH PROBE 1 2026-11-17\n.SH NAME\nprobe \\- diagnostic capture\n.SH DESCRIPTION\nBEFORE\n";
     let saturated = ".ab\n".repeat(4097);
     let late_limit = format!("{saturated}.de A\n.A\n..\n.A\n");
     for (body, limited) in [

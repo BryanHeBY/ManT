@@ -2,7 +2,7 @@
 
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
-use mant_ir::{Block, ListKind, SourceFormat};
+use mant_ir::{Block, Inline, LinkTarget, ListKind, SourceFormat, inline_plain_text};
 use mant_protocol::OutlineDetail;
 use mant_query::build_outline_with_detail;
 
@@ -51,11 +51,36 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         .find(|item| item.entry.as_ref().unwrap().names == ["git-add"])
         .unwrap();
     assert_eq!(add.source.unwrap().line, 351);
-    assert!(
-        serde_json::to_string(&add.terms)
-            .unwrap()
-            .contains("git-add(1)")
+    let [term] = add.terms.as_slice() else {
+        panic!("one git-add definition term");
+    };
+    assert_eq!(inline_plain_text(term), "git-add(1)");
+    // The pinned HTML formatter renders this fixture's \fBgit-add\fR(1)
+    // as a bold name followed by a roman section number.
+    let [
+        Inline::Anchor { .. },
+        Inline::Link {
+            target:
+                LinkTarget::Manual {
+                    name,
+                    manual_section,
+                },
+            children,
+            ..
+        },
+    ] = term.content.as_slice()
+    else {
+        panic!("one anchored manual reference: {:?}", term.content);
+    };
+    assert_eq!(
+        (name.as_str(), manual_section.as_deref()),
+        ("git-add", Some("1"))
     );
+    assert!(matches!(
+        children.as_slice(),
+        [Inline::Strong { children }, Inline::Text { value }]
+            if inline_plain_text(children) == "git-add" && value == "(1)"
+    ));
     assert!(
         serde_json::to_string(&add.description)
             .unwrap()
