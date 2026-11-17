@@ -72,6 +72,9 @@ that crate was not published for that change.
   to the corresponding content. Reject malformed typed Markdown destinations
   consistently across validation, lookup, navigation and export while
   preserving their readable labels. Document and query wire schemas use v0.14.
+- Preserve the original overview conflict in Markdown excerpts and evidence
+  reports. Selection by path keeps the content readable while ambiguous
+  anchors and links stay inactive across sections, entries and support blocks.
 - The 0.15 `mant-render` Markdown option APIs accept the option types from
   `mant-codec` 0.15.
 

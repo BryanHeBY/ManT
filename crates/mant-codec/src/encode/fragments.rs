@@ -1,6 +1,6 @@
 //! Safe report-facing fragments, without document-wide semantic declarations.
 
-use mant_ir::{Block, Heading, Inline, InlineContentRef, Section};
+use mant_ir::{Block, DOCUMENT_ROOT_ID, Diagnostic, Heading, Inline, InlineContentRef, Section};
 
 use super::math_markdown::RenderOptions;
 use super::math_markdown::{MathContext, OverviewIdentity};
@@ -19,26 +19,109 @@ pub struct MarkdownFragmentOptions {
     pub preserve_anchors: bool,
 }
 
-impl MarkdownFragmentOptions {
-    fn document_options(self, math: &MathContext) -> RenderOptions<'_> {
+/// One presentation and destination policy for fragments of the same original document.
+///
+/// An excerpt or evidence report can apply known source-wide navigation
+/// findings even when it includes only one of the owners responsible for them.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MarkdownFragments {
+    options: MarkdownFragmentOptions,
+    ambiguous_overview: bool,
+}
+
+impl From<MarkdownFragmentOptions> for MarkdownFragments {
+    fn from(options: MarkdownFragmentOptions) -> Self {
+        Self {
+            options,
+            ..Self::default()
+        }
+    }
+}
+
+impl MarkdownFragments {
+    /// Retain the original document's machine-readable overview conflict finding.
+    #[must_use]
+    pub fn for_report(options: MarkdownFragmentOptions, diagnostics: &[Diagnostic]) -> Self {
+        Self {
+            options,
+            ambiguous_overview: diagnostics.iter().any(|finding| {
+                finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION)
+            }),
+        }
+    }
+
+    fn document_options(self, math: &MathContext, emit_overview: bool) -> RenderOptions<'_> {
         let options = MarkdownOptions {
-            math: self.math,
-            preserve_anchors: self.preserve_anchors,
+            math: self.options.math,
+            preserve_anchors: self.options.preserve_anchors,
             preserve_semantics: false,
         };
         RenderOptions {
             options,
-            math: (self.math != MarkdownMath::Readable).then_some(math),
-            ..RenderOptions::default()
+            math: (options.math != MarkdownMath::Readable).then_some(math),
+            overview_identity: OverviewIdentity::Detached {
+                ambiguous: self.ambiguous_overview,
+                emit_overview,
+            },
         }
+    }
+
+    /// Encode a detached inline root without introducing reading-layout padding.
+    #[must_use]
+    pub fn inline(self, content: InlineContentRef<'_>) -> String {
+        let math = MathContext::export(true, self.options.math);
+        super::inline::render_inline_content(content, self.document_options(&math, false))
+    }
+
+    /// Encode detached blocks, optionally decorating their original inline roots.
+    #[must_use]
+    pub fn blocks(
+        self,
+        blocks: &[Block],
+        projection: Option<&dyn MarkdownInlineProjection>,
+    ) -> Vec<String> {
+        // A decorated inline root can own temporary formulas. Their addresses
+        // remain valid only for that root, so avoid pointer memoization.
+        let math = MathContext::export(projection.is_none(), self.options.math);
+        super::blocks::render_located_blocks(
+            blocks,
+            self.document_options(&math, false),
+            projection,
+        )
+    }
+
+    /// Append a detached section forest as Markdown blocks, starting at `depth`.
+    pub fn sections(self, output: &mut Vec<String>, sections: &[Section], depth: usize) {
+        let math = MathContext::export(true, self.options.math);
+        super::render_sections(output, sections, depth, self.document_options(&math, false));
+    }
+
+    /// Encode a selected overview and emit one destination when it is addressable.
+    #[must_use]
+    pub fn overview(
+        self,
+        heading: Option<&Heading>,
+        blocks: &[Block],
+        depth: usize,
+    ) -> Vec<String> {
+        let math = MathContext::export(true, self.options.math);
+        let options = self.document_options(&math, true);
+        let mut output = Vec::new();
+        if options.preserve_anchors && options.allows_destination(DOCUMENT_ROOT_ID) {
+            output.push(html_anchor(DOCUMENT_ROOT_ID));
+        }
+        if let Some(heading) = heading {
+            output.push(super::render_heading(depth, heading, options));
+        }
+        output.extend(super::blocks::render_blocks(blocks, options));
+        output
     }
 }
 
 /// Encode a detached inline root without semantic declaration metadata.
 #[must_use]
 pub fn render_inline_fragment(children: &[Inline], options: MarkdownFragmentOptions) -> String {
-    let math = MathContext::export(true, options.math);
-    super::inline::render_inline(children, options.document_options(&math))
+    MarkdownFragments::from(options).inline(InlineContentRef::unpositioned(children))
 }
 
 /// Encode a detached owner root as ordinary Markdown phrasing.
@@ -48,8 +131,7 @@ pub fn render_inline_content_fragment(
     content: InlineContentRef<'_>,
     options: MarkdownFragmentOptions,
 ) -> String {
-    let math = MathContext::export(true, options.math);
-    super::inline::render_inline_content(content, options.document_options(&math))
+    MarkdownFragments::from(options).inline(content)
 }
 
 /// Encode detached blocks without semantic declaration metadata.
@@ -57,8 +139,7 @@ pub fn render_inline_content_fragment(
 /// Returned fragments can be joined with a blank Markdown source line.
 #[must_use]
 pub fn render_blocks_fragment(blocks: &[Block], options: MarkdownFragmentOptions) -> Vec<String> {
-    let math = MathContext::export(true, options.math);
-    super::blocks::render_blocks(blocks, options.document_options(&math))
+    MarkdownFragments::from(options).blocks(blocks, None)
 }
 
 /// Encode report blocks with optional decoration of their original inline roots.
@@ -71,10 +152,7 @@ pub fn render_located_blocks_fragment(
     options: MarkdownFragmentOptions,
     projection: Option<&dyn MarkdownInlineProjection>,
 ) -> Vec<String> {
-    // A projected root can own temporary expression copies. Their addresses
-    // remain valid only for that root, so this route avoids pointer memoization.
-    let math = MathContext::export(projection.is_none(), options.math);
-    super::blocks::render_located_blocks(blocks, options.document_options(&math), projection)
+    MarkdownFragments::from(options).blocks(blocks, projection)
 }
 
 /// Append a detached section forest as Markdown blocks, starting at `depth`.
@@ -84,8 +162,7 @@ pub fn render_sections_fragment(
     depth: usize,
     options: MarkdownFragmentOptions,
 ) {
-    let math = MathContext::export(true, options.math);
-    super::render_sections(output, sections, depth, options.document_options(&math));
+    MarkdownFragments::from(options).sections(output, sections, depth);
 }
 
 /// Encode a rich heading without semantic declaration metadata.
@@ -96,7 +173,11 @@ pub fn render_heading_fragment(
     options: MarkdownFragmentOptions,
 ) -> String {
     let math = MathContext::export(true, options.math);
-    super::render_heading(depth, heading, options.document_options(&math))
+    super::render_heading(
+        depth,
+        heading,
+        MarkdownFragments::from(options).document_options(&math, false),
+    )
 }
 
 /// Encode the selected document overview as independently joinable blocks.
@@ -112,20 +193,11 @@ pub fn render_overview_fragment(
     options: MarkdownFragmentOptions,
     ambiguous_overview: bool,
 ) -> Vec<String> {
-    let math = MathContext::export(true, options.math);
-    let mut options = options.document_options(&math);
-    options.overview_identity = OverviewIdentity::Detached {
-        ambiguous: ambiguous_overview,
-    };
-    let mut output = Vec::new();
-    if options.preserve_anchors && !ambiguous_overview {
-        output.push(html_anchor(mant_ir::DOCUMENT_ROOT_ID));
+    MarkdownFragments {
+        options,
+        ambiguous_overview,
     }
-    if let Some(heading) = heading {
-        output.push(super::render_heading(depth, heading, options));
-    }
-    output.extend(super::blocks::render_blocks(blocks, options));
-    output
+    .overview(heading, blocks, depth)
 }
 
 /// Encode literal text as a `CommonMark` code span with safe delimiters.

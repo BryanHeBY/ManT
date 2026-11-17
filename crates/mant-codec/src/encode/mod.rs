@@ -23,8 +23,8 @@ pub use artifact::{
     render_addressable_markdown, render_addressable_markdown_with_options,
 };
 pub use fragments::{
-    MarkdownFragmentOptions, commonmark_code_span, escape_commonmark, html_anchor,
-    render_blocks_fragment, render_heading_fragment, render_inline_content_fragment,
+    MarkdownFragmentOptions, MarkdownFragments, commonmark_code_span, escape_commonmark,
+    html_anchor, render_blocks_fragment, render_heading_fragment, render_inline_content_fragment,
     render_inline_fragment, render_located_blocks_fragment, render_overview_fragment,
     render_sections_fragment,
 };
@@ -113,19 +113,24 @@ fn render_sections(
     options: RenderOptions<'_>,
 ) {
     for section in sections {
-        if options.preserve_anchors {
-            output.push(format!(
-                "{}\n\n{}",
-                inline::html_anchors(&section.id, &section.fragment_aliases, |fragment| options
-                    .emits_anchor(fragment),),
-                render_heading(depth, &section.heading, options)
-            ));
-        } else {
-            output.push(render_heading(depth, &section.heading, options));
-        }
+        output.push(render_section_heading(section, depth, options));
         output.extend(render_blocks(&section.blocks, options));
         render_sections(output, &section.children, depth.saturating_add(1), options);
     }
+}
+
+fn render_section_heading(section: &Section, depth: usize, options: RenderOptions<'_>) -> String {
+    let mut rendered = String::new();
+    if options.preserve_anchors {
+        rendered = inline::html_anchors(&section.id, &section.fragment_aliases, |fragment| {
+            options.emits_anchor(fragment)
+        });
+        if !rendered.is_empty() {
+            rendered.push_str("\n\n");
+        }
+    }
+    rendered.push_str(&render_heading(depth, &section.heading, options));
+    rendered
 }
 
 /// Encode a quick-reference page as independently joinable Markdown blocks.

@@ -117,7 +117,7 @@ pub fn select_excerpt(
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
-    let diagnostics = excerpt_diagnostics(document, document_root_selected);
+    let diagnostics = excerpt_diagnostics(document);
 
     Ok(QueryExcerpt {
         display_title: query
@@ -138,14 +138,14 @@ pub fn select_excerpt(
     })
 }
 
-fn excerpt_diagnostics(document: Option<&Document>, overview_selected: bool) -> Vec<Diagnostic> {
+fn excerpt_diagnostics(document: Option<&Document>) -> Vec<Diagnostic> {
     let Some(document) = document else {
         return Vec::new();
     };
     let mut diagnostics = document.diagnostics.clone();
-    // An exact path can read an ambiguous overview. Retain its identity
-    // finding before detaching the selected content from other owners.
-    if overview_selected
+    // Retain the original identity finding before detaching any selection;
+    // the competing owner might be outside the returned fragments.
+    if document.has_overview()
         && !diagnostics.iter().any(|finding| {
             finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION)
                 && finding.impact == DiagnosticImpact::SemanticCoverage

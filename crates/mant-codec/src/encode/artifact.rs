@@ -4,7 +4,7 @@ use super::{
     MarkdownOptions,
     anchors::anchor_markers,
     blocks::{RenderedBlocks, render_blocks_with_entries},
-    heading, heading_has_local_link, inline, render_heading, render_tldr,
+    heading, heading_has_local_link, inline, render_heading, render_section_heading, render_tldr,
     section_headings_have_local_links, semantic,
 };
 use crate::ResolvedContent;
@@ -416,18 +416,7 @@ fn render_artifact_sections<'src>(
     options: RenderOptions<'_>,
 ) {
     for (index, section) in sections.iter().enumerate() {
-        let mut rendered_heading = String::new();
-        if options.preserve_anchors {
-            rendered_heading =
-                inline::html_anchors(&section.id, &section.fragment_aliases, |fragment| {
-                    options.emits_anchor(fragment)
-                });
-            if !rendered_heading.is_empty() {
-                rendered_heading.push_str("\n\n");
-            }
-        }
-        rendered_heading.push_str(&render_heading(depth, &section.heading, options));
-        let range = output.push(&rendered_heading);
+        let range = output.push(&render_section_heading(section, depth, options));
         if !output.track {
             // Stream one scope at a time without retaining the whole document
             // as intermediate block strings or constructing semantic paths.

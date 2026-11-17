@@ -6,13 +6,10 @@ mod tests;
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
 use mant_codec::encode::{
-    MarkdownFragmentOptions, heading, heading_has_local_link, render_overview_fragment,
-    render_sections_fragment as render_sections, render_tldr, section_headings_have_local_links,
+    MarkdownFragmentOptions, MarkdownFragments, heading, heading_has_local_link, render_tldr,
+    section_headings_have_local_links,
 };
-use mant_codec::encode::{
-    commonmark_code_span as code_span, escape_commonmark as escape_text,
-    render_blocks_fragment as render_blocks,
-};
+use mant_codec::encode::{commonmark_code_span as code_span, escape_commonmark as escape_text};
 
 /// Render a complete query outline as a nested `CommonMark` list.
 #[must_use]
@@ -82,10 +79,7 @@ pub fn render_excerpt_markdown_with_options(
     if !excerpt.semantics_complete {
         output.push("Semantic entries are incomplete; use search to inspect unclassified or rejected content.".to_owned());
     }
-    let ambiguous_overview = excerpt
-        .diagnostics
-        .iter()
-        .any(|finding| finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION));
+    let fragments = MarkdownFragments::for_report(options, &excerpt.diagnostics);
     for (index, selection) in excerpt.selections.iter().enumerate() {
         if index > 0 {
             output.push("---".to_owned());
@@ -96,19 +90,13 @@ pub fn render_excerpt_markdown_with_options(
             ExcerptSelection::DocumentRoot {
                 heading, blocks, ..
             } => {
-                output.extend(render_overview_fragment(
-                    heading.as_ref(),
-                    blocks,
-                    2,
-                    options,
-                    ambiguous_overview,
-                ));
+                output.extend(fragments.overview(heading.as_ref(), blocks, 2));
             }
             ExcerptSelection::DocumentSection { section, .. } => {
-                render_sections(&mut output, std::slice::from_ref(section), 2, options);
+                fragments.sections(&mut output, std::slice::from_ref(section), 2);
             }
             ExcerptSelection::DocumentEntry { entry, .. } => {
-                output.extend(render_blocks(std::slice::from_ref(entry), options));
+                output.extend(fragments.blocks(std::slice::from_ref(entry), None));
             }
         }
     }

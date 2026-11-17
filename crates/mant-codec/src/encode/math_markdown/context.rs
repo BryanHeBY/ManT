@@ -30,6 +30,7 @@ pub(in crate::encode) enum OverviewIdentity<'ctx> {
     Indexed(&'ctx DocumentIndex),
     Detached {
         ambiguous: bool,
+        emit_overview: bool,
     },
 }
 
@@ -48,7 +49,9 @@ impl RenderOptions<'_> {
         match self.overview_identity {
             OverviewIdentity::Absent => true,
             OverviewIdentity::Indexed(index) => !index.is_fragment_ambiguous(fragment),
-            OverviewIdentity::Detached { ambiguous } => !ambiguous || fragment != DOCUMENT_ROOT_ID,
+            OverviewIdentity::Detached { ambiguous, .. } => {
+                !ambiguous || fragment != DOCUMENT_ROOT_ID
+            }
         }
     }
 
@@ -59,7 +62,9 @@ impl RenderOptions<'_> {
                 OverviewIdentity::Indexed(index) => {
                     fragment != DOCUMENT_ROOT_ID && !index.is_overview_alias(fragment)
                 }
-                OverviewIdentity::Detached { .. } => fragment != DOCUMENT_ROOT_ID,
+                OverviewIdentity::Detached { emit_overview, .. } => {
+                    !emit_overview || fragment != DOCUMENT_ROOT_ID
+                }
             }
     }
 }

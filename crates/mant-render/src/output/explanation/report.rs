@@ -2,7 +2,11 @@
 //! uses standard blockquotes in Markdown. Neither surface is a wire protocol.
 use super::{definition::DefinitionDisplay, metadata, spans};
 use crate::presentation::{TextPresentation, TextRole};
-use mant_protocol::{EvidenceClass, EvidenceCounts, ExplanationEvidence, ExplanationIdentityField};
+use mant_codec::encode::{MarkdownFragmentOptions, MarkdownFragments};
+use mant_protocol::{
+    EvidenceClass, EvidenceCounts, ExplanationEvidence, ExplanationIdentityField,
+    ExplanationSupport,
+};
 use std::fmt::Write;
 
 #[cfg(test)]
@@ -10,11 +14,35 @@ mod tests;
 
 pub(super) struct Report<'a> {
     pub(super) markdown: bool,
-    pub(super) options: mant_codec::encode::MarkdownFragmentOptions,
+    pub(super) options: MarkdownFragmentOptions,
     pub(super) decorate: &'a dyn Fn(TextPresentation, &str) -> String,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct ReportSource<'a> {
+    address: Option<&'a str>,
+    supports: &'a [ExplanationSupport],
+    fragments: MarkdownFragments,
+}
+
 impl Report<'_> {
+    pub(super) fn source<'a>(
+        &self,
+        address: Option<&'a str>,
+        supports: &'a [ExplanationSupport],
+        diagnostics: &[mant_ir::Diagnostic],
+    ) -> ReportSource<'a> {
+        ReportSource {
+            address,
+            supports,
+            fragments: if self.markdown {
+                MarkdownFragments::for_report(self.options, diagnostics)
+            } else {
+                MarkdownFragments::from(self.options)
+            },
+        }
+    }
+
     pub(super) fn meta(&self, role: TextRole, value: &str) -> String {
         self.field(role, value, false)
     }
@@ -67,23 +95,18 @@ impl Report<'_> {
     pub(super) fn records<'a>(
         &self,
         output: &mut String,
-        records: impl Iterator<
-            Item = (
-                &'a ExplanationEvidence,
-                Option<&'a str>,
-                &'a [mant_protocol::ExplanationSupport],
-            ),
-        >,
+        records: impl Iterator<Item = (&'a ExplanationEvidence, ReportSource<'a>)>,
     ) {
         let records = records.collect::<Vec<_>>();
         let mut previous = None;
         let mut displayed = std::collections::HashMap::new();
-        for &(e, address, supports) in &records {
+        for &(e, source) in &records {
+            let supports = source.supports;
             self.record_separator(output, e.class, previous == Some(e.class));
             previous = Some(e.class);
             let reference = e.source_reference(supports);
             let covered = reference.is_some();
-            self.owner(output, e, address, covered, supports);
+            self.owner(output, e, covered, &source);
             if let Some(support) = reference.and_then(|index| supports.get(index)) {
                 let Some(block) = support.materialized(supports) else {
                     continue;
@@ -113,7 +136,8 @@ impl Report<'_> {
                     );
                     let locations = spans::LocatedStyles::for_support(
                         block,
-                        records.iter().filter_map(|&(other, _, pool)| {
+                        records.iter().filter_map(|&(other, source)| {
+                            let pool = source.supports;
                             let context = other
                                 .source_reference(pool)
                                 .and_then(|index| pool.get(index))?
@@ -122,12 +146,10 @@ impl Report<'_> {
                         }),
                     );
                     let text = if self.markdown {
-                        mant_codec::encode::render_located_blocks_fragment(
-                            std::slice::from_ref(block),
-                            self.options,
-                            Some(&locations),
-                        )
-                        .join("\n\n")
+                        source
+                            .fragments
+                            .blocks(std::slice::from_ref(block), Some(&locations))
+                            .join("\n\n")
                     } else {
                         super::super::text::render_located_blocks(
                             std::slice::from_ref(block),
@@ -183,11 +205,10 @@ impl Report<'_> {
         &self,
         output: &mut String,
         e: &ExplanationEvidence,
-        address: Option<&str>,
         covered: bool,
-        supports: &[mant_protocol::ExplanationSupport],
+        source: &ReportSource<'_>,
     ) {
-        let locations = spans::LocatedStyles::with_pool(e, supports);
+        let locations = spans::LocatedStyles::with_pool(e, source.supports);
         write!(
             output,
             "\n\n{}{} [{}]",
@@ -233,9 +254,9 @@ impl Report<'_> {
             TextRole::Metadata,
             &format!("Matched by: {}", metadata::bases(e)),
         );
-        self.details(output, e, &locations, covered, supports);
+        self.details(output, e, &locations, covered, source);
         if !covered {
-            self.body(output, e, &locations);
+            self.body(output, e, &locations, source.fragments);
         }
         output.push('\n');
         self.line(
@@ -243,7 +264,7 @@ impl Report<'_> {
             TextRole::Path,
             &format!(
                 "Read original: {}; node {}",
-                address.unwrap_or("current input"),
+                source.address.unwrap_or("current input"),
                 e.outline.path()
             ),
         );
@@ -257,7 +278,7 @@ impl Report<'_> {
         evidence: &ExplanationEvidence,
         locations: &spans::LocatedStyles<'_>,
         covered: bool,
-        supports: &[mant_protocol::ExplanationSupport],
+        source: &ReportSource<'_>,
     ) {
         let Some(entry) = &evidence.entry else { return };
         if !covered
@@ -266,13 +287,14 @@ impl Report<'_> {
         {
             self.line(output, TextRole::Metadata, "Forms:");
             for (index, form) in entry.forms.iter().enumerate() {
-                let layout = form_layout(evidence, supports, index, form).unwrap_or_default();
+                let layout =
+                    form_layout(evidence, source.supports, index, form).unwrap_or_default();
                 let content = mant_ir::InlineContentRef {
                     content: form,
                     layout: &layout,
                 };
                 let text = if self.markdown {
-                    locations.markdown_inline(content, self.options)
+                    locations.markdown_inline(content, source.fragments)
                 } else {
                     locations.inline(content, TextRole::Body, &|p, t| {
                         (self.decorate)(p, &metadata::safe(t))
@@ -322,6 +344,7 @@ impl Report<'_> {
         output: &mut String,
         e: &ExplanationEvidence,
         locations: &spans::LocatedStyles<'_>,
+        fragments: MarkdownFragments,
     ) {
         if matches!(
             e.class,
@@ -331,12 +354,9 @@ impl Report<'_> {
                 let block = display.block;
                 self.line(output, TextRole::Metadata, "Definition:");
                 let body = if self.markdown {
-                    mant_codec::encode::render_located_blocks_fragment(
-                        std::slice::from_ref(block),
-                        self.options,
-                        Some(locations),
-                    )
-                    .join("\n\n")
+                    fragments
+                        .blocks(std::slice::from_ref(block), Some(locations))
+                        .join("\n\n")
                 } else {
                     super::super::text::render_located_blocks(
                         std::slice::from_ref(block),

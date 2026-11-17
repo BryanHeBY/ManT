@@ -107,13 +107,8 @@ fn render(result: &QueryExplanation, report: &Report<'_>) -> String {
         .address
         .as_ref()
         .map(mant_ir::DocumentAddress::catalog_path);
-    report.records(
-        &mut output,
-        result
-            .evidence
-            .iter()
-            .map(|e| (e, address.as_deref(), result.supports.as_slice())),
-    );
+    let source = report.source(address.as_deref(), &result.supports, &result.diagnostics);
+    report.records(&mut output, result.evidence.iter().map(|e| (e, source)));
     output
 }
 
@@ -127,6 +122,7 @@ fn render_scope(result: &ScopeExplanation, report: &Report<'_>) -> String {
         .iter()
         .map(|d| d.address.catalog_path())
         .collect::<Vec<_>>();
+    let mut sources = Vec::with_capacity(result.documents.len());
     for (doc, address) in result.documents.iter().zip(&addresses) {
         output.push('\n');
         output.push_str(&report.meta(
@@ -140,17 +136,18 @@ fn render_scope(result: &ScopeExplanation, report: &Report<'_>) -> String {
                 doc.semantics_complete
             ),
         ));
+        sources.push(report.source(Some(address), &doc.supports, &doc.diagnostics));
     }
+    let unknown_source = report.source(None, &[], &[]);
     report.records(
         &mut output,
         result.evidence.iter().map(|e| {
             (
                 &e.evidence,
-                addresses.get(e.document_index).map(String::as_str),
-                result
-                    .documents
+                sources
                     .get(e.document_index)
-                    .map_or(&[][..], |d| d.supports.as_slice()),
+                    .copied()
+                    .unwrap_or(unknown_source),
             )
         }),
     );

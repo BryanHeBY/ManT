@@ -302,7 +302,7 @@ fn char_offset_to_byte(text: &str, offset: usize, total_chars: usize) -> usize {
 }
 
 fn prepare_excerpt(excerpt: &mut QueryExcerpt) {
-    excerpt.diagnostics.clear();
+    keep_navigation_finding(&mut excerpt.diagnostics);
     discard_document_source_path(&mut excerpt.source);
     for selection in &mut excerpt.selections {
         if let mant_protocol::ExcerptSelection::Tldr { document, .. } = selection {
@@ -323,7 +323,7 @@ fn prepare_scope(response: &mut ScopeQueryResponse) {
     match &mut response.result {
         ScopeQueryResult::Explain { explanation } => {
             for found in &mut explanation.documents {
-                found.diagnostics.clear();
+                keep_navigation_finding(&mut found.diagnostics);
             }
             for failure in &mut explanation.failures {
                 "document could not be projected".clone_into(&mut failure.reason);
@@ -331,6 +331,20 @@ fn prepare_scope(response: &mut ScopeQueryResponse) {
         }
         ScopeQueryResult::Search { .. } => {}
     }
+}
+
+fn keep_navigation_finding(diagnostics: &mut Vec<mant_ir::Diagnostic>) {
+    // The Markdown renderer needs the source-wide conflict key on detached
+    // content. Keep it separate from human details and their source paths.
+    diagnostics.retain_mut(|finding| {
+        if finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION) {
+            finding.message = String::new();
+            finding.source = None;
+            true
+        } else {
+            false
+        }
+    });
 }
 
 fn discard_document_source_path(source: &mut Option<mant_ir::DocumentSource>) {
@@ -548,5 +562,46 @@ mod tests {
             explanation.failures[0].reason,
             "document could not be projected"
         );
+    }
+
+    #[test]
+    fn detached_heading_links_keep_their_original_target_ambiguity() {
+        let document = serde_json::from_value(serde_json::json!({
+            "source": {"format": "markdown"},
+            "meta": {},
+            "blocks": [{"type": "paragraph", "children": [{"type": "text", "value": "root"}]}],
+            "sections": [{
+                "id": mant_ir::DOCUMENT_ROOT_ID,
+                "heading": {"content": [{
+                    "type": "link",
+                    "target": {"kind": "section", "id": mant_ir::DOCUMENT_ROOT_ID},
+                    "children": [{"type": "text", "value": "READABLELABEL"}],
+                }]},
+                "blocks": [], "children": [],
+            }],
+        }))
+        .unwrap();
+        let mut excerpt = mant_query::select_excerpt(
+            &mant_ir::ResolvedContent {
+                label: "source".into(),
+                address: None,
+                document: Some(document),
+                tldr: None,
+            },
+            &[mant_protocol::ContentSelector::path("1")],
+        )
+        .unwrap();
+        excerpt.diagnostics[0].message = "private diagnostic text".into();
+        let text = super::present_excerpt(
+            excerpt,
+            PageRequest {
+                start_char: 0,
+                max_chars: 4_096,
+            },
+        );
+        assert!(text.contains("READABLELABEL"), "{text}");
+        assert!(!text.contains("](#document-overview)"), "{text}");
+        assert!(!text.contains("id=\"document-overview\""), "{text}");
+        assert!(!text.contains("private diagnostic text"), "{text}");
     }
 }
