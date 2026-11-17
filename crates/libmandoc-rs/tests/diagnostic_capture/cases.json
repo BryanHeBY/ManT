@@ -18,8 +18,8 @@
     "read.c input limit"
   ],
   "entryPoints": {
-    "bytes": "Parser::parse_bytes and Renderer::render_bytes over each case and label",
-    "files": "Parser::parse_file and Renderer::render_file over Unix labels, portable filename subset on Windows"
+    "bytes": "Parser::parse_bytes and Renderer::render_bytes over each case and label, including the opaque Unix label on Unix",
+    "files": "Parser::parse_file and Renderer::render_file over UTF-8 Unix labels, portable filename subset on Windows, plus the opaque label on Linux"
   },
   "assertions": [
     "severity",

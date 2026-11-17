@@ -31,6 +31,13 @@ fn labels() -> Vec<&'static str> {
         .collect()
 }
 
+#[cfg(unix)]
+fn opaque_label() -> OsString {
+    use std::os::unix::ffi::OsStringExt as _;
+
+    OsString::from_vec(b"probe-\xff.1".to_vec())
+}
+
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -134,6 +141,8 @@ fn diagnostic_facts_are_independent_of_the_source_label_and_display_markers() {
         for label in &labels {
             assert_bytes(Path::new(label), body, finding.as_ref());
         }
+        #[cfg(unix)]
+        assert_bytes(Path::new(&opaque_label()), body, finding.as_ref());
     }
 }
 
@@ -141,14 +150,12 @@ fn diagnostic_facts_are_independent_of_the_source_label_and_display_markers() {
 fn file_and_byte_entries_share_diagnostic_capture() {
     let scratch = Scratch::new();
     let labels = labels();
-    let names = labels[..2].iter().map(OsString::from);
-    #[cfg(unix)]
-    let names = {
-        use std::os::unix::ffi::OsStringExt as _;
-        names
-            .chain(labels[2..].iter().map(OsString::from))
-            .chain([OsString::from_vec(b"probe-\xff.1".to_vec())])
-    };
+    let portable_labels = if cfg!(windows) { &labels[..2] } else { &labels };
+    let names = portable_labels.iter().map(OsString::from);
+    // APFS rejects opaque byte names before the native parser opens the
+    // file. Exercise their filesystem path on Linux and the bytes API on Unix.
+    #[cfg(target_os = "linux")]
+    let names = names.chain([opaque_label()]);
     let parser = Parser::default();
     for name in names {
         let path = scratch.0.join(name);

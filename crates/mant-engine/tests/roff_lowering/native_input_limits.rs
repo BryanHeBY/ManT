@@ -119,7 +119,7 @@ fn native_input_limits_survive_json_and_all_query_summaries() {
 #[cfg(unix)]
 #[test]
 fn native_diagnostic_source_labels_leave_loader_and_query_coverage_intact() {
-    use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt as _, path::PathBuf};
+    use std::{ffi::OsString, fs, path::PathBuf};
 
     use mant_loader::{DocumentLoader, LoadPolicy, LoadSpec};
     use mant_protocol::InputFormat;
@@ -161,11 +161,20 @@ fn native_diagnostic_source_labels_leave_loader_and_query_coverage_intact() {
         let baseline = scratch.0.join("probe.1");
         fs::write(&baseline, &source).unwrap();
         let expected = mant_loader::parse_manual_source_with_report(&baseline).unwrap();
-        for name in [
+        let names = [
             OsString::from("probe: ERROR: page.1"),
             OsString::from("probe: UNSUPP: page.1"),
-            OsString::from_vec(b"probe-\xff.1".to_vec()),
-        ] {
+        ]
+        .into_iter();
+        // APFS rejects opaque byte names. The UTF-8 labels still exercise
+        // file loading and query coverage there.
+        #[cfg(target_os = "linux")]
+        let names = {
+            use std::os::unix::ffi::OsStringExt as _;
+
+            names.chain([OsString::from_vec(b"probe-\xff.1".to_vec())])
+        };
+        for name in names {
             let path = scratch.0.join(name);
             fs::write(&path, &source).unwrap();
             let (document, report) = mant_loader::parse_manual_source_with_report(&path).unwrap();
