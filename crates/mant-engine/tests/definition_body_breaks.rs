@@ -3,6 +3,9 @@ use mant_ir::{Block, DefinitionItem};
 use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
+#[path = "definition_body_breaks/displays.rs"]
+mod displays;
+
 fn item(query: &mant_ir::ResolvedContent) -> &DefinitionItem {
     let Block::DefinitionList { items, .. } =
         &query.document.as_ref().unwrap().sections[0].blocks[0]

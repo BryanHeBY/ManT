@@ -360,7 +360,11 @@ impl BlockLowerer<'_, '_> {
             // BODY buffer (mdoc_term.c:1128,1329,1442; man_term.c:772).
             // An IR drain cannot substitute for that source execution or
             // its NOSPACE flag.
-            self.state.finish_native_structural_row();
+            if matches!(node.macro_token.as_ref(), Some(Mdoc(_))) {
+                self.state.finish_mdoc_structural_row();
+            } else {
+                self.state.finish_native_structural_row();
+            }
         }
         if self.column_field {
             // NODE_LINE was already observed at node entry. A filled word

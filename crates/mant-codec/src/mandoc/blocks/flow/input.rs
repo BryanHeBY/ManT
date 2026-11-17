@@ -457,7 +457,10 @@ impl BlockState {
 
     /// `man_term.c::pre_literal` executes `term_newln` in the request's source
     /// mode, including when the next output mode has already been selected.
-    pub(in crate::mandoc::blocks) fn finish_native_line_in_source_mode(&mut self, no_fill: bool) {
+    pub(in crate::mandoc::blocks) fn finish_native_line_in_source_mode(
+        &mut self,
+        no_fill: bool,
+    ) -> bool {
         // A one-line display uses a literal destination without setting
         // NODE_NOFILL. Its rejected row is resolved layout, not authored text.
         let literal_owns_row = self.inline_output_is_literal(no_fill)
@@ -465,18 +468,18 @@ impl BlockState {
                 || self.literal.has_output()
                 || self.literal.has_formatter_column());
         let owner = RowOwner::from_literal(literal_owns_row);
-        let finish: fn(&mut InlineBuilder) = if owner == RowOwner::Literal && no_fill {
-            InlineBuilder::execute_native_literal_newline
+        let finish: fn(&mut InlineBuilder) -> bool = if owner == RowOwner::Literal && no_fill {
+            InlineBuilder::execute_native_literal_newline_with_tail
         } else {
             // A declaration can leave its row in ParagraphFlow after
             // restoring the source mode (mdoc_term.c::termp_nm_post).
             // The next real post must close that vector, not a new literal.
-            InlineBuilder::execute_native_newline
+            InlineBuilder::execute_native_newline_with_tail
         };
         // fi can leave historical no-fill bookkeeping while the live native
         // buffer already belongs to ParagraphFlow. The real post selected
         // that current owner above; retire the old classification either way.
-        self.with_row_boundary(owner, finish);
+        self.with_row_boundary(owner, finish)
     }
 
     pub(in crate::mandoc::blocks) fn has_formatter_cell(&self) -> bool {

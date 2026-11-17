@@ -31,6 +31,8 @@ that crate was not published for that change.
 
 - The 0.15 roff APIs use `libmandoc-rs` 0.15. Preserve literal numeric
   definitions when a discarded macro argument performed the register increment.
+- Keep compact mdoc displays on a separate row from the definition label
+  when the native display entry closes the label's row.
 - Preserve source order and spacing around relative indent continuations
   of numbered man list items.
 - Preserve per-term option and argument evidence across man `TP` and

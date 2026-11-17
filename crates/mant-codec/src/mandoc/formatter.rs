@@ -70,7 +70,7 @@ pub(super) struct FormatterState {
 pub(super) struct DefinitionBodyObservation {
     before_visible: bool,
     pending_head_row: bool,
-    placement_breaks: bool,
+    placement: DefinitionBodyPlacement,
     source_continues_after_run_in: Option<bool>,
     /// The BODY's first visible word printed under `TERMP_NOSPACE` (the
     /// request's `roff_term_pre_br()` left it, `roff_term.c:75-78`): no
@@ -83,9 +83,20 @@ pub(super) struct DefinitionBodyObservation {
     run_in_boundary: Option<super::inline::RunInBoundaryReceipt>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum DefinitionBodyPlacement {
+    Pending,
+    BreakRequested,
+    StructuralRowClosed,
+}
+
 impl DefinitionBodyObservation {
     pub(super) const fn placement_breaks(&self) -> bool {
-        self.placement_breaks
+        !matches!(self.placement, DefinitionBodyPlacement::Pending)
+    }
+
+    pub(super) const fn structural_row_closed(&self) -> bool {
+        matches!(self.placement, DefinitionBodyPlacement::StructuralRowClosed)
     }
 
     pub(super) const fn source_continues_after_run_in(&self) -> Option<bool> {
@@ -197,7 +208,7 @@ impl FormatterState {
         self.definition_bodies.push(DefinitionBodyObservation {
             before_visible: true,
             pending_head_row: shares_pending_head_row,
-            placement_breaks: false,
+            placement: DefinitionBodyPlacement::Pending,
             source_continues_after_run_in: None,
             first_word_concatenated: false,
             first_word_flushed_at_body: false,
@@ -219,8 +230,16 @@ impl FormatterState {
 
     pub(super) fn note_definition_boundary(&mut self) {
         for body in &mut self.definition_bodies {
+            if body.before_visible && matches!(body.placement, DefinitionBodyPlacement::Pending) {
+                body.placement = DefinitionBodyPlacement::BreakRequested;
+            }
+        }
+    }
+
+    pub(super) fn note_definition_structural_row_close(&mut self) {
+        for body in &mut self.definition_bodies {
             if body.before_visible {
-                body.placement_breaks = true;
+                body.placement = DefinitionBodyPlacement::StructuralRowClosed;
             }
         }
     }

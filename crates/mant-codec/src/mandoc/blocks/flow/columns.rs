@@ -36,10 +36,17 @@ impl BlockState {
         }
     }
 
+    pub(in crate::mandoc::blocks) fn finish_mdoc_structural_row(&mut self) {
+        if self.finish_native_structural_row() {
+            self.formatter.note_definition_structural_row_close();
+            self.settle_definition_line_boundary();
+        }
+    }
+
     /// A real macro pre/post calls `term_newln` independently of its IR owner.
     /// Borrow the active destination so a detached HEAD row is consumed even
     /// when the BODY has no local glyph (`mdoc_term.c::termp_bl_pre`).
-    pub(in crate::mandoc::blocks) fn finish_native_structural_row(&mut self) {
+    pub(in crate::mandoc::blocks) fn finish_native_structural_row(&mut self) -> bool {
         let no_fill = self.formatter.no_fill;
         if self.uses_literal_output()
             || (!self.formatter.execution.has_column_output_scope()
@@ -48,9 +55,12 @@ impl BlockState {
             // A structural term_newln closes the currently occupied source
             // row, not a separate layout gap. In man_term.c::pre_RS that
             // row stays in the surrounding no-fill owner's content.
-            self.finish_native_line_in_source_mode(no_fill);
+            self.finish_native_line_in_source_mode(no_fill)
         } else {
-            self.with_row_boundary(RowOwner::Paragraph, InlineBuilder::execute_native_newline);
+            self.with_row_boundary(
+                RowOwner::Paragraph,
+                InlineBuilder::execute_native_newline_with_tail,
+            )
         }
     }
 

@@ -12,6 +12,12 @@ pub(super) fn apply_executed_definition_body_layout(
     head_source_continues: bool,
     description: &[Block],
 ) {
+    if observed.structural_row_closed() {
+        // print_bvspace() calls term_newln() even for compact Bd
+        // (mdoc_term.c:585-593). Its NOSPACE belongs to the new row.
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+        return;
+    }
     if flow.shares_pending_term_row && observed.placement_breaks() {
         geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
     }

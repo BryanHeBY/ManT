@@ -481,6 +481,9 @@ the rejected field ends.
 A no-fill BODY source-line close also supersedes any earlier HEAD-column
 or next-word spacing decision. Only an executed source continuation can
 keep its first literal row beside the HEAD.
+When a display entry closes an occupied definition row, its first word
+starts on the next row. `Bd -compact` suppresses the extra blank row but
+does not keep the display beside the HEAD.
 Lists nested in a definition HEAD execute the same `Bl`/`It` phases for
 column, run-in, measured-label and generated-marker styles. Their HEAD/BODY
 words share the active field and font state. Native item post clears its

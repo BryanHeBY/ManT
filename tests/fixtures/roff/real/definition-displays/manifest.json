@@ -1,0 +1,106 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Compact display HEAD/BODY boundaries; selected contracts only.",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "oracleRecipe": {
+    "name": "native-default",
+    "stdin": "exact source bytes encoded as UTF-8",
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "LC_ALL": "C.UTF-8",
+      "TZ": "UTC"
+    },
+    "profiles": {
+      "ascii": [
+        "-Tascii",
+        "-Owidth=78"
+      ],
+      "utf8": [
+        "-Tutf8",
+        "-Owidth=78"
+      ],
+      "html": [
+        "-Thtml"
+      ],
+      "tree": [
+        "-Ttree"
+      ],
+      "lint": [
+        "-Tlint"
+      ]
+    },
+    "timeoutSeconds": 30
+  },
+  "cases": [
+    {
+      "file": "illumos-ctfdiff.1",
+      "sourceIdentity": "illumos-gate-e8f5c080:man/man1/ctfdiff.1",
+      "sourceSha256": "de7af98c181cb63595439bd511199cb617c039afc8e67c7f9c1958fca7cd6a39",
+      "fixtureSha256": "de7af98c181cb63595439bd511199cb617c039afc8e67c7f9c1958fca7cd6a39",
+      "sourceBytes": 8545,
+      "fixtureBytes": 8545,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "originUrl": "https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man1/ctfdiff.1",
+      "sourceRepository": "https://github.com/illumos/illumos-gate.git",
+      "revision": "e8f5c080cc0b7997410d860afd787df30ba1cf2d",
+      "archive": null,
+      "archiveMember": "usr/src/man/man1/ctfdiff.1",
+      "archiveSha256": null,
+      "corpusRevision": "832e18b3645884dd1d04dc34ebd656015e5a8e71",
+      "corpusMember": "corpora/illumos-gate-e8f5c080/root/man/man1/ctfdiff.1",
+      "gitBlobSha1": "f33e27204192e948b7dba2c3f64c6c208f83dbad",
+      "license": "CDDL-1.0",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "licenseSha256": "1ffb70c33c4f79f04e947facc5c7851f289609256aacb47fc115f700427d9520",
+      "embeddedNoticeLines": [
+        1,
+        14
+      ],
+      "embeddedNoticeSha256": "f92c11af6764270986c34329ed78e35a50a1449b70c221eea73d69c8a0fa00db",
+      "transformation": "None; byte-for-byte copy of the retained full manual.",
+      "selectionReason": "Compact filled Bd under inset exit-code definitions, contrasted with D1 sibling descriptions.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "7c7ec35f2da628e3ebfa07120bb4fa1e80f9fa629f363d1d6eafed90644a8f03",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 10121,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "4ab677d6ac289a594f6bf4bcb88de13899cf9ded6bc86589b480eb4adc4a053d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 10131,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "a7dd4ee89c3a70f1116e88f604607c69fd23a7501c11261cfdbb235719130447",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 16092,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "f6c9049f6b73f11865c69b1fc426fa7028543d3ab30a6cea54f7575750216c95",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 27755,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "69359bea6166d3f7e73d8ff3b90f878f36db01f04baf2fd86a29ea0f335bdb66",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 227,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    }
+  ]
+}

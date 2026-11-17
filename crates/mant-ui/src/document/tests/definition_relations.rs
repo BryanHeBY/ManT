@@ -15,6 +15,37 @@ fn text(value: &str) -> Inline {
     }
 }
 
+#[test]
+fn copied_compact_display_retains_the_label_body_row_boundary() {
+    // Fixed CVS mdoc_term.c::print_bvspace() ends the occupied tag row
+    // even when compact suppresses the following blank row.
+    let source = b".Dd November 17, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd behavior probe\n.Sh EXIT STATUS\n.Bl -inset\n.It Sy 0\n.Bd -filled -offset indent -compact\nExecution completed.\n.Ed\n.El\n";
+    let view = DocumentView::new(&mant_loader::load_roff_bytes(source).unwrap());
+    for width in [30, 80, 30] {
+        let rendered = view.render(width);
+        let hits = rendered.search("Execution completed.");
+        let [body] = hits.as_slice() else {
+            panic!("expected one complete copyable body at width {width}");
+        };
+        let copied = rendered.selected_text(RenderedSelection {
+            anchor: TextPosition {
+                row: body.row - 1,
+                column: 0,
+            },
+            focus: TextPosition {
+                row: body.row,
+                column: body.end_column - 1,
+            },
+        });
+        assert!(
+            copied
+                .lines()
+                .map(str::trim)
+                .eq(["0", "Execution completed."])
+        );
+    }
+}
+
 fn query(
     relation: HeadBodyRelation,
     alignment: DefinitionBodyAlignment,

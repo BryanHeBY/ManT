@@ -276,10 +276,6 @@ impl InlineBuilder {
     /// The literal owner receives the same consumed tail as content rows.
     /// Its old `Invisible` classification cannot distinguish a buffered
     /// zero-advance glyph from an accepted NBRZW cell after this flush.
-    pub(in crate::mandoc) fn execute_native_literal_newline(&mut self) {
-        self.execute_native_literal_newline_with_tail();
-    }
-
     pub(in crate::mandoc) fn execute_native_literal_newline_with_tail(&mut self) -> bool {
         self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::LiteralText)
     }

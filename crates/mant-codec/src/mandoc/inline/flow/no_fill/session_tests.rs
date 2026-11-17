@@ -66,8 +66,12 @@ impl Successor {
     fn observe(self, formatter: &mut FormatterState) -> Vec<Inline> {
         let mut output = Vec::new();
         match self {
-            Self::EmptyBody => formatter
-                .with_output_builder(&mut output, InlineBuilder::execute_native_literal_newline),
+            Self::EmptyBody => {
+                formatter.with_output_builder(
+                    &mut output,
+                    InlineBuilder::execute_native_literal_newline_with_tail,
+                );
+            }
             Self::InvisibleBody | Self::VisibleBody => {
                 let input = if matches!(self, Self::InvisibleBody) {
                     r"\&"

@@ -87,6 +87,29 @@ fn inline_roff_continuations_use_block_coordinates_not_the_label_width() {
     }
 }
 
+#[test]
+fn compact_ctfdiff_exit_status_displays_start_below_their_labels() {
+    let view = view("definition-displays/illumos-ctfdiff.1");
+    for width in [30, 80] {
+        let rendered = view.render(width);
+        let first = rendered.search("Execution completed");
+        assert_eq!(first.len(), 2);
+        let invalid = rendered.search("Invalid command");
+        let fatal = rendered.search("A fatal error");
+        assert_eq!(invalid.len(), 1);
+        assert_eq!(fatal.len(), 1);
+        for (label, hit) in ["0", "1", "2", "3"]
+            .into_iter()
+            .zip(first.iter().chain(&invalid).chain(&fatal))
+        {
+            let head = rendered.text.lines[hit.row - 1].to_string();
+            assert_eq!(head.trim(), label);
+            let head_origin = head.find(label).unwrap();
+            assert_eq!(hit.start_column, head_origin + 6);
+        }
+    }
+}
+
 /// Independently authored state-boundary cases exercise native IR through
 /// the terminal consumer; no reference executable or copied golden is needed.
 #[test]
