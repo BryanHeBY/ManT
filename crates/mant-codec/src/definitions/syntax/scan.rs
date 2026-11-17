@@ -121,6 +121,20 @@ pub(super) fn option_head(nodes: &[Inline], operands: &[NativeOperand]) -> Optio
     Scanner::new(&view).scan()
 }
 
+#[cfg(feature = "roff")]
+pub(super) fn native_option_key(text: &str) -> Option<RecognizedName> {
+    let operands = [NativeOperand {
+        bytes: 0..text.len(),
+        role: NativeOperandRole::ExplicitOption,
+    }];
+    let view = HeadView::native_word(text, &operands);
+    let mut scanner = Scanner::new(&view);
+    if scanner.current() == Some('-') {
+        scanner.consume_name();
+    }
+    scanner.names.pop()
+}
+
 /// The executed key can follow a generated optional opener. Only a leading
 /// accepted option, and not a later operand in an unrelated label, supplies
 /// a stronger role than the section's default.

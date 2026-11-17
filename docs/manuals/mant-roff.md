@@ -799,6 +799,11 @@ such as `Bq` and `Pq` and separate zero-width words still participate in
 execution. A search sign outside an enclosure can supply the parameter
 role for its leading arguments. An independent declaration or unknown
 word ends that prefix and leaves the earlier parameter roles intact.
+Independent names separated from the search arguments use their own
+declaration grammar. Punctuation inside a quoted invocation argument stays
+within that argument. For example, an `Fl` name derives from its accepted
+dash and word together. An owner with mixed command and option names can
+use the Term category while each name retains its original binding.
 
 The same rule covers man `IP`/`TP` (including suppressed-newline heads) and
 mdoc definition-style `It`; an explicit `TQ` multi-label owner remains one

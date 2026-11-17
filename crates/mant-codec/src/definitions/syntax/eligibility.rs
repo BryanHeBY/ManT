@@ -83,15 +83,24 @@ impl<'a> OperandUses<'a> {
 
     #[cfg(feature = "roff")]
     pub(super) fn is_parameter_only(self, part: &Range<usize>) -> bool {
+        self.covers(part, |role| {
+            matches!(
+                role,
+                NativeOperandRole::SearchArgument(_) | NativeOperandRole::IncompletePlaceholder
+            )
+        })
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn covers(
+        self,
+        part: &Range<usize>,
+        accepts: impl Fn(NativeOperandRole) -> bool,
+    ) -> bool {
         let mut cursor = self.offset + part.start;
         let end = self.offset + part.end;
         for operand in self.intersecting(part) {
-            if operand.bytes.start > cursor
-                || !matches!(
-                    operand.role,
-                    NativeOperandRole::SearchArgument(_) | NativeOperandRole::IncompletePlaceholder
-                )
-            {
+            if operand.bytes.start > cursor || !accepts(operand.role) {
                 return false;
             }
             cursor = operand.bytes.end;

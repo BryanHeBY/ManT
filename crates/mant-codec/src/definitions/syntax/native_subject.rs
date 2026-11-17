@@ -8,6 +8,8 @@ use crate::definitions::{
 use mant_ir::{DefinitionItem, EntryKind, NameCase, inline_plain_text};
 use std::ops::Range;
 
+mod declaration_parts;
+
 pub(super) fn identify(
     item: &DefinitionItem,
     first: &str,
@@ -55,18 +57,41 @@ impl Recognition {
 }
 
 fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recognition)> {
-    let head = unwrapped(text, operands);
+    if operands.iter().any(|operand| operand.role.is_search())
+        && let Some(identity) = declaration_parts::recognize(text, operands)
+    {
+        return Some(identity);
+    }
+    let (head, _) = unwrapped(text, text, operands);
+    let start = offset(text, head);
+    let first = operands.partition_point(|operand| operand.bytes.end <= start);
+    if operands
+        .get(first)
+        .is_some_and(|operand| operand.bytes.contains(&start) && operand.role.is_operand_label())
+        && operands[first..]
+            .iter()
+            .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
+        && let Some(identity) = declaration_parts::recognize(text, operands)
+    {
+        return Some(identity);
+    }
+    recognize_part(text, head, operands)
+}
+
+fn recognize_part(
+    text: &str,
+    head: &str,
+    operands: &[NativeOperand],
+) -> Option<(EntryKind, Recognition)> {
     let mut start = offset(text, head);
     let end = start + head.len();
     let mut first = operands.partition_point(|operand| operand.bytes.end <= start);
     let lead = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&start))?;
-    if matches!(
-        lead.role,
-        NativeOperandRole::Placeholder | NativeOperandRole::IncompletePlaceholder
-    ) || matches!(lead.role, NativeOperandRole::SearchArgument(_))
-        && head.len() < text.trim().len()
+    if lead.role.is_operand_label()
+        || matches!(lead.role, NativeOperandRole::SearchArgument(_))
+            && head.len() < text.trim().len()
     {
         // Ar can label a real definition or a placeholder in a syntax
         // expression. Its spelling alone proves neither a command nor an
@@ -297,8 +322,13 @@ fn symbol_group(
     }
 }
 
-fn unwrapped<'a>(text: &'a str, operands: &[NativeOperand]) -> &'a str {
-    let mut head = text.trim();
+fn unwrapped<'a>(
+    text: &'a str,
+    part: &'a str,
+    operands: &[NativeOperand],
+) -> (&'a str, Option<u32>) {
+    let mut head = part.trim();
+    let mut enclosure = None;
     for _ in 0..MAX_NESTING {
         let Some(front) = head.chars().next() else {
             break;
@@ -313,23 +343,32 @@ fn unwrapped<'a>(text: &'a str, operands: &[NativeOperand]) -> &'a str {
         let Some(inner) = head[front.len_utf8()..].strip_suffix(pair) else {
             break;
         };
-        // Both glyphs must survive from enclosure pre/post. Authored
-        // text elsewhere can spell exactly the same punctuation.
-        if !enclosure_at(operands, start)
-            || !enclosure_at(operands, start + head.len() - pair.len_utf8())
-        {
+        // Both glyphs must survive from the same enclosure's native
+        // pre/post. Sibling scopes can emit the same paired punctuation.
+        let Some(opening) = operand_at(operands, start)
+            .filter(|operand| text[operand.bytes.clone()].trim().len() == front.len_utf8())
+        else {
+            break;
+        };
+        let NativeOperandRole::EnclosureStart(scope) = opening.role else {
+            break;
+        };
+        if !operand_at(operands, start + head.len() - pair.len_utf8()).is_some_and(|operand| {
+            operand.role == NativeOperandRole::EnclosureEnd(scope)
+                && text[operand.bytes.clone()].trim().len() == pair.len_utf8()
+        }) {
             break;
         }
         head = inner.trim();
+        enclosure = Some(scope);
     }
-    head
+    (head, enclosure)
 }
 
-fn enclosure_at(operands: &[NativeOperand], offset: usize) -> bool {
-    let index = operands.partition_point(|operand| operand.bytes.end <= offset);
-    operands.get(index).is_some_and(|operand| {
-        operand.role == NativeOperandRole::Enclosure && operand.bytes.contains(&offset)
-    })
+fn operand_at(operands: &[NativeOperand], offset: usize) -> Option<&NativeOperand> {
+    operands
+        .get(operands.partition_point(|operand| operand.bytes.end <= offset))
+        .filter(|operand| operand.bytes.contains(&offset))
 }
 
 fn simple_binding(

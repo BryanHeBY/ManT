@@ -75,21 +75,34 @@ pub(super) fn native_option_occurrences(
         let Some(token) = prefix.split_whitespace().next() else {
             continue;
         };
-        if token.starts_with('-')
-            && token.chars().count() == 2
-            && token
-                .chars()
-                .nth(1)
-                .is_some_and(|c| !c.is_whitespace() && !c.is_control())
-            && !names.iter().any(|found| found.name == token)
-        {
-            names.insert(
-                0,
-                RecognizedName::contiguous(token, prefix.len() - prefix.trim_start().len()),
-            );
-        }
+        retain_native_short_option(token, prefix.len() - prefix.trim_start().len(), names);
     }
     result
+}
+
+fn retain_native_short_option(token: &str, start: usize, names: &mut Vec<RecognizedName>) {
+    let mut chars = token.chars();
+    if chars.next() == Some('-')
+        && chars
+            .next()
+            .is_some_and(|c| !c.is_whitespace() && !c.is_control())
+        && chars.next().is_none()
+        && !names.iter().any(|found| found.name == token)
+    {
+        names.insert(0, RecognizedName::contiguous(token, start));
+    }
+}
+
+/// Run the option grammar on exactly one accepted Fl scope. The complete
+/// scope may contain a key, an attached value or explicit legacy markers.
+#[cfg(feature = "roff")]
+pub(super) fn native_option_key(word: &str) -> Option<RecognizedName> {
+    super::scan::native_option_key(word).or_else(|| {
+        let mut names = Vec::new();
+        let token = word.split_whitespace().next()?;
+        retain_native_short_option(token, word.len() - word.trim_start().len(), &mut names);
+        names.pop()
+    })
 }
 
 /// A TQ term's accepted native key is independent of the original HEAD's

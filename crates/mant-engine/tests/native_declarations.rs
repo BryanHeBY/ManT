@@ -17,6 +17,10 @@ mod operands;
 mod publication;
 #[path = "native_declarations/roles.rs"]
 mod roles;
+#[path = "native_declarations/search_invocation_scope.rs"]
+mod search_invocation_scope;
+#[path = "native_declarations/search_name_candidates.rs"]
+mod search_name_candidates;
 #[path = "native_declarations/search_operand_encodings.rs"]
 mod search_operand_encodings;
 #[path = "native_declarations/search_operand_matrix.rs"]

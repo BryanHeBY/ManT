@@ -32,6 +32,7 @@ enum Suffix {
     None,
     Unknown,
     Command,
+    Flag,
 }
 
 impl Suffix {
@@ -40,12 +41,14 @@ impl Suffix {
             Self::None => ("", ""),
             Self::Unknown => (" No !unknown", "!unknown"),
             Self::Command => (" , Cm later", ",later"),
+            Self::Flag => (" , Fl q", ",-q"),
         }
     }
 
     fn name(self) -> Option<&'static str> {
         match self {
             Self::Command => Some("later"),
+            Self::Flag => Some("-q"),
             Self::None | Self::Unknown => None,
         }
     }
@@ -235,6 +238,17 @@ fn full_quote_candidates_keep_the_confirmed_prefix_when_a_name_follows() {
     // quoted Ar text payload stays inside that operand. Verify both places
     // the initial sign can be written before the actual overstrike.
     check_quote_matrix(Suffix::Command, true);
+}
+
+#[test]
+fn surviving_signs_and_flags_keep_their_independent_name_boundaries() {
+    // The fixed CVS tree places Cm and Fl after a literal comma outside
+    // the Ar operand, including when the unoverstruck sign remains
+    // visible. termp_fl_pre() prints the option's dash before its child.
+    check_quote_matrix(Suffix::Command, false);
+    for covered in [false, true] {
+        check_quote_matrix(Suffix::Flag, covered);
+    }
 }
 
 #[test]

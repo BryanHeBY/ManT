@@ -153,7 +153,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         Some(Mdoc(MdocMacro::Nm)) => {
             builder.with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
         }
-        Some(Mdoc(MdocMacro::Fl)) => append_option(builder, children, name),
+        Some(Mdoc(MdocMacro::Fl)) => append_option(builder, node.id, children, name),
         // mdoc_term.c routes Cd and Fd through termp_fd_pre = termp_bold_pre
         // (dispatch lines 142/149): unconditional Strong in every section.
         Some(Mdoc(
@@ -247,24 +247,23 @@ fn append_native_subject(
     });
 }
 
-fn append_option(builder: &mut InlineBuilder, children: &[Node], name: Option<&str>) {
-    builder.with_native_operand_role(
-        crate::definitions::NativeOperandRole::ExplicitOption,
+fn append_option(builder: &mut InlineBuilder, scope: u32, children: &[Node], name: Option<&str>) {
+    // mdoc_term.c::termp_fl_pre() emits the bold dash and then visits
+    // children in the same scope. Each word keeps that owner's receipt.
+    builder.append_scope(
         |builder| {
-            // mdoc_term.c::termp_fl_pre() emits the bold dash and then visits
-            // children in the same scope, proving each option spelling.
-            builder.append_scope(
-                |builder| {
-                    builder.with_font_scope(Font::Strong, |builder| {
-                        builder.append_text("-");
-                        builder.with_prefix_join(|builder| {
-                            append_inline_nodes(builder, children, name);
-                        });
+            builder.with_font_scope(Font::Strong, |builder| {
+                builder.with_native_operand_role(NativeOperandRole::FlDash(scope), |builder| {
+                    builder.append_text("-");
+                });
+                builder.with_prefix_join(|builder| {
+                    builder.with_native_operand_role(NativeOperandRole::FlWord(scope), |builder| {
+                        append_inline_nodes(builder, children, name);
                     });
-                },
-                coalesce_font_runs,
-            );
+                });
+            });
         },
+        coalesce_font_runs,
     );
 }
 
@@ -411,7 +410,7 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
     }
 
     fn event(&mut self, event: crate::mandoc::containers::Event<'node>) {
-        use crate::mandoc::containers::Event;
+        use crate::mandoc::containers::{EnclosureMark, Event};
         match event {
             Event::BeginNode(node) => self.builder.begin_executed_node(node),
             Event::Alignment(alignment) => self.builder.set_text_alignment(alignment),
@@ -432,25 +431,37 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 self.builder.flush_execution_line();
             }
             Event::Children(nodes) => append_inline_nodes(self.builder, nodes, self.name),
+            Event::EnclosureContent(nodes, scope) => {
+                self.builder.with_native_enclosure(scope, |builder| {
+                    append_inline_nodes(builder, nodes, self.name);
+                });
+            }
             Event::AlignedChildren(nodes) => self.builder.with_grouped_line_dispatch(|builder| {
                 append_inline_nodes(builder, nodes, self.name);
             }),
-            Event::Glyph(value) => {
+            Event::Glyph(value) => self.builder.append_text(&value),
+            Event::EnclosureMark {
+                mark,
+                scope,
+                opening,
+            } => {
+                let role = if opening {
+                    NativeOperandRole::EnclosureStart(scope)
+                } else {
+                    NativeOperandRole::EnclosureEnd(scope)
+                };
                 self.builder
-                    .with_native_operand_role(NativeOperandRole::Enclosure, |builder| {
-                        builder.append_text(&value);
+                    .with_native_operand_role(role, |builder| match mark {
+                        EnclosureMark::Nodes(nodes) => {
+                            append_inline_nodes(builder, nodes, self.name);
+                        }
+                        mark => mark.append_word(builder),
                     });
             }
             Event::Tight => self.builder.tighten_next_boundary(),
             Event::Release => self.builder.release_next_boundary(),
-            Event::Word(super::super::containers::NativeWord::Empty) => {
-                self.builder.execute_empty_word();
-            }
-            Event::Word(super::super::containers::NativeWord::Invisible) => {
+            Event::InvisibleWord => {
                 super::append_normalized_word(self.builder, "\\&");
-            }
-            Event::Word(super::super::containers::NativeWord::Roff(value)) => {
-                super::append_normalized_word(self.builder, value);
             }
             Event::EnterKeep => self.builder.enter_keep_words(),
             Event::ExitKeep => self.builder.exit_keep_words(),

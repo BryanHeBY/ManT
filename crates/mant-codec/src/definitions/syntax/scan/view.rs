@@ -20,6 +20,16 @@ pub(super) struct HeadView<'a> {
 }
 
 impl<'a> HeadView<'a> {
+    #[cfg(feature = "roff")]
+    pub(super) fn native_word(text: &str, operands: &'a [NativeOperand]) -> Self {
+        Self {
+            text: text.to_owned(),
+            runs: Vec::new(),
+            operands,
+            literal_starts: vec![text.len() - text.trim_start().len()],
+        }
+    }
+
     pub(super) fn new(nodes: &[Inline], operands: &'a [NativeOperand]) -> Self {
         let mut view = Self {
             text: String::new(),

@@ -54,6 +54,8 @@ that crate was not published for that change.
   argument does not mask a later independently declared name.
 - Retain the leading search-argument roles inside an enclosure when a
   later declaration or unknown word ends the search expression.
+- Bind independent mdoc option and term names after search arguments.
+  Preserve each accepted name range through wrappers and mixed declarations.
 - Keep mdoc search operands connected through `Sy`, `Em`, `Li`, `Bf` and
   `Bk` while preserving their fonts, source order and executed spacing.
 - Preserve declaration names, parameter exclusions and reading groups when

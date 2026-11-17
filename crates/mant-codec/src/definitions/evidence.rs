@@ -56,6 +56,15 @@ pub(crate) enum NativeOperandRole {
     },
     #[cfg(feature = "roff")]
     SearchClose,
+    /// A sign in a compound search expression. Only `SearchOpen` can prove a bare template.
+    #[cfg(feature = "roff")]
+    SearchSign,
+    /// Provisional receipts from one mdoc Fl. Acceptance joins the dash
+    /// and the surviving word from the same macro into an `ExplicitOption`.
+    #[cfg(feature = "roff")]
+    FlDash(u32),
+    #[cfg(feature = "roff")]
+    FlWord(u32),
     /// The first actual man OP operand still has to spell a complete flag.
     #[cfg(feature = "roff")]
     OptionalKey,
@@ -66,7 +75,11 @@ pub(crate) enum NativeOperandRole {
     #[cfg(feature = "roff")]
     ClippedSubject(NativeSubject, u32),
     #[cfg(feature = "roff")]
-    Enclosure,
+    EnclosureStart(u32),
+    #[cfg(feature = "roff")]
+    EnclosureEnd(u32),
+    #[cfg(feature = "roff")]
+    EnclosureContent(u32),
     ExplicitOption,
 }
 
@@ -100,6 +113,22 @@ impl NativeOperandRole {
     }
 
     #[cfg(feature = "roff")]
+    pub(super) fn is_search(self) -> bool {
+        matches!(
+            self,
+            Self::SearchArgument(_)
+                | Self::SearchOpen { .. }
+                | Self::SearchClose
+                | Self::SearchSign
+        )
+    }
+
+    #[cfg(feature = "roff")]
+    pub(crate) fn is_operand_label(self) -> bool {
+        matches!(self, Self::Placeholder | Self::IncompletePlaceholder)
+    }
+
+    #[cfg(feature = "roff")]
     pub(super) fn subject(self) -> Option<(NativeSubject, u32)> {
         match self {
             Self::Subject(subject, scope) | Self::ClippedSubject(subject, scope) => {
@@ -125,6 +154,61 @@ pub(crate) struct CapturedHeadOperands {
 
 #[cfg(feature = "roff")]
 impl CapturedHeadOperands {
+    pub(crate) fn qualify_fl_keys(&mut self, search_head: bool) {
+        let check_scopes = search_head
+            || self
+                .operands
+                .iter()
+                .find(|operand| {
+                    !matches!(
+                        operand.role,
+                        NativeOperandRole::EnclosureStart(_) | NativeOperandRole::EnclosureEnd(_)
+                    )
+                })
+                .is_some_and(|operand| operand.role.is_operand_label());
+        if !check_scopes {
+            for operand in &mut self.operands {
+                if matches!(
+                    operand.role,
+                    NativeOperandRole::FlDash(_) | NativeOperandRole::FlWord(_)
+                ) {
+                    operand.role = NativeOperandRole::ExplicitOption;
+                }
+            }
+            return;
+        }
+        if !self.operands.iter().any(|operand| {
+            matches!(
+                operand.role,
+                NativeOperandRole::FlDash(_) | NativeOperandRole::FlWord(_)
+            )
+        }) {
+            return;
+        }
+        let mut raw = std::mem::take(&mut self.operands).into_iter().peekable();
+        while let Some(mut operand) = raw.next() {
+            match operand.role {
+                NativeOperandRole::FlDash(scope) => {
+                    if let Some(word) = raw.peek()
+                        && word.role == NativeOperandRole::FlWord(scope)
+                        && operand.bytes.end == word.bytes.start
+                        && self.text[operand.bytes.clone()].trim_start() == "-"
+                    {
+                        operand.bytes.end = word.bytes.end;
+                        operand.role = NativeOperandRole::ExplicitOption;
+                        raw.next();
+                        self.operands.push(operand);
+                        continue;
+                    }
+                    operand.role = NativeOperandRole::Argument;
+                }
+                NativeOperandRole::FlWord(_) => operand.role = NativeOperandRole::Argument,
+                _ => {}
+            }
+            self.operands.push(operand);
+        }
+    }
+
     pub(crate) fn qualify_optional_keys(&mut self) {
         for operand in &mut self.operands {
             if operand.role != NativeOperandRole::OptionalKey {

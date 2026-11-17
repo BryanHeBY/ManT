@@ -99,3 +99,26 @@ fn check_search_form_projection(source: &str, form: &str) {
         }
     }
 }
+
+#[test]
+fn parameter_and_independent_option_remain_visible_with_the_same_spelling() {
+    // termp_fl_pre and Ar each write their own word in this Bq. The
+    // native form contains both identical spellings.
+    let source = concat!(
+        ".Dd November 17, 2026\n.Dt PROBE 3\n.Os\n.Sh NAME\n.Nm probe\n.Nd role probe\n",
+        ".Sh OPTIONS\n.Sm off\n.Bl -tag -width Ds\n.It Bq Sy \\z/ Ar \"RE,-q\" , Fl q\n",
+        ".It Fl n\n.It Fl N\nGROUP_BODY\n.El\n",
+    );
+    let content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+    );
+    let markdown = mant_codec::encode::render_markdown(&content);
+    let imported = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    for content in [&content, &imported] {
+        for width in [20, 40, 78] {
+            let view = DocumentView::new(content).render(width);
+            assert_eq!(view.search("-q").len(), 2, "width {width}");
+            assert_eq!(view.search("GROUP_BODY").len(), 1, "width {width}");
+        }
+    }
+}

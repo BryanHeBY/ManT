@@ -12,14 +12,6 @@ pub(super) use posts::ScopePostState;
 
 use super::{first_part_children, inline::enclosure_marks, roff_escape::RoffFont};
 
-/// Actual `term_word` operands, before native escape execution. A zero-cell
-/// empty word differs from the invisible input cell produced by `\\&`.
-pub(super) enum NativeWord<'a> {
-    Empty,
-    Invisible,
-    Roff(&'a str),
-}
-
 pub(super) enum Event<'a> {
     /// Source owner of subsequent generated output. True executes this
     /// node's `NODE_LINE`; false only changes ownership for a later post.
@@ -41,9 +33,17 @@ pub(super) enum Event<'a> {
     AlignedChildren(&'a [Node]),
     /// Formatter-generated spelling, already resolved to literal glyphs.
     Glyph(String),
+    /// A delimiter emitted by this enclosure, separate from its payload.
+    EnclosureMark {
+        mark: EnclosureMark<'a>,
+        scope: u32,
+        opening: bool,
+    },
+    /// A quote BODY or ELEM can own punctuation even if its marks disappear.
+    EnclosureContent(&'a [Node], u32),
     Tight,
     Release,
-    Word(NativeWord<'a>),
+    InvisibleWord,
     EnterKeep,
     ExitKeep,
     EnterFont(RoffFont, Option<u32>),
@@ -298,15 +298,19 @@ fn emit_enclosure<'a>(
         return false;
     };
     if let Some(open) = marks.opening {
-        emit_enclosure_mark(open, emit);
+        emit(Event::EnclosureMark {
+            mark: open,
+            scope: node.id,
+            opening: true,
+        });
         emit(Event::Tight);
     }
-    emit(Event::Children(&node.children));
+    emit(Event::EnclosureContent(&node.children, node.id));
     if !posts.ended(node.id) {
         if node.kind == NodeKind::Body {
             emit(Event::RestoreBody(node.id));
         }
-        emit_enclosure_post(marks.closing, emit);
+        emit_enclosure_post(marks.closing, node.id, emit);
     }
     true
 }
@@ -343,7 +347,7 @@ fn walk_scope_end<'a>(
             emit(Event::BeginNode(node));
             emit(Event::Tight);
         }
-        emit(Event::Children(&node.children));
+        emit(Event::EnclosureContent(&node.children, end.body_id));
         emit(Event::RestoreBody(end.body_id));
         emit(Event::Release);
         posts.finish(end.body_id);
@@ -355,7 +359,7 @@ fn walk_scope_end<'a>(
         }
         emit(Event::Children(&node.children));
         emit(Event::RestoreBody(end.body_id));
-        emit_enclosure_post(marks.closing, emit);
+        emit_enclosure_post(marks.closing, end.body_id, emit);
         posts.finish(end.body_id);
         return true;
     }
@@ -406,9 +410,21 @@ fn emit_structural_function<'a>(
     }
 }
 
-enum EnclosureMark<'a> {
+pub(super) enum EnclosureMark<'a> {
     Glyph(String),
     Operand(&'a str),
+    Nodes(&'a [Node]),
+}
+
+impl EnclosureMark<'_> {
+    pub(super) fn append_word(self, builder: &mut super::inline::InlineBuilder) {
+        match self {
+            Self::Glyph(value) => builder.append_text(&value),
+            Self::Operand("") => builder.execute_empty_word(),
+            Self::Operand(value) => super::inline::append_normalized_word(builder, value),
+            Self::Nodes(_) => unreachable!("authored marks retain their source nodes"),
+        }
+    }
 }
 
 struct EnclosureMarks<'a> {
@@ -462,18 +478,18 @@ fn sole_mt_child(node: &Node) -> bool {
     }
 }
 
-fn emit_enclosure_mark<'a>(mark: EnclosureMark<'a>, emit: &mut impl FnMut(Event<'a>)) {
-    match mark {
-        EnclosureMark::Glyph(value) => emit(Event::Glyph(value)),
-        EnclosureMark::Operand("") => emit(Event::Word(NativeWord::Empty)),
-        EnclosureMark::Operand(value) => emit(Event::Word(NativeWord::Roff(value))),
-    }
-}
-
-fn emit_enclosure_post<'a>(close: Option<EnclosureMark<'a>>, emit: &mut impl FnMut(Event<'a>)) {
+fn emit_enclosure_post<'a>(
+    close: Option<EnclosureMark<'a>>,
+    scope: u32,
+    emit: &mut impl FnMut(Event<'a>),
+) {
     if let Some(close) = close {
         emit(Event::Tight);
-        emit_enclosure_mark(close, emit);
+        emit(Event::EnclosureMark {
+            mark: close,
+            scope,
+            opening: false,
+        });
     } else {
         // mdoc_term.c releases NOSPACE after an absent `.En` closing mark.
         emit(Event::Release);
@@ -536,7 +552,11 @@ fn authored_enclosure<'a>(
     emit: &mut impl FnMut(Event<'a>),
 ) {
     let head = first_part_children(node, NodeKind::Head);
-    let body = first_part_children(node, NodeKind::Body);
+    let body = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none());
+    let body_words = body.map_or(&[][..], |body| body.children.as_slice());
     let tail = first_part_children(node, NodeKind::Tail);
     for (index, child) in node.children.iter().enumerate() {
         if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
@@ -544,26 +564,38 @@ fn authored_enclosure<'a>(
         }
         match child.kind {
             NodeKind::Head | NodeKind::Tail => {
-                emit(Event::Children(&child.children));
+                if let Some(body) = body {
+                    emit(Event::EnclosureMark {
+                        mark: EnclosureMark::Nodes(&child.children),
+                        scope: body.id,
+                        opening: child.kind == NodeKind::Head,
+                    });
+                } else {
+                    emit(Event::Children(&child.children));
+                }
             }
             NodeKind::Body => {
                 // termp_eo_pre distinguishes a normal BODY beginning with
                 // an immediate end marker from a genuinely empty word.
                 // Presence is the original child pointer, not visible text.
-                if head.is_empty() && body.first().is_some_and(|node| node.scope_end.is_some()) {
-                    emit(Event::Word(NativeWord::Invisible));
-                } else if !head.is_empty() && (!body.is_empty() || !tail.is_empty()) {
+                if head.is_empty()
+                    && body_words
+                        .first()
+                        .is_some_and(|node| node.scope_end.is_some())
+                {
+                    emit(Event::InvisibleWord);
+                } else if !head.is_empty() && (!body_words.is_empty() || !tail.is_empty()) {
                     emit(Event::Tight);
                 }
-                emit(Event::Children(&child.children));
+                emit(Event::EnclosureContent(&child.children, child.id));
                 if !posts.ended(child.id) {
                     emit(Event::RestoreBody(child.id));
                     // termp_eo_post writes a real NBRZW cell for the fully
                     // absent HEAD/BODY/TAIL form; it is not term_word("").
-                    if (!head.is_empty() || !body.is_empty()) && !tail.is_empty() {
+                    if (!head.is_empty() || !body_words.is_empty()) && !tail.is_empty() {
                         emit(Event::Tight);
-                    } else if head.is_empty() && body.is_empty() && tail.is_empty() {
-                        emit(Event::Word(NativeWord::Invisible));
+                    } else if head.is_empty() && body_words.is_empty() && tail.is_empty() {
+                        emit(Event::InvisibleWord);
                     } else if tail.is_empty() {
                         emit(Event::Release);
                     }

@@ -18,11 +18,14 @@ use mant_ir::Inline;
 pub(in crate::mandoc) struct HeadOperandCapture {
     search_head: Option<SearchHead>,
     roles: HashMap<u64, NativeOperandRole>,
-    placeholder_receipts: Vec<(usize, u64)>,
-    optional_keys: HashMap<u64, usize>,
+    name_receipts: Vec<(usize, u64)>,
+    key_receipts: HashMap<u64, usize>,
+    fl_assignment_prefixes: HashMap<u64, String>,
     captured: CapturedHeadOperands,
     last_owner: Option<u64>,
     operand_role: Option<NativeOperandRole>,
+    enclosures: Vec<u32>,
+    has_operand_label: bool,
 }
 
 impl HeadOperandCapture {
@@ -34,26 +37,52 @@ impl HeadOperandCapture {
     }
 
     pub(super) fn record(&mut self, serial: u64, role: NativeOperandRole) {
+        self.has_operand_label |= role.is_operand_label();
         self.roles.insert(serial, role);
     }
 
-    pub(super) fn mark_clipped_arguments(&mut self, owners: impl Iterator<Item = u64>) {
+    pub(super) fn mark_clipped_names(&mut self, owners: impl Iterator<Item = u64>) {
         for owner in owners {
-            if let Some(role) = self.roles.get_mut(&owner)
-                && *role == NativeOperandRole::Placeholder
-            {
-                *role = NativeOperandRole::IncompletePlaceholder;
+            if let Some(role) = self.roles.get_mut(&owner) {
+                *role = match *role {
+                    NativeOperandRole::Placeholder => NativeOperandRole::IncompletePlaceholder,
+                    NativeOperandRole::FlDash(_) => NativeOperandRole::Argument,
+                    NativeOperandRole::FlWord(_)
+                        if !self.fl_assignment_prefixes.contains_key(&owner) =>
+                    {
+                        NativeOperandRole::Argument
+                    }
+                    role => role,
+                };
             }
         }
     }
 
     pub(in crate::mandoc) fn take(&mut self) -> CapturedHeadOperands {
         let mut captured = std::mem::take(&mut self.captured);
-        for (index, serial) in self.placeholder_receipts.drain(..) {
-            captured.operands[index].role = self.roles[&serial];
+        for (index, serial) in self.name_receipts.drain(..) {
+            let operand = &mut captured.operands[index];
+            let role = self.roles[&serial];
+            // A native overstrike in an attached value need not invalidate
+            // the name. Match the untouched prefix through '=' against the
+            // actual accepted word before retaining the complete Fl receipt.
+            operand.role = if matches!(role, NativeOperandRole::FlWord(_))
+                && self
+                    .fl_assignment_prefixes
+                    .get(&serial)
+                    .is_some_and(|prefix| {
+                        !captured.text[operand.bytes.clone()]
+                            .trim_start()
+                            .starts_with(prefix)
+                    }) {
+                NativeOperandRole::Argument
+            } else {
+                role
+            };
         }
-        self.optional_keys.clear();
+        self.key_receipts.clear();
         captured.qualify_optional_keys();
+        captured.qualify_fl_keys(self.search_head.is_some());
         captured
     }
 
@@ -104,16 +133,25 @@ impl HeadOperandCapture {
         {
             previous.bytes.end = end;
         } else {
-            if role == NativeOperandRole::Placeholder {
-                self.placeholder_receipts
+            if matches!(
+                role,
+                NativeOperandRole::Placeholder
+                    | NativeOperandRole::FlDash(_)
+                    | NativeOperandRole::FlWord(_)
+            ) {
+                self.name_receipts
                     .push((self.captured.operands.len(), serial));
             }
-            // A single OP key can split at a formatter boundary. Its
+            // A single option word can split at a formatter boundary. Its
             // surviving fragments cannot each introduce an independent key.
-            if role == NativeOperandRole::OptionalKey
-                && let Some(previous) = self
-                    .optional_keys
-                    .insert(serial, self.captured.operands.len())
+            if matches!(
+                role,
+                NativeOperandRole::OptionalKey
+                    | NativeOperandRole::FlDash(_)
+                    | NativeOperandRole::FlWord(_)
+            ) && let Some(previous) = self
+                .key_receipts
+                .insert(serial, self.captured.operands.len())
             {
                 role = NativeOperandRole::Argument;
                 self.captured.operands[previous].role = role;
@@ -154,6 +192,14 @@ impl super::InlineBuilder {
                 .operand_role
                 .or_else(|| capture.search_head.as_ref()?.role(text?.0))
                 .or_else(|| {
+                    capture
+                        .enclosures
+                        .iter()
+                        .rev()
+                        .find(|&&scope| !self.scope_posts.ended(scope))
+                        .map(|&scope| NativeOperandRole::EnclosureContent(scope))
+                })
+                .or_else(|| {
                     text?
                         .1
                         .events
@@ -162,16 +208,33 @@ impl super::InlineBuilder {
                         .then_some(NativeOperandRole::Literal)
                 });
             if let Some(role) = role {
+                let role = match role {
+                    NativeOperandRole::FlDash(_) | NativeOperandRole::FlWord(_)
+                        if !capture.has_operand_label && capture.search_head.is_none() =>
+                    {
+                        NativeOperandRole::ExplicitOption
+                    }
+                    role => role,
+                };
                 let role = if text.is_some_and(|(_, decoded)| !decoded.proves_native_glyphs()) {
                     match role {
                         NativeOperandRole::Placeholder => NativeOperandRole::IncompletePlaceholder,
-                        NativeOperandRole::SearchArgument(_) => NativeOperandRole::Argument,
+                        NativeOperandRole::SearchArgument(_) | NativeOperandRole::FlWord(_) => {
+                            NativeOperandRole::Argument
+                        }
                         _ => role,
                     }
                 } else {
                     role
                 };
-                capture.record(self.execution.native_owner_serial, role);
+                let serial = self.execution.native_owner_serial;
+                if matches!(role, NativeOperandRole::FlWord(_))
+                    && let Some((_, decoded)) = text
+                    && let Some(prefix) = assignment_prefix(&decoded.events)
+                {
+                    capture.fl_assignment_prefixes.insert(serial, prefix);
+                }
+                capture.record(serial, role);
             }
         }
     }
@@ -180,7 +243,7 @@ impl super::InlineBuilder {
         if let Some(capture) = &self.head_operand_capture
             && let Some(owners) = self.execution.zero_advance.take_overwritten_word_owners()
         {
-            capture.borrow_mut().mark_clipped_arguments(owners);
+            capture.borrow_mut().mark_clipped_names(owners);
         }
     }
 
@@ -192,7 +255,7 @@ impl super::InlineBuilder {
             // HEAD's accepted residue cannot certify the complete label.
             capture
                 .borrow_mut()
-                .mark_clipped_arguments(std::iter::once(owner));
+                .mark_clipped_names(std::iter::once(owner));
         }
     }
 
@@ -210,4 +273,40 @@ impl super::InlineBuilder {
             capture.borrow_mut().operand_role = previous;
         }
     }
+
+    pub(in crate::mandoc) fn with_native_enclosure(
+        &mut self,
+        scope: u32,
+        operation: impl FnOnce(&mut Self),
+    ) {
+        let capture = self.head_operand_capture.clone();
+        if let Some(capture) = &capture {
+            capture.borrow_mut().enclosures.push(scope);
+        }
+        operation(self);
+        if let Some(capture) = capture {
+            capture.borrow_mut().enclosures.pop();
+        }
+    }
+}
+
+fn assignment_prefix(events: &[RoffInlineEvent]) -> Option<String> {
+    if !events.iter().any(|event| matches!(event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) if value.contains('='))) {
+        return None;
+    }
+    let mut prefix = String::new();
+    for event in events {
+        match event {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
+                if let Some(index) = value.find('=') {
+                    prefix.push_str(&value[..=index]);
+                    return (prefix.len() > 1).then_some(prefix);
+                }
+                prefix.push_str(value);
+            }
+            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont => {}
+            _ => return None,
+        }
+    }
+    None
 }

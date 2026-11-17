@@ -15,6 +15,7 @@ use crate::mandoc::{containers::TextScope, inline::mdoc_text_font};
 #[derive(Clone, Default)]
 pub(in crate::mandoc) struct SearchHead {
     arguments: Vec<u32>,
+    signs: Vec<u32>,
     bare_template: Option<BareTemplate>,
 }
 
@@ -43,6 +44,7 @@ impl SearchHead {
         let mut search = Self::default();
         search.scan(head, content_nodes(before).next().is_none());
         search.arguments.sort_unstable();
+        search.signs.sort_unstable();
         (!search.arguments.is_empty()).then_some(search)
     }
 
@@ -112,16 +114,18 @@ impl SearchHead {
         }
         // Only accepted HEAD receipts can prove that the sign survives
         // and that term_word inserted no gap at the argument boundary.
-        if let Some(first_argument) = first_argument
-            && whole_head
-            && words.peek().is_none()
-        {
-            self.bare_template = Some(BareTemplate {
-                opener: opener.id,
-                sign: sign.glyph,
-                first_argument,
-                closer,
-            });
+        if let Some(first_argument) = first_argument {
+            if whole_head && words.peek().is_none() {
+                self.bare_template = Some(BareTemplate {
+                    opener: opener.id,
+                    sign: sign.glyph,
+                    first_argument,
+                    closer,
+                });
+            } else {
+                self.signs.push(opener.id);
+                self.signs.extend(closer);
+            }
         }
     }
 
@@ -156,15 +160,22 @@ impl SearchHead {
     }
 
     pub(in crate::mandoc) fn role(&self, node: u32) -> Option<NativeOperandRole> {
-        let bare = self.bare_template.as_ref()?;
-        if node == bare.opener {
+        if let Some(bare) = &self.bare_template
+            && node == bare.opener
+        {
             Some(NativeOperandRole::SearchOpen {
                 sign: bare.sign,
                 argument: bare.first_argument,
                 closed: bare.closer.is_some(),
             })
-        } else if bare.closer == Some(node) {
+        } else if self
+            .bare_template
+            .as_ref()
+            .is_some_and(|bare| bare.closer == Some(node))
+        {
             Some(NativeOperandRole::SearchClose)
+        } else if self.signs.binary_search(&node).is_ok() {
+            Some(NativeOperandRole::SearchSign)
         } else {
             None
         }

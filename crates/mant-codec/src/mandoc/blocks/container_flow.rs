@@ -1,22 +1,19 @@
 //! Container events re-enter the single driver and preserve font/flush lifetimes.
 use super::{InlineBuilder, Node, source_span, targets};
-use crate::mandoc::containers::{ContainerSink, Event, NativeWord};
+use crate::mandoc::containers::{ContainerSink, EnclosureMark, Event};
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 fn append_generated_event(builder: &mut InlineBuilder, event: Event<'_>) {
     match event {
         Event::Glyph(value) => builder.append_text(&value),
+        Event::EnclosureMark { mark, .. } => mark.append_word(builder),
         Event::Anchor(target, source) => {
             builder.append(vec![mant_ir::Inline::anchor_at(target, source)]);
         }
         Event::Tight => builder.tighten_next_boundary(),
         Event::Release => builder.release_next_boundary(),
-        Event::Word(NativeWord::Empty) => builder.execute_empty_word(),
-        Event::Word(NativeWord::Invisible) => {
+        Event::InvisibleWord => {
             crate::mandoc::inline::append_normalized_word(builder, "\\&");
-        }
-        Event::Word(NativeWord::Roff(value)) => {
-            crate::mandoc::inline::append_normalized_word(builder, value);
         }
         Event::FunctionBodyBegin(synopsis) => builder.begin_function_body(synopsis),
         Event::FunctionBodyEnd(synopsis) => builder.finish_function_body(synopsis),
@@ -252,7 +249,12 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                     .state
                     .flush_requested_line(source_span(self.root));
             }
-            Event::Children(nodes) => self.lowerer.push_nodes(nodes),
+            Event::Children(nodes)
+            | Event::EnclosureContent(nodes, _)
+            | Event::EnclosureMark {
+                mark: EnclosureMark::Nodes(nodes),
+                ..
+            } => self.lowerer.push_nodes(nodes),
             Event::AlignedChildren(nodes) => {
                 let name = self.lowerer.context.default_name;
                 let append = |builder: &mut crate::mandoc::inline::InlineBuilder| {
