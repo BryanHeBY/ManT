@@ -2,8 +2,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::{Inline, InlineBuilder, external_link_target};
+use super::{Inline, InlineBuilder};
 use crate::mandoc::inline::ownership::annotations::AnnotationKey;
+use mant_ir::LinkTarget;
 
 const OWNER_PREFIX: &str = "\0mant:lk-presentation:";
 
@@ -46,10 +47,9 @@ fn placeholder(owner: AnnotationKey, part: Part, address: &str, children: Vec<In
     // never passes URI admission or executes as an href: finalization below
     // removes it after native acceptance and before semantic recognition.
     Inline::Link {
-        target: external_link_target(
-            format!("{OWNER_PREFIX}{owner}:{}:{address}", part.spelling()),
-            false,
-        ),
+        target: LinkTarget::External {
+            uri: format!("{OWNER_PREFIX}{owner}:{}:{address}", part.spelling()),
+        },
         // Authored Lk targets cannot supply this matching private title.
         // The pair distinguishes ownership metadata from an invalid authored
         // address which merely resembles the NUL-prefixed target namespace.
@@ -296,7 +296,7 @@ fn bind_accepted_link(
     if has_readable_text(&children) {
         bound.insert((owner, part));
         output.push(Inline::Link {
-            target: external_link_target(address, false),
+            target: LinkTarget::External { uri: address },
             title: None,
             children,
         });
@@ -306,7 +306,7 @@ fn bind_accepted_link(
         // rejected glyph, physical row, or alternate label is reconstructed.
         if bound.insert((owner, part)) {
             output.push(Inline::Link {
-                target: external_link_target(address, false),
+                target: LinkTarget::External { uri: address },
                 title: None,
                 children,
             });

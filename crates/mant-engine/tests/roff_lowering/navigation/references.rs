@@ -1,6 +1,218 @@
 //! References behavior contracts.
 
 use super::*;
+
+#[test]
+fn native_uri_macros_publish_single_mailboxes_as_portable_email_links() {
+    use mant_ir::LinkTarget;
+
+    // Pinned CVS man_html.c::man_UR_pre and mdoc_html.c::mdoc_lk_pre
+    // put the authored URI on the label. Their terminal handlers retain
+    // the separate address word and put trailing punctuation outside it.
+    let email = |address: &str| LinkTarget::Email {
+        address: address.into(),
+    };
+    let external = |uri: &str| LinkTarget::External { uri: uri.into() };
+    for (uri, expected, portable) in [
+        (
+            "mailto:rsync@lists.samba.org",
+            Some(email("rsync@lists.samba.org")),
+            true,
+        ),
+        (
+            "MAILTO:percent%252B@example.org",
+            Some(email("percent%2B@example.org")),
+            true,
+        ),
+        (
+            "mailto:local@example.org?subject=hello",
+            Some(external("mailto:local@example.org?subject=hello")),
+            true,
+        ),
+        (
+            "mailto:local@example.org#topic",
+            Some(external("mailto:local@example.org#topic")),
+            true,
+        ),
+        (
+            "mailto:a@example.org,b@example.org",
+            Some(external("mailto:a@example.org,b@example.org")),
+            true,
+        ),
+        (
+            "https://example.org/home",
+            Some(external("https://example.org/home")),
+            true,
+        ),
+        ("mailto:invalid", Some(external("mailto:invalid")), false),
+        (
+            "mailto:invalid%GG@example.org",
+            Some(external("mailto:invalid%GG@example.org")),
+            false,
+        ),
+        ("man:printf(3)", Some(external("man:printf(3)")), false),
+        ("", None, false),
+    ] {
+        for mdoc in [false, true] {
+            let source = if mdoc {
+                format!(
+                    ".Dd November 18, 2026\n.Dt MAIL 1\n.Os\n.Sh CREDITS\n.Lk \"{uri}\" LINKLABEL .\n"
+                )
+            } else {
+                format!(".TH MAIL 1\n.SH CREDITS\n.UR \"{uri}\"\n\\fBLINKLABEL\\fP\n.UE .\n")
+            };
+            assert_native_uri_export(&source, uri, expected.as_ref(), portable, mdoc);
+        }
+    }
+}
+
+fn assert_native_uri_export(
+    source: &str,
+    uri: &str,
+    expected: Option<&mant_ir::LinkTarget>,
+    portable: bool,
+    mdoc: bool,
+) {
+    use mant_ir::{LinkTarget, ReferenceTargetType};
+
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    for kind in [ReferenceTargetType::Email, ReferenceTargetType::External] {
+        let records = credit_references(&query, vec![kind]);
+        let targets = records
+            .iter()
+            .map(|record| {
+                assert_eq!(record.label, "LINKLABEL", "{source}");
+                &record.target
+            })
+            .collect::<Vec<_>>();
+        let expected = expected
+            .into_iter()
+            .filter(|target| match kind {
+                ReferenceTargetType::Email => matches!(target, LinkTarget::Email { .. }),
+                ReferenceTargetType::External => {
+                    matches!(target, LinkTarget::External { .. })
+                }
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(targets, expected, "{source}");
+    }
+    let native_text = mant_render::render_query_text(&query);
+    let expected_label = if mdoc {
+        format!("LINKLABEL: {uri}.")
+    } else {
+        format!("LINKLABEL <{uri}>.")
+    };
+    if !uri.is_empty() {
+        assert!(
+            native_text.contains(&expected_label),
+            "{source}: {native_text}"
+        );
+    }
+
+    let markdown = mant_codec::encode::render_markdown_with_options(
+        &query,
+        mant_codec::encode::MarkdownOptions::ADDRESSABLE,
+    );
+    let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let records = credit_references(
+        &decoded,
+        vec![
+            ReferenceTargetType::Email,
+            ReferenceTargetType::External,
+            ReferenceTargetType::Manual,
+        ],
+    );
+    let expected_records = expected
+        .into_iter()
+        .filter(|_| portable)
+        .map(|target| ("LINKLABEL", target))
+        .collect::<Vec<_>>();
+    let actual = records
+        .iter()
+        .map(|record| (record.label.as_str(), &record.target))
+        .collect::<Vec<_>>();
+    assert_eq!(actual, expected_records, "{source}: {markdown}");
+    let style = if mdoc { "*LINKLABEL*" } else { "**LINKLABEL**" };
+    assert!(markdown.contains(style), "{source}: {markdown}");
+    let decoded_text = mant_render::render_query_text(&decoded);
+    assert_eq!(decoded_text.matches("LINKLABEL").count(), 1, "{markdown}");
+    if !uri.is_empty() {
+        assert!(
+            decoded_text.contains(&expected_label),
+            "{source}: {markdown}"
+        );
+    }
+}
+
+#[test]
+fn native_mail_links_keep_unlabelled_uri_and_explicit_address_labels() {
+    use mant_ir::{LinkTarget, ReferenceTargetType};
+
+    // termp_lk_pre executes the target word as the label when there is no
+    // description, while Mt visits the mailbox operand without a suffix.
+    let address = "rsync@lists.samba.org";
+    let uri = format!("mailto:{address}");
+    let mdoc = ".Dd November 18, 2026\n.Dt MAIL 1\n.Os\n.Sh CREDITS\n";
+    let man = ".TH MAIL 1\n.SH CREDITS\n";
+    for (source, label) in [
+        (format!("{mdoc}.Lk \"{uri}\" .\n"), uri.as_str()),
+        (format!("{mdoc}.Lk \"{uri}\" \\& .\n"), uri.as_str()),
+        (format!("{man}.UR \"{uri}\"\n.UE .\n"), uri.as_str()),
+        (
+            format!("{mdoc}.Rs\n.%T Reference title\n.%U {uri}\n.Re\n"),
+            uri.as_str(),
+        ),
+        (
+            format!("{man}.MT {address}\nLINKLABEL\n.ME .\n"),
+            "LINKLABEL",
+        ),
+        (format!("{mdoc}.Mt {address} .\n"), address),
+    ] {
+        let input = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let markdown = mant_codec::encode::render_markdown_with_options(
+            &input,
+            mant_codec::encode::MarkdownOptions::ADDRESSABLE,
+        );
+        let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for query in [&input, &decoded] {
+            let records = credit_references(
+                query,
+                vec![ReferenceTargetType::Email, ReferenceTargetType::External],
+            );
+            let [record] = records.as_slice() else {
+                panic!("one email occurrence: {source}: {markdown}: {records:?}");
+            };
+            assert_eq!(
+                record.target,
+                LinkTarget::Email {
+                    address: address.into()
+                }
+            );
+            assert_eq!(record.label, label, "{source}: {markdown}");
+        }
+    }
+}
+
+fn credit_references(
+    query: &mant_ir::ResolvedContent,
+    target_types: Vec<mant_ir::ReferenceTargetType>,
+) -> Vec<mant_protocol::ReferenceRecord> {
+    mant_query::build_outline_with_references(
+        query,
+        mant_protocol::EntryProjection::All,
+        Some(mant_protocol::ContentSelector::id("credits")),
+        &mant_protocol::ReferenceProjection {
+            mode: mant_protocol::ReferenceProjectionMode::All,
+            target_types,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .references
+    .records
+}
+
 #[test]
 fn retains_unlabelled_mdoc_link_targets_before_trailing_punctuation() {
     let document = parse_manual_bytes(

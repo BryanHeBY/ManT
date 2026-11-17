@@ -2,6 +2,47 @@
 use super::*;
 
 #[test]
+fn native_mailto_activation_covers_the_label_but_not_the_uri_suffix() {
+    // Pinned CVS man_html.c::man_UR_pre and mdoc_html.c::mdoc_lk_pre
+    // link the label; the terminal handlers also execute the separate URI.
+    for (uri, active) in [
+        ("mailto:rsync@lists.samba.org", true),
+        ("mailto:invalid", false),
+    ] {
+        for source in [
+            format!(".TH MAIL 1\n.SH CREDITS\n.UR \"{uri}\"\n\\fBLINKLABEL\\fP\n.UE .\n"),
+            format!(
+                ".Dd November 18, 2026\n.Dt MAIL 1\n.Os\n.Sh CREDITS\n.Lk \"{uri}\" LINKLABEL .\n"
+            ),
+        ] {
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let view = DocumentView::new(&query);
+            for width in [30, 80] {
+                let rendered = view.render(width);
+                let labels = rendered.search("LINKLABEL");
+                let [label] = labels.as_slice() else {
+                    panic!("one native link label at width {width}: {source}");
+                };
+                if active {
+                    let [region] = rendered.links.as_slice() else {
+                        panic!("one clickable region at width {width}: {source}");
+                    };
+                    assert_eq!(region.row, label.row);
+                    assert_eq!(region.start_column, label.start_column);
+                    assert_eq!(region.end_column, label.start_column + "LINKLABEL".len());
+                    assert!(matches!(
+                        rendered.link_target_at(label.row, label.start_column),
+                        Some(LinkTarget::External(value)) if value.as_str() == uri
+                    ));
+                } else {
+                    assert!(rendered.links.is_empty(), "invalid URI: {source}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn traditional_manual_links_preserve_original_modifiers_and_copy_ranges() {
     use ratatui::{
         buffer::Buffer,

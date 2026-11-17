@@ -35,6 +35,8 @@ that crate was not published for that change.
   when the native display entry closes the label's row.
 - Preserve source order and spacing around relative indent continuations
   of numbered man list items.
+- Publish valid single-mailbox `mailto:` links from roff as email references
+  so the labels remain clickable through Markdown export and readback.
 - Preserve per-term option and argument evidence across man `TP` and
   `TQ`, and bind `OP` names only from complete executed keys.
 - Bind supported mdoc errors, constants, variables and function names to their

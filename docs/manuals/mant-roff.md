@@ -976,6 +976,14 @@ Link identity extraction is pure and does not execute font or zero-advance effec
 
 Markdown export retains its explicit angle-URI autolink policy. A native `UR` suffix such as `<https://example.org/utf8>` can therefore parse as an additional Markdown autolink beside the BODY label's typed destination, even when that destination ends in `html`. This is export syntax over existing visible text; it does not add a typed IR occurrence, native execution, or TUI activation range. Angle email text is escaped as literal Markdown text.
 
+A URI destination from `UR`, `Lk`, or `%U` is an email reference when it is a
+valid single-mailbox `mailto:` URI without headers or a fragment. It uses the
+same single percent-decoding pass as Markdown and appears in the email
+reference filter, alongside explicit `MT` and `Mt` addresses. Other URI
+destinations retain their external classification, including valid `mailto:`
+URIs with headers, fragments, or multiple recipients. The source label,
+terminal suffix and punctuation retain their authored presentation.
+
 Semantic link annotations keep delayed glyphs with their original source operand. For example, `.Mt \zX a@example.org` reads `Xa@example.org`: `X` keeps the first operand's font, while only `a@example.org` is linked and copied by an address selection. Pure target decoding cannot erase that pending glyph or move its activation range.
 
 Native reading retains automatic separators that `term_word()` buffers and

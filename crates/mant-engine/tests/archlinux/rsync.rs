@@ -95,3 +95,62 @@ fn does_not_leak_roff_markup() {
 fn does_not_have_duplicate_vertical_spacing() {
     common::assert_bounded_vertical_spacing(&archlinux_manual("rsync").sections, "archlinux/rsync");
 }
+
+#[test]
+fn credits_email_remains_clickable_in_a_readback_of_the_exported_section() {
+    use mant_ir::{LinkTarget, ReferenceTargetType};
+    use mant_protocol::{
+        ContentSelector, EntryProjection, ReferenceProjection, ReferenceProjectionMode,
+    };
+
+    // The fixture's UR in CREDITS has an ordinary email label and a mailto
+    // destination in pinned CVS man_html.c::man_UR_pre.
+    let address = "rsync@lists.samba.org";
+    let query = archlinux_manual_query("rsync");
+    let selector = ContentSelector::id("credits");
+    let references = |query: &mant_ir::ResolvedContent, root, kind| {
+        mant_query::build_outline_with_references(
+            query,
+            EntryProjection::All,
+            root,
+            &ReferenceProjection {
+                mode: ReferenceProjectionMode::All,
+                target_types: vec![kind],
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .references
+        .records
+    };
+    let source_emails = references(&query, Some(selector.clone()), ReferenceTargetType::Email);
+    let source_external = references(
+        &query,
+        Some(selector.clone()),
+        ReferenceTargetType::External,
+    );
+    assert_eq!(source_external.len(), 2);
+    assert!(source_external.iter().all(
+        |record| matches!(&record.target, LinkTarget::External { uri } if uri.starts_with("https://"))
+    ));
+    let excerpt = mant_query::select_excerpt(&query, &[selector]).unwrap();
+    let markdown = mant_render::render_excerpt_markdown(&excerpt);
+    let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let decoded_emails = references(&decoded, None, ReferenceTargetType::Email);
+    for records in [source_emails, decoded_emails] {
+        let [record] = records.as_slice() else {
+            panic!("one CREDITS mailbox: {records:?}: {markdown}");
+        };
+        assert_eq!(
+            record.target,
+            LinkTarget::Email {
+                address: address.into()
+            }
+        );
+        assert_eq!(record.label, address);
+    }
+    assert!(
+        mant_render::render_query_text(&decoded)
+            .contains(&format!("{address} <mailto:{address}>."))
+    );
+}

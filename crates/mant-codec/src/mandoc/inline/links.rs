@@ -9,7 +9,8 @@ pub(in crate::mandoc::inline) mod identity;
 pub(in crate::mandoc::inline) mod presentation;
 
 mod annotation;
-use annotation::{append_external_link, external_link_target};
+use super::ownership::markers;
+use annotation::{append_external_link, source_link_target};
 use identity::link_identity_text;
 
 /// Execute mdoc `.Lk` in the caller's formatter stream, then wrap the visible
@@ -24,14 +25,15 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
     // the generated colon and the visible URI word.
     let address = link_identity_text(first.text.as_deref().unwrap_or_default());
     let absent_target = address.is_empty();
-    let registered = builder
+    let owner = builder
         .zero_advance
-        .new_annotation(external_link_target(address, false));
-    let owner = registered.key;
-    let mant_ir::LinkTarget::External { uri } = registered.target else {
-        unreachable!()
+        .new_annotation(source_link_target(address, false))
+        .key;
+    let address = if absent_target {
+        String::new()
+    } else {
+        markers::target_key(owner)
     };
-    let address = if absent_target { String::new() } else { uri };
     let label_end = children
         .iter()
         .rposition(|child| !child.flags.delimiter_close)
@@ -222,7 +224,7 @@ pub(in crate::mandoc) fn man_link_destination(
 ) -> (mant_ir::LinkTarget, bool) {
     let address = man_link_identity_text(head);
     let present = !address.is_empty();
-    (external_link_target(address, email), present)
+    (source_link_target(address, email), present)
 }
 
 /// Execute the spelling normalized by CVS `mdoc_validate.c::post_bx()`.

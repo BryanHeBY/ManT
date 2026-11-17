@@ -1,6 +1,7 @@
 //! Place typed link annotations around their accepted source-owned output.
 
 use super::{Inline, InlineBuilder};
+use mant_ir::{LinkTarget, email_address_from_mailto_uri};
 
 /// Wrap newly executed visible content without interrupting the caller's
 /// formatter state. A link is an IR annotation around output, not an atomic
@@ -14,7 +15,7 @@ pub(super) fn append_external_link(
 ) {
     let registered = builder
         .zero_advance
-        .new_annotation(external_link_target(address.to_owned(), email));
+        .new_annotation(source_link_target(address.to_owned(), email));
     let target = registered.target;
     let owner = registered.key;
     let (_, membership) = builder.append_semantic_scope(owner, true, append, |children| {
@@ -34,10 +35,12 @@ pub(super) fn append_external_link(
     );
 }
 
-pub(super) fn external_link_target(address: String, email: bool) -> mant_ir::LinkTarget {
+pub(super) fn source_link_target(address: String, email: bool) -> LinkTarget {
     if email {
-        mant_ir::LinkTarget::Email { address }
+        LinkTarget::Email { address }
+    } else if let Some(address) = email_address_from_mailto_uri(&address) {
+        LinkTarget::Email { address }
     } else {
-        mant_ir::LinkTarget::External { uri: address }
+        LinkTarget::External { uri: address }
     }
 }

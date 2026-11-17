@@ -9,7 +9,7 @@ const END: &str = "\0mant:annotation-end:";
 const LINK_SCOPE: &str = "\0mant:link-scope:";
 const CANDIDATE: &str = "\0mant:sphinx-candidate:";
 
-pub(super) fn target_key(key: impl Display) -> String {
+pub(in crate::mandoc) fn target_key(key: impl Display) -> String {
     format!("{TARGET}{key}")
 }
 
