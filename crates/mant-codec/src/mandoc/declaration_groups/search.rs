@@ -32,6 +32,12 @@ struct SearchSign {
     proven: bool,
 }
 
+#[derive(Default)]
+struct QuotedArguments {
+    first: Option<u32>,
+    complete: bool,
+}
+
 impl SearchHead {
     pub(in crate::mandoc) fn from_head(before: &[Node], head: &[Node]) -> Option<Self> {
         let mut search = Self::default();
@@ -40,8 +46,15 @@ impl SearchHead {
         (!search.arguments.is_empty()).then_some(search)
     }
 
-    fn scan(&mut self, head: &[Node], mut whole_head: bool) {
-        let mut words = search_words(head).peekable();
+    fn scan(&mut self, head: &[Node], whole_head: bool) {
+        self.scan_words(&mut search_words(head).peekable(), whole_head);
+    }
+
+    fn scan_words<'a>(
+        &mut self,
+        words: &mut Peekable<impl Iterator<Item = &'a Node>>,
+        mut whole_head: bool,
+    ) {
         while let Some(node) = words.next() {
             if let Some(body) = quote_body(node) {
                 // Quote handlers write their own words. A quoted expression
@@ -50,7 +63,7 @@ impl SearchHead {
             } else if let Some(opener) = text_operand(node)
                 && let Some(sign) = search_sign(opener)
             {
-                self.scan_form(opener, sign, &mut words, whole_head);
+                self.scan_form(opener, sign, words, whole_head);
             }
             whole_head = false;
         }
@@ -66,12 +79,19 @@ impl SearchHead {
         whole_head &= sign.proven;
         let mut first_argument = None;
         let mut closer = None;
-        while let Some(word) = words.peek() {
-            let start = self.arguments.len();
+        while let Some(&word) = words.peek() {
             if argument(word) {
                 self.arguments.push(word.id);
-            } else if quote_body(word).is_some_and(|body| self.append_quoted_arguments(body)) {
+                first_argument.get_or_insert(word.id);
+            } else if let Some(body) = quote_body(word) {
                 whole_head = false;
+                let prefix = self.scan_quoted_arguments(body);
+                first_argument = first_argument.or(prefix.first);
+                words.next();
+                if !prefix.complete || prefix.first.is_none() {
+                    break;
+                }
+                continue;
             } else if inline_glyphless_word(word) {
                 // Unlike Ns/Sm this operand executes term_word. A glyphless
                 // inline word can be part of the source expression, but the
@@ -87,9 +107,6 @@ impl SearchHead {
                 whole_head &= close.proven;
             } else {
                 break;
-            }
-            if let Some(&argument) = self.arguments.get(start) {
-                first_argument.get_or_insert(argument);
             }
             words.next();
         }
@@ -108,19 +125,34 @@ impl SearchHead {
         }
     }
 
-    fn append_quoted_arguments(&mut self, body: &[Node]) -> bool {
-        let start = self.arguments.len();
-        for word in search_words(body) {
+    fn scan_quoted_arguments(&mut self, body: &[Node]) -> QuotedArguments {
+        let mut words = search_words(body).peekable();
+        let mut prefix = QuotedArguments::default();
+        prefix.complete = loop {
+            let Some(&word) = words.peek() else {
+                break true;
+            };
             if argument(word) {
                 self.arguments.push(word.id);
-            } else if !inline_glyphless_word(word)
-                && !quote_body(word).is_some_and(|body| self.append_quoted_arguments(body))
-            {
-                self.arguments.truncate(start);
-                return false;
+                prefix.first.get_or_insert(word.id);
+            } else if let Some(body) = quote_body(word) {
+                let nested = self.scan_quoted_arguments(body);
+                prefix.first = prefix.first.or(nested.first);
+                words.next();
+                if !nested.complete || nested.first.is_none() {
+                    break false;
+                }
+                continue;
+            } else if !inline_glyphless_word(word) {
+                break false;
             }
-        }
-        self.arguments.len() > start
+            words.next();
+        };
+        // The inherited sign ends at this boundary. Continue from the
+        // unconsumed word so a later, independent sign can still start its
+        // own expression. The prefix retains its original Ar identities.
+        self.scan_words(&mut words, false);
+        prefix
     }
 
     pub(in crate::mandoc) fn role(&self, node: u32) -> Option<NativeOperandRole> {

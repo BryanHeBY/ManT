@@ -794,9 +794,11 @@ operand cannot supply a standalone name. The form can include a closing sign
 and argument suffixes. `Xo`, `Bf`, `Bk` and the text styling macros `No`,
 `Sy`, `Em` and `Li` can span the expression or just its operands. Their
 original font and spacing effects apply to the displayed form. Spacing
-requests and macro expansion take effect before this check. Enclosures such as `Bq` and `Pq`
-and separate zero-width words still participate in execution. The search
-expression keeps its parameter roles in those compound heads.
+requests and macro expansion take effect before this check. Enclosures
+such as `Bq` and `Pq` and separate zero-width words still participate in
+execution. A search sign outside an enclosure can supply the parameter
+role for its leading arguments. An independent declaration or unknown
+word ends that prefix and leaves the earlier parameter roles intact.
 
 The same rule covers man `IP`/`TP` (including suppressed-newline heads) and
 mdoc definition-style `It`; an explicit `TQ` multi-label owner remains one

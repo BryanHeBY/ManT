@@ -52,6 +52,8 @@ that crate was not published for that change.
   A surviving bare template can keep the following declaration group.
   Zero-width formatter words still participate in execution, and a protected
   argument does not mask a later independently declared name.
+- Retain the leading search-argument roles inside an enclosure when a
+  later declaration or unknown word ends the search expression.
 - Keep mdoc search operands connected through `Sy`, `Em`, `Li`, `Bf` and
   `Bk` while preserving their fonts, source order and executed spacing.
 - Preserve declaration names, parameter exclusions and reading groups when

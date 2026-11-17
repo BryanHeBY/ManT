@@ -21,6 +21,8 @@ mod roles;
 mod search_operand_encodings;
 #[path = "native_declarations/search_operand_matrix.rs"]
 mod search_operand_matrix;
+#[path = "native_declarations/search_quoted_arguments.rs"]
+mod search_quoted_arguments;
 #[path = "native_declarations/search_template_wrappers.rs"]
 mod search_template_wrappers;
 #[path = "native_declarations/search_templates.rs"]
