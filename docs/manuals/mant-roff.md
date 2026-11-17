@@ -787,8 +787,11 @@ Independence does not discard useful reading context. A bounded run of complete 
 
 A bare mdoc search form such as `/RE` or `?RE` can precede a group of
 independently named commands. The form needs a source search sign and an
-executed `Ar` argument with no intervening printable space. It can include a
-closing sign and argument suffixes. Transparent `Xo` and `No` scopes can
+executed `Ar` argument with no intervening printable space. The sign can be
+literal or encoded by a valid roff character escape. A recovered glyph can
+retain the form without qualifying for a reading group. A clipped `Ar`
+operand cannot supply a standalone name. The form can include a closing sign
+and argument suffixes. Transparent `Xo` and `No` scopes can
 span the expression or just its operands. Spacing requests and macro
 expansion take effect before this check. Enclosures such as `Bq` and `Pq`
 and separate zero-width words still participate in execution. The search

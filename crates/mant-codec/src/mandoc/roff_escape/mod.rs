@@ -125,7 +125,25 @@ pub(super) fn decode(source: &str) -> Vec<RoffInlineEvent> {
 
 pub(super) struct DecodedText {
     pub(super) events: Vec<RoffInlineEvent>,
-    pub(super) budget_exhausted: bool,
+    status: EscapeDecodeStatus,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EscapeDecodeStatus {
+    Complete,
+    /// Recovery may preserve a readable glyph without proving a native one.
+    Recovered,
+    BudgetExceeded,
+}
+
+impl DecodedText {
+    pub(super) fn budget_exhausted(&self) -> bool {
+        self.status == EscapeDecodeStatus::BudgetExceeded
+    }
+
+    pub(super) fn proves_native_glyphs(&self) -> bool {
+        self.status == EscapeDecodeStatus::Complete
+    }
 }
 
 /// Parsing evidence accompanies events; safety loss is not a displayed glyph.
@@ -170,7 +188,7 @@ fn decode_with_options(
             } else {
                 vec![RoffInlineEvent::Text(source.to_owned())]
             },
-            budget_exhausted: false,
+            status: EscapeDecodeStatus::Complete,
         };
     }
     let mut decoder = Decoder::new(source);

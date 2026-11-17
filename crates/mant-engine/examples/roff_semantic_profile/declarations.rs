@@ -220,7 +220,7 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
     let Some(argument_start) = literal_argument_start(argument) else {
         return false;
     };
-    if argument_start == sign && raw_sign.contains(r"\z") {
+    if argument_start == sign.glyph && sign.zero_advance {
         return false;
     }
     let mut closing = None;
@@ -228,18 +228,18 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
         if operand.macro_token.as_deref() == Some("Ar") {
             // Detached IR cannot show that a zero-advance closer still owns
             // its glyph once a later word can write to that position.
-            if closing.is_some_and(|raw: &str| raw.contains(r"\z")) && readable(operand) {
+            if closing.is_some_and(|close: SourceSign| close.zero_advance) && readable(operand) {
                 return false;
             }
             continue;
         }
-        if closing.is_some()
-            || operand.kind != NodeKind::Text
-            || operand.text.as_deref().and_then(literal_search_sign) != Some(sign)
-        {
+        let Some(close) = operand.text.as_deref().and_then(literal_search_sign) else {
+            return false;
+        };
+        if closing.is_some() || operand.kind != NodeKind::Text || close.glyph != sign.glyph {
             return false;
         }
-        closing = operand.text.as_deref();
+        closing = Some(close);
     }
     // Correlate the immutable operand grammar with the complete form of
     // this physical owner. Sm and input continuations can join across input
@@ -249,11 +249,11 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
         return false;
     };
     let text = super::inline_text(term);
-    text.strip_prefix(sign).is_some_and(|tail| {
+    text.strip_prefix(sign.glyph).is_some_and(|tail| {
         !tail.contains('\n')
             && !argument_start.is_whitespace()
             && tail.starts_with(argument_start)
-            && (closing.is_none() || tail.contains(sign))
+            && (closing.is_none() || tail.contains(sign.glyph))
     })
 }
 
@@ -294,10 +294,10 @@ fn literal_argument_start(argument: &Node) -> Option<char> {
             if character != '\\' {
                 return Some(character);
             }
-            match source.next()? {
+            match escape_trigger(&mut source)? {
                 '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {}
                 'f' => skip_font(&mut source)?,
-                _ => return None,
+                trigger => return source_character(trigger, &mut source),
             }
         }
     }
@@ -305,36 +305,127 @@ fn literal_argument_start(argument: &Node) -> Option<char> {
 }
 
 fn skip_font(source: &mut std::str::Chars<'_>) -> Option<()> {
-    match source.next()? {
-        '[' => source.any(|ch| ch == ']').then_some(()),
-        '(' => {
-            source.next()?;
-            source.next()?;
-            Some(())
-        }
-        name if name.is_ascii_alphanumeric() => Some(()),
-        _ => None,
+    let mut operand = String::new();
+    match source.next() {
+        Some('[') => operand = named_operand(source, ']')?,
+        Some('(') => operand.extend([source.next()?, source.next()?]),
+        Some(name) => operand.push(name),
+        None => {}
     }
+    matches!(
+        operand.as_str(),
+        "" | "1"
+            | "2"
+            | "3"
+            | "4"
+            | "B"
+            | "I"
+            | "P"
+            | "R"
+            | "BI"
+            | "CB"
+            | "CI"
+            | "CR"
+            | "CW"
+            | "C"
+            | "V"
+            | "VB"
+            | "VI"
+    )
+    .then_some(())
 }
 
-fn literal_search_sign(text: &str) -> Option<char> {
+#[derive(Clone, Copy)]
+struct SourceSign {
+    glyph: char,
+    zero_advance: bool,
+}
+
+fn literal_search_sign(text: &str) -> Option<SourceSign> {
     // CVS roff_escape.c and term_word() consume the one-byte IGNORE escapes
     // and font selectors without printing another glyph.
     let mut sign = None;
+    let mut zero_advance = false;
     let mut chars = text.chars();
     while let Some(character) = chars.next() {
         match character {
             '/' | '?' if sign.is_none() => sign = Some(character),
-            '\\' => match chars.next()? {
-                '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'c' | 'd' | 't' | 'u' | 'z' | '{'
-                | '|' | '}' => {}
+            '\\' => match escape_trigger(&mut chars)? {
+                '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {}
+                'z' => zero_advance |= sign.is_none(),
+                'c' => zero_advance &= sign.is_some(),
                 'f' => skip_font(&mut chars)?,
+                trigger if sign.is_none() => {
+                    let glyph = source_character(trigger, &mut chars)?;
+                    sign = matches!(glyph, '/' | '?').then_some(glyph);
+                    sign?;
+                }
                 _ => return None,
             },
             _ => return None,
         }
     }
-    sign
+    Some(SourceSign {
+        glyph: sign?,
+        zero_advance,
+    })
+}
+
+fn escape_trigger(source: &mut std::str::Chars<'_>) -> Option<char> {
+    source.find(|&trigger| trigger != 'E')
+}
+
+fn named_operand(source: &mut std::str::Chars<'_>, delimiter: char) -> Option<String> {
+    let name: String = source.as_str().split_once(delimiter)?.0.into();
+    if name.contains('\\') {
+        return None;
+    }
+    source.nth(name.chars().count())?;
+    Some(name)
+}
+
+/// Independently corroborate a scalar source operand against the pinned
+/// `chars.c` catalog and `roff_escape.c`'s Unicode/numbered spellings. This
+/// observer does not interpret motion, rendering recovery or source macros.
+fn source_character(trigger: char, source: &mut std::str::Chars<'_>) -> Option<char> {
+    let name = match trigger {
+        '(' => String::from_iter([source.next()?, source.next()?]),
+        '[' => named_operand(source, ']')?,
+        'C' => {
+            let delimiter = source.next()?;
+            named_operand(source, delimiter)?
+        }
+        'N' => {
+            let delimiter = source.next()?;
+            if " %&()*+-./0123456789:<=>\\".contains(delimiter) {
+                return None;
+            }
+            let mut digits = String::new();
+            loop {
+                let character = source.next()?;
+                if !character.is_ascii_digit() {
+                    break;
+                }
+                digits.push(character);
+            }
+            return digits.parse::<u8>().ok().map(char::from);
+        }
+        _ => return None,
+    };
+    if name.len() <= 1 && name != "-" {
+        return None;
+    }
+    if let Some(digits) = name.strip_prefix('u')
+        && (4..=6).contains(&digits.len())
+        && (digits.len() == 4 || !digits.starts_with('0'))
+        && digits.bytes().all(|digit| digit.is_ascii_hexdigit())
+    {
+        return char::from_u32(u32::from_str_radix(digits, 16).ok()?);
+    }
+    match libmandoc_rs::special_character(&name) {
+        Some(libmandoc_rs::SpecialCharacter::Visible(glyph)) => Some(glyph),
+        _ => None,
+    }
 }
 
 fn source_head_text(node: &Node) -> Option<&str> {

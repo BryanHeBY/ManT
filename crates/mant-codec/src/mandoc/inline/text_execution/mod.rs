@@ -148,7 +148,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_zero_advance(
     let decoded =
         crate::mandoc::roff_escape::decode_word_with_status(source, context.policy.word_space);
     let mut execution = execute_formatter_word_events(&decoded.events, context);
-    execution.escape_scan = decoded.budget_exhausted.into();
+    execution.escape_scan = decoded.budget_exhausted().into();
     execution
 }
 

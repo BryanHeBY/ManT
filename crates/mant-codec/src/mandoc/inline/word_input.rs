@@ -3,7 +3,7 @@ use libmandoc_rs::Node;
 use mant_ir::Inline;
 
 use super::{InlineBuilder, flow::WordProjectionPolicy, font};
-use crate::mandoc::roff_escape::{RoffInlineEvent, decode, is_formatter_word_blank};
+use crate::mandoc::roff_escape::{RoffInlineEvent, decode_with_status, is_formatter_word_blank};
 
 pub(super) fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     builder.begin_executed_node(node);
@@ -46,7 +46,8 @@ impl WordSource<'_> {
 }
 
 fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSource<'_>) -> bool {
-    let events = decode(source);
+    let decoded = decode_with_status(source);
+    let events = &decoded.events;
     // `term_word()` consumes its inter-word boundary even for an explicit
     // empty operand. That word event can resolve a preceding `\\z` glyph
     // before generated enclosure punctuation is emitted. Control *nodes* are
@@ -65,7 +66,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     let settled_boundary_glyph = builder.begin_word_projection_with_break(
         true,
         !builder.in_definition_field() || has_glyph,
-        leading_event_needs_native_retreat(&events, builder.execution.zero_advance.is_armed()),
+        leading_event_needs_native_retreat(events, builder.execution.zero_advance.is_armed()),
     );
     builder.execution.settled_boundary_glyph =
         settled_boundary_glyph && matches!(origin, WordSource::Text(_));
@@ -88,12 +89,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     // pre_alternate selects an operand role before this actual term_word;
     // internal font escapes remain within this same word identity.
     if let WordSource::Text(node) = origin {
-        builder.record_current_native_operand(
-            Some(node.id),
-            events
-                .iter()
-                .any(|event| matches!(event, RoffInlineEvent::Font(_))),
-        );
+        builder.record_current_native_operand(Some((node.id, &decoded)));
     }
     let recognize_generated_references = match origin {
         WordSource::Text(node) => !node.flags.no_fill,

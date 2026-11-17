@@ -7,7 +7,7 @@ use libmandoc_rs::{
     MdocMacro, Node, NodeKind, RoffMacro,
 };
 
-use crate::mandoc::roff_escape::{RoffInlineEvent, decode};
+use crate::mandoc::roff_escape::{RoffInlineEvent, decode, decode_with_status};
 
 /// Search roles belong to a source expression. Only a complete, unquoted
 /// expression can also provide the owner's presentation-head evidence.
@@ -23,6 +23,12 @@ struct BareTemplate {
     sign: char,
     first_argument: u32,
     closer: Option<u32>,
+}
+
+#[derive(Clone, Copy)]
+struct SearchSign {
+    glyph: char,
+    proven: bool,
 }
 
 impl SearchHead {
@@ -52,10 +58,11 @@ impl SearchHead {
     fn scan_form<'a>(
         &mut self,
         opener: &Node,
-        sign: char,
+        sign: SearchSign,
         words: &mut Peekable<impl Iterator<Item = &'a Node>>,
         mut whole_head: bool,
     ) {
+        whole_head &= sign.proven;
         let mut first_argument = None;
         let mut closer = None;
         while let Some(word) = words.peek() {
@@ -72,9 +79,11 @@ impl SearchHead {
             } else if first_argument.is_some()
                 && closer.is_none()
                 && word.kind == NodeKind::Text
-                && search_sign(word) == Some(sign)
+                && let Some(close) = search_sign(word)
+                && close.glyph == sign.glyph
             {
                 closer = Some(word.id);
+                whole_head &= close.proven;
             } else {
                 break;
             }
@@ -91,7 +100,7 @@ impl SearchHead {
         {
             self.bare_template = Some(BareTemplate {
                 opener: opener.id,
-                sign,
+                sign: sign.glyph,
                 first_argument,
                 closer,
             });
@@ -240,15 +249,17 @@ fn control(node: &Node) -> bool {
         )
 }
 
-fn search_sign(node: &Node) -> Option<char> {
-    let source = node.text.as_deref()?;
-    if !source.contains(['/', '?']) {
+fn search_sign(node: &Node) -> Option<SearchSign> {
+    let source = node.decoder_text()?;
+    if !source.contains(['/', '?', '\\']) {
         return None;
     }
+    let decoded = decode_with_status(source);
+    let proven = decoded.proves_native_glyphs();
     let mut sign = None;
-    for event in decode(source) {
+    for event in decoded.events {
         match event {
-            RoffInlineEvent::Text(value)
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
                 if sign.is_none() && matches!(value.as_str(), "/" | "?") =>
             {
                 sign = value.chars().next();
@@ -261,5 +272,11 @@ fn search_sign(node: &Node) -> Option<char> {
             _ => return None,
         }
     }
-    sign
+    // term.c::term_word() decodes SPECIAL/UNICODE/NUMBERED before
+    // encode1() applies BACKAFTER. A recovered spelling can still protect
+    // the parameter, but it cannot prove a surviving native template.
+    Some(SearchSign {
+        glyph: sign?,
+        proven,
+    })
 }

@@ -534,6 +534,7 @@ impl InlineBuilder {
                 state,
                 author_effect,
             });
+        self.detach_pending_operand();
         let mut state = PreservedInlineState {
             zero_advance: std::mem::take(&mut self.execution.zero_advance),
             word_end_break: self.execution.word_end_break == WordEndBreak::Pending,

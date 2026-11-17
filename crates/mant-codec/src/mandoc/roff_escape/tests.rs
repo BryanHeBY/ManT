@@ -24,7 +24,11 @@ fn ordinary_runs_keep_the_full_decoder_control_and_event_contract() {
         let full = super::Decoder::new(&source).decode_with_status();
         let shared = super::decode_with_status(&source);
         assert_eq!(shared.events, full.events, "{source:?}");
-        assert_eq!(shared.budget_exhausted, full.budget_exhausted, "{source:?}");
+        assert_eq!(
+            shared.budget_exhausted(),
+            full.budget_exhausted(),
+            "{source:?}"
+        );
     }
 }
 

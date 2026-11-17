@@ -11,12 +11,14 @@ use std::collections::HashMap;
 
 use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
 use crate::mandoc::declaration_groups::search::SearchHead;
+use crate::mandoc::roff_escape::{DecodedText, RoffInlineEvent};
 use mant_ir::Inline;
 
 #[derive(Clone, Default)]
 pub(in crate::mandoc) struct HeadOperandCapture {
     search_head: Option<SearchHead>,
     roles: HashMap<u64, NativeOperandRole>,
+    placeholder_receipts: Vec<(usize, u64)>,
     optional_keys: HashMap<u64, usize>,
     captured: CapturedHeadOperands,
     last_owner: Option<u64>,
@@ -35,8 +37,21 @@ impl HeadOperandCapture {
         self.roles.insert(serial, role);
     }
 
+    pub(super) fn mark_clipped_arguments(&mut self, owners: impl Iterator<Item = u64>) {
+        for owner in owners {
+            if let Some(role) = self.roles.get_mut(&owner)
+                && *role == NativeOperandRole::Placeholder
+            {
+                *role = NativeOperandRole::IncompletePlaceholder;
+            }
+        }
+    }
+
     pub(in crate::mandoc) fn take(&mut self) -> CapturedHeadOperands {
         let mut captured = std::mem::take(&mut self.captured);
+        for (index, serial) in self.placeholder_receipts.drain(..) {
+            captured.operands[index].role = self.roles[&serial];
+        }
         self.optional_keys.clear();
         captured.qualify_optional_keys();
         captured
@@ -89,6 +104,10 @@ impl HeadOperandCapture {
         {
             previous.bytes.end = end;
         } else {
+            if role == NativeOperandRole::Placeholder {
+                self.placeholder_receipts
+                    .push((self.captured.operands.len(), serial));
+            }
             // A single OP key can split at a formatter boundary. Its
             // surviving fragments cannot each introduce an independent key.
             if role == NativeOperandRole::OptionalKey
@@ -127,18 +146,53 @@ impl super::InlineBuilder {
     /// Register an actual word before parsing or accepted-output drains.
     pub(in crate::mandoc) fn record_current_native_operand(
         &mut self,
-        text_node: Option<u32>,
-        has_font_escape: bool,
+        text: Option<(u32, &DecodedText)>,
     ) {
         if let Some(capture) = &self.head_operand_capture {
             let mut capture = capture.borrow_mut();
             let role = capture
                 .operand_role
-                .or_else(|| capture.search_head.as_ref()?.role(text_node?))
-                .or_else(|| has_font_escape.then_some(NativeOperandRole::Literal));
+                .or_else(|| capture.search_head.as_ref()?.role(text?.0))
+                .or_else(|| {
+                    text?
+                        .1
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, RoffInlineEvent::Font(_)))
+                        .then_some(NativeOperandRole::Literal)
+                });
             if let Some(role) = role {
+                let role = if text.is_some_and(|(_, decoded)| !decoded.proves_native_glyphs()) {
+                    match role {
+                        NativeOperandRole::Placeholder => NativeOperandRole::IncompletePlaceholder,
+                        NativeOperandRole::SearchArgument(_) => NativeOperandRole::Argument,
+                        _ => role,
+                    }
+                } else {
+                    role
+                };
                 capture.record(self.execution.native_owner_serial, role);
             }
+        }
+    }
+
+    pub(super) fn record_clipped_operands(&mut self) {
+        if let Some(capture) = &self.head_operand_capture
+            && let Some(owners) = self.execution.zero_advance.take_overwritten_word_owners()
+        {
+            capture.borrow_mut().mark_clipped_arguments(owners);
+        }
+    }
+
+    pub(super) fn detach_pending_operand(&self) {
+        if let Some(capture) = &self.head_operand_capture
+            && let Some(owner) = self.execution.zero_advance.pending_word_owner()
+        {
+            // The buffered glyph follows the live execution. The detached
+            // HEAD's accepted residue cannot certify the complete label.
+            capture
+                .borrow_mut()
+                .mark_clipped_arguments(std::iter::once(owner));
         }
     }
 

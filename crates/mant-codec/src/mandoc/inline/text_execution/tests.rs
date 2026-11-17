@@ -9,7 +9,7 @@ fn contiguous_deferred_source_spaces_use_one_run_receipt() {
     let operand = format!("ALPHA\\p{}BETA", " ".repeat(8192));
     let mut font = FontState::new();
     let mut zero = ZeroAdvanceState::new();
-    zero.set_native_word_owner(1);
+    zero.set_native_word_owner(1, false);
     let execution = parse_roff_text_with_zero_advance(
         &operand,
         TextExecutionContext {

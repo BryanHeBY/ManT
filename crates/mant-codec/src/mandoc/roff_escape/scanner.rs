@@ -887,19 +887,9 @@ impl EscapeScan<'_> {
         // iarg (including "char"), not iarg + 4. Every admitted 6/7-byte
         // descriptor therefore exceeds 0xff and retains SPECIAL with a
         // diagnostic. Do not classify it as NUMBERED from the comment alone.
-        if name.first() == Some(&'c') {
-            return true;
-        }
         // A valid Unicode descriptor becomes ESCAPE_UNICODE, not SPECIAL.
         // Invalid Unicode descriptors keep SPECIAL while reporting BADCHAR.
-        !(name.first() == Some(&'u')
-            && (5..=7).contains(&bytes)
-            && name[1..].iter().all(char::is_ascii_hexdigit)
-            && !(bytes == 7 && name[1..3] != ['1', '0'])
-            && !(bytes == 6 && name[1] == '0')
-            && !(bytes == 5
-                && name[1].eq_ignore_ascii_case(&'D')
-                && matches!(name[2], '8' | '9' | 'A'..='F' | 'a'..='f')))
+        !super::grammar::native_unicode_name(name)
     }
 
     fn reported(&mut self, report: bool, outcome: QuotedOutcome) -> ScanStep {

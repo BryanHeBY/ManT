@@ -297,7 +297,7 @@ fn nested_consumption_and_failed_prefixes_have_bounded_scan_work() {
             .as_u64()
             .is_some_and(|depth| depth > 256)
         {
-            assert!(result.budget_exhausted, "{}", case.name);
+            assert!(result.budget_exhausted(), "{}", case.name);
         }
     }
 }

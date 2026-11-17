@@ -3,8 +3,8 @@ use super::glyphs::{
 };
 use super::scanner::{ArgumentCompletion, QuotedOutcome, scan_argument, scan_quoted_argument};
 use super::{
-    ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, ASCII_NBRZW, ASCII_TABREF, DecodedText, PresentationKind,
-    RoffInlineEvent, WordSpace, font, grammar, scanner,
+    ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, ASCII_NBRZW, ASCII_TABREF, DecodedText,
+    EscapeDecodeStatus, PresentationKind, RoffInlineEvent, WordSpace, font, grammar, scanner,
 };
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
@@ -60,7 +60,7 @@ pub(super) struct Decoder {
     pub(super) measurement: bool,
     pub(super) reading_motion_spacing: bool,
     pub(super) word_space: WordSpace,
-    budget_exhausted: bool,
+    status: EscapeDecodeStatus,
     argument_completion: ArgumentCompletion,
     argument_kind: grammar::EscapeKind,
     characters: Vec<char>,
@@ -75,7 +75,7 @@ impl Decoder {
             measurement: false,
             reading_motion_spacing: true,
             word_space: WordSpace::Breakable,
-            budget_exhausted: false,
+            status: EscapeDecodeStatus::Complete,
             argument_completion: ArgumentCompletion::Complete,
             argument_kind: grammar::EscapeKind::Undefined,
             characters: source.chars().collect(),
@@ -120,7 +120,7 @@ impl Decoder {
         self.flush_text();
         DecodedText {
             events: self.events,
-            budget_exhausted: self.budget_exhausted,
+            status: self.status,
         }
     }
 
@@ -234,7 +234,18 @@ impl Decoder {
             // An undefined escape prints its trigger without the backslash in
             // roff. Keeping that behavior preserves intentional literal text
             // while all known control families are handled above.
-            other => push_terminal_safe(&mut self.text, other),
+            other => {
+                self.note_recovery();
+                push_terminal_safe(&mut self.text, other);
+            }
+        }
+        if self.argument_completion != ArgumentCompletion::Complete
+            || matches!(
+                self.argument_kind,
+                grammar::EscapeKind::Error | grammar::EscapeKind::Unsupported
+            )
+        {
+            self.note_recovery();
         }
         // term.c::term_word() writes ASCII_NBRZW for a successfully parsed
         // IGNORE escape, including opaque controls. It is a real zero-width
@@ -310,6 +321,8 @@ impl Decoder {
             && !name.is_empty()
         {
             self.push_special_character(&name, NamedCharacterSyntax::CharacterDescriptor);
+        } else {
+            self.note_recovery();
         }
     }
     fn decode_numbered_glyph(&mut self) {
@@ -361,6 +374,7 @@ impl Decoder {
                 self.emit(RoffInlineEvent::Glyph(character.to_string()));
             }
         } else {
+            self.note_recovery();
             let mut value = String::from(r"\N");
             for character in &self.characters[start..self.index] {
                 push_terminal_safe(&mut value, *character);
@@ -414,6 +428,7 @@ impl Decoder {
         // The catalog now exposes U+200B for ':', but an invalid source
         // operand must not thereby become an authored Unicode graph.
         if name == ":" {
+            self.note_recovery();
             return;
         }
         // term_strlen uses the pinned catalog and a single ESCAPE_UNICODE
@@ -424,14 +439,19 @@ impl Decoder {
             return;
         }
         if let Some(value) = dedicated_special_character(name) {
+            self.note_recovery();
             self.emit(RoffInlineEvent::Glyph(value.to_owned()));
             return;
         }
         if let Some(value) = documented_groff_composite_character(name) {
+            self.note_recovery();
             self.emit(RoffInlineEvent::Glyph(value));
             return;
         }
         if let Some(value) = unicode_special_characters(name) {
+            if !grammar::native_unicode_name(name.as_bytes()) {
+                self.note_recovery();
+            }
             let mut glyph = String::new();
             for character in value.chars() {
                 push_terminal_safe(&mut glyph, character);
@@ -455,6 +475,7 @@ impl Decoder {
     }
 
     fn push_unknown_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
+        self.note_recovery();
         let (prefix, suffix) = match syntax {
             NamedCharacterSyntax::TwoCharacter => (r"\(", ""),
             NamedCharacterSyntax::Bracketed => (r"\[", "]"),
@@ -492,6 +513,12 @@ impl Decoder {
         }
     }
 
+    fn note_recovery(&mut self) {
+        if self.status == EscapeDecodeStatus::Complete {
+            self.status = EscapeDecodeStatus::Recovered;
+        }
+    }
+
     pub(super) fn take_character(&mut self) -> Option<char> {
         let character = self.characters.get(self.index).copied()?;
         self.index += 1;
@@ -503,7 +530,9 @@ impl Decoder {
         self.index = argument.end;
         self.argument_completion = argument.completion;
         self.argument_kind = argument.kind;
-        self.budget_exhausted |= argument.completion == ArgumentCompletion::BudgetExceeded;
+        if argument.completion == ArgumentCompletion::BudgetExceeded {
+            self.status = EscapeDecodeStatus::BudgetExceeded;
+        }
         argument.payload.map(|range| {
             let mut value = self.range_string(argument.prefix);
             value.push_str(&self.range_string(range));
@@ -518,8 +547,8 @@ impl Decoder {
         let (outcome, end, budget_exhausted) =
             scan_quoted_argument(&self.characters, self.index, outer);
         self.index = end;
-        self.budget_exhausted |= budget_exhausted;
         self.argument_completion = if budget_exhausted {
+            self.status = EscapeDecodeStatus::BudgetExceeded;
             ArgumentCompletion::BudgetExceeded
         } else {
             match &outcome {

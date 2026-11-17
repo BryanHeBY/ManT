@@ -17,6 +17,7 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
         Option<crate::mandoc::inline::ownership::annotations::AnnotationPool>,
     machine: ZeroAdvanceMachine<OwnedGlyph>,
     native_word_owner: Option<u64>,
+    overwritten_word_owners: Option<Vec<u64>>,
     fragment_started_pending: bool,
     resolved_preexisting: bool,
     membership: membership::MembershipState,
@@ -65,6 +66,7 @@ impl ZeroAdvanceState {
             held: Vec::new(),
             machine: ZeroAdvanceMachine::new(),
             native_word_owner: None,
+            overwritten_word_owners: None,
             fragment_started_pending: false,
             resolved_preexisting: false,
             membership: membership::MembershipState::new(),
@@ -82,12 +84,28 @@ impl ZeroAdvanceState {
         self.inherit_armed(bare_armed);
     }
 
-    pub(in crate::mandoc) fn set_native_word_owner(&mut self, owner: u64) {
+    pub(in crate::mandoc) fn set_native_word_owner(&mut self, owner: u64, track_overwrites: bool) {
         self.native_word_owner = Some(owner);
+        if self.overwritten_word_owners.is_some() != track_overwrites {
+            self.overwritten_word_owners = track_overwrites.then(Vec::new);
+        }
+    }
+
+    pub(in crate::mandoc) fn take_overwritten_word_owners(
+        &mut self,
+    ) -> Option<std::vec::Drain<'_, u64>> {
+        self.overwritten_word_owners
+            .as_mut()
+            .filter(|owners| !owners.is_empty())
+            .map(|owners| owners.drain(..))
     }
 
     pub(super) const fn native_word_owner(&self) -> Option<u64> {
         self.native_word_owner
+    }
+
+    pub(in crate::mandoc) fn pending_word_owner(&self) -> Option<u64> {
+        self.machine.pending_ref()?.owner
     }
 
     fn project_glyph(&mut self, glyph: Inline) -> Option<(Inline, bool)> {
@@ -101,6 +119,14 @@ impl ZeroAdvanceState {
             // graph or printed space occupies the base's column.
             self.machine.stage_pending_projection();
             self.resolved_preexisting |= self.fragment_started_pending;
+        }
+        // encode1() replaces the pending glyph after a real retreat. Its
+        // owner may differ from the word currently writing into that cell.
+        if let Some(owners) = &mut self.overwritten_word_owners
+            && let Some(owner) = self.machine.pending_ref().and_then(|pending| pending.owner)
+            && owners.last() != Some(&owner)
+        {
+            owners.push(owner);
         }
         self.machine
             .project_glyph(OwnedGlyph {

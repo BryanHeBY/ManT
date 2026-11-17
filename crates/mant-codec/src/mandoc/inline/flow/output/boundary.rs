@@ -76,6 +76,13 @@ impl InlineBuilder {
         }
     }
 
+    fn prepare_native_word_output(&mut self) {
+        self.record_clipped_operands();
+        if self.execution.native_word_boundary.is_none() {
+            self.begin_native_word_registers(false);
+        }
+    }
+
     // The register choreography mirrors print_mdoc_node()/term_word(); the
     // length is the sequence itself.
     pub(super) fn append_at_boundary(
@@ -86,12 +93,10 @@ impl InlineBuilder {
         incoming_starts_with_fixed_blank: bool,
         projection: WordProjectionPolicy,
     ) {
-        if incoming.is_empty() && !word {
+        if word {
+            self.prepare_native_word_output();
+        } else if incoming.is_empty() {
             return;
-        }
-
-        if word && self.execution.native_word_boundary.is_none() {
-            self.begin_native_word_registers(false);
         }
 
         if word && self.execution.wipe_remainder {

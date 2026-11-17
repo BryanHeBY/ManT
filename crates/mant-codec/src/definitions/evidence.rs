@@ -41,6 +41,9 @@ pub(crate) enum NativeOperandRole {
     /// An `Ar` spelling may name an authored operand definition directly.
     #[cfg(feature = "roff")]
     Placeholder,
+    /// Recovery or clipping retained part of an Ar without proving its name.
+    #[cfg(feature = "roff")]
+    IncompletePlaceholder,
     /// The native Ar belongs to a source-proven search form even if native
     /// execution subsequently overwrites the opening sign.
     #[cfg(feature = "roff")]
@@ -87,6 +90,7 @@ impl NativeOperandRole {
             Self::Argument => true,
             #[cfg(feature = "roff")]
             Self::Placeholder
+            | Self::IncompletePlaceholder
             | Self::SearchArgument(_)
             | Self::OptionalKey
             | Self::Subject(..)

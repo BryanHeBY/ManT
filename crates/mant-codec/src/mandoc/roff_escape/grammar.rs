@@ -103,3 +103,31 @@ pub(super) fn valid_font_operand(operand: &[char]) -> bool {
             | ['C', 'B' | 'I' | 'R' | 'W']
     )
 }
+
+/// The pinned `roff_escape.c` SPECIAL post-processing accepts one Unicode
+/// scalar with 4 to 6 hex digits and rejects redundant leading zeroes.
+pub(super) fn native_unicode_name<T: Copy + Into<char>>(name: &[T]) -> bool {
+    let mut name = name.iter().copied().map(Into::into);
+    if name.next() != Some('u') {
+        return false;
+    }
+    let digits = name.len();
+    let (Some(first), Some(second)) = (name.next(), name.next()) else {
+        return false;
+    };
+    match digits {
+        4 if first.eq_ignore_ascii_case(&'D')
+            && matches!(second, '8' | '9' | 'A'..='F' | 'a'..='f') =>
+        {
+            return false;
+        }
+        5 if first == '0' => return false,
+        6 if (first, second) != ('1', '0') => return false,
+        4..=6 => {}
+        _ => return false,
+    }
+    std::iter::once(first)
+        .chain(std::iter::once(second))
+        .chain(name)
+        .all(|digit| digit.is_ascii_hexdigit())
+}

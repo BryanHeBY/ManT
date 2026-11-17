@@ -62,9 +62,11 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
     let lead = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&start))?;
-    if lead.role == NativeOperandRole::Placeholder
-        || matches!(lead.role, NativeOperandRole::SearchArgument(_))
-            && head.len() < text.trim().len()
+    if matches!(
+        lead.role,
+        NativeOperandRole::Placeholder | NativeOperandRole::IncompletePlaceholder
+    ) || matches!(lead.role, NativeOperandRole::SearchArgument(_))
+        && head.len() < text.trim().len()
     {
         // Ar can label a real definition or a placeholder in a syntax
         // expression. Its spelling alone proves neither a command nor an

@@ -40,14 +40,15 @@ impl InlineBuilder {
             super::INTERNAL_FIELD_WORD,
             self.execution.native_owner_serial
         );
-        self.execution
-            .zero_advance
-            .set_native_word_owner(self.execution.native_owner_serial);
+        self.execution.zero_advance.set_native_word_owner(
+            self.execution.native_owner_serial,
+            self.head_operand_capture.is_some(),
+        );
         self.execution.native_word_owner = Some(marker);
         // `termp_fl_pre()` emits a real '-' word before its children. Its
         // scoped role must be registered here, before either generated or
         // authored text can be retired from the accepted output buffer.
-        self.record_current_native_operand(None, false);
+        self.record_current_native_operand(None);
     }
 
     /// Keep the formatter's write order when this word armed BACKBEFORE.
