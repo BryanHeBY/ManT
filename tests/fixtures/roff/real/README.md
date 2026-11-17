@@ -25,18 +25,21 @@ the host manual database. Fixed compressed roff sources replace the former
 generated HTML snapshots, making parser regressions reproducible across Linux,
 macOS, and Windows while retaining upstream notices embedded in the manuals.
 
-Distribution and release source directories also contain a human-readable
-`VERIFIED_TOPICS.txt` summary of the topic/section requests scanned through
-ManT's bundled libmandoc path. Its header records the total scan breadth; the
-neighbouring README records the package provenance and observed parser
-behaviour.
+Distribution scan summaries (`VERIFIED_TOPICS.txt`) are archived in
+[mant-roff-corpus](https://github.com/BryanHeBY/mant-roff-corpus/tree/main/audits/mant-tracked/tests/fixtures/roff/real).
+Source-specific READMEs retain fixture provenance and licenses and link to the
+historical summaries; these summaries are not current correctness certificates.
 
 Source-specific audit groups bind their complete selected members, licenses
 and pristine native run receipts in `manifest.json`.
 
 The same fixed pages can be compared with a local `man(1)`/groff renderer by running `python3 -m scripts.roff.audit.audit_roff_fidelity --fixtures` from the repository root. This optional audit searches for missing visible tokens, broken token continuity, and known control-syntax leaks without treating reference layout as a ManT contract. Confirmed findings become focused tests in the existing source-specific Rust modules; the external reference renderer is intentionally not required by ordinary CI.
 
-[`../FIDELITY_AUDIT.csv`](../FIDELITY_AUDIT.csv) is the incremental catalogue for wider host-corpus scans; its [ledger guide](../FIDELITY_AUDIT.md) defines the fields and review lifecycle. Unlike the source-specific `VERIFIED_TOPICS.txt` files, which summarize successful parser breadth for reproducible snapshots, the CSV identifies every audited source by corpus, relative path, section, and decompressed-source hash. It also separates the automated signal from the human disposition, so known reference-renderer false positives are not re-investigated on later expansion runs.
+[`../FIDELITY_AUDIT.csv`](../FIDELITY_AUDIT.csv) retains only exact fixture
+rows from the historical wider scans; its [ledger guide](../FIDELITY_AUDIT.md)
+defines the fields and review lifecycle. Full distribution ledgers and scan
+summaries belong in mant-roff-corpus. See the [fixture/corpus boundary](../README.md)
+for paths, configuration and promotion requirements.
 
 [`../STRUCTURE_AUDIT.csv`](../STRUCTURE_AUDIT.csv) independently records AST-to-IR topology checks that content comparison intentionally cannot see: no-fill source lines, list and definition items, table structure, relative indentation, explicit breaks, and typed links. Its batch profiler is local-only and compares ManT's owned libmandoc AST with ManT IR; it neither invokes a host formatter nor widens ordinary CI.
 

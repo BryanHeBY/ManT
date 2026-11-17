@@ -1,5 +1,9 @@
 # Roff target-conservation audit
 
+This checkout retains only reproducible fixture records. The complete historical
+ledger and review narrative are preserved in [mant-roff-corpus](https://github.com/BryanHeBY/mant-roff-corpus/tree/main/audits/mant-tracked/tests/fixtures/roff/TARGET_AUDIT.md).
+See [corpus ownership and audit paths](README.md) before running a distribution scan.
+
 `TARGET_AUDIT.csv` records the independent zero-width navigation audit. Visible
 fidelity, AST topology, CommonMark projection, and renderer layout can all look
 correct after an anchor disappears, so none of those ledgers substitutes for
@@ -66,95 +70,3 @@ no review. Every `review` or `hard-failure` row starts as `pending` and must be
 classified as `false-positive`, `confirmed-open`, or `confirmed-fixed` with an
 explanatory note. A confirmed product defect becomes a redistributable real
 fixture and a focused Rust test.
-
-## Current complete sweep
-
-On 2026-09-04 the complete local Arch Linux manual hierarchy was rescanned at
-producer commit `c51be9d8a539080dd8f53e8812386d8c7b4f782e` with the v3
-occurrence-aware contract. The profiler binary SHA-256 was
-`6c6ada2e38de0bd4dab5c0a692c50fd94e599103b472505f339457be6bc6cf70`:
-
-```sh
-cargo build --locked -p mant-engine --example roff_target_profile
-python3 -m scripts.roff.audit.audit_roff_targets --manpath /usr/share/man \
-  --corpus archlinux-host --recheck-recorded --findings-only \
-  --json /tmp/mant-target-archlinux-v3-c51be9d.json
-```
-
-The sweep examined 28,712 pages and produced 28,712 clean results. All 565,090
-raw owners formed 565,090 logical obligations; every owner was classified and
-every retained obligation matched exactly one compatible IR occurrence. There
-were no missing or unexpected targets, role collisions, invalid
-identities/fragments, duplicates, dangling links, or unclassified owners. The
-owner census exercised man and mdoc section, paragraph, definition, list,
-display, inline, function, command, variable, error, and literal forms.
-Historical v1/v2 rows remain for source identities absent from the current
-host, while every page present in this complete sweep and every checked-in
-fixture now has a v3 record.
-
-On 2026-09-04 a broader restored logical inventory was then scanned after the
-numbered-paragraph and target-conservation fixes at producer commit
-`9233968b21f046bdcf301f5b34954ee43cdd2292`. Its inventory manifest contained
-45,036 logical paths backed by 37,286 physical source paths; the manifest
-SHA-256 was
-`a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c`.
-It combined the recorded Alpine, Arch Linux host, Apple OSS, Debian sid,
-DragonFly BSD, Fedora, FreeBSD, illumos, NetBSD 10/11, OpenBSD, generated,
-current-host, Miniconda, and checked-in fixture inputs. The audit used the
-current available bytes at each logical path; the exact decompressed source
-digests remain in the local CSV ledger.
-
-The v3 profiler binary SHA-256 was
-`ed52581a5a7c2d6a042b0fbb760ae4bf89ac14a0ea7bb017197c00f4b772af1c`.
-All 45,036 pages were clean. Their 1,192,621 raw owners formed 1,192,621
-logical obligations; every owner was classified and every retained obligation
-matched a compatible occurrence. Missing and unexpected targets, role
-collisions, invalid identities, duplicate identities, dangling links, and
-unclassified raw or logical owners were all zero. The exact reports on the
-audit host are `/tmp/mant-target-full-45036-9233968.json` and
-`/tmp/mant-target-full-45036-9233968.csv`.
-
-After target derivation was made source-authoritative, the same restored
-inventory was rescanned at producer commit
-`bd92d5cec46fca550819a5c890e56bbdcf69b8e4`. The v3 profiler binary SHA-256
-was `6b5c2cf3db0e22454f5cb1c65f0c79b1e8ed4aef30744c3b7cd8e2a9f9c7ecc3`.
-All 45,036 pages were clean: 1,192,621 raw target owners formed exactly
-1,192,621 classified logical obligations, and every retained obligation
-matched a compatible IR occurrence. All missing, unexpected, role-collision,
-invalid-identity, duplicate, dangling, and unclassified counts were zero.
-This rerun includes the argument-less `.Tg` forms that can bind either to a
-following source owner or to libmandoc's preceding paragraph owner. The exact
-reports are `/tmp/mant-target-full-45036-bd92d5c.json` and
-`/tmp/mant-target-full-45036-bd92d5c.csv`.
-
-The occurrence-aware v4 contract was run over the same 45,036-path inventory
-after exact IR owner coordinates and native owner spans were added. An initial
-complete run found 83 misplaced owner spans: 82 logical aliases of the
-editline(3) source and one ctfmerge(1) source retained an `Fo` destination in
-the correct definition but attributed it to the surrounding prose line. That
-finding produced the focused `Fo`-inside-definition regression and the
-high-level structural-part ownership fix in commit
-`a07f6529a399dbd9927edc84b148afdd38a4703f`.
-
-The final complete v4 rerun used that commit as its producer. The profiler
-binary SHA-256 was
-`f834254fe219f888aa0d8756ff2f76abadd6559914cc2b0aecb4cf1f0a4b8791`;
-the unchanged inventory manifest SHA-256 was
-`a5cd7919d1ac2774a335d077611b47680de8c1babe1b031d31ff8808f568879c`.
-All 45,036 pages were clean. Their 1,192,621 raw target owners formed exactly
-1,192,621 classified logical obligations, and every retained obligation
-matched one compatible IR occurrence at the same native owner line. Missing
-and unexpected occurrences, role collisions, invalid identities, duplicate
-identities, dangling links, and unclassified raw or logical owners were all
-zero. The path-bearing local reports are
-`/tmp/mant-target-full-45036-a07f652.json` and
-`/tmp/mant-target-full-45036-a07f652.csv`; this checked-in summary and the
-manifest digest are the durable, host-independent evidence.
-
-CI does not depend on `/usr/share/man`. It builds the profiler and verifies the
-small checked-in fixture corpus against recorded rows:
-
-```sh
-python3 -m scripts.roff.audit.audit_roff_targets --fixtures --recheck-recorded \
-  --verify --findings-only
-```

@@ -933,9 +933,10 @@ terminal screenshot. Renderer tests then verify the same IR independently.
 
 ### Roff fidelity audit
 
-The existing real-fixture catalogue also feeds an optional differential audit against the host `man(1)` and groff renderer:
+The existing real-fixture catalogue also feeds an optional differential audit against the host `man(1)` and groff renderer. External scans write to the corpus checkout; fixture commands keep their local paths even when `MANT_ROFF_CORPUS` is set:
 
 ```sh
+export MANT_ROFF_CORPUS="$HOME/dev/mant-roff-corpus"
 cargo build --package mant
 cargo build --package libmandoc-rs --example roff_ast_profile
 python3 -m scripts.roff.audit.audit_roff_fidelity --fixtures --json /tmp/mant-fidelity.json
@@ -953,16 +954,16 @@ python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man \
 python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /tmp/debian-man \
   --max-pages 200 --syntax-priority --dedupe-across-corpora \
   --syntax-cache /tmp/mant-debian-syntax.json.gz \
-  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
+  --audit-db "$MANT_ROFF_CORPUS/audits/mant/current/FIDELITY_AUDIT.csv" \
   --corpus debian-sid-amd64 --findings-only
 python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --max-pages-per-section 25 \
-  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
+  --audit-db "$MANT_ROFF_CORPUS/audits/mant/current/FIDELITY_AUDIT.csv" --corpus archlinux-host
 python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --recorded-only \
-  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
+  --audit-db "$MANT_ROFF_CORPUS/audits/mant/current/FIDELITY_AUDIT.csv" --corpus archlinux-host
 python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --retry-skipped \
-  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
+  --audit-db "$MANT_ROFF_CORPUS/audits/mant/current/FIDELITY_AUDIT.csv" --corpus archlinux-host
 python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --pending-only \
-  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
+  --audit-db "$MANT_ROFF_CORPUS/audits/mant/current/FIDELITY_AUDIT.csv" --corpus archlinux-host
 ```
 
 The audit compares NFC-normalized visible Unicode tokens and contiguous token phrases, plus narrowly source-conditioned whitespace and punctuation that carry mdoc semantics. A phrase may not cross a source-proven tbl cell boundary: terminal tbl alignment and ManT's portable ` | ` table projection have different physical ordering, while each cell remains subject to the ordinary token and phrase checks. It deliberately ignores general line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable path sampling uses the path and `--seed`, so repeating a bounded local scan selects the same pages. Use `--max-pages-per-section` when broad coverage matters more than matching the host corpus distribution, repeat `--man-section` to focus on exact suffixes such as `1`, `3ssl`, or `8`, and repeat `--source-pattern` to require multiple multiline source shapes before sampling. Source-directed sweeps are the appropriate complement to random and AST-priority sampling when a rare macro family needs complete review.
@@ -1273,7 +1274,7 @@ reported as bounded census data, not failures: those categories can be valid
 and require source-aware human judgment. The fixture ledger is
 [`SEMANTIC_AUDIT.csv`](../tests/fixtures/roff/SEMANTIC_AUDIT.csv); its
 [guide](../tests/fixtures/roff/SEMANTIC_AUDIT.md) records the exact contract
-and latest broad sweep.
+and links to the archived broad sweeps.
 
 The same profiler accepts an optional `queries` array (at most 16 literals)
 and calls the production explanation collector. It adds `queryProfiles` without
@@ -1287,14 +1288,20 @@ forbidden direct evidence. Counts alone are not a correctness oracle.
 # Network-free checked-in sources only; part of scripts/check.sh.
 python3 -m scripts.roff.audit.audit_roff_semantics --fixtures \
   --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json
-# Optional local panel; missing/drifted sources remain unresolved, never clean.
+# Optional archived panel; missing/drifted sources remain unresolved, never clean.
+export MANT_ROFF_CORPUS="$HOME/dev/mant-roff-corpus"
 python3 -m scripts.roff.audit.audit_roff_semantics \
-  --query-gold tests/fixtures/roff/ENTRY_QUERY_GOLD.json \
-  --query-root corpus=/path/to/fixed-manual-corpus \
+  --query-gold "$MANT_ROFF_CORPUS/audits/mant-tracked/tests/fixtures/roff/ENTRY_QUERY_GOLD.json" \
+  --query-root corpus=/path/to/restored-original-corpus-layout \
+  --query-root host=/path/to/frozen-host-manuals \
+  --query-root checkout="$PWD" \
   --json target/entry-query-audit.json
 ```
 
-The manifest contains selection/provenance notes, not third-party manual bodies.
+The checkout manifest contains only the 17 fixture queries. The full historical
+199-query panel is archived in mant-roff-corpus; use its explicit path for an
+external replay. Both manifests contain selection/provenance notes, not
+third-party manual bodies.
 An expectation may describe a reviewed conservative Term without claiming a
 runtime grammar or complete value domain. Do not mechanically bless new output
 as gold: review source, AST candidates and the specific direct body first. An
@@ -1328,29 +1335,30 @@ identities rather than selecting a second sample. It is useful for native mdoc
 punctuation and formatter behavior, but it does not replace groff as an
 independent parser-family oracle.
 
-```sh
-python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /tmp/exact/share/man \
-  --corpus exact-corpus --replay-source-records \
-  --reference-kind mandoc --reference mandoc \
-  --reference-id mandoc-1.14.6-1 \
-  --audit-db tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.csv --findings-only
-python3 -m scripts.roff.audit.audit_roff_layout --manpath /tmp/exact/share/man \
-  --corpus exact-corpus --replay-fidelity-records \
-  --reference-kind mandoc --reference mandoc \
-  --reference-id mandoc-1.14.6-1 \
-  --audit-db tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.csv --findings-only
-```
+Configure `MANT_ROFF_CORPUS=/path/to/mant-roff-corpus` for broad scans.
+External ledger defaults then use its `audits/mant/current` directory; without
+that variable they use untracked `target/roff-audits` (fidelity can still run
+without a ledger). Fixture commands retain their checkout-local ledgers.
+Explicit `--audit-db`, `--fidelity-db` and `--source-ledger` take precedence.
+Replay immutable historical ledgers using explicit paths under the external
+`audits/mant-tracked` snapshot; do not overwrite that imported evidence.
+
+For the mandoc route, use the active registered reference ID, explicit absolute
+reference executable, locked pristine archive and matching oracle attestation.
+Both `audit_roff_fidelity` and `audit_roff_layout` expose the corresponding
+`--reference-id`, `--reference`, `--oracle-archive` and `--oracle-attestation`
+options. The renderer must pass preflight before source rows are recorded.
 
 The content route sends decompressed bytes directly to mandoc and records its
 package identity. It expands only pure redirect pages within the selected
 manual hierarchy; embedded include execution remains deliberately out of
 scope. Reconstruct missing corpus files from the exact official artifacts and
-verify their decompressed hashes before replay. Never commit downloaded manual
-trees or `/tmp` review bundles.
+verify their decompressed hashes before replay. Downloaded corpus trees and retained audit artifacts belong in mant-roff-corpus,
+with provenance and an explicit archive policy; do not commit them to ManT.
 
 The independent [mandoc content guide](../tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.md)
-and [mandoc layout guide](../tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.md) record
-the current scope, renderer identity, commands, and human conclusions. Replay
+and [mandoc layout guide](../tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.md) describe the fixture contract and link to historical scope, renderer identities
+and human conclusions in mant-roff-corpus. Replay
 corpora serially because atomic CSV checkpoints protect interruption, not
 concurrent writers.
 
@@ -1358,7 +1366,7 @@ concurrent writers.
 
 `--syntax-report` records per-feature corpus, ledger, reused-source, and selected-page counts plus representative paths; it measures exercised parser structure, not semantic correctness. `--syntax-cache` avoids reparsing unchanged `(corpus, path, source hash)` identities and supports compact `.json.gz` files. Both the profiler response and cache carry a feature-schema identity, so changing the set of observed AST flags or shapes invalidates and rebuilds an older cache instead of silently treating stale profiles as complete. Profiling uses bounded subprocess batches and isolates an abnormal native-parser exit down to the exact page instead of losing the whole scan. Unreadable host paths remain visible as report errors but do not masquerade as syntax features.
 
-`--review-dir` writes a local, untracked review bundle for every selected page: the decompressed source, normalized reference text, ManT text, its exact finding, and a path-safe manifest. Use a bounded syntax-prioritized selection to build a deliberate manual review batch, and never commit the bundle because it can contain third-party manuals and renderer-specific output. The regular JSON report and CSV ledger remain compact metadata rather than a copy of the reviewed corpus.
+`--review-dir` writes a local, untracked review bundle for every selected page: the decompressed source, normalized reference text, ManT text, its exact finding, and a path-safe manifest. Use a bounded syntax-prioritized selection to build a deliberate manual review batch. Retain selected evidence in mant-roff-corpus under its provenance and artifact policy, not in the ManT checkout. The regular JSON report and CSV ledger remain compact metadata rather than a copy of the reviewed corpus.
 
 Treat fidelity loss as three related but distinct classes: an unhandled construct, a recognized construct with an unmapped operand, or an incorrectly lowered recognized construct. Structured parser/lowering diagnostics can expose the first two classes, but a zero diagnostic count never proves fidelity because the third class requires an external oracle or a focused semantic regression. The local differential audit is therefore the discovery surface; reproducible fixtures and exact Rust assertions remain the CI gate.
 
@@ -1368,15 +1376,15 @@ Pages containing `.so` requests use the indexed-manual path with an exact derive
 
 The full oracle is a local and release-time discovery tool, not a per-push CI dependency. Ordinary CI runs only its dependency-free self-check plus the focused Rust regressions derived from confirmed findings. When the audit exposes real semantic loss, add the smallest licensed page to the existing source catalogue, document its provenance, and encode the confirmed behavior in the corresponding `crates/mant-engine/tests/<source>/` module or a shared assertion. Do not add an allowlist merely to silence an unexplained candidate. If one complete terminal-reference comparison is clean while the other only has a review, the manifest runner records the raw review but classifies its dimension as `explained` with `cross-reference-presentation-divergence`; it does not choose a global formatter winner, conceal raw evidence, or suppress two-sided and partial-coverage candidates.
 
-Every new corpus expansion also has a manual review budget. Inspect every `REVIEW` and `HARD` result, then inspect representative clean pages that collectively cover the corpus's table forms, no-fill or display content, font changes, links or includes, and its dominant macro dialect (`man` or `mdoc`). Compare the source, the reference renderer, ManT text, and the structured result when a layout difference could hide an IR error. Record each candidate's durable conclusion in `FIDELITY_AUDIT.csv`; record the corpus-level scope and any confirmed fixes in `tests/fixtures/roff/FIDELITY_AUDIT.md`. When that review establishes that ManT preserves the source semantics more usefully than the observed terminal reference, add the exact source-hash-specific evidence to `tests/fixtures/roff/REFERENCE_RENDERER_DEVIATIONS.csv` instead of loosely calling the host formatter “wrong”. This makes the ledger evidence of both automated breadth and deliberate human inspection without turning host-specific presentation into a CI gate.
+Every new corpus expansion also has a manual review budget. Inspect every `REVIEW` and `HARD` result, then inspect representative clean pages that collectively cover the corpus's table forms, no-fill or display content, font changes, links or includes, and its dominant macro dialect (`man` or `mdoc`). Compare the source, the reference renderer, ManT text, and the structured result when a layout difference could hide an IR error. Record each external candidate's durable conclusion and corpus-level scope in mant-roff-corpus; the checkout `FIDELITY_AUDIT.csv` and guide are reserved for reproducible fixture coverage. When that review establishes that ManT preserves the source semantics more usefully than the observed terminal reference, add the exact source-hash-specific evidence to the external deviation ledger (or the checkout fixture-only ledger when the page is a tested fixture) instead of loosely calling the host formatter “wrong”. This makes the ledger evidence of both automated breadth and deliberate human inspection without turning host-specific presentation into a CI gate.
 
 Prefer complete, immutable release artifacts for permanent corpus rows.
 Rolling `current`, snapshot, and ports trees are useful bounded exploration,
-but keep their CSVs and review bundles under `/tmp` because their identities
-rotate. Record the verified artifact/build identity and aggregate result in the
-audit guide. Promote only a confirmed defect's exact licensed source and
+but record their time-bound source identities and evidence under a distinct
+external corpus snapshot. Record the verified artifact/build identity and
+aggregate result alongside it. Promote only a confirmed defect's exact licensed source and
 focused regression, or replay the whole tree under a stable release identity,
-into the repository ledgers.
+into the corresponding fixture or external corpus ledgers.
 
 For the aligned mandoc route, use the exact `reference_id` plus `-T utf8 -O width=200` in the deviation row. The coverage check then requires that current-renderer evidence to match either a reviewed `false-positive` comparison or a `confirmed-fixed` source conclusion in `MANDOC_FIDELITY_AUDIT.csv`; ordinary wrapping, equivalent tokenization, repeated instances of an existing class, and deliberate ManT layout policy do not qualify.
 
@@ -1391,7 +1399,9 @@ remain independent. Other targeted groff/structure sweeps may remain
 supersets. See
 the [coverage contract](../tests/fixtures/roff/AUDIT_COVERAGE.md) and run
 `python3 -m scripts.roff.audit.check_roff_audit_coverage` before concluding a local audit
-expansion.
+expansion. The default command checks only retained checkout fixtures; broad
+coverage checks must explicitly select the matching external ledger set. See
+the [fixture/corpus boundary](../tests/fixtures/roff/README.md).
 
 ManT intentionally does not expose this comparison as a user-facing
 `mant --verify` fidelity certificate. A reference renderer is unavailable on

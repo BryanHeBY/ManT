@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
     merge_clean_review_state,
     compile_source_patterns,
@@ -115,7 +116,7 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--corpus")
     parser.add_argument("--profiler", type=Path, default=DEFAULT_PROFILER)
     parser.add_argument("--timeout", type=int, default=600)
-    parser.add_argument("--audit-db", type=Path, default=DEFAULT_AUDIT_DB)
+    parser.add_argument("--audit-db", type=Path, default=None)
     parser.add_argument("--recheck-recorded", action="store_true")
     parser.add_argument("--recorded-only", action="store_true")
     parser.add_argument("--findings-only", action="store_true")
@@ -124,7 +125,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--query-gold", type=Path, help="check a source-bound, human-reviewed explanation manifest")
     parser.add_argument("--query-root", action="append", metavar="ROOT=PATH", help="relocate a declared query-gold corpus root")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
-    return parser.parse_args(argv)
+    arguments = parser.parse_args(argv)
+    arguments.audit_db = audit_ledger_path(
+        arguments.audit_db, DEFAULT_AUDIT_DB, external=bool(arguments.manpath),
+    )
+    return arguments
 
 
 def read_database(path: Path) -> dict[tuple[str, str, str], AuditRecord]:

@@ -30,6 +30,7 @@ from typing import Iterable, Sequence
 
 from scripts.roff.oracle import mandoc_oracle
 from scripts.roff.lib.roff_reference import module_command
+from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import discover_pages, manual_section
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -219,7 +220,17 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument("--json", type=Path, metavar="FILE", help="write a complete JSON report")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
-    return parser.parse_args(argv)
+    arguments = parser.parse_args(argv)
+    mandoc = arguments.reference_kind == "mandoc"
+    arguments.audit_db = audit_ledger_path(
+        arguments.audit_db, DEFAULT_MANDOC_AUDIT_DB if mandoc else DEFAULT_AUDIT_DB,
+        external=bool(arguments.manpath),
+    )
+    arguments.fidelity_db = audit_ledger_path(
+        arguments.fidelity_db, DEFAULT_MANDOC_FIDELITY_DB if mandoc else DEFAULT_FIDELITY_DB,
+        external=bool(arguments.manpath),
+    )
+    return arguments
 
 
 def non_negative_integer(value: str) -> int:
@@ -501,6 +512,9 @@ def run_layout_auditor(
             "--pages-file",
             str(page_set),
             "--layout-signals",
+            # This child only collects renderings. Parent owns the layout
+            # ledger; inherited corpus configuration must not update fidelity.
+            "--no-record",
             "--mant",
             str(arguments.mant),
             "--reference",
@@ -661,18 +675,6 @@ def main(argv: Sequence[str]) -> int:
                 arguments.oracle_attestation.resolve(), arguments.reference_id, "utf8",
             )
         reference_id = arguments.reference_id or arguments.reference
-        if arguments.audit_db is None:
-            arguments.audit_db = (
-                DEFAULT_MANDOC_AUDIT_DB
-                if arguments.reference_kind == "mandoc"
-                else DEFAULT_AUDIT_DB
-            )
-        if arguments.fidelity_db is None:
-            arguments.fidelity_db = (
-                DEFAULT_MANDOC_FIDELITY_DB
-                if arguments.reference_kind == "mandoc"
-                else DEFAULT_FIDELITY_DB
-            )
         if not FIDELITY_AUDITOR.is_file():
             raise ValueError(f"fidelity auditor not found: {FIDELITY_AUDITOR}")
         if not arguments.mant.is_file():

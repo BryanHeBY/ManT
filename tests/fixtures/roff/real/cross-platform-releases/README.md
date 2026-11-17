@@ -74,7 +74,7 @@ references. The fixed tests pin command/option outlines, compiler and
 cross-compilation content, source metadata, and spacing/markup invariants.
 
 The exact scan scope is recorded in
-[VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt).
+[archived VERIFIED_TOPICS.txt](https://github.com/BryanHeBY/mant-roff-corpus/blob/main/audits/mant-tracked/tests/fixtures/roff/real/cross-platform-releases/VERIFIED_TOPICS.txt).
 
 [Rust 1.97.1]: https://static.rust-lang.org/dist/2026-07-16/
 [CMake 4.4.2]: https://github.com/Kitware/CMake/releases/tag/v4.4.2

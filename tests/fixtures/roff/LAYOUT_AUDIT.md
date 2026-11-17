@@ -1,5 +1,9 @@
 # Roff renderer-layout audit ledger
 
+This checkout retains only reproducible fixture records. The complete historical
+ledger and review narrative are preserved in [mant-roff-corpus](https://github.com/BryanHeBY/mant-roff-corpus/tree/main/audits/mant-tracked/tests/fixtures/roff/LAYOUT_AUDIT.md).
+See [corpus ownership and audit paths](README.md) before running a distribution scan.
+
 `LAYOUT_AUDIT.csv` is an independent, opt-in ledger for local comparisons
 between a `man(1)`-compatible reference renderer (normally GNU groff on Linux)
 and ManT's semantic `--format man` text. It does not replace the content
@@ -67,66 +71,10 @@ After a narrowly scoped lowering fix that can only remove a known candidate,
 status is `review`. This keeps a confirmation pass proportional to the actual
 finding set rather than rescanning an entire local corpus.
 
-## 2026-08-24 BSD closure result
+## Permanent reduced-input matrices
 
-All 2,357 NetBSD 11.0 pages and all 6,363 DragonFly BSD 6.4.2 pages were clean
-under the groff-backed source-gated layout oracle. The temporary OpenBSD
-current sample was also 200/200 clean, and all 36 self-contained ports manuals
-were clean. These results concern authored no-fill boundaries, relative
-indentation, and source-requested spacing only; they do not redefine terminal
-wrapping or formatter margins as ManT contracts.
-
-## Source-geometry acceptance
-
-`LAYOUT_ACCEPTANCE.json` binds the parent-relative geometry migration to producer
-commit `4d7fc0ed`, executable/source hashes, 46 original reduced inputs, reviewed
-mandoc CVS HEAD and groff differences, and release performance samples. The
-inputs are retained in the record so reproducing the source matrix does not
-depend on a temporary review directory. Its renderer commands consume each
-case's `source` through stdin; native page furniture and soft wrapping are not
-byte-equality assertions.
-
-The acceptance matrix is also guarded by deterministic production tests:
-
-| Coverage | Regression boundary |
-| --- | --- |
-| A01: btrfs six-column layout | `mant-ui/src/document/tests/source_geometry.rs`, real-manual probe in `mant-ui/examples/layout_profile.rs` |
-| A02–A03: RS state, units and bounds | `mant-engine/src/mandoc/tests/layout_geometry.rs`, `mant-engine/src/mandoc/layout/distance.rs` |
-| A04: both ownership normalization paths | `mant-engine/src/definitions/normalize.rs`, source-bound explanation gold |
-| A05–A08: labels, bodies and native styles | `mant-engine/src/mandoc/tests/layout_geometry.rs`, `mant-ui/src/document/tests/layout.rs` |
-| A09–A10: display widths and original term lines | `mant-protocol/src/presentation/geometry.rs`, `mant-engine/tests/inline_terms.rs`, UI anchor/layout tests |
-| A11–A12: independent gaps and item boundaries | `mant-engine/tests/man_paragraph_boundaries.rs`, `mant-engine/tests/relative_scope_paragraph_spacing.rs`, `mant-ui/src/document/tests/item_spacing.rs`, shared gap validator tests |
-| A13: HP/in and literal transitions | `mant-engine/tests/hanging_literal_geometry.rs`, source geometry tests; unsupported device requests remain explicit in mant-roff(7) |
-| A14: hard/soft rows and selection | `mant-ui/src/document/tests/layout.rs`, `mant-ui/src/document/tests/zero_width.rs`, wrapping/search tests |
-| A15: semantic/target conservation | 199 query gold cases over 125 paths / 122 source identities; 51 target, semantic and projection fixtures |
-| A16–A17: translation and narrow bounds | `mant-ui/src/document/tests/source_geometry.rs`, shared geometry/table tests and `mant-ui/src/document/wrap.rs` |
-| A18: contracts and evidence | IR/manual/README/changelog updates, v0.11 schema snapshot, source hashes and current performance in the acceptance record |
-
-Paths in the table are relative to `crates/`. The full local gate and the
-all-feature workspace run passed for that producer. The 51-page layout,
-fidelity and structure replays produced byte-identical CSVs to the existing
-reviewed ledgers. This includes the known groff recursion failure and reviewed
-layout/content signals; it does not reclassify them as clean. No new 45,036-page
-sweep or native Windows/macOS run is claimed by this record.
-
-### Execution-row and facade follow-up
-
-`LAYOUT_FOLLOWUP_ACCEPTANCE.json` records the R01–R06 follow-up at producer
-`0779e2be`. It retains 15 additional original source inputs, reference versions,
-binary/source hashes, regression boundaries and the exact verification scope.
-The earlier acceptance record is unchanged rather than relabeled as new proof.
-
-The full local gate, all-feature workspace tests and all 199 source-bound query
-cases passed. The 51-page fixture replays retained the previous layout/fidelity
-review candidates and reference recursion failure; their CSVs, and the
-structure CSV, are byte-identical to the reviewed ledgers. All 46 prior reduced
-inputs plus the 15 new inputs were executed with the final producer, the pinned
-mandoc snapshot and groff 1.24.1. Reference comparisons use executed row events,
-blank-row counts and relative origins, not formatter page furniture equality.
-
-Regression tests additionally cover empty font operands versus zero-width
-glyphs, explicit `fi`/`nf` inside displays and synopses, empty display/list-item
-predecessors, bounded gaps separated by an empty literal row, and CLI/ANSI/TUI
-row conservation. The source-based tests are independent of the local review
-directory. This follow-up does not claim a new full-corpus or native
-Windows/macOS run.
+`LAYOUT_ACCEPTANCE.json` and `LAYOUT_FOLLOWUP_ACCEPTANCE.json` retain the exact
+reduced inputs consumed by `scripts.roff.audit.check_roff_behavior_matrix`.
+Their historical measurement metadata is not a claim about the current tree.
+Keep these executable regression inputs in ManT; broad run reports belong in
+the corpus repository. No formatter assertion is changed by the migration.

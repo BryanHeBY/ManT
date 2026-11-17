@@ -1,5 +1,9 @@
 # Roff CommonMark projection audit ledger
 
+This checkout retains only reproducible fixture records. The complete historical
+ledger and review narrative are preserved in [mant-roff-corpus](https://github.com/BryanHeBY/mant-roff-corpus/tree/main/audits/mant-tracked/tests/fixtures/roff/PROJECTION_AUDIT.md).
+See [corpus ownership and audit paths](README.md) before running a distribution scan.
+
 `PROJECTION_AUDIT.csv` is the incremental, human-reviewed ledger for the
 development-only IR-to-CommonMark topology audit. It is independent from both
 the AST-to-IR structure ledger and reference-renderer comparisons: a page can
@@ -76,13 +80,3 @@ rows eligible for a deliberate recheck. Host corpora never gate ordinary CI;
 only the bounded checked-in fixture catalogue does. Larger local corpora remain
 incremental review inputs, with focused Rust regressions derived from confirmed
 findings.
-
-## 2026-08-24 BSD closure result
-
-NetBSD 11.0 produced 2,356 clean rows and one reviewed row; DragonFly BSD
-6.4.2 produced 6,362 clean rows and one reviewed row. Both candidates are the
-same `make(1)` source pattern: valid CommonMark must spell a literal ampersand
-as `&amp;`, and reparsing restores the exact visible entity. They are durable
-false positives, not topology or text loss. The temporary OpenBSD current
-sample reproduced the same single candidate, while all 36 ports manuals were
-clean. No projection review remains pending.

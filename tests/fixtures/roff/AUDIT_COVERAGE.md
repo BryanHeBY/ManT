@@ -1,8 +1,8 @@
 # Roff audit coverage contract
 
 ManT's roff audits answer different questions, but their execution ranges have
-one explicit relationship. `FIDELITY_AUDIT.csv` is the historical breadth
-index keyed by immutable `(corpus, path, decompressed-source SHA-256)` identity:
+one explicit relationship. In this checkout, `FIDELITY_AUDIT.csv` is the retained
+fixture subset of the historical breadth index, keyed by immutable `(corpus, path, decompressed-source SHA-256)` identity:
 
 - `STRUCTURE_AUDIT.csv` must cover every fidelity identity with the current
   AST-to-IR profile schema, including pages whose external renderer comparison
@@ -25,6 +25,14 @@ index keyed by immutable `(corpus, path, decompressed-source SHA-256)` identity:
   evidence, either in those historical ledgers or in the separate
   `MANDOC_CVS_FIXTURE_FIDELITY_AUDIT.csv` and
   `MANDOC_CVS_FIXTURE_LAYOUT_AUDIT.csv` supplements.
+
+The complete distribution ledgers and their original narratives now live in
+[mant-roff-corpus](https://github.com/BryanHeBY/mant-roff-corpus/tree/main/audits/mant-tracked).
+The migration preserved every retained fixture row and renderer identity. It
+neither reran the historical sweeps nor changed a review disposition. The
+normal checkout gate has no dependency on the external repository. Explicit
+`--*-db` arguments can still validate a full archived set; use the complete
+set from one snapshot rather than mixing historical and fixture-only ledgers.
 
 The original structure, projection, and groff-layout ledgers may contain a
 deliberate superset. Source-pattern sweeps, host-only equation probes, complete

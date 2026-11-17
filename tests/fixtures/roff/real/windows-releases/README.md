@@ -98,7 +98,7 @@ empty sections, truncation, control characters, and leaked roff markup. The
 diagnostic reviewed; representative pages from every archive were read in
 full.
 
-The scan scope is recorded in [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt), grouped
+The scan scope is recorded in [archived VERIFIED_TOPICS.txt](https://github.com/BryanHeBY/mant-roff-corpus/blob/main/audits/mant-tracked/tests/fixtures/roff/real/windows-releases/VERIFIED_TOPICS.txt), grouped
 by the release archive that ships each page. Archives without roff remain in the
 table below as zero-page inspection results; they are not represented as
 verified topic requests.

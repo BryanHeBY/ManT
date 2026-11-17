@@ -61,7 +61,7 @@ No parser crash was observed. This count measures successful completion, not
 perfect structural or rendering fidelity for every page; see the parent
 README for the corpus limitations.
 
-[VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt) records the exact scope and
+[archived VERIFIED_TOPICS.txt](https://github.com/BryanHeBY/mant-roff-corpus/blob/main/audits/mant-tracked/tests/fixtures/roff/real/debian/VERIFIED_TOPICS.txt) records the exact scope and
 representative topics, grouped by source package.
 
 | Package group | Topics | Notes |

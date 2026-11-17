@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from pathlib import Path
 from typing import Sequence
+
+from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 
 ROOT = Path(__file__).resolve().parents[4]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
@@ -52,11 +55,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--source-ledger",
         type=Path,
-        default=DEFAULT_SOURCE_LEDGER,
+        default=None,
         metavar="FILE",
         help=(
             "historical source-identity ledger used only with "
-            f"--replay-source-records (default: {DEFAULT_SOURCE_LEDGER.relative_to(ROOT)})"
+            "--replay-source-records (fixture-local or external corpus audit directory)"
         ),
     )
     parser.add_argument(
@@ -205,7 +208,8 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
             "manifest for every selected page to this local review bundle"
         ),
     )
-    parser.add_argument(
+    recording = parser.add_mutually_exclusive_group()
+    recording.add_argument(
         "--audit-db",
         type=Path,
         metavar="FILE",
@@ -213,6 +217,10 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
             "skip unchanged pages already listed in the CSV database and merge "
             "this run into it"
         ),
+    )
+    recording.add_argument(
+        "--no-record", action="store_true",
+        help="disable fidelity result-ledger access, even with MANT_ROFF_CORPUS configured",
     )
     parser.add_argument(
         "--checkpoint-every",
@@ -262,7 +270,18 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         action="store_true",
         help=argparse.SUPPRESS,
     )
-    return parser.parse_args(argv)
+    arguments = parser.parse_args(argv)
+    external = bool(arguments.manpath)
+    arguments.source_ledger = audit_ledger_path(
+        arguments.source_ledger, DEFAULT_SOURCE_LEDGER, external=external,
+    )
+    # Fidelity has historically allowed an unrecorded scan. Opt into a default
+    # external ledger only when a corpus checkout is explicitly configured.
+    if (external and not arguments.no_record and arguments.audit_db is None
+            and os.environ.get("MANT_ROFF_CORPUS", "").strip()):
+        name = "MANDOC_FIDELITY_AUDIT.csv" if arguments.reference_kind == "mandoc" else "FIDELITY_AUDIT.csv"
+        arguments.audit_db = audit_ledger_path(None, DEFAULT_SOURCE_LEDGER.with_name(name), external=True)
+    return arguments
 
 
 def non_negative_integer(value: str) -> int:

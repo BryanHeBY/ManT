@@ -1,49 +1,20 @@
 # Mandoc renderer-layout audit
 
-`MANDOC_LAYOUT_AUDIT.csv` applies the same source-gated layout contract as
-`LAYOUT_AUDIT.csv` to the exact comparable rows in the mandoc content ledger.
-It is independent evidence: it never rewrites content, structure, projection,
-or groff-layout conclusions.
+`MANDOC_LAYOUT_AUDIT.csv` contains the unchanged checkout-fixture subset of the historical
+mandoc source-gated layout ledger. Original distribution records and their renderer
+identity, commands, provenance and review conclusions are preserved in
+[mant-roff-corpus](https://github.com/BryanHeBY/mant-roff-corpus/tree/main/audits/mant-tracked/tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.md).
 
-Rows add `reference_kind=mandoc` and the same stable `reference_id` used by
-`MANDOC_FIDELITY_AUDIT.csv`. Only content rows whose mandoc comparison
-completed as `clean` or `review` are eligible; the nine renderer skips have no
-two-output layout baseline.
+Do not relabel these old rows as observations from the active CVS oracle.
+New checkout fixtures use the paired `MANDOC_CVS_FIXTURE_FIDELITY_AUDIT.csv`
+and `MANDOC_CVS_FIXTURE_LAYOUT_AUDIT.csv` supplements bound to the current
+pristine registration. Actual rendering requires a verified reference binary,
+locked pristine archive and matching attestation; static ledger checks do not
+claim a fresh rendering.
 
-Run a full aligned replay with:
-
-```sh
-python3 -m scripts.roff.audit.audit_roff_layout \
-  --manpath /path/to/exact/manual-root \
-  --corpus corpus-name --replay-fidelity-records \
-  --fidelity-db tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.csv \
-  --reference-kind mandoc --reference mandoc \
-  --reference-id mandoc-1.14.6-1 \
-  --audit-db tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.csv \
-  --findings-only
-```
-
-Use `--recheck-review-recorded` to revisit only current renderer-layout
-candidates. The 2026-08-24 replay covers all 17,802 comparable identities:
-17,729 clean and 73 reviewed, with no hard failure or pending disposition.
-
-All 73 candidates were inspected against their source. One checked-in rclone
-fixture contains an ambiguous sentence repeated in filled and no-fill
-contexts. The other 72 are one class: mandoc preserves or adds two to four
-vertical blank rows at a source-gated no-fill boundary, while ManT deliberately
-normalizes the run to one semantic separator. Every visible line and relative
-indent remains present. This describes the **historical 2026-08-24 policy**,
-not the current spacing contract. Current source-bound paragraph and explicit
-space requests retain their independent gaps. Revisit these exact sources
-using the pinned-reference matrix/census in `docs/development.md` before making
-a current fidelity claim; the old separator-collapse disposition is not a waiver.
-
-The new rows comprise two NetBSD aliases of one `ipfilter` source and
-DragonFly `screen(4)`. The temporary OpenBSD current sample found the same
-class once in `isakmpd.conf(5)`; all 36 self-contained ports manuals were
-clean. Rolling results remain local evidence rather than permanent ledger
-rows.
-
-Keep this route local and release-time. Daily CI validates its ledger schema,
-source-identity coverage, review completion, and dependency-free self-check;
-it does not install mandoc or reconstruct third-party corpora.
+The [coverage contract](AUDIT_COVERAGE.md) requires exact source hashes,
+matching reference identities and paired comparable evidence. Review, timeout,
+skipped or unsupported results must retain their actual status. The
+[fixture guide](README.md) explains external corpus paths and the
+[development guide](../../../docs/development.md#mandoc-reference-replay)
+describes the bounded renderer execution contract.

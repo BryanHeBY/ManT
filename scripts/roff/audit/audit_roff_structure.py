@@ -32,6 +32,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import discover_pages, manual_section, run_jsonl_profile_batch
 
 
@@ -146,21 +147,21 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--audit-db",
         type=Path,
-        default=DEFAULT_AUDIT_DB,
+        default=None,
         metavar="FILE",
         help=(
             "incremental structure-ledger CSV "
-            f"(default: {DEFAULT_AUDIT_DB.relative_to(ROOT)})"
+            "(fixture-local; external scans use MANT_ROFF_CORPUS or target/roff-audits)"
         ),
     )
     parser.add_argument(
         "--fidelity-db",
         type=Path,
-        default=DEFAULT_FIDELITY_DB,
+        default=None,
         metavar="FILE",
         help=(
             "content-audit CSV used by --replay-fidelity-records "
-            f"(default: {DEFAULT_FIDELITY_DB.relative_to(ROOT)})"
+            "(fixture-local; external scans use MANT_ROFF_CORPUS or target/roff-audits)"
         ),
     )
     parser.add_argument(
@@ -194,7 +195,14 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument("--json", type=Path, metavar="FILE", help="write the complete JSON report")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
-    return parser.parse_args(argv)
+    arguments = parser.parse_args(argv)
+    arguments.audit_db = audit_ledger_path(
+        arguments.audit_db, DEFAULT_AUDIT_DB, external=bool(arguments.manpath),
+    )
+    arguments.fidelity_db = audit_ledger_path(
+        arguments.fidelity_db, DEFAULT_FIDELITY_DB, external=bool(arguments.manpath),
+    )
+    return arguments
 
 
 def non_negative_integer(value: str) -> int:

@@ -24,6 +24,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
     compile_source_patterns,
     discover_pages,
@@ -134,9 +135,9 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         default=600,
         help="seconds allowed for the complete profiler batch (default: 600)",
     )
-    parser.add_argument("--audit-db", type=Path, default=DEFAULT_AUDIT_DB, metavar="FILE")
+    parser.add_argument("--audit-db", type=Path, default=None, metavar="FILE")
     parser.add_argument(
-        "--fidelity-db", type=Path, default=DEFAULT_FIDELITY_DB, metavar="FILE"
+        "--fidelity-db", type=Path, default=None, metavar="FILE"
     )
     parser.add_argument(
         "--corpus", metavar="NAME", help="stable corpus name (default: fixtures or local-manpath)"
@@ -165,7 +166,14 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument("--json", type=Path, metavar="FILE")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
-    return parser.parse_args(argv)
+    arguments = parser.parse_args(argv)
+    arguments.audit_db = audit_ledger_path(
+        arguments.audit_db, DEFAULT_AUDIT_DB, external=bool(arguments.manpath),
+    )
+    arguments.fidelity_db = audit_ledger_path(
+        arguments.fidelity_db, DEFAULT_FIDELITY_DB, external=bool(arguments.manpath),
+    )
+    return arguments
 
 
 def read_database(path: Path) -> dict[tuple[str, str, str], AuditRecord]:
