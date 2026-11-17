@@ -1,6 +1,6 @@
 use super::{
     definitions,
-    operands::{explain, load},
+    support::{explain, load},
 };
 use mant_ir::{
     Block, Document, EntryInlineRoot, EntryKind, EntryOwner, Inline, LinkTarget, ParameterKind,

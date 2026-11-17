@@ -1,10 +1,9 @@
 //! Independent declaration names adjacent to protected search parameters.
-use super::operands::{explain, load};
-use super::search_templates::{list_groups, source};
+use super::support::{check_occurrences, explain, list_groups, load, roundtrip, source};
 use mant_ir::{DefinitionItem, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{
-    ContentSelector, EntryProjection, EvidenceBasis, EvidenceClass, ExplanationContentRange,
-    ExplanationSupport, OutlineNode, QueryExcerpt, QueryExplanation, QueryOutline,
+    ContentSelector, EntryProjection, EvidenceBasis, EvidenceClass, ExplanationSupport,
+    OutlineNode, QueryExcerpt, QueryExplanation, QueryOutline,
 };
 use pulldown_cmark::{Event, Parser};
 use std::ops::Range;
@@ -588,79 +587,6 @@ fn check_lookup(
         expected_mentions,
         "{name}: {input}"
     );
-}
-
-pub(super) fn check_occurrences(
-    hit: &mant_protocol::ExplanationEvidence,
-    name: &str,
-    ranges: &[Range<usize>],
-) {
-    let matches = hit
-        .bases
-        .iter()
-        .find_map(|basis| {
-            if let EvidenceBasis::Name { matches } = basis {
-                Some(matches)
-            } else {
-                None
-            }
-        })
-        .expect("accepted name evidence");
-    let [record] = matches.as_slice() else {
-        panic!("expected one matched spelling for {name}");
-    };
-    assert_eq!(record.name, name);
-    assert_eq!(record.occurrences.len(), ranges.len(), "{name}");
-    let entry = hit.entry.as_ref().unwrap();
-    let display = entry
-        .name_bindings
-        .iter()
-        .find(|binding| entry.names[binding.name_index as usize] == name)
-        .unwrap();
-    assert_eq!(record.occurrences, display.occurrences, "{name}");
-    for (position, expected) in record.occurrences.iter().zip(ranges) {
-        let mut cursor = expected.start;
-        let mut spelling = String::new();
-        for part in &position.forms {
-            assert_eq!(part.form_index, 0, "{name}");
-            let text = inline_plain_text(part.resolve(&entry.forms).unwrap());
-            let start = part.start_char as usize;
-            let end = part.end_char as usize;
-            assert_eq!(start, cursor, "{name}");
-            cursor = end;
-            spelling.extend(text.chars().skip(start).take(end - start));
-        }
-        assert_eq!(cursor, expected.end, "{name}");
-        assert_eq!(spelling, name, "{name}");
-        let mut cursor = expected.start;
-        for part in &position.content {
-            assert!(
-                matches!(
-                    part,
-                    ExplanationContentRange::DefinitionTerm {
-                        item_index: 0,
-                        term_index: 0,
-                        ..
-                    }
-                ),
-                "{name}"
-            );
-            let range = part.char_range();
-            assert_eq!(range.start, cursor, "{name}");
-            cursor = range.end;
-        }
-        assert_eq!(cursor, expected.end, "{name}");
-    }
-}
-
-pub(super) fn roundtrip<
-    T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
->(
-    original: &T,
-) -> T {
-    let decoded = serde_json::from_str(&serde_json::to_string(original).unwrap()).unwrap();
-    assert_eq!(&decoded, original);
-    decoded
 }
 
 fn markdown_body_mentions(result: &QueryExplanation) -> usize {

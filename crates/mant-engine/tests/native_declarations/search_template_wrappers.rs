@@ -1,6 +1,5 @@
 //! Source-role recognition inside mdoc controls and wrappers.
-use super::operands::{explain, load};
-use super::search_templates::{check_three, list_groups, source};
+use super::support::{assert_search_fixture, explain, list_groups, load, source};
 use mant_ir::{Inline, inline_plain_text};
 use mant_protocol::{EntryProjection, EvidenceBasis, OutlineNode, QueryOutline};
 
@@ -29,7 +28,7 @@ fn ns_does_not_disguise_search_arguments_inside_enclosures() {
                 let input = probe(&format!(
                     r".It {before}{enclosure} Pf \z{sign} Ar RE{after}"
                 ));
-                let content = check_three(&input, form, &[], None);
+                let content = assert_search_fixture(&input, form, &[], None);
                 let unexplained = explain(&content, "RE");
                 assert_eq!(unexplained.counts.direct_entry.total, 0, "{input}");
                 assert!(unexplained.supports.is_empty(), "{input}");
@@ -73,7 +72,7 @@ fn nested_control_views_leave_enclosure_and_execution_evidence_intact() {
             Some(1),
         ),
     ] {
-        check_three(&probe(head), form, &[], group);
+        assert_search_fixture(&probe(head), form, &[], group);
     }
 }
 
@@ -83,7 +82,7 @@ fn tag_and_font_nodes_keep_their_effects_inside_the_normalized_view() {
     // to It HEAD. roff_term.c::roff_term_pre_ft bolds the opening sign, and
     // the Ar handler still uses emphasis for its own word.
     let input = probe(".It Xo\n.ft B\n.Tg search-target\n.Xo\n.Pf ? Ar RE\n.Xc\n.ft R\n.Xc");
-    let content = check_three(&input, "?RE", &[], Some(1));
+    let content = assert_search_fixture(&input, "?RE", &[], Some(1));
     let document = content.document.as_ref().unwrap();
     let items = super::definitions(document);
     let styles = &items[0].terms[0].content;
@@ -154,7 +153,7 @@ fn real_formatter_words_cannot_make_an_entire_head_a_bare_template() {
         (".It Xo\n.Pf \\z? Bq Ar RE\n.Xc", "[RE]"),
     ] {
         let input = probe(head);
-        let content = check_three(&input, form, &[], None);
+        let content = assert_search_fixture(&input, form, &[], None);
         let explained = explain(&content, "RE");
         assert!(
             explained.evidence.iter().all(|hit| {
@@ -185,14 +184,14 @@ fn standalone_arguments_and_later_declarations_keep_their_names() {
             "later",
         ),
     ] {
-        check_three(&probe(head), form, &[name], Some(0));
+        assert_search_fixture(&probe(head), form, &[name], Some(0));
     }
     let option = source(
         "",
         ".Sh OPTIONS\n.Sm off\n",
         ".It Ns Pf \\z? Ar RE , Fl later Ns\n",
     );
-    check_three(&option, "RE,-later", &["-later"], Some(0));
+    assert_search_fixture(&option, "RE,-later", &["-later"], Some(0));
 }
 
 #[test]

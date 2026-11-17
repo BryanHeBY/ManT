@@ -1,7 +1,5 @@
 //! The executed mdoc enclosure determines which punctuation can separate names.
-use super::operands::{explain, load};
-use super::search_name_candidates::{check_occurrences, roundtrip};
-use super::search_templates::source;
+use super::support::{check_occurrences, explain, load, roundtrip, source};
 use mant_ir::{Document, EntryOwner, inline_plain_text};
 use mant_protocol::{DocumentResponse, EvidenceClass, QueryExplanation};
 

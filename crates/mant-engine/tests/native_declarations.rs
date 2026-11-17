@@ -33,6 +33,8 @@ mod search_template_wrappers;
 mod search_templates;
 #[path = "native_declarations/subjects.rs"]
 mod subjects;
+#[path = "native_declarations/support.rs"]
+mod support;
 
 fn definitions(document: &Document) -> Vec<&DefinitionItem> {
     struct Items<'a>(Vec<&'a DefinitionItem>);

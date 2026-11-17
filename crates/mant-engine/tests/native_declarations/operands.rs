@@ -1,35 +1,9 @@
 use super::definitions;
-use mant_ir::{EntryInlineRoot, EntryOwner, ResolvedContent};
-use mant_protocol::{
-    ContentSelector, EvidenceBasis, EvidenceClass, ExplanationOptions, ExplanationQuery,
-};
-
-#[path = "../support/json_roundtrip.rs"]
-mod json_roundtrip;
+use super::support::{explain, load};
+use mant_ir::{EntryInlineRoot, EntryOwner};
+use mant_protocol::{ContentSelector, EvidenceBasis, EvidenceClass};
 
 const MAN_HEADER: &str = ".TH TEST 1 2026-11-17\n.SH DESCRIPTION\n";
-
-pub(super) fn load(source: &str) -> ResolvedContent {
-    let original = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
-    let query = json_roundtrip::json_string_roundtrip(&original);
-    assert_eq!(
-        mant_ir::validate_document(query.document.as_ref().unwrap()),
-        []
-    );
-    assert_eq!(query.document, original.document);
-    query
-}
-
-pub(super) fn explain(query: &ResolvedContent, name: &str) -> mant_protocol::QueryExplanation {
-    mant_query::explain_query(
-        query,
-        &ExplanationQuery {
-            entry: name.into(),
-            options: ExplanationOptions::default(),
-        },
-    )
-    .unwrap()
-}
 
 #[test]
 fn tq_keeps_each_heads_executed_argument_ranges_in_source_order() {

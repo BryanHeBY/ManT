@@ -1,8 +1,7 @@
 //! Quoted search parameters retain their original operand and owner boundaries.
 use std::ops::Range;
 
-use super::operands::{explain, load};
-use super::search_templates::{check_three, list_groups, source};
+use super::support::{assert_search_fixture, explain, list_groups, load, roundtrip, source};
 use mant_ir::{
     EntryInlineRoot, EntryOwner, ResolvedContent, inline_plain_text, project_content_slice,
 };
@@ -55,7 +54,7 @@ impl Suffix {
 }
 
 fn query_round_trip(query: &ResolvedContent, name: &str) -> QueryExplanation {
-    serde_json::from_str(&serde_json::to_string(&explain(query, name)).unwrap()).unwrap()
+    roundtrip(&explain(query, name))
 }
 
 fn no_name(query: &ResolvedContent, name: &str, input: &str) {
@@ -130,8 +129,7 @@ fn assert_declared_name(query: &ResolvedContent, name: &str, input: &str) {
 
     let excerpt =
         mant_query::select_excerpt(query, &[ContentSelector::path(hit.outline.path())]).unwrap();
-    let excerpt: QueryExcerpt =
-        serde_json::from_str(&serde_json::to_string(&excerpt).unwrap()).unwrap();
+    let excerpt: QueryExcerpt = roundtrip(&excerpt);
     let original = mant_render::render_excerpt_text(&excerpt);
     assert!(!original.contains("GROUP_BODY"), "{input}");
     assert_eq!(
@@ -153,7 +151,7 @@ fn assert_declared_name(query: &ResolvedContent, name: &str, input: &str) {
 
 fn check_case(input: &str, form: &str, arguments: &[&str], bindings: &[(&str, Range<usize>)]) {
     let names: Vec<_> = bindings.iter().map(|(name, _)| *name).collect();
-    let query = check_three(input, form, &names, (!names.is_empty()).then_some(0));
+    let query = assert_search_fixture(input, form, &names, (!names.is_empty()).then_some(0));
     let items = super::definitions(query.document.as_ref().unwrap());
     for &(name, ref range) in bindings {
         assert_bound_range(EntryOwner::Definition(items[0]), name, range.clone(), input);
@@ -166,8 +164,7 @@ fn check_case(input: &str, form: &str, arguments: &[&str], bindings: &[(&str, Ra
     }
 
     let outline = mant_query::build_outline_projection(&query, EntryProjection::All, None).unwrap();
-    let outline: QueryOutline =
-        serde_json::from_str(&serde_json::to_string(&outline).unwrap()).unwrap();
+    let outline: QueryOutline = roundtrip(&outline);
     let published: Vec<_> = outline
         .nodes
         .last()
@@ -404,8 +401,7 @@ fn expanded_quote_scopes_bind_identical_text_to_the_correct_owner() {
     );
     let excerpt =
         mant_query::select_excerpt(&query, &[ContentSelector::path(hit.outline.path())]).unwrap();
-    let excerpt: QueryExcerpt =
-        serde_json::from_str(&serde_json::to_string(&excerpt).unwrap()).unwrap();
+    let excerpt: QueryExcerpt = roundtrip(&excerpt);
     let excerpt = mant_render::render_excerpt_text(&excerpt);
     assert!(excerpt.contains("[RE,other]"), "{excerpt}");
     assert!(

@@ -1,160 +1,8 @@
 //! Search-form presentation and the original owners of shared context.
-use super::operands::{explain, load};
-use mant_ir::{
-    Block, DefinitionItem, Document, EntryOwner, ResolvedContent, inline_plain_text, visit,
+use super::support::{
+    COMMANDS, HEADER, LIST, assert_search_fixture, check_head, explain, list_groups, load, source,
 };
-use mant_protocol::{
-    ContentSelector, DocumentResponse, EvidenceBasis, EvidenceClass, ExplanationSupport,
-    QueryExcerpt, QueryExplanation,
-};
-
-const HEADER: &str =
-    ".Dd November 17, 2026\n.Dt PROBE 3\n.Os\n.Sh NAME\n.Nm probe\n.Nd role probe\n";
-const LIST: &str = ".Bl -tag -width Ds\n";
-const COMMANDS: &str = ".It Cm n\n.It Cm N\nGROUP_BODY\n.El\n";
-
-pub(super) fn source(before: &str, section: &str, head: &str) -> String {
-    format!("{HEADER}{before}{section}{LIST}{head}{COMMANDS}")
-}
-
-pub(super) fn list_groups(document: &Document) -> Vec<Vec<(usize, usize)>> {
-    struct Groups(Vec<Vec<(usize, usize)>>);
-    impl<'ir> visit::Visit<'ir> for Groups {
-        fn visit_block(&mut self, block: &'ir Block) {
-            if let Block::DefinitionList {
-                declaration_groups, ..
-            } = block
-            {
-                self.0.push(
-                    declaration_groups
-                        .iter()
-                        .map(|group| (group.start_item, group.end_item))
-                        .collect(),
-                );
-            }
-            visit::walk_block(self, block);
-        }
-    }
-    let mut groups = Groups(Vec::new());
-    visit::Visit::visit_document(&mut groups, document);
-    groups.0
-}
-
-fn check_head(item: &DefinitionItem, form: &str, names: &[&str]) {
-    let owner = EntryOwner::Definition(item);
-    assert_eq!(owner.validated_names().unwrap(), names, "{form}");
-    assert!(owner.facts().unwrap().alias_groups.is_empty(), "{form}");
-    assert_eq!(
-        owner
-            .forms()
-            .unwrap()
-            .iter()
-            .map(inline_plain_text)
-            .collect::<Vec<_>>(),
-        [form]
-    );
-}
-
-pub(super) fn check_three(
-    source: &str,
-    form: &str,
-    names: &[&str],
-    group_start: Option<usize>,
-) -> ResolvedContent {
-    let query = load(source);
-    let document = query.document.as_ref().unwrap();
-    let response = DocumentResponse::from(document);
-    let decoded: DocumentResponse =
-        serde_json::from_str(&serde_json::to_string(&response).unwrap()).unwrap();
-    assert_eq!(Document::from(decoded), *document);
-    let items = super::definitions(document);
-    let [template, n, upper_n] = items.as_slice() else {
-        panic!("{source}");
-    };
-    check_head(template, form, names);
-    for (item, name) in [(n, "n"), (upper_n, "N")] {
-        check_head(item, name, &[name]);
-    }
-    assert!(template.description.is_empty(), "{source}");
-    assert!(n.description.is_empty(), "{source}");
-    assert!(mant_ir::blocks_have_readable_content(&upper_n.description));
-    assert_eq!(
-        list_groups(document),
-        [group_start
-            .into_iter()
-            .map(|start| (start, 3))
-            .collect::<Vec<_>>()],
-        "{source}"
-    );
-
-    for (expected, name) in [(n, "n"), (upper_n, "N")] {
-        let result = explain(&query, name);
-        let result: QueryExplanation =
-            serde_json::from_str(&serde_json::to_string(&result).unwrap()).unwrap();
-        assert_eq!(result.counts.direct_entry.total, 1, "{source}");
-        let hit = result
-            .evidence
-            .iter()
-            .find(|row| row.class == EvidenceClass::DirectEntry)
-            .unwrap();
-        assert_eq!(hit.source, expected.source);
-        assert!(
-            hit.bases
-                .iter()
-                .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
-        );
-        assert!(
-            hit.bases
-                .iter()
-                .any(|basis| matches!(basis, EvidenceBasis::Form { .. }))
-        );
-        let shared = result.supports.iter().find_map(|support| {
-            let ExplanationSupport::DeclarationGroup { group, .. } = support else {
-                return None;
-            };
-            Some((group, support.items().unwrap()))
-        });
-        if let Some(start) = group_start {
-            let (range, owners) = shared.unwrap();
-            assert_eq!((range.start_item, range.end_item), (start, 3));
-            assert_eq!(owners.last().unwrap(), *upper_n);
-        } else {
-            assert!(shared.is_none(), "{source}");
-        }
-        let excerpt =
-            mant_query::select_excerpt(&query, &[ContentSelector::path(hit.outline.path())])
-                .unwrap();
-        let excerpt: QueryExcerpt =
-            serde_json::from_str(&serde_json::to_string(&excerpt).unwrap()).unwrap();
-        assert_eq!(
-            mant_render::render_excerpt_text(&excerpt)
-                .matches("GROUP_BODY")
-                .count(),
-            usize::from(name == "N"),
-            "{source}"
-        );
-        assert_eq!(
-            mant_render::render_explanation_text(&result)
-                .matches("GROUP_BODY")
-                .count(),
-            usize::from(name == "N" || group_start.is_some()),
-            "{source}"
-        );
-    }
-    if names.is_empty() && !form.chars().any(char::is_control) {
-        let template_only = explain(&query, form);
-        assert!(
-            template_only.evidence.iter().all(|hit| {
-                hit.bases
-                    .iter()
-                    .all(|basis| !matches!(basis, EvidenceBasis::Name { .. }))
-            }),
-            "{source}"
-        );
-        assert!(template_only.supports.is_empty(), "{source}");
-    }
-    query
-}
+use mant_protocol::ExplanationSupport;
 
 #[test]
 fn declared_search_parameters_follow_the_executed_word_boundary() {
@@ -249,7 +97,7 @@ fn declared_search_parameters_follow_the_executed_word_boundary() {
                 format!("{sign}R"),
             ),
         ] {
-            check_three(&source(before, section, &head), &form, &[], Some(1));
+            assert_search_fixture(&source(before, section, &head), &form, &[], Some(1));
         }
     }
 }
@@ -299,7 +147,7 @@ fn a_search_form_requires_surviving_source_owned_signs_and_argument() {
                 format!("({sign}RE)"),
             ),
         ] {
-            check_three(&source(before, ".Sh COMMANDS\n", &head), &form, &[], None);
+            assert_search_fixture(&source(before, ".Sh COMMANDS\n", &head), &form, &[], None);
         }
     }
     for (head, form) in [
@@ -309,14 +157,14 @@ fn a_search_form_requires_surviving_source_owned_signs_and_argument() {
     ] {
         // The enclosure's own words remain, but the overwritten operator
         // cannot turn the Ar slot into a standalone operand definition.
-        check_three(
+        assert_search_fixture(
             &source(".Sm off\n", ".Sh COMMANDS\n", head),
             form,
             &[],
             None,
         );
     }
-    check_three(
+    assert_search_fixture(
         &source(".Sm off\n", ".Sh COMMANDS\n", ".It Bq Ar file\n"),
         "[file]",
         &["file"],
@@ -336,7 +184,7 @@ fn a_search_form_requires_surviving_source_owned_signs_and_argument() {
             None,
         ),
     ] {
-        check_three(
+        assert_search_fixture(
             &source(".Sm off\n", ".Sh COMMANDS\n", &format!("{head}\n")),
             form,
             &[],
@@ -361,7 +209,7 @@ fn identical_visible_search_spellings_can_be_real_names() {
             "later",
         ),
     ] {
-        check_three(
+        assert_search_fixture(
             &source(mode, ".Sh COMMANDS\n", head),
             form,
             &[name],

@@ -1,6 +1,6 @@
 use super::{
     definitions,
-    operands::{explain, load},
+    support::{explain, load},
 };
 use mant_ir::{EntryKind, EntryOwner, ParameterKind, inline_plain_text};
 use mant_protocol::{ContentSelector, EvidenceBasis, EvidenceClass};

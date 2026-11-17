@@ -1,6 +1,5 @@
 //! Native search identity uses decoded and accepted word evidence.
-use super::operands::{explain, load};
-use super::search_templates::{check_three, source};
+use super::support::{assert_search_fixture, explain, load, source};
 use mant_ir::{EntryOwner, inline_plain_text};
 use mant_protocol::EvidenceBasis;
 
@@ -28,9 +27,9 @@ fn native_escape_encodings_preserve_search_operand_roles() {
         (r"\f[]/", '/'),
     ] {
         let input = probe(&format!(".It Pf {spelling} Ar RE"));
-        check_three(&input, &format!("{sign}RE"), &[], Some(1));
+        assert_search_fixture(&input, &format!("{sign}RE"), &[], Some(1));
         let input = probe(&format!(r".It Bq Pf \z{spelling} Ar RE"));
-        let content = check_three(&input, "[RE]", &[], None);
+        let content = assert_search_fixture(&input, "[RE]", &[], None);
         let argument = explain(&content, "RE");
         assert_eq!(argument.counts.direct_entry.total, 0, "{input}");
         assert!(argument.supports.is_empty(), "{input}");
@@ -47,7 +46,7 @@ fn native_escape_encodings_preserve_search_operand_roles() {
         (r".It No / Ar \zXRE", "/RE", Some(1)),
         (r".It No / Ar \zR Ar E", "/E", None),
     ] {
-        check_three(&probe(head), form, &[], group);
+        assert_search_fixture(&probe(head), form, &[], group);
     }
 }
 
@@ -68,7 +67,7 @@ fn malformed_operands_do_not_qualify_a_reading_group() {
             "/RE/OFFSET",
         ),
     ] {
-        check_three(&probe(head), form, &[], None);
+        assert_search_fixture(&probe(head), form, &[], None);
     }
 }
 
@@ -85,21 +84,21 @@ fn overwritten_argument_glyphs_cannot_name_the_visible_suffix() {
         r".It Bq Pf \z\N'2047' Ar RE",
     ] {
         let input = probe(head);
-        let content = check_three(&input, "[E]", &[], None);
+        let content = assert_search_fixture(&input, "[E]", &[], None);
         assert_eq!(
             explain(&content, "E").counts.direct_entry.total,
             0,
             "{input}"
         );
     }
-    check_three(&probe(r".It Bq Ar RE\z"), "[RE]", &["RE"], Some(0));
-    check_three(&probe(r".It Bq Ar RE"), "[RE]", &["RE"], Some(0));
+    assert_search_fixture(&probe(r".It Bq Ar RE\z"), "[RE]", &["RE"], Some(0));
+    assert_search_fixture(&probe(r".It Bq Ar RE"), "[RE]", &["RE"], Some(0));
     for head in [
         r".It Bq Ar \zRE , Cm later",
         r".It Bq Pf \z\[unknown] Ar RE , Cm later",
     ] {
         let input = probe(head);
-        let content = check_three(&input, "[E,later]", &["later"], Some(0));
+        let content = assert_search_fixture(&input, "[E,later]", &["later"], Some(0));
         assert_eq!(
             explain(&content, "E").counts.direct_entry.total,
             0,
@@ -116,7 +115,7 @@ fn overwritten_argument_glyphs_cannot_name_the_visible_suffix() {
 #[test]
 fn identical_argument_and_declared_name_have_distinct_ranges() {
     let input = probe(r".It Bq Pf \z\(sl Ar RE , Cm RE");
-    let content = check_three(&input, "[RE,RE]", &["RE"], Some(0));
+    let content = assert_search_fixture(&input, "[RE,RE]", &["RE"], Some(0));
     let document = content.document.as_ref().unwrap();
     let items = super::definitions(document);
     let owner = EntryOwner::Definition(items[0]);

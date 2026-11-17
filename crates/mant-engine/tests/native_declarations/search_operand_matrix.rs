@@ -1,6 +1,5 @@
 //! Search operands across source spellings, font wrappers, and overstrikes.
-use super::operands::explain;
-use super::search_templates::{check_three, source};
+use super::support::{assert_search_fixture, explain, source};
 use mant_ir::{EntryInlineRoot, EntryOwner, Inline};
 use mant_protocol::{EntryProjection, EvidenceBasis, OutlineNode, QueryOutline};
 use pulldown_cmark::{Event, Parser};
@@ -46,7 +45,7 @@ fn styled_operands_use_executed_spacing_and_preserve_typed_macros() {
         (r".It Em \[u002F] Ar RE", "/ RE", None),
     ] {
         let input = source("", ".Sh COMMANDS\n.Sm on\n", &format!("{head}\n"));
-        check_three(&input, form, &[], group);
+        assert_search_fixture(&input, form, &[], group);
     }
 
     // Equal terminal glyphs under a semantic macro do not prove the same
@@ -59,7 +58,7 @@ fn styled_operands_use_executed_spacing_and_preserve_typed_macros() {
         (r".It Bq Em \z\[u002F] Ar Ré", "[Ré]"),
     ] {
         let input = source("", ".Sh COMMANDS\n.Sm off\n", &format!("{head}\n"));
-        let content = check_three(&input, form, &[], None);
+        let content = assert_search_fixture(&input, form, &[], None);
         assert!(explain(&content, "RE").supports.is_empty(), "{input}");
     }
 }
@@ -77,7 +76,7 @@ fn closing_signs_use_the_same_native_word_shapes_as_openers() {
         (r".It Pf / Ar RE Pf \z/ Ar OFFSET", "/REOFFSET", None),
     ] {
         let input = source("", ".Sh COMMANDS\n.Sm off\n", &format!("{head}\n"));
-        check_three(&input, form, &[], group);
+        assert_search_fixture(&input, form, &[], group);
     }
 }
 
@@ -108,7 +107,7 @@ fn unicode_search_arguments_leave_independent_declared_names_addressable() {
         (".It Bq Ar 查找 , Cm suffix", "[查找,suffix]", &[][..], None),
     ] {
         let input = source("", ".Sh COMMANDS\n.Sm off\n", &format!("{head}\n"));
-        let content = check_three(&input, form, names, group);
+        let content = assert_search_fixture(&input, form, names, group);
         assert_eq!(
             explain(&content, "查找").counts.direct_entry.total,
             0,
@@ -138,7 +137,7 @@ fn styled_glyphs(nodes: &[Inline], style: GlyphStyle, glyphs: &mut Vec<(char, Gl
 fn check_form(head: &str, expected: &[(char, GlyphStyle)], shared: bool) {
     let input = source("", ".Sh COMMANDS\n.Sm off\n", &format!("{head}\n"));
     let form: String = expected.iter().map(|&(ch, _)| ch).collect();
-    let content = check_three(&input, &form, &[], shared.then_some(1));
+    let content = assert_search_fixture(&input, &form, &[], shared.then_some(1));
     let document = content.document.as_ref().unwrap();
     let items = super::definitions(document);
     let mut visible = Vec::new();
