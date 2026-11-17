@@ -13,7 +13,7 @@ use std::borrow::Cow;
 use mant_ir::Inline;
 
 use super::links::{PhrasingNode, phrasing_nodes, render_link};
-use super::{code_span, escape_text, html_anchor};
+use super::{code_span, escape_text};
 pub(super) use projection::{LinkMeaning, link_meaning, matches_link};
 use serialization::{Framing, append_safe_piece, render_inline_pieces};
 
@@ -162,6 +162,7 @@ fn render_unstyled_framed<'source>(
             RenderOptions {
                 destinations: options.destinations,
                 emit_overview: options.emit_overview,
+                report_navigation: options.report_navigation,
                 ..RenderOptions::portable(options.options)
             },
             manual_links,
@@ -270,9 +271,8 @@ fn inline_pieces<'source>(
                 let mut seen = std::collections::HashSet::new();
                 let markers = std::iter::once(id.as_str())
                     .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
-                    .filter(|target| options.emits_anchor(target))
                     .filter(|target| seen.insert(*target))
-                    .map(html_anchor)
+                    .filter_map(|target| options.anchor(target))
                     .collect();
                 pieces.push(InlinePiece::plain(markers));
             }

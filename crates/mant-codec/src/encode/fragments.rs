@@ -1,9 +1,10 @@
 //! Safe report-facing fragments, without document-wide semantic declarations.
 
 use mant_ir::{Block, Diagnostic, DocumentValidation, Heading, Inline, InlineContentRef, Section};
+use std::collections::HashSet;
 
 use super::math_markdown::{MathContext, RenderOptions};
-use super::navigation::LocalDestinations;
+use super::navigation::{LocalDestinations, ReportNavigation};
 use super::{MarkdownInlineProjection, MarkdownMath, MarkdownOptions};
 
 /// Presentation controls for detached report fragments.
@@ -30,6 +31,7 @@ pub type MarkdownFragments = ScopedMarkdownFragments<'static>;
 pub struct ScopedMarkdownFragments<'a> {
     options: MarkdownFragmentOptions,
     destinations: LocalDestinations<'a>,
+    report_navigation: Option<ReportNavigation<'a>>,
 }
 
 impl From<MarkdownFragmentOptions> for ScopedMarkdownFragments<'_> {
@@ -51,6 +53,7 @@ impl<'a> ScopedMarkdownFragments<'a> {
         Self {
             options,
             destinations: LocalDestinations::from_diagnostics(diagnostics),
+            report_navigation: None,
         }
     }
 
@@ -66,7 +69,19 @@ impl<'a> ScopedMarkdownFragments<'a> {
         Self {
             options,
             destinations: LocalDestinations::Indexed(snapshot.index()),
+            report_navigation: None,
         }
+    }
+
+    /// Qualify local destinations for a single source of a combined report.
+    ///
+    /// The source ordinal belongs to the response, not to a label or catalog
+    /// path. After discovering the accepted anchors, supply their encoded IDs
+    /// to leave other local references as unlinked text.
+    #[must_use]
+    pub fn in_report_scope(mut self, source: usize, anchors: Option<&'a HashSet<String>>) -> Self {
+        self.report_navigation = Some(ReportNavigation { source, anchors });
+        self
     }
 
     /// Preserve destinations when an authored heading link requires them.
@@ -94,6 +109,7 @@ impl<'a> ScopedMarkdownFragments<'a> {
             math: (options.math != MarkdownMath::Readable).then_some(math),
             destinations: self.destinations,
             emit_overview,
+            report_navigation: self.report_navigation,
         }
     }
 
@@ -139,7 +155,7 @@ impl<'a> ScopedMarkdownFragments<'a> {
         let options = self.document_options(&math, true);
         let mut output = Vec::new();
         if options.preserve_anchors {
-            output.push(options.destinations.overview_markers());
+            output.push(options.overview_markers());
         }
         if let Some(heading) = heading {
             output.push(super::render_heading(depth, heading, options));
@@ -231,6 +247,7 @@ pub fn render_overview_fragment(
         } else {
             LocalDestinations::Unrestricted
         },
+        report_navigation: None,
     }
     .overview(heading, blocks, depth)
 }

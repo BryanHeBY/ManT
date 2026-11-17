@@ -1,6 +1,7 @@
 //! Source-wide alias conflicts survive projection and detached wire round trips.
 
 use super::detached_navigation::{OPTIONS, excerpt_wire, fragment_count, query, scope_graph};
+use super::scoped_navigation::Page;
 use mant_codec::encode::{ScopedMarkdownFragments, render_addressable_markdown};
 use mant_ir::{
     AMBIGUOUS_FRAGMENT_ALIAS, DOCUMENT_ROOT_ID, DiagnosticImpact, Document, DocumentIndex,
@@ -354,16 +355,19 @@ fn detached_evidence_and_support_do_not_reactivate_a_fragment_or_affect_another_
     assert!(!restored.documents[0].semantics_complete);
     assert!(restored.documents[1].semantics_complete);
     let markdown = mant_render::render_scope_explanation_markdown_with_options(&restored, OPTIONS);
-    for target in ["#shared", "#valid"] {
-        assert_eq!(
-            fragment_count(&markdown, target),
-            fragment_count(&direct[1], target)
-        );
-    }
-    assert_eq!(markdown.matches("PROVIDER").count(), 2, "{markdown}");
+    let page = Page::read(&markdown);
+    assert_eq!(page.source_links(0, "valid"), 0, "{markdown}");
+    assert_eq!(page.source_links(0, "shared"), 0, "{markdown}");
     assert_eq!(
-        markdown.matches("id=\"Inline.Exact\"").count(),
-        1,
-        "{markdown}"
+        page.source_links(1, "shared"),
+        0,
+        "shared section is outside the page"
     );
+    assert_eq!(
+        page.source_links(1, "valid"),
+        fragment_count(&direct[1], "#valid")
+    );
+    assert_eq!(markdown.matches("PROVIDER").count(), 2, "{markdown}");
+    assert_eq!(page.source_anchors(0, "Inline.Exact"), 0, "{markdown}");
+    assert_eq!(page.source_anchors(1, "Inline.Exact"), 1, "{markdown}");
 }

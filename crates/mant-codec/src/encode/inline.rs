@@ -20,7 +20,7 @@ pub(super) use links::link_destination;
 pub(super) use links::render_uri;
 pub(super) use text::render_html_anchors;
 pub(super) use text::{block_prefix_escape_position, protect_block_prefix};
-pub(crate) use text::{escape_text, html_anchor, html_anchors};
+pub(crate) use text::{escape_text, html_anchor};
 
 pub(crate) fn render_inline<'ctx>(
     children: &[Inline],
@@ -197,8 +197,10 @@ pub(super) fn preformatted_anchor_markers(
                 for target in std::iter::once(id.as_str())
                     .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
                 {
-                    if options.emits_anchor(target) && seen.insert(target) {
-                        markers.push(html_anchor(target));
+                    if seen.insert(target)
+                        && let Some(anchor) = options.anchor(target)
+                    {
+                        markers.push(anchor);
                     }
                 }
             }
@@ -287,7 +289,10 @@ mod tests {
             },
         ];
         assert_eq!(
-            super::preformatted_anchor_markers(&children, super::RenderOptions::default()),
+            super::preformatted_anchor_markers(
+                &children,
+                super::RenderOptions::portable(super::super::MarkdownOptions::ADDRESSABLE)
+            ),
             "<a id=\"first\"></a>\n<a id=\"second\"></a>"
         );
     }

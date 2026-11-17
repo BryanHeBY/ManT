@@ -202,3 +202,12 @@ and anchors inactive. Visible labels and other link types keep their regular
 presentation, and unaffected sources retain their local navigation. MCP
 retains these codes during report rendering and clears their messages and
 source locations.
+
+Scoped explanation Markdown with anchor preservation qualifies each
+source's fragment IDs by its position in the
+response. These IDs belong to the rendered page and may change between
+queries. The renderer keeps the first displayed marker for a destination
+quoted more than once. A local link stays clickable only when its exact
+source fragment has a marker on the page. Pagination, filtering and
+content budgets can leave links as readable labels. External, manual
+and relative document links keep their ordinary presentation.

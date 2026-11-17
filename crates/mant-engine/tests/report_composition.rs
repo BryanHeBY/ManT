@@ -8,5 +8,7 @@ mod detached_navigation;
 mod identity;
 #[path = "report_composition/markdown.rs"]
 mod markdown;
+#[path = "report_composition/scoped_navigation.rs"]
+mod scoped_navigation;
 #[path = "report_composition/text.rs"]
 mod text;

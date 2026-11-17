@@ -4,13 +4,13 @@ use super::{
     MAX_MARKDOWN_MATH_NODES, MAX_MARKDOWN_MATH_OUTPUT_BYTES, MarkdownMathError, MarkdownMathIssue,
     MarkdownMathIssueKind, MarkdownMathLimit, MarkdownMathSummary,
 };
-use crate::encode::navigation::LocalDestinations;
+use crate::encode::navigation::{LocalDestinations, ReportNavigation};
 use crate::encode::{MarkdownMath, MarkdownOptions};
 use crate::math::{MathFormat, MathLoss, MathOptions, MathPolicy, encode_equation};
 use mant_ir::{
     Block, EquationExpression, EquationValidationError, EquationValidationLimits, Inline,
 };
-use std::{cell::RefCell, collections::HashMap};
+use std::{borrow::Cow, cell::RefCell, collections::HashMap};
 
 #[cfg(test)]
 #[path = "context/tests.rs"]
@@ -22,6 +22,7 @@ pub(in crate::encode) struct RenderOptions<'ctx> {
     pub(in crate::encode) math: Option<&'ctx MathContext>,
     pub(in crate::encode) destinations: LocalDestinations<'ctx>,
     pub(in crate::encode) emit_overview: bool,
+    pub(in crate::encode) report_navigation: Option<ReportNavigation<'ctx>>,
 }
 
 impl RenderOptions<'_> {
@@ -35,13 +36,45 @@ impl RenderOptions<'_> {
         }
     }
 
-    pub(in crate::encode) fn allows_destination(self, fragment: &str) -> bool {
-        self.destinations.allows(fragment)
+    pub(in crate::encode) fn link_fragment(self, fragment: &str) -> Option<Cow<'_, str>> {
+        if !self.destinations.allows(fragment) {
+            return None;
+        }
+        if let Some(report) = self.report_navigation {
+            let qualified = report.fragment(fragment);
+            report
+                .has_anchor(&qualified)
+                .then_some(Cow::Owned(qualified))
+        } else {
+            Some(Cow::Borrowed(fragment))
+        }
     }
 
-    pub(in crate::encode) fn emits_anchor(self, fragment: &str) -> bool {
-        self.allows_destination(fragment)
-            && !(self.emit_overview && self.destinations.is_overview_destination(fragment))
+    pub(in crate::encode) fn anchor(self, fragment: &str) -> Option<String> {
+        if !self.preserve_anchors
+            || !self.destinations.allows(fragment)
+            || (self.emit_overview && self.destinations.is_overview_destination(fragment))
+        {
+            return None;
+        }
+        Some(self.report_navigation.map_or_else(
+            || crate::encode::inline::html_anchor(fragment),
+            |report| report.anchor(fragment),
+        ))
+    }
+
+    pub(in crate::encode) fn overview_markers(mut self) -> String {
+        let aliases = self
+            .destinations
+            .index()
+            .into_iter()
+            .flat_map(mant_ir::DocumentIndex::overview_aliases)
+            .map(mant_ir::FragmentAlias::as_str);
+        self.emit_overview = false;
+        crate::encode::inline::render_html_anchors(
+            std::iter::once(mant_ir::DOCUMENT_ROOT_ID).chain(aliases),
+            |fragment| self.anchor(fragment),
+        )
     }
 }
 

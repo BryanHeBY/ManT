@@ -36,6 +36,7 @@ pub use math_markdown::{
     MarkdownMathIssueKind, MarkdownMathLimit, MarkdownMathSummary, MathMarkdownArtifact,
     render_math_markdown,
 };
+pub use navigation::render_scoped_report_page;
 
 /// Optional report decoration expressed only as source-neutral inline IR.
 ///
@@ -123,9 +124,15 @@ fn render_sections(
 fn render_section_heading(section: &Section, depth: usize, options: RenderOptions<'_>) -> String {
     let mut rendered = String::new();
     if options.preserve_anchors {
-        rendered = inline::html_anchors(&section.id, &section.fragment_aliases, |fragment| {
-            options.emits_anchor(fragment)
-        });
+        rendered = inline::render_html_anchors(
+            std::iter::once(section.id.as_str()).chain(
+                section
+                    .fragment_aliases
+                    .iter()
+                    .map(mant_ir::FragmentAlias::as_str),
+            ),
+            |fragment| options.anchor(fragment),
+        );
         if !rendered.is_empty() {
             rendered.push_str("\n\n");
         }

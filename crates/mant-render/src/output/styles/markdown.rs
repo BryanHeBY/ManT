@@ -2,16 +2,16 @@
 //! Fenced displays remain verbatim; inserting Markdown inside them would lie.
 use super::{LocatedStyles, Span, key, pieces};
 use crate::presentation::TextPresentation;
-use mant_codec::encode::{MarkdownFragments, MarkdownInlineProjection};
+use mant_codec::encode::{MarkdownInlineProjection, ScopedMarkdownFragments};
 use mant_ir::{Inline, InlineContentRef};
 use mant_protocol::ExplanationTextRoot;
 use std::borrow::Cow;
 
 impl LocatedStyles<'_> {
-    pub(in crate::output) fn markdown_inline(
+    pub(in crate::output) fn markdown_inline<'a>(
         &self,
         content: InlineContentRef<'_>,
-        fragments: impl Into<MarkdownFragments>,
+        fragments: impl Into<ScopedMarkdownFragments<'a>>,
     ) -> String {
         fragments.into().inline(InlineContentRef {
             content: &self.project(content.content),

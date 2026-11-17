@@ -1,4 +1,5 @@
 //! Exact path selection preserves the source's navigation decisions.
+use super::scoped_navigation::Page;
 use mant_codec::encode::{MarkdownFragmentOptions, MarkdownMath};
 use mant_ir::{
     DOCUMENT_ROOT_ID, DiagnosticImpact, Document, DocumentAddress, EntryForm, MarkdownOrigin,
@@ -407,16 +408,11 @@ fn scoped_explanation_keeps_navigation_policy_per_source() {
             serde_json::from_str(&serde_json::to_string(&scope).unwrap()).unwrap();
         let markdown =
             mant_render::render_scope_explanation_markdown_with_options(&restored, OPTIONS);
-        assert_eq!(
-            markdown.matches("id=\"document-overview\"").count(),
-            1,
-            "{markdown}"
-        );
-        assert_eq!(
-            fragment_count(&markdown, "#document-overview"),
-            active,
-            "{markdown}"
-        );
+        let page = Page::read(&markdown);
+        assert_eq!(page.source_anchors(0, DOCUMENT_ROOT_ID), 0, "{markdown}");
+        assert_eq!(page.source_anchors(1, DOCUMENT_ROOT_ID), 1, "{markdown}");
+        assert_eq!(page.source_links(0, DOCUMENT_ROOT_ID), 0, "{markdown}");
+        assert_eq!(page.source_links(1, DOCUMENT_ROOT_ID), active, "{markdown}");
         assert_eq!(markdown.matches("BODYJUMP").count(), 2, "{markdown}");
     }
 }

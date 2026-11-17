@@ -3,7 +3,6 @@ use super::{assembly, mapped_sequence};
 use crate::encode::math_markdown::RenderOptions;
 use crate::encode::{
     MarkdownInlineProjection,
-    inline::html_anchor,
     mapped::{BlockSyntax, MappedText},
 };
 use mant_ir::{Block, EntryOwner, ListItem, ListKind};
@@ -63,11 +62,11 @@ pub(super) fn render_list(
             if !options.preserve_semantics
                 && options.preserve_anchors
                 && let Some(facts) = &item.entry
-                && options.emits_anchor(&facts.id)
+                && let Some(anchor) = options.anchor(&facts.id)
             {
                 // A retained anchor uses the actual first block's syntax;
                 // it cannot be glued to a fence or steal a child's receiver.
-                content.attach_navigation(&html_anchor(&facts.id));
+                content.attach_navigation(&anchor);
             }
             let content = content
                 .with_owner(EntryOwner::List(item), track)

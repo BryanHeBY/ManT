@@ -231,14 +231,22 @@ fn link_presentation(
         // a URI/proof that will never participate in the serialized output.
         return LinkPresentation::OmittedByPolicy;
     }
-    if matches!(target, LinkTarget::Section { id } if !options.allows_destination(id)) {
-        return LinkPresentation::Invalid;
-    }
-    let Some(destination) = CheckedDestination::from_target(target) else {
+    let fragment = if let LinkTarget::Section { id } = target {
+        let Some(fragment) = options.link_fragment(id) else {
+            return LinkPresentation::Invalid;
+        };
+        Some(fragment)
+    } else {
+        None
+    };
+    let Some(mut destination) = CheckedDestination::from_target(target) else {
         // Invalid target facts and diagnostics belong to the original IR;
         // transparent labels preserve content without inventing another URI.
         return LinkPresentation::Invalid;
     };
+    if let Some(Cow::Owned(qualified)) = fragment {
+        destination.0 = format!("#{qualified}");
+    }
     LinkPresentation::Wrapped(destination)
 }
 

@@ -302,3 +302,87 @@ fn request_json_and_cli_share_classification_and_original_rendering() {
     }
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn request_json_markdown_keeps_scope_anchors_for_their_own_documents() {
+    use std::{collections::HashSet, io::Write, process::Stdio};
+
+    let root = fixture("scope-markdown-navigation");
+    let documents = support::registered_documents_dir(&root);
+    for (file, markdown) in [
+        (
+            "first.md",
+            "# alpha\n\n## Options\n\n- `--term`: ALPHA_BODY [here](#option-term) [away](#option-target) [web](https://example.test/)\n- `--target`: OMITTED_BODY\n",
+        ),
+        (
+            "second.md",
+            "# beta\n\n## Options\n\n- `--target`, `--term`: BETA_BODY [here](#option-target)\n",
+        ),
+        (
+            "third.md",
+            "# gamma\n\n## Options\n\n- `--term`: GAMMA_BODY [here](#option-term)\n",
+        ),
+    ] {
+        fs::write(documents.join(file), markdown).unwrap();
+    }
+    let request = json!({
+        "schema": "mant.scope-request/v0.14",
+        "scope": {"documents": [
+            {"selector":"documents/first"},
+            {"selector":"documents/second"},
+            {"selector":"documents/third"}
+        ]},
+        "view": {"kind":"explain", "entry":"--term"},
+    });
+    let mut command = Command::new(env!("CARGO_BIN_EXE_mant"));
+    support::configure_registered_documents(&mut command, &root);
+    let mut child = command
+        .args([
+            "--request-json",
+            "--format=markdown",
+            "--preserve-anchors",
+            "--display=direct",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(request.to_string().as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    fs::remove_dir_all(&root).unwrap();
+
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty(), "{output:?}");
+    let markdown = String::from_utf8(output.stdout).unwrap();
+    let mut destinations = HashSet::new();
+    for owner in ["ALPHA_BODY", "BETA_BODY", "GAMMA_BODY"] {
+        let row = markdown.lines().find(|line| line.contains(owner)).unwrap();
+        let anchor = row
+            .split_once(" id=\"")
+            .and_then(|(_, rest)| rest.split_once('"'))
+            .unwrap()
+            .0;
+        let link = row
+            .split_once("[here](#")
+            .and_then(|(_, rest)| rest.split_once(')'))
+            .unwrap()
+            .0;
+        assert_eq!(anchor, link, "{row}");
+        assert!(destinations.insert(anchor), "{markdown}");
+    }
+    assert!(
+        markdown.contains("away") && !markdown.contains("[away]("),
+        "{markdown}"
+    );
+    assert!(
+        markdown.contains("[web](https://example.test/)"),
+        "{markdown}"
+    );
+    assert!(!markdown.contains("OMITTED_BODY"), "{markdown}");
+}

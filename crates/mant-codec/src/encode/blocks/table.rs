@@ -2,7 +2,7 @@
 use super::nonempty;
 use crate::encode::math_markdown::RenderOptions;
 use crate::encode::{
-    inline::{code_fences, html_anchor},
+    inline::code_fences,
     mapped::{BlockSyntax, MappedText},
 };
 use mant_ir::visit::Visit;
@@ -72,8 +72,10 @@ fn table_markers(rows: &[TableRow], options: RenderOptions<'_>) -> String {
                 for target in std::iter::once(id.as_str())
                     .chain(fragment_aliases.iter().map(mant_ir::FragmentAlias::as_str))
                 {
-                    if self.options.emits_anchor(target) && self.seen.insert(target) {
-                        self.output.push(html_anchor(target));
+                    if self.seen.insert(target)
+                        && let Some(anchor) = self.options.anchor(target)
+                    {
+                        self.output.push(anchor);
                     }
                 }
             } else {

@@ -239,7 +239,7 @@ pub(super) fn render_markdown_with_context<'src>(
         .and_then(|document| document.heading.as_ref())
     {
         if options.emit_overview {
-            output.push(&options.destinations.overview_markers());
+            output.push(&options.overview_markers());
         }
         let range = output.push(&render_heading(1, heading, options));
         if track {
@@ -271,7 +271,7 @@ pub(super) fn render_markdown_with_context<'src>(
             || (document.heading.is_none() && !document.fragment_aliases.is_empty())
         {
             let start = if options.emit_overview && document.heading.is_none() {
-                output.push(&options.destinations.overview_markers()).start
+                output.push(&options.overview_markers()).start
             } else {
                 output.text.len()
             };

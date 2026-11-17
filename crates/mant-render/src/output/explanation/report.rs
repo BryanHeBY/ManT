@@ -2,12 +2,12 @@
 //! uses standard blockquotes in Markdown. Neither surface is a wire protocol.
 use super::{definition::DefinitionDisplay, metadata, spans};
 use crate::presentation::{TextPresentation, TextRole};
-use mant_codec::encode::{MarkdownFragmentOptions, MarkdownFragments};
+use mant_codec::encode::{MarkdownFragmentOptions, ScopedMarkdownFragments};
 use mant_protocol::{
     EvidenceClass, EvidenceCounts, ExplanationEvidence, ExplanationIdentityField,
     ExplanationSupport,
 };
-use std::fmt::Write;
+use std::{collections::HashSet, fmt::Write};
 
 #[cfg(test)]
 mod tests;
@@ -22,7 +22,14 @@ pub(super) struct Report<'a> {
 pub(super) struct ReportSource<'a> {
     address: Option<&'a str>,
     supports: &'a [ExplanationSupport],
-    fragments: MarkdownFragments,
+    fragments: ScopedMarkdownFragments<'a>,
+}
+
+impl<'a> ReportSource<'a> {
+    pub(super) fn in_scope(mut self, index: usize, anchors: Option<&'a HashSet<String>>) -> Self {
+        self.fragments = self.fragments.in_report_scope(index, anchors);
+        self
+    }
 }
 
 impl Report<'_> {
@@ -36,9 +43,9 @@ impl Report<'_> {
             address,
             supports,
             fragments: if self.markdown {
-                MarkdownFragments::for_report(self.options, diagnostics)
+                ScopedMarkdownFragments::for_report(self.options, diagnostics)
             } else {
-                MarkdownFragments::from(self.options)
+                ScopedMarkdownFragments::from(self.options)
             },
         }
     }
@@ -344,7 +351,7 @@ impl Report<'_> {
         output: &mut String,
         e: &ExplanationEvidence,
         locations: &spans::LocatedStyles<'_>,
-        fragments: MarkdownFragments,
+        fragments: ScopedMarkdownFragments<'_>,
     ) {
         if matches!(
             e.class,

@@ -1261,6 +1261,10 @@ destinations. A standalone excerpt or explanation from a source with fragment
 alias conflicts keeps its readable labels, external links and manual references
 while leaving that source's local navigation inactive.
 
+For a scoped explanation sent through `--request-json`, `--preserve-anchors`
+qualifies fragment IDs by source within the returned page. References to
+destinations outside that result page retain their readable labels.
+
 The `man` format applies only to a complete native roff manual and emits plain
 manual content without an external tldr preface. It rejects Markdown documents and partial
 document views. All document queries default to text, including full documents,

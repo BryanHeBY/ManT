@@ -88,6 +88,9 @@ that crate was not published for that change.
   documents without an overview. Same-snapshot excerpts keep unique local
   destinations. Standalone v0.14 reports disable local navigation for an
   affected source while preserving text, external links and manual references.
+- Scope fragment anchors to their source in composed Markdown explanations.
+  Local links resolve to the first displayed marker for their exact
+  destination. Targets omitted from the page retain readable labels.
 - The 0.15 `mant-render` Markdown option APIs accept the option types from
   `mant-codec` 0.15.
 

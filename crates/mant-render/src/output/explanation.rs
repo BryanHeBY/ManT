@@ -6,6 +6,7 @@ use super::styles as spans;
 use crate::presentation::{TextPresentation, TextRole};
 use mant_protocol::{QueryExplanation, ScopeExplanation};
 use report::Report;
+use std::collections::HashSet;
 
 /// Render classified evidence without conflating mentions with definitions.
 #[must_use]
@@ -70,6 +71,7 @@ pub fn render_scope_explanation_text_with(
             options: mant_codec::encode::MarkdownFragmentOptions::default(),
             decorate: &decorate,
         },
+        None,
     )
 }
 /// `CommonMark` presentation of the same global class-first evidence page.
@@ -87,14 +89,18 @@ pub fn render_scope_explanation_markdown_with_options(
     result: &ScopeExplanation,
     options: mant_codec::encode::MarkdownFragmentOptions,
 ) -> String {
-    render_scope(
-        result,
-        &Report {
-            markdown: true,
-            options,
-            decorate: &|_, text| text.to_owned(),
-        },
-    )
+    let report = Report {
+        markdown: true,
+        options,
+        decorate: &|_, text| text.to_owned(),
+    };
+    if options.preserve_anchors {
+        mant_codec::encode::render_scoped_report_page(|anchors| {
+            render_scope(result, &report, anchors)
+        })
+    } else {
+        render_scope(result, &report, None)
+    }
 }
 
 fn render(result: &QueryExplanation, report: &Report<'_>) -> String {
@@ -112,7 +118,11 @@ fn render(result: &QueryExplanation, report: &Report<'_>) -> String {
     output
 }
 
-fn render_scope(result: &ScopeExplanation, report: &Report<'_>) -> String {
+fn render_scope(
+    result: &ScopeExplanation,
+    report: &Report<'_>,
+    anchors: Option<&HashSet<String>>,
+) -> String {
     let mut output = report.meta(TextRole::Document, &format!(
         "Explanation {:?}: {}; owners={}, returned={}, offset={}; nextOffset={:?}; truncated: candidates={}, relations={}, content={}",
         crate::presentation::sanitize_terminal_text(&result.query.entry), metadata::outcome_name(result.outcome), result.total, result.returned, result.query.options.offset, result.next_offset, result.truncation.candidates, result.truncation.relations, result.truncation.content));
@@ -123,7 +133,8 @@ fn render_scope(result: &ScopeExplanation, report: &Report<'_>) -> String {
         .map(|d| d.address.catalog_path())
         .collect::<Vec<_>>();
     let mut sources = Vec::with_capacity(result.documents.len());
-    for (doc, address) in result.documents.iter().zip(&addresses) {
+    let scoped_anchors = report.markdown && report.options.preserve_anchors;
+    for (index, (doc, address)) in result.documents.iter().zip(&addresses).enumerate() {
         output.push('\n');
         output.push_str(&report.meta(
             TextRole::Metadata,
@@ -136,9 +147,20 @@ fn render_scope(result: &ScopeExplanation, report: &Report<'_>) -> String {
                 doc.semantics_complete
             ),
         ));
-        sources.push(report.source(Some(address), &doc.supports, &doc.diagnostics));
+        let mut source = report.source(Some(address), &doc.supports, &doc.diagnostics);
+        if scoped_anchors {
+            source = source.in_scope(index, anchors);
+        }
+        sources.push(source);
     }
-    let unknown_source = report.source(None, &[], &[]);
+    let unknown = Report {
+        options: mant_codec::encode::MarkdownFragmentOptions {
+            preserve_anchors: false,
+            ..report.options
+        },
+        ..*report
+    };
+    let unknown_source = unknown.source(None, &[], &[]);
     report.records(
         &mut output,
         result.evidence.iter().map(|e| {
