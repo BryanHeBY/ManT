@@ -234,7 +234,20 @@ fn mixed_subjects_use_the_same_name_budget_without_losing_the_owner() {
                 .count(),
             usize::from(count == 257)
         );
-        let excerpt = mant_query::select_excerpt(&query, &[ContentSelector::path("2/e1")]).unwrap();
+        let outline = roundtrip(
+            &mant_query::build_outline_projection(&query, EntryProjection::All, None).unwrap(),
+        );
+        let [entry] = outline.nodes.last().unwrap().children() else {
+            panic!("{count} operands");
+        };
+        assert_eq!(entry.path(), "2/e1");
+        let id = ContentSelector::id(entry.id());
+        id.validate().expect("published ID is a valid selector");
+        let excerpt = mant_query::select_excerpt(&query, &[id]).unwrap();
+        assert_eq!(
+            excerpt,
+            mant_query::select_excerpt(&query, &[ContentSelector::path(entry.path())]).unwrap(),
+        );
         assert!(mant_render::render_excerpt_text(&excerpt).contains("OWNERBODY."));
     }
 }

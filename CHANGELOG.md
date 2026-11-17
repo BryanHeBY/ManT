@@ -46,6 +46,8 @@ that crate was not published for that change.
   Keep constants in an explicitly separated argument tail out of the names.
 - Bind mixed mdoc subjects in source order. Keep an explicitly delimited
   argument tail out of the name index across mixed prefixes and enclosures.
+- Keep generated semantic entry IDs within the selector limit, including
+  when a long form cannot publish names. The full form remains readable.
 - Check declaration names against their executed operand roles. An `Ar`
   placeholder cannot complete a concrete option, symbol, environment
   variable or command name. Standalone operand labels and independent

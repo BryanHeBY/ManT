@@ -1960,6 +1960,8 @@ same owners. The outline trail identifies ancestors without
 copying their blocks.
 
 The `excerpt` and `outline.root` views use one exact structural resolver.
+Generated semantic entry IDs fit the 512-byte selector limit even when their
+full forms are longer. Selecting by the emitted ID retains the complete form.
 An ID cannot fall back to a same-named entry alias, and a failed path cannot
 activate a fragment or another document. Duplicate IDs return candidates;
 exact paths keep distinct source owners independently readable. Names may

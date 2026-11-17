@@ -494,7 +494,11 @@ fn semantic_fingerprint(
     for block in item.blocks() {
         content.visit_block(block);
     }
-    let digest = Sha256::digest(content.0);
+    short_fingerprint(&content.0)
+}
+
+fn short_fingerprint(value: &[u8]) -> String {
+    let digest = Sha256::digest(value);
     digest[..6]
         .iter()
         .fold(String::with_capacity(12), |mut fingerprint, byte| {
@@ -535,13 +539,68 @@ pub(crate) fn document_id_slug(value: &str) -> String {
     }
 }
 
+// Generated semantic IDs must round-trip through the public ContentSelector.
+const MAX_SELECTOR_ID_BYTES: usize = 512;
+
+fn fit_entry_id(base: &str, suffix: &str, fingerprint: &mut Option<String>) -> String {
+    let maximum = MAX_SELECTOR_ID_BYTES - suffix.len();
+    if base.len() <= maximum {
+        return format!("{base}{suffix}");
+    }
+    let fingerprint = fingerprint.get_or_insert_with(|| short_fingerprint(base.as_bytes()));
+    let mut end = maximum - fingerprint.len() - 1;
+    while !base.is_char_boundary(end) {
+        end -= 1;
+    }
+    let start = base[..end].trim_end_matches('-');
+    format!("{start}-{fingerprint}{suffix}")
+}
+
 fn unique_id(base: &str, used: &mut HashSet<String>, reserved: &HashSet<String>) -> String {
-    let mut candidate = base.to_owned();
+    let mut fingerprint = None;
+    let mut candidate = fit_entry_id(base, "", &mut fingerprint);
     let mut suffix = 2;
     while used.contains(&candidate) || reserved.contains(&candidate) {
-        candidate = format!("{base}-{suffix}");
+        candidate = fit_entry_id(base, &format!("-{suffix}"), &mut fingerprint);
         suffix += 1;
     }
     used.insert(candidate.clone());
     candidate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HashSet, MAX_SELECTOR_ID_BYTES, unique_id};
+
+    #[test]
+    fn long_entry_ids_are_distinct_normalized_and_bounded_after_collisions() {
+        let stem = format!("term-{}", "中é".repeat(160));
+        let first = format!("{stem}-first");
+        let second = format!("{stem}-second");
+        let mut used = HashSet::new();
+        let reserved = HashSet::new();
+        let original = unique_id(&first, &mut used, &reserved);
+        let repeated = unique_id(&first, &mut used, &reserved);
+        let different = unique_id(&second, &mut used, &reserved);
+        for id in [&original, &repeated, &different] {
+            assert!(id.len() <= MAX_SELECTOR_ID_BYTES);
+            assert!(mant_ir::is_normalized_node_id(id));
+        }
+        assert!(repeated.ends_with("-2"));
+        assert_ne!(original, different);
+        let reserved = HashSet::from([original]);
+        let reserved_collision = unique_id(&first, &mut HashSet::new(), &reserved);
+        assert_eq!(reserved_collision, repeated);
+
+        let exact = format!("term-{}", "a".repeat(MAX_SELECTOR_ID_BYTES - "term-".len()));
+        assert_eq!(unique_id(&exact, &mut used, &reserved), exact);
+        let exact_collision = unique_id(&exact, &mut used, &reserved);
+        assert!(exact_collision.len() <= MAX_SELECTOR_ID_BYTES);
+        assert!(exact_collision.ends_with("-2"));
+        assert_eq!(unique_id("term-short", &mut used, &reserved), "term-short");
+        assert_eq!(
+            unique_id("term-short", &mut used, &reserved),
+            "term-short-2"
+        );
+    }
 }
