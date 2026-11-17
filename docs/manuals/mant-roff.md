@@ -788,10 +788,11 @@ Independence does not discard useful reading context. A bounded run of complete 
 A bare mdoc search form such as `/RE` or `?RE` can precede a group of
 independently named commands. The form needs a source search sign and an
 executed `Ar` argument with no intervening printable space. It can include a
-closing sign and argument suffixes, or sit inside a transparent `Xo`.
-Spacing requests and macro expansion take effect before this check.
-Enclosed forms such as `Bq` and `Pq` retain their argument roles and do not
-qualify as bare search forms.
+closing sign and argument suffixes. Transparent `Xo` and `No` scopes can
+span the expression or just its operands. Spacing requests and macro
+expansion take effect before this check. Enclosures such as `Bq` and `Pq`
+and separate zero-width words still participate in execution. The search
+expression keeps its parameter roles in those compound heads.
 
 The same rule covers man `IP`/`TP` (including suppressed-newline heads) and
 mdoc definition-style `It`; an explicit `TQ` multi-label owner remains one

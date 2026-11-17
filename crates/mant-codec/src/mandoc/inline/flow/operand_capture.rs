@@ -10,12 +10,12 @@
 use std::collections::HashMap;
 
 use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
-use crate::mandoc::declaration_groups::search::SearchTemplate;
+use crate::mandoc::declaration_groups::search::SearchHead;
 use mant_ir::Inline;
 
 #[derive(Clone, Default)]
 pub(in crate::mandoc) struct HeadOperandCapture {
-    search_template: Option<SearchTemplate>,
+    search_head: Option<SearchHead>,
     roles: HashMap<u64, NativeOperandRole>,
     optional_keys: HashMap<u64, usize>,
     captured: CapturedHeadOperands,
@@ -24,9 +24,9 @@ pub(in crate::mandoc) struct HeadOperandCapture {
 }
 
 impl HeadOperandCapture {
-    pub(in crate::mandoc) fn new(search_template: Option<SearchTemplate>) -> Self {
+    pub(in crate::mandoc) fn new(search_head: Option<SearchHead>) -> Self {
         Self {
-            search_template,
+            search_head,
             ..Self::default()
         }
     }
@@ -114,7 +114,7 @@ impl super::InlineBuilder {
         if self.head_operand_capture.as_ref().is_some_and(|capture| {
             capture
                 .borrow()
-                .search_template
+                .search_head
                 .as_ref()
                 .is_some_and(|form| form.has_argument(node))
         }) {
@@ -134,7 +134,7 @@ impl super::InlineBuilder {
             let mut capture = capture.borrow_mut();
             let role = capture
                 .operand_role
-                .or_else(|| capture.search_template.as_ref()?.role(text_node?))
+                .or_else(|| capture.search_head.as_ref()?.role(text_node?))
                 .or_else(|| has_font_escape.then_some(NativeOperandRole::Literal));
             if let Some(role) = role {
                 capture.record(self.execution.native_owner_serial, role);

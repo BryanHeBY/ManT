@@ -67,7 +67,7 @@ fn source_head_text(node: &Node) -> Option<&str> {
         .iter()
         .find(|child| child.kind == NodeKind::Head)?;
     let mut current = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::It)) {
-        let mut visible = head.children.iter().filter(|child| !search::control(child));
+        let mut visible = search::content_nodes(&head.children);
         let first = visible.next()?;
         // A title or bracket label is proved by the whole HEAD. An
         // additional Ar must not disappear behind its first word.

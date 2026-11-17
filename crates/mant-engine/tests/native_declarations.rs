@@ -17,6 +17,8 @@ mod operands;
 mod publication;
 #[path = "native_declarations/roles.rs"]
 mod roles;
+#[path = "native_declarations/search_template_wrappers.rs"]
+mod search_template_wrappers;
 #[path = "native_declarations/search_templates.rs"]
 mod search_templates;
 #[path = "native_declarations/subjects.rs"]

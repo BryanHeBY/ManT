@@ -62,10 +62,15 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
     let lead = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&start))?;
-    if lead.role == NativeOperandRole::Placeholder {
+    if lead.role == NativeOperandRole::Placeholder
+        || matches!(lead.role, NativeOperandRole::SearchArgument(_))
+            && head.len() < text.trim().len()
+    {
         // Ar can label a real definition or a placeholder in a syntax
         // expression. Its spelling alone proves neither a command nor an
-        // environment variable, and it cannot contribute a flag name.
+        // environment variable. A surviving generated enclosure gives an
+        // enclosed search form the same scope for independent declarations.
+        // The role check still prevents a search argument from naming one.
         let uses = OperandUses::new(operands).shifted(start);
         let names = named::term_occurrences(head, uses)
             .unwrap_or_default()

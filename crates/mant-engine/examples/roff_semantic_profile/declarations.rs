@@ -99,7 +99,12 @@ fn paragraph_boundary(node: &Node) -> bool {
         .any(paragraph_boundary)
 }
 
-fn bracket_head(item: &DefinitionItem) -> bool {
+fn bracket_head(node: &Node, item: &DefinitionItem) -> bool {
+    // mdoc quote handlers can generate the same visible bracket around
+    // arbitrary syntax. Only an authored literal supplies this exemption.
+    if node.macro_token.as_deref() == Some("It") && source_head_text(node).is_none() {
+        return false;
+    }
     // Native text can still contain font escapes before `[`. Inspect the
     // source-correlated visible head, not raw roff bytes or a derived ID.
     item.terms
@@ -166,24 +171,13 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
     {
         return false;
     }
-    let Some(mut part) = node
+    let Some(part) = node
         .children
         .iter()
         .find(|child| child.kind == NodeKind::Head)
     else {
         return false;
     };
-    while let [wrapper] = part.children.as_slice()
-        && wrapper.kind == NodeKind::Block
-        && !wrapper.flags.no_print
-        && wrapper.macro_token.as_deref() == Some("Xo")
-        && let Some(body) = wrapper
-            .children
-            .iter()
-            .find(|child| child.kind == NodeKind::Body)
-    {
-        part = body;
-    }
     if node
         .children
         .iter()
@@ -192,7 +186,9 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
     {
         return false;
     }
-    let mut source = part.children.iter().filter(|child| !search_control(child));
+    let mut words = Vec::new();
+    collect_search_words(&part.children, &mut words);
+    let mut source = words.into_iter();
     let Some(prefix) = source.next() else {
         return false;
     };
@@ -201,7 +197,7 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
         prefix.kind,
         prefix.children.as_slice(),
     ) {
-        (Some("Pf" | "No"), NodeKind::Element, [text])
+        (Some("Pf"), NodeKind::Element, [text])
             if text.kind == NodeKind::Text && !text.flags.no_print =>
         {
             text
@@ -263,6 +259,29 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
 
 fn search_control(node: &Node) -> bool {
     node.flags.no_print || matches!(node.macro_token.as_deref(), Some("Ns" | "Sm" | "Tg" | "ft"))
+}
+
+fn collect_search_words<'a>(nodes: &'a [Node], words: &mut Vec<&'a Node>) {
+    for node in nodes.iter().filter(|node| !search_control(node)) {
+        // mdoc_term.c dispatches Xo without pre/post handlers and No only
+        // sets the font. Real source words still occupy their own positions.
+        let transparent = match (node.macro_token.as_deref(), node.kind) {
+            (Some("Xo"), NodeKind::Block) => node
+                .children
+                .iter()
+                .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none())
+                .map(|body| body.children.as_slice()),
+            (Some("No"), NodeKind::Element) if !node.children.is_empty() => {
+                Some(node.children.as_slice())
+            }
+            _ => None,
+        };
+        if let Some(children) = transparent {
+            collect_search_words(children, words);
+        } else {
+            words.push(node);
+        }
+    }
 }
 
 fn literal_argument_start(argument: &Node) -> Option<char> {
@@ -597,7 +616,7 @@ impl Audit<'_> {
                             .is_none_or(|facts| facts.names.is_empty())
                     })
                     .and_then(|item| {
-                        if bracket_head(item) {
+                        if bracket_head(child, item) {
                             Some("parameter-only-head")
                         } else if unsigned_numeric_head(child, item) {
                             Some("unsigned-numeric-head")
@@ -1031,13 +1050,21 @@ mod tests {
         let prefix = ".Dd November 17, 2026\n.Dt PROBE 3\n.Os\n.Sh NAME\n.Nm probe\n.Nd role probe\n.Sm off\n.Sh COMMANDS\n.Bl -tag -width Ds\n";
         for (head, grouped) in [
             (".It No ? Ar RE", true),
+            (".It Xo\n.Sm off\n.Xo\n.Pf ? Ar RE\n.Xc\n.Xc", true),
+            (r#".It No "\fR[argument]""#, true),
+            (r#".It No "\&[argument]""#, true),
+            (r#".It No "\(lBargument\(rB""#, true),
+            (r#".It No "\[lB]argument\[rB]""#, true),
+            (r#".It No "\[u005B]argument\[u005D]""#, true),
+            (r#".It No "\N'91'argument\N'93'""#, true),
+            (".It Xo\n.Pf \\z? Bq Ar RE\n.Xc", false),
             (r".It No ? Ar \& Ar RE", false),
             (r".It No ? Ar \zR Ar E", false),
             (r".It No ? Ar x?y Ns \z? Ar OFFSET", false),
         ] {
-            // Fixed CVS retains ?RE, ?RE, ?E and ?x?yOFFSET here. Those
-            // similar forms do not prove the presence of the agreed source
-            // words in the last three cases (term.c::encode1()).
+            // Check the source roles behind the pinned spellings. In
+            // particular, a generated bracket or retained parameter can
+            // remain after the search sign was overstruck (term.c::encode1()).
             let source = format!("{prefix}{head}\n.It Cm n\n.It Cm N\nGROUP_BODY\n.El\n");
             let path = std::path::Path::new("probe.3");
             let native = libmandoc_rs::Parser::default()

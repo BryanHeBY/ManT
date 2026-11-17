@@ -45,6 +45,10 @@ that crate was not published for that change.
   Spacing controls such as `Sm` preserve later declaration groups when the
   words join. Overwritten arguments and signs cannot create template evidence
   or turn parameter text into a declaration name.
+- Preserve mdoc search-argument roles through nested wrappers and controls.
+  A surviving bare template can keep the following declaration group.
+  Zero-width formatter words still participate in execution, and a protected
+  argument does not mask a later independently declared name.
 - Preserve declaration names, parameter exclusions and reading groups when
   native navigation consumes a source-proven reference marker. Bind later
   names to the surviving text in their original operands.

@@ -1,6 +1,8 @@
 //! Search-form presentation and the original owners of shared context.
 use super::operands::{explain, load};
-use mant_ir::{Block, DefinitionItem, Document, EntryOwner, inline_plain_text, visit};
+use mant_ir::{
+    Block, DefinitionItem, Document, EntryOwner, ResolvedContent, inline_plain_text, visit,
+};
 use mant_protocol::{
     ContentSelector, DocumentResponse, EvidenceBasis, EvidenceClass, ExplanationSupport,
     QueryExcerpt, QueryExplanation,
@@ -11,11 +13,11 @@ const HEADER: &str =
 const LIST: &str = ".Bl -tag -width Ds\n";
 const COMMANDS: &str = ".It Cm n\n.It Cm N\nGROUP_BODY\n.El\n";
 
-fn source(before: &str, section: &str, head: &str) -> String {
+pub(super) fn source(before: &str, section: &str, head: &str) -> String {
     format!("{HEADER}{before}{section}{LIST}{head}{COMMANDS}")
 }
 
-fn list_groups(document: &Document) -> Vec<Vec<(usize, usize)>> {
+pub(super) fn list_groups(document: &Document) -> Vec<Vec<(usize, usize)>> {
     struct Groups(Vec<Vec<(usize, usize)>>);
     impl<'ir> visit::Visit<'ir> for Groups {
         fn visit_block(&mut self, block: &'ir Block) {
@@ -53,7 +55,12 @@ fn check_head(item: &DefinitionItem, form: &str, names: &[&str]) {
     );
 }
 
-fn check_three(source: &str, form: &str, names: &[&str], group_start: Option<usize>) {
+pub(super) fn check_three(
+    source: &str,
+    form: &str,
+    names: &[&str],
+    group_start: Option<usize>,
+) -> ResolvedContent {
     let query = load(source);
     let document = query.document.as_ref().unwrap();
     let response = DocumentResponse::from(document);
@@ -146,6 +153,7 @@ fn check_three(source: &str, form: &str, names: &[&str], group_start: Option<usi
         );
         assert!(template_only.supports.is_empty(), "{source}");
     }
+    query
 }
 
 #[test]

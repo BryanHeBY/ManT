@@ -91,17 +91,12 @@ impl<'a> LoweringContext<'a> {
         &self,
         nodes: HeadNodes<'_>,
     ) -> Rc<RefCell<inline::HeadOperandCapture>> {
-        let search_template = if self.macro_set == MacroSet::Mdoc {
-            super::declaration_groups::search::SearchTemplate::from_head(
-                nodes.before,
-                nodes.content,
-            )
+        let search_head = if self.macro_set == MacroSet::Mdoc {
+            super::declaration_groups::search::SearchHead::from_head(nodes.before, nodes.content)
         } else {
             None
         };
-        Rc::new(RefCell::new(inline::HeadOperandCapture::new(
-            search_template,
-        )))
+        Rc::new(RefCell::new(inline::HeadOperandCapture::new(search_head)))
     }
 
     pub(super) fn replace_mdoc_section(&self, section: MdocSectionContext) -> MdocSectionContext {
