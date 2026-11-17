@@ -1,21 +1,21 @@
 //! Name only the accepted operands of a typed mdoc definition head.
 use super::eligibility::{NameSource, OperandUses};
 use super::scan::{MAX_NAMES, MAX_NESTING, closing, quote_closer};
-use super::{DeclarationLimit, InferredIdentity, named, ordered_names};
+use super::{DeclarationLimit, named, occurrences::HeadNames};
 use crate::definitions::{
     NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, evidence::HeadOperands,
 };
-use mant_ir::{DefinitionItem, EntryKind, NameCase, inline_plain_text};
+use mant_ir::{DefinitionItem, EntryKind, inline_plain_text};
 use std::ops::Range;
 
 mod declaration_parts;
 
-pub(super) fn identify(
+pub(super) fn recognize_head(
     item: &DefinitionItem,
     first: &str,
     operands: HeadOperands<'_>,
-) -> Option<InferredIdentity> {
-    let (mut kind, first) = recognize(first, operands.for_term(0)?)?;
+) -> Option<(EntryKind, HeadNames)> {
+    let (kind, first) = recognize(first, operands.for_term(0)?)?;
     let mut limit = first.limit;
     let mut occurrences = vec![first.names];
     for (index, term) in item.terms.iter().enumerate().skip(1) {
@@ -28,17 +28,7 @@ pub(super) fn identify(
         }
         occurrences.push(names);
     }
-    let names = ordered_names(&occurrences, kind);
-    if names.is_empty() {
-        kind = EntryKind::Term;
-    }
-    Some(InferredIdentity {
-        kind,
-        case: NameCase::Sensitive,
-        names,
-        occurrences,
-        limit,
-    })
+    Some((kind, HeadNames { occurrences, limit }))
 }
 
 #[derive(Default)]

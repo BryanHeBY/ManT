@@ -1,7 +1,9 @@
 //! Recognize independent names in a native HEAD with protected operands.
 use super::{Recognition, offset, operand_at, recognize_part, unwrapped};
 use crate::definitions::syntax::{
-    DeclarationLimit, NameSource, OperandUses, named, options,
+    DeclarationLimit,
+    eligibility::{NameSource, OperandUses},
+    named, options,
     scan::{MAX_NAMES, MAX_NESTING},
 };
 use crate::definitions::{NativeOperand, NativeOperandRole, RecognizedName};
@@ -45,39 +47,42 @@ pub(super) fn recognize(
     if !candidates.separated {
         return None;
     }
-    let limit = match collected {
-        Ok(()) => {
+    Some(candidates.resolve(collected))
+}
+
+impl Candidates {
+    fn resolve(self, result: Result<(), RejectedPart>) -> (EntryKind, Recognition) {
+        let Err(rejected) = result else {
             let mut kind = None;
-            let names = candidates
+            let names = self
                 .names
                 .into_iter()
-                .filter(|candidate| candidate.explicit || !candidates.unproved_part)
+                .filter(|candidate| candidate.explicit || !self.unproved_part)
                 .map(|candidate| {
-                    kind = Some(kind.map_or(candidate.kind, |previous| {
-                        if previous == candidate.kind {
-                            previous
-                        } else {
-                            EntryKind::Term
-                        }
-                    }));
+                    kind = Some(match kind {
+                        Some(previous) if previous != candidate.kind => EntryKind::Term,
+                        _ => candidate.kind,
+                    });
                     candidate.name
                 })
                 .collect();
-            return Some((
+            return (
                 kind.unwrap_or(EntryKind::Term),
                 Recognition { names, limit: None },
-            ));
-        }
-        Err(RejectedPart::NameLimit) => Some(DeclarationLimit::Names),
-        Err(RejectedPart::Unproved) => None,
-    };
-    Some((
-        EntryKind::Term,
-        Recognition {
-            names: Vec::new(),
-            limit,
-        },
-    ))
+            );
+        };
+        let limit = match rejected {
+            RejectedPart::NameLimit => Some(DeclarationLimit::Names),
+            RejectedPart::Unproved => None,
+        };
+        (
+            EntryKind::Term,
+            Recognition {
+                names: Vec::new(),
+                limit,
+            },
+        )
+    }
 }
 
 fn collect(

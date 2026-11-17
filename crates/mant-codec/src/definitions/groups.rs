@@ -2,7 +2,7 @@
 //! indentation or moving another item's description into a semantic owner.
 #[cfg(feature = "roff")]
 use super::evidence::head_snapshot;
-use super::evidence::{HeadSnapshot, NativeHeadEvidence, head_matches};
+use super::evidence::{HeadSnapshot, head_matches};
 use mant_ir::{Block, DeclarationGroup, DefinitionItem, Inline, Section, SourceSpan};
 use std::collections::{HashMap, HashSet};
 
@@ -260,7 +260,7 @@ impl GroupEvidence {
         &self,
         blocks: &[Block],
         sections: &[Section],
-        evidence: &NativeHeadEvidence,
+        is_template: impl Fn(&DefinitionItem, usize) -> bool,
     ) -> GroupMatchingPlan {
         let mut plan = GroupMatchingPlan::default();
         for witnesses in self.items.values() {
@@ -279,8 +279,8 @@ impl GroupEvidence {
                 }
             }
         }
-        plan.count_blocks(blocks, evidence);
-        plan.count_sections(sections, evidence);
+        plan.count_blocks(blocks, &is_template);
+        plan.count_sections(sections, &is_template);
         plan
     }
 
@@ -374,36 +374,44 @@ impl GroupEvidence {
 }
 
 impl GroupMatchingPlan {
-    fn count_sections(&mut self, sections: &[Section], evidence: &NativeHeadEvidence) {
+    fn count_sections(
+        &mut self,
+        sections: &[Section],
+        is_template: &impl Fn(&DefinitionItem, usize) -> bool,
+    ) {
         for section in sections {
-            self.count_blocks(&section.blocks, evidence);
-            self.count_sections(&section.children, evidence);
+            self.count_blocks(&section.blocks, is_template);
+            self.count_sections(&section.children, is_template);
         }
     }
 
-    fn count_blocks(&mut self, blocks: &[Block], evidence: &NativeHeadEvidence) {
+    fn count_blocks(
+        &mut self,
+        blocks: &[Block],
+        is_template: &impl Fn(&DefinitionItem, usize) -> bool,
+    ) {
         for block in blocks {
             match block {
                 Block::DefinitionList { items, .. } => {
                     for item in items {
                         if let Some(owner) = owner_marker(item) {
                             *self.occurrences.entry(owner).or_default() += 1;
-                            if evidence.is_search_template(item, owner) {
+                            if is_template(item, owner) {
                                 self.accepted_templates.insert(owner);
                             }
                         }
-                        self.count_blocks(&item.description, evidence);
+                        self.count_blocks(&item.description, is_template);
                     }
                 }
                 Block::List { items, .. } => {
                     for item in items {
-                        self.count_blocks(&item.blocks, evidence);
+                        self.count_blocks(&item.blocks, is_template);
                     }
                 }
                 Block::Table { rows, .. } => {
                     for row in rows {
                         for cell in &row.cells {
-                            self.count_blocks(&cell.blocks, evidence);
+                            self.count_blocks(&cell.blocks, is_template);
                         }
                     }
                 }

@@ -6,7 +6,9 @@
 
 use mant_ir::Inline;
 
-use super::{commands, constrain_term_names, eligibility::OperandUses, forms, named, options};
+use super::{
+    commands, eligibility::OperandUses, forms, named, occurrences::constrain_term_names, options,
+};
 use crate::definitions::context::DefinitionContext;
 use mant_ir::inline_plain_text as plain_text;
 

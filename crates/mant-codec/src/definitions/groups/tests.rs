@@ -1,4 +1,4 @@
-use super::{GroupEvidence, NativeHeadEvidence, mark_native_definition_owner};
+use super::{GroupEvidence, mark_native_definition_owner};
 use mant_ir::{Block, DefinitionItem, DefinitionLayout, Inline, LayoutHint, SourceSpan};
 
 fn item(line: u32, column: u32, name: &str, description: bool) -> DefinitionItem {
@@ -42,7 +42,7 @@ fn plan(evidence: &GroupEvidence, items: &[DefinitionItem]) -> super::GroupMatch
         source: None,
         layout: LayoutHint::default(),
     }];
-    evidence.matching_plan(&blocks, &[], &NativeHeadEvidence::default())
+    evidence.matching_plan(&blocks, &[], |_, _| false)
 }
 
 fn record(evidence: &mut GroupEvidence, items: &mut [DefinitionItem], keys: &[usize]) {
@@ -160,7 +160,7 @@ fn duplicated_owner_marker_refuses_to_allocate_a_group() {
         source: None,
         layout: LayoutHint::default(),
     });
-    let mut plan = evidence.matching_plan(&blocks, &[], &NativeHeadEvidence::default());
+    let mut plan = evidence.matching_plan(&blocks, &[], |_, _| false);
     let Block::DefinitionList { items, .. } = &blocks[0] else {
         unreachable!();
     };
@@ -275,7 +275,7 @@ fn macro_expansion_can_span_definition_lists_without_losing_owner_identity() {
             layout: LayoutHint::default(),
         },
     ];
-    let mut plan = evidence.matching_plan(&blocks, &[], &NativeHeadEvidence::default());
+    let mut plan = evidence.matching_plan(&blocks, &[], |_, _| false);
     let expected = vec![mant_ir::DeclarationGroup {
         start_item: 0,
         end_item: 2,
@@ -315,7 +315,7 @@ fn nested_preparation_cannot_swap_same_source_macro_owners() {
         source: None,
         layout: LayoutHint::default(),
     }];
-    let mut plan = evidence.matching_plan(&blocks, &[], &NativeHeadEvidence::default());
+    let mut plan = evidence.matching_plan(&blocks, &[], |_, _| false);
 
     // Preparation descends into a definition body before resolving its
     // containing list. A FIFO allocation would give this inner pair the
