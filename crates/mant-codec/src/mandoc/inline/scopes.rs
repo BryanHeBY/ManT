@@ -136,6 +136,10 @@ fn append_reference_body(builder: &mut InlineBuilder, nodes: &[Node], name: Opti
 
 fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let children = inline_children(node);
+    if let Some(font) = super::mdoc_text_font(node.macro_token.as_ref()) {
+        builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
+        return;
+    }
     match node.macro_token.as_ref() {
         Some(Mdoc(MdocMacro::Fn | MdocMacro::Fo)) => {
             super::generated::function(builder, node, name);
@@ -153,12 +157,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         // mdoc_term.c routes Cd and Fd through termp_fd_pre = termp_bold_pre
         // (dispatch lines 142/149): unconditional Strong in every section.
         Some(Mdoc(
-            MdocMacro::Cm
-            | MdocMacro::Ic
-            | MdocMacro::Sy
-            | MdocMacro::Ms
-            | MdocMacro::Cd
-            | MdocMacro::Fd,
+            MdocMacro::Cm | MdocMacro::Ic | MdocMacro::Ms | MdocMacro::Cd | MdocMacro::Fd,
         )) => {
             builder.with_font_scope(Font::Strong, |builder| {
                 append_inline_nodes(builder, children, name);
@@ -185,19 +184,11 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         )) => {
             append_native_subject(builder, node, children, name);
         }
-        Some(Mdoc(MdocMacro::Pa | MdocMacro::Em | MdocMacro::Ad | MdocMacro::Fr)) => {
+        Some(Mdoc(MdocMacro::Pa | MdocMacro::Ad | MdocMacro::Fr)) => {
             builder.with_font_scope(Font::Emphasis, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         }
-        Some(Mdoc(MdocMacro::No)) => {
-            builder.with_font_scope(Font::Regular, |builder| {
-                append_inline_nodes(builder, children, name);
-            });
-        }
-        Some(Mdoc(MdocMacro::Li)) => builder.with_font_scope(Font::Code, |builder| {
-            append_inline_nodes(builder, children, name);
-        }),
         Some(Mdoc(MdocMacro::Sx)) => append_section_reference(builder, children, name),
         Some(Mdoc(MdocMacro::Nd)) => {
             // mdoc_term.c::termp_nd_pre() prints `\(en` (U+2013), not an em

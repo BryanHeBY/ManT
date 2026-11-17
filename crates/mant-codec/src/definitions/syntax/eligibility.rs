@@ -81,6 +81,24 @@ impl<'a> OperandUses<'a> {
         self.protects(&(offset..offset + 1))
     }
 
+    #[cfg(feature = "roff")]
+    pub(super) fn is_parameter_only(self, part: &Range<usize>) -> bool {
+        let mut cursor = self.offset + part.start;
+        let end = self.offset + part.end;
+        for operand in self.intersecting(part) {
+            if operand.bytes.start > cursor
+                || !matches!(
+                    operand.role,
+                    NativeOperandRole::SearchArgument(_) | NativeOperandRole::IncompletePlaceholder
+                )
+            {
+                return false;
+            }
+            cursor = operand.bytes.end;
+        }
+        !part.is_empty() && cursor >= end
+    }
+
     pub(super) fn has_parameters(self) -> bool {
         self.operands
             .iter()

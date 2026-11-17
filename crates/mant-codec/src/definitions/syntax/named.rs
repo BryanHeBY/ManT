@@ -182,8 +182,17 @@ pub(super) fn named_occurrences_with_uses(
     } else {
         named_groups(text, uses)?
     };
+    let parts = parts.into_iter();
+    #[cfg(feature = "roff")]
+    let parts = parts.filter(|part| {
+        // A complete parameter-only part has no name grammar to satisfy.
+        // Its spelling (for example non-Latin text) cannot veto an
+        // independently authored name in the following part.
+        let trimmed = part.trim();
+        let start = trimmed.as_ptr() as usize - text.as_ptr() as usize;
+        !uses.is_parameter_only(&(start..start + trimmed.len()))
+    });
     parts
-        .into_iter()
         .map(|part| {
             let trimmed = part.trim();
             let name = if let Some(name) = named_term_name(trimmed, validate) {

@@ -69,6 +69,22 @@ fn a_search_template_and_its_following_command_group_keep_original_reader_target
         ".Sm off\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It No ? Ar RE\n",
         ".It Cm n\n.It Cm N\nGROUP_BODY\n.El\n",
     );
+    check_search_form_projection(source, "?RE");
+}
+
+#[test]
+fn styled_and_encoded_search_operands_survive_reader_roundtrips() {
+    let prefix = ".Dd November 17, 2026\n.Dt PROBE 3\n.Os\n.Sh NAME\n.Nm probe\n.Nd role probe\n.Sh COMMANDS\n.Sm off\n.Bl -tag -width Ds\n";
+    for (head, form) in [
+        (r".It Em \[u003F] Ar RE", "?RE"),
+        (r".It Bq Li \z\N'47' Ar RE", "[RE]"),
+    ] {
+        let source = format!("{prefix}{head}\n.It Cm n\n.It Cm N\nGROUP_BODY\n.El\n");
+        check_search_form_projection(&source, form);
+    }
+}
+
+fn check_search_form_projection(source: &str, form: &str) {
     let content = json_roundtrip::json_string_roundtrip(
         &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
     );
@@ -77,7 +93,7 @@ fn a_search_template_and_its_following_command_group_keep_original_reader_target
     for content in [&content, &readback] {
         for width in [20, 40, 78] {
             let rendered = DocumentView::new(content).render(width);
-            for term in ["?RE", "GROUP_BODY"] {
+            for term in [form, "GROUP_BODY"] {
                 assert_eq!(rendered.search(term).len(), 1, "width {width}: {term}");
             }
         }

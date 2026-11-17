@@ -156,19 +156,17 @@ fn unsigned_numeric_head(node: &Node, item: &DefinitionItem) -> bool {
 fn source_presentation_head(node: &Node, item: &DefinitionItem) -> bool {
     // The AST remains immutable during corruption tests. An empty name set
     // or a template-like spelling alone never permits an omitted owner.
-    native_mdoc_search_template(node, item)
-        || native_man_option_template(node)
-        || native_man_search_template(node)
-        || native_title_head(node)
+    item.entry
+        .as_ref()
+        .is_none_or(|entry| entry.names.is_empty())
+        && (native_mdoc_search_template(node, item)
+            || native_man_option_template(node)
+            || native_man_search_template(node)
+            || native_title_head(node))
 }
 
 fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
-    if node.macro_token.as_deref() != Some("It")
-        || item
-            .entry
-            .as_ref()
-            .is_some_and(|entry| !entry.names.is_empty())
-    {
+    if node.macro_token.as_deref() != Some("It") {
         return false;
     }
     let Some(part) = node
@@ -192,20 +190,7 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
     let Some(prefix) = source.next() else {
         return false;
     };
-    let sign = match (
-        prefix.macro_token.as_deref(),
-        prefix.kind,
-        prefix.children.as_slice(),
-    ) {
-        (Some("Pf"), NodeKind::Element, [text])
-            if text.kind == NodeKind::Text && !text.flags.no_print =>
-        {
-            text
-        }
-        (_, NodeKind::Text, []) => prefix,
-        _ => return false,
-    };
-    let Some(raw_sign) = sign.text.as_deref() else {
+    let Some(raw_sign) = text_operand(prefix) else {
         return false;
     };
     let Some(sign) = literal_search_sign(raw_sign) else {
@@ -233,10 +218,10 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
             }
             continue;
         }
-        let Some(close) = operand.text.as_deref().and_then(literal_search_sign) else {
+        let Some(close) = text_operand(operand).and_then(literal_search_sign) else {
             return false;
         };
-        if closing.is_some() || operand.kind != NodeKind::Text || close.glyph != sign.glyph {
+        if closing.is_some() || close.glyph != sign.glyph {
             return false;
         }
         closing = Some(close);
@@ -257,29 +242,52 @@ fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
     })
 }
 
+fn text_operand(node: &Node) -> Option<&str> {
+    match (
+        node.kind,
+        node.macro_token.as_deref(),
+        node.children.as_slice(),
+    ) {
+        (NodeKind::Text, _, []) => node.text.as_deref(),
+        (NodeKind::Element, Some("Pf"), [word])
+            if word.kind == NodeKind::Text && !word.flags.no_print =>
+        {
+            word.text.as_deref()
+        }
+        _ => None,
+    }
+}
+
 fn search_control(node: &Node) -> bool {
     node.flags.no_print || matches!(node.macro_token.as_deref(), Some("Ns" | "Sm" | "Tg" | "ft"))
 }
 
 fn collect_search_words<'a>(nodes: &'a [Node], words: &mut Vec<&'a Node>) {
     for node in nodes.iter().filter(|node| !search_control(node)) {
-        // mdoc_term.c dispatches Xo without pre/post handlers and No only
-        // sets the font. Real source words still occupy their own positions.
-        let transparent = match (node.macro_token.as_deref(), node.kind) {
-            (Some("Xo"), NodeKind::Block) => node
-                .children
-                .iter()
-                .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none())
-                .map(|body| body.children.as_slice()),
-            (Some("No"), NodeKind::Element) if !node.children.is_empty() => {
-                Some(node.children.as_slice())
+        // Keep the source observer independent from producer roles. CVS's
+        // Bf/Bk handlers skip their selector HEAD but retain punctuation
+        // before it. Xo has no terminal handler. Style elements change only
+        // their own operands' font, without absorbing separately typed Ar.
+        let token = node.macro_token.as_deref();
+        match (token, node.kind) {
+            (Some("Xo" | "Bf" | "Bk"), NodeKind::Block) => {
+                for part in &node.children {
+                    match part.kind {
+                        NodeKind::Head if token != Some("Xo") => {}
+                        NodeKind::Head | NodeKind::Body | NodeKind::Tail => {
+                            collect_search_words(&part.children, words);
+                        }
+                        _ => collect_search_words(std::slice::from_ref(part), words),
+                    }
+                }
             }
-            _ => None,
-        };
-        if let Some(children) = transparent {
-            collect_search_words(children, words);
-        } else {
-            words.push(node);
+            (Some("Xo" | "Bf" | "Bk"), _) if node.scope_end.is_some() => {
+                collect_search_words(&node.children, words);
+            }
+            (Some("No" | "Sy" | "Em" | "Li"), NodeKind::Element) if !node.children.is_empty() => {
+                collect_search_words(&node.children, words);
+            }
+            _ => words.push(node),
         }
     }
 }
@@ -567,8 +575,19 @@ struct Audit<'a> {
     native_source_nodes: BTreeMap<OwnerKey, &'a Node>,
 }
 impl Audit<'_> {
+    fn contains_native_search_template(&self, sources: &[OwnerKey]) -> bool {
+        sources.iter().any(|source| {
+            self.native_source_nodes
+                .get(source)
+                .zip(self.observed.owners.get(source))
+                .is_some_and(|(node, item)| native_mdoc_search_template(node, item))
+        })
+    }
+
     fn retained_group(&self, sources: &[OwnerKey]) -> Option<(usize, &'static str)> {
-        if let Some(index) = self.group_index.get(sources).copied() {
+        if let Some(index) = self.group_index.get(sources).copied()
+            && !self.contains_native_search_template(sources)
+        {
             return Some((index, "source-run-retained"));
         }
 
@@ -590,18 +609,19 @@ impl Audit<'_> {
                     .windows(group.len())
                     .position(|window| window == group)
                     .filter(|&start| {
-                        sources[..start]
-                            .iter()
-                            .chain(&sources[start + group.len()..])
-                            .all(|source| {
-                                self.observed
-                                    .owners
-                                    .get(source)
-                                    .zip(self.native_source_nodes.get(source))
-                                    .is_some_and(|(item, node)| {
-                                        source_presentation_head(node, item)
-                                    })
-                            })
+                        !self.contains_native_search_template(group)
+                            && sources[..start]
+                                .iter()
+                                .chain(&sources[start + group.len()..])
+                                .all(|source| {
+                                    self.observed
+                                        .owners
+                                        .get(source)
+                                        .zip(self.native_source_nodes.get(source))
+                                        .is_some_and(|(item, node)| {
+                                            source_presentation_head(node, item)
+                                        })
+                                })
                     })
                     .map(|_| (index, "source-run-semantic-subset"))
             })
@@ -1179,6 +1199,50 @@ mod tests {
                 let mutated = profile(&native.document.root, &document);
                 assert!(!violations(&mutated).is_empty(), "{head}: {mutated}");
             }
+        }
+    }
+
+    #[test]
+    fn styled_search_group_audit_is_independent_of_injected_names() {
+        let prefix = ".Dd November 17, 2026\n.Dt PROBE 3\n.Os\n.Sh NAME\n.Nm probe\n.Nd role probe\n.Sh COMMANDS\n.Sm off\n.Bl -tag -width Ds\n";
+        for (head, grouped) in [
+            (r".It Sy / Ar RE", true),
+            (r".It Em \[u003F] Ar RE", true),
+            (r".It Pf / Ar \(eu", true),
+            (r".It Pf / Ar RE Pf \(sl Ar OFFSET", true),
+            (r".It Pf \z\c\(sl Ar /RE", true),
+            (r".It Pf \Ez/ Ar //RE", false),
+            (r".It Pf \z/\c Ar /RE", false),
+        ] {
+            let source = format!("{prefix}{head}\n.It Cm n\n.It Cm N\nGROUP_BODY\n.El\n");
+            let path = std::path::Path::new("probe.3");
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes(path, source.as_bytes())
+                .unwrap();
+            let mut document = mant_loader::parse_manual_bytes(path, source.as_bytes()).unwrap();
+            let first = profile(&native.document.root, &document);
+            assert!(violations(&first).is_empty(), "{head}: {first}");
+            let Block::DefinitionList {
+                items,
+                declaration_groups,
+                ..
+            } = &mut document.sections[1].blocks[0]
+            else {
+                panic!("expected command list");
+            };
+            if grouped {
+                assert_eq!(declaration_groups[0].start_item, 1, "{head}");
+                declaration_groups[0].start_item = 0;
+                items[0].entry.as_mut().unwrap().names.push("RE".into());
+            } else {
+                assert!(declaration_groups.is_empty(), "{head}");
+                declaration_groups.push(mant_ir::DeclarationGroup {
+                    start_item: 1,
+                    end_item: 3,
+                });
+            }
+            let mutated = profile(&native.document.root, &document);
+            assert!(!violations(&mutated).is_empty(), "{head}: {mutated}");
         }
     }
 

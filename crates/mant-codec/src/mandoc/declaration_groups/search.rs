@@ -8,6 +8,7 @@ use libmandoc_rs::{
 };
 
 use crate::mandoc::roff_escape::{RoffInlineEvent, decode, decode_with_status};
+use crate::mandoc::{containers::TextScope, inline::mdoc_text_font};
 
 /// Search roles belong to a source expression. Only a complete, unquoted
 /// expression can also provide the owner's presentation-head evidence.
@@ -78,11 +79,11 @@ impl SearchHead {
                 whole_head = false;
             } else if first_argument.is_some()
                 && closer.is_none()
-                && word.kind == NodeKind::Text
-                && let Some(close) = search_sign(word)
+                && let Some(operand) = text_operand(word)
+                && let Some(close) = search_sign(operand)
                 && close.glyph == sign.glyph
             {
-                closer = Some(word.id);
+                closer = Some(operand.id);
                 whole_head &= close.proven;
             } else {
                 break;
@@ -163,18 +164,6 @@ fn block_body(node: &Node) -> Option<&[Node]> {
     )
 }
 
-fn transparent_children(node: &Node) -> Option<&[Node]> {
-    match (node.macro_token.as_ref(), node.kind) {
-        // Xo has no terminal pre/post handlers. No pushes the regular font
-        // but otherwise executes its operands (mdoc_term.c::termp_li_pre).
-        (Some(Mdoc(MdocMacro::Xo)), NodeKind::Block) => block_body(node),
-        (Some(Mdoc(MdocMacro::No)), NodeKind::Element) if !node.children.is_empty() => {
-            Some(&node.children)
-        }
-        _ => None,
-    }
-}
-
 fn search_words(head: &[Node]) -> impl Iterator<Item = &Node> {
     let mut words = head.iter();
     let mut parents = Vec::new();
@@ -187,10 +176,26 @@ fn search_words(head: &[Node]) -> impl Iterator<Item = &Node> {
             if control(node) {
                 continue;
             }
-            if let Some(children) = transparent_children(node) {
-                parents.push(std::mem::replace(&mut words, children.iter()));
-            } else {
-                return Some(node);
+            let token = node.macro_token.as_ref();
+            match (TextScope::from_token(token), node.kind) {
+                (Some(scope), NodeKind::Block) => {
+                    parents.push(std::mem::take(&mut words));
+                    parents.extend(
+                        node.children
+                            .iter()
+                            .rev()
+                            .map(|part| scope.part_words(part).iter()),
+                    );
+                }
+                (Some(_), _) if node.scope_end.is_some() => {
+                    parents.push(std::mem::replace(&mut words, node.children.iter()));
+                }
+                (_, NodeKind::Element)
+                    if mdoc_text_font(token).is_some() && !node.children.is_empty() =>
+                {
+                    parents.push(std::mem::replace(&mut words, node.children.iter()));
+                }
+                _ => return Some(node),
             }
         }
     })

@@ -3,6 +3,7 @@
 //! Container transparency means that payloads remain reachable. It does not
 //! mean that the entire container may be skipped by logical sibling lookup.
 use libmandoc_rs::{
+    MacroToken,
     MacroToken::{Man, Mdoc, Roff},
     ManMacro, MdocMacro, Node, NodeKind, RoffMacro,
 };
@@ -205,6 +206,33 @@ pub(super) fn walk<'a>(
     true
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum TextScope {
+    Transparent,
+    FontOrKeep,
+}
+
+impl TextScope {
+    pub(super) fn from_token(token: Option<&MacroToken>) -> Option<Self> {
+        match token {
+            Some(Mdoc(MdocMacro::Xo)) => Some(Self::Transparent),
+            Some(Mdoc(MdocMacro::Bf | MdocMacro::Bk)) => Some(Self::FontOrKeep),
+            _ => None,
+        }
+    }
+
+    /// CVS `termp_bf_pre` and `termp_bk_pre` skip the selector HEAD. Direct
+    /// punctuation outside the structural parts is still a real word.
+    pub(super) fn part_words(self, part: &Node) -> &[Node] {
+        match part.kind {
+            NodeKind::Head if matches!(self, Self::FontOrKeep) => &[],
+            NodeKind::Tail if matches!(self, Self::FontOrKeep) => std::slice::from_ref(part),
+            NodeKind::Head | NodeKind::Body | NodeKind::Tail => &part.children,
+            _ => std::slice::from_ref(part),
+        }
+    }
+}
+
 /// `Xo`/`Xc` have no macro pre/post in `mdoc_term.c`. Visit their actual
 /// structural parts, preserving the shared node-entry/font lifecycle, but
 /// never turn an output-owner return into `term_newln()`/`term_flushln()`.
@@ -212,13 +240,13 @@ fn transparent_scope<'a>(node: &'a Node, posts: &ScopePostState, emit: &mut impl
     for child in &node.children {
         if matches!(child.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail) {
             emit(Event::At(child, true));
-            emit(Event::Children(&child.children));
+            emit(Event::Children(TextScope::Transparent.part_words(child)));
             if child.kind == NodeKind::Body && !posts.ended(child.id) {
                 emit(Event::RestoreBody(child.id));
             }
             emit(Event::EndNode(child));
         } else {
-            emit(Event::Children(std::slice::from_ref(child)));
+            emit(Event::Children(TextScope::Transparent.part_words(child)));
         }
     }
 }
@@ -240,7 +268,7 @@ fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
                 } else if let Some(font) = node.font {
                     emit(Event::EnterFont(font.into(), Some(child.id)));
                 }
-                emit(Event::Children(&child.children));
+                emit(Event::Children(TextScope::FontOrKeep.part_words(child)));
                 emit(Event::RestoreBody(child.id));
                 if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bk)) {
                     emit(Event::ExitKeep);
@@ -249,7 +277,7 @@ fn emit_font_or_keep<'a>(node: &'a Node, emit: &mut impl FnMut(Event<'a>)) {
                 }
                 emit(Event::EndNode(child));
             }
-            _ => emit(Event::Children(std::slice::from_ref(child))),
+            _ => emit(Event::Children(TextScope::FontOrKeep.part_words(child))),
         }
     }
 }

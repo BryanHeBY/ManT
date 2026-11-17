@@ -338,6 +338,18 @@ pub(super) fn inline_children(node: &Node) -> &[Node] {
         .map_or(&node.children, |body| &body.children)
 }
 
+/// These mdoc macros change the font while their original operands execute.
+/// Typed macros such as Cm, Ar and Va keep their own operand boundaries.
+pub(super) fn mdoc_text_font(token: Option<&MacroToken>) -> Option<Font> {
+    match token {
+        Some(Mdoc(MdocMacro::No)) => Some(Font::Regular),
+        Some(Mdoc(MdocMacro::Sy)) => Some(Font::Strong),
+        Some(Mdoc(MdocMacro::Em)) => Some(Font::Emphasis),
+        Some(Mdoc(MdocMacro::Li)) => Some(Font::Code),
+        _ => None,
+    }
+}
+
 pub(super) fn alternating_font_pair(macro_name: Option<&MacroToken>) -> Option<(Font, Font)> {
     match macro_name {
         Some(Man(ManMacro::Bi)) => Some((Font::Strong, Font::Emphasis)),
