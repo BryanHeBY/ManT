@@ -19,6 +19,15 @@ struct Candidates {
     names: Vec<Candidate>,
     unproved_part: bool,
     separated: bool,
+    sequence: SubjectSequence,
+}
+
+#[derive(Default, Clone, Copy)]
+enum SubjectSequence {
+    #[default]
+    Subjects,
+    Constant(Option<u32>),
+    ArgumentTail(Option<u32>),
 }
 
 struct Candidate {
@@ -47,7 +56,14 @@ pub(super) fn recognize(
         return None;
     }
     let mut candidates = Candidates::default();
-    let collected = collect(text, text, operands, 0, admission, &mut candidates);
+    let collected = collect(
+        text,
+        unwrap_search(text, text, operands),
+        operands,
+        0,
+        admission,
+        &mut candidates,
+    );
     // A flag or search sign in the arguments of a single invocation does
     // not establish a separately declared name. Its existing grammar still
     // owns the invocation (for example read [-n n | -N n] [vname?prompt]).
@@ -58,6 +74,18 @@ pub(super) fn recognize(
 }
 
 impl Candidates {
+    fn leave_enclosure(&mut self, enclosure: u32, parent: Option<u32>) {
+        self.sequence = match self.sequence {
+            SubjectSequence::Constant(Some(owner)) if owner == enclosure => {
+                SubjectSequence::Constant(parent)
+            }
+            SubjectSequence::ArgumentTail(Some(owner)) if owner == enclosure => {
+                SubjectSequence::Subjects
+            }
+            sequence => sequence,
+        };
+    }
+
     fn resolve(self, result: Result<(), RejectedPart>) -> (EntryKind, Recognition) {
         let Err(rejected) = result else {
             let mut kind = None;
@@ -94,7 +122,7 @@ impl Candidates {
 
 fn collect(
     text: &str,
-    head: &str,
+    (head, enclosure): (&str, Option<u32>),
     operands: &[NativeOperand],
     depth: usize,
     admission: Admission,
@@ -103,17 +131,30 @@ fn collect(
     if depth == MAX_NESTING {
         return Err(RejectedPart::Unproved);
     }
-    let (head, enclosure) = unwrap_search(text, head, operands);
     let start = offset(text, head);
     let uses = OperandUses::new(operands);
     let groups =
         independent_groups(head, start, enclosure, operands).ok_or(RejectedPart::Unproved)?;
     candidates.separated |= groups.len() > 1;
     for group in groups {
+        if matches!(candidates.sequence, SubjectSequence::ArgumentTail(_)) {
+            break;
+        }
         let group = group.trim();
-        let (part, _) = unwrap_search(text, group, operands);
+        let (part, nested) = unwrap_search(text, group, operands);
         if part.len() != group.len() {
-            match collect(text, group, operands, depth + 1, admission, candidates) {
+            let result = collect(
+                text,
+                (part, nested.or(enclosure)),
+                operands,
+                depth + 1,
+                admission,
+                candidates,
+            );
+            if let Some(nested) = nested {
+                candidates.leave_enclosure(nested, enclosure);
+            }
+            match result {
                 Ok(()) => {}
                 Err(RejectedPart::Unproved) => candidates.unproved_part = true,
                 Err(err) => return Err(err),
@@ -125,7 +166,21 @@ fn collect(
         if uses.covers(&span, search_argument) {
             continue;
         }
-        let explicit = operand_at(operands, start).is_some_and(|operand| {
+        let lead = operand_at(operands, start);
+        let subject = lead
+            .and_then(|operand| operand.role.subject())
+            .map(|(subject, _)| subject);
+        if subject == Some(NativeSubject::Field) {
+            // A separately delimited Fa starts the argument tail of the
+            // preceding constant. Matching native enclosures are transparent
+            // to the role, but a tail started inside one ends with that scope.
+            if let SubjectSequence::Constant(owner) = candidates.sequence {
+                candidates.sequence = SubjectSequence::ArgumentTail(owner);
+                candidates.unproved_part = true;
+            }
+            continue;
+        }
+        let explicit = lead.is_some_and(|operand| {
             operand.role == NativeOperandRole::ExplicitOption
                 || operand.role == NativeOperandRole::Placeholder
                 || operand.role.subject().is_some()
@@ -140,6 +195,10 @@ fn collect(
         }
         if result.names.is_empty() {
             candidates.unproved_part = true;
+        } else if subject == Some(NativeSubject::Constant) {
+            candidates.sequence = SubjectSequence::Constant(enclosure);
+        } else if explicit {
+            candidates.sequence = SubjectSequence::Subjects;
         }
         candidates
             .names
@@ -206,12 +265,7 @@ fn recognize_group(
         return Err(RejectedPart::Unproved);
     }
     if admission == Admission::TypedSubjects
-        && !operand_at(operands, span.start).is_some_and(|operand| {
-            operand
-                .role
-                .subject()
-                .is_some_and(|(subject, _)| subject != NativeSubject::Field)
-        })
+        && operand_at(operands, span.start).is_none_or(|operand| operand.role.subject().is_none())
     {
         return Err(RejectedPart::Unproved);
     }

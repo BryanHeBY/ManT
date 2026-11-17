@@ -5,6 +5,9 @@ use super::{
 use mant_ir::{EntryKind, EntryOwner, ParameterKind, inline_plain_text};
 use mant_protocol::{ContentSelector, EvidenceBasis, EvidenceClass};
 
+#[path = "subjects/sequence.rs"]
+mod sequence;
+
 const HEADER: &str = ".Dd November 17, 2026\n.Dt TEST 3\n.Os\n.Sh NAME\n.Nm test\n.Nd role probe\n";
 
 fn example(section: &str, head: &str) -> mant_ir::ResolvedContent {

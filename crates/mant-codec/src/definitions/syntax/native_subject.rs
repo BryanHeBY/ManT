@@ -53,29 +53,19 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
     let leading = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&start));
-    let subject = leading
-        .and_then(|operand| operand.role.subject())
-        .map(|(subject, _)| subject);
-    if matches!(
-        subject,
-        Some(NativeSubject::Constant | NativeSubject::Error)
-    ) {
-        return recognize_part(text, head, operands);
-    }
-    let typed = matches!(
-        subject,
-        Some(
-            NativeSubject::Variable
-                | NativeSubject::ReturnType
-                | NativeSubject::Function
-                | NativeSubject::FunctionBlock
-        )
-    );
     let protected = operands.iter().any(|operand| operand.role.is_search())
         || leading.is_some_and(|operand| operand.role.is_operand_label())
             && operands[first..]
                 .iter()
                 .any(|operand| operand.role == NativeOperandRole::ExplicitOption);
+    let typed = leading.is_some_and(|operand| {
+        operand.role.subject().is_some()
+            || !protected
+                && matches!(operand.role, NativeOperandRole::EnclosureStart(_))
+                && operands[first..]
+                    .iter()
+                    .any(|operand| operand.role.subject().is_some())
+    });
     if (typed || protected)
         && let Some(identity) = declaration_parts::recognize(
             text,
@@ -144,7 +134,7 @@ fn recognize_part(
     }
     let name = match subject {
         NativeSubject::Constant | NativeSubject::Error => {
-            let symbols = symbol_names(text, start..end, &operands[first..], subject);
+            let symbols = symbol_group(text, start..end, &operands[first..], subject);
             return Some((EntryKind::Term, symbols));
         }
         NativeSubject::Type | NativeSubject::Field => {
@@ -258,52 +248,6 @@ fn matching_subject_span(
     Some(span)
 }
 
-fn symbol_names(
-    text: &str,
-    head: Range<usize>,
-    operands: &[NativeOperand],
-    subject: NativeSubject,
-) -> Recognition {
-    let uses = OperandUses::new(operands).shifted(head.start);
-    let Some(groups) = named::named_groups(&text[head], uses) else {
-        return Recognition::default();
-    };
-    let mut result = Recognition::default();
-    for group in groups {
-        let group = group.trim();
-        let start = offset(text, group);
-        let first = operands.partition_point(|operand| operand.bytes.end <= start);
-        // An attached Fa can annotate a symbol. A separate Fa part starts
-        // an invocation's argument tail, including any later Dv sentinel.
-        if subject == NativeSubject::Constant
-            && !result.names.is_empty()
-            && operands.get(first).is_some_and(|operand| {
-                operand.bytes.contains(&start)
-                    && operand
-                        .role
-                        .subject()
-                        .is_some_and(|(role, _)| role == NativeSubject::Field)
-            })
-        {
-            break;
-        }
-        let recognized = symbol_group(
-            text,
-            start..start + group.len(),
-            &operands[first..],
-            subject,
-        );
-        if recognized.limit.is_some() || result.names.len() + recognized.names.len() > MAX_NAMES {
-            return Recognition {
-                limit: Some(DeclarationLimit::Names),
-                ..Recognition::default()
-            };
-        }
-        result.names.extend(recognized.names);
-    }
-    result
-}
-
 fn symbol_group(
     text: &str,
     head: Range<usize>,
@@ -325,13 +269,16 @@ fn symbol_group(
         let Some(gap) = text.get(cursor..start).map(str::trim) else {
             return Recognition::default();
         };
-        if role == NativeSubject::Field
-            && subject == NativeSubject::Constant
-            && !names.is_empty()
-            && gap.is_empty()
-        {
-            cursor = operand.bytes.end;
-            continue;
+        if role == NativeSubject::Field && subject == NativeSubject::Constant && !names.is_empty() {
+            if gap.is_empty() {
+                cursor = operand.bytes.end;
+                continue;
+            }
+            if enclosed_field_suffix(text, &text[cursor..head.end], operands) {
+                cursor = head.end;
+                break;
+            }
+            return Recognition::default();
         }
         if role != subject || !matches!(operand.role, NativeOperandRole::Subject(..)) {
             continue;
@@ -368,6 +315,16 @@ fn symbol_group(
     } else {
         Recognition::default()
     }
+}
+
+fn enclosed_field_suffix(text: &str, suffix: &str, operands: &[NativeOperand]) -> bool {
+    let (inner, enclosure) = unwrapped(text, suffix, operands);
+    let start = offset(text, inner);
+    enclosure.is_some()
+        && OperandUses::new(operands).covers(&(start..start + inner.len()), |role| {
+            role.subject()
+                .is_some_and(|(subject, _)| subject == NativeSubject::Field)
+        })
 }
 
 fn unwrapped<'a>(
