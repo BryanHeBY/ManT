@@ -48,6 +48,16 @@ struct TextPage {
     start_char: usize,
     end_char: usize,
     total_chars: usize,
+    content_incomplete: bool,
+    semantics_incomplete: bool,
+}
+
+impl TextPage {
+    fn with_coverage(mut self, content_complete: bool, semantics_complete: bool) -> Self {
+        self.content_incomplete = !content_complete;
+        self.semantics_incomplete = !semantics_complete;
+        self
+    }
 }
 
 fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
@@ -84,11 +94,12 @@ fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
             }
         }
     }
-    page_text(&text, page)
+    page_text(&text, page).with_coverage(outline.content_complete, outline.semantics_complete)
 }
 
 fn render_excerpt(excerpt: &QueryExcerpt, page: PageRequest) -> TextPage {
     page_text(&mant_render::render_excerpt_markdown(excerpt), page)
+        .with_coverage(excerpt.content_complete, excerpt.semantics_complete)
 }
 
 fn render_scope_explain(
@@ -130,7 +141,13 @@ fn render_scope_explain(
         }
     }
     append_scope_status(&mut text, response);
-    Ok(page_text(&text, page))
+    Ok(page_text(&text, page).with_coverage(
+        explanation.documents.iter().all(|doc| doc.content_complete),
+        explanation
+            .documents
+            .iter()
+            .all(|doc| doc.semantics_complete),
+    ))
 }
 
 /// JSON-quoted arguments inside a delimiter that cannot be closed by source text.
@@ -158,15 +175,20 @@ fn render_scope_search(
         return Err("scope response does not contain search results".to_owned());
     };
     let mut text = mant_render::render_scope_query_text(response);
-    if search.returned == 0 {
+    if search.total == 0 {
         text = format!(
             "0 matches across {} documents",
             response.scope.documents.len()
         );
+    } else if search.returned == 0 {
+        text = format!(
+            "No matching line groups on this page ({} total).",
+            search.total
+        );
     }
     append_status_line(&mut text, &search_status(search));
     append_scope_status(&mut text, response);
-    Ok(page_text(&text, page))
+    Ok(page_text(&text, page).with_coverage(search.content_complete, true))
 }
 
 fn search_status(search: &mant_protocol::ScopeSearch) -> String {
@@ -243,6 +265,12 @@ fn finish_page(page: &TextPage) -> String {
     if page.end_char < page.total_chars {
         let _ = write!(output, " nextChar={}", page.end_char);
     }
+    if page.content_incomplete {
+        output.push_str(" contentComplete=false");
+    }
+    if page.semantics_incomplete {
+        output.push_str(" semanticsComplete=false");
+    }
     output.push(']');
     if !page.text.is_empty() {
         output.push_str("\n\n");
@@ -277,6 +305,8 @@ fn page_text(text: &str, page: PageRequest) -> TextPage {
         start_char,
         end_char,
         total_chars,
+        content_incomplete: false,
+        semantics_incomplete: false,
     }
 }
 
@@ -419,6 +449,22 @@ mod tests {
         assert_eq!(page.text.len(), 131_072);
         assert_eq!(page.end_char, 32_768);
         assert_eq!(page.total_chars, 32_769);
+    }
+
+    #[test]
+    fn semantic_coverage_does_not_report_source_content_loss() {
+        let page = page_text(
+            "abcd",
+            PageRequest {
+                start_char: 1,
+                max_chars: 1,
+            },
+        )
+        .with_coverage(true, false);
+        assert_eq!(
+            finish_page(&page),
+            "[mant-page chars=1..2 totalChars=4 nextChar=2 semanticsComplete=false]\n\nb"
+        );
     }
 
     #[test]

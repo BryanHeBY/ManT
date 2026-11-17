@@ -2398,6 +2398,13 @@ line separating it from the body are framing and do not contribute to these
 coordinates. A start at or beyond the current end returns an empty body with
 `chars=totalChars..totalChars`.
 
+The header includes `contentComplete=false` or `semanticsComplete=false` when
+the applicable projection reports incomplete source content or semantic
+entries. These optional flags appear on every character page and do not
+count toward its coordinates. Search reports source content coverage; an
+offset past the last match produces an empty result page with the original
+matching-line-group total.
+
 Because paging counts Unicode scalar values rather than bytes, a maximum-size
 body occupies at most 131,072 UTF-8 bytes before JSON escaping (32,768 scalars
 at four bytes each). The page header, blank separator, JSON-RPC envelope, and

@@ -137,6 +137,105 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
 }
 
 #[test]
+#[cfg(feature = "roff")]
+fn mcp_pages_keep_coverage_and_distinguish_exhausted_search() {
+    // Pinned CVS retains both ordinary text rows around this nested formula.
+    let fixture_root =
+        std::env::temp_dir().join(format!("mant-mcp-coverage-{}", std::process::id()));
+    let manuals = fixture_root.join("man1");
+    fs::create_dir_all(&manuals).unwrap();
+    fs::write(
+        manuals.join("covered.1"),
+        format!(".TH COVERED 1\n.SH DESCRIPTION\nPAGE_NEEDLE\n.EQ\n{}x{}\n.EN\n.PP\nPAGE_NEEDLE after formula.\n",
+            "sqrt { ".repeat(260), " }".repeat(260)),
+    ).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_mant"))
+        .arg("--mcp")
+        .env("MANT_MANPATH", &fixture_root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let stderr = child.stderr.take().unwrap();
+    initialize(&mut input);
+    input.flush().unwrap();
+    assert_eq!(parse_reply(lines.next().unwrap())["id"], 1);
+    let mut request = |id, name, args: &Value| {
+        call_tool(&mut input, id, name, args);
+        input.flush().unwrap();
+        let reply = parse_reply(lines.next().unwrap());
+        assert_eq!(reply["id"], id);
+        successful_text(&reply).to_owned()
+    };
+    for (id, tool, args, semantics) in [
+        (
+            10,
+            "mant_outline",
+            json!({"document":"covered","maxChars":1}),
+            true,
+        ),
+        (
+            11,
+            "mant_read",
+            json!({"document":"covered","selectors":[{"kind":"path","path":"1"}],"maxChars":1}),
+            true,
+        ),
+        (
+            12,
+            "mant_read",
+            json!({"document":"covered","selectors":[{"kind":"path","path":"1"}],"startChar":12,"maxChars":1}),
+            true,
+        ),
+        (
+            13,
+            "mant_search",
+            json!({"documents":["covered"],"pattern":"PAGE_NEEDLE","maxChars":1}),
+            false,
+        ),
+        (
+            14,
+            "mant_explain",
+            json!({"documents":["covered"],"entry":"PAGE_NEEDLE","maxChars":1}),
+            true,
+        ),
+    ] {
+        let text = request(id, tool, &args);
+        let (header, body) = text.split_once("\n\n").unwrap();
+        assert!(header.contains("contentComplete=false"), "{text}");
+        assert_eq!(
+            header.contains("semanticsComplete=false"),
+            semantics,
+            "{text}"
+        );
+        assert_eq!(body.chars().count(), 1, "{text}");
+        assert!(!text.contains("mant-mcp-coverage-"), "{text}");
+    }
+    let empty = request(
+        15,
+        "mant_search",
+        &json!({"documents":["covered"],"pattern":"PAGE_NEEDLE","offset":100}),
+    );
+    assert!(
+        empty.contains("No matching line groups on this page (2 total)."),
+        "{empty}"
+    );
+    assert!(!empty.contains("0 matches across"), "{empty}");
+    let missing = request(
+        16,
+        "mant_search",
+        &json!({"documents":["covered"],"pattern":"UNMATCHABLE_9A48"}),
+    );
+    assert!(
+        missing.contains("0 matches across 1 documents"),
+        "{missing}"
+    );
+    assert_silent_shutdown(child, input, stderr, fixture_root);
+}
+
+#[test]
 fn invalid_request_lines_return_bounded_errors_and_the_session_recovers() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_mant"))
         .arg("--mcp")
@@ -590,7 +689,7 @@ fn assert_explanation_paging(replies: &[Value]) {
     let page = successful_text(reply(replies, 19));
     assert!(
         page.starts_with(&format!(
-            "[mant-page chars=3..20 totalChars={} nextChar=20]",
+            "[mant-page chars=3..20 totalChars={} nextChar=20 semanticsComplete=false]",
             body.chars().count()
         )),
         "{page}"

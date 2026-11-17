@@ -115,6 +115,8 @@ that crate was not published for that change.
 
 ### mant and mant-protocol
 
+- Keep source and semantic coverage in MCP page metadata, and distinguish an
+  exhausted search result page from a search with no matches.
 - Document and query JSON report the version of the running `mant` program.
   The default Rust response constructor identifies `mant-protocol` and lets
   embedding applications supply their own publisher identity. Parser identity
