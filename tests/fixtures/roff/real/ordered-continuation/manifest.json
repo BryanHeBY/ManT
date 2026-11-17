@@ -1,0 +1,69 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Exact complete illumos getopts(1) from the November 18 real roff review.",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "file": "illumos-getopts.1",
+      "sourceIdentity": "illumos-gate-e8f5c080:man/man1/getopts.1",
+      "sourceSha256": "546dff38cbfb44bba62bd06ccfe0ccb8a4131b166964e800931ce154039bfc83",
+      "fixtureSha256": "546dff38cbfb44bba62bd06ccfe0ccb8a4131b166964e800931ce154039bfc83",
+      "sourceBytes": 27652,
+      "fixtureBytes": 27652,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "originalAuditDate": "2026-11-18",
+      "originUrl": "https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man1/getopts.1",
+      "sourceRepository": "https://github.com/illumos/illumos-gate.git",
+      "revision": "e8f5c080cc0b7997410d860afd787df30ba1cf2d",
+      "archive": null,
+      "archiveMember": "usr/src/man/man1/getopts.1",
+      "archiveSha256": null,
+      "license": "CDDL-1.0; source retains its IEEE/The Open Group POSIX Issue 6 reprint notice",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "transformation": "None; exact complete repository file.",
+      "selectionReason": "Interleaved labels and relative-indent prose stay in authored order after an ordinal TP opens a list.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "f71ecf30698ebf53b0d15cb5d1cf4e72cfa3ac87de68ab0796aeeffe7e020ba4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 29122,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "3703e6cde5039decbca260b6c917c07c0c4bce8e84b01c01dae8cf6628719d12",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 29776,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "e81db179e8a4aa6c64928a5a019818220d5f0cef1b8a4f70ab81bb05ee434e50",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 37817,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "bdfe29d254b8e66ad84171773d14e89abb26f4b38b0f68266560261fa3fe85d7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 61608,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "4b1c98632188f897f02f8ab93d881d87a4ab63c1fb0b9b459eabd6adbd234113",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 5144,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    }
+  ]
+}

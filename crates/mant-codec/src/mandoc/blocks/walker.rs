@@ -311,7 +311,8 @@ impl BlockLowerer<'_, '_> {
         // RS changes only the source offset; its output and ownership are
         // transferred together below. Semantic structures have their own
         // content owners, even if the surrounding fill mode remains nf.
-        if node.macro_token.as_ref() != Some(&Man(ManMacro::Rs)) || self.man_list_state.is_active()
+        if node.macro_token.as_ref() != Some(&Man(ManMacro::Rs))
+            || self.man_list_state.can_continue(&self.state.output)
         {
             self.state.literal_assembly.end(self.state.output.len());
         }

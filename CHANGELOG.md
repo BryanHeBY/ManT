@@ -31,6 +31,8 @@ that crate was not published for that change.
 
 - The 0.15 roff APIs use `libmandoc-rs` 0.15. Preserve literal numeric
   definitions when a discarded macro argument performed the register increment.
+- Preserve source order and spacing around relative indent continuations
+  of numbered man list items.
 - Preserve per-term option and argument evidence across man `TP` and
   `TQ`, and bind `OP` names only from complete executed keys.
 - Bind supported mdoc errors, constants, variables and function names to their

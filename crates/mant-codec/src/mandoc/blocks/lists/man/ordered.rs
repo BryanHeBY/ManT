@@ -25,8 +25,22 @@ impl ManListState {
     pub(in crate::mandoc::blocks) const fn new() -> Self {
         Self { active: None }
     }
-    pub(in crate::mandoc::blocks) const fn is_active(self) -> bool {
-        self.active.is_some()
+    pub(in crate::mandoc::blocks) fn can_continue(self, output: &[Block]) -> bool {
+        self.continuation_start(output).is_some()
+    }
+
+    fn continuation_start(self, output: &[Block]) -> Option<usize> {
+        let active = self.active?;
+        let (owner, tail) = output.get(active.block..)?.split_first()?;
+        if matches!(owner, Block::List { kind: ListKind::Ordered { .. }, items, .. } if !items.is_empty())
+            && tail
+                .iter()
+                .all(|block| matches!(block, Block::VerticalSpace { .. }))
+        {
+            Some(active.block + 1)
+        } else {
+            None
+        }
     }
     pub(in crate::mandoc::blocks) fn reset(&mut self) {
         self.active = None;
@@ -42,9 +56,6 @@ impl ActiveOrdinal {
         self.owned_list(output)
     }
 
-    /// Continuation ownership survives separately emitted spacing requests.
-    /// The driver resets this handle at structural boundaries; an output-tail
-    /// check here would invent a new ownership boundary for `.sp`.
     fn owned_list(self, output: &mut [Block]) -> Option<(&mut bool, &mut Vec<ListItem>)> {
         match output.get_mut(self.block)? {
             Block::List {
@@ -218,23 +229,25 @@ fn append_new_ordered(
 /// visible item and must not break ordinal sequence recognition.  Proven list
 /// items use coordinates relative to the list container.
 pub(in crate::mandoc::blocks) fn append_relative_continuation(
-    output: &mut [Block],
+    output: &mut Vec<Block>,
     nested: &mut Vec<Block>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     state: ManListState,
 ) -> bool {
-    let Some(active) = state.active else {
+    let Some(start) = state.continuation_start(output) else {
         return false;
     };
+    if nested.is_empty() {
+        return true;
+    }
+    let active = state.active.expect("checked continuation owner");
+    let spacing = output.split_off(start);
     let origin = indent_columns
         .relative_columns()
         .saturating_add(ordinal_width(active.marker.value));
-    let Some((_, items)) = active.owned_list(output) else {
-        return false;
-    };
-    let Some(item) = items.last_mut() else {
-        return false;
-    };
+    let (_, items) = active.owned_list(output).expect("checked ordered list");
+    let item = items.last_mut().expect("checked ordered list item");
+    item.blocks.extend(spacing);
     rebase_roots(nested, 0, origin);
     item.blocks.append(nested);
     true
@@ -457,11 +470,15 @@ mod tests {
             state
         ));
         assert_eq!(continuation.len(), 0);
-        assert_eq!(output[1], spacing);
-        assert!(matches!(&output[0], Block::List { items, .. } if items[0].blocks.len() == 2));
-        // In contrast, the next ordinal cannot join across that physical gap.
+        let [Block::List { items, .. }] = output.as_slice() else {
+            panic!("one ordered owner: {output:?}");
+        };
+        assert_eq!(items[0].blocks.len(), 3);
+        assert_eq!(items[0].blocks[1], spacing);
+        // With the spacing consumed by the continuation, the next ordinal
+        // can join the completed item without moving the blank rows again.
         append(&mut output, &mut state, "2.", 0);
-        assert_eq!(output.len(), 3);
+        assert!(matches!(output.as_slice(), [Block::List { items, .. }] if items.len() == 2));
     }
 
     #[test]
@@ -516,13 +533,13 @@ mod tests {
         append(&mut output, &mut state, "1.", 0);
         let mut continuation = definition("continuation", "tail").description;
         assert!(!super::append_relative_continuation(
-            &mut [],
+            &mut Vec::new(),
             &mut continuation,
             0.into(),
             state
         ));
         state.reset();
-        assert!(!state.is_active());
+        assert!(state.continuation_start(&output).is_none());
         assert!(!super::append_relative_continuation(
             &mut output,
             &mut continuation,

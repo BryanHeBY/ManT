@@ -118,16 +118,16 @@ impl StructuralLowerer<'_, '_, '_> {
         next: Option<&Node>,
         table_embedding: Option<&TableEmbedding>,
     ) {
-        let continues_ip_item = node.macro_token.as_ref() == Some(&Man(ManMacro::Rs))
-            && self.man_list_state.is_active();
+        let continues_item = node.macro_token.as_ref() == Some(&Man(ManMacro::Rs))
+            && self.man_list_state.can_continue(self.output);
         if !matches!(
             node.macro_token.as_ref(),
             Some(Man(ManMacro::Ip | ManMacro::Tp))
-        ) && !continues_ip_item
+        ) && !continues_item
         {
             self.man_list_state.reset();
         }
-        if self.lower_transparent_container(node, next) {
+        if self.lower_transparent_container(node, next, continues_item) {
             return;
         }
         match node.macro_token.as_ref() {
@@ -333,7 +333,12 @@ impl StructuralLowerer<'_, '_, '_> {
         }
     }
 
-    fn lower_transparent_container(&mut self, node: &Node, next: Option<&Node>) -> bool {
+    fn lower_transparent_container(
+        &mut self,
+        node: &Node,
+        next: Option<&Node>,
+        continues_item: bool,
+    ) -> bool {
         match node.macro_token.as_ref() {
             Some(Man(ManMacro::Hp)) => self.lower_man_hanging_paragraph(node, next),
             Some(Man(ManMacro::Rs)) => {
@@ -348,7 +353,6 @@ impl StructuralLowerer<'_, '_, '_> {
                 // pre_RS(BODY) replaces the offset derived from mt->offset,
                 // after BLOCK term_newln; a preceding ti is not that base.
                 super::reset_man_macro_offset(self.formatter, self.indent_columns);
-                let continues_item = self.man_list_state.is_active();
                 let output = if continues_item {
                     Vec::new()
                 } else {
@@ -387,6 +391,7 @@ impl StructuralLowerer<'_, '_, '_> {
                         self.indent_columns,
                         *self.man_list_state,
                     ) {
+                        self.literal_assembly.truncate(self.output.len());
                         return true;
                     }
                     self.man_list_state.reset();

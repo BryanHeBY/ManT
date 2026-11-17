@@ -53,6 +53,22 @@ impl LiteralAssembly {
         }
     }
 
+    pub(in crate::mandoc::blocks) fn truncate(&mut self, output: usize) {
+        while self
+            .ranges
+            .last()
+            .is_some_and(|range| range.start >= output)
+        {
+            self.ranges.pop();
+        }
+        if let Some(last) = self.ranges.last_mut() {
+            last.end = last.end.min(output);
+        }
+        if let Some(start) = &mut self.active {
+            *start = (*start).min(output);
+        }
+    }
+
     pub(in crate::mandoc::blocks) fn insert(&mut self, index: usize, count: usize) {
         for range in &mut self.ranges {
             if range.start >= index {
