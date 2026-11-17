@@ -4,6 +4,7 @@
 //! separator following a completed argument may introduce another full option;
 //! it never gives a parameter fragment a fresh chance to become a name.
 
+use super::eligibility::OperandUses;
 use mant_ir::Inline;
 use std::collections::HashSet;
 
@@ -14,7 +15,7 @@ enum Phase {
     StyledArgument,
 }
 
-pub(super) struct DeclarationState {
+pub(super) struct DeclarationState<'a> {
     text: String,
     offset: usize,
     closers: Vec<char>,
@@ -22,10 +23,11 @@ pub(super) struct DeclarationState {
     uncertain: bool,
     literal_starts: HashSet<usize>,
     argument_starts: HashSet<usize>,
+    uses: OperandUses<'a>,
 }
 
-impl DeclarationState {
-    pub(super) fn new(text: String, inlines: &[Inline]) -> Self {
+impl<'a> DeclarationState<'a> {
+    pub(super) fn new(text: String, inlines: &[Inline], uses: OperandUses<'a>) -> Self {
         let mut literal_starts = HashSet::new();
         collect_literal_starts(inlines, false, false, &mut 0, &mut literal_starts);
         let mut ranges = Vec::new();
@@ -51,6 +53,7 @@ impl DeclarationState {
             uncertain: false,
             literal_starts,
             argument_starts,
+            uses,
         }
     }
 
@@ -59,6 +62,7 @@ impl DeclarationState {
             self.begin_argument();
         }
         let next_offset = self.offset + character.len_utf8();
+        let eligible = eligible && !self.uses.protects_syntax(self.offset);
         // This method sees every visible scalar, not just separators. Avoid
         // rescanning the remaining head for every character in a long form.
         if !eligible {

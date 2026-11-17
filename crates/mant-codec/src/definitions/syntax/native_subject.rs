@@ -1,6 +1,7 @@
 //! Name only the accepted operands of a typed mdoc definition head.
+use super::eligibility::{NameSource, OperandUses};
 use super::scan::{MAX_NAMES, MAX_NESTING, closing, quote_closer};
-use super::{DeclarationLimit, InferredIdentity, constrain_term_names, named, ordered_names};
+use super::{DeclarationLimit, InferredIdentity, named, ordered_names};
 use crate::definitions::{
     NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, evidence::HeadOperands,
 };
@@ -65,12 +66,22 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
         // Ar can label a real definition or a placeholder in a syntax
         // expression. Its spelling alone proves neither a command nor an
         // environment variable, and it cannot contribute a flag name.
-        let mut names = named::term_occurrences(text)
+        let uses = OperandUses::new(operands).shifted(start);
+        let names = named::term_occurrences(head, uses)
             .unwrap_or_default()
             .into_iter()
-            .filter(|name| !name.name.starts_with(['-', '+']))
+            .filter(|name| {
+                uses.permits(name, NameSource::Operand(NativeOperandRole::Placeholder))
+                    || uses.permits(name, NameSource::Lexical)
+            })
+            .map(|mut name| {
+                for part in &mut name.parts {
+                    part.start += start;
+                    part.end += start;
+                }
+                name
+            })
             .collect();
-        constrain_term_names(&mut names, Some(operands));
         return Some((EntryKind::Term, Recognition { names, limit: None }));
     }
     let NativeOperandRole::Subject(mut subject, _) = lead.role else {
@@ -95,7 +106,8 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
         NativeSubject::Type | NativeSubject::Field => {
             // A type/field can be the subject of a term, but the type
             // spelling never supplies a variable or command identity.
-            simple_binding(text, start..end, plain_identifier)
+            subject_span(text, &operands[first..], start..end)
+                .and_then(|span| simple_binding(text, span, plain_identifier))
         }
         NativeSubject::Variable => subject_span(text, &operands[first..], start..end)
             .and_then(|span| simple_binding(text, span, declaration_name)),
@@ -121,7 +133,12 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
     } else {
         EntryKind::Term
     };
-    Some((kind, Recognition::one(name)))
+    let uses = OperandUses::new(operands);
+    let scope = NameSource::Operand(operands[first].role);
+    Some((
+        kind,
+        Recognition::one(name.filter(|name| uses.permits(name, scope))),
+    ))
 }
 
 fn following_function(
@@ -183,6 +200,38 @@ fn symbol_names(
     operands: &[NativeOperand],
     subject: NativeSubject,
 ) -> Recognition {
+    let uses = OperandUses::new(operands).shifted(head.start);
+    let Some(groups) = named::named_groups(&text[head], uses) else {
+        return Recognition::default();
+    };
+    let mut result = Recognition::default();
+    for group in groups {
+        let group = group.trim();
+        let start = offset(text, group);
+        let first = operands.partition_point(|operand| operand.bytes.end <= start);
+        let recognized = symbol_group(
+            text,
+            start..start + group.len(),
+            &operands[first..],
+            subject,
+        );
+        if recognized.limit.is_some() || result.names.len() + recognized.names.len() > MAX_NAMES {
+            return Recognition {
+                limit: Some(DeclarationLimit::Names),
+                ..Recognition::default()
+            };
+        }
+        result.names.extend(recognized.names);
+    }
+    result
+}
+
+fn symbol_group(
+    text: &str,
+    head: Range<usize>,
+    operands: &[NativeOperand],
+    subject: NativeSubject,
+) -> Recognition {
     let mut names = Vec::new();
     let mut cursor = head.start;
     let mut previous_scope = None;
@@ -194,7 +243,8 @@ fn symbol_names(
         let NativeOperandRole::Subject(role, scope) = operand.role else {
             continue;
         };
-        let Some(gap) = text.get(cursor..operand.bytes.start).map(str::trim) else {
+        let start = operand.bytes.start.max(head.start);
+        let Some(gap) = text.get(cursor..start).map(str::trim) else {
             return Recognition::default();
         };
         if role == NativeSubject::Field
@@ -208,23 +258,23 @@ fn symbol_names(
         if role != subject {
             continue;
         }
-        // Delimiter TEXT can be a child of the preceding semantic macro.
-        // Leave it in the gap; the next subject must prove the boundary.
         let Some(name) = text
-            .get(operand.bytes.clone())
+            .get(start..operand.bytes.end)
             .and_then(|word| plain_identifier(word.trim()))
         else {
             continue;
         };
-        if !(matches!(gap, "," | "|") && !names.is_empty()
-            || gap.is_empty() && (names.is_empty() || previous_scope == Some(scope)))
-        {
+        if !gap.is_empty() || !names.is_empty() && previous_scope != Some(scope) {
             return Recognition::default();
+        }
+        let name = RecognizedName::contiguous(name, offset(text, name));
+        if !OperandUses::new(operands).permits(&name, NameSource::Operand(operand.role)) {
+            continue;
         }
         if names.len() == MAX_NAMES {
             limit = Some(DeclarationLimit::Names);
         } else {
-            names.push(RecognizedName::contiguous(name, offset(text, name)));
+            names.push(name);
         }
         cursor = operand.bytes.end;
         previous_scope = Some(scope);

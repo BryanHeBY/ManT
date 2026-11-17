@@ -1,4 +1,5 @@
 //! named recognition; complete forms retain their role-specific grammar.
+use super::eligibility::OperandUses;
 use crate::definitions::RecognizedName;
 
 /// Strong local configuration spelling, used only on complete declaration
@@ -117,11 +118,18 @@ fn annotation_end(value: &str) -> Option<usize> {
 
 /// Delimiters inside a bounded annotation or placeholder are not declaration
 /// separators. Every outer part still has to pass its entire name grammar.
-fn named_groups(text: &str) -> Option<Vec<&str>> {
+pub(super) fn named_groups<'a>(text: &'a str, uses: OperandUses<'_>) -> Option<Vec<&'a str>> {
     let mut parts = Vec::new();
     let mut start = 0;
     let mut closers = Vec::new();
     for (index, character) in text.char_indices() {
+        if matches!(
+            character,
+            '(' | ')' | '<' | '>' | '[' | ']' | '{' | '}' | ',' | '|'
+        ) && uses.protects_syntax(index)
+        {
+            continue;
+        }
         // Parenthesized annotations contain literal defaults/key bindings:
         // the '[' in C-[ is not a fresh syntax group. Only their own delimiter
         // pair nests; commas and pipes remain inside the annotation.
@@ -161,10 +169,18 @@ pub(super) fn named_occurrences(
     text: &str,
     validate: fn(&str) -> bool,
 ) -> Option<Vec<RecognizedName>> {
-    let parts = if text.contains('=') {
+    named_occurrences_with_uses(text, validate, OperandUses::default())
+}
+
+pub(super) fn named_occurrences_with_uses(
+    text: &str,
+    validate: fn(&str) -> bool,
+    uses: OperandUses<'_>,
+) -> Option<Vec<RecognizedName>> {
+    let parts = if has_assignment(text, uses) {
         vec![text]
     } else {
-        named_groups(text)?
+        named_groups(text, uses)?
     };
     parts
         .into_iter()
@@ -193,8 +209,8 @@ pub(super) fn named_occurrences(
 /// invocation form makes source-defined callable names addressable without
 /// treating prose as a declaration: its name must contain lowercase technical
 /// spelling and every remaining token must be an all-uppercase placeholder.
-pub(in crate::definitions) fn term_occurrences(text: &str) -> Option<Vec<RecognizedName>> {
-    named_occurrences(text, is_variable_term)
+pub(super) fn term_occurrences(text: &str, uses: OperandUses<'_>) -> Option<Vec<RecognizedName>> {
+    named_occurrences_with_uses(text, is_variable_term, uses)
         .or_else(|| {
             let name = invocation_name(text.trim())?;
             let offset = name.as_ptr() as usize - text.as_ptr() as usize;
@@ -275,13 +291,21 @@ fn sigilled_invocation_argument(value: &str) -> bool {
 /// A declaration group is atomic: accepting a word after rejected prose does
 /// not prove that either the paragraph or that word declares a variable.
 pub(super) fn environment_occurrences(text: &str) -> Option<Vec<RecognizedName>> {
-    let parts = if text.contains('=') {
+    environment_occurrences_with_uses(text, OperandUses::default())
+}
+
+pub(super) fn environment_occurrences_with_uses(
+    text: &str,
+    uses: OperandUses<'_>,
+) -> Option<Vec<RecognizedName>> {
+    let parts = if has_assignment(text, uses) {
         vec![text]
     } else {
-        named_groups(text)?
+        named_groups(text, uses)?
     };
     let mut names = Vec::new();
     for part in parts {
+        let offset = part.as_ptr() as usize - text.as_ptr() as usize;
         let name = environment_variable_alias(part).or_else(|| {
             let (name, suffix) = part.trim().split_once(char::is_whitespace)?;
             annotations(suffix)
@@ -289,16 +313,22 @@ pub(super) fn environment_occurrences(text: &str) -> Option<Vec<RecognizedName>>
                 .flatten()
         });
         let Some(name) = name else {
-            if environment_template(part.trim()) {
+            // A native placeholder can make this whole atom a template.
+            // The next authored separator can still start a distinct name.
+            if environment_template(part.trim()) || uses.protects(&(offset..offset + part.len())) {
                 continue;
             }
             return None;
         };
-        let start =
-            part.as_ptr() as usize - text.as_ptr() as usize + part.len() - part.trim_start().len();
+        let start = offset + part.len() - part.trim_start().len();
         names.push(RecognizedName::contiguous(&name, start));
     }
     Some(names)
+}
+
+fn has_assignment(text: &str, uses: OperandUses<'_>) -> bool {
+    text.match_indices('=')
+        .any(|(index, _)| !uses.protects_syntax(index))
 }
 
 // A bounded literal/placeholder environment head is a declaration, but not
@@ -482,7 +512,7 @@ mod tests {
     #[test]
     fn generic_terms_keep_optional_parameters_and_uppercase_invocations_out_of_names() {
         let names = |value| {
-            term_occurrences(value)
+            term_occurrences(value, super::OperandUses::default())
                 .unwrap_or_default()
                 .into_iter()
                 .map(|found| found.name)

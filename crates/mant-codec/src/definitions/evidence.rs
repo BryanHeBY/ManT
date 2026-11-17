@@ -36,6 +36,7 @@ struct HeadWitness {
 pub(crate) enum NativeOperandRole {
     #[cfg(any(feature = "roff", test))]
     Literal,
+    #[cfg(any(feature = "roff", test))]
     Argument,
     /// An `Ar` spelling may name an authored operand definition directly.
     #[cfg(feature = "roff")]
@@ -66,18 +67,11 @@ pub(crate) enum NativeSubject {
 impl NativeOperandRole {
     pub(super) fn is_parameter(self) -> bool {
         match self {
+            #[cfg(any(feature = "roff", test))]
             Self::Argument => true,
             #[cfg(feature = "roff")]
             Self::Placeholder | Self::OptionalKey | Self::Subject(..) => true,
             _ => false,
-        }
-    }
-
-    pub(super) fn blocks_lexical_name(self) -> bool {
-        match self {
-            #[cfg(feature = "roff")]
-            Self::Subject(..) => true,
-            _ => self == Self::Argument,
         }
     }
 }

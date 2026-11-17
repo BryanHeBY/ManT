@@ -6,7 +6,7 @@
 
 use mant_ir::Inline;
 
-use super::{commands, forms, named, options};
+use super::{commands, constrain_term_names, eligibility::OperandUses, forms, named, options};
 use crate::definitions::context::DefinitionContext;
 use mant_ir::inline_plain_text as plain_text;
 
@@ -89,6 +89,7 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
         return None;
     }
     let text = plain_text(inlines);
+    let uses = OperandUses::new(operands);
     let (kind, case) = if options.inferred_complete {
         (
             mant_ir::EntryKind::Parameter {
@@ -99,15 +100,19 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
     } else {
         super::decision::select_kind(text.trim(), context, None)
     };
-    let occurrences = match kind {
+    let mut occurrences = match kind {
         mant_ir::EntryKind::Parameter {
             parameter_kind: mant_ir::ParameterKind::Option,
         } => options.names,
-        mant_ir::EntryKind::EnvironmentVariable => named::environment_occurrences(&text)?,
-        mant_ir::EntryKind::ConfigurationKey => {
-            named::named_occurrences(&text, named::is_configuration_key)?
+        mant_ir::EntryKind::EnvironmentVariable => {
+            named::environment_occurrences_with_uses(&text, uses)?
         }
-        mant_ir::EntryKind::Variable => named::named_occurrences(&text, named::is_variable_term)?,
+        mant_ir::EntryKind::ConfigurationKey => {
+            named::named_occurrences_with_uses(&text, named::is_configuration_key, uses)?
+        }
+        mant_ir::EntryKind::Variable => {
+            named::named_occurrences_with_uses(&text, named::is_variable_term, uses)?
+        }
         mant_ir::EntryKind::Command => {
             let name = commands::inferred_command_name(inlines)
                 .or_else(|| commands::command_name_from_authored_form(&text).map(str::to_owned))?;
@@ -116,6 +121,7 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
         }
         _ => return None,
     };
+    constrain_term_names(&mut occurrences, Some(operands));
     let mut names = Vec::new();
     for found in &occurrences {
         if !names.contains(&found.name) {

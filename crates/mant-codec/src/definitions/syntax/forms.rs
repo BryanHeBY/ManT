@@ -1,5 +1,6 @@
 //! Keep declaration separators and parameter styling distinct until extraction.
 use super::declaration::DeclarationState;
+use super::eligibility::OperandUses;
 use mant_ir::Inline;
 
 use mant_ir::inline_plain_text as plain_text;
@@ -50,11 +51,18 @@ pub(super) fn environment_prefix(inlines: &[Inline]) -> Option<String> {
 /// nesting and local argument phases survive strong/link wrapper boundaries;
 /// punctuation inside an argument is not a fresh declaration.
 pub(super) fn declaration_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
+    declaration_groups_with_uses(term, OperandUses::default())
+}
+
+pub(super) fn declaration_groups_with_uses(
+    term: &[Inline],
+    uses: OperandUses<'_>,
+) -> Vec<Vec<Inline>> {
     split_groups(
         term,
         &[',', '|'],
         &mut None,
-        &mut DeclarationState::new(plain_text(term), term),
+        &mut DeclarationState::new(plain_text(term), term, uses),
     )
 }
 
@@ -65,7 +73,7 @@ fn split_groups(
     term: &[Inline],
     separators: &[char],
     remaining: &mut Option<usize>,
-    state: &mut DeclarationState,
+    state: &mut DeclarationState<'_>,
 ) -> Vec<Vec<Inline>> {
     let mut groups = vec![Vec::new()];
     for inline in term {

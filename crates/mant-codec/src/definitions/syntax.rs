@@ -8,6 +8,7 @@ use mant_ir::{DefinitionItem, EntryKind, NameCase, ParameterKind};
 mod commands;
 mod decision;
 mod declaration;
+mod eligibility;
 mod forms;
 mod head;
 mod named;
@@ -15,6 +16,7 @@ mod named;
 mod native_subject;
 mod options;
 mod scan;
+use eligibility::{NameSource, OperandUses};
 pub(super) use head::is_inferred_head;
 pub(super) use head::recognize_inferred_head_with_operands;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
@@ -59,7 +61,7 @@ pub(super) fn infer_identity(
     let (mut occurrences, mut limit) = head_occurrences(item, kind, hint, operands);
     constrain_names(&mut occurrences, operands);
     if hint == Some(super::NativeHeadRole::Literal) && occurrences.iter().all(Vec::is_empty) {
-        occurrences = name_occurrences(item, EntryKind::Command);
+        occurrences = name_occurrences_with_operands(item, EntryKind::Command, operands);
         constrain_names(&mut occurrences, operands);
         if occurrences.iter().all(Vec::is_empty) {
             occurrences = item
@@ -89,7 +91,7 @@ pub(super) fn infer_identity(
             Some(super::NativeHeadRole::Option | super::NativeHeadRole::Environment)
         )
     {
-        occurrences = name_occurrences(item, EntryKind::Term);
+        occurrences = name_occurrences_with_operands(item, EntryKind::Term, operands);
         constrain_names(&mut occurrences, operands);
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
@@ -163,15 +165,35 @@ fn head_occurrences(
         Some(super::NativeHeadRole::Environment) => item
             .terms
             .iter()
-            .map(|term| {
-                forms::environment_prefix(term)
-                    .and_then(|prefix| named::environment_occurrences(&prefix))
-                    .unwrap_or_default()
+            .enumerate()
+            .map(|(index, term)| {
+                operands.for_term(index).map_or_else(Vec::new, |ranges| {
+                    native_environment_occurrences(term.as_ref(), OperandUses::new(ranges))
+                })
             })
             .collect(),
         _ => name_occurrences_with_operands(item, kind, operands),
     };
     (occurrences, None)
+}
+
+fn native_environment_occurrences(
+    term: &[mant_ir::Inline],
+    uses: OperandUses<'_>,
+) -> Vec<RecognizedName> {
+    let mut names = forms::environment_prefix(term)
+        .and_then(|prefix| named::environment_occurrences_with_uses(&prefix, uses))
+        .unwrap_or_default();
+    if uses.has_parameters()
+        && let Some(complete) = named::environment_occurrences_with_uses(&plain_text(term), uses)
+    {
+        // A styled parameter may stop the legacy prefix scan. An authored
+        // delimiter outside that parameter still starts another declaration.
+        names.extend(complete);
+        names.sort_by_key(|name| name.parts[0].start);
+        names.dedup_by(|left, right| left.parts == right.parts);
+    }
+    names
 }
 
 fn continued_occurrences(
@@ -186,7 +208,7 @@ fn continued_occurrences(
         let mut mixed = false;
         for (index, (term, names)) in item.terms.iter().zip(occurrences).enumerate().skip(1) {
             if names.is_empty() {
-                *names = named::term_occurrences(&plain_text(term)).unwrap_or_default();
+                *names = lexical_term_occurrences(&plain_text(term), operands.for_term(index));
                 constrain_term_names(names, operands.for_term(index));
                 mixed |= !names.is_empty();
             }
@@ -196,7 +218,7 @@ fn continued_occurrences(
     if options::retain_continued_option_names(&item.terms, operands, occurrences, limit)
         && occurrences[0].is_empty()
     {
-        occurrences[0] = named::term_occurrences(first).unwrap_or_default();
+        occurrences[0] = lexical_term_occurrences(first, operands.for_term(0));
         constrain_term_names(&mut occurrences[0], operands.for_term(0));
         if occurrences[0].is_empty() {
             return Some(EntryKind::Parameter {
@@ -206,6 +228,15 @@ fn continued_occurrences(
         return Some(EntryKind::Term);
     }
     None
+}
+
+fn lexical_term_occurrences(
+    text: &str,
+    ranges: Option<&[super::NativeOperand]>,
+) -> Vec<RecognizedName> {
+    ranges.map_or_else(Vec::new, |ranges| {
+        named::term_occurrences(text, OperandUses::new(ranges)).unwrap_or_default()
+    })
 }
 
 fn constrain_names(occurrences: &mut [Vec<RecognizedName>], operands: HeadOperands<'_>) {
@@ -222,18 +253,7 @@ fn constrain_term_names(
         names.clear();
         return;
     };
-    names.retain(|name| {
-        !name.parts.iter().any(|part| {
-            let start = ranges.partition_point(|range| range.bytes.end <= part.start);
-            ranges[start..]
-                .iter()
-                .take_while(|range| range.bytes.start < part.end)
-                .any(|range| {
-                    range.role.blocks_lexical_name()
-                        || name.name.starts_with(['-', '+']) && range.role.is_parameter()
-                })
-        })
-    });
+    names.retain(|name| OperandUses::new(ranges).permits(name, NameSource::Lexical));
 }
 
 fn ordered_names(occurrences: &[Vec<RecognizedName>], kind: EntryKind) -> Vec<String> {
@@ -301,7 +321,12 @@ fn name_occurrences_with_operands(
     }
     item.terms
         .iter()
-        .map(|term| {
+        .enumerate()
+        .map(|(index, term)| {
+            let Some(ranges) = operands.for_term(index) else {
+                return Vec::new();
+            };
+            let uses = OperandUses::new(ranges);
             let text = plain_text(term);
             let locate = |part: &str, name: &str| {
                 super::RecognizedName::contiguous(
@@ -312,7 +337,7 @@ fn name_occurrences_with_operands(
             };
             match kind {
                 EntryKind::EnvironmentVariable => {
-                    named::environment_occurrences(&text).unwrap_or_default()
+                    named::environment_occurrences_with_uses(&text, uses).unwrap_or_default()
                 }
                 EntryKind::Variable | EntryKind::ConfigurationKey | EntryKind::Value => {
                     let validate = match kind {
@@ -320,14 +345,14 @@ fn name_occurrences_with_operands(
                         EntryKind::ConfigurationKey => is_configuration_key,
                         _ => is_value_name,
                     };
-                    named::named_occurrences(&text, validate).unwrap_or_default()
+                    named::named_occurrences_with_uses(&text, validate, uses).unwrap_or_default()
                 }
                 EntryKind::Command => {
                     if let Some((name, _)) = super::context::key_binding_command_form(&text) {
                         return vec![locate(&text, name)];
                     }
                     let mut offset = 0;
-                    forms::declaration_groups(term)
+                    forms::declaration_groups_with_uses(term, uses)
                         .into_iter()
                         .filter_map(|group| {
                             let text = plain_text(&group);
@@ -342,7 +367,7 @@ fn name_occurrences_with_operands(
                         })
                         .collect()
                 }
-                EntryKind::Term => named::term_occurrences(&text).unwrap_or_default(),
+                EntryKind::Term => named::term_occurrences(&text, uses).unwrap_or_default(),
                 EntryKind::Parameter { .. } => Vec::new(),
             }
         })
