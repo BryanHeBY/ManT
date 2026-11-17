@@ -47,21 +47,45 @@ impl Recognition {
 }
 
 fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recognition)> {
-    if operands.iter().any(|operand| operand.role.is_search())
-        && let Some(identity) = declaration_parts::recognize(text, operands)
-    {
-        return Some(identity);
-    }
     let (head, _) = unwrapped(text, text, operands);
     let start = offset(text, head);
     let first = operands.partition_point(|operand| operand.bytes.end <= start);
-    if operands
+    let leading = operands
         .get(first)
-        .is_some_and(|operand| operand.bytes.contains(&start) && operand.role.is_operand_label())
-        && operands[first..]
-            .iter()
-            .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
-        && let Some(identity) = declaration_parts::recognize(text, operands)
+        .filter(|operand| operand.bytes.contains(&start));
+    let subject = leading
+        .and_then(|operand| operand.role.subject())
+        .map(|(subject, _)| subject);
+    if matches!(
+        subject,
+        Some(NativeSubject::Constant | NativeSubject::Error)
+    ) {
+        return recognize_part(text, head, operands);
+    }
+    let typed = matches!(
+        subject,
+        Some(
+            NativeSubject::Variable
+                | NativeSubject::ReturnType
+                | NativeSubject::Function
+                | NativeSubject::FunctionBlock
+        )
+    );
+    let protected = operands.iter().any(|operand| operand.role.is_search())
+        || leading.is_some_and(|operand| operand.role.is_operand_label())
+            && operands[first..]
+                .iter()
+                .any(|operand| operand.role == NativeOperandRole::ExplicitOption);
+    if (typed || protected)
+        && let Some(identity) = declaration_parts::recognize(
+            text,
+            operands,
+            if typed {
+                declaration_parts::Admission::TypedSubjects
+            } else {
+                declaration_parts::Admission::ProtectedSyntax
+            },
+        )
     {
         return Some(identity);
     }
@@ -134,6 +158,23 @@ fn recognize_part(
         NativeSubject::Function | NativeSubject::FunctionBlock => {
             let span = matching_subject_span(text, &operands[first..], start..end);
             span.and_then(|span| {
+                if operands[first..]
+                    .iter()
+                    .skip_while(|operand| operand.bytes.start < span.end)
+                    .take_while(|operand| operand.bytes.start < end)
+                    .any(|operand| {
+                        operand.role.subject().is_some_and(|(role, _)| {
+                            matches!(
+                                role,
+                                NativeSubject::Function
+                                    | NativeSubject::FunctionBlock
+                                    | NativeSubject::ReturnType
+                            )
+                        })
+                    })
+                {
+                    return None;
+                }
                 let suffix = text[span.end..end].trim().trim_end_matches(';');
                 if !suffix.starts_with('(') || !suffix.ends_with(')') {
                     return None;
@@ -197,10 +238,13 @@ fn matching_subject_span(
     head: Range<usize>,
 ) -> Option<Range<usize>> {
     let first = operands.first()?;
-    if first.bytes.start < head.start || first.bytes.end > head.end {
+    if first.bytes.end > head.end
+        || first.bytes.start < head.start
+            && !text.get(first.bytes.start..head.start)?.trim().is_empty()
+    {
         return None;
     }
-    let mut span = first.bytes.clone();
+    let mut span = first.bytes.start.max(head.start)..first.bytes.end;
     for operand in &operands[1..] {
         if operand.role != first.role || operand.bytes.end > head.end {
             break;
@@ -229,6 +273,20 @@ fn symbol_names(
         let group = group.trim();
         let start = offset(text, group);
         let first = operands.partition_point(|operand| operand.bytes.end <= start);
+        // An attached Fa can annotate a symbol. A separate Fa part starts
+        // an invocation's argument tail, including any later Dv sentinel.
+        if subject == NativeSubject::Constant
+            && !result.names.is_empty()
+            && operands.get(first).is_some_and(|operand| {
+                operand.bytes.contains(&start)
+                    && operand
+                        .role
+                        .subject()
+                        .is_some_and(|(role, _)| role == NativeSubject::Field)
+            })
+        {
+            break;
+        }
         let recognized = symbol_group(
             text,
             start..start + group.len(),

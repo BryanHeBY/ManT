@@ -155,6 +155,149 @@ fn accepted_variables_and_symbols_bind_the_subject_and_keep_other_content() {
 }
 
 #[test]
+fn independent_subjects_keep_their_names_and_extent() {
+    // CVS mdoc_term.c::termp_fn_pre emits argument commas inside the
+    // generated parentheses; only the intervening source delimiter separates Fn scopes.
+    let cases: &[(&str, EntryKind, &[&str], &str)] = &[
+        (
+            "Va h_dev , Va h_ino",
+            EntryKind::Variable,
+            &["h_dev", "h_ino"],
+            "h_dev, h_ino",
+        ),
+        (
+            "Va h_ino , Va h_dev",
+            EntryKind::Variable,
+            &["h_ino", "h_dev"],
+            "h_ino, h_dev",
+        ),
+        (
+            "Fn first , Fn second",
+            EntryKind::Term,
+            &["first", "second"],
+            "first(), second()",
+        ),
+        (
+            "Fn second , Fn first",
+            EntryKind::Term,
+            &["second", "first"],
+            "second(), first()",
+        ),
+        (
+            "Bq Fn alpha , Fn beta",
+            EntryKind::Term,
+            &["alpha", "beta"],
+            "[alpha(), beta()]",
+        ),
+        (
+            "Fn gamma , Fn delta , Bq No ? Ar ignored",
+            EntryKind::Term,
+            &["gamma", "delta"],
+            "gamma(), delta(), [? ignored]",
+        ),
+        (
+            r#"Fn typed "int left, int right" , Fn other"#,
+            EntryKind::Term,
+            &["typed", "other"],
+            "typed(int left, int right), other()",
+        ),
+        (
+            "Fn first , Fa arg , Fn second",
+            EntryKind::Term,
+            &["first", "second"],
+            "first(), arg, second()",
+        ),
+        (
+            "Fn first , No decorative , Bq No ? Ar ignored",
+            EntryKind::Term,
+            &["first"],
+            "first(), decorative, [? ignored]",
+        ),
+        (
+            "Fn first Fn second",
+            EntryKind::Term,
+            &[],
+            "first() second()",
+        ),
+    ];
+    for &(head, kind, names, form) in cases {
+        let query = example("DESCRIPTION", head);
+        assert_subject(&query, head, kind, names, form);
+        for name in names {
+            let result = super::support::roundtrip(&explain(&query, name));
+            let hit = result
+                .evidence
+                .iter()
+                .find(|hit| hit.class == EvidenceClass::DirectEntry)
+                .unwrap();
+            let start = form.find(name).unwrap();
+            super::support::check_occurrences(
+                hit,
+                name,
+                std::slice::from_ref(&(start..start + name.len())),
+            );
+        }
+        for name in ["arg", "decorative", "ignored", "left", "right"] {
+            assert_eq!(
+                explain(&query, name).counts.direct_entry.total,
+                0,
+                "{head} / {name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn symbol_arguments_do_not_publish_constants_as_independent_names() {
+    // The pinned HTML keeps Fa as argument markup and still renders the
+    // trailing Dv sentinel. The standalone Dv and same-role list are controls.
+    let cases: &[(&str, &[&str], &str)] = &[
+        (
+            "Dv EL_BIND , Fa arg , Dv NULL",
+            &["EL_BIND"],
+            "EL_BIND, arg, NULL",
+        ),
+        (
+            r#"Dv EL_BIND , Fa "char *" , Fa ... , Dv NULL"#,
+            &["EL_BIND"],
+            "EL_BIND, char *, ..., NULL",
+        ),
+        (
+            "Dv EL_BIND Fa arg , Dv ZERO",
+            &["EL_BIND", "ZERO"],
+            "EL_BIND arg, ZERO",
+        ),
+        (
+            "Bq Dv START , Fa arg , Dv END",
+            &["START"],
+            "[START, arg, END]",
+        ),
+        (
+            "Dv EL_BIND , Fa arg , Dv NULL , Bq No ? Ar ignored",
+            &["EL_BIND"],
+            "EL_BIND, arg, NULL, [? ignored]",
+        ),
+        ("Dv SINGLE , Fa arg", &["SINGLE"], "SINGLE, arg"),
+        ("Dv NULL", &["NULL"], "NULL"),
+        ("Dv ALPHA , Dv BETA", &["ALPHA", "BETA"], "ALPHA, BETA"),
+        ("Fa field", &["field"], "field"),
+    ];
+    for &(head, names, form) in cases {
+        let query = example("DESCRIPTION", head);
+        assert_subject(&query, head, EntryKind::Term, names, form);
+        for name in ["arg", "NULL", "ZERO", "END", "ignored"] {
+            if !names.contains(&name) {
+                assert_eq!(
+                    explain(&query, name).counts.direct_entry.total,
+                    0,
+                    "{head} / {name}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn accepted_function_operands_bind_the_subject_and_keep_types_and_arguments() {
     // termp_fn_pre uses the actual first operand. post_fo drops excess
     // HEAD operands before termp_fo_pre sees them.

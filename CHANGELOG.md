@@ -42,6 +42,8 @@ that crate was not published for that change.
 - Bind supported mdoc errors, constants, variables and function names to their
   original definition heads. Complex declarators keep their complete readable
   form and description.
+- Bind each independent mdoc variable or function in a combined definition.
+  Keep constants in an explicitly separated argument tail out of the names.
 - Check declaration names against their executed operand roles. An `Ar`
   placeholder cannot complete a concrete option, symbol, environment
   variable or command name. Standalone operand labels and independent

@@ -630,7 +630,12 @@ An mdoc definition headed by `Fl` or `Ev` retains that option or environment-var
 An existing mdoc definition head can bind the executed error code in
 `Bq Er EINVAL`, the symbol in `Dv BIOCGBLEN Fa "u_int *"`, and the
 identifier in a supported `Va`, `Fn`, or `Fo` declaration. The complete
-form retains brackets, types, and arguments. Simple `Va` declarations use
+form retains brackets, types, and arguments. Complete, independently
+separated `Va` and `Fn` subjects bind to their own ranges in source order.
+For a constant followed by a separately delimited `Fa` argument, later
+constants in that argument tail (such as a varargs sentinel) stay readable
+without becoming selectors. An `Fa` annotation attached to one constant
+does not consume a later independent declaration. Simple `Va` declarations use
 the variable category. Function signatures, errors, constants, and standalone
 types or argument labels use term entries. Arrays, C function-pointer
 declarators, and ambiguous multiple-variable forms retain their complete

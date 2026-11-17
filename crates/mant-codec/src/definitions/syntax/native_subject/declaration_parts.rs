@@ -6,7 +6,7 @@ use crate::definitions::syntax::{
     named, options,
     scan::{MAX_NAMES, MAX_NESTING},
 };
-use crate::definitions::{NativeOperand, NativeOperandRole, RecognizedName};
+use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject, RecognizedName};
 use mant_ir::{EntryKind, ParameterKind};
 use std::ops::Range;
 
@@ -32,15 +32,22 @@ enum RejectedPart {
     NameLimit,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Admission {
+    TypedSubjects,
+    ProtectedSyntax,
+}
+
 pub(super) fn recognize(
     text: &str,
     operands: &[NativeOperand],
+    admission: Admission,
 ) -> Option<(EntryKind, Recognition)> {
     if !text.contains([',', '|']) {
         return None;
     }
     let mut candidates = Candidates::default();
-    let collected = collect(text, text, operands, 0, &mut candidates);
+    let collected = collect(text, text, operands, 0, admission, &mut candidates);
     // A flag or search sign in the arguments of a single invocation does
     // not establish a separately declared name. Its existing grammar still
     // owns the invocation (for example read [-n n | -N n] [vname?prompt]).
@@ -90,6 +97,7 @@ fn collect(
     head: &str,
     operands: &[NativeOperand],
     depth: usize,
+    admission: Admission,
     candidates: &mut Candidates,
 ) -> Result<(), RejectedPart> {
     if depth == MAX_NESTING {
@@ -105,7 +113,7 @@ fn collect(
         let group = group.trim();
         let (part, _) = unwrap_search(text, group, operands);
         if part.len() != group.len() {
-            match collect(text, group, operands, depth + 1, candidates) {
+            match collect(text, group, operands, depth + 1, admission, candidates) {
                 Ok(()) => {}
                 Err(RejectedPart::Unproved) => candidates.unproved_part = true,
                 Err(err) => return Err(err),
@@ -122,7 +130,8 @@ fn collect(
                 || operand.role == NativeOperandRole::Placeholder
                 || operand.role.subject().is_some()
         });
-        let Ok((kind, result)) = recognize_group(text, part, span, operands, uses) else {
+        let Ok((kind, result)) = recognize_group(text, part, span, operands, uses, admission)
+        else {
             candidates.unproved_part = true;
             continue;
         };
@@ -180,6 +189,7 @@ fn recognize_group(
     span: Range<usize>,
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
+    admission: Admission,
 ) -> Result<(EntryKind, Recognition), RejectedPart> {
     if let Some(option) = operand_at(operands, span.start)
         && option.role == NativeOperandRole::ExplicitOption
@@ -195,8 +205,21 @@ fn recognize_group(
         // nor a new lexical spelling containing both operands.
         return Err(RejectedPart::Unproved);
     }
+    if admission == Admission::TypedSubjects
+        && !operand_at(operands, span.start).is_some_and(|operand| {
+            operand
+                .role
+                .subject()
+                .is_some_and(|(subject, _)| subject != NativeSubject::Field)
+        })
+    {
+        return Err(RejectedPart::Unproved);
+    }
     if let Some(result) = recognize_part(text, part, operands) {
         return Ok(result);
+    }
+    if admission == Admission::TypedSubjects {
+        return Err(RejectedPart::Unproved);
     }
     let uses = uses.shifted(span.start);
     let names = named::term_occurrences(part, uses)
