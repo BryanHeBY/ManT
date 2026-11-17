@@ -40,6 +40,9 @@ that crate was not published for that change.
   placeholder cannot complete a concrete option, symbol, environment
   variable or command name. Standalone operand labels and independent
   declarations still receive exact name bindings.
+- Preserve declaration names, parameter exclusions and reading groups when
+  native navigation consumes a source-proven reference marker. Bind later
+  names to the surviving text in their original operands.
 - Resolve qualified `Sx` references only for a unique authored target and
   retain BR/IR operand styling and neighboring text inside and outside the link.
 - Preserve leading, trailing and repeated ordinary spaces in mathematical

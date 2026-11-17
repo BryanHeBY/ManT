@@ -2,15 +2,111 @@
 //! accepted inline roots. Neither source coordinates nor label text can
 //! select a witness for another owner.
 use super::{
-    NativeHeadEvidence, NativeOperand, TermOperands, head_snapshot, native_owner,
-    publication_matches,
+    NativeHeadEvidence, NativeOperand, NativeOperandRole, TermOperands, head_snapshot,
+    native_owner, publication_matches,
 };
 use mant_ir::{
-    Block, DefinitionItem, Heading, Inline, Section,
+    Block, DefinitionItem, Diagnostic, DiagnosticImpact, DiagnosticLevel, Heading, Inline, Section,
+    SourceSpan, inline_plain_text,
     visit::{self, Visit, VisitMut},
 };
 use std::collections::HashMap;
+use std::ops::Range;
 use std::rc::Rc;
+
+/// Changes from publishing one inline root. Offsets belong to the accepted
+/// text before publication, including bytes in nested style and link nodes.
+#[derive(Default)]
+pub(crate) struct InlinePublication {
+    pub(crate) changed: bool,
+    deletions: Vec<Deletion>,
+}
+
+struct Deletion {
+    bytes: Range<usize>,
+    removed_before: usize,
+}
+
+impl InlinePublication {
+    pub(crate) fn remove(&mut self, bytes: Range<usize>) {
+        let removed_before = self
+            .deletions
+            .last()
+            .map_or(0, |last| last.removed_before + last.bytes.len());
+        self.deletions.push(Deletion {
+            bytes,
+            removed_before,
+        });
+        self.changed = true;
+    }
+
+    /// Check each recorded byte deletion against the original and the final
+    /// text, including every intervening span. Matching text elsewhere in
+    /// the root cannot supply evidence for an unknown edit.
+    fn matches(&self, before: &str, mut after: &str) -> bool {
+        let mut offset = 0;
+        for deletion in &self.deletions {
+            let Some(retained) = before.get(offset..deletion.bytes.start) else {
+                return false;
+            };
+            if deletion.bytes.is_empty() || before.get(deletion.bytes.clone()).is_none() {
+                return false;
+            }
+            let Some(rest) = after.strip_prefix(retained) else {
+                return false;
+            };
+            after = rest;
+            offset = deletion.bytes.end;
+        }
+        before.get(offset..) == Some(after)
+    }
+
+    fn offset(&self, original: usize) -> usize {
+        let index = self
+            .deletions
+            .partition_point(|deletion| deletion.bytes.start < original);
+        self.deletions[..index].last().map_or(original, |deletion| {
+            let removed = original.min(deletion.bytes.end) - deletion.bytes.start;
+            original - deletion.removed_before - removed
+        })
+    }
+
+    /// Return whether publication clipped an already qualified option key.
+    /// Parameter bounds survive a deletion so the remaining text stays
+    /// excluded from lexical matching. A clipped typed subject or complete
+    /// key no longer proves a name.
+    pub(in crate::definitions) fn rebase_operands(
+        &self,
+        operands: &mut Vec<NativeOperand>,
+        before: &[Inline],
+        after: &[Inline],
+    ) -> Option<bool> {
+        if !self.matches(&inline_plain_text(before), &inline_plain_text(after)) {
+            return None;
+        }
+        let mut lost_key = false;
+        if !self.deletions.is_empty() {
+            operands.retain_mut(|operand| {
+                let projected = self.offset(operand.bytes.start)..self.offset(operand.bytes.end);
+                if projected.len() != operand.bytes.len() {
+                    lost_key |= operand.role == NativeOperandRole::ExplicitOption;
+                    operand.role = match operand.role {
+                        NativeOperandRole::Subject(subject, scope) => {
+                            NativeOperandRole::ClippedSubject(subject, scope)
+                        }
+                        NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder => {
+                            NativeOperandRole::Argument
+                        }
+                        role => role,
+                    };
+                }
+                operand.bytes = projected;
+                !operand.bytes.is_empty()
+            });
+        }
+        Some(lost_key)
+    }
+}
 
 #[derive(Default)]
 struct Owners(HashMap<usize, usize>);
@@ -35,8 +131,8 @@ impl NativeHeadEvidence {
         &mut self,
         blocks: &mut [Block],
         sections: &mut [Section],
-        publish: impl FnMut(&mut Vec<Inline>) -> bool,
-    ) {
+        publish: impl FnMut(&mut Vec<Inline>) -> InlinePublication,
+    ) -> Vec<Diagnostic> {
         let mut owners = Owners::default();
         for block in blocks.iter() {
             owners.visit_block(block);
@@ -48,6 +144,7 @@ impl NativeHeadEvidence {
             evidence: self,
             owners,
             publish,
+            diagnostics: Vec::new(),
         };
         for block in blocks {
             publisher.visit_block_mut(block);
@@ -55,6 +152,7 @@ impl NativeHeadEvidence {
         for section in sections {
             publisher.visit_section_mut(section);
         }
+        publisher.diagnostics
     }
 }
 
@@ -62,9 +160,10 @@ struct Publisher<'a, F> {
     evidence: &'a mut NativeHeadEvidence,
     owners: Owners,
     publish: F,
+    diagnostics: Vec<Diagnostic>,
 }
 
-impl<F: FnMut(&mut Vec<Inline>) -> bool> VisitMut for Publisher<'_, F> {
+impl<F: FnMut(&mut Vec<Inline>) -> InlinePublication> VisitMut for Publisher<'_, F> {
     fn visit_heading_mut(&mut self, heading: &mut Heading) {
         (self.publish)(&mut heading.content);
     }
@@ -99,28 +198,36 @@ impl<F: FnMut(&mut Vec<Inline>) -> bool> VisitMut for Publisher<'_, F> {
                     .receiver_of_proved_head(key, block)
                     .is_some_and(|body| self.owners.unique(body))
         });
-        let (Block::Paragraph { children, .. } | Block::Preformatted { children, .. }) = block
+        let (Block::Paragraph {
+            children, source, ..
+        }
+        | Block::Preformatted {
+            children, source, ..
+        }) = block
         else {
             unreachable!("inline publication root")
         };
-        let changed = (self.publish)(children);
+        let publication = (self.publish)(children);
         if let Some(key) = owner {
             if !proved || native_inline_owner(children) != Some(key) {
                 self.evidence.hanging.discard_pair(key);
-            } else if changed {
-                self.evidence.hanging.rebase_published_head(key, children);
+            } else if publication.changed
+                && self
+                    .evidence
+                    .hanging
+                    .rebase_published_head(key, children, &publication)
+            {
+                self.diagnostics.push(operand_coverage(*source));
             }
         }
     }
 }
 
-impl<F: FnMut(&mut Vec<Inline>) -> bool> Publisher<'_, F> {
-    fn publish_terms(&mut self, item: &mut DefinitionItem) -> bool {
-        let mut changed = false;
+impl<F: FnMut(&mut Vec<Inline>) -> InlinePublication> Publisher<'_, F> {
+    fn publish_terms(&mut self, item: &mut DefinitionItem) {
         for term in &mut item.terms {
-            changed |= (self.publish)(&mut term.content);
+            (self.publish)(&mut term.content);
         }
-        changed
     }
 
     fn publish_head(&mut self, item: &mut DefinitionItem, owner: usize) {
@@ -141,7 +248,37 @@ impl<F: FnMut(&mut Vec<Inline>) -> bool> Publisher<'_, F> {
             .then(|| self.evidence.matching_operand_witness(item, owner))
             .flatten()
             .map(|(index, _)| index);
-        let changed = self.publish_terms(item);
+        let mut witness = self
+            .evidence
+            .operand_witnesses
+            .get_mut(&owner)
+            .and_then(|witnesses| {
+                let matched = operands.map(|index| witnesses.swap_remove(index));
+                // Preserve an explicit rejection if no complete witness matches.
+                witnesses.clear();
+                matched
+            });
+        let mut changed = false;
+        let mut lost_operands = false;
+        for (index, term) in item.terms.iter_mut().enumerate() {
+            let publication = (self.publish)(&mut term.content);
+            changed |= publication.changed;
+            if publication.changed
+                && let Some(witness) = &mut witness
+                && let TermOperands::Accepted(operands) = &mut witness.operands[index]
+            {
+                if let Some(lost_key) = publication.rebase_operands(
+                    Rc::make_mut(operands),
+                    &witness.terms[index],
+                    &term.content,
+                ) {
+                    lost_operands |= lost_key;
+                } else {
+                    lost_operands |= !operands.is_empty();
+                    witness.operands[index] = TermOperands::Unavailable;
+                }
+            }
+        }
         let same_owner = unique && native_owner(item) == Some(owner);
         let head = (changed && same_owner && (group.is_some() || role || operands.is_some()))
             .then(|| head_snapshot(&item.terms));
@@ -156,54 +293,34 @@ impl<F: FnMut(&mut Vec<Inline>) -> bool> Publisher<'_, F> {
         {
             witness.terms = head.clone();
         }
-        if let Some(witnesses) = self.evidence.operand_witnesses.get_mut(&owner) {
-            if let Some(index) = operands.filter(|_| same_owner) {
-                let mut witness = witnesses.swap_remove(index);
-                witnesses.clear();
+        if let Some(mut witness) = witness {
+            if same_owner {
                 if let Some(head) = head {
-                    for ((term, before), after) in witness
-                        .operands
-                        .iter_mut()
-                        .zip(witness.terms.iter())
-                        .zip(head.iter())
-                    {
-                        if let TermOperands::Accepted(operands) = term {
-                            let operands = Rc::make_mut(operands);
-                            let count = operands.len();
-                            retain_unchanged_operands(operands, before, after);
-                            if operands.len() != count {
-                                *term = TermOperands::Unavailable;
-                            }
-                        }
-                    }
                     witness.terms = head;
                 }
-                witnesses.push(witness);
+                self.evidence
+                    .operand_witnesses
+                    .get_mut(&owner)
+                    .expect("the matched operand witness had an owner")
+                    .push(witness);
             } else {
-                // A failed receipt is distinct from a head with no native
-                // constraints. Keep this owner's rejection through lookup.
-                witnesses.clear();
+                lost_operands = true;
             }
+        }
+        if lost_operands {
+            self.diagnostics.push(operand_coverage(item.source));
         }
     }
 }
 
-/// Publication can consume a source-proven reference marker. A byte range
-/// remains valid only through the unchanged prefix of its verified term.
-pub(in crate::definitions) fn retain_unchanged_operands(
-    operands: &mut Vec<NativeOperand>,
-    before: &[Inline],
-    after: &[Inline],
-) {
-    if operands.is_empty() {
-        return;
+fn operand_coverage(source: Option<SourceSpan>) -> Diagnostic {
+    Diagnostic {
+        level: DiagnosticLevel::Warning,
+        impact: DiagnosticImpact::SemanticCoverage,
+        code: Some("manual.semantic-entry.operand-coverage".into()),
+        message:
+            "could not publish all executed declaration evidence. The readable form is retained"
+                .into(),
+        source,
     }
-    let before = mant_ir::inline_plain_text(before);
-    let after = mant_ir::inline_plain_text(after);
-    let unchanged = before
-        .bytes()
-        .zip(after.bytes())
-        .take_while(|(a, b)| a == b)
-        .count();
-    operands.retain(|operand| operand.bytes.end <= unchanged);
 }

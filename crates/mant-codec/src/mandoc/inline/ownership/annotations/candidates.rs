@@ -1,6 +1,7 @@
 //! Finalize source-proven reference candidates after native acceptance.
 use mant_ir::{Inline, LinkTarget};
 
+use crate::definitions::InlinePublication;
 use crate::mandoc::reference::{
     SPHINX_EMPTY_DESTINATION, is_manual_reference_name, manual_section_operand,
     trailing_sphinx_manual_reference,
@@ -8,8 +9,12 @@ use crate::mandoc::reference::{
 
 use super::markers;
 
-pub(super) fn finish_source_candidates(nodes: &mut Vec<Inline>) -> bool {
-    publish_candidates(nodes, false)
+pub(super) fn finish_source_candidates(
+    nodes: &mut Vec<Inline>,
+    publication: &mut InlinePublication,
+) {
+    let mut offset = 0;
+    publish_candidates(nodes, false, &mut offset, publication);
 }
 
 /// A source label can outlive its public wrapper, for example after a block
@@ -39,8 +44,12 @@ pub(super) fn protect_source_label_candidates(nodes: &mut [Inline]) {
     protect(nodes, false);
 }
 
-fn publish_candidates(nodes: &mut Vec<Inline>, in_link: bool) -> bool {
-    let mut changed = false;
+fn publish_candidates(
+    nodes: &mut Vec<Inline>,
+    in_link: bool,
+    offset: &mut usize,
+    publication: &mut InlinePublication,
+) {
     let mut output = Vec::with_capacity(nodes.len());
     for mut node in std::mem::take(nodes) {
         match &mut node {
@@ -49,16 +58,22 @@ fn publish_candidates(nodes: &mut Vec<Inline>, in_link: bool) -> bool {
                 title,
                 children,
             } if markers::is_candidate(uri) => {
-                changed = true;
+                publication.changed = true;
+                let accepted = mant_ir::inline_plain_text(children);
+                *offset += accepted.len();
                 if !in_link
                     && let Some(display) = title.as_deref()
-                    && let Some(candidate) = eligible_candidate(children, display, output.last())
+                    && let Some(candidate) = eligible_candidate(&accepted, display, output.last())
                 {
                     // A traditional split-font reference is published by
                     // navigation's own name/section recognizer. Here only
                     // the source-proven suffix is removed.
                     let mut marker_bytes = SPHINX_EMPTY_DESTINATION.len();
                     trim_suffix(children, &mut marker_bytes);
+                    let removed = SPHINX_EMPTY_DESTINATION.len() - marker_bytes;
+                    if removed > 0 {
+                        publication.remove(*offset - removed..*offset);
+                    }
                     if let Candidate::Complete(target) = candidate {
                         output.push(Inline::Link {
                             target,
@@ -73,16 +88,21 @@ fn publish_candidates(nodes: &mut Vec<Inline>, in_link: bool) -> bool {
                 }
                 continue;
             }
-            Inline::Link { children, .. } => changed |= publish_candidates(children, true),
-            Inline::Strong { children } | Inline::Emphasis { children } => {
-                changed |= publish_candidates(children, in_link);
+            Inline::Link { children, .. } => {
+                publish_candidates(children, true, offset, publication);
             }
-            _ => {}
+            Inline::Strong { children } | Inline::Emphasis { children } => {
+                publish_candidates(children, in_link, offset, publication);
+            }
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                *offset += value.len();
+            }
+            Inline::LineBreak { .. } => *offset += 1,
+            Inline::Anchor { .. } => {}
         }
         output.push(node);
     }
     *nodes = output;
-    changed
 }
 
 enum Candidate {
@@ -91,11 +111,10 @@ enum Candidate {
 }
 
 fn eligible_candidate(
-    children: &[Inline],
+    accepted: &str,
     display: &str,
     previous: Option<&Inline>,
 ) -> Option<Candidate> {
-    let accepted = mant_ir::inline_plain_text(children);
     if accepted.strip_suffix(SPHINX_EMPTY_DESTINATION)? != display {
         return None;
     }

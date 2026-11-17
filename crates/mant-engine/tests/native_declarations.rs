@@ -13,6 +13,8 @@ mod eligibility;
 mod hanging;
 #[path = "native_declarations/operands.rs"]
 mod operands;
+#[path = "native_declarations/publication.rs"]
+mod publication;
 #[path = "native_declarations/roles.rs"]
 mod roles;
 #[path = "native_declarations/subjects.rs"]

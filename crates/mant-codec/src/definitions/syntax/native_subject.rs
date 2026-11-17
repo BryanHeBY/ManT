@@ -84,9 +84,7 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
             .collect();
         return Some((EntryKind::Term, Recognition { names, limit: None }));
     }
-    let NativeOperandRole::Subject(mut subject, _) = lead.role else {
-        return None;
-    };
+    let (mut subject, _) = lead.role.subject()?;
     if subject == NativeSubject::ReturnType {
         // Ft supplies a type before the following function's own name.
         // Keep an isolated or unsupported descriptor as an unnamed term.
@@ -240,7 +238,7 @@ fn symbol_group(
         .iter()
         .take_while(|operand| operand.bytes.end <= head.end)
     {
-        let NativeOperandRole::Subject(role, scope) = operand.role else {
+        let Some((role, scope)) = operand.role.subject() else {
             continue;
         };
         let start = operand.bytes.start.max(head.start);
@@ -255,7 +253,7 @@ fn symbol_group(
             cursor = operand.bytes.end;
             continue;
         }
-        if role != subject {
+        if role != subject || !matches!(operand.role, NativeOperandRole::Subject(..)) {
             continue;
         }
         let Some(name) = text

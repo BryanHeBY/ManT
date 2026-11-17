@@ -48,15 +48,26 @@ impl HangingOwnerEvidence {
     }
 
     #[cfg(feature = "roff")]
-    pub(super) fn rebase_published_head(&mut self, key: usize, children: &[Inline]) {
+    pub(super) fn rebase_published_head(
+        &mut self,
+        key: usize,
+        children: &[Inline],
+        publication: &super::InlinePublication,
+    ) -> bool {
         if let Some(pair) = self.pairs.get_mut(&key) {
-            super::evidence::retain_unchanged_operands(
-                &mut pair.head.operands,
-                &pair.head.children,
-                children,
-            );
-            pair.head.children = head_content(&[children]).pop().unwrap_or_default();
+            if let Some(lost_key) =
+                publication.rebase_operands(&mut pair.head.operands, &pair.head.children, children)
+            {
+                pair.head.children = head_content(&[children]).pop().unwrap_or_default();
+                return lost_key;
+            }
+            // An untracked edit must not turn a constrained head into an
+            // unconstrained lexical candidate for this definition pair.
+            let lost_operands = !pair.head.operands.is_empty();
+            self.pairs.remove(&key);
+            return lost_operands;
         }
+        false
     }
     /// Preserve only an already matching execution proof through a producer
     /// reading transform. A changed/mismatching head cannot acquire evidence

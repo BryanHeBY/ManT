@@ -49,6 +49,9 @@ impl<'a> OperandUses<'a> {
             NameSource::Lexical => !self.protects(part),
             #[cfg(feature = "roff")]
             NameSource::Operand(role) => {
+                if matches!(role, NativeOperandRole::ClippedSubject(..)) {
+                    return false;
+                }
                 // An Ar label must fit one executed operand. Subject scopes
                 // carry their own identity and can cover contiguous parts.
                 let mut end = self.offset + part.start;

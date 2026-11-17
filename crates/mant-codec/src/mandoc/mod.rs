@@ -137,7 +137,7 @@ fn lower_mandoc_document_with_source(
     diagnostics.extend(equations::diagnostics(&parsed.root));
     let (mut root_blocks, mut sections) =
         blocks::lower_document_structure(&parsed.root, &mut context);
-    context.annotations.finish(
+    let publication_diagnostics = context.annotations.finish(
         &mut root_blocks,
         &mut sections,
         &mut context.native_heads.borrow_mut(),
@@ -149,6 +149,7 @@ fn lower_mandoc_document_with_source(
             )
         },
     );
+    diagnostics.extend(publication_diagnostics);
     diagnostics.extend(context.annotations.take_diagnostics());
     diagnostics.extend(context.take_diagnostics());
     match initial_code_row {

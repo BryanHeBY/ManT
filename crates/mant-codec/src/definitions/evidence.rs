@@ -8,7 +8,7 @@ use mant_ir::{DefinitionItem, Inline, SourceSpan};
 #[cfg(feature = "roff")]
 mod publication;
 #[cfg(feature = "roff")]
-pub(super) use publication::retain_unchanged_operands;
+pub(crate) use publication::InlinePublication;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeHeadRole {
@@ -46,6 +46,10 @@ pub(crate) enum NativeOperandRole {
     OptionalKey,
     #[cfg(feature = "roff")]
     Subject(NativeSubject, u32),
+    /// Publication retained the native subject's role within the form,
+    /// while clipping the evidence for its own exact name.
+    #[cfg(feature = "roff")]
+    ClippedSubject(NativeSubject, u32),
     #[cfg(feature = "roff")]
     Enclosure,
     ExplicitOption,
@@ -70,8 +74,21 @@ impl NativeOperandRole {
             #[cfg(any(feature = "roff", test))]
             Self::Argument => true,
             #[cfg(feature = "roff")]
-            Self::Placeholder | Self::OptionalKey | Self::Subject(..) => true,
+            Self::Placeholder
+            | Self::OptionalKey
+            | Self::Subject(..)
+            | Self::ClippedSubject(..) => true,
             _ => false,
+        }
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn subject(self) -> Option<(NativeSubject, u32)> {
+        match self {
+            Self::Subject(subject, scope) | Self::ClippedSubject(subject, scope) => {
+                Some((subject, scope))
+            }
+            _ => None,
         }
     }
 }

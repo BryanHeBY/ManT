@@ -8,6 +8,8 @@ use std::{
 
 use mant_ir::{Block, EquationExpression, Inline, LinkTarget, Section, SourceSpan};
 
+use crate::definitions::InlinePublication;
+
 use super::markers;
 
 mod candidates;
@@ -275,27 +277,36 @@ impl AnnotationPool {
         sections: &mut [Section],
         evidence: &mut crate::definitions::NativeHeadEvidence,
         mut publish_navigation: impl FnMut(&mut Vec<Inline>) -> bool,
-    ) {
+    ) -> Vec<mant_ir::Diagnostic> {
         let has_source_candidates = self.0.borrow().source_candidates > 0;
         let has_annotations = !self.0.borrow().targets.is_empty() || has_source_candidates;
         if has_annotations {
             self.check_document_equation_carriers(blocks, sections);
         }
         evidence.publish_annotations(blocks, sections, |nodes| {
-            let changed = has_annotations && self.finish_inline_root(nodes, has_source_candidates);
+            let mut publication = if has_annotations {
+                self.finish_inline_root(nodes, has_source_candidates)
+            } else {
+                InlinePublication::default()
+            };
             // Link wrappers change the leaf paths even when every glyph
             // remains identical. Publish before deriving public name bindings.
-            publish_navigation(nodes) || changed
-        });
+            publication.changed |= publish_navigation(nodes);
+            publication
+        })
     }
 
-    fn finish_inline_root(&self, nodes: &mut Vec<Inline>, has_source_candidates: bool) -> bool {
-        let changed = self.resolve(nodes, has_source_candidates);
+    fn finish_inline_root(
+        &self,
+        nodes: &mut Vec<Inline>,
+        has_source_candidates: bool,
+    ) -> InlinePublication {
+        let mut publication = InlinePublication::default();
+        publication.changed = self.resolve(nodes, has_source_candidates);
         if has_source_candidates {
-            finish_source_candidates(nodes) || changed
-        } else {
-            changed
+            finish_source_candidates(nodes, &mut publication);
         }
+        publication
     }
 
     fn resolve(&self, nodes: &mut Vec<Inline>, has_source_candidates: bool) -> bool {

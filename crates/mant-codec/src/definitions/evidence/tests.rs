@@ -333,13 +333,15 @@ fn publication_rebinds_only_the_proved_owner_once() {
     evidence.publish_annotations(std::slice::from_mut(&mut block), &mut [], |nodes| {
         calls += 1;
         let Some(Inline::Link { target, title, .. }) = nodes.last_mut() else {
-            return false;
+            return super::InlinePublication::default();
         };
         *target = LinkTarget::External {
             uri: "https://example.test".into(),
         };
         *title = None;
-        true
+        let mut publication = super::InlinePublication::default();
+        publication.changed = true;
+        publication
     });
     assert_eq!(calls, 2);
     let Block::DefinitionList { items, .. } = &block else {
@@ -366,7 +368,9 @@ fn publication_refuses_duplicated_owner_markers() {
         source: None,
         layout: mant_ir::LayoutHint::default(),
     };
-    evidence.publish_annotations(std::slice::from_mut(&mut block), &mut [], |_| false);
+    evidence.publish_annotations(std::slice::from_mut(&mut block), &mut [], |_| {
+        super::InlinePublication::default()
+    });
     let mant_ir::Block::DefinitionList { items, .. } = &block else {
         unreachable!()
     };
@@ -375,4 +379,89 @@ fn publication_refuses_duplicated_owner_markers() {
         assert!(matches!(evidence.operands(item), HeadOperands::Unavailable));
         assert!(evidence.groups.shared_head(item).is_none());
     }
+}
+
+#[test]
+#[cfg(feature = "roff")]
+fn publication_projects_exact_bytes_once_without_guessing_at_duplicate_names() {
+    let before = [Inline::Text {
+        value: "--flag é fake <> fake <> -later".into(),
+    }];
+    let after = [Inline::Text {
+        value: "--flag é fake fake -later".into(),
+    }];
+    let mut operands = vec![
+        NativeOperand {
+            bytes: 0..6,
+            role: NativeOperandRole::ExplicitOption,
+        },
+        NativeOperand {
+            bytes: 7..25,
+            role: NativeOperandRole::Argument,
+        },
+        NativeOperand {
+            bytes: 26..32,
+            role: NativeOperandRole::ExplicitOption,
+        },
+    ];
+    let mut publication = InlinePublication::default();
+    publication.remove(14..17);
+    publication.remove(22..25);
+    assert_eq!(
+        publication.rebase_operands(&mut operands, &before, &after),
+        Some(false)
+    );
+    assert_eq!(
+        operands
+            .iter()
+            .map(|operand| operand.bytes.clone())
+            .collect::<Vec<_>>(),
+        [0..6, 7..19, 20..26]
+    );
+    assert_eq!(operands[1].role, NativeOperandRole::Argument);
+    let different_retained_text = [Inline::Text {
+        value: "--flag é same fake -later".into(),
+    }];
+    assert_eq!(
+        publication.rebase_operands(&mut operands, &before, &different_retained_text),
+        None,
+    );
+    // An edit whose endpoints split a UTF-8 character cannot carry proof.
+    let mut unknown = InlinePublication::default();
+    unknown.remove(8..11);
+    assert_eq!(
+        unknown.rebase_operands(&mut operands, &before, &after),
+        None
+    );
+}
+
+#[test]
+#[cfg(feature = "roff")]
+fn publication_never_requalifies_a_clipped_name_as_a_smaller_selector() {
+    let before = [Inline::Text {
+        value: "--joined -after".into(),
+    }];
+    let after = [Inline::Text {
+        value: "--join -after".into(),
+    }];
+    let mut operands = vec![
+        NativeOperand {
+            bytes: 0..8,
+            role: NativeOperandRole::ExplicitOption,
+        },
+        NativeOperand {
+            bytes: 9..15,
+            role: NativeOperandRole::ExplicitOption,
+        },
+    ];
+    let mut publication = InlinePublication::default();
+    publication.remove(6..8);
+    assert_eq!(
+        publication.rebase_operands(&mut operands, &before, &after),
+        Some(true)
+    );
+    assert_eq!(operands[0].bytes, 0..6);
+    assert_eq!(operands[0].role, NativeOperandRole::Argument);
+    assert_eq!(operands[1].bytes, 7..13);
+    assert_eq!(operands[1].role, NativeOperandRole::ExplicitOption);
 }
