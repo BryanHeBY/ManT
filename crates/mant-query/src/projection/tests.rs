@@ -804,6 +804,85 @@ fn child_selection_retains_ancestor_breadcrumbs() {
 }
 
 #[test]
+fn excerpt_drops_only_entries_covered_by_a_selected_structural_owner() {
+    let mut query = query_with_semantic_entries();
+    let document = query.document.as_mut().unwrap();
+    let Block::DefinitionList { items, .. } = &mut document.sections[1].blocks[0] else {
+        unreachable!();
+    };
+    let mut independent = items[0].clone();
+    independent.entry.as_mut().unwrap().id = "other-forward".into();
+    if let Block::DefinitionList { items, .. } = &mut independent.description[0] {
+        items[0].entry.as_mut().unwrap().id = "other-yes".into();
+    }
+    items.push(independent);
+    let path = ContentSelector::path;
+    let id = ContentSelector::id;
+    for selectors in [
+        vec![path("2/e1"), id("value-yes"), path("2/e2"), id("other-yes")],
+        vec![
+            id("other-yes"),
+            path("2/e2"),
+            path("2/e1/e1"),
+            id("option-local-forward"),
+        ],
+    ] {
+        let excerpt = select_excerpt(&query, &selectors).unwrap();
+        assert_eq!(
+            excerpt
+                .selections
+                .iter()
+                .map(|selection| selection.outline().path())
+                .collect::<Vec<_>>(),
+            ["2/e1", "2/e2", "2/e3/e1"],
+        );
+    }
+}
+
+#[test]
+fn paged_search_uses_the_same_nested_owner_trail_as_excerpt_and_explain() {
+    for root in [false, true] {
+        let mut query = query_with_semantic_entries();
+        if root {
+            let document = query.document.as_mut().unwrap();
+            document.blocks = std::mem::take(&mut document.sections[1].blocks);
+        }
+        let expected_path = if root { "root/e1/e1" } else { "2/e1/e1" };
+        let expected_parent = if root { "root/e1" } else { "2/e1" };
+        let excerpt = select_excerpt(&query, &[ContentSelector::path(expected_path)]).unwrap();
+        let expected = excerpt.selections[0].outline();
+        assert_eq!(expected.ancestors.last().unwrap().path, expected_parent);
+        let explained = super::select_explanation(&query, expected_path).unwrap();
+        assert!(
+            explained
+                .evidence
+                .iter()
+                .any(|evidence| &evidence.outline == expected)
+        );
+        for scope in [
+            mant_protocol::SearchScope::Visible,
+            mant_protocol::SearchScope::Markdown,
+        ] {
+            let search = crate::search_query(
+                &query,
+                &mant_protocol::SearchQuery {
+                    pattern: "yes".into(),
+                    syntax: mant_protocol::SearchSyntax::Literal,
+                    case: mant_protocol::SearchCase::Sensitive,
+                    scope,
+                    word: false,
+                    context_lines: 0,
+                    limit: 1,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(&search.matches[0].outline, expected, "{scope:?}");
+        }
+    }
+}
+
+#[test]
 fn structural_paths_take_precedence_over_colliding_entry_ids() {
     let mut query = query();
     query.document.as_mut().expect("document").sections[1]

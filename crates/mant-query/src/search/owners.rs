@@ -72,7 +72,7 @@ impl<'map, 'src> OwnerIndex<'map, 'src> {
     pub(super) fn trail(&self, key: usize) -> OutlineTrail {
         #[cfg(test)]
         self.materialized.set(self.materialized.get() + 1);
-        trail(self.artifact, self.artifact.nodes()[key].node())
+        trail(self.artifact, &self.artifact.nodes()[key])
     }
 
     pub(super) fn owner(&self, offset: usize) -> Option<&Owner> {
@@ -137,8 +137,8 @@ fn owner_from_range(key: usize, mapped: &MarkdownNodeRange<'_>) -> Owner {
     }
 }
 
-fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTrail {
-    match node {
+fn trail(artifact: &MarkdownArtifact<'_>, mapped: &MarkdownNodeRange<'_>) -> OutlineTrail {
+    match mapped.node() {
         MarkdownNode::Tldr => OutlineTrail {
             ancestors: Vec::new(),
             node: OutlineNodeReference::Tldr {
@@ -176,7 +176,7 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
             ..
         } => {
             let facts = owner.facts().expect("mapped semantic owner");
-            let ancestors = if section.is_some() {
+            let mut ancestors = if section.is_some() {
                 section_ancestors(artifact, *section)
             } else {
                 vec![mant_protocol::OutlineReference {
@@ -185,6 +185,11 @@ fn trail(artifact: &MarkdownArtifact<'_>, node: &MarkdownNode<'_>) -> OutlineTra
                     title: "OVERVIEW".into(),
                 }]
             };
+            ancestors.extend(
+                crate::selectors::entry_ancestors(path, mapped.entry_ancestors()).map(
+                    |breadcrumb| crate::projection::excerpt::breadcrumb_reference(&breadcrumb),
+                ),
+            );
             OutlineTrail {
                 ancestors,
                 node: OutlineNodeReference::DocumentEntry {

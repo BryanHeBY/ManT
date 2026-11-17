@@ -1955,7 +1955,8 @@ and normalized `names`. Empty ancestor arrays are omitted.
 An excerpt accepts from 1 through 16 closed path/ID selector objects. The schema, native request boundary, MCP,
 and direct in-process projection all enforce the same bound. Overlapping
 selections are deduplicated, and source order is preserved. Selecting a section
-includes its descendants. The outline trail identifies ancestors without
+or entry includes its descendants and suppresses separate selections of those
+same owners. The outline trail identifies ancestors without
 copying their blocks.
 
 The `excerpt` and `outline.root` views use one exact structural resolver.

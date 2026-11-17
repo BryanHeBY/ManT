@@ -73,6 +73,7 @@ impl<'src> MarkdownArtifact<'src> {
 pub struct MarkdownNodeRange<'src> {
     pub(super) range: Range<usize>,
     pub(super) node: MarkdownNode<'src>,
+    entry_ancestors: Vec<EntryOwner<'src>>,
 }
 
 impl<'src> MarkdownNodeRange<'src> {
@@ -86,6 +87,12 @@ impl<'src> MarkdownNodeRange<'src> {
     #[must_use]
     pub fn node(&self) -> &MarkdownNode<'src> {
         &self.node
+    }
+
+    /// Original entry owners containing this range, from outermost to nearest.
+    #[must_use]
+    pub fn entry_ancestors(&self) -> &[EntryOwner<'src>] {
+        &self.entry_ancestors
     }
 }
 
@@ -245,6 +252,7 @@ pub(super) fn render_markdown_with_context<'src>(
         if track {
             output.nodes.push(MarkdownNodeRange {
                 range,
+                entry_ancestors: Vec::new(),
                 node: MarkdownNode::DocumentHeading {
                     source: heading.source,
                 },
@@ -343,6 +351,7 @@ impl<'src> ArtifactBuilder<'src> {
                 .expect("enumerated entry paths are one-based");
             self.nodes.push(MarkdownNodeRange {
                 range: block.start + entry.start..block.start + entry.end,
+                entry_ancestors: entry.ancestors,
                 node: MarkdownNode::DocumentEntry {
                     path,
                     owner: entry.owner,
@@ -362,6 +371,7 @@ impl<'src> ArtifactBuilder<'src> {
         self.nodes.push(MarkdownNodeRange {
             range: start..self.text.len(),
             node,
+            entry_ancestors: Vec::new(),
         });
         Some(index)
     }

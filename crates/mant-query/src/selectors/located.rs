@@ -130,20 +130,16 @@ fn collect_sections_impl<'a, const DETAILS: bool>(
             content_entry_locations(&section.blocks)
         } {
             let entry = located.owner();
+            let path = OutlinePath::nested_entry(Some(&coordinates), located.indices())
+                .expect("enumerated entry paths are one-based");
             let mut entry_breadcrumbs = child_breadcrumbs.clone();
             if DETAILS {
-                append_entry_breadcrumbs(
-                    &mut entry_breadcrumbs,
-                    Some(&coordinates),
-                    located.indices(),
-                    located.ancestors(),
-                );
+                entry_breadcrumbs.extend(entry_ancestors(&path, located.ancestors()));
             }
             output.push(LocatedNode::Entry {
                 order: output.len(),
                 coordinates: coordinates.clone(),
-                path: OutlinePath::nested_entry(Some(&coordinates), located.indices())
-                    .expect("enumerated entry paths are one-based"),
+                path,
                 title: if DETAILS {
                     definition_title(entry, located.names())
                 } else {
@@ -193,20 +189,16 @@ fn collect_root_entries_impl<'a, const DETAILS: bool>(
         content_entry_locations(blocks)
     } {
         let entry = located.owner();
+        let path = OutlinePath::nested_entry(None, located.indices())
+            .expect("enumerated entry paths are one-based");
         let mut entry_breadcrumbs = breadcrumbs.clone();
         if DETAILS {
-            append_entry_breadcrumbs(
-                &mut entry_breadcrumbs,
-                None,
-                located.indices(),
-                located.ancestors(),
-            );
+            entry_breadcrumbs.extend(entry_ancestors(&path, located.ancestors()));
         }
         output.push(LocatedNode::Entry {
             order: output.len(),
             coordinates: Vec::new(),
-            path: OutlinePath::nested_entry(None, located.indices())
-                .expect("enumerated entry paths are one-based"),
+            path,
             title: if DETAILS {
                 definition_title(entry, located.names())
             } else {
@@ -219,24 +211,27 @@ fn collect_root_entries_impl<'a, const DETAILS: bool>(
     }
 }
 
-fn append_entry_breadcrumbs(
-    breadcrumbs: &mut Vec<LocatedBreadcrumb>,
-    section: Option<&[usize]>,
-    indices: &[usize],
-    ancestors: &[EntryOwner<'_>],
-) {
-    for (depth, ancestor) in ancestors.iter().enumerate() {
-        let path = OutlinePath::nested_entry(section, &indices[..=depth])
-            .expect("ancestor entry paths are one-based");
+pub(crate) fn entry_ancestors<'a>(
+    path: &'a OutlinePath,
+    ancestors: &'a [EntryOwner<'_>],
+) -> impl Iterator<Item = LocatedBreadcrumb> + 'a {
+    let OutlinePath::Entry { section, indices } = path else {
+        unreachable!("entry ancestors require an entry path");
+    };
+    ancestors.iter().enumerate().map(move |(depth, ancestor)| {
+        let path = OutlinePath::Entry {
+            section: section.clone(),
+            indices: indices[..=depth].to_vec(),
+        };
         let identity = ancestor
             .facts()
             .expect("semantic entry ancestors have identities");
-        breadcrumbs.push(LocatedBreadcrumb {
-            path: path.clone(),
+        LocatedBreadcrumb {
+            path,
             id: identity.id.clone(),
             title: definition_title(*ancestor, ancestor.validated_names().unwrap_or_default()),
-        });
-    }
+        }
+    })
 }
 
 fn definition_title(entry: EntryOwner<'_>, names: &[String]) -> String {

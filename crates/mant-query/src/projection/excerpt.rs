@@ -110,24 +110,14 @@ fn select_from_source(
         resolve_excerpt_candidates(query, selectors, &index, || {
             source_index().is_some_and(DocumentIndex::has_overview_conflict)
         })?;
-    let selected_sections = selected
-        .iter()
-        .filter(|candidate| candidate.is_section())
-        .map(|candidate| candidate.coordinates().to_vec())
-        .collect::<Vec<_>>();
+    let selected_owners = selected.clone();
     selected.retain(|candidate| {
         if document_root_selected && candidate.path().is_document_root_entry() {
             return false;
         }
-        !selected_sections.iter().any(|ancestor| {
-            if candidate.is_section() {
-                ancestor != candidate.coordinates()
-                    && is_ancestor(ancestor, candidate.coordinates())
-            } else {
-                ancestor == candidate.coordinates()
-                    || is_ancestor(ancestor, candidate.coordinates())
-            }
-        })
+        !selected_owners
+            .iter()
+            .any(|ancestor| covers(ancestor.path(), candidate.path()))
     });
     selected.sort_by_key(|candidate| candidate.order());
 
@@ -297,16 +287,43 @@ impl LocatedNode<'_> {
 }
 
 pub(crate) fn project_breadcrumbs(breadcrumbs: &[LocatedBreadcrumb]) -> Vec<OutlineReference> {
-    breadcrumbs
-        .iter()
-        .map(|breadcrumb| OutlineReference {
-            path: breadcrumb.path.to_string().into(),
-            id: breadcrumb.id.clone(),
-            title: breadcrumb.title.clone(),
-        })
-        .collect()
+    breadcrumbs.iter().map(breadcrumb_reference).collect()
 }
 
-fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
-    ancestor.len() < descendant.len() && descendant.starts_with(ancestor)
+pub(crate) fn breadcrumb_reference(breadcrumb: &LocatedBreadcrumb) -> OutlineReference {
+    OutlineReference {
+        path: breadcrumb.path.to_string().into(),
+        id: breadcrumb.id.clone(),
+        title: breadcrumb.title.clone(),
+    }
+}
+
+fn covers(ancestor: &OutlinePath, descendant: &OutlinePath) -> bool {
+    match (ancestor, descendant) {
+        (OutlinePath::Section(ancestor), OutlinePath::Section(descendant)) => {
+            ancestor.len() < descendant.len() && descendant.starts_with(ancestor)
+        }
+        (
+            OutlinePath::Section(ancestor),
+            OutlinePath::Entry {
+                section: Some(section),
+                ..
+            },
+        ) => section.starts_with(ancestor),
+        (
+            OutlinePath::Entry {
+                section: parent_section,
+                indices: parent,
+            },
+            OutlinePath::Entry {
+                section: child_section,
+                indices: child,
+            },
+        ) => {
+            parent_section == child_section
+                && parent.len() < child.len()
+                && child.starts_with(parent)
+        }
+        _ => false,
+    }
 }

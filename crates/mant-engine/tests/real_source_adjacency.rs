@@ -148,6 +148,49 @@ fn tmux_xo_keeps_the_complete_option_owner_link_and_query_binding() {
 }
 
 #[test]
+fn tmux_nested_options_share_search_and_read_paths_without_duplicate_selections() {
+    // Fixed CVS also retains the option under the session options heading.
+    let content = transported(&fixture("arch-tmux.1.gz"));
+    let excerpt =
+        mant_query::select_excerpt(&content, &[ContentSelector::path("8/e1/e3")]).unwrap();
+    let child = excerpt.selections[0].outline();
+    assert_eq!(
+        child
+            .ancestors
+            .iter()
+            .map(|ancestor| ancestor.path.as_str())
+            .collect::<Vec<_>>(),
+        ["8", "8/e1"]
+    );
+    for scope in ["visible", "markdown"] {
+        let request = serde_json::from_value(serde_json::json!({
+            "pattern": "no-detach-on-destroy", "scope": scope, "limit": 1,
+        }))
+        .unwrap();
+        let result = mant_query::search_query(&content, &request).unwrap();
+        assert_eq!(&result.matches[0].outline, child, "{scope}");
+    }
+    let child_id = ContentSelector::id(child.node.id());
+    for selectors in [
+        [ContentSelector::path("8/e1"), child_id.clone()],
+        [child_id, ContentSelector::path("8/e1")],
+    ] {
+        let excerpt = mant_query::select_excerpt(&content, &selectors).unwrap();
+        assert_eq!(excerpt.selections.len(), 1);
+        assert_eq!(excerpt.selections[0].outline().path(), "8/e1");
+        let markdown = mant_render::render_excerpt_markdown(&excerpt);
+        assert_eq!(markdown.matches("no-detach-on-destroy").count(), 1);
+        let restored = load_markdown_text(&markdown, None).unwrap();
+        assert_eq!(
+            mant_render::render_query_text(&restored)
+                .matches("no-detach-on-destroy")
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
 fn openbsd_date_keeps_sm_controlled_nested_synopsis_seams() {
     // mdoc_term.c::termp_sm_pre and termp_ns_pre govern joining across this
     // complete real synopsis; print_mdoc_node preserves each enclosure phase.

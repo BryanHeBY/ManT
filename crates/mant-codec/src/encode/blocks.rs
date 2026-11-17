@@ -33,6 +33,7 @@ pub(super) struct RenderedEntry<'src> {
     pub(super) start: usize,
     pub(super) end: usize,
     pub(super) owner: EntryOwner<'src>,
+    pub(super) ancestors: Vec<EntryOwner<'src>>,
     pub(super) names: &'src [String],
     pub(super) source: Option<SourceSpan>,
 }
@@ -73,6 +74,7 @@ pub(super) fn render_blocks_with_entries<'ctx>(
                 let range = ranges.get(&std::ptr::from_ref(identity))?;
                 Some(RenderedEntry {
                     owner,
+                    ancestors: located.ancestors().to_vec(),
                     names: located.names(),
                     indices: located.indices().to_vec(),
                     start: range.start,
