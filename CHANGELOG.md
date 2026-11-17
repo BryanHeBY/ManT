@@ -85,6 +85,12 @@ that crate was not published for that change.
   embedding applications supply their own publisher identity. Parser identity
   and v0.14 response schemas remain the same.
 
+### Dependency maintenance
+
+- Update flate2 to 1.1.11, zip to 9.6.1 and zstd to 0.14.4. Refresh the workspace
+  and fuzz locks and regenerate distributable notices. Rust 1.88 remains
+  supported.
+
 ## 0.14.0 - 2026-11-14
 
 This release selects the ten native/IR/reader crates at

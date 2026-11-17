@@ -16,13 +16,13 @@
     <p>This file is generated from the locked dependency graph by cargo-about. It lists the license texts and Rust packages included in ManT native distributions.</p>
     <h2>Licenses</h2>
     <ul>
-      <li><a href="#Apache-2.0">Apache License 2.0</a> (159 packages)</li>
+      <li><a href="#Apache-2.0">Apache License 2.0</a> (161 packages)</li>
       <li><a href="#MIT">MIT License</a> (59 packages)</li>
       <li><a href="#ISC">ISC License</a> (34 packages)</li>
       <li><a href="#BSD-3-Clause">BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License</a> (7 packages)</li>
+      <li><a href="#BSD-2-Clause">BSD 2-Clause &quot;Simplified&quot; License</a> (2 packages)</li>
       <li><a href="#BSL-1.0">Boost Software License 1.0</a> (2 packages)</li>
       <li><a href="#Zlib">zlib License</a> (2 packages)</li>
-      <li><a href="#BSD-2-Clause">BSD 2-Clause &quot;Simplified&quot; License</a> (1 packages)</li>
       <li><a href="#CDLA-Permissive-2.0">Community Data License Agreement Permissive 2.0</a> (1 packages)</li>
       <li><a href="#Unicode-3.0">Unicode License v3</a> (1 packages)</li>
     </ul>
@@ -35,6 +35,7 @@
         <li><a href="https://github.com/psychon/x11rb">x11rb-protocol 0.13.2</a></li>
         <li><a href="https://github.com/psychon/x11rb">x11rb 0.13.2</a></li>
         <li><a href="https://github.com/RustCrypto/utils">zeroize 1.9.1</a></li>
+        <li><a href="https://github.com/RustCrypto/utils">zeroize_derive 1.5.0</a></li>
       </ul>
       <pre>
                                  Apache License
@@ -3104,7 +3105,7 @@ limitations under the License.
         <li><a href="https://github.com/alexcrichton/filetime">filetime 0.2.29</a></li>
         <li><a href="https://github.com/rust-lang/cc-rs">find-msvc-tools 0.1.15</a></li>
         <li><a href="https://github.com/petgraph/fixedbitset">fixedbitset 0.5.7</a></li>
-        <li><a href="https://github.com/rust-lang/flate2-rs">flate2 1.1.10</a></li>
+        <li><a href="https://github.com/rust-lang/flate2-rs">flate2 1.1.11</a></li>
         <li><a href="https://codeberg.org/swsnr/gethostname.rs.git">gethostname 1.1.0</a></li>
         <li><a href="https://github.com/rust-lang/hashbrown">hashbrown 0.15.5</a></li>
         <li><a href="https://github.com/rust-lang/hashbrown">hashbrown 0.17.1</a></li>
@@ -4197,6 +4198,7 @@ limitations under the License.
       <ul class="used-by">
         <li><a href="https://github.com/zakarumych/allocator-api2">allocator-api2 0.2.21</a></li>
         <li><a href="https://github.com/1Password/arboard">arboard 3.7.0</a></li>
+        <li><a href="https://codeberg.org/cesarb/constant_time_eq">constant_time_eq 0.6.1</a></li>
         <li><a href="https://github.com/slint-ui/document-features">document-features 0.2.12</a></li>
         <li><a href="https://github.com/dtolnay/dyn-clone">dyn-clone 1.0.20</a></li>
         <li><a href="https://github.com/TedDriggs/ident_case">ident_case 1.0.1</a></li>
@@ -4588,12 +4590,49 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 </pre>
     </section>
     <section>
+      <h2 id="BSD-2-Clause">BSD 2-Clause &quot;Simplified&quot; License</h2>
+      <p>Used by:</p>
+      <ul class="used-by">
+        <li><a href="https://github.com/gyscos/zstd-rs">zstd-sys 2.1.3+zstd.1.5.7</a></li>
+      </ul>
+      <pre>The decoders for legacy formats, in zstd/lib/legacy/, include code under the
+2-clause BSD license:
+
+BSD 2-Clause License
+
+Copyright (C) 2013-2016, Yann Collet.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+&quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+</pre>
+    </section>
+    <section>
       <h2 id="BSD-3-Clause">BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License</h2>
       <p>Used by:</p>
       <ul class="used-by">
-        <li><a href="https://github.com/gyscos/zstd-rs">zstd-safe 8.2.0</a></li>
-        <li><a href="https://github.com/gyscos/zstd-rs">zstd-sys 2.1.2+zstd.1.5.7</a></li>
-        <li><a href="https://github.com/gyscos/zstd-rs">zstd 0.14.3</a></li>
+        <li><a href="https://github.com/gyscos/zstd-rs">zstd-safe 8.3.0</a></li>
+        <li><a href="https://github.com/gyscos/zstd-rs">zstd-sys 2.1.3+zstd.1.5.7</a></li>
+        <li><a href="https://github.com/gyscos/zstd-rs">zstd 0.14.4</a></li>
       </ul>
       <pre>BSD 3-Clause License
 
@@ -4629,7 +4668,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <h2 id="BSD-3-Clause">BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License</h2>
       <p>Used by:</p>
       <ul class="used-by">
-        <li><a href="https://github.com/gyscos/zstd-rs">zstd-sys 2.1.2+zstd.1.5.7</a></li>
+        <li><a href="https://github.com/gyscos/zstd-rs">zstd-sys 2.1.3+zstd.1.5.7</a></li>
       </ul>
       <pre>BSD License
 
@@ -4737,7 +4776,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <h2 id="BSD-3-Clause">BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License</h2>
       <p>Used by:</p>
       <ul class="used-by">
-        <li><a href="https://github.com/gyscos/zstd-rs">zstd-sys 2.1.2+zstd.1.5.7</a></li>
+        <li><a href="https://github.com/gyscos/zstd-rs">zstd-sys 2.1.3+zstd.1.5.7</a></li>
       </ul>
       <pre>The auto-generated bindings are under the 3-clause BSD license:
 
@@ -6936,7 +6975,7 @@ THE SOFTWARE.
       <p>Used by:</p>
       <ul class="used-by">
         <li><a href="https://github.com/tokio-rs/tracing">tracing-core 0.1.36</a></li>
-        <li><a href="https://github.com/zip-rs/zip2">zip 9.3.0</a></li>
+        <li><a href="https://github.com/zip-rs/zip2">zip 9.6.1</a></li>
       </ul>
       <pre>The MIT License (MIT)
 
@@ -6997,7 +7036,7 @@ THE SOFTWARE.
       <h2 id="MIT">MIT License</h2>
       <p>Used by:</p>
       <ul class="used-by">
-        <li><a href="https://github.com/nix-rust/nix">nix 0.31.3</a></li>
+        <li><a href="https://github.com/nix-rust/nix">nix 0.32.0</a></li>
       </ul>
       <pre>The MIT License (MIT)
 
