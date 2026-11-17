@@ -39,7 +39,8 @@ that crate was not published for that change.
 - Check declaration names against their executed operand roles. An `Ar`
   placeholder cannot complete a concrete option, symbol, environment
   variable or command name. Standalone operand labels and independent
-  declarations still receive exact name bindings.
+  declarations still receive exact name bindings. Forward and backward
+  search templates preserve the shared description of later literal commands.
 - Preserve declaration names, parameter exclusions and reading groups when
   native navigation consumes a source-proven reference marker. Bind later
   names to the surviving text in their original operands.

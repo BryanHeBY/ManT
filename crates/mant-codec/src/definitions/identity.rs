@@ -165,10 +165,11 @@ pub(super) fn identity_plan(
         && groupable_role
         && (!names.is_empty()
             || !item.terms.is_empty()
-                && item
-                    .terms
-                    .iter()
-                    .all(|term| super::syntax::is_inferred_head(term, head_context)));
+                && item.terms.iter().enumerate().all(|(index, term)| {
+                    operands.for_term(index).is_some_and(|ranges| {
+                        super::syntax::is_inferred_head_with_operands(term, head_context, ranges)
+                    })
+                }));
     IdentityPlan {
         semantic,
         group_head,

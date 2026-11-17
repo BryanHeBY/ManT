@@ -6,7 +6,7 @@ use libmandoc_rs::{
 };
 use libmandoc_rs::{Node, NodeKind};
 
-use super::roff_escape::visible_text;
+use super::roff_escape::{RoffInlineEvent, decode, visible_text};
 
 pub(super) fn record(root: &Node, evidence: &mut NativeHeadEvidence) {
     fn declaration(node: &Node) -> bool {
@@ -113,33 +113,99 @@ fn literal_numeric_label(text: &str) -> bool {
     digits > 0
 }
 
-fn collect_mdoc_template_text(node: &Node, text: &mut String, has_argument: &mut bool) {
-    if node.flags.no_print {
-        return;
-    }
-    if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ar)) {
-        *has_argument = true;
-    }
-    if let Some(value) = node.text.as_deref() {
-        text.push_str(value);
-    }
-    for child in &node.children {
-        collect_mdoc_template_text(child, text, has_argument);
-    }
-}
-
 fn native_mdoc_search_template(node: &Node) -> bool {
-    let Some(head) = node
+    let Some(mut head) = node
         .children
         .iter()
         .find(|child| child.kind == NodeKind::Head)
     else {
         return false;
     };
-    let mut text = String::new();
-    let mut has_argument = false;
-    collect_mdoc_template_text(head, &mut text, &mut has_argument);
-    has_argument && visible_text(&text).trim_start().starts_with('/')
+    while let [wrapper] = head.children.as_slice()
+        && wrapper.kind == NodeKind::Block
+        && !wrapper.flags.no_print
+        && wrapper.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Xo))
+        && let Some(body) = wrapper
+            .children
+            .iter()
+            .find(|child| child.kind == NodeKind::Body)
+    {
+        head = body;
+    }
+    let mut words = head.children.iter().filter(|child| !child.flags.no_print);
+    let Some(prefix) = words.next() else {
+        return false;
+    };
+    let mut joined = prefix.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Pf));
+    let sign = match (
+        prefix.macro_token.as_ref(),
+        prefix.kind,
+        prefix.children.as_slice(),
+    ) {
+        (Some(Mdoc(MdocMacro::Pf | MdocMacro::No)), NodeKind::Element, [text])
+            if text.kind == NodeKind::Text && !text.flags.no_print =>
+        {
+            text
+        }
+        (_, NodeKind::Text, []) => prefix,
+        _ => return false,
+    };
+    let Some(sign) = sign.text.as_deref().and_then(search_sign) else {
+        return false;
+    };
+    // CVS termp_pf_post and termp_ns_pre join actual same-line operands.
+    // A literal search command followed by a separate Ar stays a candidate.
+    let mut words = words.peekable();
+    let joined_by_ns = |child: &&Node| {
+        !child.flags.line_start && child.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ns))
+    };
+    while words.next_if(joined_by_ns).is_some() {
+        joined = true;
+    }
+    if !joined
+        || !words.next().is_some_and(|child| {
+            !child.flags.line_start && child.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ar))
+        })
+    {
+        return false;
+    }
+    // An optional closing sign and Ar suffixes such as an offset belong to
+    // the template. Another visible source role ends that proof.
+    let mut closed = false;
+    words.filter(|child| !joined_by_ns(child)).all(|child| {
+        if child.flags.line_start {
+            return false;
+        }
+        if child.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ar)) {
+            return true;
+        }
+        if !closed
+            && child.kind == NodeKind::Text
+            && child.text.as_deref().and_then(search_sign) == Some(sign)
+        {
+            closed = true;
+            return true;
+        }
+        false
+    })
+}
+
+fn search_sign(text: &str) -> Option<char> {
+    let mut sign = None;
+    for event in decode(text) {
+        match event {
+            RoffInlineEvent::Text(value)
+                if sign.is_none() && matches!(value.as_str(), "/" | "?") =>
+            {
+                sign = value.chars().next();
+            }
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::ZeroWidthGlyph => {}
+            _ => return None,
+        }
+    }
+    sign
 }
 
 fn native_man_option_template(node: &Node) -> bool {

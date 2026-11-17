@@ -50,6 +50,7 @@ pub(super) fn environment_prefix(inlines: &[Inline]) -> Option<String> {
 /// Split complete declarations without flattening parameter spans. Bracket
 /// nesting and local argument phases survive strong/link wrapper boundaries;
 /// punctuation inside an argument is not a fresh declaration.
+#[cfg(test)]
 pub(super) fn declaration_groups(term: &[Inline]) -> Vec<Vec<Inline>> {
     declaration_groups_with_uses(term, OperandUses::default())
 }

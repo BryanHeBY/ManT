@@ -14,21 +14,30 @@ pub(in crate::definitions) fn is_inferred_head(
     inlines: &[Inline],
     context: DefinitionContext,
 ) -> bool {
-    let options = super::scan::option_head(inlines, &[]);
-    inferred_head_with_options(inlines, context, &options)
+    is_inferred_head_with_operands(inlines, context, &[])
+}
+
+pub(in crate::definitions) fn is_inferred_head_with_operands(
+    inlines: &[Inline],
+    context: DefinitionContext,
+    operands: &[crate::definitions::NativeOperand],
+) -> bool {
+    let options = super::scan::option_head(inlines, operands);
+    inferred_head_with_options(inlines, context, &options, OperandUses::new(operands))
 }
 
 fn inferred_head_with_options(
     inlines: &[Inline],
     context: DefinitionContext,
     options: &super::scan::OptionHead,
+    uses: OperandUses<'_>,
 ) -> bool {
     if options.inferred_complete {
         return true;
     }
     // Candidate syntax precedes final role: a complete flag declaration does
     // not stop being a candidate under a configuration/value heading.
-    let groups = forms::declaration_groups(inlines);
+    let groups = forms::declaration_groups_with_uses(inlines, uses);
     if options.names.is_empty()
         && !groups.is_empty()
         && groups.iter().enumerate().all(|(index, group)| {
@@ -50,9 +59,15 @@ fn inferred_head_with_options(
     }
     match context {
         DefinitionContext::EnvironmentVariables => named::environment_occurrences(&text).is_some(),
-        DefinitionContext::Commands => forms::declaration_groups(inlines)
-            .iter()
-            .all(|group| is_command_head(group)),
+        DefinitionContext::Commands => {
+            let mut offset = 0;
+            groups.iter().all(|group| {
+                let text = plain_text(group);
+                let accepted = is_command_head(group, &text, offset, uses);
+                offset += text.len() + 1;
+                accepted
+            })
+        }
         DefinitionContext::ConfigurationKeys => {
             named::named_occurrences(&text, named::is_configuration_key).is_some()
                 && (commands::leading_styled_command_name(inlines).is_some()
@@ -85,11 +100,11 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
     operands: &[crate::definitions::NativeOperand],
 ) -> Option<super::InferredIdentity> {
     let options = super::scan::option_head(inlines, operands);
-    if !inferred_head_with_options(inlines, context, &options) {
+    let uses = OperandUses::new(operands);
+    if !inferred_head_with_options(inlines, context, &options, uses) {
         return None;
     }
     let text = plain_text(inlines);
-    let uses = OperandUses::new(operands);
     let (kind, case) = if options.inferred_complete {
         (
             mant_ir::EntryKind::Parameter {
@@ -116,8 +131,7 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
         mant_ir::EntryKind::Command => {
             let name = commands::inferred_command_name(inlines)
                 .or_else(|| commands::command_name_from_authored_form(&text).map(str::to_owned))?;
-            let start = text.find(&name)?;
-            vec![crate::definitions::RecognizedName::contiguous(&name, start)]
+            vec![commands::command_binding(&text, &name, 0, uses)?]
         }
         _ => return None,
     };
@@ -137,12 +151,15 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
     })
 }
 
-fn is_command_head(inlines: &[Inline]) -> bool {
+fn is_command_head(inlines: &[Inline], text: &str, offset: usize, uses: OperandUses<'_>) -> bool {
     let manual_name = commands::manual_name(inlines);
     let matched_manual = manual_name.is_some();
     let Some(name) = manual_name.or_else(|| commands::leading_styled_command_name(inlines)) else {
         return false;
     };
+    if commands::command_binding(text, &name, offset, uses).is_none() {
+        return false;
+    }
     let mut literal = String::new();
     append_syntax(inlines, &mut literal);
     let Some(tail) = literal.trim_start().strip_prefix(&name) else {

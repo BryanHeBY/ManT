@@ -1,4 +1,6 @@
 //! commands recognition; complete forms retain their role-specific grammar.
+use super::eligibility::{NameSource, OperandUses};
+use crate::definitions::RecognizedName;
 use mant_ir::Inline;
 use mant_ir::inline_plain_text as plain_text;
 
@@ -7,6 +9,32 @@ use mant_ir::inline_plain_text as plain_text;
 /// destinations or arbitrary alternative labels are never lexical evidence.
 pub(super) fn inferred_command_name(term: &[Inline]) -> Option<String> {
     manual_name(term).or_else(|| leading_styled_command_name(term))
+}
+
+pub(super) fn command_binding(
+    text: &str,
+    name: &str,
+    offset: usize,
+    uses: OperandUses<'_>,
+) -> Option<RecognizedName> {
+    let start = text.find(name)?;
+    let end = start + name.len();
+    // Strong styling can cut the prefix of one joined command template.
+    // A separate argument or an explicit syntax delimiter still gives a
+    // complete name. Check the rest of the joined token even when an
+    // unstyled literal sits between the claimed name and the argument.
+    let tail = &text[end..];
+    let joined = tail
+        .find(|character: char| {
+            character.is_whitespace() || matches!(character, '[' | '<' | '{' | '(')
+        })
+        .unwrap_or(tail.len());
+    if joined > 0 && uses.protects(&(offset + end..offset + end + joined)) {
+        return None;
+    }
+    let binding = RecognizedName::contiguous(name, offset + start);
+    uses.permits(&binding, NameSource::Lexical)
+        .then_some(binding)
 }
 
 pub(super) fn manual_name(nodes: &[Inline]) -> Option<String> {

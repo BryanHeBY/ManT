@@ -18,6 +18,7 @@ mod options;
 mod scan;
 use eligibility::{NameSource, OperandUses};
 pub(super) use head::is_inferred_head;
+pub(super) use head::is_inferred_head_with_operands;
 pub(super) use head::recognize_inferred_head_with_operands;
 pub(crate) use named::{environment_variable_alias, environment_variable_body};
 use named::{is_configuration_key, is_variable_term};
@@ -328,13 +329,6 @@ fn name_occurrences_with_operands(
             };
             let uses = OperandUses::new(ranges);
             let text = plain_text(term);
-            let locate = |part: &str, name: &str| {
-                super::RecognizedName::contiguous(
-                    name,
-                    part.as_ptr() as usize - text.as_ptr() as usize
-                        + part.find(name).expect("grammar returns a visible name"),
-                )
-            };
             match kind {
                 EntryKind::EnvironmentVariable => {
                     named::environment_occurrences_with_uses(&text, uses).unwrap_or_default()
@@ -349,7 +343,9 @@ fn name_occurrences_with_operands(
                 }
                 EntryKind::Command => {
                     if let Some((name, _)) = super::context::key_binding_command_form(&text) {
-                        return vec![locate(&text, name)];
+                        return commands::command_binding(&text, name, 0, uses)
+                            .into_iter()
+                            .collect();
                     }
                     let mut offset = 0;
                     forms::declaration_groups_with_uses(term, uses)
@@ -361,9 +357,7 @@ fn name_occurrences_with_operands(
                             let name = commands::inferred_command_name(&group).or_else(|| {
                                 commands::command_name_from_authored_form(&text).map(str::to_owned)
                             })?;
-                            let start =
-                                start + text.find(&name).expect("grammar returns the command head");
-                            Some(super::RecognizedName::contiguous(&name, start))
+                            commands::command_binding(&text, &name, start, uses)
                         })
                         .collect()
                 }

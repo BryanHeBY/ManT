@@ -60,6 +60,41 @@ fn joined_placeholders_do_not_supply_concrete_names() {
 }
 
 #[test]
+fn styled_command_prefixes_need_an_actual_operand_boundary() {
+    // CVS mdoc_term.c::termp_ns_pre joins the two operands while leaving
+    // Ar's role intact. The font transition alone cannot finish a name.
+    for (head, form, name) in [
+        (r"No \f[B]?\fP Ns Ar RE", "?RE", None),
+        (r"No \fBfind\fP Ns Ar FILE", "findFILE", None),
+        ("Cm find Ns No _ Ns Ar FILE", "find_FILE", None),
+        (r"No \f[B]?\fP Ar RE", "? RE", Some("?")),
+        ("Cm find Ar FILE", "find FILE", Some("find")),
+        ("Cm find Ns Op Ar FILE", "find[FILE]", Some("find")),
+    ] {
+        let kind = if name.is_some() {
+            EntryKind::Command
+        } else {
+            EntryKind::Term
+        };
+        let unqualified = if form.starts_with('?') { "?" } else { "find" };
+        let rejected = if name.is_none() {
+            &[unqualified][..]
+        } else {
+            &[]
+        };
+        check_head("COMMANDS", head, form, kind, name.as_slice(), rejected);
+    }
+    check_head(
+        "COMMANDS",
+        "Cm find Ns No _ Ns Ar FILE , Cm other",
+        "find_FILE, other",
+        EntryKind::Command,
+        &["other"],
+        &["find", "FILE"],
+    );
+}
+
+#[test]
 fn complete_scoped_subjects_and_argument_labels_remain_addressable() {
     for (section, head, form, kind, names) in [
         (

@@ -159,33 +159,105 @@ fn source_presentation_head(node: &Node) -> bool {
         || native_title_head(node)
 }
 
-fn collect_mdoc_template_text(node: &Node, text: &mut String, has_argument: &mut bool) {
-    if node.flags.no_print {
-        return;
-    }
-    if node.macro_token.as_deref() == Some("Ar") {
-        *has_argument = true;
-    }
-    if let Some(value) = node.text.as_deref() {
-        text.push_str(value);
-    }
-    for child in &node.children {
-        collect_mdoc_template_text(child, text, has_argument);
-    }
-}
-
 fn native_mdoc_search_template(node: &Node) -> bool {
-    let Some(head) = node
+    let Some(mut part) = node
         .children
         .iter()
         .find(|child| child.kind == NodeKind::Head)
     else {
         return false;
     };
-    let mut text = String::new();
-    let mut has_argument = false;
-    collect_mdoc_template_text(head, &mut text, &mut has_argument);
-    has_argument && text.trim_start().starts_with('/')
+    while let [wrapper] = part.children.as_slice()
+        && wrapper.kind == NodeKind::Block
+        && !wrapper.flags.no_print
+        && wrapper.macro_token.as_deref() == Some("Xo")
+        && let Some(body) = wrapper
+            .children
+            .iter()
+            .find(|child| child.kind == NodeKind::Body)
+    {
+        part = body;
+    }
+    let mut source = part.children.iter().filter(|child| !child.flags.no_print);
+    let Some(prefix) = source.next() else {
+        return false;
+    };
+    let sign = match (
+        prefix.macro_token.as_deref(),
+        prefix.kind,
+        prefix.children.as_slice(),
+    ) {
+        (Some("Pf" | "No"), NodeKind::Element, [text])
+            if text.kind == NodeKind::Text && !text.flags.no_print =>
+        {
+            text
+        }
+        (_, NodeKind::Text, []) => prefix,
+        _ => return false,
+    };
+    let Some(sign) = sign.text.as_deref().and_then(literal_search_sign) else {
+        return false;
+    };
+    // This is independent AST evidence. Neither a missing IR name nor a
+    // later Ar can turn a literal search command into a template.
+    let mut joined = prefix.macro_token.as_deref() == Some("Pf");
+    let mut source = source.peekable();
+    let inline_ns =
+        |child: &&Node| child.macro_token.as_deref() == Some("Ns") && !child.flags.line_start;
+    while source.next_if(inline_ns).is_some() {
+        joined = true;
+    }
+    if !joined
+        || !source.next().is_some_and(|argument| {
+            argument.macro_token.as_deref() == Some("Ar") && !argument.flags.line_start
+        })
+    {
+        return false;
+    }
+    let mut closed = false;
+    for operand in source.filter(|child| !inline_ns(child)) {
+        if operand.flags.line_start {
+            return false;
+        }
+        if operand.macro_token.as_deref() == Some("Ar") {
+            continue;
+        }
+        if closed
+            || operand.kind != NodeKind::Text
+            || operand.text.as_deref().and_then(literal_search_sign) != Some(sign)
+        {
+            return false;
+        }
+        closed = true;
+    }
+    true
+}
+
+fn literal_search_sign(text: &str) -> Option<char> {
+    // CVS roff_escape.c and term_word() consume the one-byte IGNORE escapes
+    // and font selectors without printing another glyph.
+    let mut sign = None;
+    let mut chars = text.chars();
+    while let Some(character) = chars.next() {
+        match character {
+            '/' | '?' if sign.is_none() => sign = Some(character),
+            '\\' => match chars.next()? {
+                '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {}
+                'f' => match chars.next()? {
+                    '[' if chars.by_ref().any(|ch| ch == ']') => {}
+                    '(' => {
+                        chars.next()?;
+                        chars.next()?;
+                    }
+                    name if name.is_ascii_alphanumeric() => {}
+                    _ => return None,
+                },
+                _ => return None,
+            },
+            _ => return None,
+        }
+    }
+    sign
 }
 
 fn source_head_text(node: &Node) -> Option<&str> {
@@ -324,9 +396,9 @@ impl Audit<'_> {
         }
 
         // mdoc command references often collect several `.It Xo` forms under
-        // one description. A leading `/RE` template is deliberately retained
-        // as presentation because it has no literal selector, while a later
-        // `?RE` or `n` can be a real semantic entry. The final declaration
+        // one description. Search forms containing `Ar` are presentation
+        // templates. A later literal command can still have a name and
+        // share the description with an adjacent command. The final declaration
         // group therefore represents a contiguous *semantic* portion of the
         // physical native run. Accept that precise subset only when every
         // omitted owner is an immutable native template form; missing,
@@ -345,9 +417,11 @@ impl Audit<'_> {
                             .iter()
                             .chain(&sources[start + group.len()..])
                             .all(|source| {
-                                self.native_source_nodes
-                                    .get(source)
-                                    .is_some_and(|node| source_presentation_head(node))
+                                self.observed.owners.contains_key(source)
+                                    && self
+                                        .native_source_nodes
+                                        .get(source)
+                                        .is_some_and(|node| source_presentation_head(node))
                             })
                     })
                     .map(|_| (index, "source-run-semantic-subset"))
@@ -743,24 +817,144 @@ mod tests {
 
     #[test]
     fn semantic_subrun_can_follow_unaddressable_mdoc_templates() {
-        // Reduced from the vi(1) search commands. `/RE` forms use an authored
-        // regular-expression placeholder and deliberately have no exact
-        // selector; `?RE` and `n` are addressable command heads sharing the
-        // same physical mdoc description run.
-        let source = b".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Xo\n.Pf / Ns Ar RE\n.Xc\n.It Xo\n.Pf / Ns Ar RE Ns /\n.Xc\n.It Xo\n.Pf ? Ns Ar RE\n.Xc\n.It Cm n\nSearch.\n.El\n";
-        let native = libmandoc_rs::Parser::default()
-            .parse_bytes("probe.1", source)
-            .unwrap();
-        let document =
-            mant_loader::parse_manual_bytes(std::path::Path::new("probe.1"), source).unwrap();
-        let profile = profile(&native.document.root, &document);
+        // Pinned mdoc_term.c::termp_pf_post/termp_ns_pre suppress spacing
+        // around the search prefix. mdoc_html.c::mdoc_ar_pre still renders
+        // a distinct Ar operand. The plain Cm control paints the same ?RE.
+        let prefix = ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It Xo\n.Pf / Ns Ar RE\n.Xc\n.It Xo\n.Pf / Ns Ar RE Ns /\n.Xc\n.It Xo\n";
+        let probe_path = std::path::Path::new("probe.1");
+        for (reverse_search, label, literal, append_repeat, group_start) in [
+            (".Pf ? Ns Ar RE", "?RE", None, false, None),
+            (".Pf ? Ns Ar RE", "?RE", None, true, Some(3)),
+            (".Pf ? Ar RE", "?RE", None, true, Some(3)),
+            (".No / Ns Ar RE", "/RE", None, true, Some(3)),
+            (".No ? Ns Ar RE", "?RE", None, true, Some(3)),
+            (".No ? Ns Ar RE Ns ?", "?RE?", None, true, Some(3)),
+            (r".No \fB/\fR Ns Ar RE", "/RE", None, true, Some(3)),
+            (r".Pf \&/ Ns Ar RE", "/RE", None, true, Some(3)),
+            (r".Pf \^/ Ns Ar RE", "/RE", None, true, Some(3)),
+            (r".Pf \%/ Ns Ar RE", "/RE", None, true, Some(3)),
+            (
+                ".Pf / Ns Ar RE Ns / Ar offset",
+                "/RE/ offset",
+                None,
+                true,
+                Some(3),
+            ),
+            (r".No \f[B]?\fP Ns Ar RE", "?RE", None, true, Some(3)),
+            (".Pf ? Ns Ar RE Ar flags", "?RE flags", None, true, Some(3)),
+            (".No ? Ar RE", "? RE", None, true, None),
+            (
+                r#".Ar "\fBfind\fR operand""#,
+                "find operand",
+                None,
+                true,
+                None,
+            ),
+            (r#".Ar "find operand""#, "find operand", None, true, None),
+            (".Cm ?RE", "?RE", Some("?RE"), true, Some(2)),
+            (".Cm ?RE Ar KEY", "?RE KEY", Some("?RE"), true, Some(2)),
+            (
+                ".Cm /usr/bin/search Ar RE",
+                "/usr/bin/search RE",
+                None,
+                true,
+                None,
+            ),
+        ] {
+            let repeat = if append_repeat { ".It Cm N\n" } else { "" };
+            let source = format!("{prefix}{reverse_search}\n.Xc\n.It Cm n\n{repeat}Search.\n.El\n");
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes(probe_path, source.as_bytes())
+                .unwrap();
+            let mut document =
+                mant_loader::parse_manual_bytes(probe_path, source.as_bytes()).unwrap();
+            let analyzed = profile(&native.document.root, &document);
+            let Block::DefinitionList {
+                items,
+                declaration_groups,
+                ..
+            } = &mut document.sections[0].blocks[0]
+            else {
+                panic!("search declaration list")
+            };
+            let mut expected_labels = vec!["/RE", "/RE/", label, "n"];
+            if append_repeat {
+                expected_labels.push("N");
+            }
+            let mut physical_sources = vec![[6, 2, 0], [9, 2, 0], [12, 2, 0], [15, 2, 0]];
+            if append_repeat {
+                physical_sources.push([16, 2, 0]);
+            }
+            assert_eq!(items.len(), expected_labels.len(), "{source}");
+            for (index, (item, label)) in items.iter().zip(expected_labels).enumerate() {
+                assert_eq!(super::super::inline_text(&item.terms[0]), label, "{source}");
+                let name = match index {
+                    2 => literal,
+                    3.. => Some(label),
+                    _ => None,
+                };
+                assert_eq!(
+                    &*item.entry.as_ref().unwrap().names,
+                    name.as_slice(),
+                    "{source}"
+                );
+            }
+            assert!(violations(&analyzed).is_empty(), "{analyzed}");
+            let runs = analyzed["sourceRuns"].as_array().unwrap();
+            let run = runs
+                .iter()
+                .find(|row| row["physicalSources"] == json!(physical_sources))
+                .unwrap_or_else(|| panic!("{analyzed}"));
+            if let Some(start_item) = group_start {
+                assert_eq!(run["reason"], "source-run-semantic-subset");
+                assert_eq!(run["observedGroup"], 0);
+                assert_eq!(
+                    declaration_groups.as_slice(),
+                    [mant_ir::DeclarationGroup {
+                        start_item,
+                        end_item: items.len(),
+                    }]
+                );
+                if literal.is_some() {
+                    declaration_groups[0].start_item += 1;
+                } else {
+                    // The source template can be omitted from the group
+                    // only while its original IR owner remains readable.
+                    items.remove(0);
+                    declaration_groups[0].start_item -= 1;
+                    declaration_groups[0].end_item -= 1;
+                }
+                let changed = profile(&native.document.root, &document);
+                assert!(!violations(&changed).is_empty(), "{changed}");
+            } else {
+                assert_eq!(run["reason"], "named-source-run-without-group");
+                assert!(run["observedGroup"].is_null());
+                assert!(declaration_groups.is_empty());
+            }
+        }
+    }
 
-        assert!(violations(&profile).is_empty(), "{profile}");
-        assert!(profile["sourceRuns"].as_array().unwrap().iter().any(|row| {
-            row["reason"] == "source-run-semantic-subset"
-                && row["physicalSources"] == json!([[6, 2, 0], [9, 2, 0], [12, 2, 0], [15, 2, 0]])
-                && row["observedGroup"] == 0
-        }));
+    #[test]
+    fn direct_mdoc_search_templates_preserve_the_following_command_group() {
+        // CVS places the literal sign, Ns and Ar directly under It HEAD
+        // in both directions, with no Xo wrapper.
+        let prefix = ".Dd September 12, 2026\n.Dt PROBE 1\n.Os\n.Sh COMMANDS\n.Bl -tag -width Ds\n";
+        let probe_path = std::path::Path::new("probe.1");
+        for sign in ['/', '?'] {
+            let source = format!("{prefix}.It {sign} Ns Ar RE\n.It Cm n\n.It Cm N\nSearch.\n.El\n");
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes(probe_path, source.as_bytes())
+                .unwrap();
+            let document = mant_loader::parse_manual_bytes(probe_path, source.as_bytes()).unwrap();
+            let audited = profile(&native.document.root, &document);
+            assert!(violations(&audited).is_empty(), "{audited}");
+            assert_eq!(audited["observedGroups"], json!([[[7, 2, 0], [8, 2, 0]]]));
+            assert!(audited["sourceRuns"].as_array().unwrap().iter().any(|row| {
+                row["reason"] == "source-run-semantic-subset"
+                    && row["physicalSources"] == json!([[6, 2, 0], [7, 2, 0], [8, 2, 0]])
+                    && row["observedGroup"] == 0
+            }));
+        }
     }
 
     #[test]
