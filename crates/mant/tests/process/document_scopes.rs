@@ -36,6 +36,7 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert_eq!(groups.len(), 3);
     assert!(groups.iter().all(|group| group.get("search").is_none()));
     assert!(groups.iter().all(|group| group.get("offset").is_none()));
+    assert!(groups.iter().all(|group| group.get("producer").is_none()));
     assert_eq!(
         groups
             .iter()
@@ -67,6 +68,11 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert_eq!(matches.len(), 2);
     assert_eq!(matches[0]["address"]["path"], "beta");
     assert_eq!(matches[1]["address"]["path"], "alpha");
+    for document in matches {
+        assert_eq!(document["producer"]["name"], "mant");
+        assert_eq!(document["producer"]["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(document["producer"]["engine"]["name"], "pulldown-cmark");
+    }
     assert_eq!(explain["result"]["explanation"]["outcome"], "evidence");
     assert_eq!(
         explain["result"]["explanation"]["failures"],

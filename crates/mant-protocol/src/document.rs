@@ -19,13 +19,13 @@ impl DocumentSchema {
     pub const ID: &'static str = "mant.document/v0.14";
 }
 
-/// Identifies `ManT` and the parser used to build a wire document.
+/// Publishing implementation and parser identities recorded in a response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Producer {
-    /// Process implementation name.
+    /// Publishing implementation name.
     pub name: String,
-    /// Process package version.
+    /// Publishing implementation version.
     pub version: String,
     /// Parser implementation, when an authoritative document was parsed.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -161,11 +161,14 @@ impl TryFrom<DocumentResponseUnchecked> for DocumentResponse {
 }
 
 impl Producer {
-    /// Construct process provenance for a normalized document.
+    /// Construct library provenance for a normalized document.
+    ///
+    /// Applications publishing the response can supply their own name and
+    /// version while retaining its parser identity.
     #[must_use]
     pub fn for_document(document: &IrDocument) -> Self {
         Self {
-            name: "mant".to_owned(),
+            name: env!("CARGO_PKG_NAME").to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
             engine: document.parser.as_ref().map(|parser| Engine {
                 name: parser.name.clone(),
@@ -212,6 +215,43 @@ impl From<DocumentResponse> for IrDocument {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn library_conversion_retains_parser_identity_and_accepts_the_host_identity() {
+        let document = IrDocument {
+            parser: Some(ParserInfo {
+                name: "embedded-parser".into(),
+                version: "1.0".into(),
+            }),
+            source: DocumentSource {
+                format: mant_ir::SourceFormat::Markdown,
+                path: None,
+            },
+            meta: DocumentMeta::default(),
+            heading: None,
+            fragment_aliases: Vec::new(),
+            diagnostics: Vec::new(),
+            blocks: Vec::new(),
+            sections: Vec::new(),
+        };
+        let mut response = DocumentResponse::from(&document);
+        assert_eq!(response.producer.name, "mant-protocol");
+        assert_eq!(response.producer.version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(
+            response.producer.engine,
+            Some(Engine {
+                name: "embedded-parser".into(),
+                version: "1.0".into(),
+            })
+        );
+
+        response.producer.name = "library-host".into();
+        response.producer.version = "2.9".into();
+        let json = serde_json::to_string(&response).unwrap();
+        let restored: DocumentResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, response);
+        assert_eq!(IrDocument::from(restored), document);
+    }
 
     #[test]
     fn document_wire_rejects_conflicting_equation_text() {

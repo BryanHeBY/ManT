@@ -78,6 +78,13 @@ that crate was not published for that change.
 - The 0.15 `mant-render` Markdown option APIs accept the option types from
   `mant-codec` 0.15.
 
+### mant and mant-protocol
+
+- Document and query JSON report the version of the running `mant` program.
+  The default Rust response constructor identifies `mant-protocol` and lets
+  embedding applications supply their own publisher identity. Parser identity
+  and v0.14 response schemas remain the same.
+
 ## 0.14.0 - 2026-11-14
 
 This release selects the ten native/IR/reader crates at

@@ -290,10 +290,15 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     let value: serde_json::Value = serde_json::from_slice(&direct.stdout).expect("query JSON");
     assert_eq!(value["document"]["heading"]["content"][0]["value"], "Local");
     assert_eq!(
+        value["document"]["producer"]["version"],
+        env!("CARGO_PKG_VERSION")
+    );
+    assert_eq!(
         value["document"]["source"]["path"],
         path.to_str().expect("UTF-8 path")
     );
     assert!(value.get("tldr").is_none());
+    let producer = value["document"]["producer"].clone();
 
     let mut child = Command::new(executable())
         .args(["--request-json", "--format", "json", "--compact"])
@@ -333,6 +338,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
         )
     );
     assert_eq!(value["document"]["source"]["format"], "markdown");
+    assert_eq!(value["document"]["producer"], producer);
 }
 
 fn markdown_fixture_path() -> PathBuf {

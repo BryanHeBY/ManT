@@ -93,6 +93,10 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     let initialization = parse_reply(lines.next().expect("initialization reply"));
     assert_eq!(initialization["id"], 1);
     assert_eq!(initialization["result"]["serverInfo"]["name"], "mant");
+    assert_eq!(
+        initialization["result"]["serverInfo"]["version"],
+        env!("CARGO_PKG_VERSION")
+    );
     assert!(
         initialization["result"]["instructions"]
             .as_str()

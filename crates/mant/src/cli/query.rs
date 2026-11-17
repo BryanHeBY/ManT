@@ -1,11 +1,12 @@
 //! CLI input adaptation and presentation around complete document requests.
 use crate::{
     application,
-    arguments::{ColorMode, OutputOptions, QuerySource},
+    arguments::{ColorMode, OutputOptions, QueryFormat, QuerySource},
     delivery,
     error::{Failure, query_execution_failure},
     host::CliHost,
     presentation::{self, render_query_result},
+    provenance,
     request_input::{NativeRequest, read_native_request, read_query_request, read_utf8_input},
 };
 #[cfg(feature = "roff")]
@@ -66,7 +67,7 @@ pub(super) fn execute_query(
         },
         source => source,
     };
-    let result = match source {
+    let mut result = match source {
         QuerySource::InputStdin { format, view } => {
             validate_markdown_policy(policy)?;
             let query = match format {
@@ -134,7 +135,11 @@ pub(super) fn execute_query(
             },
         );
     }
-    render_query_result(&result, output.render_options())
+    let options = output.render_options();
+    if options.format == QueryFormat::Json {
+        provenance::identify_query_projection(&mut result);
+    }
+    render_query_result(&result, options)
 }
 
 fn execute_scope_arguments(
@@ -167,7 +172,7 @@ fn execute_scope_request(
     output: QueryOutput,
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
-    let response = application::execute_scope_query(request, host)?;
+    let mut response = application::execute_scope_query(request, host)?;
     let content_complete = match &response.result {
         mant_protocol::ScopeQueryResult::Search { search } => search.content_complete,
         mant_protocol::ScopeQueryResult::Explain { explanation } => explanation
@@ -178,7 +183,11 @@ fn execute_scope_request(
     if !content_complete {
         eprintln!("mant: warning: source document content is incomplete; inspect diagnostics");
     }
-    presentation::render_scope_query_result(&response, output.render_options())
+    let options = output.render_options();
+    if options.format == QueryFormat::Json {
+        provenance::identify_scope_query(&mut response);
+    }
+    presentation::render_scope_query_result(&response, options)
 }
 
 fn validate_markdown_policy(policy: LoadPolicy) -> Result<(), Failure> {

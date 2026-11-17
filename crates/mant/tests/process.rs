@@ -24,6 +24,9 @@ mod markdown_links;
 #[path = "process/requests.rs"]
 mod requests;
 
+#[path = "process/provenance.rs"]
+mod provenance;
+
 #[path = "process/semantic_queries.rs"]
 mod semantic_queries;
 

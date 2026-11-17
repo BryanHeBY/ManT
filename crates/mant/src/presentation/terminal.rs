@@ -1,9 +1,9 @@
 //! CLI-only style and terminal safety over shared semantic renderers.
 use super::RenderOptions;
-use crate::{arguments::QueryFormat, error::Failure};
+use crate::{arguments::QueryFormat, error::Failure, provenance};
 use anstyle::{AnsiColor, Style};
 use mant_ir::{DocumentMeta, EntryKind, ResolvedContent, SourceFormat};
-use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch};
+use mant_protocol::{QueryBundle, QueryExcerpt, QueryOutline, QuerySearch};
 use mant_render::sanitize_terminal_text;
 use std::fmt::Write as _;
 /// Keep protocol-owned catalog text intact while applying optional CLI styling.
@@ -285,7 +285,11 @@ pub(super) fn render_full_query(
             })
         }
         QueryFormat::Json => {
-            mant_render::render_query_json(query, pretty).map_err(Failure::operational)
+            let mut bundle = QueryBundle::from(query);
+            if let Some(document) = &mut bundle.document {
+                provenance::identify(&mut document.producer);
+            }
+            super::render_json(&bundle, pretty)
         }
     }
 }

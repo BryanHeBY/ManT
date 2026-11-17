@@ -5,11 +5,13 @@ use std::path::Path;
 use std::{collections::BTreeSet, fmt::Write as _, fs};
 
 use anstyle::{AnsiColor, Style};
-use mant_protocol::{DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport, Producer};
+use mant_protocol::{DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport};
 use mant_sources::{
     ConfiguredSourceInspection, DocumentPaths, RegisteredDocumentOrigin, SourceInstallationStatus,
     SourceTransport,
 };
+
+use crate::provenance;
 
 const OK_STYLE: Style = AnsiColor::Green.on_default().bold();
 const INFO_STYLE: Style = AnsiColor::Cyan.on_default().bold();
@@ -57,11 +59,7 @@ impl DoctorBuilder {
 
     fn finish(self) -> DoctorReport {
         DoctorReport::new(
-            Producer {
-                name: "mant".to_owned(),
-                version: env!("CARGO_PKG_VERSION").to_owned(),
-                engine: None,
-            },
+            provenance::process_producer(),
             self.environment,
             self.checks,
         )
@@ -77,7 +75,7 @@ pub(crate) fn inspect_system() -> DoctorReport {
         DoctorCheckStatus::Ok,
         format!(
             "ManT {} on {}-{}",
-            env!("CARGO_PKG_VERSION"),
+            provenance::VERSION,
             std::env::consts::ARCH,
             std::env::consts::OS
         ),

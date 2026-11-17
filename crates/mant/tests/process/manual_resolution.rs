@@ -67,6 +67,40 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn scope_explanation_reports_the_process_version_for_each_parser() {
+    let fixture = Fixture::new("scope-provenance");
+    let manual = fixture.0.join("manuals/man1");
+    fs::create_dir_all(&manual).unwrap();
+    fs::write(
+        manual.join("presentation.1"),
+        include_str!("../../../mant-engine/tests/fixtures/entry-presentation.1"),
+    )
+    .unwrap();
+    fs::write(
+        registered_documents_dir(&fixture.0).join("guide.md"),
+        "# Guide\n\nLanguage choices\n",
+    )
+    .unwrap();
+
+    let result = fixture.json(&[
+        "--document",
+        "manual/1/presentation",
+        "--document",
+        "guide",
+        "--explain=language",
+    ]);
+    let documents = result["result"]["explanation"]["documents"]
+        .as_array()
+        .unwrap();
+    assert_eq!(documents.len(), 2);
+    for (document, parser) in documents.iter().zip(["libmandoc", "pulldown-cmark"]) {
+        assert_eq!(document["producer"]["name"], "mant");
+        assert_eq!(document["producer"]["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(document["producer"]["engine"]["name"], parser);
+    }
+}
+
+#[test]
 fn manual_queries_share_category_resolution_but_catalog_filters_and_addresses_stay_exact() {
     let fixture = Fixture::new("selectors");
     for arguments in [

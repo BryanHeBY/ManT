@@ -18,6 +18,7 @@ mod json_boundary;
 mod mcp;
 mod output_policy;
 mod presentation;
+mod provenance;
 mod request_input;
 mod schema_output;
 mod terminal;

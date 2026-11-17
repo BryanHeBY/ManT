@@ -153,6 +153,10 @@ fn doctor_is_offline_read_only_and_supports_stable_json() {
     let report: serde_json::Value = serde_json::from_slice(&json.stdout).expect("doctor JSON");
     assert_eq!(report["schema"], "mant.doctor/v1");
     assert_eq!(
+        report["producer"],
+        serde_json::json!({"name": "mant", "version": env!("CARGO_PKG_VERSION")})
+    );
+    assert_eq!(
         report["environment"]["dataRoot"],
         data_root.to_string_lossy().as_ref()
     );

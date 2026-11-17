@@ -839,8 +839,10 @@ An abbreviated but structurally valid Markdown result is:
 }
 ```
 
-The actual `producer.version` is the installed ManT version; clients must not
-hard-code the illustrative value above.
+The CLI reports `producer.name` as `mant` and `producer.version` as the installed
+program version, matching `mant --version` and `mant --doctor`. This also applies
+to producer records in excerpts and in single-document and scope explanations.
+Clients should read the reported version instead of hard-coding the example.
 
 ## Document Response and IR Projection
 
@@ -855,7 +857,7 @@ to the reusable in-memory IR.
 | Field | Meaning |
 | --- | --- |
 | `schema` | Exact `mant.document/v0.14` marker |
-| `producer` | ManT version and parser engine |
+| `producer` | Publishing implementation, its version, and parser engine |
 | `source` | Original source format and path |
 | `meta` | Normalized title, section, date, volume, OS, architecture, names, and alias target |
 | `fragmentAliases` | Optional exact fragments resolving to `document-overview` |
@@ -865,6 +867,11 @@ to the reusable in-memory IR.
 
 `producer.engine` is `libmandoc` for man/mdoc input and `pulldown-cmark` for
 Markdown.
+
+The default Rust envelope construction reports the `mant-protocol` library's
+own name and version. An embedding application can supply its own identity in
+`Producer` while retaining the parser information. Schema identifiers and
+parser versions have their own versioning.
 
 `source.format` is one of `man`, `mdoc`, or `markdown`. Temporary decompression
 paths never replace the original `source.path`.
