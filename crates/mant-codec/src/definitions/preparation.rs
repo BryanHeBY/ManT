@@ -55,7 +55,7 @@ pub(super) fn prepare(
     let mut diagnostics = Vec::new();
     normalize_blocks(blocks, context, evidence, &mut diagnostics);
     normalize_sections(sections, context, evidence, &mut diagnostics);
-    let mut group_matches = evidence.groups.matching_plan(blocks, sections);
+    let mut group_matches = evidence.groups.matching_plan(blocks, sections, evidence);
     let mut prepared = PreparedDefinitions {
         preferred_counts: HashMap::new(),
         plans: Vec::new(),

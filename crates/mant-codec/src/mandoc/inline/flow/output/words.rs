@@ -47,7 +47,7 @@ impl InlineBuilder {
         // `termp_fl_pre()` emits a real '-' word before its children. Its
         // scoped role must be registered here, before either generated or
         // authored text can be retired from the accepted output buffer.
-        self.record_current_native_operand(false);
+        self.record_current_native_operand(None, false);
     }
 
     /// Keep the formatter's write order when this word armed BACKBEFORE.

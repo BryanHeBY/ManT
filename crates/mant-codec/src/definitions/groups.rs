@@ -2,7 +2,7 @@
 //! indentation or moving another item's description into a semantic owner.
 #[cfg(feature = "roff")]
 use super::evidence::head_snapshot;
-use super::evidence::{HeadSnapshot, head_matches};
+use super::evidence::{HeadSnapshot, NativeHeadEvidence, head_matches};
 use mant_ir::{Block, DeclarationGroup, DefinitionItem, Inline, Section, SourceSpan};
 use std::collections::{HashMap, HashSet};
 
@@ -136,6 +136,7 @@ struct Witness {
 pub(crate) struct GroupMatchingPlan {
     owners: HashMap<usize, Vec<OwnerBinding>>,
     occurrences: HashMap<usize, usize>,
+    accepted_templates: HashSet<usize>,
 }
 
 struct OwnerBinding {
@@ -146,20 +147,17 @@ struct OwnerBinding {
 
 #[derive(Default)]
 pub(crate) struct GroupEvidence {
-    edges: HashSet<(usize, usize)>,
     // A semantic declaration group may start only at the beginning of a
     // native declaration run, or after a source owner with its own readable
-    // body.  Keep the raw sibling fact separately from `edges`: semantic
-    // preparation deliberately drops unaddressable heads, and must not make
-    // the next recognizable head look like a fresh adjacent run.
-    native_predecessors: HashSet<usize>,
+    // body. Keep the source topology after semantic preparation drops an
+    // unaddressable head so its successor cannot look like a fresh run.
+    native_predecessors: HashMap<usize, usize>,
     // Some native list heads are formatter-visible templates rather than
     // addressable declarations: `/RE`, `-min-len`, a bracketed parameter,
     // and unsigned numeric labels are representative examples. They still
     // split a physical run, but must not make a later independently named
     // suffix borrow their unclassifiable status.
     presentation_heads: HashSet<usize>,
-    presentation_predecessors: HashSet<usize>,
     // A native owner with an actual body closes its physical run even if
     // lowering later converts it to an ordinary/ordered list. The following
     // declaration must not inherit an earlier unclassified-head barrier.
@@ -216,11 +214,7 @@ impl GroupEvidence {
 
     #[cfg(feature = "roff")]
     pub(crate) fn adjacent(&mut self, left: usize, right: usize, left_has_body: bool) {
-        self.edges.insert((left, right));
-        self.native_predecessors.insert(right);
-        if self.presentation_heads.contains(&left) {
-            self.presentation_predecessors.insert(right);
-        }
+        self.native_predecessors.insert(right, left);
         if left_has_body {
             self.body_closed_predecessors.insert(right);
         }
@@ -266,6 +260,7 @@ impl GroupEvidence {
         &self,
         blocks: &[Block],
         sections: &[Section],
+        evidence: &NativeHeadEvidence,
     ) -> GroupMatchingPlan {
         let mut plan = GroupMatchingPlan::default();
         for witnesses in self.items.values() {
@@ -284,11 +279,8 @@ impl GroupEvidence {
                 }
             }
         }
-        plan.count_blocks(blocks);
-        for section in sections {
-            plan.count_blocks(&section.blocks);
-            plan.count_sections(&section.children);
-        }
+        plan.count_blocks(blocks, evidence);
+        plan.count_sections(sections, evidence);
         plan
     }
 
@@ -307,6 +299,12 @@ impl GroupEvidence {
             .find(|binding| binding.source == source && head_matches(&item.terms, &binding.head))
             .map(|binding| (owner, binding.last_key))
     }
+    fn is_presentation_head(&self, owner: usize, plan: &GroupMatchingPlan) -> bool {
+        self.presentation_heads.contains(&owner)
+            || (plan.occurrences.get(&owner) == Some(&1)
+                && plan.accepted_templates.contains(&owner))
+    }
+
     /// One linear pass over final owners; recognizability comes from the same
     /// preparation plan that will allocate their names, never another parser.
     pub(super) fn resolve(
@@ -338,19 +336,18 @@ impl GroupEvidence {
                 // suffix from borrowing an unrelated description.
                 if mant_ir::blocks_have_readable_content(&item.description) {
                     blocked_by_unclassified_head = false;
-                } else if !self.presentation_heads.contains(&key.0) {
+                } else if !self.is_presentation_head(key.0, plan) {
                     blocked_by_unclassified_head = true;
                 }
                 previous = Some(key.1);
                 continue;
             }
-            let contiguous = previous
-                .zip(Some(key.0))
-                .is_some_and(|edge| self.edges.contains(&edge));
+            let predecessor = self.native_predecessors.get(&key.0).copied();
+            let contiguous = predecessor.is_some() && predecessor == previous;
             if !contiguous {
                 pending = None;
-                blocked_by_unclassified_head |= self.native_predecessors.contains(&key.0)
-                    && !self.presentation_predecessors.contains(&key.0)
+                blocked_by_unclassified_head |= predecessor
+                    .is_some_and(|owner| !self.is_presentation_head(owner, plan))
                     && !self.body_closed_predecessors.contains(&key.0);
             }
             if mant_ir::blocks_have_readable_content(&item.description) {
@@ -377,31 +374,36 @@ impl GroupEvidence {
 }
 
 impl GroupMatchingPlan {
-    fn count_sections(&mut self, sections: &[Section]) {
+    fn count_sections(&mut self, sections: &[Section], evidence: &NativeHeadEvidence) {
         for section in sections {
-            self.count_blocks(&section.blocks);
-            self.count_sections(&section.children);
+            self.count_blocks(&section.blocks, evidence);
+            self.count_sections(&section.children, evidence);
         }
     }
 
-    fn count_blocks(&mut self, blocks: &[Block]) {
+    fn count_blocks(&mut self, blocks: &[Block], evidence: &NativeHeadEvidence) {
         for block in blocks {
             match block {
                 Block::DefinitionList { items, .. } => {
                     for item in items {
-                        self.count(item);
-                        self.count_blocks(&item.description);
+                        if let Some(owner) = owner_marker(item) {
+                            *self.occurrences.entry(owner).or_default() += 1;
+                            if evidence.is_search_template(item, owner) {
+                                self.accepted_templates.insert(owner);
+                            }
+                        }
+                        self.count_blocks(&item.description, evidence);
                     }
                 }
                 Block::List { items, .. } => {
                     for item in items {
-                        self.count_blocks(&item.blocks);
+                        self.count_blocks(&item.blocks, evidence);
                     }
                 }
                 Block::Table { rows, .. } => {
                     for row in rows {
                         for cell in &row.cells {
-                            self.count_blocks(&cell.blocks);
+                            self.count_blocks(&cell.blocks, evidence);
                         }
                     }
                 }
@@ -412,12 +414,6 @@ impl GroupMatchingPlan {
                 | Block::ThematicBreak { .. }
                 | Block::Unsupported { .. } => {}
             }
-        }
-    }
-
-    fn count(&mut self, item: &DefinitionItem) {
-        if let Some(owner) = owner_marker(item) {
-            *self.occurrences.entry(owner).or_default() += 1;
         }
     }
 }

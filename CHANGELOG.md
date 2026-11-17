@@ -41,6 +41,10 @@ that crate was not published for that change.
   variable or command name. Standalone operand labels and independent
   declarations still receive exact name bindings. Forward and backward
   search templates preserve the shared description of later literal commands.
+- Qualify mdoc search templates from their executed signs and arguments.
+  Spacing controls such as `Sm` preserve later declaration groups when the
+  words join. Overwritten arguments and signs cannot create template evidence
+  or turn parameter text into a declaration name.
 - Preserve declaration names, parameter exclusions and reading groups when
   native navigation consumes a source-proven reference marker. Bind later
   names to the surviving text in their original operands.

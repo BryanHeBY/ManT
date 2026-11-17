@@ -165,7 +165,8 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             });
         }
         Some(Mdoc(MdocMacro::Ar)) => {
-            builder.with_native_operand_role(NativeOperandRole::Placeholder, |builder| {
+            let role = builder.mdoc_argument_role(node.id);
+            builder.with_native_operand_role(role, |builder| {
                 // `Ar` dispatches through termp_under_pre, then its actual
                 // children. A child's font escape does not rename the
                 // argument macro as another literal declaration.

@@ -41,6 +41,18 @@ pub(crate) enum NativeOperandRole {
     /// An `Ar` spelling may name an authored operand definition directly.
     #[cfg(feature = "roff")]
     Placeholder,
+    /// The native Ar belongs to a source-proven search form even if native
+    /// execution subsequently overwrites the opening sign.
+    #[cfg(feature = "roff")]
+    SearchArgument(u32),
+    #[cfg(feature = "roff")]
+    SearchOpen {
+        sign: char,
+        argument: u32,
+        closed: bool,
+    },
+    #[cfg(feature = "roff")]
+    SearchClose,
     /// The first actual man OP operand still has to spell a complete flag.
     #[cfg(feature = "roff")]
     OptionalKey,
@@ -75,6 +87,7 @@ impl NativeOperandRole {
             Self::Argument => true,
             #[cfg(feature = "roff")]
             Self::Placeholder
+            | Self::SearchArgument(_)
             | Self::OptionalKey
             | Self::Subject(..)
             | Self::ClippedSubject(..) => true,
@@ -280,6 +293,64 @@ impl NativeHeadEvidence {
         } else {
             HeadOperands::Absent
         }
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn is_search_template(&self, item: &DefinitionItem, owner: usize) -> bool {
+        let [term] = item.terms.as_slice() else {
+            return false;
+        };
+        let Some(witness) = self
+            .operand_witnesses
+            .get(&owner)
+            .and_then(|all| all.last())
+        else {
+            return false;
+        };
+        let [TermOperands::Accepted(operands)] = witness.operands.as_slice() else {
+            return false;
+        };
+        let [opening, first_argument, suffix @ ..] = operands.as_slice() else {
+            return false;
+        };
+        let NativeOperandRole::SearchOpen {
+            sign,
+            argument,
+            closed,
+        } = opening.role
+        else {
+            return false;
+        };
+        if opening.bytes != (0..sign.len_utf8())
+            || first_argument.role != NativeOperandRole::SearchArgument(argument)
+            || first_argument.bytes.start != opening.bytes.end
+            || item.source != Some(witness.source)
+            || !publication_matches(&item.terms, &witness.terms)
+        {
+            return false;
+        }
+        // The automatic separator may be part of the argument's receipt.
+        // Inspect the accepted bytes rather than assuming its start is a glyph.
+        let text = mant_ir::inline_plain_text(term);
+        text.starts_with(sign)
+            && !text.contains('\n')
+            && text
+                .get(first_argument.bytes.clone())
+                .and_then(|word| word.chars().next())
+                .is_some_and(|first| !first.is_whitespace())
+            && (!closed
+                || suffix.iter().any(|operand| {
+                    operand.role == NativeOperandRole::SearchClose
+                        && text.get(operand.bytes.clone()).is_some_and(|word| {
+                            let mut glyphs = word.trim().chars();
+                            glyphs.next() == Some(sign) && glyphs.next().is_none()
+                        })
+                }))
+    }
+
+    #[cfg(not(feature = "roff"))]
+    pub(super) fn is_search_template(&self, _item: &DefinitionItem, _owner: usize) -> bool {
+        false
     }
 
     /// Snapshot each input independently before TQ moves its terms. Every

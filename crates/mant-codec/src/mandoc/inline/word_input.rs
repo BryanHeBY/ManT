@@ -87,8 +87,9 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     builder.begin_native_word_owner();
     // pre_alternate selects an operand role before this actual term_word;
     // internal font escapes remain within this same word identity.
-    if matches!(origin, WordSource::Text(_)) {
+    if let WordSource::Text(node) = origin {
         builder.record_current_native_operand(
+            Some(node.id),
             events
                 .iter()
                 .any(|event| matches!(event, RoffInlineEvent::Font(_))),

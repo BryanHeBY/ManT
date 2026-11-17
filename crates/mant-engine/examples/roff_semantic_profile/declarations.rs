@@ -148,18 +148,24 @@ fn unsigned_numeric_head(node: &Node, item: &DefinitionItem) -> bool {
     native_numeric_label(node).is_some_and(|label| label == text.trim_matches([' ', '\t']))
 }
 
-fn source_presentation_head(node: &Node) -> bool {
-    // This deliberately recognizes only source-level presentation templates,
-    // never an anonymous final IR owner. The AST remains immutable during
-    // corruption tests, so a later lost name cannot turn a real declaration
-    // into a permitted audit gap.
-    native_mdoc_search_template(node)
+fn source_presentation_head(node: &Node, item: &DefinitionItem) -> bool {
+    // The AST remains immutable during corruption tests. An empty name set
+    // or a template-like spelling alone never permits an omitted owner.
+    native_mdoc_search_template(node, item)
         || native_man_option_template(node)
         || native_man_search_template(node)
         || native_title_head(node)
 }
 
-fn native_mdoc_search_template(node: &Node) -> bool {
+fn native_mdoc_search_template(node: &Node, item: &DefinitionItem) -> bool {
+    if node.macro_token.as_deref() != Some("It")
+        || item
+            .entry
+            .as_ref()
+            .is_some_and(|entry| !entry.names.is_empty())
+    {
+        return false;
+    }
     let Some(mut part) = node
         .children
         .iter()
@@ -178,7 +184,15 @@ fn native_mdoc_search_template(node: &Node) -> bool {
     {
         part = body;
     }
-    let mut source = part.children.iter().filter(|child| !child.flags.no_print);
+    if node
+        .children
+        .iter()
+        .take_while(|child| child.kind != NodeKind::Head)
+        .any(|child| !search_control(child))
+    {
+        return false;
+    }
+    let mut source = part.children.iter().filter(|child| !search_control(child));
     let Some(prefix) = source.next() else {
         return false;
     };
@@ -195,42 +209,93 @@ fn native_mdoc_search_template(node: &Node) -> bool {
         (_, NodeKind::Text, []) => prefix,
         _ => return false,
     };
-    let Some(sign) = sign.text.as_deref().and_then(literal_search_sign) else {
+    let Some(raw_sign) = sign.text.as_deref() else {
         return false;
     };
-    // This is independent AST evidence. Neither a missing IR name nor a
-    // later Ar can turn a literal search command into a template.
-    let mut joined = prefix.macro_token.as_deref() == Some("Pf");
-    let mut source = source.peekable();
-    let inline_ns =
-        |child: &&Node| child.macro_token.as_deref() == Some("Ns") && !child.flags.line_start;
-    while source.next_if(inline_ns).is_some() {
-        joined = true;
-    }
-    if !joined
-        || !source.next().is_some_and(|argument| {
-            argument.macro_token.as_deref() == Some("Ar") && !argument.flags.line_start
-        })
-    {
+    let Some(sign) = literal_search_sign(raw_sign) else {
+        return false;
+    };
+    let Some(argument) = source
+        .next()
+        .filter(|arg| arg.macro_token.as_deref() == Some("Ar"))
+    else {
+        return false;
+    };
+    let Some(argument_start) = literal_argument_start(argument) else {
+        return false;
+    };
+    if argument_start == sign && raw_sign.contains(r"\z") {
         return false;
     }
-    let mut closed = false;
-    for operand in source.filter(|child| !inline_ns(child)) {
-        if operand.flags.line_start {
-            return false;
-        }
+    let mut closing = None;
+    for operand in source {
         if operand.macro_token.as_deref() == Some("Ar") {
+            // Detached IR cannot show that a zero-advance closer still owns
+            // its glyph once a later word can write to that position.
+            if closing.is_some_and(|raw: &str| raw.contains(r"\z")) && readable(operand) {
+                return false;
+            }
             continue;
         }
-        if closed
+        if closing.is_some()
             || operand.kind != NodeKind::Text
             || operand.text.as_deref().and_then(literal_search_sign) != Some(sign)
         {
             return false;
         }
-        closed = true;
+        closing = operand.text.as_deref();
     }
-    true
+    // Correlate the immutable operand grammar with the complete form of
+    // this physical owner. Sm and input continuations can join across input
+    // lines; neither the producer's name inference nor a second spacing
+    // interpreter can tell this observer what survived execution.
+    let [term] = item.terms.as_slice() else {
+        return false;
+    };
+    let text = super::inline_text(term);
+    text.strip_prefix(sign).is_some_and(|tail| {
+        !tail.contains('\n')
+            && !argument_start.is_whitespace()
+            && tail.starts_with(argument_start)
+            && (closing.is_none() || tail.contains(sign))
+    })
+}
+
+fn search_control(node: &Node) -> bool {
+    node.flags.no_print || matches!(node.macro_token.as_deref(), Some("Ns" | "Sm" | "Tg" | "ft"))
+}
+
+fn literal_argument_start(argument: &Node) -> Option<char> {
+    // An observer without the producer's word receipts can corroborate a
+    // literal lead glyph. An empty Ar or a motion at its start cannot prove
+    // that a later argument didn't supply the first accepted scalar.
+    for word in argument.children.iter().filter(|word| !word.flags.no_print) {
+        let mut source = word.text.as_deref()?.chars();
+        while let Some(character) = source.next() {
+            if character != '\\' {
+                return Some(character);
+            }
+            match source.next()? {
+                '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {}
+                'f' => skip_font(&mut source)?,
+                _ => return None,
+            }
+        }
+    }
+    None
+}
+
+fn skip_font(source: &mut std::str::Chars<'_>) -> Option<()> {
+    match source.next()? {
+        '[' => source.any(|ch| ch == ']').then_some(()),
+        '(' => {
+            source.next()?;
+            source.next()?;
+            Some(())
+        }
+        name if name.is_ascii_alphanumeric() => Some(()),
+        _ => None,
+    }
 }
 
 fn literal_search_sign(text: &str) -> Option<char> {
@@ -242,16 +307,9 @@ fn literal_search_sign(text: &str) -> Option<char> {
         match character {
             '/' | '?' if sign.is_none() => sign = Some(character),
             '\\' => match chars.next()? {
-                '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'd' | 't' | 'u' | '{' | '|' | '}' => {}
-                'f' => match chars.next()? {
-                    '[' if chars.by_ref().any(|ch| ch == ']') => {}
-                    '(' => {
-                        chars.next()?;
-                        chars.next()?;
-                    }
-                    name if name.is_ascii_alphanumeric() => {}
-                    _ => return None,
-                },
+                '%' | '&' | ')' | ',' | '/' | '^' | 'a' | 'c' | 'd' | 't' | 'u' | 'z' | '{'
+                | '|' | '}' => {}
+                'f' => skip_font(&mut chars)?,
                 _ => return None,
             },
             _ => return None,
@@ -265,7 +323,16 @@ fn source_head_text(node: &Node) -> Option<&str> {
         .children
         .iter()
         .find(|child| child.kind == NodeKind::Head)?;
-    let mut current = head.children.first()?;
+    let mut current = if node.macro_token.as_deref() == Some("It") {
+        let mut visible = head.children.iter().filter(|child| !search_control(child));
+        let first = visible.next()?;
+        if visible.next().is_some() {
+            return None;
+        }
+        first
+    } else {
+        head.children.first()?
+    };
     loop {
         if current.kind == NodeKind::Text {
             return (!current.flags.no_print && current.children.is_empty())
@@ -417,11 +484,13 @@ impl Audit<'_> {
                             .iter()
                             .chain(&sources[start + group.len()..])
                             .all(|source| {
-                                self.observed.owners.contains_key(source)
-                                    && self
-                                        .native_source_nodes
-                                        .get(source)
-                                        .is_some_and(|node| source_presentation_head(node))
+                                self.observed
+                                    .owners
+                                    .get(source)
+                                    .zip(self.native_source_nodes.get(source))
+                                    .is_some_and(|(item, node)| {
+                                        source_presentation_head(node, item)
+                                    })
                             })
                     })
                     .map(|_| (index, "source-run-semantic-subset"))
@@ -954,6 +1023,44 @@ mod tests {
                     && row["physicalSources"] == json!([[6, 2, 0], [7, 2, 0], [8, 2, 0]])
                     && row["observedGroup"] == 0
             }));
+        }
+    }
+
+    #[test]
+    fn executed_search_template_runs_need_the_original_operator_and_argument() {
+        let prefix = ".Dd November 17, 2026\n.Dt PROBE 3\n.Os\n.Sh NAME\n.Nm probe\n.Nd role probe\n.Sm off\n.Sh COMMANDS\n.Bl -tag -width Ds\n";
+        for (head, grouped) in [
+            (".It No ? Ar RE", true),
+            (r".It No ? Ar \& Ar RE", false),
+            (r".It No ? Ar \zR Ar E", false),
+            (r".It No ? Ar x?y Ns \z? Ar OFFSET", false),
+        ] {
+            // Fixed CVS retains ?RE, ?RE, ?E and ?x?yOFFSET here. Those
+            // similar forms do not prove the presence of the agreed source
+            // words in the last three cases (term.c::encode1()).
+            let source = format!("{prefix}{head}\n.It Cm n\n.It Cm N\nGROUP_BODY\n.El\n");
+            let path = std::path::Path::new("probe.3");
+            let native = libmandoc_rs::Parser::default()
+                .parse_bytes(path, source.as_bytes())
+                .unwrap();
+            let mut document = mant_loader::parse_manual_bytes(path, source.as_bytes()).unwrap();
+            let audited = profile(&native.document.root, &document);
+            assert!(violations(&audited).is_empty(), "{audited}");
+            let Block::DefinitionList {
+                declaration_groups, ..
+            } = &mut document.sections[1].blocks[0]
+            else {
+                panic!("expected command list");
+            };
+            assert_eq!(!declaration_groups.is_empty(), grouped, "{head}");
+            if !grouped {
+                declaration_groups.push(mant_ir::DeclarationGroup {
+                    start_item: 1,
+                    end_item: 3,
+                });
+                let mutated = profile(&native.document.root, &document);
+                assert!(!violations(&mutated).is_empty(), "{head}: {mutated}");
+            }
         }
     }
 

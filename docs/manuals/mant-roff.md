@@ -785,6 +785,14 @@ Consecutive mdoc `It` heads remain independent, even when they name the same opt
 
 Independence does not discard useful reading context. A bounded run of complete native declaration heads with no readable body, followed by a described declaration, can carry a `declarationGroups` annotation. Explain returns the group's original heads and final description as explicitly recovered context, not as aliases or inherited children/value domains. Source paragraph/container boundaries stop grouping; arbitrary later prose is never a fallback explanation. Ordinary Markdown items are not automatically grouped, and the annotation does not change full-document rendering.
 
+A bare mdoc search form such as `/RE` or `?RE` can precede a group of
+independently named commands. The form needs a source search sign and an
+executed `Ar` argument with no intervening printable space. It can include a
+closing sign and argument suffixes, or sit inside a transparent `Xo`.
+Spacing requests and macro expansion take effect before this check.
+Enclosed forms such as `Bq` and `Pq` retain their argument roles and do not
+qualify as bare search forms.
+
 The same rule covers man `IP`/`TP` (including suppressed-newline heads) and
 mdoc definition-style `It`; an explicit `TQ` multi-label owner remains one
 member. Complete parameterized heads can supply Form evidence without invented

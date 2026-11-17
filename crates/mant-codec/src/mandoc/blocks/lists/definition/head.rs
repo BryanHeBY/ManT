@@ -37,7 +37,6 @@ pub(super) fn lower_definition_head(
     native_head_field_units: Option<usize>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> DefinitionHeadOutcome {
-    let groups = std::iter::once(head_nodes);
     if flow.head.generated_cells().is_some() {
         let generated_cells = usize::from(flow.head.generated_cells().unwrap_or_default());
         // mdoc_term.c::termp_it_pre() configures the NOBREAK field before
@@ -65,7 +64,7 @@ pub(super) fn lower_definition_head(
             _ => crate::mandoc::inline::AuthorBreakEffect::Line,
         };
         let finished = context.lower_run_in_definition_head(
-            groups,
+            head_nodes,
             flow.spacing_enabled,
             formatter,
             flow.head.strong_scope(),

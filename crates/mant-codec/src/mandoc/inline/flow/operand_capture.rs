@@ -10,10 +10,12 @@
 use std::collections::HashMap;
 
 use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
+use crate::mandoc::declaration_groups::search::SearchTemplate;
 use mant_ir::Inline;
 
 #[derive(Clone, Default)]
 pub(in crate::mandoc) struct HeadOperandCapture {
+    search_template: Option<SearchTemplate>,
     roles: HashMap<u64, NativeOperandRole>,
     optional_keys: HashMap<u64, usize>,
     captured: CapturedHeadOperands,
@@ -22,6 +24,13 @@ pub(in crate::mandoc) struct HeadOperandCapture {
 }
 
 impl HeadOperandCapture {
+    pub(in crate::mandoc) fn new(search_template: Option<SearchTemplate>) -> Self {
+        Self {
+            search_template,
+            ..Self::default()
+        }
+    }
+
     pub(super) fn record(&mut self, serial: u64, role: NativeOperandRole) {
         self.roles.insert(serial, role);
     }
@@ -101,12 +110,31 @@ impl HeadOperandCapture {
 }
 
 impl super::InlineBuilder {
+    pub(in crate::mandoc) fn mdoc_argument_role(&self, node: u32) -> NativeOperandRole {
+        if self.head_operand_capture.as_ref().is_some_and(|capture| {
+            capture
+                .borrow()
+                .search_template
+                .as_ref()
+                .is_some_and(|form| form.has_argument(node))
+        }) {
+            NativeOperandRole::SearchArgument(node)
+        } else {
+            NativeOperandRole::Placeholder
+        }
+    }
+
     /// Register an actual word before parsing or accepted-output drains.
-    pub(in crate::mandoc) fn record_current_native_operand(&mut self, has_font_escape: bool) {
+    pub(in crate::mandoc) fn record_current_native_operand(
+        &mut self,
+        text_node: Option<u32>,
+        has_font_escape: bool,
+    ) {
         if let Some(capture) = &self.head_operand_capture {
             let mut capture = capture.borrow_mut();
             let role = capture
                 .operand_role
+                .or_else(|| capture.search_template.as_ref()?.role(text_node?))
                 .or_else(|| has_font_escape.then_some(NativeOperandRole::Literal));
             if let Some(role) = role {
                 capture.record(self.execution.native_owner_serial, role);

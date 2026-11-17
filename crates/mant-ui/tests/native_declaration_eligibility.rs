@@ -59,3 +59,27 @@ fn placeholder_and_later_declaration_remain_readable_and_selectable() {
         }
     }
 }
+
+#[test]
+fn a_search_template_and_its_following_command_group_keep_original_reader_targets() {
+    // Pinned mdoc_term.c carries Sm off across Sh. The joined sign and
+    // argument still form one visible label, and only N owns the prose.
+    let source = concat!(
+        ".Dd November 17, 2026\n.Dt PROBE 3\n.Os\n.Sh NAME\n.Nm probe\n.Nd role probe\n",
+        ".Sm off\n.Sh COMMANDS\n.Bl -tag -width Ds\n.It No ? Ar RE\n",
+        ".It Cm n\n.It Cm N\nGROUP_BODY\n.El\n",
+    );
+    let content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+    );
+    let markdown = mant_codec::encode::render_markdown(&content);
+    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    for content in [&content, &readback] {
+        for width in [20, 40, 78] {
+            let rendered = DocumentView::new(content).render(width);
+            for term in ["?RE", "GROUP_BODY"] {
+                assert_eq!(rendered.search(term).len(), 1, "width {width}: {term}");
+            }
+        }
+    }
+}

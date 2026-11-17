@@ -6,7 +6,9 @@ use libmandoc_rs::{
 };
 use libmandoc_rs::{Node, NodeKind};
 
-use super::roff_escape::{RoffInlineEvent, decode, visible_text};
+use super::roff_escape::visible_text;
+
+pub(super) mod search;
 
 pub(super) fn record(root: &Node, evidence: &mut NativeHeadEvidence) {
     fn declaration(node: &Node) -> bool {
@@ -53,7 +55,6 @@ pub(super) fn record(root: &Node, evidence: &mut NativeHeadEvidence) {
 /// spelling resembles one of these templates.
 fn source_presentation_head(node: &Node) -> bool {
     native_numeric_label(node).is_some()
-        || native_mdoc_search_template(node)
         || native_man_option_template(node)
         || native_man_search_template(node)
         || native_parameter_template(node)
@@ -65,7 +66,18 @@ fn source_head_text(node: &Node) -> Option<&str> {
         .children
         .iter()
         .find(|child| child.kind == NodeKind::Head)?;
-    let mut current = head.children.first()?;
+    let mut current = if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::It)) {
+        let mut visible = head.children.iter().filter(|child| !search::control(child));
+        let first = visible.next()?;
+        // A title or bracket label is proved by the whole HEAD. An
+        // additional Ar must not disappear behind its first word.
+        if visible.next().is_some() {
+            return None;
+        }
+        first
+    } else {
+        head.children.first()?
+    };
     loop {
         if current.kind == NodeKind::Text {
             return (!current.flags.no_print && current.children.is_empty())
@@ -111,101 +123,6 @@ fn literal_numeric_label(text: &str) -> bool {
         }
     }
     digits > 0
-}
-
-fn native_mdoc_search_template(node: &Node) -> bool {
-    let Some(mut head) = node
-        .children
-        .iter()
-        .find(|child| child.kind == NodeKind::Head)
-    else {
-        return false;
-    };
-    while let [wrapper] = head.children.as_slice()
-        && wrapper.kind == NodeKind::Block
-        && !wrapper.flags.no_print
-        && wrapper.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Xo))
-        && let Some(body) = wrapper
-            .children
-            .iter()
-            .find(|child| child.kind == NodeKind::Body)
-    {
-        head = body;
-    }
-    let mut words = head.children.iter().filter(|child| !child.flags.no_print);
-    let Some(prefix) = words.next() else {
-        return false;
-    };
-    let mut joined = prefix.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Pf));
-    let sign = match (
-        prefix.macro_token.as_ref(),
-        prefix.kind,
-        prefix.children.as_slice(),
-    ) {
-        (Some(Mdoc(MdocMacro::Pf | MdocMacro::No)), NodeKind::Element, [text])
-            if text.kind == NodeKind::Text && !text.flags.no_print =>
-        {
-            text
-        }
-        (_, NodeKind::Text, []) => prefix,
-        _ => return false,
-    };
-    let Some(sign) = sign.text.as_deref().and_then(search_sign) else {
-        return false;
-    };
-    // CVS termp_pf_post and termp_ns_pre join actual same-line operands.
-    // A literal search command followed by a separate Ar stays a candidate.
-    let mut words = words.peekable();
-    let joined_by_ns = |child: &&Node| {
-        !child.flags.line_start && child.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ns))
-    };
-    while words.next_if(joined_by_ns).is_some() {
-        joined = true;
-    }
-    if !joined
-        || !words.next().is_some_and(|child| {
-            !child.flags.line_start && child.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ar))
-        })
-    {
-        return false;
-    }
-    // An optional closing sign and Ar suffixes such as an offset belong to
-    // the template. Another visible source role ends that proof.
-    let mut closed = false;
-    words.filter(|child| !joined_by_ns(child)).all(|child| {
-        if child.flags.line_start {
-            return false;
-        }
-        if child.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Ar)) {
-            return true;
-        }
-        if !closed
-            && child.kind == NodeKind::Text
-            && child.text.as_deref().and_then(search_sign) == Some(sign)
-        {
-            closed = true;
-            return true;
-        }
-        false
-    })
-}
-
-fn search_sign(text: &str) -> Option<char> {
-    let mut sign = None;
-    for event in decode(text) {
-        match event {
-            RoffInlineEvent::Text(value)
-                if sign.is_none() && matches!(value.as_str(), "/" | "?") =>
-            {
-                sign = value.chars().next();
-            }
-            RoffInlineEvent::Font(_)
-            | RoffInlineEvent::PreviousFont
-            | RoffInlineEvent::ZeroWidthGlyph => {}
-            _ => return None,
-        }
-    }
-    sign
 }
 
 fn native_man_option_template(node: &Node) -> bool {

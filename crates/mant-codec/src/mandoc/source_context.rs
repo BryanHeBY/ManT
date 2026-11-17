@@ -4,6 +4,7 @@ use super::{
 };
 
 mod table_source;
+use std::rc::Rc;
 pub(super) use table_source::TableTextBlock;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -86,6 +87,23 @@ impl<'a> LoweringContext<'a> {
         self.active_mdoc_section.get()
     }
 
+    fn head_operand_capture(
+        &self,
+        nodes: HeadNodes<'_>,
+    ) -> Rc<RefCell<inline::HeadOperandCapture>> {
+        let search_template = if self.macro_set == MacroSet::Mdoc {
+            super::declaration_groups::search::SearchTemplate::from_head(
+                nodes.before,
+                nodes.content,
+            )
+        } else {
+            None
+        };
+        Rc::new(RefCell::new(inline::HeadOperandCapture::new(
+            search_template,
+        )))
+    }
+
     pub(super) fn replace_mdoc_section(&self, section: MdocSectionContext) -> MdocSectionContext {
         self.active_mdoc_section.replace(section)
     }
@@ -155,7 +173,7 @@ impl<'a> LoweringContext<'a> {
                 inline::AuthorBreakEffect::Line
             },
         );
-        let operand_capture = std::rc::Rc::new(RefCell::new(inline::HeadOperandCapture::default()));
+        let operand_capture = self.head_operand_capture(nodes);
         builder.head_operand_capture = Some(operand_capture.clone());
         if preserve_rows {
             builder.begin_definition_head_consumption();
@@ -201,9 +219,9 @@ impl<'a> LoweringContext<'a> {
     /// stream as their heads.  The returned state owns pending `\z`, `\p`,
     /// and source-continuation effects until the generated run-in cells and
     /// first body word execute.
-    pub(super) fn lower_run_in_definition_head<'n>(
+    pub(super) fn lower_run_in_definition_head(
         &self,
-        groups: impl IntoIterator<Item = HeadNodes<'n>>,
+        nodes: HeadNodes<'_>,
         spacing: bool,
         formatter: &mut crate::mandoc::formatter::FormatterState,
         strong_scope: bool,
@@ -215,36 +233,27 @@ impl<'a> LoweringContext<'a> {
             self.active_mdoc_section() == MdocSectionContext::Authors,
             author_break_effect,
         );
-        let operand_capture = std::rc::Rc::new(RefCell::new(inline::HeadOperandCapture::default()));
+        let operand_capture = self.head_operand_capture(nodes);
         builder.head_operand_capture = Some(operand_capture.clone());
-        let mut operand_key = None;
         builder.begin_definition_head_consumption();
         builder.scope_posts = self.scope_posts.clone();
         builder.observe_no_fill_source_lines(true);
-        let mut saved_font = None;
-        for nodes in groups {
-            if !nodes.content.is_empty() {
-                operand_key.get_or_insert(nodes.content.as_ptr() as usize);
-            }
-            if !nodes.before.is_empty() {
-                // Direct It siblings are outside the diagnostic HEAD font
-                // and NOBREAK field, but remain in its live input buffer.
-                builder.enter_definition_head_effect(inline::AuthorBreakEffect::Line);
-                inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
-            }
-            if let Some(origin) = nodes.source_origin_units {
-                builder.execution.enter_definition_head_origin(origin);
-            }
-            builder.enter_definition_head_effect(author_break_effect);
-            if strong_scope && saved_font.is_none() {
-                saved_font = Some(
-                    builder
-                        .font
-                        .push_scope(super::roff_escape::RoffFont::Strong),
-                );
-            }
-            inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
+        if !nodes.before.is_empty() {
+            // Direct It siblings are outside the diagnostic HEAD font
+            // and NOBREAK field, but remain in its live input buffer.
+            builder.enter_definition_head_effect(inline::AuthorBreakEffect::Line);
+            inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
         }
+        if let Some(origin) = nodes.source_origin_units {
+            builder.execution.enter_definition_head_origin(origin);
+        }
+        builder.enter_definition_head_effect(author_break_effect);
+        let saved_font = strong_scope.then(|| {
+            builder
+                .font
+                .push_scope(super::roff_escape::RoffFont::Strong)
+        });
+        inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
         builder.observe_no_fill_source_lines(false);
         // The generated cells execute FIRST (append_run_in_cells routes
         // them through the zero-advance projection): a pending HEAD glyph
@@ -263,10 +272,11 @@ impl<'a> LoweringContext<'a> {
         }
         let (mut output, execution) = formatter.finish_inline_scope(builder);
         let breaks = inline::take_definition_term_breaks(&mut output);
-        if let Some(key) = operand_key {
-            self.native_heads
-                .borrow_mut()
-                .capture_operands(key, operand_capture.borrow_mut().take());
+        if !nodes.content.is_empty() {
+            self.native_heads.borrow_mut().capture_operands(
+                nodes.content.as_ptr() as usize,
+                operand_capture.borrow_mut().take(),
+            );
         }
         RunInDefinitionHead {
             output,
