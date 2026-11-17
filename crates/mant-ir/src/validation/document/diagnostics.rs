@@ -20,7 +20,7 @@ pub(super) fn is_semantic_completeness_diagnostic(code: &str) -> bool {
             | "ir.duplicate-identity"
             | "ir.empty-fragment-alias"
             | "ir.invalid-fragment-alias"
-            | "ir.ambiguous-fragment-alias"
+            | crate::AMBIGUOUS_FRAGMENT_ALIAS
             | "ir.invalid-document-reference"
             | "ir.empty-semantic-document-reference"
             | "ir.invalid-semantic-document-reference"

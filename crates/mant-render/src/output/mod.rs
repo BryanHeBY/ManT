@@ -33,6 +33,7 @@ pub use json::{
 };
 pub use markdown_report::{
     render_excerpt_markdown, render_excerpt_markdown_with_options, render_outline_markdown,
+    render_selected_excerpt_markdown,
 };
 pub use search::{
     SearchTextRole, render_search_markdown, render_search_text, render_search_text_with,

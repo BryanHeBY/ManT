@@ -8,6 +8,7 @@ mod fragments;
 mod inline;
 mod mapped;
 mod math_markdown;
+mod navigation;
 mod semantic;
 mod table_projection;
 
@@ -23,10 +24,10 @@ pub use artifact::{
     render_addressable_markdown, render_addressable_markdown_with_options,
 };
 pub use fragments::{
-    MarkdownFragmentOptions, MarkdownFragments, commonmark_code_span, escape_commonmark,
-    html_anchor, render_blocks_fragment, render_heading_fragment, render_inline_content_fragment,
-    render_inline_fragment, render_located_blocks_fragment, render_overview_fragment,
-    render_sections_fragment,
+    MarkdownFragmentOptions, MarkdownFragments, ScopedMarkdownFragments, commonmark_code_span,
+    escape_commonmark, html_anchor, render_blocks_fragment, render_heading_fragment,
+    render_inline_content_fragment, render_inline_fragment, render_located_blocks_fragment,
+    render_overview_fragment, render_sections_fragment,
 };
 use math_markdown::RenderOptions;
 pub use math_markdown::{

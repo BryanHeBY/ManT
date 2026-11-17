@@ -58,18 +58,17 @@ impl<'a> DocumentSelectorIndex<'a> {
     /// outline node. A path remains an exact way to read the overview.
     pub(crate) fn validate_overview_identity(
         &self,
-        query: &mant_ir::ResolvedContent,
+        document: &str,
         selector: &ContentSelector,
+        has_overview_conflict: impl FnOnce() -> bool,
     ) -> Result<(), ProjectionError> {
         let root = mant_ir::DOCUMENT_ROOT_ID;
-        self.validate_synthetic_identity(&query.label, selector, root, "root")?;
+        self.validate_synthetic_identity(document, selector, root, "root")?;
         if matches!(selector, ContentSelector::Id { id } if id.as_str() == root)
-            && query.document.as_ref().is_some_and(|document| {
-                mant_ir::DocumentIndex::build(document).has_overview_conflict()
-            })
+            && has_overview_conflict()
         {
             return Err(ProjectionError::AmbiguousSelector {
-                document: query.label.clone(),
+                document: document.to_owned(),
                 selector: selector.to_string(),
                 candidates: vec![super::SelectorCandidate {
                     path: "root".into(),

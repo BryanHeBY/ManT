@@ -160,7 +160,8 @@ fn render_unstyled_framed<'source>(
         return render_unstyled_framed(
             nodes,
             RenderOptions {
-                overview_identity: options.overview_identity,
+                destinations: options.destinations,
+                emit_overview: options.emit_overview,
                 ..RenderOptions::portable(options.options)
             },
             manual_links,

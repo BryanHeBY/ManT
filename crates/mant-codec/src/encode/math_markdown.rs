@@ -10,7 +10,7 @@ use super::MarkdownMath;
 use super::{MarkdownArtifact, MarkdownOptions};
 use crate::ResolvedContent;
 use crate::math::{MathError, MathLossKind, MathPolicy};
-pub(super) use context::{MathContext, OverviewIdentity, RenderOptions};
+pub(super) use context::{MathContext, RenderOptions};
 use std::{error::Error, fmt};
 
 /// Maximum independently owned formulas in one mathematical Markdown operation.

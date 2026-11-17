@@ -1256,10 +1256,13 @@ mant tar --explain=--exclude
 - `--markdown-math MODE`: Select `latex` (default), `mathml`, or `readable` formulas for Markdown documents, excerpts and reports.
 
 Clean Markdown output normally omits internal HTML anchors. A heading with a
-document-local link automatically retains addressable anchors so its target is
-not discarded; the original link remains clickable. The `man` format
-applies only to a complete native roff manual and emits plain manual content
-without an external tldr preface; it rejects Markdown documents and partial
+document-local link automatically retains addressable anchors for unique
+destinations. A standalone excerpt or explanation from a source with fragment
+alias conflicts keeps its readable labels, external links and manual references
+while leaving that source's local navigation inactive.
+
+The `man` format applies only to a complete native roff manual and emits plain
+manual content without an external tldr preface. It rejects Markdown documents and partial
 document views. All document queries default to text, including full documents,
 outlines, nodes, explanations, searches, and queries supplied by `--request-json`.
 Full interactive reading still opens the TUI; piped input never opens it

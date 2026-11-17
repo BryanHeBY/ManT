@@ -80,6 +80,10 @@ that crate was not published for that change.
 - Preserve the original overview conflict in Markdown excerpts and evidence
   reports. Selection by path keeps the content readable while ambiguous
   anchors and links stay inactive across sections, entries and support blocks.
+- Apply fragment-alias ambiguity checks to addressable Markdown, including
+  documents without an overview. Same-snapshot excerpts keep unique local
+  destinations. Standalone v0.14 reports disable local navigation for an
+  affected source while preserving text, external links and manual references.
 - The 0.15 `mant-render` Markdown option APIs accept the option types from
   `mant-codec` 0.15.
 

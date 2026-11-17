@@ -337,8 +337,11 @@ fn keep_navigation_finding(diagnostics: &mut Vec<mant_ir::Diagnostic>) {
     // The Markdown renderer needs the source-wide conflict key on detached
     // content. Keep it separate from human details and their source paths.
     diagnostics.retain_mut(|finding| {
-        if finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION) {
-            finding.message = String::new();
+        if matches!(
+            finding.code.as_deref(),
+            Some(mant_ir::OVERVIEW_IDENTITY_COLLISION | mant_ir::AMBIGUOUS_FRAGMENT_ALIAS)
+        ) {
+            finding.message.clear();
             finding.source = None;
             true
         } else {
@@ -357,7 +360,7 @@ fn discard_document_source_path(source: &mut Option<mant_ir::DocumentSource>) {
 mod tests {
     use mant_ir::DocumentAddress;
     use mant_protocol::{
-        DocumentScope, DocumentSelector, DocumentTraversal, ResolvedDocumentScope,
+        DocumentScope, DocumentSelector, DocumentTraversal, QueryExcerpt, ResolvedDocumentScope,
         ScopeQueryResponse, ScopeQueryResult, ScopeQuerySchema, ScopedQueryFailure,
     };
 
@@ -603,5 +606,85 @@ mod tests {
         assert!(!text.contains("](#document-overview)"), "{text}");
         assert!(!text.contains("id=\"document-overview\""), "{text}");
         assert!(!text.contains("private diagnostic text"), "{text}");
+    }
+
+    #[test]
+    fn alias_conflicts_survive_mcp_preparation_without_human_diagnostics() {
+        let document = serde_json::from_value(serde_json::json!({
+            "source": {"format": "markdown", "path": "/private/source.md"},
+            "meta": {},
+            "sections": [{
+                "id": "first", "fragmentAliases": ["shared"],
+                "heading": {"content": [
+                    {"type": "link", "target": {"kind": "section", "id": "shared"},
+                     "children": [{"type": "text", "value": "DISPUTED"}]},
+                    {"type": "text", "value": " "},
+                    {"type": "link", "target": {"kind": "section", "id": "first"},
+                     "children": [{"type": "text", "value": "UNIQUE"}]},
+                    {"type": "text", "value": " "},
+                    {"type": "link", "target": {"kind": "external", "uri": "https://example.test"},
+                     "children": [{"type": "text", "value": "EXTERNAL"}]}
+                ]}, "blocks": [], "children": []
+            }, {
+                "id": "shared", "heading": {"content": [{"type": "text", "value": "OTHER"}]},
+                "blocks": [], "children": []
+            }],
+        }))
+        .unwrap();
+        let mut excerpt = mant_query::select_excerpt(
+            &mant_ir::ResolvedContent {
+                label: "source".into(),
+                address: None,
+                document: Some(document),
+                tldr: None,
+            },
+            &[mant_protocol::ContentSelector::path("1")],
+        )
+        .unwrap();
+        let diagnostic = excerpt
+            .diagnostics
+            .iter_mut()
+            .find(|finding| finding.code.as_deref() == Some(mant_ir::AMBIGUOUS_FRAGMENT_ALIAS))
+            .unwrap();
+        diagnostic.message = "private diagnostic /private/details.md".into();
+        diagnostic.source = Some(mant_ir::SourceSpan {
+            byte_range: None,
+            line: 1,
+            column: 2,
+            end_line: Some(1),
+            end_column: Some(3),
+        });
+        let wire = serde_json::to_string(&excerpt).unwrap();
+        let restored: QueryExcerpt = serde_json::from_str(&wire).unwrap();
+        let text = super::present_excerpt(
+            restored,
+            PageRequest {
+                start_char: 0,
+                max_chars: 4_096,
+            },
+        );
+        assert!(
+            text.contains("DISPUTED UNIQUE [EXTERNAL](https://example.test)"),
+            "{text}"
+        );
+        for marker in [
+            "#shared)",
+            "#first)",
+            "id=\"shared\"",
+            "id=\"first\"",
+            "/private/",
+        ] {
+            assert!(!text.contains(marker), "{text}");
+        }
+
+        super::prepare_excerpt(&mut excerpt);
+        assert_eq!(excerpt.source.unwrap().path, None);
+        assert_eq!(excerpt.diagnostics.len(), 1);
+        assert_eq!(
+            excerpt.diagnostics[0].code.as_deref(),
+            Some(mant_ir::AMBIGUOUS_FRAGMENT_ALIAS)
+        );
+        assert_eq!(excerpt.diagnostics[0].message, "");
+        assert_eq!(excerpt.diagnostics[0].source, None);
     }
 }

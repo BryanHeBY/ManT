@@ -4,11 +4,11 @@ use super::{
     MAX_MARKDOWN_MATH_NODES, MAX_MARKDOWN_MATH_OUTPUT_BYTES, MarkdownMathError, MarkdownMathIssue,
     MarkdownMathIssueKind, MarkdownMathLimit, MarkdownMathSummary,
 };
+use crate::encode::navigation::LocalDestinations;
 use crate::encode::{MarkdownMath, MarkdownOptions};
 use crate::math::{MathFormat, MathLoss, MathOptions, MathPolicy, encode_equation};
 use mant_ir::{
-    Block, DOCUMENT_ROOT_ID, DocumentIndex, EquationExpression, EquationValidationError,
-    EquationValidationLimits, Inline,
+    Block, EquationExpression, EquationValidationError, EquationValidationLimits, Inline,
 };
 use std::{cell::RefCell, collections::HashMap};
 
@@ -20,18 +20,8 @@ mod tests;
 pub(in crate::encode) struct RenderOptions<'ctx> {
     pub(in crate::encode) options: MarkdownOptions,
     pub(in crate::encode) math: Option<&'ctx MathContext>,
-    pub(in crate::encode) overview_identity: OverviewIdentity<'ctx>,
-}
-
-#[derive(Clone, Copy, Default)]
-pub(in crate::encode) enum OverviewIdentity<'ctx> {
-    #[default]
-    Absent,
-    Indexed(&'ctx DocumentIndex),
-    Detached {
-        ambiguous: bool,
-        emit_overview: bool,
-    },
+    pub(in crate::encode) destinations: LocalDestinations<'ctx>,
+    pub(in crate::encode) emit_overview: bool,
 }
 
 impl RenderOptions<'_> {
@@ -46,26 +36,12 @@ impl RenderOptions<'_> {
     }
 
     pub(in crate::encode) fn allows_destination(self, fragment: &str) -> bool {
-        match self.overview_identity {
-            OverviewIdentity::Absent => true,
-            OverviewIdentity::Indexed(index) => !index.is_fragment_ambiguous(fragment),
-            OverviewIdentity::Detached { ambiguous, .. } => {
-                !ambiguous || fragment != DOCUMENT_ROOT_ID
-            }
-        }
+        self.destinations.allows(fragment)
     }
 
     pub(in crate::encode) fn emits_anchor(self, fragment: &str) -> bool {
         self.allows_destination(fragment)
-            && match self.overview_identity {
-                OverviewIdentity::Absent => true,
-                OverviewIdentity::Indexed(index) => {
-                    fragment != DOCUMENT_ROOT_ID && !index.is_overview_alias(fragment)
-                }
-                OverviewIdentity::Detached { emit_overview, .. } => {
-                    !emit_overview || fragment != DOCUMENT_ROOT_ID
-                }
-            }
+            && !(self.emit_overview && self.destinations.is_overview_destination(fragment))
     }
 }
 

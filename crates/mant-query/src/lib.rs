@@ -18,7 +18,7 @@ pub use projection::{
     ProjectionError, ReferenceProjectionLimits, SelectorCandidate, build_outline,
     build_outline_projection, build_outline_with_detail, build_outline_with_references,
     project_references, project_references_with_limits, select_excerpt, select_explanation,
-    semantics_complete,
+    semantics_complete, with_selected_excerpt,
 };
 pub use scope_query::{
     QueryScopeView, ScopeExecutionError, ScopeInputError, explain_scope, search_scope,

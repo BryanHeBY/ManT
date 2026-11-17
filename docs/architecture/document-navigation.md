@@ -183,3 +183,22 @@ MCP remains read-only: it returns references, local resolution information and
 subsequent read parameters, never launches browsers, shells or URI handlers.
 Only an explicit user action in the interactive host reaches the safe opener.
 A typed action in a DTO is data, not permission to execute it.
+
+## Markdown presentation of local destinations
+
+Addressable document exports resolve fragment ambiguity against the original
+snapshot, including documents without an overview. An excerpt produced and
+rendered in the same snapshot operation, such as a Markdown clipboard copy,
+uses that same index. Both surfaces keep unambiguous local links and anchors.
+Overview anchor emission follows the presence of an actual overview.
+
+Standalone v0.14 excerpts and explanation reports carry source findings even
+when they omit one of the competing owners. The
+`ir.overview-identity-collision` finding disables the `document-overview`
+fragment. The `ir.ambiguous-fragment-alias` code applies to the source as a
+whole because the envelope carries the spelling only in its human-readable
+message. Its Markdown presentation leaves that source's fragment-only links
+and anchors inactive. Visible labels and other link types keep their regular
+presentation, and unaffected sources retain their local navigation. MCP
+retains these codes during report rendering and clears their messages and
+source locations.

@@ -33,6 +33,34 @@ impl DocumentIndex {
             )
         })
     }
+
+    /// Report ambiguous fragment aliases without validating unrelated content.
+    ///
+    /// A conflict over the canonical overview spelling with the same indexed
+    /// ID is reported separately by [`Self::overview_conflict_diagnostic`].
+    pub fn ambiguous_fragment_diagnostics(&self) -> impl Iterator<Item = Diagnostic> + '_ {
+        self.ambiguous_fragments().filter_map(|(alias, targets)| {
+            let detail = if targets.len() > 1 {
+                format!(
+                    "multiple document-local IDs: {}",
+                    targets
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                if alias.as_str() == crate::DOCUMENT_ROOT_ID {
+                    return None;
+                }
+                format!("multiple owners of '{}'", crate::DOCUMENT_ROOT_ID)
+            };
+            Some(invariant(
+                crate::AMBIGUOUS_FRAGMENT_ALIAS,
+                format!("fragment '{alias}' resolves to {detail}"),
+            ))
+        })
+    }
 }
 
 pub(super) fn validate_with_index(
@@ -108,29 +136,7 @@ pub(super) fn validate_with_index(
             ));
         }
     }
-    for (alias, targets) in index.ambiguous_fragments() {
-        let detail = if targets.len() > 1 {
-            format!(
-                "multiple document-local IDs: {}",
-                targets
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        } else {
-            if alias.as_str() == crate::DOCUMENT_ROOT_ID {
-                // The dedicated overview-identity finding already reports
-                // this canonical spelling when its owners differ.
-                continue;
-            }
-            format!("multiple owners of '{}'", crate::DOCUMENT_ROOT_ID)
-        };
-        diagnostics.push(invariant(
-            "ir.ambiguous-fragment-alias",
-            format!("fragment '{alias}' resolves to {detail}"),
-        ));
-    }
+    diagnostics.extend(index.ambiguous_fragment_diagnostics());
 
     let mut collector = InvariantCollector::default();
     collector.visit_document(document);

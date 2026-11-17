@@ -6,7 +6,7 @@ mod tests;
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
 use mant_codec::encode::{
-    MarkdownFragmentOptions, MarkdownFragments, heading, heading_has_local_link, render_tldr,
+    MarkdownFragmentOptions, ScopedMarkdownFragments, heading, heading_has_local_link, render_tldr,
     section_headings_have_local_links,
 };
 use mant_codec::encode::{commonmark_code_span as code_span, escape_commonmark as escape_text};
@@ -54,7 +54,23 @@ pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
 #[must_use]
 pub fn render_excerpt_markdown_with_options(
     excerpt: &QueryExcerpt,
-    mut options: MarkdownFragmentOptions,
+    options: MarkdownFragmentOptions,
+) -> String {
+    render_selected_excerpt_markdown(
+        excerpt,
+        ScopedMarkdownFragments::for_report(options, &excerpt.diagnostics),
+    )
+}
+
+/// Assemble a report inside the trusted source selection operation.
+///
+/// As with the individual fragment encoders, borrowed local destinations must
+/// come from the same projection. For an independent DTO, use
+/// [`render_excerpt_markdown_with_options`].
+#[must_use]
+pub fn render_selected_excerpt_markdown(
+    excerpt: &QueryExcerpt,
+    fragments: ScopedMarkdownFragments<'_>,
 ) -> String {
     let heading_links = excerpt.selections.iter().any(|selection| match selection {
         ExcerptSelection::DocumentRoot { heading, .. } => {
@@ -65,9 +81,11 @@ pub fn render_excerpt_markdown_with_options(
         }
         ExcerptSelection::DocumentEntry { .. } | ExcerptSelection::Tldr { .. } => false,
     });
-    if heading_links {
-        options.preserve_anchors = true;
-    }
+    let fragments = if heading_links {
+        fragments.with_anchors()
+    } else {
+        fragments
+    };
     let label = document_label(
         excerpt.display_title.as_deref().unwrap_or(&excerpt.label),
         excerpt
@@ -79,7 +97,6 @@ pub fn render_excerpt_markdown_with_options(
     if !excerpt.semantics_complete {
         output.push("Semantic entries are incomplete; use search to inspect unclassified or rejected content.".to_owned());
     }
-    let fragments = MarkdownFragments::for_report(options, &excerpt.diagnostics);
     for (index, selection) in excerpt.selections.iter().enumerate() {
         if index > 0 {
             output.push("---".to_owned());

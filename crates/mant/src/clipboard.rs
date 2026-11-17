@@ -150,14 +150,32 @@ fn render_copy_request(request: CopyRequest) -> Result<String, String> {
             content,
             selector,
             format,
-        } => {
-            let excerpt = mant_query::select_excerpt(content.as_ref(), &[selector])
-                .map_err(|error| format!("could not select the current node: {error}"))?;
-            Ok(match format {
-                CopyFormat::Text => mant_render::render_excerpt_text(&excerpt),
-                CopyFormat::Markdown => mant_render::render_excerpt_markdown(&excerpt),
-            })
+        } => match format {
+            CopyFormat::Text => mant_query::select_excerpt(content.as_ref(), &[selector])
+                .map(|excerpt| mant_render::render_excerpt_text(&excerpt)),
+            CopyFormat::Markdown => mant_query::with_selected_excerpt(
+                content.as_ref(),
+                &[selector],
+                |excerpt, validation| {
+                    let options = mant_codec::encode::MarkdownFragmentOptions::default();
+                    let fragments = validation.map_or_else(
+                        || {
+                            mant_codec::encode::ScopedMarkdownFragments::for_report(
+                                options,
+                                &excerpt.diagnostics,
+                            )
+                        },
+                        |snapshot| {
+                            mant_codec::encode::ScopedMarkdownFragments::for_snapshot(
+                                options, snapshot,
+                            )
+                        },
+                    );
+                    mant_render::render_selected_excerpt_markdown(excerpt, fragments)
+                },
+            ),
         }
+        .map_err(|error| format!("could not select the current node: {error}")),
     }
 }
 
@@ -200,6 +218,37 @@ mod tests {
         assert!(text.contains("--help"));
         assert!(markdown.contains("## Options"));
         assert!(markdown.contains("`--help`"));
+    }
+
+    #[test]
+    fn markdown_copy_uses_the_source_index_for_authored_aliases() {
+        let content = Arc::new(
+            mant_loader::load_markdown_text(
+                concat!(
+                    "# Demo\n\n## [DISPUTED](#shared) [VALID](#valid) {#shared}\n\nRead me.\n\n",
+                    "## Competing {#shared}\n\n## Destination {#valid}\n"
+                ),
+                Some("demo.md".into()),
+            )
+            .unwrap(),
+        );
+        let document = content.document.as_ref().unwrap();
+        assert!(mant_ir::DocumentIndex::build(document).is_fragment_ambiguous("shared"));
+        let selectors = [ContentSelector::path("1")];
+        let excerpt = mant_query::select_excerpt(content.as_ref(), &selectors).unwrap();
+        let standalone = mant_render::render_excerpt_markdown(&excerpt);
+        assert!(!standalone.contains("](#valid)"), "{standalone}");
+
+        let markdown = render_copy_request(CopyRequest::Node {
+            content,
+            selector: ContentSelector::path("1"),
+            format: CopyFormat::Markdown,
+        })
+        .unwrap();
+        assert!(markdown.contains("DISPUTED [VALID](#valid)"), "{markdown}");
+        assert!(!markdown.contains("](#shared)"), "{markdown}");
+        assert!(!markdown.contains("id=\"shared\""), "{markdown}");
+        assert!(markdown.contains("Read me."), "{markdown}");
     }
 
     #[test]

@@ -11,6 +11,9 @@ pub const DOCUMENT_ROOT_ID: &str = "document-overview";
 /// Validation code for another content owner claiming the document overview ID.
 pub const OVERVIEW_IDENTITY_COLLISION: &str = "ir.overview-identity-collision";
 
+/// Validation code for a fragment spelling that addresses more than one owner.
+pub const AMBIGUOUS_FRAGMENT_ALIAS: &str = "ir.ambiguous-fragment-alias";
+
 /// Exact source-authored fragment spelling for one local navigation target.
 ///
 /// A fragment alias is not a [`NodeId`]: formats such as mdoc deliberately

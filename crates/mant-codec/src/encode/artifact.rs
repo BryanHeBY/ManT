@@ -1,14 +1,14 @@
 //! Canonical Markdown bytes and borrowed source-coordinate maps.
-use super::math_markdown::{OverviewIdentity, RenderOptions};
 use super::{
     MarkdownOptions,
     anchors::anchor_markers,
     blocks::{RenderedBlocks, render_blocks_with_entries},
-    heading, heading_has_local_link, inline, render_heading, render_section_heading, render_tldr,
+    heading, heading_has_local_link, render_heading, render_section_heading, render_tldr,
     section_headings_have_local_links, semantic,
 };
+use super::{math_markdown::RenderOptions, navigation::LocalDestinations};
 use crate::ResolvedContent;
-use mant_ir::{DOCUMENT_ROOT_ID, DocumentIndex, EntryOwner, OutlinePath, Section, SourceSpan};
+use mant_ir::{Document, DocumentIndex, EntryOwner, OutlinePath, Section, SourceSpan};
 use std::ops::Range;
 
 /// Canonical Markdown bytes and coordinates borrowing their exact source snapshot.
@@ -219,12 +219,14 @@ pub(super) fn render_markdown_with_context<'src>(
     let index = query
         .document
         .as_ref()
-        .filter(|document| options.preserve_anchors && document.has_overview())
+        .filter(|_| options.preserve_anchors)
         .map(DocumentIndex::build);
     let options = RenderOptions {
-        overview_identity: index
+        destinations: index
             .as_ref()
-            .map_or(OverviewIdentity::Absent, OverviewIdentity::Indexed),
+            .map_or(LocalDestinations::Unrestricted, LocalDestinations::Indexed),
+        emit_overview: options.preserve_anchors
+            && query.document.as_ref().is_some_and(Document::has_overview),
         ..options
     };
     let mut output = ArtifactBuilder {
@@ -236,8 +238,8 @@ pub(super) fn render_markdown_with_context<'src>(
         .as_ref()
         .and_then(|document| document.heading.as_ref())
     {
-        if let Some(index) = &index {
-            output.push(&overview_anchors(index, options));
+        if options.emit_overview {
+            output.push(&options.destinations.overview_markers());
         }
         let range = output.push(&render_heading(1, heading, options));
         if track {
@@ -268,10 +270,8 @@ pub(super) fn render_markdown_with_context<'src>(
         if !document.blocks.is_empty()
             || (document.heading.is_none() && !document.fragment_aliases.is_empty())
         {
-            let start = if let Some(index) = &index
-                && document.heading.is_none()
-            {
-                output.push(&overview_anchors(index, options)).start
+            let start = if options.emit_overview && document.heading.is_none() {
+                output.push(&options.destinations.overview_markers()).start
             } else {
                 output.text.len()
             };
@@ -282,14 +282,6 @@ pub(super) fn render_markdown_with_context<'src>(
         render_artifact_sections(&mut output, &document.sections, &[], None, 2, options);
     }
     output.finish()
-}
-
-fn overview_anchors(index: &DocumentIndex, options: RenderOptions<'_>) -> String {
-    inline::render_html_anchors(
-        std::iter::once(DOCUMENT_ROOT_ID)
-            .chain(index.overview_aliases().map(mant_ir::FragmentAlias::as_str)),
-        |fragment| options.allows_destination(fragment),
-    )
 }
 
 #[derive(Default)]

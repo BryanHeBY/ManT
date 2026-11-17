@@ -1,9 +1,9 @@
 //! Safe report-facing fragments, without document-wide semantic declarations.
 
-use mant_ir::{Block, DOCUMENT_ROOT_ID, Diagnostic, Heading, Inline, InlineContentRef, Section};
+use mant_ir::{Block, Diagnostic, DocumentValidation, Heading, Inline, InlineContentRef, Section};
 
-use super::math_markdown::RenderOptions;
-use super::math_markdown::{MathContext, OverviewIdentity};
+use super::math_markdown::{MathContext, RenderOptions};
+use super::navigation::LocalDestinations;
 use super::{MarkdownInlineProjection, MarkdownMath, MarkdownOptions};
 
 /// Presentation controls for detached report fragments.
@@ -19,17 +19,20 @@ pub struct MarkdownFragmentOptions {
     pub preserve_anchors: bool,
 }
 
-/// One presentation and destination policy for fragments of the same original document.
+/// One presentation and destination policy for detached fragments of one document.
+pub type MarkdownFragments = ScopedMarkdownFragments<'static>;
+
+/// A fragment renderer that can borrow validation from its immutable source.
 ///
 /// An excerpt or evidence report can apply known source-wide navigation
 /// findings even when it includes only one of the owners responsible for them.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MarkdownFragments {
+pub struct ScopedMarkdownFragments<'a> {
     options: MarkdownFragmentOptions,
-    ambiguous_overview: bool,
+    destinations: LocalDestinations<'a>,
 }
 
-impl From<MarkdownFragmentOptions> for MarkdownFragments {
+impl From<MarkdownFragmentOptions> for ScopedMarkdownFragments<'_> {
     fn from(options: MarkdownFragmentOptions) -> Self {
         Self {
             options,
@@ -38,19 +41,49 @@ impl From<MarkdownFragmentOptions> for MarkdownFragments {
     }
 }
 
-impl MarkdownFragments {
-    /// Retain the original document's machine-readable overview conflict finding.
+impl<'a> ScopedMarkdownFragments<'a> {
+    /// Retain the original document's machine-readable navigation findings.
+    ///
+    /// Detached alias conflicts provide no trusted alias spelling. In that
+    /// case, keep labels and ordinary links without activating local targets.
     #[must_use]
     pub fn for_report(options: MarkdownFragmentOptions, diagnostics: &[Diagnostic]) -> Self {
         Self {
             options,
-            ambiguous_overview: diagnostics.iter().any(|finding| {
-                finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION)
-            }),
+            destinations: LocalDestinations::from_diagnostics(diagnostics),
         }
     }
 
-    fn document_options(self, math: &MathContext, emit_overview: bool) -> RenderOptions<'_> {
+    /// Render fragments projected from the exact original snapshot.
+    ///
+    /// Use this during the source's projection operation. Independently loaded
+    /// report DTOs require [`Self::for_report`], even if their address matches.
+    #[must_use]
+    pub fn for_snapshot(
+        options: MarkdownFragmentOptions,
+        snapshot: &'a DocumentValidation<'_>,
+    ) -> Self {
+        Self {
+            options,
+            destinations: LocalDestinations::Indexed(snapshot.index()),
+        }
+    }
+
+    /// Preserve destinations when an authored heading link requires them.
+    #[must_use]
+    pub fn with_anchors(mut self) -> Self {
+        self.options.preserve_anchors = true;
+        self
+    }
+
+    fn document_options<'ctx>(
+        self,
+        math: &'ctx MathContext,
+        emit_overview: bool,
+    ) -> RenderOptions<'ctx>
+    where
+        'a: 'ctx,
+    {
         let options = MarkdownOptions {
             math: self.options.math,
             preserve_anchors: self.options.preserve_anchors,
@@ -59,10 +92,8 @@ impl MarkdownFragments {
         RenderOptions {
             options,
             math: (options.math != MarkdownMath::Readable).then_some(math),
-            overview_identity: OverviewIdentity::Detached {
-                ambiguous: self.ambiguous_overview,
-                emit_overview,
-            },
+            destinations: self.destinations,
+            emit_overview,
         }
     }
 
@@ -107,8 +138,8 @@ impl MarkdownFragments {
         let math = MathContext::export(true, self.options.math);
         let options = self.document_options(&math, true);
         let mut output = Vec::new();
-        if options.preserve_anchors && options.allows_destination(DOCUMENT_ROOT_ID) {
-            output.push(html_anchor(DOCUMENT_ROOT_ID));
+        if options.preserve_anchors {
+            output.push(options.destinations.overview_markers());
         }
         if let Some(heading) = heading {
             output.push(super::render_heading(depth, heading, options));
@@ -195,7 +226,11 @@ pub fn render_overview_fragment(
 ) -> Vec<String> {
     MarkdownFragments {
         options,
-        ambiguous_overview,
+        destinations: if ambiguous_overview {
+            LocalDestinations::OverviewConflict
+        } else {
+            LocalDestinations::Unrestricted
+        },
     }
     .overview(heading, blocks, depth)
 }

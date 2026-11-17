@@ -8,13 +8,14 @@ use crate::{
     },
 };
 use mant_ir::{
-    DOCUMENT_ROOT_ID, Diagnostic, DiagnosticImpact, Document, DocumentIndex, OutlinePath,
+    AMBIGUOUS_FRAGMENT_ALIAS, DOCUMENT_ROOT_ID, Diagnostic, DiagnosticImpact, Document,
+    DocumentIndex, DocumentValidation, OVERVIEW_IDENTITY_COLLISION, OutlinePath,
 };
 use mant_protocol::{
     ContentSelector, ExcerptSchema, ExcerptSelection, MAX_NODE_SELECTORS, OutlineNodeReference,
     OutlineReference, OutlineTrail, QueryExcerpt,
 };
-use std::collections::HashSet;
+use std::{cell::OnceCell, collections::HashSet};
 
 pub(super) fn selector_matches(selector: &ContentSelector, path: &OutlinePath, id: &str) -> bool {
     match selector {
@@ -35,6 +36,34 @@ pub fn select_excerpt(
     query: &ResolvedContent,
     selectors: &[ContentSelector],
 ) -> Result<QueryExcerpt, ProjectionError> {
+    validate_excerpt_request(query, selectors)?;
+    select_from_source(query, selectors, None)
+}
+
+/// Select and consume an excerpt together with validation of its exact source.
+///
+/// The callback receives the just-projected excerpt and a borrowed sidecar
+/// from the same read. This operation takes original content and selectors.
+///
+/// # Errors
+///
+/// Returns the same selection errors as [`select_excerpt`].
+pub fn with_selected_excerpt<R>(
+    query: &ResolvedContent,
+    selectors: &[ContentSelector],
+    consume: impl FnOnce(&QueryExcerpt, Option<&DocumentValidation<'_>>) -> R,
+) -> Result<R, ProjectionError> {
+    validate_excerpt_request(query, selectors)?;
+    let validation = query.document.as_ref().map(DocumentValidation::new);
+    let index = validation.as_ref().map(DocumentValidation::index);
+    let excerpt = select_from_source(query, selectors, index)?;
+    Ok(consume(&excerpt, validation.as_ref()))
+}
+
+fn validate_excerpt_request(
+    query: &ResolvedContent,
+    selectors: &[ContentSelector],
+) -> Result<(), ProjectionError> {
     if selectors.is_empty() {
         return Err(ProjectionError::EmptySelection);
     }
@@ -53,15 +82,34 @@ pub fn select_excerpt(
             document: query.label.clone(),
         });
     }
+    Ok(())
+}
+
+fn select_from_source(
+    query: &ResolvedContent,
+    selectors: &[ContentSelector],
+    validated_index: Option<&DocumentIndex>,
+) -> Result<QueryExcerpt, ProjectionError> {
     let mut located = Vec::new();
     if let Some(manual) = &query.document {
         collect_root_entries(&manual.blocks, &mut located);
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
     let index = DocumentSelectorIndex::new(&located);
+    let derived = OnceCell::new();
+    let source_index = || {
+        validated_index.or_else(|| {
+            query
+                .document
+                .as_ref()
+                .map(|document| derived.get_or_init(|| DocumentIndex::build(document)))
+        })
+    };
 
     let (tldr_selected, document_root_selected, mut selected) =
-        resolve_excerpt_candidates(query, selectors, &index)?;
+        resolve_excerpt_candidates(query, selectors, &index, || {
+            source_index().is_some_and(DocumentIndex::has_overview_conflict)
+        })?;
     let selected_sections = selected
         .iter()
         .filter(|candidate| candidate.is_section())
@@ -117,7 +165,12 @@ pub fn select_excerpt(
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
-    let diagnostics = excerpt_diagnostics(document);
+    let diagnostics = document.map_or_else(Vec::new, |document| {
+        excerpt_diagnostics(
+            document,
+            source_index().expect("selected document has an index"),
+        )
+    });
 
     Ok(QueryExcerpt {
         display_title: query
@@ -138,21 +191,24 @@ pub fn select_excerpt(
     })
 }
 
-fn excerpt_diagnostics(document: Option<&Document>) -> Vec<Diagnostic> {
-    let Some(document) = document else {
-        return Vec::new();
-    };
+fn excerpt_diagnostics(document: &Document, index: &DocumentIndex) -> Vec<Diagnostic> {
     let mut diagnostics = document.diagnostics.clone();
-    // Retain the original identity finding before detaching any selection;
-    // the competing owner might be outside the returned fragments.
-    if document.has_overview()
-        && !diagnostics.iter().any(|finding| {
-            finding.code.as_deref() == Some(mant_ir::OVERVIEW_IDENTITY_COLLISION)
+    // Inspect the whole source before detaching any selection. Neither the
+    // selected fragments nor a custom producer's diagnostics prove that a
+    // local destination has a single owner.
+    let known = |code| {
+        document.diagnostics.iter().any(|finding| {
+            finding.code.as_deref() == Some(code)
                 && finding.impact == DiagnosticImpact::SemanticCoverage
         })
-        && let Some(collision) = DocumentIndex::build(document).overview_conflict_diagnostic()
+    };
+    if let Some(collision) = index.overview_conflict_diagnostic()
+        && !known(OVERVIEW_IDENTITY_COLLISION)
     {
         diagnostics.push(collision);
+    }
+    if !known(AMBIGUOUS_FRAGMENT_ALIAS) {
+        diagnostics.extend(index.ambiguous_fragment_diagnostics());
     }
     diagnostics
 }
@@ -161,6 +217,7 @@ fn resolve_excerpt_candidates<'a>(
     query: &ResolvedContent,
     selectors: &[ContentSelector],
     index: &DocumentSelectorIndex<'a>,
+    has_overview_conflict: impl Fn() -> bool,
 ) -> Result<(bool, bool, Vec<&'a LocatedNode<'a>>), ProjectionError> {
     let mut tldr_selected = false;
     let mut document_root_selected = false;
@@ -178,7 +235,7 @@ fn resolve_excerpt_candidates<'a>(
                 .as_ref()
                 .is_some_and(mant_ir::Document::has_overview)
         {
-            index.validate_overview_identity(query, selector)?;
+            index.validate_overview_identity(&query.label, selector, &has_overview_conflict)?;
             document_root_selected = true;
             continue;
         }

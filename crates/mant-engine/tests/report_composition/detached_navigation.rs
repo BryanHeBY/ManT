@@ -12,7 +12,7 @@ use mant_protocol::{
 use pulldown_cmark::{Event, Parser, Tag};
 use serde_json::{Value, json};
 
-const OPTIONS: MarkdownFragmentOptions = MarkdownFragmentOptions {
+pub(super) const OPTIONS: MarkdownFragmentOptions = MarkdownFragmentOptions {
     math: MarkdownMath::Readable,
     preserve_anchors: true,
 };
@@ -147,7 +147,7 @@ fn document(root: &str, collision: &str, placement: &str, grouped: bool) -> Docu
     serde_json::from_value(value).unwrap()
 }
 
-fn query(mut document: Document, validate: bool, label: &str) -> ResolvedContent {
+pub(super) fn query(mut document: Document, validate: bool, label: &str) -> ResolvedContent {
     if validate {
         document
             .diagnostics
@@ -169,7 +169,7 @@ fn query(mut document: Document, validate: bool, label: &str) -> ResolvedContent
     }
 }
 
-fn fragment_count(markdown: &str, target: &str) -> usize {
+pub(super) fn fragment_count(markdown: &str, target: &str) -> usize {
     Parser::new(markdown)
         .filter(|event| matches!(event, Event::Start(Tag::Link {dest_url, ..}) if dest_url.as_ref() == target))
         .count()
@@ -184,7 +184,7 @@ fn assert_inactive(markdown: &str) {
     assert!(!markdown.contains("id=\"document-overview\""), "{markdown}");
 }
 
-fn excerpt_wire(excerpt: &QueryExcerpt) -> QueryExcerpt {
+pub(super) fn excerpt_wire(excerpt: &QueryExcerpt) -> QueryExcerpt {
     let restored: QueryExcerpt =
         serde_json::from_str(&serde_json::to_string(excerpt).unwrap()).unwrap();
     assert_eq!(restored, *excerpt);
@@ -345,7 +345,7 @@ fn explanation_and_declaration_support_keep_the_source_navigation_policy() {
     }
 }
 
-fn scope_graph(sources: &[ResolvedContent]) -> ResolvedDocumentScope {
+pub(super) fn scope_graph(sources: &[ResolvedContent]) -> ResolvedDocumentScope {
     ResolvedDocumentScope {
         query: DocumentScope {
             documents: sources

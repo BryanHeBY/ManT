@@ -4,7 +4,7 @@ mod outline;
 pub mod references;
 pub use crate::explanation::select_explanation;
 pub use crate::selectors::{ProjectionError, SelectorCandidate};
-pub use excerpt::select_excerpt;
+pub use excerpt::{select_excerpt, with_selected_excerpt};
 pub use mant_ir::{content_complete, semantics_complete};
 pub use outline::{
     build_outline, build_outline_projection, build_outline_with_detail,
