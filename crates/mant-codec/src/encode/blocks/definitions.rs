@@ -84,13 +84,16 @@ fn definition_content(
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> DefinitionContent {
-    let mut head = DefinitionHead::project(&item.terms, options, locations);
-    let has_terms = head.has_output;
-    let mut terms = std::mem::take(&mut head.terms);
     let start = item.description_start();
     let shared_prose = start.is_some_and(|body| {
         body.can_share(item.head_body_relation) && matches!(body.block, Block::Paragraph { .. })
     });
+    let aligned_term = shared_prose
+        .then(|| mant_ir::geometry::aligned_definition_term(item))
+        .flatten();
+    let mut head = DefinitionHead::project(&item.terms, aligned_term, options, locations);
+    let has_terms = head.has_output;
+    let mut terms = std::mem::take(&mut head.terms);
     let mut body = definition_body(item, start, options, locations, track, &head);
     if has_terms
         && !body.navigation.is_empty()

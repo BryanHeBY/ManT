@@ -8,8 +8,8 @@ use super::super::{
 };
 use super::DocumentBuilder;
 use mant_ir::geometry::{
-    compose_origin, coordinate, list_item_spacing, list_marker, list_marker_width,
-    marker_paragraph_gap, marker_run_in_gap, padding,
+    aligned_definition_term, compose_origin, coordinate, list_item_spacing, list_marker,
+    list_marker_width, marker_paragraph_gap, marker_run_in_gap, omit_term_end_padding, padding,
 };
 use mant_ir::{DefinitionItem, ListItem};
 
@@ -191,15 +191,18 @@ impl DocumentBuilder<'_> {
     ) -> (Vec<StyledInlineLine>, Vec<(String, usize)>) {
         let mut head_lines = Vec::new();
         let mut head_targets = Vec::new();
-        for term in &item.terms {
+        let aligned_term = aligned_definition_term(item);
+        for (index, term) in item.terms.iter().enumerate() {
             for (id, row) in inline_anchor_rows(term) {
                 head_targets.push((id, head_lines.len() + row));
             }
-            let lines = self.styled_inlines(
-                term.inline_content(),
-                theme::style(theme::StyleRole::Text),
-                false,
-            );
+            let mut inline = term.inline_content();
+            let mut reading = Cow::Borrowed(inline.content);
+            if aligned_term == Some(index) {
+                omit_term_end_padding(&mut reading);
+            }
+            inline.content = &reading;
+            let lines = self.styled_inlines(inline, theme::style(theme::StyleRole::Text), false);
             if lines.len() != 1 || !lines[0].spans.is_empty() {
                 head_lines.extend(lines);
             } else {

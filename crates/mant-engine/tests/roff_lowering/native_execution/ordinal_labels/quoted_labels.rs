@@ -68,6 +68,78 @@ fn ordinal_replacement_retains_executed_operand_spaces() {
     }
 }
 
+#[test]
+fn ip_trailing_spaces_keep_the_form_without_extending_the_shared_row() {
+    const HEADER: &str = concat!(
+        ".TH PROBE 1 \"November 18, 2026\" Test Manual\n.SH NAME\n",
+        "probe \\- exercise descriptors\n.SH DESCRIPTION\n",
+    );
+    // CVS pre_IP() enables NOBREAK without BRTRSP. In term_flushln() the
+    // printable end plus trailspace controls fit, and trailing ASCII spaces
+    // are absent from term_field(). The field is still authoritative for BODY.
+    for (label, operand) in [
+        ("1.", "1."),
+        ("LABEL", r"\fBLABEL\fR"),
+        ("LA  BEL", "LA  BEL"),
+    ] {
+        for blanks in [1, 8, 1000] {
+            let padding = " ".repeat(blanks);
+            for field in [
+                label.len() - 1,
+                label.len(),
+                label.len() + 1,
+                label.len() + 4,
+            ] {
+                let source = format!("{HEADER}.IP \"{operand}{padding}\" {field}\nBODY\n");
+                let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+                let query = crate::json_roundtrip::json_string_roundtrip(&query);
+                let doc = query.document.as_ref().unwrap();
+                let [Block::DefinitionList { items, .. }] = doc.sections[1].blocks.as_slice()
+                else {
+                    panic!("expected original definition owner: {source}");
+                };
+                assert_eq!(
+                    mant_ir::inline_plain_text(&items[0].terms[0]),
+                    format!("{label}{padding}")
+                );
+                for width in [24, 78] {
+                    let rendered = mant_render::render_query_man_at_width(&query, width);
+                    let rows: Vec<_> = rendered.lines().collect();
+                    let label_row = rows.iter().position(|row| row.contains(label)).unwrap();
+                    let body_row = rows.iter().position(|row| row.contains("BODY")).unwrap();
+                    if field > label.len() {
+                        assert_eq!(body_row, label_row, "{source}\n{rendered}");
+                        let line = rows[body_row];
+                        assert_eq!(
+                            line.find("BODY").unwrap() - line.find(label).unwrap(),
+                            field,
+                            "{source}\n{rendered}"
+                        );
+                    } else {
+                        assert_eq!(body_row, label_row + 1, "{source}\n{rendered}");
+                    }
+                }
+                if field > label.len() {
+                    let markdown = mant_codec::encode::render_addressable_markdown(&query);
+                    let reloaded = mant_loader::load_markdown_text(markdown.text(), None).unwrap();
+                    let reading = mant_render::render_query_text(&reloaded);
+                    let body = reading.lines().find(|line| line.contains("BODY")).unwrap();
+                    // CommonMark may normalize interior runs of ordinary
+                    // spaces. The rendered term and description still share
+                    // one word-separated row and the tail adds no escapes.
+                    assert_eq!(body.split_whitespace().last(), Some("BODY"));
+                    assert!(body.contains(label), "{}\n{reading}", markdown.text());
+                    assert!(
+                        !markdown.text().contains("&#32; BODY"),
+                        "{}",
+                        markdown.text()
+                    );
+                }
+            }
+        }
+    }
+}
+
 fn check(kind: Kind, spaces: Spaces, numbers: [u8; 3], mask: u8) {
     let mut source = if kind == Kind::It {
         MDOC.replace("exercise descriptors", "probe page") + ".Bl -tag -width Ds\n"

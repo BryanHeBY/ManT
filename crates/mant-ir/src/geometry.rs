@@ -31,7 +31,7 @@ mod gaps;
 pub use gaps::has_bounded_gap;
 
 mod terms;
-pub use terms::definition_run_in_width;
+pub use terms::{aligned_definition_term, definition_run_in_width, omit_term_end_padding};
 
 mod blocks;
 pub use blocks::{block_layout, block_layout_mut, block_source, rebase_roots};
@@ -104,7 +104,8 @@ pub fn padding(origin: i32) -> usize {
 ///
 /// Origins remain signed until this leaf. A preferred alignment is a layout
 /// hint: it cannot insert cells across a proven joined word boundary. Accepted
-/// authored padding in the term remains untouched. Continuation origins are
+/// authored padding that contributes to the shared row remains in `term_width`.
+/// Continuation origins are
 /// deliberately outside this first-row calculation.
 #[must_use]
 pub fn definition_body_gap(

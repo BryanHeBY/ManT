@@ -9,6 +9,8 @@ use ratatui::{
     widgets::{Paragraph, Widget},
 };
 
+mod field_alignment;
+
 fn text(value: &str) -> Inline {
     Inline::Text {
         value: value.into(),

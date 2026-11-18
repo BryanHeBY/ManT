@@ -128,6 +128,9 @@ that crate was not published for that change.
   and keep native punctuation flags before an independent typed operand.
 - Retain quoted leading blanks in authored ordinal labels when replacing the
   label with an ordered marker would change the layout.
+- Keep trailing ASCII spaces in authored definition labels while aligning the
+  shared description from the printable label end. CLI, TUI and Markdown
+  use this reading rule for separated, indented fields.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.

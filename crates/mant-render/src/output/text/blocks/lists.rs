@@ -1,9 +1,14 @@
 //! List labels and definition bodies compose into the caller's content flow.
+use std::borrow::Cow;
+
 use super::{
     Block, BlockRenderer, DefinitionItem, Flow, LayoutText, ListItem, ListKind, ParagraphTail,
     TextRole, compose_origin, coordinate, padding,
 };
-use mant_ir::geometry::{list_item_spacing, list_marker, list_marker_width, marker_paragraph_gap};
+use mant_ir::geometry::{
+    aligned_definition_term, list_item_spacing, list_marker, list_marker_width,
+    marker_paragraph_gap, omit_term_end_padding,
+};
 
 impl BlockRenderer<'_> {
     pub(super) fn render_list(
@@ -96,11 +101,19 @@ impl BlockRenderer<'_> {
 
     fn render_definition(&self, item: &DefinitionItem, origin: i32) -> Flow {
         let body_origin = compose_origin(origin, item.layout.body_indent_columns);
+        let aligned_term = aligned_definition_term(item);
         let mut terms = item
             .terms
             .iter()
-            .filter_map(|term| {
-                let rows = self.inline_rows(term.inline_content(), TextRole::DefinitionTerm);
+            .enumerate()
+            .filter_map(|(index, term)| {
+                let mut inline = term.inline_content();
+                let mut reading = Cow::Borrowed(inline.content);
+                if aligned_term == Some(index) {
+                    omit_term_end_padding(&mut reading);
+                }
+                inline.content = &reading;
+                let rows = self.inline_rows(inline, TextRole::DefinitionTerm);
                 // A term that only breaks rows still owns those rows (an
                 // empty `.It` operand's field owns its blank lines).
                 (rows.len() > 1 || rows.iter().any(|(row, _)| !row.is_empty())).then_some(rows)
@@ -115,7 +128,7 @@ impl BlockRenderer<'_> {
         {
             let (mut shared_row, row_indent) = last_rows.pop().unwrap_or_default();
             let term_origin = row_indent.resolve(origin, origin).first_visual_origin;
-            let last_width = mant_ir::geometry::definition_run_in_width(&item.terms).unwrap_or(0);
+            let last_width = super::super::layout::display_columns(&shared_row.visible);
             let mut lines = self.inline_rows(content, TextRole::Body);
             let completed_empty_tail = matches!(body.block, Block::Paragraph { .. })
                 && Self::close_paragraph_rows(&mut lines, ParagraphTail::BlockBoundary);

@@ -115,12 +115,20 @@ pub(super) struct DefinitionHead<'a> {
 impl<'a> DefinitionHead<'a> {
     pub(super) fn project(
         terms: &'a [DefinitionTerm],
+        aligned_term: Option<usize>,
         options: RenderOptions<'_>,
         locations: Option<&dyn MarkdownInlineProjection>,
     ) -> Self {
         let roots = terms
             .iter()
-            .map(|root| InlineRoot::project(root.inline_content(), locations))
+            .enumerate()
+            .map(|(index, term)| {
+                let mut root = InlineRoot::project(term.inline_content(), locations);
+                if aligned_term == Some(index) {
+                    mant_ir::geometry::omit_term_end_padding(&mut root.nodes);
+                }
+                root
+            })
             .collect::<Vec<_>>();
         let has_output = roots.iter().any(|root| root.has_output);
         // Navigation stays on an adjacent real HEAD row, never a new row

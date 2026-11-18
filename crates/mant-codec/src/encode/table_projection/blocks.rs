@@ -126,13 +126,16 @@ fn plain_block(block: &Block, tail: ParagraphTail, track: bool, shared_first: bo
         ),
         Block::DefinitionList { items, .. } => join(
             items.iter().map(|item| {
+                let aligned_term = mant_ir::geometry::aligned_definition_term(item);
                 let mut terms = join(
-                    item.terms.iter().map(|term| {
-                        inline_projection(
-                            term.inline_content(),
-                            Some(ParagraphTail::OpenCellRow),
-                            false,
-                        )
+                    item.terms.iter().enumerate().map(|(index, term)| {
+                        let mut inline = term.inline_content();
+                        let mut reading = std::borrow::Cow::Borrowed(inline.content);
+                        if aligned_term == Some(index) {
+                            mant_ir::geometry::omit_term_end_padding(&mut reading);
+                        }
+                        inline.content = &reading;
+                        inline_projection(inline, Some(ParagraphTail::OpenCellRow), false)
                     }),
                     "\n",
                 );

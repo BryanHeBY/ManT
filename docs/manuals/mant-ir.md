@@ -137,7 +137,11 @@ the independent `bodyAlignment` preference (`after-term` or `indented`, default
 `indented`) and geometric spacing. Joined words receive no invented separator;
 accepted authored label padding remains content. Separated words retain at least the
 minimum term gap. `after-term` uses that gap, while `indented` also considers
-the preferred first BODY origin. Alignment has no effect on a separate row;
+the preferred first BODY origin. A separated `indented` field with a positive
+minimum gap counts ordinary trailing ASCII spaces as alignment padding on
+the last occupied term row. The original term retains these scalars. The field
+uses its printable end to place the BODY. Fixed spaces, interior spaces, and
+other term rows keep their positions. Alignment has no effect on a separate row;
 changing it cannot establish sharing or change the word boundary. Joined words
 ignore alignment and the minimum gap while preserving those layout values.
 This choice does not change continuation origins or semantic ownership.
