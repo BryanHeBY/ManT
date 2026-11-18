@@ -34,6 +34,8 @@ that crate was not published for that change.
   serialized nodes default the field to `None`.
 - Expose `NodeFlags::table_leading_space` for a tbl start that requests
   leading device spacing. Older serialized ASTs default it to `false`.
+- Expose `TableColumnMetrics::motion_argument()` for native motion lengths
+  and optional drawing glyphs.
 
 ### mant-codec
 
@@ -134,6 +136,12 @@ that crate was not published for that change.
 - Use tbl's painted rules, numeric padding and measured horizontal motion to
   preserve word boundaries. Retain opening spacing and completed cell rows
   in phrasing and block tables.
+- Keep an independently separated declaration in its original definition
+  when a table and an enclosure also appear in the label. Keep cell text and
+  unsupported connectors out of the name index.
+- Account for tbl cursor retreats, absolute motion, and drawn lines when
+  measuring the first printed field. Unprinted cells do not add a word
+  separator, and completed empty rows keep their native count.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.
