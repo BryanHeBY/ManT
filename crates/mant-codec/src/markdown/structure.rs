@@ -68,12 +68,7 @@ pub(super) fn lower_document_structure(
             }
             let is_document_title = !saw_heading && level == HeadingLevel::H1;
             saw_heading = true;
-            let id = ids.allocate(&heading, explicit_id.as_deref());
-            let fragment_aliases = explicit_id
-                .as_deref()
-                .map(mant_ir::FragmentAlias::from)
-                .into_iter()
-                .collect();
+            let (id, fragment_aliases) = ids.allocate(&heading, explicit_id.as_deref());
             if is_document_title {
                 document_title_id = Some(id.clone());
             }

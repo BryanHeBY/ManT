@@ -1,6 +1,7 @@
 //! Heading identity allocation, nesting and exact local-fragment remapping.
+use crate::producer_identity::HeadingIds;
 use mant_ir::{
-    Block, Document, Heading, Inline, Section,
+    Block, Document, FragmentAlias, Heading, Inline, Section,
     visit::{self, VisitMut},
 };
 use pulldown_cmark::HeadingLevel;
@@ -114,8 +115,7 @@ fn attach_completed(stack: &mut Vec<FlatSection>, roots: &mut Vec<Section>) {
 
 #[derive(Default)]
 pub(super) struct SectionIds {
-    counts: HashMap<String, usize>,
-    assigned: HashSet<String>,
+    headings: HeadingIds,
     targets: HashMap<String, String>,
 }
 
@@ -141,7 +141,15 @@ impl SectionIds {
         LocalLinkResolver::new(&self.targets).visit_document_mut(document);
     }
 
-    pub(super) fn allocate(&mut self, title: &str, explicit: Option<&str>) -> String {
+    pub(super) fn allocate(
+        &mut self,
+        title: &str,
+        explicit: Option<&str>,
+    ) -> (String, Vec<FragmentAlias>) {
+        let mut fragments = explicit
+            .into_iter()
+            .map(FragmentAlias::from)
+            .collect::<Vec<_>>();
         let explicit = explicit
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -170,18 +178,14 @@ impl SectionIds {
         // slugs to base `foo-2`, which collides with the `foo-2` a second
         // `# Foo` produces. Counting per base alone would hand both the same
         // id, silently misattributing search ownership between them.
-        let count = self.counts.entry(base.clone()).or_default();
-        let id = loop {
-            *count += 1;
-            let candidate = if *count == 1 {
-                base.clone()
-            } else {
-                format!("{base}-{}", *count)
-            };
-            if self.assigned.insert(candidate.clone()) {
-                break candidate;
+        let (id, long_fragment) = self.headings.allocate(&base);
+        if let Some(fragment) = long_fragment {
+            self.targets
+                .insert(fragment.as_str().to_owned(), id.clone());
+            if !fragments.contains(&fragment) {
+                fragments.push(fragment);
             }
-        };
+        }
         // Ambiguous human-facing keys resolve to the first section that
         // claimed them, matching the bare slug this heading renders as its
         // anchor. A later duplicate owns only its own disambiguated id.
@@ -198,7 +202,7 @@ impl SectionIds {
             .entry(slug(title))
             .or_insert_with(|| id.clone());
         self.targets.insert(id.clone(), id.clone());
-        id
+        (id, fragments)
     }
 
     pub(super) fn remap_target(&mut self, current: Option<&str>, replacement: Option<&str>) {

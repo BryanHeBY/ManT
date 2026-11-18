@@ -51,6 +51,8 @@ that crate was not published for that change.
   custom enclosure delimiters.
 - Keep generated semantic entry IDs within the selector limit, including
   when a long form cannot publish names. The full form remains readable.
+- Fit roff and Markdown section IDs within the selector byte budget after
+  disambiguation. Preserve full headings and their original fragments.
 - Check declaration names against their executed operand roles. An `Ar`
   placeholder cannot complete a concrete option, symbol, environment
   variable or command name. Standalone operand labels and independent

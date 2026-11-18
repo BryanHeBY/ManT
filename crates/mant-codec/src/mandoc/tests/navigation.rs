@@ -121,16 +121,16 @@ fn native_section_ids_ignore_unrelated_section_insertions() {
     let original_options = original.section_id("OPTIONS");
 
     let mut edited = LoweringContext::new(None, None);
-    assert_eq!(edited.section_id("NOTES"), "notes");
+    assert_eq!(edited.section_id("NOTES").0, "notes");
     assert_eq!(edited.section_id("NAME"), original_name);
     assert_eq!(edited.section_id("OPTIONS"), original_options);
-    assert_eq!(edited.section_id("OPTIONS"), "options-2");
+    assert_eq!(edited.section_id("OPTIONS").0, "options-2");
 }
 
 #[test]
 fn native_section_ids_disambiguate_final_slug_collisions() {
     let mut context = LoweringContext::new(None, None);
-    assert_eq!(context.section_id("FOO"), "foo");
-    assert_eq!(context.section_id("FOO"), "foo-2");
-    assert_eq!(context.section_id("FOO 2"), "foo-2-2");
+    assert_eq!(context.section_id("FOO").0, "foo");
+    assert_eq!(context.section_id("FOO").0, "foo-2");
+    assert_eq!(context.section_id("FOO 2").0, "foo-2-2");
 }

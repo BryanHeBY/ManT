@@ -1,0 +1,74 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Twelve authored subsection headings exceed the selector byte limit when slugged.",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "file": "archlinux-gp_hash_table.3.gz",
+      "sourceSha256": "7f3f0a02ff753fe02146600b376e0ca833221651555c5b5e4f9cbf43a8aa7255",
+      "fixtureSha256": "7f3f0a02ff753fe02146600b376e0ca833221651555c5b5e4f9cbf43a8aa7255",
+      "sourceBytes": 1549,
+      "fixtureBytes": 1549,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "originalAuditDate": "2026-11-18",
+      "sourceIdentity": "archlinux-host:man/man3/__gnu_pbds::gp_hash_table.3.gz",
+      "originUrl": "https://archive.archlinux.org/packages/g/gcc/gcc-16.2.1%2Br23%2Bgd564253eb6c8-1-x86_64.pkg.tar.zst",
+      "sourceRepository": "https://gcc.gnu.org/git/gcc.git",
+      "revision": "d564253eb6c8",
+      "archive": "gcc-16.2.1+r23+gd564253eb6c8-1-x86_64.pkg.tar.zst",
+      "archiveMember": "usr/share/man/man3/__gnu_pbds::gp_hash_table.3.gz",
+      "archiveSha256": "1d79371ccf3138e3c172dd83b51560687b65ab824c1ad7e9cb41b7857ed9c55f",
+      "license": "GPL-3.0-or-later WITH GCC-exception-3.1; see the PBDS author notice",
+      "licenseFile": "../LICENSES/GPL-3.0-or-later.txt",
+      "additionalLicenseFiles": [
+        "../LICENSES/GCC-RUNTIME-LIBRARY-EXCEPTION-3.1.txt",
+        "../LICENSES/GCC-PBDS-NOTICE.txt"
+      ],
+      "transformation": "None; exact complete compressed package member, with a portable fixture basename.",
+      "selectionReason": "Twelve authored subsection headings exceed the selector byte limit when slugged.",
+      "decompressedSha256": "b443bbad5f3076ad023b38776b5285ef2e87b8bfd7fd8f3f4d1fea8515c68c44",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "a6dd991d2633c8d7cb21989a385e6257fe6aae0626cc0cb3a667217360531b78",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 37277,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "a6dd991d2633c8d7cb21989a385e6257fe6aae0626cc0cb3a667217360531b78",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 37277,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "a30571f451713dcff1aac1bb03f49bb6ec55c3da536b211c4d46a832d0d1a357",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 25101,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "110e02627b4b509241db36d4682b33e3df86dc679d70c42e5063177500592f82",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 27093,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "ca774d7e42d679580894bcf93cc81b41870982bdf4ff3c2f5545c9d220683f20",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 6089,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    }
+  ]
+}

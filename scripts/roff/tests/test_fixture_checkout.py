@@ -57,13 +57,14 @@ class FixtureCheckoutTests(unittest.TestCase):
         for family in ("literal_leading_rows", "table_layout"):
             files.update({path.relative_to(ROOT): path.read_bytes()
                           for path in (ROOT / "tests/fixtures/roff" / family).rglob("*.1")})
-        ordered_fixture = Path("tests/fixtures/roff/real/ordered-continuation/illumos-getopts.1")
-        files[ordered_fixture] = (ROOT / ordered_fixture).read_bytes()
-        ordered_manifest = json.loads((ROOT / ordered_fixture.parent / "manifest.json").read_bytes())
-        manifest_case, = ordered_manifest["cases"]
-        self.assertEqual(manifest_case["file"], ordered_fixture.name)
-        self.assertEqual(hashlib.sha256(files[ordered_fixture]).hexdigest(),
-                         manifest_case["fixtureSha256"])
+        for family in ("ordered-continuation", "mdoc-subjects", "section-navigation"):
+            directory = Path("tests/fixtures/roff/real") / family
+            manifest = json.loads((ROOT / directory / "manifest.json").read_bytes())
+            for case in manifest["cases"]:
+                fixture = directory / case["file"]
+                files[fixture] = (ROOT / fixture).read_bytes()
+                self.assertEqual(hashlib.sha256(files[fixture]).hexdigest(),
+                                 case["fixtureSha256"])
         for family in ("scoped-layout", "field-boundaries", "mathematical-export", "source-lines",
                        "definition-displays"):
             files.update({path.relative_to(ROOT): path.read_bytes()

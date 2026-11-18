@@ -3,6 +3,11 @@ use mant_loader::load_markdown_text;
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceBasis, ExplanationQuery};
 use mant_query::{ProjectionError, build_outline_projection, select_excerpt};
 
+#[path = "content_selectors/heading_ids.rs"]
+mod heading_ids;
+#[path = "support/json_roundtrip.rs"]
+mod json_roundtrip;
+
 #[test]
 fn duplicate_section_ids_cannot_redirect_path_selected_entry_metadata() {
     let mut query = load_markdown_text("# Tool\n\n## First\n\n<!-- mant:entries role=command case=sensitive -->\n- `first`: First body.\n\n## Second\n\n<!-- mant:entries role=command case=sensitive -->\n- `second`: Second body.\n", None).unwrap();

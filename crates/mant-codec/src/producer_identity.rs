@@ -1,10 +1,107 @@
 //! Producer identity allocation policy over source-neutral IR locations.
 //! No query selectors, DTOs or presentation are needed to validate an identity.
 use mant_ir::{
-    Block, DOCUMENT_ROOT_ID, Diagnostic, DiagnosticLevel, OutlinePath, Section, SourceSpan,
-    content_entry_locations,
+    Block, DOCUMENT_ROOT_ID, Diagnostic, DiagnosticLevel, FragmentAlias, OutlinePath, Section,
+    SourceSpan, content_entry_locations,
 };
-use std::collections::BTreeMap;
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    fmt::Write as _,
+};
+
+/// The public content selector accepts at most this many UTF-8 bytes.
+/// Source-authored fragment aliases and non-selectable anchors have their own
+/// contracts.
+pub(crate) const MAX_CONTENT_ID_BYTES: usize = 512;
+
+/// Allocate an ID from a normalized base, using the final spelling to check
+/// reservations and collisions. Keeping the ordinal lets a namespace resume
+/// duplicate allocation without rescanning candidates.
+pub(crate) fn allocate_content_id(
+    base: &str,
+    ordinal: &mut usize,
+    mut claim: impl FnMut(&str) -> bool,
+) -> String {
+    let mut fingerprint = None;
+    loop {
+        *ordinal += 1;
+        let suffix = duplicate_suffix(*ordinal);
+        let limit = MAX_CONTENT_ID_BYTES - suffix.len();
+        let candidate = if base.len() <= limit {
+            format!("{base}{suffix}")
+        } else {
+            let fingerprint = fingerprint.get_or_insert_with(|| short_fingerprint(base.as_bytes()));
+            let mut end = limit - fingerprint.len() - 1;
+            while !base.is_char_boundary(end) {
+                end -= 1;
+            }
+            let prefix = base[..end].trim_end_matches('-');
+            format!("{prefix}-{fingerprint}{suffix}")
+        };
+        if claim(&candidate) {
+            return candidate;
+        }
+    }
+}
+
+fn duplicate_suffix(ordinal: usize) -> String {
+    if ordinal == 1 {
+        String::new()
+    } else {
+        format!("-{ordinal}")
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct HeadingIds {
+    ordinals: HashMap<String, HeadingOrdinals>,
+    assigned: HashSet<String>,
+}
+
+#[derive(Default)]
+struct HeadingOrdinals {
+    full: usize,
+    bounded: usize,
+}
+
+impl HeadingIds {
+    pub(crate) fn reserve(&mut self, ids: &HashSet<String>) {
+        self.assigned.extend(ids.iter().cloned());
+    }
+
+    pub(crate) fn allocate(&mut self, base: &str) -> (String, Option<FragmentAlias>) {
+        // The full slug can be a fragment even when the earlier selector
+        // rejected it. Claim it independently so a collision on a shortened
+        // ID cannot silently migrate that fragment to a different section.
+        let ordinals = self.ordinals.entry(base.to_owned()).or_default();
+        let full = loop {
+            ordinals.full += 1;
+            let candidate = format!("{base}{}", duplicate_suffix(ordinals.full));
+            if self.assigned.insert(candidate.clone()) {
+                break candidate;
+            }
+        };
+        if full.len() <= MAX_CONTENT_ID_BYTES {
+            return (full, None);
+        }
+        ordinals.bounded = ordinals.bounded.max(ordinals.full - 1);
+        let bounded = allocate_content_id(base, &mut ordinals.bounded, |candidate| {
+            self.assigned.insert(candidate.to_owned())
+        });
+        (bounded, Some(full.into()))
+    }
+}
+
+pub(crate) fn short_fingerprint(value: &[u8]) -> String {
+    let digest = Sha256::digest(value);
+    digest[..6]
+        .iter()
+        .fold(String::with_capacity(12), |mut fingerprint, byte| {
+            write!(fingerprint, "{byte:02x}").expect("writing to a String cannot fail");
+            fingerprint
+        })
+}
 
 /// Reserve synthetic roots, structural coordinates and generated entry prefixes
 /// before allocating authored section identities. This is producer policy, not

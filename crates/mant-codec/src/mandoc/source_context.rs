@@ -28,8 +28,7 @@ pub(super) struct LoweringContext<'a> {
     /// independent of speculative formatter/diagnostic transactions.
     pub(super) table_recovery_budget: RefCell<super::table_recovery_budget::TableRecoveryBudget>,
     pub(super) table_layout_budget: RefCell<super::table_layout_budget::TableLayoutBudget>,
-    pub(super) section_ids: HashMap<String, usize>,
-    pub(super) assigned_section_ids: HashSet<String>,
+    pub(super) section_ids: crate::producer_identity::HeadingIds,
     pub(super) authored_section_targets: HashMap<String, Option<String>>,
     /// Immutable authored namespace reserved for normalized identities.
     pub(super) explicit_targets: HashSet<String>,
@@ -71,8 +70,7 @@ impl<'a> LoweringContext<'a> {
             native_table_requests: RefCell::new(HashMap::new()),
             table_recovery_budget: RefCell::default(),
             table_layout_budget: RefCell::default(),
-            section_ids: HashMap::new(),
-            assigned_section_ids: HashSet::new(),
+            section_ids: crate::producer_identity::HeadingIds::default(),
             authored_section_targets: HashMap::new(),
             explicit_targets: HashSet::new(),
             native_target_owners: HashSet::new(),

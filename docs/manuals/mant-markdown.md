@@ -22,7 +22,20 @@ Heading links retain their typed destinations in Markdown output. When a heading
 
 Heading levels determine ancestry. Skipped levels are accepted; depth follows the nearest preceding heading with a lower level. Duplicate titles receive distinct document-local IDs.
 
-An explicit heading ID written as a whitespace-separated final `{#configuration}` becomes an exact fragment alias. If it already satisfies the normalized ID grammar and is not a reserved selector, it is also the heading's internal ID; otherwise the internal ID is derived from the visible title while the exact authored fragment remains usable. This is the complete supported heading-attribute grammar: class-only blocks, custom key/value attributes, attached brace groups, and ordinary trailing brace text are retained as title text rather than consumed. Consequently headings such as `GET /users/{id}` and `Route /users/{#id}` preserve the path parameter. Internal IDs use lower-case Unicode alphanumeric characters and underscores, replace other runs with `-`, and receive numeric suffixes when needed. A local link may use the exact authored alias, while outlines and structured selectors expose the normalized ID.
+An explicit heading ID written as a whitespace-separated final `{#configuration}`
+becomes an exact fragment alias. If the spelling satisfies the normalized ID
+grammar and avoids reserved selectors, it provides the base for the internal
+ID. Otherwise the base comes from the visible title. Class-only blocks,
+custom key/value attributes, attached brace groups, and ordinary trailing
+brace text stay in the title. Headings such as `GET /users/{id}` and
+`Route /users/{#id}` preserve the path parameter. Internal IDs use lower-case
+Unicode alphanumeric characters and underscores, replace other runs with
+`-`, and receive numeric suffixes when needed.
+
+The final internal ID fits within 512 UTF-8 bytes, including its duplicate
+suffix. Longer spellings use a shortened prefix and fingerprint. Exact
+authored fragments and full heading-derived fragments remain available to
+links.
 
 ## Supported Blocks
 

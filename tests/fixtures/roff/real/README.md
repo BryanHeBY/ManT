@@ -10,6 +10,8 @@ required by the third-party manuals.
 | --- | --- | --- | --- |
 | [`definition-displays/`](definition-displays/README.md) | Immutable illumos ctfdiff | Complete original repository file | Compact display boundaries inside definitions |
 | [`ordered-continuation/`](ordered-continuation/README.md) | Immutable illumos `getopts(1)` from the November 18 real roff review | Exact complete source file | Relative-indent continuations retain label/description order and intervening spacing |
+| [`mdoc-subjects/`](mdoc-subjects/README.md) | Immutable illumos `kstat(3KSTAT)` | Exact complete source file | Parallel field names retain a shared definition owner |
+| [`section-navigation/`](section-navigation/README.md) | Immutable Arch Linux GCC package | Complete original gzip package member | Long Doxygen subsection titles retain selectable IDs |
 | [`source-lines/`](source-lines/README.md) | Arch Linux libxcb 1.17.0-1 | Complete original gzip package member | Leading TAB in filled definition bodies and ordinary paragraphs |
 | [`mathematical-export/`](mathematical-export/README.md) | Exact November 2026 mathematical audit sources from POSIX, OpenBSD, FreeBSD, illumos and X11 | Complete original sources and the original X11 gzip member | Inline/display ownership, scripts, integral limits, matrices, accents and readable code-context formulas |
 | [`field-boundaries/`](field-boundaries/README.md) | Exact November 2026 audit sources: Debian chem, NetBSD 11.0 scmdctl, OpenBSD 7.9 mandoc and ksh | Original gzip and complete uncompressed release members | Native field exits, single table owners and nested display origins |

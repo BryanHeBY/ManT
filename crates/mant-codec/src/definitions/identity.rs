@@ -3,17 +3,14 @@ use super::{
     context::DefinitionContext,
     syntax::{environment_variable_body, infer_identity, is_ordinal_marker},
 };
+use crate::producer_identity::{allocate_content_id, short_fingerprint};
 use mant_ir::inline_plain_text as plain_text;
 use mant_ir::{
     Block, DefinitionItem, EntryFacts, EntryKind, EntryOwner, Inline, ListItem, NameCase, Section,
     ValueDomain,
     visit::{self, Visit},
 };
-use sha2::{Digest, Sha256};
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Write as _,
-};
+use std::collections::{HashMap, HashSet};
 
 pub(super) fn document_anchor_ids(blocks: &[Block], sections: &[Section]) -> HashSet<String> {
     struct Collector(HashSet<String>);
@@ -497,16 +494,6 @@ fn semantic_fingerprint(
     short_fingerprint(&content.0)
 }
 
-fn short_fingerprint(value: &[u8]) -> String {
-    let digest = Sha256::digest(value);
-    digest[..6]
-        .iter()
-        .fold(String::with_capacity(12), |mut fingerprint, byte| {
-            write!(fingerprint, "{byte:02x}").expect("writing to a String cannot fail");
-            fingerprint
-        })
-}
-
 /// Normalize a visible semantic name into a document-local identity base.
 ///
 /// Source-specific producers use this same boundary for generated navigation
@@ -539,38 +526,16 @@ pub(crate) fn document_id_slug(value: &str) -> String {
     }
 }
 
-// Generated semantic IDs must round-trip through the public ContentSelector.
-const MAX_SELECTOR_ID_BYTES: usize = 512;
-
-fn fit_entry_id(base: &str, suffix: &str, fingerprint: &mut Option<String>) -> String {
-    let maximum = MAX_SELECTOR_ID_BYTES - suffix.len();
-    if base.len() <= maximum {
-        return format!("{base}{suffix}");
-    }
-    let fingerprint = fingerprint.get_or_insert_with(|| short_fingerprint(base.as_bytes()));
-    let mut end = maximum - fingerprint.len() - 1;
-    while !base.is_char_boundary(end) {
-        end -= 1;
-    }
-    let start = base[..end].trim_end_matches('-');
-    format!("{start}-{fingerprint}{suffix}")
-}
-
 fn unique_id(base: &str, used: &mut HashSet<String>, reserved: &HashSet<String>) -> String {
-    let mut fingerprint = None;
-    let mut candidate = fit_entry_id(base, "", &mut fingerprint);
-    let mut suffix = 2;
-    while used.contains(&candidate) || reserved.contains(&candidate) {
-        candidate = fit_entry_id(base, &format!("-{suffix}"), &mut fingerprint);
-        suffix += 1;
-    }
-    used.insert(candidate.clone());
-    candidate
+    allocate_content_id(base, &mut 0, |candidate| {
+        !reserved.contains(candidate) && used.insert(candidate.to_owned())
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{HashSet, MAX_SELECTOR_ID_BYTES, unique_id};
+    use super::{HashSet, unique_id};
+    use crate::producer_identity::MAX_CONTENT_ID_BYTES;
 
     #[test]
     fn long_entry_ids_are_distinct_normalized_and_bounded_after_collisions() {
@@ -583,7 +548,7 @@ mod tests {
         let repeated = unique_id(&first, &mut used, &reserved);
         let different = unique_id(&second, &mut used, &reserved);
         for id in [&original, &repeated, &different] {
-            assert!(id.len() <= MAX_SELECTOR_ID_BYTES);
+            assert!(id.len() <= MAX_CONTENT_ID_BYTES);
             assert!(mant_ir::is_normalized_node_id(id));
         }
         assert!(repeated.ends_with("-2"));
@@ -592,10 +557,10 @@ mod tests {
         let reserved_collision = unique_id(&first, &mut HashSet::new(), &reserved);
         assert_eq!(reserved_collision, repeated);
 
-        let exact = format!("term-{}", "a".repeat(MAX_SELECTOR_ID_BYTES - "term-".len()));
+        let exact = format!("term-{}", "a".repeat(MAX_CONTENT_ID_BYTES - "term-".len()));
         assert_eq!(unique_id(&exact, &mut used, &reserved), exact);
         let exact_collision = unique_id(&exact, &mut used, &reserved);
-        assert!(exact_collision.len() <= MAX_SELECTOR_ID_BYTES);
+        assert!(exact_collision.len() <= MAX_CONTENT_ID_BYTES);
         assert!(exact_collision.ends_with("-2"));
         assert_eq!(unique_id("term-short", &mut used, &reserved), "term-short");
         assert_eq!(

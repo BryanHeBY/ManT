@@ -76,15 +76,16 @@ pub(super) fn normalize_generated_anchors(
         }
     }
 
-    fn reserve_section_ids(sections: &[Section], used: &mut HashSet<String>) {
+    fn reserve_section_targets(sections: &[Section], used: &mut HashSet<String>) {
         for section in sections {
             used.insert(section.id.to_string());
-            reserve_section_ids(&section.children, used);
+            used.extend(section.fragment_aliases.iter().map(ToString::to_string));
+            reserve_section_targets(&section.children, used);
         }
     }
 
     let mut used = HashSet::new();
-    reserve_section_ids(sections, &mut used);
+    reserve_section_targets(sections, &mut used);
     let mut normalizer = Normalizer {
         explicit_targets,
         used,
@@ -274,25 +275,27 @@ use super::{LoweringContext, Node, targets};
 impl LoweringContext<'_> {
     pub(super) fn reserve_section_ids(&mut self, ids: &HashSet<String>) {
         self.explicit_targets.clone_from(ids);
-        self.assigned_section_ids.extend(ids.iter().cloned());
+        self.section_ids.reserve(ids);
     }
     pub(super) fn section_identity_for(
         &mut self,
         title: &str,
         node: &Node,
     ) -> (String, Vec<mant_ir::FragmentAlias>) {
-        let id = self.section_id(title);
+        let (id, long_fragment) = self.section_id(title);
         self.authored_section_targets
             .entry(title.to_owned())
             .and_modify(|target| *target = None)
             .or_insert_with(|| Some(id.clone()));
         let fragment_aliases = targets::section_target(node)
             .filter(|target| self.explicit_targets.contains(target))
-            .map(|target| vec![target.into()])
-            .unwrap_or_default();
+            .map(mant_ir::FragmentAlias::from)
+            .into_iter()
+            .chain(long_fragment)
+            .collect();
         (id, fragment_aliases)
     }
-    pub(super) fn section_id(&mut self, title: &str) -> String {
+    pub(super) fn section_id(&mut self, title: &str) -> (String, Option<mant_ir::FragmentAlias>) {
         let slug: String = title
             .chars()
             .flat_map(char::to_lowercase)
@@ -315,18 +318,7 @@ impl LoweringContext<'_> {
         } else {
             slug
         };
-        let count = self.section_ids.entry(base.clone()).or_default();
-        loop {
-            *count += 1;
-            let candidate = if *count == 1 {
-                base.clone()
-            } else {
-                format!("{base}-{count}")
-            };
-            if self.assigned_section_ids.insert(candidate.clone()) {
-                return candidate;
-            }
-        }
+        self.section_ids.allocate(&base)
     }
 }
 

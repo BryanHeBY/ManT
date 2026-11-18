@@ -49,3 +49,4 @@ tests/fixtures/roff/real/LICENSES/BPF-MANUAL-LICENSE.txt text eol=lf whitespace=
 tests/fixtures/roff/real/LICENSES/BHYVE-MANUAL-BSD-2-Clause.txt text eol=lf whitespace=-blank-at-eof
 tests/fixtures/roff/real/LICENSES/KSH-MANUAL-PUBLIC-DOMAIN.txt text eol=lf whitespace=-blank-at-eof
 tests/fixtures/roff/real/LICENSES/CDDL-1.0.txt text eol=lf whitespace=-blank-at-eof
+tests/fixtures/roff/real/LICENSES/GCC-RUNTIME-LIBRARY-EXCEPTION-3.1.txt text eol=lf whitespace=-blank-at-eof
