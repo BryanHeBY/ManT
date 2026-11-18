@@ -6,7 +6,7 @@ use super::{
 };
 use crate::mandoc::{LoweringContext, inline::TableCellExecution, source_span};
 use libmandoc_rs::{Node, TableCellKind, TableFont};
-use mant_ir::{Block, Inline, LayoutHint, TableCell as AstTableCell};
+use mant_ir::{Block, LayoutHint, TableCell as AstTableCell};
 
 pub(super) struct ExecutedCell {
     pub(super) cell: AstTableCell,
@@ -16,11 +16,26 @@ pub(super) struct ExecutedCell {
 impl ExecutedCell {
     pub(super) fn into_block_cell(mut self) -> AstTableCell {
         if self.empty_tail != 0
-            && let [Block::Paragraph { children, .. }] = self.cell.blocks.as_mut_slice()
+            && let [
+                Block::Paragraph {
+                    children, source, ..
+                },
+            ] = self.cell.blocks.as_mut_slice()
         {
-            // A raw tbl follow-up pass already owns an endline. Keep
-            // its empty row when placement retires the provisional tail.
-            children.push(Inline::line_break());
+            // The raw scan proved completed empty passes, distinct from
+            // an open inline tail that the enclosing row may reuse.
+            let source = *source;
+            for _ in 0..self.empty_tail {
+                crate::mandoc::inline::consume_one_row_ending(children);
+            }
+            let mut rows = self.empty_tail;
+            while rows != 0 {
+                let lines = u16::try_from(rows).unwrap_or(u16::MAX);
+                self.cell
+                    .blocks
+                    .push(Block::VerticalSpace { lines, source });
+                rows -= usize::from(lines);
+            }
         }
         self.cell
     }

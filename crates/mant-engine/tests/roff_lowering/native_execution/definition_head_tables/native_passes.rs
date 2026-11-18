@@ -155,6 +155,22 @@ fn an_empty_follow_up_tbl_pass_is_a_row_only_when_the_suffix_reaches_it() {
         ] {
             let source = input(owner, "", "l", &format!("START{tail}\nLAST"));
             let query = lower(&source);
+            if owner != "head" {
+                let document = query.document.as_ref().unwrap();
+                let Some(Block::Table { rows, .. }) = first_table(&document.sections[1].blocks)
+                else {
+                    panic!("expected the native table owner: {source}");
+                };
+                let completed_rows = rows[0].cells[0]
+                    .blocks
+                    .iter()
+                    .filter_map(|block| match block {
+                        Block::VerticalSpace { lines, .. } => Some(*lines),
+                        _ => None,
+                    })
+                    .sum::<u16>();
+                assert_eq!(completed_rows, u16::from(middle == [""]), "{source}");
+            }
             for text in projections(&query) {
                 assert_eq!(between(&text, "START", "LAST"), middle, "{source}\n{text}");
                 assert_eq!(text.matches("START").count(), 1, "{source}");
