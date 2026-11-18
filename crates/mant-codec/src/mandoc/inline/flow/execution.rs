@@ -571,6 +571,10 @@ impl super::InlineExecutionState {
         }
     }
 
+    pub(in crate::mandoc::inline) fn native_field_has_input(&self) -> bool {
+        !self.word_input().0.is_empty()
+    }
+
     pub(super) fn acknowledge_word_input_pass(&mut self, end: usize) {
         let buffer = if self.uses_definition_word_buffer() {
             &mut self

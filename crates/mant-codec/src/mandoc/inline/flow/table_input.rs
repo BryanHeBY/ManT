@@ -177,6 +177,7 @@ impl InlineExecutionState {
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
                 line_width_units: cell_width,
+                native_field_has_input: false,
                 table_field_units: None,
                 policy: crate::mandoc::inline::TextExecutionPolicy {
                     recognize_generated_references: false,

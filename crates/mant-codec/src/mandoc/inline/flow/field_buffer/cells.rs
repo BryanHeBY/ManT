@@ -90,6 +90,8 @@ pub(in crate::mandoc) enum FieldWrite {
         absolute: bool,
         units: i32,
     },
+    /// The motion depends on an earlier native prefix that cannot be replayed.
+    UnprovedMotion,
     /// A resolved slot range. Device writing and any backing up already
     /// happened, and only its surviving source projection counts.
     Placed {

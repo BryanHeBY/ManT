@@ -219,6 +219,9 @@ ManT resolves the native writes before projecting the accepted text. Prose,
 headings, link labels, definition labels, and table cells use that write
 order. Reading output omits device-only strokes and retains authored word
 boundaries between surviving glyphs.
+An entry rewind onto an earlier operand still uses the live field. When
+absolute motion can reach previously written cells whose positions cannot
+be proved, the reading projection preserves the authored words.
 
 Generated inset/diagnostic gaps keep the native nonbreaking cells for
 execution, including overstrikes and field acceptance. Their surviving reading

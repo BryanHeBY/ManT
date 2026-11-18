@@ -1,30 +1,43 @@
 //! Keep native edit operations before pass acceptance and reading projection.
 
-use super::{Font, RoffInlineEvent, TextExecutionContext, WordExecution};
+use super::{Font, FontState, RoffInlineEvent, TextExecutionContext, WordExecution};
 use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldWrite, isolated_passes},
-    native_slots::{FillSlot, NativeSlots},
+    native_slots::{FillSlot, NativeSlots, PriorSlotEdit},
 };
 use crate::mandoc::roff_escape::PresentationKind;
 
 pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext<'_>) -> bool {
     if events.len() < 2
         || !context.policy.record_native_cells
+        // The inherited BACK pair may own an earlier operand or its entry
+        // blank. Leave that receipt with the live word executor.
+        || context.native_field_has_input && context.zero_advance.is_armed()
         || context.zero_advance.has_pending_glyph()
     {
         return false;
     }
     let mut marker = false;
     let mut edits = false;
+    let mut authored_blank = false;
     for event in events {
         match event {
             RoffInlineEvent::LineBreak => marker = true,
-            RoffInlineEvent::HorizontalMotion { .. }
-            | RoffInlineEvent::Overstrike { .. }
-            | RoffInlineEvent::Presentation {
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(value),
+                ..
+            } => {
+                let relative = value.strip_prefix('|');
+                edits |=
+                    libmandoc_rs::TableColumnMetrics::motion_argument(relative.unwrap_or(value))
+                        .is_some_and(|(units, _)| relative.is_some() || units < 0);
+            }
+            RoffInlineEvent::Overstrike { buffered, .. } => edits |= *buffered || authored_blank,
+            RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
                 ..
             } => edits = true,
+            RoffInlineEvent::Text(value) => authored_blank |= value.contains([' ', '\t']),
             RoffInlineEvent::Link(_) | RoffInlineEvent::EmptyDestination => return false,
             _ => {}
         }
@@ -87,13 +100,18 @@ impl<'a> Placement<'a> {
         owner
     }
 
-    fn input(&mut self, event: &'a RoffInlineEvent, context: &mut TextExecutionContext<'_>) {
+    fn input(
+        &mut self,
+        event: &'a RoffInlineEvent,
+        state: &mut FontState,
+        line_width_units: usize,
+    ) {
         use crate::mandoc::roff_escape::RoffFont;
-        let font = context.font.current;
-        let display = context.font.display_current();
+        let font = state.current;
+        let display = state.display_current();
         match event {
-            RoffInlineEvent::Font(next) => context.font.select(*next),
-            RoffInlineEvent::PreviousFont => context.font.restore(),
+            RoffInlineEvent::Font(next) => state.select(*next),
+            RoffInlineEvent::PreviousFont => state.restore(),
             RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
                 self.text(value, display, font);
             }
@@ -111,7 +129,7 @@ impl<'a> Placement<'a> {
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
                 argument: Some(argument),
-            } => self.slots.line(argument, context.line_width_units, font),
+            } => self.slots.line(argument, line_width_units, font),
             RoffInlineEvent::BreakableHyphen => self.place(FieldCell::Hyphen, '-', display, font),
             RoffInlineEvent::NonBreakingWordBlank => {
                 self.place(FieldCell::NonBreakingBlank, ' ', display, font);
@@ -185,27 +203,37 @@ impl<'a> Placement<'a> {
     }
 }
 
-pub(super) fn execute(
+pub(super) fn try_execute(
     events: &[RoffInlineEvent],
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
-) {
+) -> Result<(), PriorSlotEdit> {
     let mut placement = Placement {
-        slots: NativeSlots::default(),
+        slots: NativeSlots::after_entry(context.native_field_has_input),
         reading: Vec::new(),
         marker_boundary: MarkerBoundary::Clear,
     };
-    if context.zero_advance.take_armed() {
+    // Only publish state once all edits stay within this word's bytes.
+    // A rewind into the earlier field must run from the unmodified state.
+    let mut font = context.font.clone();
+    let mut continuation = None;
+    if context.zero_advance.is_armed() {
         placement.slots.arm_backafter();
     }
     for (index, event) in events.iter().enumerate() {
         if matches!(event, RoffInlineEvent::NoSpace) && index + 1 == events.len() {
-            word.source_continuation = Some(!placement.slots.backafter());
+            continuation = Some(!placement.slots.backafter());
         }
-        placement.input(event, context);
+        placement.input(event, &mut font, context.line_width_units);
+        if let Some(edit) = placement.slots.prior_edit() {
+            return Err(edit);
+        }
     }
     let armed = placement.slots.backafter();
+    *context.font = font;
+    context.zero_advance.take_armed();
     context.zero_advance.inherit_armed(armed);
+    word.source_continuation = continuation;
     let mut slots = placement.slots.into_fill_slots();
     retire_overstruck_chars(&mut slots);
     preserve_author_separators(&slots, &mut placement.reading);
@@ -229,6 +257,7 @@ pub(super) fn execute(
     if armed {
         word.native_writes.push(FieldWrite::ArmBackafter);
     }
+    Ok(())
 }
 
 fn retire_overstruck_chars(slots: &mut [FillSlot]) {

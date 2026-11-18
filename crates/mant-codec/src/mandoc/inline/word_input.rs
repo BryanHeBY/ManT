@@ -97,6 +97,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         WordSource::EquationOperand => false,
     };
     let line_width_units = builder.execution.horizontal_line_width_units(source);
+    let native_field_has_input = builder.execution.native_field_has_input();
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {
@@ -104,6 +105,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
             zero_advance: &mut builder.execution.zero_advance,
             defer_leading_blanks,
             line_width_units,
+            native_field_has_input,
             table_field_units: None,
             policy: font::TextExecutionPolicy {
                 recognize_generated_references,

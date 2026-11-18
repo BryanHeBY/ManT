@@ -132,6 +132,7 @@ impl FieldWrite {
             Self::RewindWordEntry(_)
             | Self::DrawSpaces(_)
             | Self::MoveInDrawing { .. }
+            | Self::UnprovedMotion
             | Self::Placed { .. } => EntryWrite::Rewind,
         }
     }

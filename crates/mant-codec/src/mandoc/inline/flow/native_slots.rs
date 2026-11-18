@@ -101,9 +101,28 @@ pub(in crate::mandoc::inline) struct NativeSlots {
     extent: usize,
     backafter: bool,
     backbefore: bool,
+    prior_input: bool,
+    prior_edit: Option<PriorSlotEdit>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum PriorSlotEdit {
+    Rewind,
+    Unresolved,
 }
 
 impl NativeSlots {
+    pub(in crate::mandoc::inline) fn after_entry(prior_input: bool) -> Self {
+        Self {
+            prior_input,
+            ..Self::default()
+        }
+    }
+
+    pub(in crate::mandoc::inline) fn prior_edit(&self) -> Option<PriorSlotEdit> {
+        self.prior_edit
+    }
+
     pub(in crate::mandoc::inline) fn arm_backafter(&mut self) {
         self.backafter = true;
     }
@@ -141,6 +160,12 @@ impl NativeSlots {
         let Some((length, _)) = TableColumnMetrics::motion_argument(argument) else {
             return;
         };
+        if absolute && self.prior_input {
+            // term_word() resolves absolute HORIZ against col in the whole
+            // field, including writes by earlier operands (term.c:678–714).
+            self.prior_edit = Some(PriorSlotEdit::Unresolved);
+            return;
+        }
         let relative = if absolute {
             i64::from(length)
                 .saturating_sub(i64::try_from(self.cursor.saturating_mul(EN)).unwrap_or(i64::MAX))
@@ -154,6 +179,10 @@ impl NativeSlots {
         } else if relative < 0 {
             let cells = usize::try_from(relative.unsigned_abs()).unwrap_or(usize::MAX) / EN;
             let retreat = usize::from(std::mem::take(&mut self.backbefore));
+            if self.prior_input && cells.saturating_add(retreat) > self.cursor {
+                self.prior_edit = Some(PriorSlotEdit::Rewind);
+                return;
+            }
             // The pre-column remainder changes tcol.offset upstream, not
             // lastcol or the available width after the occupied prefix.
             self.cursor = self.cursor.saturating_sub(cells.saturating_add(retreat));
@@ -244,12 +273,15 @@ impl NativeSlots {
             }
         }
 
-        if self.extent > 2
-            && matches!(
-                self.previous_cell(self.extent),
-                Some(FieldCell::BreakableBlank | FieldCell::Tab)
-            )
-        {
+        let blank_at_end = matches!(
+            self.previous_cell(self.extent),
+            Some(FieldCell::BreakableBlank | FieldCell::Tab)
+        );
+        if self.prior_input && (self.extent == 0 || self.extent == 1 && blank_at_end) {
+            // lastcol and the final backspace/blank pair can include bytes
+            // preceding this word (term.c:790–796).
+            self.prior_edit = Some(PriorSlotEdit::Unresolved);
+        } else if blank_at_end && (self.extent > 2 || self.prior_input && self.extent == 2) {
             // The final blank after a retreat removes the generated
             // backspace/blank pair, not the preceding original graph.
             let end = self.extent - 2;
@@ -287,6 +319,10 @@ impl NativeSlots {
     }
 
     fn glyph(&mut self, cell: FieldCell, font: RoffFont, owner: Option<usize>) {
+        if self.backbefore && self.cursor == 0 && self.prior_input {
+            self.prior_edit = Some(PriorSlotEdit::Unresolved);
+            return;
+        }
         if std::mem::take(&mut self.backbefore) && self.cursor > 0 {
             if matches!(
                 self.previous_cell(self.cursor),

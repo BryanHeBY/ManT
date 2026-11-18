@@ -347,15 +347,56 @@ fn unmodeled_word_entry_cannot_authorize_a_native_rejection() {
 .No OMEGA
 "#;
     assert_readbacks(source, "ALPHAX BETA\nOMEGA", None);
-    // If motion occurs inside one operand, the independent leading-word
-    // plan is not applicable either. Retain the new label even when the
-    // native terminal moves the cursor and changes the marker's pass.
-    for distance in ["-1n", "-2n"] {
-        let inline = format!(
-            "{}.No \"ALPHA\\zX \\h'{distance}'\\p\\: BETA\"\n.br\n.No OMEGA\n",
-            source.split_once(".No").unwrap().0
-        );
-        assert_readbacks(&inline, "ALPHAX  BETA\nOMEGA", None);
+}
+
+#[test]
+fn same_operand_motion_uses_the_written_slots_before_its_marker() {
+    // CVS ASCII and UTF-8 agree. term.c:678–714 evaluates both forms of HORIZ
+    // from col; term_fill() receives the marker after that retreat.
+    let heading = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    for (distance, expected) in [
+        ("-1n", "ALPHA\n BETA\nOMEGA"),
+        ("-2n", "ALPH\n BETA\nOMEGA"),
+        ("0n", "ALPHAX\n\nOMEGA"),
+        ("1n", "ALPHAX\n\nOMEGA"),
+        ("|6n", "ALPHA\n BETA\nOMEGA"),
+    ] {
+        let inline =
+            format!("{heading}.No \"ALPHA\\zX \\h'{distance}'\\p\\: BETA\"\n.br\n.No OMEGA\n");
+        assert_readbacks(&inline, expected, None);
+    }
+}
+
+#[test]
+fn drawing_word_uses_the_native_field_lifetime() {
+    let heading = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
+    let source = format!(
+        "{heading}.No \"ALPHA\\zX\"\n.br\n.No \"P\\l'1n '\\h'0n'\\h'|5n'\\p NEEDLE\"\n.No \"\"\n.br\n.No OMEGA\n"
+    );
+    // Both fixed CVS devices output these four rows. br retires the old
+    // field, so the following absolute HORIZ starts from a fresh cursor.
+    assert_readbacks(&source, "ALPHAX\nP\nNEEDLE\nOMEGA", None);
+
+    // Without br, both devices still print NEEDLE. The motion can address
+    // the earlier word, so an incomplete geometry receipt cannot reject it.
+    let live = source.replacen("\n.br\n", "\n", 1);
+    assert!(
+        description(&render(&live, "roff", "text", "never", false)).contains("NEEDLE"),
+        "{live}"
+    );
+}
+
+#[test]
+fn local_slot_edits_keep_their_effect_after_a_prior_word() {
+    // Pinned term.c:678–714 and 790–796. Here the retreat and overstrike trim
+    // affect only bytes of the arriving word, even with an occupied field.
+    let heading = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n";
+    for (word, expected) in [
+        (r"Q\p \o' '\p XYZ", "BEFORE Q\nXYZ LAST\nEND"),
+        (r"\l'1n.'\h'-1n'\p XYZ", "BEFORE\n\nEND"),
+    ] {
+        let source = format!("{heading}.No BEFORE\n.No \"{word}\"\n.No LAST\n.br\n.No END\n");
+        assert_readbacks(&source, expected, None);
     }
 }
 

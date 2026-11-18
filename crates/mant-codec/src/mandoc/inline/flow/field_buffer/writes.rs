@@ -300,6 +300,11 @@ impl FieldBuffer {
                 FieldWrite::MoveInDrawing { absolute, units } => {
                     self.move_in_drawing(drawing_start, *absolute, *units);
                 }
+                FieldWrite::UnprovedMotion => {
+                    self.word_scan = WordScanPolicy::UnmodeledRewind;
+                    self.scan = None;
+                    self.clear_backtracking();
+                }
                 FieldWrite::Placed { cell, scalars } => self.push_placed(cell, *scalars),
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
                 FieldWrite::DeferredBlanks { source, count } => {
