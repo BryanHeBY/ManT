@@ -15,3 +15,6 @@ mod target_identity;
 
 #[path = "navigation/target_ownership.rs"]
 mod target_ownership;
+
+#[path = "navigation/target_successors.rs"]
+mod target_successors;

@@ -52,6 +52,8 @@ that crate was not published for that change.
 - Bind numbered BSD error names and annotated constants at their exact
   ranges. Keep types, descriptions and unproved enclosed arguments out
   of direct definition results.
+- Preserve the exact fragment of an argument-less mdoc `Tg` when a user
+  macro emits it and its target at the same source position.
 - Keep generated semantic entry IDs within the selector limit, including
   when a long form cannot publish names. The full form remains readable.
 - Fit roff and Markdown section IDs within the selector byte budget after

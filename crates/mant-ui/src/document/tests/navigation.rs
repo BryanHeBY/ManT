@@ -323,6 +323,23 @@ fn authored_fragments_jump_to_their_canonical_target_rows() {
 }
 
 #[test]
+fn expanded_argumentless_target_lands_at_the_relocated_paragraph() {
+    // CVS tag.c::tag_move_id() moves the validated Fn target onto Pp.
+    // Later.Automatic is a different target and has no authored Tg alias.
+    let query = mant_loader::load_roff_bytes(b".Dd November 18, 2026\n.Dt TARGET 7\n.Os\n.Sh NAME\n.Nm target\n.Nd navigation probe\n.Sh DESCRIPTION\nINTRO.\n.Pp\n.de XX\n.Tg\n.Fn Mixed.Target\n..\n.XX\nOWNERBODY.\n.Pp\n.Fn Later.Automatic\nLATERBODY.\n").unwrap();
+    let view = DocumentView::new(&query);
+    assert!(view.validate_fragment("Mixed.Target").is_ok());
+    assert!(view.validate_fragment("Later.Automatic").is_err());
+    for width in [32, 80] {
+        let rendered = view.render(width);
+        let target = rendered.anchor_row("Mixed.Target").unwrap();
+        assert_eq!(rendered.anchor_row("mixed-target"), Some(target));
+        assert_eq!(rendered.search("Mixed.Target")[0].row, target);
+        assert!(target < rendered.anchor_row("later-automatic").unwrap());
+    }
+}
+
+#[test]
 fn manual_references_preserve_their_unresolved_section_query() {
     let lines = styled_inline_lines(
         &[Inline::Link {

@@ -33,54 +33,61 @@ pub(super) struct NativeTargetPlan {
 
 impl NativeTargetPlan {
     pub(super) fn build(root: &Node) -> Self {
-        let mut nodes = Vec::new();
-        flatten_nodes(root, &mut nodes);
-        let mut retained = HashSet::new();
-        for node in &nodes {
-            if let Some(target) = raw_target(node) {
-                retained.insert(target);
-            }
-        }
-        let mut explicit = HashSet::new();
+        let mut plan = Self {
+            explicit: HashSet::new(),
+            validated_owners: HashSet::new(),
+        };
+        let mut lists = Vec::new();
+        plan.collect(root, None, &mut lists);
+        plan.explicit
+            .retain(|target| plan.validated_owners.contains(target));
+
         // The list stream also recovers authored targets whose empty owner was
         // removed by native validation. Reserve exactly that recovery set so
         // normalization preserves their original fragment spellings as well.
-        for node in &nodes {
-            if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
-                && node.kind == NodeKind::Body
-            {
-                explicit.extend(
-                    node.children
-                        .iter()
-                        .filter_map(|child| list_stream_target(child, &retained)),
-                );
-            }
+        for list in lists {
+            plan.explicit.extend(
+                list.children
+                    .iter()
+                    .filter_map(|child| list_stream_target(child, &plan.validated_owners)),
+            );
         }
-        for (index, node) in nodes.iter().enumerate() {
-            if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Tg)) {
-                continue;
-            }
-            let target = raw_target(node)
+        plan
+    }
+
+    fn collect<'node>(
+        &mut self,
+        node: &'node Node,
+        successor: Option<&'node Node>,
+        lists: &mut Vec<&'node Node>,
+    ) {
+        let target = raw_target(node);
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
+            if let Some(authored) = target
+                .clone()
                 .or_else(|| explicit_target_argument(node))
-                .or_else(|| {
-                    // An argument-less `.Tg` names the first argument of its
-                    // following source macro. libmandoc can move the validated
-                    // target backwards onto an enclosing structural wrapper, so
-                    // the next target owner is not necessarily the source macro.
-                    nodes[index + 1..]
-                        .iter()
-                        .find(|candidate| candidate.line > node.line)
-                        .and_then(|candidate| candidate.children.first())
-                        .filter(|child| child.kind == NodeKind::Text)
-                        .and_then(source_token)
-                });
-            if let Some(target) = target.filter(|target| retained.contains(target)) {
-                explicit.insert(target);
+                .or_else(|| derived_target_argument(node, successor))
+            {
+                self.explicit.insert(authored);
             }
+        } else if node.kind == NodeKind::Body
+            && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
+        {
+            lists.push(node);
         }
-        Self {
-            explicit,
-            validated_owners: retained,
+        if let Some(target) = target {
+            self.validated_owners.insert(target);
+        }
+
+        for (index, child) in node.children.iter().enumerate() {
+            // CVS mdoc_validate.c::post_tg() ascends until it finds a next
+            // sibling on something other than a HEAD/BODY/TAIL. The lookup
+            // is structural and source coordinates may repeat after expansion.
+            let successor = match child.kind {
+                NodeKind::Head | NodeKind::Body | NodeKind::Tail => successor,
+                _ => node.children.get(index + 1).or(successor),
+            };
+            self.collect(child, successor, lists);
         }
     }
 
@@ -158,9 +165,29 @@ pub(super) fn explicit_target_argument(node: &Node) -> Option<String> {
     if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Tg)) {
         return None;
     }
-    let target = first_text_on_line(node, node.line).map(visible_text)?;
-    let target = target.trim();
-    (!target.is_empty()).then(|| target.to_owned())
+    target_argument(node.children.first()?)
+}
+
+fn derived_target_argument(node: &Node, successor: Option<&Node>) -> Option<String> {
+    // post_tg() hides a request that transferred its target. The eventual
+    // NODE_ID may sit on an earlier wrapper after tag.c::tag_move_id(), so
+    // use the logical successor only for spelling and let surviving owners
+    // govern publication. post_tg() accepts one complete native TEXT atom.
+    if !node.flags.no_print || !node.children.is_empty() {
+        return None;
+    }
+    target_argument(successor?.children.first()?)
+}
+
+fn target_argument(operand: &Node) -> Option<String> {
+    if operand.kind != NodeKind::Text {
+        return None;
+    }
+    let spelling = operand.decoder_text()?;
+    if spelling.is_empty() || spelling.contains([' ', '\t', '\\']) {
+        return None;
+    }
+    operand.text.as_deref().map(visible_text)
 }
 
 /// Collect targets owned by a structural node or one of its direct parts.
@@ -565,18 +592,6 @@ fn first_text(node: &Node) -> Option<&str> {
     node.children.iter().find_map(first_text)
 }
 
-fn first_text_on_line(node: &Node, line: u32) -> Option<&str> {
-    // Explicit `.Tg` arguments are source syntax and intentionally no-print.
-    // Their source line, not their presentation flag, distinguishes them from
-    // a destination derived from a following macro.
-    if node.kind == NodeKind::Text && node.line == line {
-        return node.text.as_deref();
-    }
-    node.children
-        .iter()
-        .find_map(|child| first_text_on_line(child, line))
-}
-
 fn node_and_part_targets(node: &Node) -> Vec<String> {
     let mut targets = Vec::new();
     let mut seen = HashSet::new();
@@ -592,13 +607,6 @@ fn node_and_part_targets(node: &Node) -> Vec<String> {
         }
     }
     targets
-}
-
-fn flatten_nodes<'a>(node: &'a Node, output: &mut Vec<&'a Node>) {
-    output.push(node);
-    for child in &node.children {
-        flatten_nodes(child, output);
-    }
 }
 
 #[cfg(test)]
