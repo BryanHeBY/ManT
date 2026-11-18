@@ -141,7 +141,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::No)) {
             // termp_li_pre executes explicit literal text. It may
             // continue an Ev spelling where Ns removed the separator.
-            builder.with_environment_operand(NativeOperandRole::LiteralContinuation(None), append);
+            builder.with_declaration_operand(NativeOperandRole::LiteralContinuation(None), append);
         } else {
             builder.with_native_operand_role(NativeOperandRole::Description, append);
         }
@@ -158,7 +158,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             super::names::append_block(builder, node, None, name);
         }
         Some(Mdoc(MdocMacro::Nm)) => {
-            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
                 builder
                     .with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
             });
@@ -180,7 +180,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         Some(Mdoc(
             MdocMacro::Cm | MdocMacro::Ic | MdocMacro::Ms | MdocMacro::Cd | MdocMacro::Fd,
         )) => {
-            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
                 builder.with_font_scope(Font::Strong, |builder| {
                     append_inline_nodes(builder, children, name);
                 });
@@ -246,7 +246,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             // Unhandled mdoc elements execute their own child words in
             // print_mdoc_node, including validator-generated St/OS text.
             // Only the explicit No branch can continue an Ev's spelling.
-            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         }
@@ -552,12 +552,12 @@ fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -
         Some(Mdoc(MdocMacro::In)) => {
             // termp_in_pre/post emits the surrounding angles as part of
             // this independent include, along with its original operand.
-            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
                 append_include(builder, node, name);
             });
         }
         Some(Mdoc(MdocMacro::Bx)) => {
-            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
                 append_bsd_reference(builder, node, name);
             });
         }

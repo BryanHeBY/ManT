@@ -11,6 +11,9 @@ use mant_protocol::{
 
 use crate::support::explanation_ranges;
 
+#[path = "table_declarations/styled_intervals.rs"]
+mod styled_intervals;
+
 const HEADER: &str =
     ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd exercise descriptors\n";
 const SECTIONS: [&str; 4] = ["DESCRIPTION", "OPTIONS", "COMMANDS", "ENVIRONMENT"];

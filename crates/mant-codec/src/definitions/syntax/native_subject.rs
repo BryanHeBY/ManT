@@ -5,19 +5,19 @@ use super::{DeclarationLimit, named, occurrences::HeadNames};
 use crate::definitions::{
     NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, evidence::HeadOperands,
 };
-use mant_ir::{DefinitionItem, EntryKind, inline_plain_text};
+use mant_ir::{DefinitionTerm, EntryKind, inline_plain_text};
 use std::ops::Range;
 
 mod annotations;
 mod declaration_parts;
 mod display;
-pub(super) use display::display_separated_names;
+pub(super) use display::infer_display_head;
 mod environment;
 pub(super) use environment::environment_names;
 mod symbols;
 
 pub(super) fn recognize_head(
-    item: &DefinitionItem,
+    terms: &[DefinitionTerm],
     first: &str,
     operands: HeadOperands<'_>,
 ) -> Option<(EntryKind, HeadNames)> {
@@ -25,7 +25,7 @@ pub(super) fn recognize_head(
     let mut limit = first.limit;
     let mut semantic = !first.unproved_field;
     let mut occurrences = vec![first.names];
-    for (index, term) in item.terms.iter().enumerate().skip(1) {
+    for (index, term) in terms.iter().enumerate().skip(1) {
         let mut names = Vec::new();
         if let Some(ranges) = operands.for_term(index)
             && let Some((_, term)) = recognize(&inline_plain_text(term), ranges)

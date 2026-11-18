@@ -37,6 +37,7 @@ fn option_occurrences_with_operands(
 pub(super) struct OptionOccurrences {
     pub(super) occurrences: Vec<Vec<RecognizedName>>,
     pub(super) limit: Option<super::DeclarationLimit>,
+    pub(super) excluded_forms: Vec<usize>,
 }
 
 fn scan_option_occurrences(
@@ -46,6 +47,7 @@ fn scan_option_occurrences(
     let mut result = OptionOccurrences {
         occurrences: Vec::with_capacity(terms.len()),
         limit: None,
+        excluded_forms: Vec::new(),
     };
     for (index, term) in terms.iter().enumerate() {
         let Some(operands) = operands.for_term(index) else {
@@ -53,6 +55,9 @@ fn scan_option_occurrences(
             continue;
         };
         let scanned = super::scan::option_head(term.as_ref(), operands);
+        if scanned.unproved_form {
+            result.excluded_forms.push(index);
+        }
         result.limit = result.limit.or(scanned.limit);
         result.occurrences.push(scanned.names);
     }

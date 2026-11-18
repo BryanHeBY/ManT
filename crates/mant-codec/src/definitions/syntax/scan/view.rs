@@ -22,10 +22,7 @@ pub(in crate::definitions::syntax) struct HeadView<'a> {
 
 impl<'a> HeadView<'a> {
     #[cfg(feature = "roff")]
-    pub(in crate::definitions::syntax) fn native_word(
-        text: &str,
-        operands: &'a [NativeOperand],
-    ) -> Self {
+    pub(super) fn native_word(text: &str, operands: &'a [NativeOperand]) -> Self {
         Self {
             text: text.to_owned(),
             runs: Vec::new(),
@@ -160,5 +157,27 @@ impl<'a> HeadView<'a> {
     pub(super) fn explicit_option(&self, offset: usize) -> bool {
         self.operand(offset)
             .is_some_and(|operand| operand.role == NativeOperandRole::ExplicitOption)
+    }
+
+    pub(super) fn reference_or_environment(&self, offset: usize) -> bool {
+        self.operand(offset)
+            .is_some_and(|operand| match operand.role {
+                #[cfg(feature = "roff")]
+                NativeOperandRole::ReferenceText(_)
+                | NativeOperandRole::Environment { .. }
+                | NativeOperandRole::ClippedEnvironment { .. } => true,
+                _ => false,
+            })
+    }
+
+    pub(super) fn independent_option_suffix(&self, offset: usize) -> bool {
+        self.reference_or_environment(offset)
+            || self
+                .operand(offset)
+                .is_some_and(|operand| match operand.role {
+                    #[cfg(feature = "roff")]
+                    NativeOperandRole::Description => !self.style(offset).emphasis,
+                    _ => false,
+                })
     }
 }

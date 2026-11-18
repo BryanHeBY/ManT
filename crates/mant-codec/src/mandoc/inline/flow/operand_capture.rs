@@ -28,6 +28,7 @@ pub(in crate::mandoc) struct HeadOperandCapture {
     enclosures: Vec<u32>,
     has_operand_label: bool,
     has_environment: bool,
+    has_option: bool,
 }
 
 impl HeadOperandCapture {
@@ -41,6 +42,12 @@ impl HeadOperandCapture {
     pub(super) fn record(&mut self, serial: u64, role: NativeOperandRole) {
         self.has_operand_label |= role.is_operand_label();
         self.has_environment |= matches!(role, NativeOperandRole::Environment { .. });
+        self.has_option |= matches!(
+            role,
+            NativeOperandRole::ExplicitOption
+                | NativeOperandRole::FlDash(_)
+                | NativeOperandRole::FlWord(_)
+        );
         self.roles.insert(serial, role);
     }
 
@@ -314,16 +321,16 @@ impl super::InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc) fn with_environment_operand(
+    pub(in crate::mandoc) fn with_declaration_operand(
         &mut self,
         role: NativeOperandRole,
         operation: impl FnOnce(&mut Self),
     ) {
-        let has_environment = self
-            .head_operand_capture
-            .as_ref()
-            .is_some_and(|capture| capture.borrow().has_environment);
-        if has_environment {
+        let has_declaration = self.head_operand_capture.as_ref().is_some_and(|capture| {
+            let capture = capture.borrow();
+            capture.has_environment || capture.has_option && role == NativeOperandRole::Description
+        });
+        if has_declaration {
             self.with_native_operand_role(role, operation);
         } else {
             operation(self);

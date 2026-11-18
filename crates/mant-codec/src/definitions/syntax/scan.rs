@@ -96,6 +96,7 @@ pub(super) struct OptionHead {
     #[cfg(test)]
     pub(super) complete: bool,
     pub(super) inferred_complete: bool,
+    pub(super) unproved_form: bool,
     pub(super) limit: Option<DeclarationLimit>,
 }
 
@@ -111,6 +112,7 @@ impl OptionHead {
             #[cfg(test)]
             complete: false,
             inferred_complete: false,
+            unproved_form: false,
             limit: Some(DeclarationLimit::Names),
         }
     }
@@ -119,11 +121,6 @@ impl OptionHead {
 pub(super) fn option_head(nodes: &[Inline], operands: &[NativeOperand]) -> OptionHead {
     let view = HeadView::new(nodes, operands);
     Scanner::new(&view).scan()
-}
-
-#[cfg(feature = "roff")]
-pub(super) fn native_option_head(text: &str, operands: &[NativeOperand]) -> OptionHead {
-    Scanner::new(&HeadView::native_word(text, operands)).scan()
 }
 
 #[cfg(feature = "roff")]
@@ -181,6 +178,7 @@ struct Scanner<'a> {
     admission: OwnerAdmission,
     separator: Option<usize>,
     placeholder: Placeholder,
+    unproved_form: bool,
 }
 
 struct Argument {
@@ -205,6 +203,7 @@ impl<'a> Scanner<'a> {
             admission: OwnerAdmission::Proved,
             separator: None,
             placeholder: Placeholder::default(),
+            unproved_form: false,
         }
     }
 
@@ -260,6 +259,7 @@ impl<'a> Scanner<'a> {
             #[cfg(test)]
             complete,
             inferred_complete: complete && self.admission == OwnerAdmission::Proved,
+            unproved_form: self.unproved_form,
             limit: None,
         }
     }
@@ -357,9 +357,11 @@ impl<'a> Scanner<'a> {
 
     fn consume_name(&mut self) -> bool {
         let start = self.cursor;
-        if self.view.explicit_option(start)
-            && let Some(marker) = self.explicit_marker(start)
-        {
+        let native = self.view.explicit_option(start);
+        if self.view.reference_or_environment(start) {
+            return false;
+        }
+        if native && let Some(marker) = self.explicit_marker(start) {
             self.names.push(RecognizedName::contiguous(marker, start));
             self.cursor += marker.len();
             return true;
@@ -367,7 +369,10 @@ impl<'a> Scanner<'a> {
         let mut end = start + 1;
         for (index, next) in self.view.text[end..].char_indices() {
             let offset = start + 1 + index;
-            if !option_character(next) || self.view.is_parameter(offset) {
+            if !option_character(next)
+                || self.view.is_parameter(offset)
+                || native && self.view.independent_option_suffix(offset)
+            {
                 break;
             }
             end = offset + next.len_utf8();
@@ -375,7 +380,13 @@ impl<'a> Scanner<'a> {
         if let Some(name) = super::options::option_prefix(&self.view.text[start..end]) {
             self.names.push(RecognizedName::contiguous(name, start));
             self.cursor = start + name.len();
-            if self.cursor < end {
+            let foreign_tail = native
+                && self
+                    .current()
+                    .is_some_and(|character| !character.is_whitespace())
+                && self.view.independent_option_suffix(self.cursor);
+            self.unproved_form |= foreign_tail;
+            if self.cursor < end || foreign_tail {
                 self.begin_argument();
             }
             return true;

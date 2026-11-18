@@ -15,6 +15,8 @@ mod eligibility;
 mod hanging;
 #[path = "native_declarations/operands.rs"]
 mod operands;
+#[path = "native_declarations/option_operand_boundaries.rs"]
+mod option_operand_boundaries;
 #[path = "native_declarations/publication.rs"]
 mod publication;
 #[path = "native_declarations/real_subjects.rs"]

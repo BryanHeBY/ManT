@@ -8,7 +8,10 @@ use super::{
 use crate::definitions::{
     NativeHeadRole, NativeOperand, RecognizedName, context, evidence::HeadOperands,
 };
-use mant_ir::{DefinitionItem, EntryKind, Inline, ParameterKind, inline_plain_text as plain_text};
+use mant_ir::{
+    DefinitionItem, DefinitionTerm, EntryKind, Inline, ParameterKind,
+    inline_plain_text as plain_text,
+};
 
 pub(super) struct HeadNames {
     pub(super) occurrences: Vec<Vec<RecognizedName>>,
@@ -36,74 +39,16 @@ impl HeadNames {
             constrain_term_names(names, operands.for_term(index));
         }
     }
-
-    pub(super) fn restrict_display_only_forms(
-        &mut self,
-        item: &DefinitionItem,
-        operands: HeadOperands<'_>,
-        kind: EntryKind,
-    ) -> EntryKind {
-        let original_kind = kind;
-        #[cfg(feature = "roff")]
-        let mut kind = (!self.is_empty()).then_some(kind);
-        for (index, names) in self.occurrences.iter_mut().enumerate() {
-            let Some(ranges) = operands.for_term(index) else {
-                continue;
-            };
-            if ranges.iter().any(|operand| operand.role.display_only()) {
-                let uses = OperandUses::new(ranges);
-                names.retain(|name| {
-                    name.parts
-                        .iter()
-                        .all(|range| !uses.overlaps_display_only(range))
-                });
-                if let Err(at) = self.excluded_forms.binary_search(&index) {
-                    self.excluded_forms.insert(at, index);
-                }
-                #[cfg(feature = "roff")]
-                {
-                    let found =
-                        super::native_subject::display_separated_names(&item.terms[index], ranges);
-                    self.limit = self.limit.or(found.limit);
-                    if let Some(inferred) = found.kind.filter(|_| !found.names.is_empty()) {
-                        kind = Some(match kind {
-                            Some(current) if inferred != current => EntryKind::Term,
-                            _ => inferred,
-                        });
-                    }
-                    for name in found.names {
-                        if !names
-                            .iter()
-                            .any(|old| old.name == name.name && old.parts == name.parts)
-                        {
-                            names.push(name);
-                        }
-                    }
-                    names.sort_by_key(|name| name.parts[0].start);
-                }
-            }
-        }
-        debug_assert_eq!(self.occurrences.len(), item.terms.len());
-        #[cfg(feature = "roff")]
-        {
-            kind.unwrap_or(original_kind)
-        }
-        #[cfg(not(feature = "roff"))]
-        {
-            original_kind
-        }
-    }
 }
 
 pub(super) fn recognize_head_names(
-    item: &DefinitionItem,
+    terms: &[DefinitionTerm],
     kind: EntryKind,
     hint: Option<NativeHeadRole>,
     operands: HeadOperands<'_>,
 ) -> HeadNames {
     if hint == Some(NativeHeadRole::LiteralTerm) {
-        let occurrences = item
-            .terms
+        let occurrences = terms
             .iter()
             .map(|term| {
                 let text = plain_text(term);
@@ -117,7 +62,7 @@ pub(super) fn recognize_head_names(
     }
     let occurrences = match hint {
         Some(NativeHeadRole::Option) => {
-            let found = options::native_option_occurrences(&item.terms, operands);
+            let found = options::native_option_occurrences(terms, operands);
             // A complete accepted native option receipt establishes known
             // selector loss; a weak candidate alone cannot prove coverage loss.
             let limit = if operands.proves_option() {
@@ -127,24 +72,26 @@ pub(super) fn recognize_head_names(
             };
             return HeadNames {
                 occurrences: found.occurrences,
-                excluded_forms: Vec::new(),
+                excluded_forms: found.excluded_forms,
                 limit,
                 semantic: true,
             };
         }
-        Some(NativeHeadRole::Environment) => return environment_head_names(item, operands),
-        _ => name_occurrences_with_operands(item, kind, operands),
+        Some(NativeHeadRole::Environment) => return environment_head_names(terms, operands),
+        _ => name_occurrences_with_operands(terms, kind, operands),
     };
     HeadNames::from_occurrences(occurrences)
 }
 
-fn environment_head_names(item: &DefinitionItem, operands: HeadOperands<'_>) -> HeadNames {
+pub(super) fn environment_head_names(
+    terms: &[DefinitionTerm],
+    operands: HeadOperands<'_>,
+) -> HeadNames {
     #[cfg(feature = "roff")]
     let mut excluded_forms = Vec::new();
     #[cfg(not(feature = "roff"))]
     let excluded_forms = Vec::<usize>::new();
-    let occurrences = item
-        .terms
+    let occurrences = terms
         .iter()
         .enumerate()
         .map(|(index, term)| {
@@ -214,27 +161,25 @@ pub(in crate::definitions) fn name_occurrences(
     item: &DefinitionItem,
     kind: EntryKind,
 ) -> Vec<Vec<RecognizedName>> {
-    name_occurrences_with_operands(item, kind, HeadOperands::Absent)
+    name_occurrences_with_operands(&item.terms, kind, HeadOperands::Absent)
 }
 
 pub(super) fn name_occurrences_with_operands(
-    item: &DefinitionItem,
+    terms: &[DefinitionTerm],
     kind: EntryKind,
     operands: HeadOperands<'_>,
 ) -> Vec<Vec<RecognizedName>> {
     if let EntryKind::Parameter { parameter_kind } = kind {
         if parameter_kind == ParameterKind::Option {
-            return options::parameter_occurrences(&item.terms, operands);
+            return options::parameter_occurrences(terms, operands);
         }
         // Marker/operand inference requires an exact complete first term,
         // not a prefix of a longer invocation. Repeated matching terms may
         // contribute evidence without promoting other terms into names.
-        let first = item
-            .terms
+        let first = terms
             .first()
             .map_or_else(String::new, |term| plain_text(term));
-        return item
-            .terms
+        return terms
             .iter()
             .map(|term| {
                 let text = plain_text(term);
@@ -250,7 +195,7 @@ pub(super) fn name_occurrences_with_operands(
             })
             .collect();
     }
-    item.terms
+    terms
         .iter()
         .enumerate()
         .map(|(index, term)| {

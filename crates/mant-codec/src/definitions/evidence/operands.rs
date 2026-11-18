@@ -129,12 +129,9 @@ impl NativeOperandRole {
         }
     }
 
+    #[cfg(feature = "roff")]
     pub(in crate::definitions) fn display_only(self) -> bool {
-        match self {
-            #[cfg(feature = "roff")]
-            Self::DisplayOnly => true,
-            _ => false,
-        }
+        self == Self::DisplayOnly
     }
 
     #[cfg(feature = "roff")]

@@ -1,104 +1,262 @@
-//! Recognize typed declarations separated by display-only table content.
-use super::{Recognition, environment, recognize};
+//! Use the ordinary head grammar on styled intervals between table receipts.
 use crate::definitions::syntax::{
-    eligibility::{OperandUses, operand_at},
-    options,
-    scan::{self, DeclarationLimit, HeadView, MAX_NAMES},
+    commands,
+    inference::{InferredIdentity, infer_terms},
+    occurrences::HeadNames,
+    scan::{DeclarationLimit, MAX_NAMES},
 };
-use crate::definitions::{NativeOperand, NativeOperandRole, RecognizedName};
-use mant_ir::{EntryKind, Inline, ParameterKind, inline_plain_text};
+use crate::definitions::{
+    NativeHeadRole, NativeOperand, NativeOperandRole,
+    context::DefinitionContext,
+    evidence::{HeadOperands, TermOperands},
+};
+use mant_ir::{DefinitionTerm, EntryKind, Inline, NameCase};
+use std::{ops::Range, rc::Rc};
 
-#[derive(Default)]
-pub(in crate::definitions::syntax) struct DisplayNames {
-    pub(in crate::definitions::syntax) kind: Option<EntryKind>,
-    pub(in crate::definitions::syntax) names: Vec<RecognizedName>,
-    pub(in crate::definitions::syntax) limit: Option<DeclarationLimit>,
+pub(in crate::definitions::syntax) fn infer_display_head(
+    terms: &[DefinitionTerm],
+    context: DefinitionContext,
+    hint: Option<NativeHeadRole>,
+    operands: HeadOperands<'_>,
+) -> Option<InferredIdentity> {
+    if !matches!(operands, HeadOperands::Accepted(_)) {
+        return None;
+    }
+    let has_display =
+        |ranges: &[NativeOperand]| ranges.iter().any(|operand| operand.role.display_only());
+    if !(0..terms.len()).any(|index| operands.for_term(index).is_some_and(has_display)) {
+        return None;
+    }
+    let mut head = HeadNames {
+        occurrences: Vec::with_capacity(terms.len()),
+        excluded_forms: Vec::new(),
+        limit: None,
+        semantic: true,
+    };
+    let mut kind = None;
+    for (index, term) in terms.iter().enumerate() {
+        let mut names = Vec::new();
+        if let Some(ranges) = operands.for_term(index) {
+            if has_display(ranges) {
+                // The complete authored term stays in the public owner.
+                // Its display-only bytes cannot supply a queryable form.
+                head.excluded_forms.push(index);
+                let segments = segments(term, ranges);
+                let first = segments
+                    .iter()
+                    .position(|segment| mant_ir::has_printable_character(&segment.content));
+                for (position, segment) in segments.into_iter().enumerate() {
+                    let original_hint = (index == 0 && first == Some(position))
+                        .then_some(hint)
+                        .flatten();
+                    let Some(segment) = segment.infer(context, original_hint) else {
+                        continue;
+                    };
+                    append_names(segment, &mut names, &mut kind, &mut head.limit);
+                }
+            } else {
+                let local = [TermOperands::Accepted(Rc::new(ranges.to_vec()))];
+                let inherited = (index == 0).then_some(hint).flatten();
+                let inferred = infer_terms(
+                    std::slice::from_ref(term),
+                    context,
+                    inherited,
+                    HeadOperands::Accepted(&local),
+                );
+                if !inferred.excluded_forms.is_empty() || !inferred.semantic {
+                    head.excluded_forms.push(index);
+                }
+                append_names(inferred, &mut names, &mut kind, &mut head.limit);
+            }
+        } else {
+            head.excluded_forms.push(index);
+        }
+        head.occurrences.push(names);
+    }
+    let (kind, case) = kind.unwrap_or((EntryKind::Term, NameCase::Sensitive));
+    Some(InferredIdentity::classify(head, kind, case, false))
 }
 
-pub(in crate::definitions::syntax) fn display_separated_names(
-    term: &[Inline],
-    operands: &[NativeOperand],
-) -> DisplayNames {
-    let text = inline_plain_text(term);
-    let mut result = DisplayNames::default();
+fn append_names(
+    inferred: InferredIdentity,
+    names: &mut Vec<crate::definitions::RecognizedName>,
+    kind: &mut Option<(EntryKind, NameCase)>,
+    limit: &mut Option<DeclarationLimit>,
+) {
+    *limit = limit.or(inferred.limit);
+    let Some(found) = inferred.occurrences.into_iter().next() else {
+        return;
+    };
+    if !found.is_empty() {
+        let role = (inferred.kind, inferred.case);
+        *kind = Some(match *kind {
+            Some(previous) if previous != role => (EntryKind::Term, NameCase::Sensitive),
+            _ => role,
+        });
+        let remaining = MAX_NAMES.saturating_sub(names.len());
+        if found.len() > remaining {
+            *limit = Some(DeclarationLimit::Names);
+        }
+        names.extend(found.into_iter().take(remaining));
+    }
+}
+
+struct Segment<'a> {
+    bytes: Range<usize>,
+    operands: &'a [NativeOperand],
+    content: Vec<Inline>,
+}
+
+impl Segment<'_> {
+    fn infer(
+        self,
+        context: DefinitionContext,
+        hint: Option<NativeHeadRole>,
+    ) -> Option<InferredIdentity> {
+        // Preserve the ordinary styled command grammar as well as explicit
+        // native heads. Arbitrary surrounding text gains no declaration
+        // evidence merely by standing on one side of a display.
+        let native = self.operands.iter().any(|operand| {
+            matches!(
+                operand.role,
+                NativeOperandRole::ExplicitOption | NativeOperandRole::Environment { .. }
+            ) || operand.role.subject().is_some()
+                || operand.role.is_operand_label()
+                || operand.role.is_search()
+        });
+        let styled_command = context == DefinitionContext::Commands
+            && commands::leading_styled_command_name(&self.content).is_some();
+        if !(native || styled_command || hint == Some(NativeHeadRole::Literal)) {
+            return None;
+        }
+        let term = DefinitionTerm::from(self.content);
+        // A separator written before a table can be covered by the previous
+        // receipt. Clip that edge to the span read by the head grammar.
+        let end = self.bytes.start + mant_ir::inline_plain_text(&term).trim_end().len();
+        let local = self
+            .operands
+            .iter()
+            .take_while(|operand| operand.bytes.start < end)
+            .map(|operand| NativeOperand {
+                bytes: operand.bytes.start - self.bytes.start
+                    ..operand.bytes.end.min(end) - self.bytes.start,
+                role: operand.role,
+            })
+            .collect();
+        let operands = [TermOperands::Accepted(Rc::new(local))];
+        let mut found = infer_terms(&[term], context, hint, HeadOperands::Accepted(&operands));
+        for name in found.occurrences.iter_mut().flatten() {
+            for part in &mut name.parts {
+                part.start += self.bytes.start;
+                part.end += self.bytes.start;
+            }
+        }
+        Some(found)
+    }
+}
+
+fn segments<'a>(term: &[Inline], operands: &'a [NativeOperand]) -> Vec<Segment<'a>> {
     let mut start = 0;
     let mut end = 0;
-    for segment in operands.split(|operand| operand.role.display_only()) {
-        let boundary = operands.get(end + segment.len());
-        let end_at = boundary.map_or(text.len(), |operand| operand.bytes.start);
-        if let Some((kind, names, limit)) = recognize_segment(&text[start..end_at], start, segment)
-        {
-            result.kind = Some(match result.kind {
-                Some(previous) if previous != kind => EntryKind::Term,
-                _ => kind,
+    let mut segments = Vec::new();
+    for receipts in operands.split(|operand| operand.role.display_only()) {
+        let boundary = operands.get(end + receipts.len());
+        let end_at = boundary.map_or(usize::MAX, |operand| operand.bytes.start);
+        if start < end_at {
+            segments.push(Segment {
+                bytes: start..end_at,
+                operands: receipts,
+                content: Vec::new(),
             });
-            let available = MAX_NAMES.saturating_sub(result.names.len());
-            if names.len() > available {
-                result.limit = Some(DeclarationLimit::Names);
-            }
-            result.limit = result.limit.or(limit);
-            result
-                .names
-                .extend(names.into_iter().take(available).map(|mut name| {
-                    for range in &mut name.parts {
-                        range.start += start;
-                        range.end += start;
-                    }
-                    name
-                }));
         }
-        end += segment.len() + 1;
-        start = boundary.map_or(text.len(), |operand| operand.bytes.end);
+        end += receipts.len() + 1;
+        start = boundary.map_or(usize::MAX, |operand| operand.bytes.end);
     }
-    result
+    if !segments.is_empty() {
+        collect_inline_intervals(term, &mut segments, &mut 0, &mut 0);
+    }
+    segments
 }
 
-fn recognize_segment(
-    text: &str,
-    base: usize,
-    operands: &[NativeOperand],
-) -> Option<(EntryKind, Vec<RecognizedName>, Option<DeclarationLimit>)> {
-    let head = text.len() - text.trim_start().len();
-    let lead = operand_at(operands, base + head)?;
-    // Crossing a table is an explicit display boundary, not new evidence
-    // for lexical discovery in arbitrary adjacent text.
-    let operands = operands
-        .iter()
-        .map(|operand| NativeOperand {
-            bytes: operand.bytes.start - base..operand.bytes.end - base,
-            role: operand.role,
-        })
-        .collect::<Vec<_>>();
-    if lead.role == NativeOperandRole::ExplicitOption {
-        let mut found = scan::native_option_head(text, &operands);
-        if found.names.is_empty()
-            && found.limit.is_none()
-            && let Some(name) = options::native_option_key(&text[head..lead.bytes.end - base])
+fn collect_inline_intervals(
+    nodes: &[Inline],
+    segments: &mut [Segment<'_>],
+    segment_index: &mut usize,
+    offset: &mut usize,
+) {
+    for node in nodes {
+        if let Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } = node
         {
-            found
-                .names
-                .push(RecognizedName::contiguous(&name.name, head));
+            let first = *segment_index;
+            let Some(initial) = segments.get(first).map(|segment| segment.content.len()) else {
+                return;
+            };
+            collect_inline_intervals(children, segments, segment_index, offset);
+            for (index, segment) in segments
+                .iter_mut()
+                .enumerate()
+                .take(*segment_index + 1)
+                .skip(first)
+            {
+                let start = if index == first { initial } else { 0 };
+                if start < segment.content.len() {
+                    let children = segment.content.split_off(start);
+                    segment.content.push(wrap_interval(node, children));
+                }
+            }
+            continue;
         }
-        return Some((
-            EntryKind::Parameter {
-                parameter_kind: ParameterKind::Option,
-            },
-            found.names,
-            found.limit,
-        ));
+        let text = match node {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
+                value
+            }
+            Inline::LineBreak { .. } => "\n",
+            Inline::Anchor { .. } => continue,
+            _ => unreachable!("the wrappers have already been traversed"),
+        };
+        let start = *offset;
+        let end = start + text.len();
+        while let Some(segment) = segments.get_mut(*segment_index) {
+            if segment.bytes.start >= end {
+                break;
+            }
+            let clip_start = segment.bytes.start.max(start);
+            let clip_end = segment.bytes.end.min(end);
+            if clip_start < clip_end
+                && let Some(slice) = text.get(clip_start - start..clip_end - start)
+            {
+                segment.content.push(if slice.len() == text.len() {
+                    node.clone()
+                } else if matches!(node, Inline::Code { .. }) {
+                    Inline::Code {
+                        value: slice.into(),
+                    }
+                } else {
+                    Inline::Text {
+                        value: slice.into(),
+                    }
+                });
+            }
+            if segment.bytes.end > end {
+                break;
+            }
+            *segment_index += 1;
+        }
+        *offset = end;
     }
-    if matches!(lead.role, NativeOperandRole::Environment { .. }) {
-        let view = HeadView::native_word(text, &operands);
-        let found = environment::recognize(&view, &operands, OperandUses::new(&operands))?;
-        return Some((EntryKind::EnvironmentVariable, found.names, None));
-    }
-    let (
-        kind,
-        Recognition {
-            names,
-            limit,
-            unproved_field,
+}
+
+fn wrap_interval(wrapper: &Inline, children: Vec<Inline>) -> Inline {
+    match wrapper {
+        Inline::Strong { .. } => Inline::Strong { children },
+        Inline::Emphasis { .. } => Inline::Emphasis { children },
+        Inline::Link { target, title, .. } => Inline::Link {
+            target: target.clone(),
+            title: title.clone(),
+            children,
         },
-    ) = recognize(text, &operands)?;
-    (!unproved_field).then_some((kind, names, limit))
+        _ => unreachable!("only wrappers own child intervals"),
+    }
 }

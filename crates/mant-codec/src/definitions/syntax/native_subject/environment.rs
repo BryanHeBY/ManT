@@ -36,12 +36,14 @@ pub(super) fn recognize(
     let (parts, assignments) = split_groups(view, operands, uses)?;
     let mut parts = parts.into_iter().peekable();
     let mut result = EnvironmentNames::default();
-    let mut unproved_join = false;
+    let mut has_native_group = false;
+    let mut has_unproved_group = false;
     while let Some(part) = parts.next() {
         let first = part.trim();
         let start = offset(text, first);
         let mut end = start + first.len();
         let leading = operand_at(operands, start).map(|operand| operand.role);
+        has_native_group |= leading.is_some_and(is_environment);
         let annotation = annotation_start(text, &(start..end), operands);
         let next_assignment = assignments.partition_point(|at| *at < start);
         if assignments
@@ -64,19 +66,18 @@ pub(super) fn recognize(
         {
             result.names.push(RecognizedName::contiguous(&name, start));
         } else if let Some(role @ NativeOperandRole::Environment { .. }) = leading {
-            unproved_join |= joined_foreign_operand(text, &range, operands, role);
+            result.unproved_exact_form |= joined_foreign_operand(text, &range, operands, role);
         } else if !leading.is_some_and(|role| is_environment(role) || is_description(role))
             && !named::environment_template(&text[range.clone()])
             && !uses.protects(&range)
         {
-            // Unproved ordinary prose still vetoes lexical aliases.
-            return None;
+            has_unproved_group = true;
         }
     }
-    // The authored label remains visible. Its exact text cannot claim an
-    // aliasless semantic owner when only unrelated operands made it look
-    // like a declaration. An independently named atom still owns the form.
-    result.unproved_exact_form = unproved_join;
+    // A native Ev can occur inside an ordinary label, e.g. `(PROBE_ENV)`,
+    // without starting a declaration atom. Only an actual environment
+    // group makes an unrelated sibling disqualify the complete form.
+    result.unproved_exact_form |= has_native_group && has_unproved_group;
     Some(result)
 }
 

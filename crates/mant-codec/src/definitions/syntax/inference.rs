@@ -13,7 +13,8 @@ use crate::definitions::{
     NativeHeadRole, RecognizedName, context::DefinitionContext, evidence::HeadOperands,
 };
 use mant_ir::{
-    DefinitionItem, EntryKind, NameCase, ParameterKind, inline_plain_text as plain_text,
+    DefinitionItem, DefinitionTerm, EntryKind, NameCase, ParameterKind,
+    inline_plain_text as plain_text,
 };
 
 pub(in crate::definitions) struct InferredIdentity {
@@ -32,20 +33,25 @@ pub(in crate::definitions) fn infer_identity(
     hint: Option<NativeHeadRole>,
     operands: HeadOperands<'_>,
 ) -> InferredIdentity {
-    let first = item
-        .terms
+    #[cfg(feature = "roff")]
+    if let Some(found) = native_subject::infer_display_head(&item.terms, context, hint, operands) {
+        return found;
+    }
+    infer_terms(&item.terms, context, hint, operands)
+}
+
+pub(super) fn infer_terms(
+    terms: &[DefinitionTerm],
+    context: DefinitionContext,
+    hint: Option<NativeHeadRole>,
+    operands: HeadOperands<'_>,
+) -> InferredIdentity {
+    let first = terms
         .first()
         .map_or_else(String::new, |term| plain_text(term));
     #[cfg(feature = "roff")]
-    if let Some((kind, recognized)) = native_subject::recognize_head(item, &first, operands) {
-        return InferredIdentity::classify(
-            recognized,
-            kind,
-            NameCase::Sensitive,
-            false,
-            item,
-            operands,
-        );
+    if let Some((kind, recognized)) = native_subject::recognize_head(terms, &first, operands) {
+        return InferredIdentity::classify(recognized, kind, NameCase::Sensitive, false);
     }
     let trimmed = first.trim();
     let leading_option = hint.is_none()
@@ -53,19 +59,41 @@ pub(in crate::definitions) fn infer_identity(
             .for_term(0)
             .is_some_and(|ranges| scan::has_leading_explicit_option(&first, ranges));
     let hint = hint.or(leading_option.then_some(NativeHeadRole::Option));
+    #[cfg(feature = "roff")]
+    if hint.is_none()
+        && operands.for_term(0).is_some_and(|ranges| {
+            ranges.iter().any(|operand| {
+                matches!(
+                    operand.role,
+                    crate::definitions::NativeOperandRole::Environment { .. }
+                )
+            })
+        })
+    {
+        let mut named = super::occurrences::environment_head_names(terms, operands);
+        named.constrain(operands);
+        if !named.is_empty() {
+            return InferredIdentity::classify(
+                named,
+                EntryKind::EnvironmentVariable,
+                NameCase::Sensitive,
+                true,
+            );
+        }
+    }
     let (mut kind, mut case) = decision::select_kind(trimmed, context, hint);
     let keep_unnamed_kind = matches!(
         hint,
         Some(NativeHeadRole::Option | NativeHeadRole::Environment)
     );
-    let mut recognized = recognize_head_names(item, kind, hint, operands);
+    let mut recognized = recognize_head_names(terms, kind, hint, operands);
     recognized.constrain(operands);
     if hint == Some(NativeHeadRole::Literal) && recognized.is_empty() {
-        recognized.occurrences = name_occurrences_with_operands(item, EntryKind::Command, operands);
+        recognized.occurrences =
+            name_occurrences_with_operands(terms, EntryKind::Command, operands);
         recognized.constrain(operands);
         if recognized.is_empty() {
-            recognized.occurrences = item
-                .terms
+            recognized.occurrences = terms
                 .iter()
                 .map(|term| {
                     let prefix = forms::literal_prefix(term);
@@ -86,38 +114,30 @@ pub(in crate::definitions) fn infer_identity(
         case = NameCase::Sensitive;
     }
     if recognized.is_empty() && !keep_unnamed_kind {
-        recognized.occurrences = name_occurrences_with_operands(item, EntryKind::Term, operands);
+        recognized.occurrences = name_occurrences_with_operands(terms, EntryKind::Term, operands);
         recognized.constrain(operands);
         kind = EntryKind::Term;
         case = NameCase::Sensitive;
     }
     if (hint.is_none() || leading_option)
-        && item.terms.len() > 1
+        && terms.len() > 1
         && operands.proves_option()
         && let Some(mixed_kind) =
-            continued_occurrences(item, &first, operands, leading_option, &mut recognized)
+            continued_occurrences(terms, &first, operands, leading_option, &mut recognized)
     {
         kind = mixed_kind;
         case = NameCase::Sensitive;
     }
-    InferredIdentity::classify(recognized, kind, case, keep_unnamed_kind, item, operands)
+    InferredIdentity::classify(recognized, kind, case, keep_unnamed_kind)
 }
 
 impl InferredIdentity {
-    fn classify(
-        mut recognized: HeadNames,
+    pub(super) fn classify(
+        recognized: HeadNames,
         kind: EntryKind,
         case: NameCase,
         keep_unnamed_kind: bool,
-        item: &DefinitionItem,
-        operands: HeadOperands<'_>,
     ) -> Self {
-        let actual = recognized.restrict_display_only_forms(item, operands, kind);
-        let (kind, case) = if actual == kind {
-            (kind, case)
-        } else {
-            (actual, NameCase::Sensitive)
-        };
         let names = ordered_names(&recognized.occurrences, kind);
         let semantic = recognized.semantic
             && (!names.is_empty()
@@ -140,7 +160,7 @@ impl InferredIdentity {
 }
 
 fn continued_occurrences(
-    item: &DefinitionItem,
+    terms: &[DefinitionTerm],
     first: &str,
     operands: HeadOperands<'_>,
     leading_option: bool,
@@ -151,7 +171,7 @@ fn continued_occurrences(
     } = recognized;
     if leading_option {
         let mut mixed = false;
-        for (index, (term, names)) in item.terms.iter().zip(occurrences).enumerate().skip(1) {
+        for (index, (term, names)) in terms.iter().zip(occurrences).enumerate().skip(1) {
             if names.is_empty() {
                 *names = lexical_term_occurrences(&plain_text(term), operands.for_term(index));
                 constrain_term_names(names, operands.for_term(index));
@@ -160,7 +180,7 @@ fn continued_occurrences(
         }
         return mixed.then_some(EntryKind::Term);
     }
-    if options::retain_continued_option_names(&item.terms, operands, occurrences, limit)
+    if options::retain_continued_option_names(terms, operands, occurrences, limit)
         && occurrences[0].is_empty()
     {
         occurrences[0] = lexical_term_occurrences(first, operands.for_term(0));
