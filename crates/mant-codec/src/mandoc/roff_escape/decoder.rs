@@ -250,7 +250,12 @@ impl Decoder {
             // character-skipping shortcut. Keep the following escapes in the
             // normal decoder so their operands and font effects survive.
             'z' => self.emit(RoffInlineEvent::ZeroAdvance),
-            '%' if self.characters.get(self.index..self.index + 2) == Some(&['<', '>']) => {
+            '%' if self.projection != Projection::LinkIdentity
+                && self.characters.get(self.index..self.index + 2) == Some(&['<', '>']) =>
+            {
+                // The Sphinx marker is a reading convention. The HTML
+                // attribute path consumes the escape and then reads the
+                // two authored delimiters as individual literal characters.
                 self.index += 2;
                 self.emit(RoffInlineEvent::EmptyDestination);
             }

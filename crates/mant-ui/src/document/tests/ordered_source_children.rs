@@ -135,6 +135,39 @@ fn complete_native_children_survive_json_buffer_resize_and_markdown_readback() {
 }
 
 #[test]
+fn authored_angle_brackets_in_roff_addresses_do_not_create_clickable_regions() {
+    // Fixed html.c::print_encode strips the escaped percent and preserves
+    // the literal brackets. The percent-encoded positive control differs.
+    let source = concat!(
+        ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n",
+        ".Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n",
+        ".Lk https://e/\\%<>Y LABEL\n.Lk https://e/%3C%3EY SAFE\n",
+    );
+    let input = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let view = DocumentView::new(&input);
+    for width in [18, 78] {
+        let rendered = view.render(width);
+        for (label, target) in [
+            ("LABEL", None),
+            (
+                "SAFE",
+                Some(LinkTarget::External(
+                    ExternalUri::parse("https://e/%3C%3EY").unwrap(),
+                )),
+            ),
+        ] {
+            check_buffer(&rendered, width, label, false);
+            let hits = rendered.search(label);
+            let hit = &hits[0];
+            assert_eq!(
+                rendered.link_target_at(hit.row, hit.start_column),
+                target.as_ref()
+            );
+        }
+    }
+}
+
+#[test]
 fn man_synopsis_posts_keep_physical_rows_and_word_seams_in_final_cells() {
     // These exact inputs ran pristine ASCII/UTF-8/tree/lint before the
     // assertions. man_term.c::post_SY flushes HEAD unconditionally, retains

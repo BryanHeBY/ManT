@@ -147,6 +147,79 @@ fn native_address_recovery_is_shared_by_web_mail_and_reference_operands() {
     }
 }
 
+#[test]
+fn literal_angle_brackets_survive_address_decoding_without_enabling_activation() {
+    const MDOC: &str = concat!(
+        ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n",
+        ".Sh NAME\n.Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n",
+    );
+    const MAN: &str = ".TH PROBE 1 \"November 18, 2026\"\n.SH NAME\nprobe \\- exercise descriptors\n.SH DESCRIPTION\n";
+    // Fixed CVS html.c::print_encode consumes the percent escape, then
+    // independently escapes the two authored angle brackets in the href.
+    for (operand, decoded) in [
+        ("<>", "<>"),
+        (r"\%<>", "<>"),
+        (r"\z\%<>", "<>"),
+        (r"\%<", "<"),
+        (r"\%>", ">"),
+        (r"\%<>\%<>", "<><>"),
+        ("%3C%3E", "%3C%3E"),
+    ] {
+        let uri = format!("https://e/{operand}Y");
+        let address = format!("x{operand}Y@example.test");
+        for (source, email) in [
+            (format!("{MDOC}.Lk {uri} LABEL\n"), false),
+            (format!("{MAN}.UR {uri}\nLABEL\n.UE\n"), false),
+            (format!("{MDOC}.Rs\n.%U {uri}\n.Re\n"), false),
+            (format!("{MDOC}.Mt {address}\n"), true),
+            (format!("{MAN}.MT {address}\nLABEL\n.ME\n"), true),
+        ] {
+            let (target, expected, code) = if email {
+                let expected = format!("x{decoded}Y@example.test");
+                let target = LinkTarget::Email {
+                    address: expected.clone(),
+                };
+                (target, expected, "ir.invalid-email-address")
+            } else {
+                let expected = format!("https://e/{decoded}Y");
+                let target = LinkTarget::External {
+                    uri: expected.clone(),
+                };
+                (target, expected, "ir.invalid-external-uri")
+            };
+            let query = roundtrip(&source);
+            assert_eq!(
+                link_targets(&query),
+                std::slice::from_ref(&expected),
+                "{source}"
+            );
+            let valid = decoded == "%3C%3E";
+            assert_eq!(target.to_uri().is_some(), valid, "{source}");
+            let document = query.document.as_ref().unwrap();
+            assert_eq!(
+                document
+                    .diagnostics
+                    .iter()
+                    .filter(|d| d.code.as_deref() == Some(code))
+                    .count(),
+                usize::from(!valid),
+                "{source}",
+            );
+            let markdown = mant_codec::encode::render_markdown(&query);
+            let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            let exported = link_targets(&readback);
+            if valid {
+                assert!(exported.contains(&expected), "{source}: {markdown}");
+            } else {
+                assert!(exported.is_empty(), "{source}: {markdown}");
+            }
+            if source.contains("LABEL") {
+                assert_eq!(search(&query, "LABEL").matches.len(), 1, "{source}");
+            }
+        }
+    }
+}
+
 fn assert_exported_address(source: &str, expected: &str) {
     let query = roundtrip(source);
     assert_eq!(link_targets(&query), [expected], "{source}");
