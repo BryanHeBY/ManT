@@ -20,6 +20,7 @@ pub(in crate::mandoc) fn lower_document_structure(
     let mut paragraph_distance = 1;
     let mut formatter = crate::mandoc::formatter::FormatterState::default();
     formatter.execution.escape_coverage = context.escape_coverage.clone();
+    formatter.execution.table_recovery = Some(context.table_recovery.clone());
     formatter.execution.zero_advance.annotations = Some(context.annotations.clone());
     let mut root_blocks = Vec::new();
     let mut sections = Vec::new();

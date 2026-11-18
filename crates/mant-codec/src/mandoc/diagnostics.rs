@@ -76,7 +76,7 @@ impl LoweringContext<'_> {
                 source: None,
             });
         }
-        let table_budget = self.table_recovery_budget.borrow();
+        let table_budget = self.table_recovery.budget.borrow();
         if table_budget.exhaustion().is_some() || table_budget.refused_fragments() > 0 {
             diagnostics.push(Diagnostic {
                 impact: mant_ir::DiagnosticImpact::None,
@@ -154,7 +154,7 @@ mod tests {
             message: "already incomplete".to_owned(),
             source: None,
         });
-        let mut budget = context.table_recovery_budget.borrow_mut();
+        let mut budget = context.table_recovery.budget.borrow_mut();
         budget.reject_fragment();
         budget.reject_fragment();
         assert!(!budget.charge_scan(usize::MAX));

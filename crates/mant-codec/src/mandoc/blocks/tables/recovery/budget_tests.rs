@@ -2,7 +2,7 @@
 //! high-level-macro T{} cases are the documented GNU enhancement, while
 //! `tbl_data.c::tbl_cdata` retains the native operand payload on refusal.
 
-use super::{CellPosition, TableEmbeddingPlan, TableTextBlock, lower_table_cell};
+use super::{CellPosition, TableTextBlock, lower_table_cell, recover_text_blocks};
 use crate::mandoc::table_recovery_budget::{Exhaustion, Limits, TableRecoveryBudget};
 use crate::mandoc::{LoweringContext, formatter::FormatterState};
 use libmandoc_rs::{MacroSet, Node, NodeKind, Parser};
@@ -44,7 +44,7 @@ fn name_session_refusal_keeps_the_complete_native_cell_and_discards_speculation(
     ] {
         let mut context = LoweringContext::new(Some("probe"), Some(NAME_SESSION));
         context.macro_set = dialect;
-        *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
+        *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
         let mut formatter = FormatterState::default();
         let initial_font = formatter.font.clone();
         formatter.execution.scope_posts.finish(u32::MAX);
@@ -69,7 +69,8 @@ fn name_session_refusal_keeps_the_complete_native_cell_and_discards_speculation(
         assert!(formatter.execution.scope_posts.ended(u32::MAX));
         assert!(
             context
-                .table_recovery_budget
+                .table_recovery
+                .budget
                 .borrow()
                 .exhaustion()
                 .is_some()
@@ -141,7 +142,7 @@ fn every_enhancement_limit_preserves_the_complete_native_cell() {
     ] {
         let mut context = LoweringContext::new(None, None);
         context.macro_set = dialect;
-        *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
+        *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
         let block = TableTextBlock {
             source: ".B SAFE".to_owned(),
             escape: Some(b'\\'),
@@ -156,7 +157,8 @@ fn every_enhancement_limit_preserves_the_complete_native_cell() {
         );
         assert!(
             context
-                .table_recovery_budget
+                .table_recovery
+                .budget
                 .borrow()
                 .exhaustion()
                 .is_some()
@@ -169,14 +171,14 @@ fn safe_cells_share_attempts_across_rows_and_new_sessions_start_fresh() {
     let (dialect, rows) = parsed_tables(ROWS);
     let mut context = LoweringContext::new(None, Some(ROWS));
     context.macro_set = dialect;
-    *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+    *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
         attempts: 2,
         ..Limits::default()
     });
-    let plan = TableEmbeddingPlan::new(&rows, &context);
     let mut formatter = FormatterState::default();
     for (index, (row, word)) in rows.iter().zip(["FIRST", "SECOND", "THIRD"]).enumerate() {
-        let block = plan.embedding(index).unwrap().blocks[0].as_ref().unwrap();
+        let blocks = recover_text_blocks(row, &context);
+        let block = blocks[0].as_ref().unwrap();
         let output = decode_cell(row, 0, &context, block, &mut formatter);
         assert_eq!(mant_ir::inline_plain_text(&output), word);
         assert_eq!(
@@ -185,7 +187,7 @@ fn safe_cells_share_attempts_across_rows_and_new_sessions_start_fresh() {
         );
     }
     assert_eq!(
-        context.table_recovery_budget.borrow().exhaustion(),
+        context.table_recovery.budget.borrow().exhaustion(),
         Some(Exhaustion::Attempts)
     );
     let mut fresh = LoweringContext::new(None, None);
@@ -212,10 +214,10 @@ fn unsafe_cell_does_not_spend_an_attempt_or_disable_its_safe_neighbor() {
     assert!(rows[0].table_cells[1].source_recovery_safe);
     let mut context = LoweringContext::new(None, Some(MIXED));
     context.macro_set = dialect;
-    let plan = TableEmbeddingPlan::new(&rows, &context);
+    let blocks = recover_text_blocks(&rows[0], &context);
     let mut formatter = FormatterState::default();
     for (index, expected) in ["UNSAFE", "SAFE"].into_iter().enumerate() {
-        let block = plan.embedding(0).unwrap().blocks[index].as_ref();
+        let block = blocks[index].as_ref();
         assert_eq!(block.is_some(), index == 1);
         let output = lower_table_cell(
             &rows[0].table_cells[index],
@@ -230,7 +232,7 @@ fn unsafe_cell_does_not_spend_an_attempt_or_disable_its_safe_neighbor() {
         )
         .unwrap();
         assert_eq!(mant_ir::inline_plain_text(&output), expected);
-        assert_eq!(context.table_recovery_budget.borrow().attempts(), index);
+        assert_eq!(context.table_recovery.budget.borrow().attempts(), index);
         if index == 1 {
             assert!(matches!(output.first(), Some(Inline::Strong { .. })));
         }
@@ -252,7 +254,7 @@ fn source_scan_stops_at_its_allowance_and_retains_only_complete_blocks() {
             break;
         }
     }
-    *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+    *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
         scan: units,
         ..Limits::default()
     });
@@ -261,7 +263,7 @@ fn source_scan_stops_at_its_allowance_and_retains_only_complete_blocks() {
     assert_eq!(blocks.len(), 1);
     assert_eq!(blocks[0].as_ref().unwrap().source, ".Em FIRST");
     assert_eq!(
-        context.table_recovery_budget.borrow().exhaustion(),
+        context.table_recovery.budget.borrow().exhaustion(),
         Some(Exhaustion::Scan)
     );
     assert_eq!(rows.len(), 3);
@@ -273,7 +275,7 @@ fn output_refusal_does_not_commit_spacing_fonts_scope_posts_or_candidate_diagnos
     let (dialect, rows) = parsed_tables(STATE);
     let mut context = LoweringContext::new(None, None);
     context.macro_set = dialect;
-    *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+    *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
         output_bytes: 3,
         ..Limits::default()
     });
@@ -318,7 +320,7 @@ fn raw_fallback_spends_a_second_attempt_after_semantic_decline() {
     rows[0].table_cells[0].text = None;
     let mut context = LoweringContext::new(None, None);
     context.macro_set = dialect;
-    *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+    *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
         attempts: 1,
         ..Limits::default()
     });
@@ -333,9 +335,9 @@ fn raw_fallback_spends_a_second_attempt_after_semantic_decline() {
         &mut FormatterState::default(),
     );
     assert_eq!(output.len(), 0);
-    assert_eq!(context.table_recovery_budget.borrow().attempts(), 2);
+    assert_eq!(context.table_recovery.budget.borrow().attempts(), 2);
     assert_eq!(
-        context.table_recovery_budget.borrow().exhaustion(),
+        context.table_recovery.budget.borrow().exhaustion(),
         Some(Exhaustion::Attempts)
     );
 }
@@ -346,7 +348,7 @@ fn output_nodes_and_bytes_accept_the_exact_limit_without_flattening_styles() {
     for (nodes, bytes) in [(2, 4), (3, 5)] {
         let mut context = LoweringContext::new(None, None);
         context.macro_set = dialect;
-        *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+        *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
             output_nodes: nodes,
             output_bytes: bytes,
             ..Limits::default()
@@ -363,7 +365,7 @@ fn output_nodes_and_bytes_accept_the_exact_limit_without_flattening_styles() {
         );
         assert_eq!(mant_ir::inline_plain_text(&output), "SAFE");
         assert!(matches!(output.first(), Some(Inline::Strong { .. })));
-        assert_eq!(context.table_recovery_budget.borrow().exhaustion(), None);
+        assert_eq!(context.table_recovery.budget.borrow().exhaustion(), None);
     }
 }
 
@@ -374,7 +376,7 @@ fn raw_fallback_can_commit_when_its_distinct_attempt_is_available() {
     rows[0].table_cells[0].text = None;
     let mut context = LoweringContext::new(None, None);
     context.macro_set = dialect;
-    *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+    *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
         attempts: 2,
         ..Limits::default()
     });
@@ -389,8 +391,8 @@ fn raw_fallback_can_commit_when_its_distinct_attempt_is_available() {
         &mut FormatterState::default(),
     );
     assert_eq!(mant_ir::inline_plain_text(&output), "FIRST LAST");
-    assert_eq!(context.table_recovery_budget.borrow().attempts(), 2);
-    assert_eq!(context.table_recovery_budget.borrow().exhaustion(), None);
+    assert_eq!(context.table_recovery.budget.borrow().attempts(), 2);
+    assert_eq!(context.table_recovery.budget.borrow().exhaustion(), None);
 }
 
 #[test]
@@ -420,16 +422,17 @@ fn overlong_metadata_is_refused_before_name_scanning_and_native_payload_survives
             .iter()
             .all(|node| matches!(node, Inline::Text { .. }))
     );
-    assert_eq!(context.table_recovery_budget.borrow().exhaustion(), None);
+    assert_eq!(context.table_recovery.budget.borrow().exhaustion(), None);
     assert_eq!(
-        context.table_recovery_budget.borrow().refused_fragments(),
+        context.table_recovery.budget.borrow().refused_fragments(),
         1
     );
     // The refusal belongs to the synthetic metadata input, not the shared
     // page allowance. An independently bounded fragment can still use it.
     assert!(
         context
-            .table_recovery_budget
+            .table_recovery
+            .budget
             .borrow_mut()
             .begin_candidate(".B SAFE".len())
     );
@@ -440,7 +443,7 @@ fn overlong_metadata_is_refused_before_name_scanning_and_native_payload_survives
         None,
         false,
         FormatterState::default(),
-        Some(&context.table_recovery_budget),
+        Some(&context.table_recovery.budget),
     )
     .unwrap();
     assert!(recovered.complete);
@@ -460,12 +463,12 @@ fn local_request_cap_preserves_every_operand_at_sixty_three_sixty_four_and_sixty
         let (dialect, rows) = parsed_tables(source);
         let mut context = LoweringContext::new(None, Some(source));
         context.macro_set = dialect;
-        let plan = TableEmbeddingPlan::new(&rows, &context);
+        let blocks = recover_text_blocks(&rows[0], &context);
         let output = decode_cell(
             &rows[0],
             0,
             &context,
-            plan.embedding(0).unwrap().blocks[0].as_ref().unwrap(),
+            blocks[0].as_ref().unwrap(),
             &mut FormatterState::default(),
         );
         let output_text = mant_ir::inline_plain_text(&output);
@@ -479,7 +482,7 @@ fn local_request_cap_preserves_every_operand_at_sixty_three_sixty_four_and_sixty
                 .any(|node| matches!(node, Inline::Strong { .. })),
             count <= 64
         );
-        assert_eq!(context.table_recovery_budget.borrow().exhaustion(), None);
+        assert_eq!(context.table_recovery.budget.borrow().exhaustion(), None);
     }
 }
 
@@ -498,9 +501,8 @@ fn oversized_cells_preserve_ordinals_and_do_not_poison_safe_neighbors() {
         let (dialect, rows) = parsed_tables(&source);
         let mut context = LoweringContext::new(None, Some(&source));
         context.macro_set = dialect;
-        let plan = TableEmbeddingPlan::new(&rows, &context);
-        let first = plan.embedding(0).unwrap();
-        assert!(first.blocks[0].is_none());
+        let first = recover_text_blocks(&rows[0], &context);
+        assert!(first[0].is_none());
         let first_output = lower_table_cell(
             &rows[0].table_cells[0],
             CellPosition {
@@ -515,9 +517,14 @@ fn oversized_cells_preserve_ordinals_and_do_not_poison_safe_neighbors() {
         .unwrap();
         assert_eq!(mant_ir::inline_plain_text(&first_output), long);
         let (row_index, cell_index, block_index) = if adjacent { (0, 1, 1) } else { (1, 0, 0) };
-        let block = plan.embedding(row_index).unwrap().blocks[block_index]
-            .as_ref()
-            .unwrap();
+        let next;
+        let blocks = if row_index == 0 {
+            &first
+        } else {
+            next = recover_text_blocks(&rows[row_index], &context);
+            &next
+        };
+        let block = blocks[block_index].as_ref().unwrap();
         assert_eq!(block.source, ".B SAFE");
         let output = decode_cell(
             &rows[row_index],
@@ -529,11 +536,11 @@ fn oversized_cells_preserve_ordinals_and_do_not_poison_safe_neighbors() {
         assert_eq!(mant_ir::inline_plain_text(&output), "SAFE");
         assert!(matches!(output.first(), Some(Inline::Strong { .. })));
         assert_eq!(
-            context.table_recovery_budget.borrow().refused_fragments(),
+            context.table_recovery.budget.borrow().refused_fragments(),
             1
         );
-        assert_eq!(context.table_recovery_budget.borrow().exhaustion(), None);
-        assert_eq!(context.table_recovery_budget.borrow().attempts(), 1);
+        assert_eq!(context.table_recovery.budget.borrow().exhaustion(), None);
+        assert_eq!(context.table_recovery.budget.borrow().attempts(), 1);
     }
 }
 
@@ -542,8 +549,7 @@ fn unavailable_source_does_not_attempt_optional_recovery_or_damage_native_payloa
     let (dialect, rows) = parsed_tables(MAN_STYLE);
     let mut context = LoweringContext::new(None, None);
     context.macro_set = dialect;
-    let plan = TableEmbeddingPlan::new(&rows, &context);
-    assert!(plan.embedding(0).unwrap().blocks.is_empty());
+    assert!(recover_text_blocks(&rows[0], &context).is_empty());
     let output = lower_table_cell(
         &rows[0].table_cells[0],
         CellPosition {
@@ -557,8 +563,8 @@ fn unavailable_source_does_not_attempt_optional_recovery_or_damage_native_payloa
     )
     .unwrap();
     assert_eq!(mant_ir::inline_plain_text(&output), "SAFE");
-    assert_eq!(context.table_recovery_budget.borrow().attempts(), 0);
-    assert_eq!(context.table_recovery_budget.borrow().exhaustion(), None);
+    assert_eq!(context.table_recovery.budget.borrow().attempts(), 0);
+    assert_eq!(context.table_recovery.budget.borrow().exhaustion(), None);
 }
 
 #[test]
@@ -568,7 +574,7 @@ fn ownership_comparison_charges_both_inputs_before_visiting_native_payload() {
     let (_, rows) = parsed_tables(MAN_STYLE);
     for input in [7, 8, 9] {
         let context = LoweringContext::new(None, None);
-        *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+        *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
             input,
             ..Limits::default()
         });
@@ -594,7 +600,7 @@ fn ownership_comparison_charges_both_inputs_before_visiting_native_payload() {
             input >= 8
         );
         assert_eq!(
-            context.table_recovery_budget.borrow().exhaustion(),
+            context.table_recovery.budget.borrow().exhaustion(),
             if input < 8 {
                 Some(Exhaustion::Input)
             } else {
@@ -636,7 +642,7 @@ fn real_row_execution_keeps_followers_when_all_candidate_attempts_are_refused() 
         context
             .scope_posts
             .index_structural_payload(&report.document.root);
-        *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
+        *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(Limits {
             attempts: 0,
             ..Limits::default()
         });
@@ -663,7 +669,8 @@ fn real_row_execution_keeps_followers_when_all_candidate_attempts_are_refused() 
         );
         exhausted += usize::from(
             context
-                .table_recovery_budget
+                .table_recovery
+                .budget
                 .borrow()
                 .exhaustion()
                 .is_some(),

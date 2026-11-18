@@ -3,6 +3,11 @@
 use mant_ir::{Block, DocumentIndex, ResolvedContent, inline_plain_text};
 use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax, default_search_limit};
 
+mod row_boundaries;
+mod source_recovery;
+
+const REVIEW_HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n";
+
 const HEADER: &str =
     ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
 
@@ -22,23 +27,27 @@ fn verify_consumers(query: &ResolvedContent, expected: &[&str], source: &str) {
         }
     }
     for word in expected {
-        let found = mant_query::search_query(
-            query,
-            &SearchQuery {
-                pattern: (*word).into(),
-                syntax: SearchSyntax::Literal,
-                case: SearchCase::Sensitive,
-                scope: SearchScope::Visible,
-                word: true,
-                context_lines: 0,
-                limit: default_search_limit(),
-                offset: 0,
-            },
-        )
-        .unwrap();
+        let found = whole_word(query, word);
         assert!(found.content_complete, "{source}");
         assert_eq!(found.matches.len(), 1, "{word}: {source}");
     }
+}
+
+fn whole_word(query: &ResolvedContent, word: &str) -> mant_protocol::QuerySearch {
+    mant_query::search_query(
+        query,
+        &SearchQuery {
+            pattern: word.into(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: true,
+            context_lines: 0,
+            limit: default_search_limit(),
+            offset: 0,
+        },
+    )
+    .unwrap()
 }
 
 fn lower(source: &str) -> ResolvedContent {

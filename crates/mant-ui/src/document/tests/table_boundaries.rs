@@ -1,14 +1,37 @@
 //! Closed table cells retain source positions and never invent blank rows.
 
 use super::*;
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    widgets::{Paragraph, Widget},
+};
+
+const REVIEW_HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n";
+
+fn restored(source: &str) -> ResolvedContent {
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let wire = mant_render::render_query_json(&query, false).unwrap();
+    serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
+        .unwrap()
+        .into()
+}
+
+fn paint(document: &RenderedDocument, width: u16) -> Buffer {
+    let area = Rect::new(0, 0, width, document.row_count.try_into().unwrap());
+    let mut buffer = Buffer::empty(area);
+    Paragraph::new(document.text.clone()).render(area, &mut buffer);
+    buffer
+}
+
+fn painted(buffer: &Buffer, row: usize, start: usize, end: usize) -> String {
+    (start..end)
+        .map(|col| buffer[(col.try_into().unwrap(), row.try_into().unwrap())].symbol())
+        .collect()
+}
 
 #[test]
 fn a_native_table_inside_an_extended_definition_head_paints_every_cell() {
-    use ratatui::{
-        buffer::Buffer,
-        layout::Rect,
-        widgets::{Paragraph, Widget},
-    };
     let header = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
     // CVS term_tbl emits both cells inside Xo, before the original It BODY.
     for tag in ["", ".Tg Table.Point\n"] {
@@ -41,6 +64,119 @@ fn a_native_table_inside_an_extended_definition_head_paints_every_cell() {
                 view.validate_fragment("Table.Point").is_ok(),
                 !tag.is_empty()
             );
+        }
+    }
+}
+
+#[test]
+fn head_table_rows_and_prefix_words_survive_narrow_and_wide_paint() {
+    // The engine row matrix ran these exact sources against pristine CVS.
+    for style in ["tag", "hang"] {
+        for prefix in ["", ".No PRE\n", ".No PRE\n.br\n"] {
+            for blanks in 0..=2 {
+                let blank_rows = "\\&\n".repeat(blanks);
+                let source = format!(
+                    "{REVIEW_HEADER}.Bl -{style} -width Ds\n.It Xo\n{prefix}.TS\nl.\nFIRST\n{blank_rows}LAST\n.TE\n.No AFTER\n.Xc\nENDING\n.El\n.Sh EXAMPLES\nTAIL\n"
+                );
+                let query = restored(&source);
+                let view = DocumentView::new(&query);
+                for width in [14, 78, 14] {
+                    let rendered = view.render(width);
+                    let raw = paint(&rendered, width);
+                    let first = &rendered.search("FIRST")[0];
+                    let last = &rendered.search("LAST")[0];
+                    assert_eq!(last.row - first.row, blanks + 1, "{source}: {width}");
+                    assert!(
+                        (first.row + 1..last.row).all(|row| painted(
+                            &raw,
+                            row,
+                            0,
+                            usize::from(width)
+                        )
+                        .trim()
+                        .is_empty()),
+                        "{source}: {width}"
+                    );
+                    for (word, hit) in [("FIRST", first), ("LAST", last)] {
+                        assert_eq!(
+                            painted(&raw, hit.row, hit.start_column, hit.end_column),
+                            word
+                        );
+                    }
+                    let prefixes = rendered.search("PRE");
+                    assert_eq!(prefixes.len(), usize::from(!prefix.is_empty()));
+                    if let Some(pre) = prefixes.first()
+                        && width == 78
+                    {
+                        let split = style == "tag" && prefix.contains(".br");
+                        assert_eq!(pre.row + usize::from(split), first.row, "{source}");
+                        if !split {
+                            assert!(first.start_column > pre.end_column, "{source}");
+                            assert_eq!(
+                                painted(&raw, first.row, pre.start_column, first.end_column),
+                                "PRE FIRST",
+                                "{source}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn source_backed_head_cell_keeps_its_exact_click_and_copy_parts() {
+    // Fixed tbl_cdata witnesses the same raw operand in either form. Only
+    // the source-backed T{} cell recovers the Mt semantic link.
+    for (cell, clickable) in [
+        ("a@example.test", false),
+        ("T{\n.Mt a@example.test\nT}", true),
+    ] {
+        let source = format!(
+            "{REVIEW_HEADER}.Bl -tag -width Ds\n.It Xo\n.TS\nl.\n{cell}\n.TE\n.Xc\nOWNER\n.El\n"
+        );
+        let query = restored(&source);
+        let view = DocumentView::new(&query);
+        for width in [16, 78, 16] {
+            let rendered = view.render(width);
+            assert_eq!(!rendered.links.is_empty(), clickable, "{source}: {width}");
+            if clickable {
+                let buffer = paint(&rendered, width);
+                let label = rendered
+                    .links
+                    .iter()
+                    .map(|region| {
+                        assert!(
+                            matches!(rendered.link_target_at(region.row, region.start_column),
+                        Some(LinkTarget::External(uri)) if uri.as_str() == "mailto:a@example.test")
+                        );
+                        let part =
+                            painted(&buffer, region.row, region.start_column, region.end_column);
+                        assert_eq!(
+                            rendered.selected_text(RenderedSelection {
+                                anchor: TextPosition {
+                                    row: region.row,
+                                    column: region.start_column,
+                                },
+                                focus: TextPosition {
+                                    row: region.row,
+                                    column: region.end_column - 1,
+                                },
+                            }),
+                            part
+                        );
+                        part
+                    })
+                    .collect::<String>();
+                assert_eq!(label, "a@example.test", "{source}: {width}");
+                let owner = &rendered.search("OWNER")[0];
+                assert!(
+                    rendered
+                        .link_target_at(owner.row, owner.start_column)
+                        .is_none()
+                );
+            }
         }
     }
 }

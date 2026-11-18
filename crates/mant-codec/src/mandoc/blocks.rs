@@ -46,7 +46,7 @@ mod man_macros;
 pub(in crate::mandoc) mod mdoc_macros;
 mod preformatted;
 mod tables;
-pub(super) use tables::InlineTableSequence;
+pub(super) use tables::{InlineTableRow, InlineTableSequence};
 mod walker;
 
 use lists::man::{

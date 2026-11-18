@@ -1,11 +1,9 @@
 //! Source facts and operation-local services; no hidden formatter registers.
-use super::{
-    Diagnostic, HashMap, HashSet, MacroSet, Node, RefCell, SourceLineIndex, formatter, inline,
-};
+use super::{Diagnostic, HashSet, MacroSet, Node, RefCell, formatter, inline};
 
 mod table_source;
 use std::rc::Rc;
-pub(super) use table_source::TableTextBlock;
+pub(super) use table_source::{TableRecoverySource, TableTextBlock};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) enum MdocSectionContext {
@@ -22,11 +20,7 @@ pub(super) struct LoweringContext<'a> {
     // Immutable source services. Formatter execution is passed separately;
     // the RefCells below are memoization and diagnostic collection only.
     pub(super) default_name: Option<&'a str>,
-    pub(super) source_lines: Option<SourceLineIndex<'a>>,
-    native_table_requests: RefCell<HashMap<String, bool>>,
-    /// Optional T{} enhancement work is cumulative across this document,
-    /// independent of speculative formatter/diagnostic transactions.
-    pub(super) table_recovery_budget: RefCell<super::table_recovery_budget::TableRecoveryBudget>,
+    pub(super) table_recovery: Rc<TableRecoverySource>,
     pub(super) table_layout_budget: RefCell<super::table_layout_budget::TableLayoutBudget>,
     pub(super) section_ids: crate::producer_identity::HeadingIds,
     pub(super) pending_section_ids: Vec<super::section_identity::PendingSectionIdentity>,
@@ -62,14 +56,19 @@ pub(super) struct HeadNodes<'a> {
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
+        Self::with_table_recovery(default_name, Rc::new(TableRecoverySource::new(source)))
+    }
+
+    pub(super) fn with_table_recovery(
+        default_name: Option<&'a str>,
+        table_recovery: Rc<TableRecoverySource>,
+    ) -> Self {
         Self {
             annotations: inline::ownership::annotations::AnnotationPool::deferred(),
             macro_set: MacroSet::None,
             native_heads: RefCell::default(),
             default_name,
-            source_lines: source.map(SourceLineIndex::new),
-            native_table_requests: RefCell::new(HashMap::new()),
-            table_recovery_budget: RefCell::default(),
+            table_recovery,
             table_layout_budget: RefCell::default(),
             section_ids: crate::producer_identity::HeadingIds::default(),
             pending_section_ids: Vec::new(),

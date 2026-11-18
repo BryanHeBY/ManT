@@ -41,7 +41,9 @@ pub(super) fn lower_cells(
             "declared-column execution work budget exceeded",
         );
     }
-    let text_blocks = text_blocks(node, embedding);
+    let source_blocks =
+        embedding.map_or_else(Vec::new, |_| recovery::recover_text_blocks(node, context));
+    let text_blocks = text_blocks(node, &source_blocks);
     let mut cells = cell_owners(node);
     let mut buffered = false;
     let mut width_dependent_lines = Vec::new();
@@ -107,7 +109,7 @@ pub(super) fn lower_cells(
 
 fn text_blocks<'a>(
     node: &Node,
-    embedding: Option<&'a TableEmbedding<'_>>,
+    source_blocks: &'a [Option<crate::mandoc::TableTextBlock>],
 ) -> Vec<Option<&'a crate::mandoc::TableTextBlock>> {
     let mut text_block_index = 0;
     node.table_cells
@@ -116,9 +118,7 @@ fn text_blocks<'a>(
             if !cell.text_block {
                 return None;
             }
-            let block = embedding
-                .and_then(|embedding| embedding.blocks.get(text_block_index))
-                .and_then(Option::as_ref);
+            let block = source_blocks.get(text_block_index).and_then(Option::as_ref);
             text_block_index += 1;
             block
         })

@@ -7,13 +7,13 @@
 //! every AST node.
 
 #[derive(Debug)]
-pub(super) struct SourceLineIndex<'a> {
-    source: &'a str,
+pub(super) struct SourceLineIndex {
+    source: Box<str>,
     starts: Vec<u32>,
 }
 
-impl<'a> SourceLineIndex<'a> {
-    pub(super) fn new(source: &'a str) -> Self {
+impl SourceLineIndex {
+    pub(super) fn new(source: &str) -> Self {
         let mut starts = Vec::new();
         if !source.is_empty() {
             starts.push(0);
@@ -28,11 +28,14 @@ impl<'a> SourceLineIndex<'a> {
             };
             starts.push(start);
         }
-        Self { source, starts }
+        Self {
+            source: source.into(),
+            starts,
+        }
     }
 
     /// Iterate physical source lines starting at a one-based coordinate.
-    pub(super) fn lines_from(&self, first_line: u32) -> impl Iterator<Item = (u32, &'a str)> + '_ {
+    pub(super) fn lines_from(&self, first_line: u32) -> impl Iterator<Item = (u32, &str)> + '_ {
         let first = usize::try_from(first_line)
             .ok()
             .and_then(|line| line.checked_sub(1))
@@ -49,7 +52,7 @@ impl<'a> SourceLineIndex<'a> {
             })
     }
 
-    fn line_at_index(&self, index: usize) -> Option<&'a str> {
+    fn line_at_index(&self, index: usize) -> Option<&str> {
         let start = usize::try_from(*self.starts.get(index)?).ok()?;
         let end = self
             .starts

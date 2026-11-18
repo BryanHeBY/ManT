@@ -18,6 +18,7 @@ pub(super) struct FinishedInlineLine {
 struct DefinitionHeadRows {
     occupied: bool,
     completed_empty_rows: u16,
+    table_data_rows: u16,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -192,8 +193,9 @@ impl FormatterState {
         self.definition_head_rows.occupied
     }
 
-    pub(super) const fn definition_head_completed_empty_rows(&self) -> u16 {
-        self.definition_head_rows.completed_empty_rows
+    pub(super) const fn definition_head_completed_empty_rows(&self) -> (u16, u16) {
+        let rows = self.definition_head_rows;
+        (rows.completed_empty_rows, rows.table_data_rows)
     }
 
     pub(super) fn enter_man_definition_body(&mut self) {
@@ -432,12 +434,18 @@ impl FormatterState {
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed(boundary.native());
         let completed_empty_rows = builder.completed_empty_rows();
+        let table_data_rows = if completed_empty_rows > 0 {
+            builder.trailing_table_data_rows()
+        } else {
+            0
+        };
         let (mut output, execution, occupied, retirement) =
             builder.finish_captured_formatter_line(preserve_rows, boundary);
         let definition_term_breaks = super::inline::take_definition_term_breaks(&mut output);
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,
+            table_data_rows,
         };
         self.return_inline_session(execution, retirement);
         FinishedInlineLine {
@@ -460,6 +468,7 @@ impl FormatterState {
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,
+            table_data_rows: 0,
         };
         // These exact completed tails have already executed. Transfer their
         // physical rows to the HEAD owner before its structural representation
@@ -496,9 +505,15 @@ impl FormatterState {
         builder: InlineBuilder,
         occupied: bool,
     ) -> (Vec<mant_ir::Inline>, PreservedInlineState) {
+        let completed_empty_rows = builder.completed_empty_rows();
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
-            completed_empty_rows: builder.completed_empty_rows(),
+            completed_empty_rows,
+            table_data_rows: if completed_empty_rows > 0 {
+                builder.trailing_table_data_rows()
+            } else {
+                0
+            },
         };
         let retirement = builder.native_input_retirement();
         let (output, preserved, execution) = builder.finish_preserving_execution();

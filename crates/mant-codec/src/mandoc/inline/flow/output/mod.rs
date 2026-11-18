@@ -108,6 +108,11 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn completed_empty_rows(&self) -> u16 {
         u16::try_from(trailing_completed_row_origins(&self.nodes).len()).unwrap_or(u16::MAX)
     }
+
+    pub(in crate::mandoc) fn trailing_table_data_rows(&self) -> u16 {
+        row_observation::trailing_table_data_rows(&self.nodes)
+    }
+
     /// Retain one actual native graph-row end in its current output owner.
     /// This is a boundary receipt, not an additional completed empty row.
     pub(in crate::mandoc) fn record_device_row_end(&mut self) {

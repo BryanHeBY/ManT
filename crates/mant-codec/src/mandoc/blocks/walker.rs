@@ -46,7 +46,7 @@ impl BlockLowerer<'_, '_> {
     }
 
     fn push_source_sequence(&mut self, nodes: &[Node], sequence: SourceSequence) {
-        let table_plan = TableEmbeddingPlan::new(nodes, self.context);
+        let table_plan = TableEmbeddingPlan::new(nodes);
         let mut synopsis_previous = None;
         let mut has_native_sibling = false;
         let mut previous_native_is_sy = false;

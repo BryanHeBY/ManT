@@ -5,14 +5,10 @@ use libmandoc_rs::{Node, NodeKind, TableCellKind};
 use std::rc::Rc;
 
 pub(in crate::mandoc::blocks) struct TableEmbedding<'a> {
-    pub(in crate::mandoc::blocks::tables) blocks: Vec<Option<TableTextBlock>>,
     pub(in crate::mandoc::blocks::tables) execution: Rc<TableExecution<'a>>,
 }
 
-fn table_embeddings<'a>(
-    nodes: &'a [Node],
-    context: &LoweringContext<'_>,
-) -> TableEmbeddingPlan<'a> {
+fn table_embeddings(nodes: &[Node]) -> TableEmbeddingPlan<'_> {
     let mut embeddings = (0..nodes.len()).map(|_| None).collect::<Vec<_>>();
     let mut groups: Vec<Vec<(usize, &Node)>> = Vec::new();
     for (index, node) in nodes
@@ -31,46 +27,42 @@ fn table_embeddings<'a>(
         ));
         for (index, _) in group {
             embeddings[index] = Some(TableEmbedding {
-                blocks: Vec::new(),
                 execution: Rc::clone(&execution),
             });
         }
     }
-    for (index, node) in nodes.iter().enumerate() {
-        if node.kind != NodeKind::Table {
-            continue;
-        }
-        // Whole-cell execution proof precedes optional source copying.
-        // The row-wide summary cannot disable a proven safe sibling.
-        if !node.table_cells.iter().any(|cell| {
-            cell.text_block
-                && cell.source_recovery_safe
-                && cell.kind == TableCellKind::Text
-                && !cell.vertical_continuation
-        }) {
-            continue;
-        }
-        let blocks = context.table_text_blocks(
-            node.line,
-            node.table_cells
-                .iter()
-                .filter(|cell| cell.text_block)
-                .map(|cell| {
-                    cell.source_recovery_safe
-                        && cell.kind == TableCellKind::Text
-                        && !cell.vertical_continuation
-                }),
-            node.table_escape,
-        );
-        if blocks.is_empty() {
-            continue;
-        }
-        embeddings[index].as_mut().expect("table embedding").blocks = blocks;
-    }
     TableEmbeddingPlan { embeddings }
 }
 
-/// One sibling stream owns source coordinates for embedded table text.
+/// Copy source evidence only when the row executes. An earlier nested
+/// HEAD must use the page allowance before a later sibling table.
+pub(in crate::mandoc::blocks::tables) fn recover_text_blocks(
+    node: &Node,
+    context: &LoweringContext<'_>,
+) -> Vec<Option<TableTextBlock>> {
+    let eligible = |cell: &libmandoc_rs::TableCell| {
+        cell.source_recovery_safe && cell.kind == TableCellKind::Text && !cell.vertical_continuation
+    };
+    // Whole-cell execution proof precedes optional source copying.
+    // The row-wide summary cannot disable a proven safe sibling.
+    if !node
+        .table_cells
+        .iter()
+        .any(|cell| cell.text_block && eligible(cell))
+    {
+        return Vec::new();
+    }
+    context.table_text_blocks(
+        node.line,
+        node.table_cells
+            .iter()
+            .filter(|cell| cell.text_block)
+            .map(eligible),
+        node.table_escape,
+    )
+}
+
+/// One sibling stream owns its table width calculations and execution budget.
 ///
 /// Native macro expansion can reuse the source line of a table cell while
 /// emitting ordinary AST siblings after the table. Those siblings remain in
@@ -81,8 +73,8 @@ pub(in crate::mandoc::blocks) struct TableEmbeddingPlan<'a> {
     embeddings: Vec<Option<TableEmbedding<'a>>>,
 }
 impl<'a> TableEmbeddingPlan<'a> {
-    pub(in crate::mandoc::blocks) fn new(nodes: &'a [Node], context: &LoweringContext<'_>) -> Self {
-        table_embeddings(nodes, context)
+    pub(in crate::mandoc::blocks) fn new(nodes: &'a [Node]) -> Self {
+        table_embeddings(nodes)
     }
     pub(in crate::mandoc::blocks) fn embedding(&self, index: usize) -> Option<&TableEmbedding<'a>> {
         self.embeddings[index].as_ref()

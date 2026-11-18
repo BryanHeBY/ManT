@@ -7,6 +7,7 @@ use libmandoc_rs::Node;
 use mant_ir::Inline;
 
 mod embeddings;
+pub(super) use embeddings::recover_text_blocks;
 pub(in crate::mandoc::blocks) use embeddings::{TableEmbedding, TableEmbeddingPlan};
 
 #[cfg(test)]
@@ -105,7 +106,8 @@ impl CellCandidate {
             return ownership_text_agrees(context, source_operands, native) == Some(true);
         }
         if !context
-            .table_recovery_budget
+            .table_recovery
+            .budget
             .borrow_mut()
             .charge_input(self.output_text_bytes)
         {
@@ -158,7 +160,8 @@ pub(super) fn lower_table_cell(
 ) -> Option<Vec<Inline>> {
     if let Some(text_block) = text_block.filter(|_| cell.source_recovery_safe)
         && context
-            .table_recovery_budget
+            .table_recovery
+            .budget
             .borrow_mut()
             .begin_candidate(text_block.source.len())
     {
@@ -168,7 +171,8 @@ pub(super) fn lower_table_cell(
         let diagnostic_start = context.diagnostics.borrow().len();
         let source = LoweringContext::table_execution_source(&text_block.source, text_block.escape);
         let source_operands = context
-            .table_recovery_budget
+            .table_recovery
+            .budget
             .borrow_mut()
             .charge_input(source.len())
             .then(|| table_source_operands(context, &source));
@@ -193,7 +197,7 @@ pub(super) fn lower_table_cell(
                 context.default_name,
                 node.flags.synopsis_pretty,
                 initial_state.clone(),
-                Some(&context.table_recovery_budget),
+                Some(&context.table_recovery.budget),
             )
             && recovered.complete
         {
@@ -226,7 +230,8 @@ pub(super) fn lower_table_cell(
         if cell.text.as_deref().is_none_or(str::is_empty)
             && let Some(source_operands) = source_operands.as_deref()
             && context
-                .table_recovery_budget
+                .table_recovery
+                .budget
                 .borrow_mut()
                 .begin_candidate(source.len())
         {
@@ -240,7 +245,7 @@ pub(super) fn lower_table_cell(
             let candidate_diagnostics =
                 context.diagnostics.borrow_mut().split_off(diagnostic_start);
             let output_text_bytes = recovered.as_deref().and_then(|inlines| {
-                let mut budget = context.table_recovery_budget.borrow_mut();
+                let mut budget = context.table_recovery.budget.borrow_mut();
                 if let Some(annotations) = &candidate_state.execution.zero_advance.annotations {
                     budget.charge_output_with_annotations(inlines, annotations)
                 } else {
@@ -271,14 +276,12 @@ pub(super) fn lower_table_cell(
         // Rejected candidates ran only on copies; the live formatter and its
         // indexed BODY-post record remain exactly as they were at entry.
     }
-    if cell.text.is_some() {
-        return Some(lower_table_cell_text(
-            cell.decoder_text().unwrap_or_default(),
-            context,
-            formatter,
-        ));
-    }
-    None
+    cell.text.as_ref()?;
+    Some(lower_table_cell_text(
+        cell.decoder_text().unwrap_or_default(),
+        context,
+        formatter,
+    ))
 }
 
 fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
@@ -297,7 +300,8 @@ fn ownership_text_agrees(
     // Both sides are visited for each comparison. Repeated empty foreign
     // siblings must not make a long whitespace prefix free to rescan.
     context
-        .table_recovery_budget
+        .table_recovery
+        .budget
         .borrow_mut()
         .charge_input(reconstructed.len().saturating_add(parsed.len()))
         .then(|| table_text_agrees(reconstructed, parsed))
@@ -356,7 +360,8 @@ fn lower_raw_table_text_block(
         }
         let quoted = line.starts_with(['.', '\'']);
         if !context
-            .table_recovery_budget
+            .table_recovery
+            .budget
             .borrow_mut()
             .charge_input(line.len().saturating_add(2 * usize::from(quoted)))
         {
@@ -373,7 +378,8 @@ fn lower_raw_table_text_block(
         .fold(0usize, |bytes, operand| bytes.saturating_add(operand.len()))
         .saturating_add(operands.len().saturating_sub(1));
     if !context
-        .table_recovery_budget
+        .table_recovery
+        .budget
         .borrow_mut()
         .charge_input(joined_bytes)
     {

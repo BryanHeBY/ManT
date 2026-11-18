@@ -50,6 +50,165 @@ impl<'a> Visit<'a> for Output {
 }
 
 #[test]
+fn inline_and_block_tables_spend_one_recovery_budget_in_source_order() {
+    const HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n";
+    const FOOTER: &str = ".Sh NEXT\n.Lk https://example.test FINAL\n";
+    let tbl = |name| format!(".TS\nl.\nT{{\n.Mt {name}@example.test\nT}}\n.TE\n");
+    let wrap = |table: &str, place| match place {
+        "head" => format!(".Bl -tag -width Ds\n.It Xo\n{table}.Xc\nOWNER\n.El\n"),
+        "body" => format!(".Bl -tag -width Ds\n.It TAG\n{table}OWNER\n.El\n"),
+        "plain" => format!("{table}OWNER\n"),
+        _ => unreachable!("closed source fixture positions"),
+    };
+    let first = tbl("initial");
+    let second = tbl("following");
+    let mut sources = Vec::new();
+    for (a, b) in [
+        ("head", "body"),
+        ("body", "head"),
+        ("head", "head"),
+        ("body", "body"),
+        // The ordinary table is a sibling of the enclosing Bl. Planning
+        // every sibling before dispatch would steal the earlier HEAD's scan.
+        ("head", "plain"),
+        ("plain", "head"),
+        ("plain", "plain"),
+    ] {
+        sources.push(format!(
+            "{HEADER}{}{}{FOOTER}",
+            wrap(&first, a),
+            wrap(&second, b)
+        ));
+    }
+    sources.push(format!("{HEADER}{first}{second}OWNER\n{FOOTER}"));
+    for source in sources {
+        // Each complete source was executed by pristine CVS before this
+        // assertion. tbl_cdata outputs the original email operand even
+        // when optional recovery is rejected; only ManT assigns the link.
+        let report = Parser::default()
+            .parse_bytes("budget-order.1", source.as_bytes())
+            .unwrap();
+        let first_scan = "T{\n.Mt initial@example.test\nT}\n".len();
+        for (limits, accepted, exhaustion) in [
+            (
+                Limits {
+                    attempts: 1,
+                    ..Limits::default()
+                },
+                1,
+                Some(Exhaustion::Attempts),
+            ),
+            (
+                Limits {
+                    attempts: 2,
+                    ..Limits::default()
+                },
+                2,
+                None,
+            ),
+            (
+                Limits {
+                    attempts: 3,
+                    ..Limits::default()
+                },
+                2,
+                None,
+            ),
+            (
+                Limits {
+                    scan: first_scan,
+                    ..Limits::default()
+                },
+                1,
+                Some(Exhaustion::Scan),
+            ),
+        ] {
+            assert_page_recovery_budget(&source, &report.document, limits, accepted, exhaustion);
+        }
+    }
+}
+
+fn assert_page_recovery_budget(
+    source: &str,
+    document: &libmandoc_rs::Document,
+    limits: Limits,
+    accepted: usize,
+    exhaustion: Option<Exhaustion>,
+) {
+    let mut context = LoweringContext::new(Some("probe"), Some(source));
+    context.macro_set = document.macro_set;
+    context.scope_posts.index_structural_payload(&document.root);
+    *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
+    let (mut blocks, mut sections) =
+        crate::mandoc::blocks::lower_document_structure(&document.root, &mut context);
+    context.annotations.finish(
+        &mut blocks,
+        &mut sections,
+        &mut context.native_heads.borrow_mut(),
+        |_| false,
+    );
+    let mut output = Output::default();
+    let mut text = Contents::default();
+    for section in &sections {
+        output.visit_section(section);
+        text.visit_section(section);
+    }
+    let mut expected = ["initial@example.test", "following@example.test"][..accepted]
+        .iter()
+        .map(|address| {
+            (
+                LinkTarget::Email {
+                    address: (*address).into(),
+                },
+                (*address).into(),
+            )
+        })
+        .collect::<Vec<_>>();
+    expected.push((
+        LinkTarget::External {
+            uri: "https://example.test".into(),
+        },
+        "FINAL".into(),
+    ));
+    assert_eq!(output.links, expected, "{source}: {limits:?}");
+    for word in ["initial@example.test", "following@example.test", "FINAL"] {
+        assert_eq!(text.0.matches(word).count(), 1, "{word}: {source}");
+    }
+    assert_eq!(
+        context.table_recovery.budget.borrow().exhaustion(),
+        exhaustion,
+        "{source}: {limits:?}"
+    );
+    let diagnostics = context.take_diagnostics();
+    let budget_diagnostics = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_deref() == Some("manual.table-recovery-budget"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        budget_diagnostics.len(),
+        usize::from(exhaustion.is_some()),
+        "{source}"
+    );
+    assert!(
+        budget_diagnostics
+            .iter()
+            .all(|finding| finding.impact == mant_ir::DiagnosticImpact::None)
+    );
+}
+
+#[derive(Default)]
+struct Contents(String);
+
+impl<'a> Visit<'a> for Contents {
+    fn visit_inline(&mut self, node: &'a Inline) {
+        if let Inline::Text { value } | Inline::Code { value } = node {
+            self.0.push_str(value);
+        }
+        mant_ir::visit::walk_inline(self, node);
+    }
+}
+
+#[test]
 fn rejected_candidates_cannot_reassign_committed_members_or_later_receivers() {
     // All four complete sources ran pristine ASCII/UTF8/HTML/tree/lint first.
     // tbl_data.c::tbl_cdata provides the base operand stream on refusal;
@@ -69,7 +228,7 @@ fn rejected_candidates_cannot_reassign_committed_members_or_later_receivers() {
                 .scope_posts
                 .index_structural_payload(&report.document.root);
             let limits = limits(variant);
-            *context.table_recovery_budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
+            *context.table_recovery.budget.borrow_mut() = TableRecoveryBudget::with_limits(limits);
             let (mut blocks, mut sections) = crate::mandoc::blocks::lower_document_structure(
                 &report.document.root,
                 &mut context,
@@ -82,14 +241,14 @@ fn rejected_candidates_cannot_reassign_committed_members_or_later_receivers() {
                 _ => panic!("unregistered exhaustion"),
             };
             assert_eq!(
-                context.table_recovery_budget.borrow().exhaustion(),
+                context.table_recovery.budget.borrow().exhaustion(),
                 expected,
                 "{} {variant}",
                 case["id"]
             );
             if let Some(count) = variant["expected_attempts"].as_u64() {
                 assert_eq!(
-                    context.table_recovery_budget.borrow().attempts(),
+                    context.table_recovery.budget.borrow().attempts(),
                     usize::try_from(count).unwrap()
                 );
             }

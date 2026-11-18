@@ -18,17 +18,25 @@ pub(in crate::mandoc) struct InlineTableSequence<'a> {
     plan: TableEmbeddingPlan<'a>,
 }
 
+pub(in crate::mandoc) struct InlineTableRow {
+    pub(in crate::mandoc) content: Vec<Inline>,
+    pub(in crate::mandoc) data: bool,
+}
+
 impl<'a> InlineTableSequence<'a> {
     pub(in crate::mandoc) fn new(
         siblings: &'a [Node],
         execution: &crate::mandoc::inline::InlineExecutionState,
     ) -> Self {
-        let mut context = LoweringContext::new(None, None);
+        let mut context = LoweringContext::with_table_recovery(
+            None,
+            execution.table_recovery.clone().unwrap_or_default(),
+        );
         context.macro_set = execution.macro_set;
         if let Some(annotations) = &execution.zero_advance.annotations {
             context.annotations = annotations.clone();
         }
-        let plan = TableEmbeddingPlan::new(siblings, &context);
+        let plan = TableEmbeddingPlan::new(siblings);
         Self { context, plan }
     }
 
@@ -37,10 +45,8 @@ impl<'a> InlineTableSequence<'a> {
         node: &Node,
         index: usize,
         formatter: &mut crate::mandoc::formatter::FormatterState,
-    ) -> Vec<Inline> {
-        let Some(kind) = table_row_kind(node) else {
-            return Vec::new();
-        };
+    ) -> Option<InlineTableRow> {
+        let kind = table_row_kind(node)?;
         let cells = cells::lower_cells(
             node,
             &kind,
@@ -66,7 +72,10 @@ impl<'a> InlineTableSequence<'a> {
                 }
             }
         }
-        output
+        Some(InlineTableRow {
+            content: output,
+            data: kind == mant_ir::TableRowKind::Data,
+        })
     }
 }
 

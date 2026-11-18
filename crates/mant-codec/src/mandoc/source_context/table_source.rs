@@ -1,6 +1,30 @@
 //! Optional source evidence for native tbl cells.
 
 use super::LoweringContext;
+use crate::mandoc::{SourceLineIndex, table_recovery_budget::TableRecoveryBudget};
+use std::{cell::RefCell, collections::HashMap};
+
+/// Page-owned tbl evidence shared by block and inline output owners. The
+/// allowance survives candidate rollback and detached formatter sessions.
+#[derive(Debug, Default)]
+pub(in crate::mandoc) struct TableRecoverySource {
+    source_lines: Option<SourceLineIndex>,
+    native_requests: RefCell<HashMap<String, bool>>,
+    pub(in crate::mandoc) budget: RefCell<TableRecoveryBudget>,
+}
+
+impl TableRecoverySource {
+    pub(super) fn new(source: Option<&str>) -> Self {
+        Self {
+            // The scanner needs an authored T{ delimiter. Ordinary
+            // pages need neither a source copy nor a line index.
+            source_lines: source
+                .filter(|source| source.contains("T{"))
+                .map(SourceLineIndex::new),
+            ..Self::default()
+        }
+    }
+}
 
 #[derive(Debug)]
 pub(in crate::mandoc) struct TableTextBlock {
@@ -86,11 +110,12 @@ impl LoweringContext<'_> {
     /// man/mdoc macros. Native roff requests have already been handled by the
     /// parser and must not leak their operands into recovered cell text.
     pub(in crate::mandoc) fn is_native_table_request(&self, name: &str) -> bool {
-        if let Some(native) = self.native_table_requests.borrow().get(name) {
+        if let Some(native) = self.table_recovery.native_requests.borrow().get(name) {
             return *native;
         }
         let native = libmandoc_rs::is_native_roff_request(name);
-        self.native_table_requests
+        self.table_recovery
+            .native_requests
             .borrow_mut()
             .insert(name.to_owned(), native);
         native
@@ -109,7 +134,7 @@ impl LoweringContext<'_> {
         if eligible_cells.peek().is_none() {
             return Vec::new();
         }
-        let Some(source_lines) = self.source_lines.as_ref() else {
+        let Some(source_lines) = self.table_recovery.source_lines.as_ref() else {
             return Vec::new();
         };
         let mut blocks = Vec::new();
@@ -121,7 +146,8 @@ impl LoweringContext<'_> {
             // Only complete blocks survive an allowance refusal; native
             // finalized cells never depend on this optional source scan.
             if !self
-                .table_recovery_budget
+                .table_recovery
+                .budget
                 .borrow_mut()
                 .charge_scan(line.len().saturating_add(1))
             {
@@ -157,11 +183,11 @@ impl LoweringContext<'_> {
                     if source.len().saturating_add(copied)
                         > crate::mandoc::table_recovery_budget::MAX_FRAGMENT_BYTES
                     {
-                        self.table_recovery_budget.borrow_mut().reject_fragment();
+                        self.table_recovery.budget.borrow_mut().reject_fragment();
                         *content = None;
                         continue;
                     }
-                    if !self.table_recovery_budget.borrow_mut().charge_input(copied) {
+                    if !self.table_recovery.budget.borrow_mut().charge_input(copied) {
                         break;
                     }
                     if !source.is_empty() {

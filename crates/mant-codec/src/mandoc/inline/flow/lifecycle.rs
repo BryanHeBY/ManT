@@ -57,6 +57,7 @@ impl InlineExecutionState {
             native_word_writes: None,
             table_buffer_written: None,
             table_line_needs_width: false,
+            table_recovery: None,
             table_page_margin: 78 * 24,
             table_previous_margin: 78 * 24,
             native_word_boundary: None,

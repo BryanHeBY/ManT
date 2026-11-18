@@ -222,20 +222,35 @@ pub(super) fn carry_completed_head_rows(
     terms: &[Vec<Inline>],
     closed_head_row: bool,
     completed_empty_rows: u16,
+    table_data_rows: u16,
     description: &mut Vec<Block>,
 ) {
-    let rows = if completed_empty_rows > 0 {
-        completed_empty_rows
-    } else {
-        u16::from(closed_head_row && invisible_closed_head_row(terms))
-    };
-    if rows > 0 {
-        // term_newln() flushed a HEAD cell, but an invisible term has no IR
-        // renderer. Transfer its completed physical row to the BODY owner.
+    if completed_empty_rows > 0 {
         description.insert(
             0,
             Block::VerticalSpace {
-                lines: rows,
+                lines: completed_empty_rows,
+                source: source_span(node),
+            },
+        );
+    }
+    let hard_rows = if completed_empty_rows > 0 {
+        // The wholly empty HEAD's accepted delimiters were moved above.
+        // term_tbl's endlines are independent of term_vspace's layout gaps.
+        table_data_rows
+    } else {
+        u16::from(closed_head_row && invisible_closed_head_row(terms))
+    };
+    if hard_rows > 0 {
+        // A physical row ended even though the HEAD contained no printable
+        // cells. Its carried delimiter is a hard line, not a spacing request
+        // at the next block boundary (tbl_term.c::term_tbl, term.c::term_vspace).
+        description.insert(
+            0,
+            Block::Paragraph {
+                children: vec![Inline::line_break(); usize::from(hard_rows)],
+                inline_layout: mant_ir::InlineLayout::default(),
+                layout: mant_ir::LayoutHint::default(),
                 source: source_span(node),
             },
         );

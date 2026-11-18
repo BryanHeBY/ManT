@@ -28,11 +28,7 @@ mod equations;
 use ast::{first_part_children, part_child_groups, source_span};
 mod targets;
 
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    path::Path,
-};
+use std::{cell::RefCell, collections::HashSet, path::Path};
 
 use libmandoc_rs::{
     Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseError,

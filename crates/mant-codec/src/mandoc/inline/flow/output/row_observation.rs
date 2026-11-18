@@ -6,11 +6,13 @@ const COMPLETED_ROW: &str = "\0mant:output-scope:completed-row";
 const HARD_ROW: &str = "\0mant:output-scope:hard-row";
 const LITERAL_ROW: &str = "\0mant:output-scope:literal-row";
 const DEVICE_ROW_END: &str = "\0mant:output-scope:device-row-end";
+const TABLE_ROW_END: &str = "\0mant:output-scope:table-row-end";
 
 #[derive(Clone, Copy)]
 pub(super) enum RowReceipt {
     Completed(CompletedRowOrigin),
     DeviceEnd,
+    TableDataEnd,
 }
 
 impl RowReceipt {
@@ -20,6 +22,7 @@ impl RowReceipt {
             Self::Completed(CompletedRowOrigin::HardLine) => HARD_ROW,
             Self::Completed(CompletedRowOrigin::LiteralText) => LITERAL_ROW,
             Self::DeviceEnd => DEVICE_ROW_END,
+            Self::TableDataEnd => TABLE_ROW_END,
         })
     }
 
@@ -32,6 +35,7 @@ impl RowReceipt {
             HARD_ROW => Self::Completed(CompletedRowOrigin::HardLine),
             LITERAL_ROW => Self::Completed(CompletedRowOrigin::LiteralText),
             DEVICE_ROW_END => Self::DeviceEnd,
+            TABLE_ROW_END => Self::TableDataEnd,
             _ => return None,
         })
     }
@@ -64,7 +68,9 @@ pub(in crate::mandoc::inline::flow) fn find_in_row_tail<T>(
 /// occupied formatter word, unlike an empty wrapper or an anchor.
 pub(super) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> OutputRowEnd {
     find_in_row_tail(nodes, &mut |node| match RowReceipt::of(node) {
-        Some(RowReceipt::DeviceEnd) => Some(OutputRowEnd::GeneratedClose),
+        Some(RowReceipt::DeviceEnd | RowReceipt::TableDataEnd) => {
+            Some(OutputRowEnd::GeneratedClose)
+        }
         Some(RowReceipt::Completed(CompletedRowOrigin::LiteralText)) => {
             Some(OutputRowEnd::LiteralClose)
         }
@@ -108,7 +114,12 @@ pub(in crate::mandoc) fn take_leading_column_rows(
                 .iter()
                 .take_while(|node| matches!(node, Inline::Anchor { .. })),
         )
-        .any(|node| matches!(RowReceipt::of(node), Some(RowReceipt::DeviceEnd)));
+        .any(|node| {
+            matches!(
+                RowReceipt::of(node),
+                Some(RowReceipt::DeviceEnd | RowReceipt::TableDataEnd)
+            )
+        });
     let closes_previous_field = has_device_end
         && (has_later_completed_rows || mant_ir::geometry::has_literal_rows(following));
 
@@ -157,6 +168,27 @@ pub(in crate::mandoc) fn take_leading_column_rows(
 /// a literal drain keeps that receipt in order with other completed rows.
 pub(super) fn trailing_paragraph_row_origins(nodes: &[Inline]) -> Vec<CompletedRowOrigin> {
     trailing_row_origins(nodes, RowProjection::Paragraph)
+}
+
+/// Empty data rows remain distinct from completed `term_vspace()` requests.
+pub(super) fn trailing_table_data_rows(nodes: &[Inline]) -> u16 {
+    let mut rows = 0_u16;
+    let _ = find_in_row_tail(nodes, &mut |node| {
+        if matches!(RowReceipt::of(node), Some(RowReceipt::TableDataEnd)) {
+            rows = rows.saturating_add(1);
+        }
+        match node {
+            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. }
+                if value
+                    .chars()
+                    .any(|character| !matches!(character, ' ' | '\t' | '\r' | '\n')) =>
+            {
+                Some(())
+            }
+            _ => None,
+        }
+    });
+    rows
 }
 
 pub(in crate::mandoc) fn trailing_completed_row_origins(

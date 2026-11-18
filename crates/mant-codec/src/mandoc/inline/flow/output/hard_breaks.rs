@@ -330,9 +330,17 @@ impl InlineBuilder {
         }
     }
 
-    pub(in crate::mandoc::inline::flow) fn commit_table_row_projection(&mut self) {
-        self.finish_hard_break_projection(true);
-        self.record_device_row_end();
+    pub(in crate::mandoc::inline::flow) fn commit_table_row_projection(
+        &mut self,
+        project_delimiter: bool,
+        native_data: bool,
+    ) {
+        self.finish_hard_break_projection(project_delimiter);
+        if native_data {
+            self.nodes.push(super::RowReceipt::TableDataEnd.anchor());
+        } else if project_delimiter {
+            self.record_device_row_end();
+        }
         self.tighten_next_boundary();
     }
 

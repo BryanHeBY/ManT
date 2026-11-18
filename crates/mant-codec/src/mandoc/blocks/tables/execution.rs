@@ -277,10 +277,7 @@ mod tests {
         let row = first(&report.document.root).unwrap();
         let execution = std::rc::Rc::new(TableExecution::new(vec![row]));
         execution.column_work_left.set(0);
-        let embedding = super::super::recovery::TableEmbedding {
-            blocks: Vec::new(),
-            execution,
-        };
+        let embedding = super::super::recovery::TableEmbedding { execution };
         let context = crate::mandoc::LoweringContext::new(None, Some(source));
         let mut formatter = FormatterState::default();
         let mut blocks = Vec::new();

@@ -211,7 +211,7 @@ impl HangNativeRow {
     /// once. `term_ascii.c` sets defindent=5; `mdoc_term.c::termp_sh_pre()` adds
     /// it to offset. On a fresh row that offset covers minbl. After any
     /// actual graph prints, minbl is independent spacing on the same row.
-    pub(super) fn padding_units(&self, offset_units: usize) -> usize {
+    pub(in crate::mandoc::inline::flow) fn padding_units(&self, offset_units: usize) -> usize {
         const PAGE_ORIGIN_UNITS: usize = 5 * 24;
         let unprinted_origin = if self.native_row_occupied() {
             0

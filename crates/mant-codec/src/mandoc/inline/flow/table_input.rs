@@ -12,17 +12,46 @@ impl InlineBuilder {
     ) {
         self.begin_executed_node(node);
         let geometry = self.definition_geometry_checkpoint(node);
-        // mdoc_term.c::print_mdoc_node flushes the preceding word before the
-        // first span. tbl_term.c accepts the cell contents and ends its device
-        // row separately. Later HEAD field passes cannot reject that prefix.
+        // print_mdoc_node() invokes term_newln() at table entry. HANG and
+        // fitting NOBREAK fields can print their prefix without ending the
+        // device row. The table's endline is a separate operation.
         if node.flags.table_start {
-            self.hard_break();
+            self.execute_native_newline_with_tail();
         }
+        let open = self.execution.has_open_native_device_row();
+        let has_gap = self
+            .execution
+            .definition
+            .as_ref()
+            .is_some_and(|field| field.hang_row.padding_units(field.field_offset_units) >= 24);
+        let needs_gap = open
+            && has_gap
+            && self
+                .execution
+                .last_visible_character
+                .is_some_and(|c| !c.is_whitespace());
         let mut formatter = crate::mandoc::formatter::FormatterState::default();
         formatter.execution = std::mem::take(&mut self.execution);
         let row = table.lower_row(node, index, &mut formatter);
         self.execution = formatter.execution;
-        if !row.is_empty() && self.head_operand_capture.is_some() {
+        if let Some(row) = row {
+            self.project_table_row(row, open, needs_gap);
+        }
+        self.finish_executed_node(node);
+        self.restore_definition_geometry(geometry);
+    }
+
+    fn project_table_row(
+        &mut self,
+        row: crate::mandoc::blocks::InlineTableRow,
+        open: bool,
+        needs_gap: bool,
+    ) {
+        let content = row.content;
+        if needs_gap && !content.is_empty() {
+            self.append_projected(vec![Inline::Text { value: " ".into() }]);
+        }
+        if !content.is_empty() && self.head_operand_capture.is_some() {
             // The table cells belong to the term's readable content only.
             self.with_native_operand_role(NativeOperandRole::Description, |builder| {
                 builder.begin_native_word_owner();
@@ -31,12 +60,10 @@ impl InlineBuilder {
                 self.nodes.push(Inline::anchor(marker));
             }
         }
-        if !row.is_empty() {
-            self.append_projected(row);
-            self.commit_table_row_projection();
-        }
-        self.finish_executed_node(node);
-        self.restore_definition_geometry(geometry);
+        self.append_projected(content);
+        // The phrasing projection omits grid geometry. A real data span
+        // still owns its endline even when its accepted cells are empty.
+        self.commit_table_row_projection(row.data || open, row.data);
     }
 }
 

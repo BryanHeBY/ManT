@@ -227,6 +227,8 @@ pub(in crate::mandoc) struct InlineExecutionState {
     /// survives projection drains, but only a committed recovery publishes it.
     pub(in crate::mandoc) table_buffer_written: Option<bool>,
     pub(in crate::mandoc) table_line_needs_width: bool,
+    pub(in crate::mandoc) table_recovery:
+        Option<Rc<crate::mandoc::source_context::TableRecoverySource>>,
     /// Source page bounds used by tbl width execution, never viewport layout.
     table_page_margin: usize,
     table_previous_margin: usize,
