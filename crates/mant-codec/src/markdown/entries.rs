@@ -31,13 +31,13 @@ pub(crate) fn export_attached_policy(items: &[ListItem]) -> Option<&'static str>
 }
 use super::bindings::{OriginalItemId, OriginalListId};
 use names::is_option_code;
-use signature::{EntrySignature, entry_signature};
+use signature::{EntrySignature, entry_signature, entry_term_text};
 
 use super::directives::{
     AttachedValuePolicy, DomainDeclaration, DomainDeclarationState, SemanticDeclarations,
     domain_diagnostic, semantic_diagnostic,
 };
-use mant_ir::{Block, Diagnostic, EntryKind, Inline, ListItem, ListKind, SourceSpan, ValueDomain};
+use mant_ir::{Block, Diagnostic, EntryKind, ListItem, ListKind, SourceSpan, ValueDomain};
 
 /// Attach facts to each declared owner without consuming its head or delimiter.
 pub(super) fn normalize_entry_lists(
@@ -251,15 +251,11 @@ fn normalize_nested_blocks(
 fn resembles_rejected_option_list(items: &[ListItem]) -> bool {
     let option_like = items
         .iter()
-        .filter(|item| {
-            matches!(
-                item.blocks.first(),
-                Some(Block::Paragraph { children, .. })
-                    if matches!(children.first(),
-                        Some(Inline::Code { value } | Inline::Equation { value, .. })
-                            if is_option_code(value))
-            )
+        .filter_map(|item| match item.blocks.first() {
+            Some(Block::Paragraph { children, .. }) => children.first().and_then(entry_term_text),
+            _ => None,
         })
+        .filter(|value| is_option_code(value))
         .count();
     option_like > 0 && option_like.saturating_add(1) >= items.len()
 }

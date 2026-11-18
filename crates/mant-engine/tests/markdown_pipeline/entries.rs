@@ -2,6 +2,62 @@
 use super::*;
 
 #[test]
+fn inferred_option_list_coverage_uses_the_leading_term_grammar() {
+    for (target, eligible) in [
+        (None, true),
+        (Some("man:test(1)"), true),
+        (Some("guide.md"), true),
+        (Some("https://example.org"), false),
+    ] {
+        let term = |name| match target {
+            Some(target) => format!("[`{name}`]({target})"),
+            None => format!("`{name}`"),
+        };
+        let alpha = term("--alpha");
+        let beta = term("--beta");
+        for (prefix, infer) in [("", eligible), ("Use ", false), ("1000000000. ", false)] {
+            for complete in [false, true] {
+                let delimiter = if complete { ": " } else { " " };
+                let source = format!(
+                    "# Test\n\n- {prefix}{alpha}: First.\n- {prefix}{beta}{delimiter}Second.\n"
+                );
+                let document = parse_document(&source, Some("probe.md".to_owned()));
+                let has_diagnostic = document.diagnostics.iter().any(|diagnostic| {
+                    diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
+                });
+                assert_eq!(has_diagnostic, infer && !complete, "{source}");
+                let content = ResolvedContent {
+                    address: None,
+                    label: "probe.md".to_owned(),
+                    document: Some(document),
+                    tldr: None,
+                };
+                for entry in ["--alpha", "--beta"] {
+                    let result = mant_query::explain_query(
+                        &content,
+                        &mant_protocol::ExplanationQuery {
+                            entry: entry.to_owned(),
+                            options: mant_protocol::ExplanationOptions::default(),
+                        },
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        result.counts.direct_entry.total,
+                        u32::from(infer && complete),
+                        "{entry}: {source}"
+                    );
+                    assert_eq!(
+                        result.semantics_complete,
+                        !infer || complete,
+                        "{entry}: {source}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn annotates_explicit_option_lists_without_rewriting_their_heads() {
     let document = parse_document(
         "\

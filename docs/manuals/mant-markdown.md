@@ -243,7 +243,11 @@ ManT attaches entry facts to make options, markers, operands, commands, configur
 - `--color WHEN`: Select color output.
 ```
 
-The directive must be the only construct on its line and immediately precede a list. `role` and `case` are required; `attached` is optional. Each explicitly declared item is validated independently: an invalid head remains ordinary visible content and produces a diagnostic, while valid siblings retain their entries. Without a directive, conservative option recognition still requires a complete option-shaped bullet list; ordered lists are never inferred:
+The directive must be the only construct on its line and immediately precede a list. `role` and `case` are required, and `attached` is optional. Each explicitly declared item is validated independently. An invalid head remains ordinary visible content and produces a diagnostic, while valid siblings retain their entries. Without a directive, option recognition requires a complete option-shaped bullet list.
+
+A leading code term can be plain or the sole label of a manual or document
+link. The same leading-term rule applies when reporting incomplete option
+lists. External link labels and ordinary mentions remain prose.
 
 | Field | Values | Meaning |
 | --- | --- | --- |
