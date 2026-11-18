@@ -664,6 +664,11 @@ In an `Ev` declaration, the executed operand determines the name boundary,
 including literal parentheses in a name such as `BASH_FUNC_home()`. An
 assignment retains its value and any internal comma or pipe in the form.
 A separate executed declaration can introduce another name after that value.
+An independently emphasized description or link label can follow a complete
+name across a visible word boundary. The description and the link's accepted
+address retain their own punctuation, including when the whole reference
+appears inside a proved annotation. A display join leaves the complete form
+available for inspection without publishing a name made from attached text.
 
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand

@@ -3,6 +3,7 @@ use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_inline_nodes, append_isolated_inline_node,
     first_part_children, inline_children,
 };
+use crate::definitions::NativeOperandRole;
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
 pub(in crate::mandoc) mod identity;
@@ -40,31 +41,28 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         .map_or(1, |index| index + 1)
         .max(1);
     let label = &children[1..label_end];
-    if label.is_empty() {
-        append_link_target_or_text(builder, first, &address, default_name);
-    } else {
-        // A descriptive Lk label replaces the typed anchor, but the label,
-        // generated colon, and URI all execute in the same output stream as
-        // the surrounding source siblings. CVS `termp_lk_pre()` presents the
-        // label (underlined), a plain generated `:`, and the URI word,
-        // regardless of source operand order.
-        presentation::append_owned_part(
-            builder,
-            owner,
-            presentation::Part::Description,
-            &address,
-            None,
-            |builder| {
-                builder.with_font_scope(Font::Emphasis, |builder| {
-                    append_inline_nodes(builder, label, default_name);
-                });
-            },
-        );
-        // CVS termp_lk_pre() always executes this suffix for a syntactically
-        // present description. The native receipt accepts or rejects its
-        // owned text; all projections retain that accepted result.
-        append_terminal_link_suffix(builder, owner, first, &address, default_name);
-    }
+    builder.with_native_operand_role(NativeOperandRole::ReferenceText(None), |builder| {
+        if label.is_empty() {
+            append_link_target_or_text(builder, first, &address, default_name);
+        } else {
+            // termp_lk_pre() executes the label, colon and URI before
+            // authored trailing delimiters. Treat their punctuation as
+            // part of the reference when reading an enclosing declaration.
+            presentation::append_owned_part(
+                builder,
+                owner,
+                presentation::Part::Description,
+                &address,
+                None,
+                |builder| {
+                    builder.with_font_scope(Font::Emphasis, |builder| {
+                        append_inline_nodes(builder, label, default_name);
+                    });
+                },
+            );
+            append_terminal_link_suffix(builder, owner, first, &address, default_name);
+        }
+    });
     append_inline_nodes(builder, &children[label_end..], default_name);
 }
 
@@ -120,18 +118,18 @@ pub(super) fn append_mail_addresses(
             append_isolated_inline_node(builder, child, default_name);
             continue;
         }
-        let address = link_identity_text(child.text.as_deref().unwrap_or_default());
-        if address.is_empty() {
-            // Pure href decoding can erase a pending zero-advance glyph,
-            // but the visible operand still runs as ordinary Mt text.
-            // `termp_under_pre()` visits every child; `encode1()` writes
-            // the glyph before BACKBEFORE consumes the next word separator.
-            append_isolated_inline_node(builder, child, default_name);
-        } else {
-            append_external_link(builder, &address, true, |builder| {
+        builder.with_native_operand_role(NativeOperandRole::ReferenceText(None), |builder| {
+            let address = link_identity_text(child.text.as_deref().unwrap_or_default());
+            if address.is_empty() {
+                // Pure href decoding can erase a pending zero-advance glyph.
+                // termp_under_pre() still executes the visible operand.
                 append_isolated_inline_node(builder, child, default_name);
-            });
-        }
+            } else {
+                append_external_link(builder, &address, true, |builder| {
+                    append_isolated_inline_node(builder, child, default_name);
+                });
+            }
+        });
     }
     builder.font.pop_scope(saved);
 }

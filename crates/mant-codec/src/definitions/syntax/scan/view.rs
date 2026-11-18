@@ -12,8 +12,8 @@ struct Run {
     style: Style,
 }
 
-pub(super) struct HeadView<'a> {
-    pub(super) text: String,
+pub(in crate::definitions::syntax) struct HeadView<'a> {
+    pub(in crate::definitions::syntax) text: String,
     runs: Vec<Run>,
     operands: &'a [NativeOperand],
     literal_starts: Vec<usize>,
@@ -30,7 +30,10 @@ impl<'a> HeadView<'a> {
         }
     }
 
-    pub(super) fn new(nodes: &[Inline], operands: &'a [NativeOperand]) -> Self {
+    pub(in crate::definitions::syntax) fn new(
+        nodes: &[Inline],
+        operands: &'a [NativeOperand],
+    ) -> Self {
         let mut view = Self {
             text: String::new(),
             runs: Vec::new(),
@@ -102,6 +105,26 @@ impl<'a> HeadView<'a> {
         self.runs
             .get(index)
             .map_or(Style::default(), |run| run.style)
+    }
+
+    #[cfg(feature = "roff")]
+    pub(in crate::definitions::syntax) fn emphasized_operand_start(
+        &self,
+        range: Range<usize>,
+    ) -> Option<usize> {
+        let first = self
+            .runs
+            .partition_point(|run| run.bytes.end <= range.start);
+        self.runs[first..]
+            .iter()
+            .take_while(|run| run.bytes.start < range.end)
+            .filter(|run| run.style.emphasis)
+            .find_map(|run| {
+                let start = run.bytes.start.max(range.start);
+                let value = &self.text[start..run.bytes.end.min(range.end)];
+                let trimmed = value.trim_start();
+                (!trimmed.is_empty()).then_some(start + value.len() - trimmed.len())
+            })
     }
 
     pub(super) fn operand(&self, offset: usize) -> Option<&NativeOperand> {

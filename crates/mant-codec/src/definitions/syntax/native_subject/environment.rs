@@ -1,8 +1,8 @@
 //! Recognize Ev names from accepted operands and their own annotation.
 use super::{annotations, offset, operand_at};
-use crate::definitions::syntax::{eligibility::OperandUses, named};
+use crate::definitions::syntax::{eligibility::OperandUses, named, scan::HeadView};
 use crate::definitions::{NativeOperand, NativeOperandRole, RecognizedName};
-use mant_ir::{Inline, inline_plain_text};
+use mant_ir::Inline;
 use std::ops::Range;
 
 pub(in crate::definitions::syntax) fn environment_names(
@@ -12,16 +12,17 @@ pub(in crate::definitions::syntax) fn environment_names(
     if !operands.iter().any(|operand| is_environment(operand.role)) {
         return None;
     }
-    let text = inline_plain_text(term);
+    let view = HeadView::new(term, operands);
     let uses = OperandUses::new(operands);
-    Some(recognize(&text, operands, uses).unwrap_or_default())
+    Some(recognize(&view, operands, uses).unwrap_or_default())
 }
 
 fn recognize(
-    text: &str,
+    view: &HeadView<'_>,
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
 ) -> Option<Vec<RecognizedName>> {
+    let text = view.text.as_str();
     // in_line() retains punctuation inside one Ev word, but emits
     // standalone delimiters as their own nodes. An Env word may have
     // literal parentheses in its name or punctuation in its value.
@@ -30,10 +31,15 @@ fn recognize(
         if uses.protects_syntax(at) {
             return true;
         }
-        let Some(operand) = operand_at(operands, at).filter(|operand| is_environment(operand.role))
-        else {
+        let Some(operand) = operand_at(operands, at) else {
             return false;
         };
+        if is_description(operand.role) {
+            return true;
+        }
+        if !is_environment(operand.role) {
+            return false;
+        }
         if !matches!(text.as_bytes()[at], b',' | b'|') {
             return true;
         }
@@ -68,9 +74,15 @@ fn recognize(
             }
         }
         let range = start..end;
-        if let Some(name) = name_in_atom(text, &range, operands, leading, uses) {
+        let name = name_in_atom(view, &range, operands, leading, uses);
+        if let Some(name) = name.filter(|name| {
+            // A lexically valid word can still cross into an unrelated
+            // macro's glyphs when Ns removes the separator.
+            !intersecting_operands(operands, start..start + name.len())
+                .any(|operand| is_description(operand.role))
+        }) {
             names.push(RecognizedName::contiguous(&name, start));
-        } else if !leading.is_some_and(is_environment)
+        } else if !leading.is_some_and(|role| is_environment(role) || is_description(role))
             && !named::environment_template(&text[range.clone()])
             && !uses.protects(&range)
         {
@@ -130,12 +142,13 @@ fn independent_environment(
 }
 
 fn name_in_atom(
-    text: &str,
+    view: &HeadView<'_>,
     range: &Range<usize>,
     operands: &[NativeOperand],
     leading: Option<NativeOperandRole>,
     uses: OperandUses<'_>,
 ) -> Option<String> {
+    let text = view.text.as_str();
     if matches!(leading, Some(NativeOperandRole::ClippedEnvironment { .. })) {
         return None;
     }
@@ -154,13 +167,23 @@ fn name_in_atom(
     };
     named::environment_atom(part.trim_end())
         .or_else(|| environment_with_operand_suffix(text, part, uses))
+        .or_else(|| {
+            // A separate styled operand can supplement the Ev name, for
+            // example a link label. This fallback stays inside the current
+            // atom and cannot bypass a failed native delimiter proof above.
+            leading.filter(|role| is_environment(*role))?;
+            let end = view.emphasized_operand_start(range.start..range.start + part.len())?;
+            let prefix = &text[range.start..end];
+            if prefix.ends_with(char::is_whitespace) && !prefix.contains('=') {
+                named::environment_atom(prefix.trim_end())
+            } else {
+                None
+            }
+        })
 }
 
 fn annotation_start(text: &str, range: &Range<usize>, operands: &[NativeOperand]) -> Option<usize> {
-    let start = operands.partition_point(|operand| operand.bytes.end <= range.start);
-    operands[start..]
-        .iter()
-        .take_while(|operand| operand.bytes.start < range.end)
+    intersecting_operands(operands, range.clone())
         .find(|operand| {
             matches!(
                 operand.role,
@@ -171,6 +194,16 @@ fn annotation_start(text: &str, range: &Range<usize>, operands: &[NativeOperand]
             )
         })
         .map(|operand| offset(text, text[operand.bytes.clone()].trim_start()))
+}
+
+fn intersecting_operands(
+    operands: &[NativeOperand],
+    range: Range<usize>,
+) -> impl Iterator<Item = &NativeOperand> {
+    let start = operands.partition_point(|operand| operand.bytes.end <= range.start);
+    operands[start..]
+        .iter()
+        .take_while(move |operand| operand.bytes.start < range.end)
 }
 
 fn environment_with_operand_suffix(
@@ -198,5 +231,12 @@ fn is_environment(role: NativeOperandRole) -> bool {
     matches!(
         role,
         NativeOperandRole::Environment { .. } | NativeOperandRole::ClippedEnvironment { .. }
+    )
+}
+
+fn is_description(role: NativeOperandRole) -> bool {
+    matches!(
+        role,
+        NativeOperandRole::Description | NativeOperandRole::ReferenceText(_)
     )
 }

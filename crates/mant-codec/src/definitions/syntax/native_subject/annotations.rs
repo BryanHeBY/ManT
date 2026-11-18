@@ -264,7 +264,8 @@ fn native_delimiters_match(left: &str, right: &str) -> bool {
 fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
     match role {
         NativeOperandRole::EnclosureContent(owner) => Some(owner),
-        NativeOperandRole::Environment { enclosure, .. } => enclosure,
+        NativeOperandRole::Environment { enclosure, .. }
+        | NativeOperandRole::ReferenceText(enclosure) => enclosure,
         _ => {
             role.subject()
                 .filter(|receipt| {
@@ -314,7 +315,8 @@ fn is_supplement(role: NativeOperandRole, enclosure: Option<u32>, plain_text: bo
         })
         || plain_text
             && match role {
-                NativeOperandRole::EnclosureContent(owner) => enclosure == Some(owner),
+                NativeOperandRole::EnclosureContent(owner)
+                | NativeOperandRole::ReferenceText(Some(owner)) => enclosure == Some(owner),
                 NativeOperandRole::Environment {
                     enclosure: owner, ..
                 } => enclosure == owner,

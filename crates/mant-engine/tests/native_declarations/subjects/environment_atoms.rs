@@ -139,6 +139,125 @@ fn annotation_starts_after_the_executed_environment_spelling() {
 }
 
 #[test]
+fn executed_description_and_reference_operands_keep_their_own_word_boundaries() {
+    // The pinned tree gives Ar, Em, Sy, Lk, Mt and Xr independent operands.
+    // termp_lk_pre further emits a generated colon and the URI. None of
+    // these words may extend the Ev spelling when Ns glues the display.
+    for (tail, value, supplemental) in [
+        ("Ar FILE", "FILE", true),
+        ("Em FILE", "FILE", true),
+        ("Sy FILE", "FILE", false),
+        (
+            "Lk https://example.test FILE",
+            "FILE: https://example.test",
+            true,
+        ),
+        ("Mt y@example.test", "y@example.test", true),
+        ("Xr printf 3", "printf(3)", false),
+    ] {
+        for (join, gap) in [("", " "), ("Ns ", "")] {
+            let names = if supplemental && join.is_empty() {
+                &["HOME"][..]
+            } else {
+                &[]
+            };
+            check(
+                &format!("Ev HOME {join}{tail}"),
+                names,
+                &format!("HOME{gap}{value}"),
+                &["FILE", "printf"],
+            );
+        }
+    }
+}
+
+#[test]
+fn link_operands_keep_their_native_annotation_scope() {
+    // Each expected form comes from the pinned terminal. mdoc_term.c's
+    // termp_lk_pre, termp_under_pre and termp_xr_pre all execute inside Pq.
+    for (macro_name, name, section, kind) in [
+        ("Dv", "SYS", "DESCRIPTION", EntryKind::Term),
+        ("Va", "local", "DESCRIPTION", EntryKind::Variable),
+        ("Ev", "HOME", "ENVIRONMENT", EntryKind::EnvironmentVariable),
+    ] {
+        for (tail, label) in [
+            ("Lk https://example.test FILE", "FILE: https://example.test"),
+            ("Mt y@example.test", "y@example.test"),
+            ("Xr printf 3", "printf(3)"),
+        ] {
+            let head = format!("{macro_name} {name} Pq {tail}");
+            let query = section_fixture(section, "", &head);
+            check_query(
+                &query,
+                &head,
+                kind,
+                &[name],
+                &format!("{name} ({label})"),
+                &["FILE", "printf"],
+            );
+        }
+    }
+}
+
+#[test]
+fn link_and_description_punctuation_cannot_open_an_alias() {
+    // CVS keeps the comma in the description or URI and the unmatched
+    // parenthesis in the link label. The trailing comma is a separate TEXT
+    // node and can delimit a later Ev, including after a native annotation.
+    for (head, names, form) in [
+        (
+            r#"Ev MAIN Em "some, text" , Ev PATH"#,
+            &["MAIN", "PATH"][..],
+            "MAIN some, text, PATH",
+        ),
+        (
+            "Ev MAIN Lk https://example.test/a,b FILE",
+            &["MAIN"][..],
+            "MAIN FILE: https://example.test/a,b",
+        ),
+        (
+            "Ev MAIN Lk https://example.test/a,b",
+            &[][..],
+            "MAIN https://example.test/a,b",
+        ),
+        (
+            r#"Ev DEMO_HOME Lk https://example.test "FILE (draft""#,
+            &["DEMO_HOME"][..],
+            "DEMO_HOME FILE (draft: https://example.test",
+        ),
+        (
+            r#"Ev FIRST , Ev SECOND Lk https://example.test "FILE (draft""#,
+            &["FIRST", "SECOND"][..],
+            "FIRST, SECOND FILE (draft: https://example.test",
+        ),
+        (
+            "Xo Ev HOME Pq Em ann ,\n.Ev PATH Lk https://example.test FILE\n.Xc",
+            &["HOME", "PATH"][..],
+            "HOME (ann), PATH FILE: https://example.test",
+        ),
+        (
+            "Xo Ev PATH Lk https://example.test FILE ,\n.Ev HOME Pq Em ann\n.Xc",
+            &["PATH", "HOME"][..],
+            "PATH FILE: https://example.test, HOME (ann)",
+        ),
+        (
+            "Ev HOME=value,other Lk https://example.test FILE",
+            &["HOME"][..],
+            "HOME=value,other FILE: https://example.test",
+        ),
+        ("Ev ONE=a, Em FAKE=b", &[][..], "ONE=a, FAKE=b"),
+        ("Ev ONE=a, Ns Em FAKE=b", &[][..], "ONE=a,FAKE=b"),
+    ] {
+        check(
+            head,
+            names,
+            form,
+            &["text", "b", "draft", "FILE", "other", "FAKE"],
+        );
+    }
+}
+
+#[test]
 fn rejected_annotation_cannot_be_rescanned_as_an_environment_name() {
     for (head, form) in [
         (

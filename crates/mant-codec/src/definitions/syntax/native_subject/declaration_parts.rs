@@ -309,6 +309,7 @@ fn independent_groups<'a>(
                     || match operand.role {
                         NativeOperandRole::ExplicitOption
                         | NativeOperandRole::Description
+                        | NativeOperandRole::ReferenceText(_)
                         | NativeOperandRole::EnclosureStart { .. }
                         | NativeOperandRole::EnclosureEnd(_) => true,
                         NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),

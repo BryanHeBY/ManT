@@ -70,6 +70,8 @@ that crate was not published for that change.
 - Use accepted `Ev` operands to distinguish an environment name, its value,
   and its annotation. Retain declaration names through nested `Eo`/`Ec`
   annotations with matching visible marks and native bodies.
+- Keep link labels, addresses, and styled descriptions in their executed
+  declaration operands. Their punctuation cannot introduce extra names.
 - Preserve the exact fragment of an argument-less mdoc `Tg` when a user
   macro emits it and its target at the same source position.
 - Preserve author fragments through native validation rewrites and retain

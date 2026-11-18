@@ -89,7 +89,7 @@ impl Placeholder {
 }
 
 mod view;
-use view::HeadView;
+pub(super) use view::HeadView;
 
 pub(super) struct OptionHead {
     pub(super) names: Vec<RecognizedName>,

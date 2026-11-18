@@ -160,27 +160,29 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
         registered.key,
         true,
         |builder| {
-            if let Some(first) = first {
-                builder.with_direct_word_operands(|builder| {
-                    append_isolated_inline_node(builder, first, name);
-                });
-            }
-            // CVS man_term.c::pre_MR() emits parentheses even without a
-            // section operand; mdoc termp_xr_pre() returns after the name.
-            if children.get(1).is_some() || man_reference {
-                if first.is_some() {
-                    builder.tighten_next_boundary();
-                }
-                builder.append_text("(");
-                builder.tighten_next_boundary();
-                if let Some(section_node) = children.get(1) {
+            builder.with_native_operand_role(NativeOperandRole::ReferenceText(None), |builder| {
+                if let Some(first) = first {
                     builder.with_direct_word_operands(|builder| {
-                        append_isolated_inline_node(builder, section_node, name);
+                        append_isolated_inline_node(builder, first, name);
                     });
                 }
-                builder.tighten_next_boundary();
-                builder.append_text(")");
-            }
+                // man_term.c::pre_MR() emits parentheses even without a
+                // section operand. mdoc termp_xr_pre() returns after the name.
+                if children.get(1).is_some() || man_reference {
+                    if first.is_some() {
+                        builder.tighten_next_boundary();
+                    }
+                    builder.append_text("(");
+                    builder.tighten_next_boundary();
+                    if let Some(section_node) = children.get(1) {
+                        builder.with_direct_word_operands(|builder| {
+                            append_isolated_inline_node(builder, section_node, name);
+                        });
+                    }
+                    builder.tighten_next_boundary();
+                    builder.append_text(")");
+                }
+            });
         },
         |children| {
             if first.is_none() || plain_text(&children).trim().is_empty() {

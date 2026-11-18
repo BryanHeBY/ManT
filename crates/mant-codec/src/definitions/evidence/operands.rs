@@ -42,6 +42,9 @@ pub(crate) enum NativeOperandRole {
     /// Styled text executed by its own mdoc macro in a declaration HEAD.
     #[cfg(feature = "roff")]
     Description,
+    /// Visible link operands, including the terminal's generated suffix.
+    #[cfg(feature = "roff")]
+    ReferenceText(Option<u32>),
     #[cfg(feature = "roff")]
     Subject(SubjectReceipt),
     /// Publication retained the native subject's role within the form,
@@ -160,6 +163,7 @@ impl NativeOperandRole {
                 body,
                 parent: enclosure(),
             },
+            Self::ReferenceText(_) => Self::ReferenceText(enclosure()),
             role => role,
         }
     }
