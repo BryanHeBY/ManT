@@ -6,17 +6,18 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::reference::{is_manual_reference_name, is_manual_section};
+use super::{
+    reference::{is_manual_reference_name, is_manual_section},
+    section_identity::{RoffSectionHeading, RoffSectionTargets},
+};
 use mant_ir::{
     Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section,
     visit::{self, VisitMut},
 };
 
-type SectionTargets = HashMap<String, Option<String>>;
-
 pub(super) fn publish_inline_navigation(
     nodes: &mut Vec<Inline>,
-    targets: &SectionTargets,
+    targets: &RoffSectionTargets,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> bool {
     // Navigation names belong to the authored heading namespace.  Formatter
@@ -230,7 +231,7 @@ fn manual_section_prefix(value: &str) -> Option<(&str, usize)> {
 
 fn resolve_section_references(
     nodes: &mut Vec<Inline>,
-    targets: &SectionTargets,
+    targets: &RoffSectionTargets,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> bool {
     let mut changed = false;
@@ -272,7 +273,7 @@ fn resolve_section_references(
         } = &mut node
         {
             changed |= resolve_section_references(children, targets, diagnostics);
-            if let Some(section_id) = resolve_section_target(targets, id.as_str()) {
+            if let Some(section_id) = targets.resolve(id.as_str()) {
                 if id.as_str() != section_id {
                     *id = section_id.into();
                     changed = true;
@@ -296,64 +297,11 @@ fn resolve_section_references(
     changed
 }
 
-/// Resolve an `.Sx` title without guessing across arbitrary headings.
-///
-/// Most mdoc sources name a heading exactly.  Some established manual pages
-/// use the stable leading title while their target adds a parenthetical
-/// qualifier, for example `White Space Splitting` for `White Space Splitting
-/// (Field Splitting)`.  Accept that form only when it identifies one target;
-/// every other prefix remains unresolved rather than becoming a surprising
-/// navigation jump.
-#[must_use]
-pub fn resolve_section_target<'a>(targets: &'a SectionTargets, reference: &str) -> Option<&'a str> {
-    if reference.trim().is_empty() {
-        return None;
-    }
-    if let Some(exact) = targets.get(reference) {
-        return exact.as_deref();
-    }
-    let mut candidates = targets
-        .iter()
-        .filter(|(title, _)| is_parenthetical_section_qualification(reference, title));
-    let (_, candidate) = candidates.next()?;
-    // An ambiguous authored title still occupies a candidate slot.
-    // Discarding it here would promote another title to a false unique match.
-    if candidates.next().is_some() {
-        return None;
-    }
-    candidate.as_deref()
-}
-
-fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool {
-    let Some(suffix) = title.strip_prefix(reference) else {
-        return false;
-    };
-    let Some(body) = suffix
-        .trim_start_matches([' ', '\t'])
-        .strip_prefix('(')
-        .and_then(|body| body.strip_suffix(')'))
-    else {
-        return false;
-    };
-    if body.trim().is_empty() {
-        return false;
-    }
-    let mut nested = 0usize;
-    for byte in body.bytes() {
-        match byte {
-            b'(' => nested += 1,
-            b')' if nested == 0 => return false,
-            b')' => nested -= 1,
-            _ => {}
-        }
-    }
-    nested == 0
-}
-
-use super::{LoweringContext, Node, targets};
+use super::{LoweringContext, Node, first_part_children, inline, targets};
+use libmandoc_rs::NodeKind;
 
 pub(super) struct PendingSectionIdentity {
-    title: String,
+    heading: RoffSectionHeading,
     base: String,
     full: crate::producer_identity::FullHeadingId,
 }
@@ -364,15 +312,27 @@ impl LoweringContext<'_> {
         self.section_ids.reserve(ids);
     }
 
-    pub(super) fn record_section_identity(
-        &mut self,
-        title: String,
-        node: &Node,
-    ) -> Vec<mant_ir::FragmentAlias> {
-        let base = section_id_base(&title);
+    pub(super) fn record_section_identity(&mut self, node: &Node) -> Vec<mant_ir::FragmentAlias> {
+        let heading = RoffSectionHeading::from_node(node);
+        let head = first_part_children(node, NodeKind::Head);
+        let base = if head.iter().all(|child| child.kind == NodeKind::Text) {
+            section_id_base(&heading.title)
+        } else {
+            // Published IDs for macro-bearing headings historically used a
+            // detached display label (for example `label-https-example-org`
+            // for `Lk https://example.org Label`). Preserve those IDs while
+            // resolving Sx solely through the authored namespace above.
+            section_id_base(&inline::plain_text(&inline::lower_inline_nodes(
+                head,
+                self.default_name,
+            )))
+        };
         let full = self.section_ids.claim_full(&base);
-        self.pending_section_ids
-            .push(PendingSectionIdentity { title, base, full });
+        self.pending_section_ids.push(PendingSectionIdentity {
+            heading,
+            base,
+            full,
+        });
         targets::section_target(node)
             .filter(|target| self.explicit_targets.contains(target))
             .map(mant_ir::FragmentAlias::from)
@@ -385,7 +345,7 @@ impl LoweringContext<'_> {
             sections: &mut [Section],
             ids: &mut crate::producer_identity::HeadingIds,
             plans: &mut impl Iterator<Item = PendingSectionIdentity>,
-            targets: &mut SectionTargets,
+            targets: &mut RoffSectionTargets,
         ) {
             for section in sections {
                 let plan = plans.next().expect("one identity per lowered heading");
@@ -395,11 +355,8 @@ impl LoweringContext<'_> {
                 {
                     section.fragment_aliases.push(fragment);
                 }
-                targets
-                    .entry(plan.title)
-                    .and_modify(|target| *target = None)
-                    .or_insert_with(|| Some(id.clone()));
-                section.id = id.into();
+                section.id = id.clone().into();
+                targets.register(plan.heading, id);
                 complete(&mut section.children, ids, plans, targets);
             }
         }
@@ -442,14 +399,11 @@ pub(super) fn section_id_base(title: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     use mant_ir::{Block, Inline, InlineLayout, LayoutHint, LinkTarget};
 
-    use super::{
-        SectionTargets, normalize_generated_anchors, promote_manual_reference_inlines,
-        resolve_section_target,
-    };
+    use super::{normalize_generated_anchors, promote_manual_reference_inlines};
 
     #[test]
     fn anchor_suffix_cursor_keeps_source_order_and_authored_reservations() {
@@ -498,38 +452,6 @@ mod tests {
                 ("tag-6", Some("tag")),
             ]
         );
-    }
-
-    #[test]
-    fn resolves_one_parenthetically_qualified_section_title() {
-        let targets: SectionTargets = HashMap::from([
-            (
-                "White Space Splitting (Field Splitting)".to_owned(),
-                Some("white-space-splitting-field-splitting-36".to_owned()),
-            ),
-            ("Other".to_owned(), Some("other-2".to_owned())),
-        ]);
-
-        assert_eq!(
-            resolve_section_target(&targets, "White Space Splitting"),
-            Some("white-space-splitting-field-splitting-36")
-        );
-    }
-
-    #[test]
-    fn rejects_ambiguous_parenthetically_qualified_section_titles() {
-        let targets: SectionTargets = HashMap::from([
-            (
-                "Examples (basic)".to_owned(),
-                Some("examples-basic-2".to_owned()),
-            ),
-            (
-                "Examples (advanced)".to_owned(),
-                Some("examples-advanced-3".to_owned()),
-            ),
-        ]);
-
-        assert_eq!(resolve_section_target(&targets, "Examples"), None);
     }
 
     #[test]

@@ -30,7 +30,7 @@ pub(super) struct LoweringContext<'a> {
     pub(super) table_layout_budget: RefCell<super::table_layout_budget::TableLayoutBudget>,
     pub(super) section_ids: crate::producer_identity::HeadingIds,
     pub(super) pending_section_ids: Vec<super::navigation::PendingSectionIdentity>,
-    pub(super) authored_section_targets: HashMap<String, Option<String>>,
+    pub(super) authored_section_targets: super::section_identity::RoffSectionTargets,
     /// Immutable authored namespace reserved for normalized identities.
     pub(super) explicit_targets: HashSet<String>,
     /// Immutable `NODE_ID` owners collected before structural lowering.
@@ -73,7 +73,7 @@ impl<'a> LoweringContext<'a> {
             table_layout_budget: RefCell::default(),
             section_ids: crate::producer_identity::HeadingIds::default(),
             pending_section_ids: Vec::new(),
-            authored_section_targets: HashMap::new(),
+            authored_section_targets: super::section_identity::RoffSectionTargets::default(),
             explicit_targets: HashSet::new(),
             native_target_owners: HashSet::new(),
             diagnostics: RefCell::new(Vec::new()),

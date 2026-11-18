@@ -88,15 +88,19 @@ has no address obligation. If the name still produces a visible label such as
 `ir.invalid-manual-reference` diagnostic. Space and escape recovery affect
 the known or unclassified status of the name and optional section.
 
-Each executed `Sx` shares the parser's authored title spelling. The audit
-pairs native headings with emitted section owners at matching source
-coordinates, retaining occurrence order for sections from the same macro
-expansion. With complete heading-owner evidence, the observed resolved links
-must contain the expected canonical targets in order, and a distinct
-`unresolved-section-reference` diagnostic must name each unresolvable
-authored reference. Additional observations can occur where formatting splits
-a link into more than one piece. Incomplete heading-owner evidence limits
-the audit to the aggregate executed-reference count for that page.
+The audit records every executed `Sx` occurrence. An empty or control-only
+label still executes, but contributes no link or unresolved diagnostic
+obligation. Authored fixed spaces contribute label glyphs. Section references
+use recursively collected authored words and the validated native heading
+target. The audit pairs native headings with emitted section owners at matching
+source coordinates, retaining occurrence order through macro expansion. With
+complete heading-owner evidence the observed resolved links must contain the
+expected canonical targets in order, and a distinct
+`unresolved-section-reference` diagnostic must name each unresolvable label.
+Formatting can split a link into more than one piece. Incomplete heading-owner
+evidence limits the audit to the aggregate visible-label obligation count for
+that page. The consumer regression separately checks the fixed CVS HTML href
+and heading ID pairs so the shared authored spelling cannot hide a wrong target.
 
 `sourceLinkOrigins` keeps the existing coordinate sets for `Xr`, `UR`/`Lk`,
 `MT`/`Mt`, and `Sx`. The obligation count also covers direct `MR` and reference

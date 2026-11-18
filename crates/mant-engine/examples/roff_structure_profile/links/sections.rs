@@ -1,18 +1,17 @@
 //! Section-reference proof from authored titles, heading owners, and IR outcomes.
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::Node;
+use mant_codec::{RoffSectionHeading, RoffSectionTargets};
 use mant_ir::{Diagnostic, Section};
-
-use super::{node_part_children, observe_operand};
 
 type Origin = (u32, u32);
 
 #[derive(Default)]
 pub(crate) struct NativeSectionLinks {
-    headings: Vec<(Origin, String)>,
-    references: Vec<(Origin, String)>,
+    headings: Vec<(Origin, RoffSectionHeading)>,
+    references: Vec<(Origin, Option<String>)>,
 }
 
 #[derive(Default)]
@@ -23,33 +22,30 @@ pub(crate) struct ObservedSectionLinks {
 }
 
 impl NativeSectionLinks {
-    pub(crate) fn record_heading(&mut self, node: &Node, default_name: Option<&str>) {
+    pub(crate) fn record_heading(&mut self, node: &Node) {
         self.headings.push((
             (node.line, node.column),
-            mant_codec::observe_roff_section_phrase(
-                node_part_children(node, NodeKind::Head),
-                default_name,
-            ),
+            RoffSectionHeading::from_node(node),
         ));
     }
 
-    pub(crate) fn record_reference(&mut self, node: &Node, default_name: Option<&str>) -> bool {
-        let title = mant_codec::observe_roff_section_phrase(&node.children, default_name);
-        if title.is_empty()
-            && node.children.iter().all(|child| {
-                child
-                    .text
-                    .as_deref()
-                    .and_then(observe_operand)
-                    .is_some_and(|value| value.is_empty())
-            })
-        {
-            // Sx may have no operand or display glyph at all. Space escapes
-            // are different: they still execute a visible, unresolved label.
-            return false;
-        }
+    pub(crate) fn record_reference(&mut self, node: &Node) -> bool {
+        let has_label = mant_codec::observe_roff_section_label_glyphs(&node.children);
+        let title = has_label.then(|| mant_codec::observe_roff_section_phrase(&node.children));
+        // A control-only Sx still has a source occurrence. It owes no
+        // link or diagnostic because there is no label to activate.
         self.references.push(((node.line, node.column), title));
-        true
+        has_label
+    }
+
+    #[cfg(test)]
+    pub(crate) fn source_reference_counts(&self) -> (usize, usize) {
+        let glyphless = self
+            .references
+            .iter()
+            .filter(|(_, title)| title.is_none())
+            .count();
+        (self.references.len(), glyphless)
     }
 
     pub(crate) fn compare(&self, observed: &ObservedSectionLinks, violations: &mut Vec<String>) {
@@ -64,7 +60,8 @@ impl NativeSectionLinks {
         let mut position = 0;
         let mut unresolved = observed.unresolved.clone();
         for ((line, column), title) in &self.references {
-            if let Some(id) = mant_codec::observe_roff_section_target(&targets, title) {
+            let Some(title) = title else { continue };
+            if let Some(id) = targets.resolve(title) {
                 // A label can acquire more than one annotation while crossing
                 // an IR output segment. Preserve order for all authored links,
                 // while allowing additional observations of one annotation.
@@ -88,22 +85,16 @@ impl NativeSectionLinks {
         }
     }
 
-    fn authored_targets(
-        &self,
-        observed: &ObservedSectionLinks,
-    ) -> Option<HashMap<String, Option<String>>> {
+    fn authored_targets(&self, observed: &ObservedSectionLinks) -> Option<RoffSectionTargets> {
         let mut by_origin: BTreeMap<_, VecDeque<_>> = observed
             .headings
             .iter()
             .map(|(origin, ids)| (*origin, ids.iter().collect()))
             .collect();
-        let mut targets = HashMap::new();
-        for (origin, title) in &self.headings {
+        let mut targets = RoffSectionTargets::default();
+        for (origin, heading) in &self.headings {
             let id = by_origin.get_mut(origin)?.pop_front()?;
-            targets
-                .entry(title.clone())
-                .and_modify(|target| *target = None)
-                .or_insert_with(|| Some(id.clone()));
+            targets.register(heading.clone(), id.clone());
         }
         by_origin
             .values()

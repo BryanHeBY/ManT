@@ -56,20 +56,11 @@ impl LinkOccurrences {
 
 /// The owned AST visits a link once at its canonical structural view. Equal
 /// addresses and equal source coordinates can each belong to separate links.
-pub(super) fn native_link_obligations(
-    root: &Node,
-    default_name: Option<&str>,
-    profile: &mut AstStructure,
-) {
-    collect_links(root, default_name, None, profile);
+pub(super) fn native_link_obligations(root: &Node, profile: &mut AstStructure) {
+    collect_links(root, None, profile);
 }
 
-fn collect_links(
-    node: &Node,
-    default_name: Option<&str>,
-    list: Option<NormalizedListKind>,
-    profile: &mut AstStructure,
-) {
+fn collect_links(node: &Node, list: Option<NormalizedListKind>, profile: &mut AstStructure) {
     let token = node.macro_token.as_deref();
     if node.line > 0 && !node.flags.generated && !node.flags.no_print {
         match (node.kind, token) {
@@ -100,14 +91,11 @@ fn collect_links(
             }
             (NodeKind::Element, Some("%R")) => rfc_link(node, profile),
             (NodeKind::Element, Some("Sx")) => {
-                profile.section_links += usize::from(
-                    profile
-                        .section_outcomes
-                        .record_reference(node, default_name),
-                );
+                profile.section_links +=
+                    usize::from(profile.section_outcomes.record_reference(node));
             }
             (NodeKind::Block, Some("Sh" | "Ss")) => {
-                profile.section_outcomes.record_heading(node, default_name);
+                profile.section_outcomes.record_heading(node);
             }
             _ => {}
         }
@@ -133,7 +121,7 @@ fn collect_links(
         );
     for child in &node.children {
         if !skip_head || child.kind != NodeKind::Head {
-            collect_links(child, default_name, list, profile);
+            collect_links(child, list, profile);
         }
     }
 }

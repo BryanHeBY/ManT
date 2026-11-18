@@ -192,8 +192,30 @@ fn heading_wrappers_remove_only_the_structural_bold_layer() {
         "CVS heading did not combine bold and underline: {native:?}"
     );
     let query = mant_loader::load_roff_bytes(source.as_bytes()).expect("lower linked headings");
+    let document = query.document.as_ref().unwrap();
+    let [_, target, section_link, external] = document.sections.as_slice() else {
+        panic!("expected the linked headings after their target");
+    };
+    // CVS HTML gives the plain TARGET the surviving id. The equal-looking
+    // macro heading contains a link to it and owns a different body.
+    assert_eq!(target.id.as_str(), "target");
+    assert_eq!(section_link.id.as_str(), "target-2");
+    assert!(matches!(
+        section_link.heading.content.as_slice(),
+        [Inline::Link {
+            target: LinkTarget::Section { id }, children, ..
+        }] if id == &target.id && matches!(children.as_slice(), [Inline::Emphasis { .. }])
+    ));
+    assert_eq!(external.id.as_str(), "label-https-example-org");
     let markdown = mant_codec::encode::render_markdown(&query);
-    assert!(markdown.contains("## *TARGET*"), "{markdown}");
+    assert!(
+        markdown.contains("<a id=\"target\"></a>\n\n## TARGET\n\nBODY"),
+        "{markdown}"
+    );
+    assert!(
+        markdown.contains("<a id=\"target-2\"></a>\n\n## [*TARGET*](#target)\n\nSX"),
+        "{markdown}"
+    );
     assert!(
         markdown.contains("## [*Label*](https://example.org)"),
         "{markdown}"

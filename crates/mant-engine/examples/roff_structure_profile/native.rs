@@ -21,7 +21,7 @@ pub(super) fn ast_profile(document: &libmandoc_rs::Document) -> (AstStructure, A
         &head_tables.row_ids,
     );
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
-    super::links::native_link_obligations(root, document.metadata.name.as_deref(), &mut profile);
+    super::links::native_link_obligations(root, &mut profile);
     let mut topology = AstTopology::default();
     collect_ast_topology(root, false, &mut topology, &head_tables.row_ids);
     topology.head_tables = head_tables;

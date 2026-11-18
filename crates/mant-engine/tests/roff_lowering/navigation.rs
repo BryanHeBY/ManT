@@ -13,6 +13,9 @@ mod references;
 #[path = "navigation/section_qualifiers.rs"]
 mod section_qualifiers;
 
+#[path = "navigation/section_identity.rs"]
+mod section_identity;
+
 #[path = "navigation/target_identity.rs"]
 mod target_identity;
 

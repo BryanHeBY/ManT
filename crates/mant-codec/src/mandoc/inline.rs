@@ -26,14 +26,14 @@ mod scopes;
 mod source_fragment;
 pub(in crate::mandoc) mod synopsis;
 pub(in crate::mandoc) use flow::{
-    AuthorBreakEffect, CompletedRowOrigin, DefinitionGeometryCheckpoint, FieldFlag, FieldFlags,
-    HeadOperandCapture, InlineExecutionState, NamePartGeometry, NativeInputRetirement,
-    NestedListScope, NoFillInlineState, OutputRowEnd, PreservedInlineState, RunInBoundaryReceipt,
-    consume_one_row_ending, ends_with_executed_line_break, has_rendered_formatter_glyph,
-    lower_no_fill_fragment_with_formatter, native_row_origin, prepare_inline_output,
-    retain_inline_identities, split_row_origin, strip_native_projection_markers,
-    take_definition_term_breaks, take_inline_layout, take_leading_column_rows,
-    trailing_completed_row_origins,
+    AuthorBreakEffect, ColumnLeadingRows, CompletedRowOrigin, DefinitionGeometryCheckpoint,
+    FieldFlag, FieldFlags, HeadOperandCapture, InlineExecutionState, NamePartGeometry,
+    NativeInputRetirement, NestedListScope, NoFillInlineState, OutputRowEnd, PreservedInlineState,
+    RunInBoundaryReceipt, consume_one_row_ending, ends_with_executed_line_break,
+    has_rendered_formatter_glyph, lower_no_fill_fragment_with_formatter, native_row_origin,
+    prepare_inline_output, retain_inline_identities, split_row_origin,
+    strip_native_projection_markers, take_definition_term_breaks, take_inline_layout,
+    take_leading_column_rows, trailing_completed_row_origins,
 };
 pub(super) use flow::{FontScope, FontState, InlineBuilder};
 mod node;
@@ -72,63 +72,6 @@ pub(super) fn lower_inline_nodes_with_spacing(
     append_inline_nodes(&mut builder, nodes, default_name);
     builder.finish()
 }
-
-/// Derive an authored section phrase without inheriting terminal execution
-/// state from the surrounding formatter.
-///
-/// CVS uses the same source-derived phrase for `Sh`/`Ss` identities and for
-/// `Sx` destinations.  The terminal label is executed separately and may be
-/// changed by persistent state such as `Sm off` or a preceding bare `\z`.
-#[must_use]
-pub fn authored_section_phrase(nodes: &[Node], default_name: Option<&str>) -> String {
-    if nodes.iter().all(|node| node.kind == NodeKind::Text) {
-        return nodes
-            .iter()
-            .filter_map(|node| node.text.as_deref())
-            .filter_map(deroff_text_fragment)
-            .collect::<Vec<_>>()
-            .join(" ");
-    }
-    plain_text(&lower_inline_nodes(nodes, default_name))
-        .trim()
-        .to_owned()
-}
-
-/// Normalize one direct text child exactly like CVS `roff.c::deroff()`.
-///
-/// This is deliberately narrower than visible-text decoding.  Section
-/// identities retain embedded escapes such as `A\zBC`; only leading spacing
-/// escapes, a trailing continuation backslash, and surrounding ASCII
-/// whitespace are removed from each authored fragment.
-fn deroff_text_fragment(source: &str) -> Option<&str> {
-    let bytes = source.as_bytes();
-    let mut start = 0;
-    while start < bytes.len() {
-        if bytes[start] == b'\\'
-            && bytes
-                .get(start + 1)
-                .is_some_and(|next| b" %&0^|~".contains(next))
-        {
-            start += 2;
-        } else if bytes[start].is_ascii_whitespace() {
-            start += 1;
-        } else {
-            break;
-        }
-    }
-
-    let mut end = bytes.len();
-    if end > start && bytes[end - 1] == b'\\' {
-        end -= 1;
-    }
-    while end > start && bytes[end - 1].is_ascii_whitespace() {
-        end -= 1;
-    }
-    (start < end).then(|| &source[start..end])
-}
-
-#[cfg(test)]
-mod authored_phrase_tests;
 
 /// Apply one validated mdoc `Sm` state transition.
 ///

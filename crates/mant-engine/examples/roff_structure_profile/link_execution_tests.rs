@@ -132,6 +132,96 @@ fn unresolved_section_references_need_their_own_diagnostics() {
 }
 
 #[test]
+fn section_link_obligations_distinguish_source_control_words_from_labels() {
+    // Fixed CVS mdoc_sx_pre emits an empty HTML link for \fP and \s0. Tree
+    // and term_word distinguish \& from the fixed blank \~ and its glyph.
+    // The pristine HTML renderer has no usable href for the empty ID forms.
+    for (label, visible, unresolved) in [
+        (r"\fP", false, false),
+        (r"\s0", false, false),
+        (r"\&", false, false),
+        (r"\p", false, false),
+        ("\"\"", false, false),
+        (r"\~", true, true),
+        (r"\0", true, true),
+        ("TOPIC", true, false),
+    ] {
+        let source = format!("{HEADER}.Sx {label}\n.br\nNEXT-A.\n.Sh TOPIC\nBODY-A.\n");
+        let (expected, syntax, document) = parsed_structure(&source);
+        let (observed, topology) = ir_profile(&document);
+        assert_eq!(
+            expected.section_outcomes.source_reference_counts(),
+            (1, usize::from(!visible)),
+            "{source}"
+        );
+        assert_eq!(expected.section_links, usize::from(visible), "{source}");
+        assert_eq!(
+            observed.section_links,
+            usize::from(visible && !unresolved),
+            "{source}"
+        );
+        assert_eq!(
+            observed.unresolved_section_references,
+            usize::from(unresolved),
+            "{source}"
+        );
+        assert!(render_text(document.clone()).contains("NEXT-A."));
+        let reading = reading(document.clone());
+        let markdown = mant_codec::encode::render_addressable_markdown(&reading);
+        if matches!(label, r"\~" | r"\0") {
+            assert!(render_text(document.clone()).contains('\u{a0}'), "{source}");
+        }
+        assert_eq!(
+            markdown.text().contains("](#"),
+            visible && !unresolved,
+            "{source}"
+        );
+        let findings = compare_structure(&expected, &observed, &syntax, &topology);
+        assert!(findings.is_empty(), "{source}: {findings:?}");
+    }
+}
+
+#[test]
+fn mixed_section_link_obligations_reject_misrouted_links_and_diagnostics() {
+    // QQ expands both visible labels and the font-only operand at 13:2.
+    // Fixed CVS HTML targets TOPIC's Fl heading, emits an empty anchor for
+    // the font change, and has no destination for MISSING.
+    let source = [
+        HEADER,
+        ".de QQ\n.Sx TOPIC\n.Sx \\\\fP\n.Sx MISSING\n..\n.QQ\n.Sh Fl TOPIC\nBODY-A.\n",
+    ]
+    .concat();
+    let (expected, native, mut document) = parsed_structure(&source);
+    let compare = |document: &Document| {
+        let (observed, topology) = ir_profile(document);
+        compare_structure(&expected, &observed, &native, &topology)
+    };
+    assert_eq!(expected.section_outcomes.source_reference_counts(), (3, 1));
+    assert_eq!(expected.section_links, 2);
+    assert!(compare(&document).is_empty(), "{:?}", compare(&document));
+    let mut wrong_owner = document.clone();
+    mutate_section_links(&mut wrong_owner, |index| {
+        (index == 0).then_some(Some("description"))
+    });
+    assert_finding(
+        &compare(&wrong_owner),
+        "expected \"TOPIC\"",
+        "in source order",
+    );
+    let diagnostic = document
+        .diagnostics
+        .iter_mut()
+        .find(|diagnostic| diagnostic.code.as_deref() == Some("unresolved-section-reference"))
+        .unwrap();
+    diagnostic.message = "cannot resolve section reference: \\fP".to_owned();
+    assert_finding(
+        &compare(&document),
+        "expected unresolved diagnostic",
+        "MISSING",
+    );
+}
+
+#[test]
 fn list_item_links_require_an_executed_native_part() {
     // CVS mdoc_it_pre skips the HEAD of bullet/dash/hyphen/item/enum lists.
     // Lint keeps the skipped-arguments error; the BODY and definition terms

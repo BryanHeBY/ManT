@@ -5,8 +5,8 @@ use super::{
     update_paragraph_distance,
 };
 use crate::mandoc::{
-    formatter::FormatterState, inline::authored_section_phrase,
-    layout::execute_vertical_spacing_after_newline, source_context::MdocSectionContext,
+    formatter::FormatterState, layout::execute_vertical_spacing_after_newline,
+    source_context::MdocSectionContext,
 };
 use libmandoc_rs::{
     MacroToken::{Man, Mdoc},
@@ -199,10 +199,6 @@ fn lower_section(
     } else {
         context.active_mdoc_section()
     };
-    let authored_title = authored_section_phrase(
-        first_part_children(node, NodeKind::Head),
-        context.default_name,
-    );
     let (mut heading, blank_heading_rows) = prepared.unwrap_or_else(|| {
         prepare_heading(
             node,
@@ -213,7 +209,7 @@ fn lower_section(
             false,
         )
     });
-    let fragment_aliases = context.record_section_identity(authored_title, node);
+    let fragment_aliases = context.record_section_identity(node);
     let body = first_part_children(node, NodeKind::Body);
     formatter.row_presentation.offset_shift = 0;
     formatter.row_presentation.parent = 5 * 24;

@@ -3,7 +3,7 @@ use super::font::coalesce_font_runs;
 use super::links::{append_bsd_reference, append_link, append_mail_addresses};
 use super::{
     Font, Inline, InlineBuilder, Node, NodeKind, append_include, append_inline_nodes,
-    authored_section_phrase, inline_children, navigation_anchor,
+    inline_children, navigation_anchor,
 };
 use crate::definitions::{NativeOperandRole, NativeSubject};
 use crate::mandoc::targets::{self, OwnedTarget};
@@ -294,7 +294,7 @@ fn append_option(builder: &mut InlineBuilder, scope: u32, children: &[Node], nam
 }
 
 fn append_section_reference(builder: &mut InlineBuilder, children: &[Node], name: Option<&str>) {
-    let authored_target = authored_section_phrase(children, name);
+    let authored_target = crate::mandoc::section_identity::authored_section_phrase(children);
     let registered = builder
         .zero_advance
         .new_annotation(mant_ir::LinkTarget::Section {
