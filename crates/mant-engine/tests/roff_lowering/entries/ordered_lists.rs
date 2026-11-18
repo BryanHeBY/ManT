@@ -137,7 +137,7 @@ fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
     let document = parse_manual_bytes(
         std::path::Path::new("ip-reference-candidate.1"),
         b".TH IP-REFERENCE-CANDIDATE 1\n.SH NOTES\n\
-.IP \" 9.\" 4\nOnly reference\n.RS 4\nfile:///only\n.RE\n",
+.IP 9. 4\nOnly reference\n.RS 4\nfile:///only\n.RE\n",
     )
     .expect("lower one numbered IP reference");
 
@@ -159,6 +159,30 @@ fn recognizes_one_source_proven_ip_ordinal_without_semantic_entry() {
                 ..
             }
         ] if body.indent_columns == 1 && continuation.indent_columns == 1
+    ));
+    assert_eq!(SemanticIndex::build(&document).section("notes").len(), 0);
+}
+
+#[test]
+fn quoted_numbered_ip_preserves_its_operand_and_relative_body() {
+    // CVS pre_IP() passes the quoted leading cell to term_word(). Its
+    // following RS belongs to this same authored label's description.
+    let document = parse_manual_bytes(
+        std::path::Path::new("ip-reference-candidate.1"),
+        b".TH IP-REFERENCE-CANDIDATE 1\n.SH NOTES\n\
+.IP \" 9.\" 4\nOnly reference\n.RS 4\nfile:///only\n.RE\n",
+    )
+    .unwrap();
+    let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+        panic!("expected one definition owner");
+    };
+    assert_eq!(items.len(), 1);
+    assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), " 9.");
+    assert!(matches!(
+        items[0].description.as_slice(),
+        [Block::Paragraph { children: body, .. }, Block::Paragraph { children: continuation, .. }]
+            if mant_ir::inline_plain_text(body) == "Only reference"
+                && mant_ir::inline_plain_text(continuation) == "file:///only"
     ));
     assert_eq!(SemanticIndex::build(&document).section("notes").len(), 0);
 }

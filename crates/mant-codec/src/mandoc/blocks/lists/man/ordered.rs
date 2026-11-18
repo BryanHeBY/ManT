@@ -109,8 +109,10 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
     if !collect_marker_text(term, &mut text) {
         return None;
     }
-    // Native fixed spaces are authored cells, unlike ordinary edge padding.
-    let text = text.trim_ascii();
+    // Macro syntax separators are absent from the executed label. Any edge
+    // whitespace still present can belong to a quoted operand and affect
+    // the native field width (term.c::term_fill), even if the device later
+    // omits trailing cells when drawing it.
     let (digits, style) = if let Some(digits) = text.strip_suffix('.') {
         (digits, IpOrdinalStyle::Period)
     } else if let Some(digits) = text.strip_suffix(')') {
@@ -120,7 +122,7 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
             (digits, IpOrdinalStyle::ClosingParenthesis)
         }
     } else if uses_incrementing_register {
-        (text, IpOrdinalStyle::IncrementingRegister)
+        (text.as_str(), IpOrdinalStyle::IncrementingRegister)
     } else {
         return None;
     };

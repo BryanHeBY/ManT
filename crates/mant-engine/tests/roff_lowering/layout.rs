@@ -760,9 +760,9 @@ fn keeps_relative_indent_references_inside_man_ip_enumerations() {
     let document = parse_manual_bytes(
         std::path::Path::new("ip-reference-enumeration.1"),
         b".TH IP-REFERENCE-ENUMERATION 1\n.SH NOTES\n\
-.IP \" 1.\" 4\nFirst reference\n.RS 4\nfile:///first\n.RE\n\
-.IP \" 2.\" 4\nSecond reference\n.RS 4\nfile:///second\n.RE\n\
-.IP \" 3.\" 4\nThird reference\n.RS 4\nfile:///third\n.RE\n",
+.IP 1. 4\nFirst reference\n.RS 4\nfile:///first\n.RE\n\
+.IP 2. 4\nSecond reference\n.RS 4\nfile:///second\n.RE\n\
+.IP 3. 4\nThird reference\n.RS 4\nfile:///third\n.RE\n",
     )
     .expect("lower numbered IP references");
 

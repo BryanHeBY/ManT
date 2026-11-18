@@ -213,11 +213,7 @@ pub(super) fn definition_item(
         &mut description,
     );
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip)) {
-        // man_term.c::post_IP() can complete an empty HEAD word even though
-        // it supplies no tag. Its row now belongs to the description; an
-        // empty term shell must not turn a headless .IP continuation into a
-        // new semantic definition.
-        terms.retain(|term| !term.is_empty());
+        finish_man_ip_head(&mut terms, &mut geometry, finished.definition_field_exited);
     }
     let observed = finish_definition_body_execution(formatter, man_node);
     apply_executed_definition_body_layout(
@@ -247,6 +243,30 @@ pub(super) fn definition_item(
         ordinal_label_can_be_replaced: !closed_head_row
             && empty_head_rows == 0
             && !finished.head_layout_must_survive,
+    }
+}
+
+fn finish_man_ip_head(
+    terms: &mut Vec<Vec<Inline>>,
+    geometry: &mut crate::mandoc::layout::DefinitionGeometry,
+    field_exited: bool,
+) {
+    use crate::mandoc::layout::TermPlacement;
+
+    // post_IP() can complete an empty HEAD word. Its row now belongs to
+    // the description, including in a headless continuation.
+    terms.retain(|term| !term.is_empty());
+    if matches!(geometry.placement, TermPlacement::Fit)
+        && !field_exited
+        && terms
+            .last()
+            .is_some_and(|term| matches!(mant_ir::last_visible_character(term), Some(' ' | '\t')))
+    {
+        // man_term.c::pre_IP() does not select BRTRSP. term_flushln()
+        // ignores ordinary trailing cells for fit, including the spaces
+        // kept in the quoted operand's IR. Follow the native field receipt
+        // on this boundary instead of measuring the whole authored tail.
+        geometry.placement = TermPlacement::RunIn;
     }
 }
 

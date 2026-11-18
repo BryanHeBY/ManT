@@ -2,7 +2,7 @@
 
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
-use mant_ir::{Block, Inline, LinkTarget, ListKind, SourceFormat, inline_plain_text};
+use mant_ir::{Block, HeadBodyRelation, Inline, LinkTarget, SourceFormat, inline_plain_text};
 use mant_protocol::OutlineDetail;
 use mant_query::build_outline_with_detail;
 
@@ -77,17 +77,64 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         Some(Block::Paragraph { layout, .. }) if layout.spacing_before_lines == 0
     ));
 
-    let notes = common::section(document, "NOTES");
-    assert!(matches!(
-        notes.blocks.as_slice(),
-        [Block::List {
-            kind: ListKind::Ordered { start: Some(1) },
-            items,
-            ..
-        }] if items.len() == 7
-    ));
+    assert_git_notes(document);
 
     common::assert_bounded_vertical_spacing(&document.sections, "fedora44/git");
+}
+
+fn assert_git_notes(document: &mant_ir::Document) {
+    // CVS pre_IP() sends the quoted " 1." through term_word(), including
+    // its leading blank. The label and caption share one row, and the
+    // following RS contributes its own address row to that reference.
+    let references = [
+        (
+            "Git User’s Manual",
+            "file:///usr/share/doc/git/user-manual.html",
+        ),
+        (
+            "Trace2 documentation",
+            "file:///usr/share/doc/git/technical/api-trace2.html",
+        ),
+        (
+            "Git concepts chapter of the user-manual",
+            "file:///usr/share/doc/git/user-manual.html#git-concepts",
+        ),
+        ("howto", "file:///usr/share/doc/git/howto-index.html"),
+        (
+            "Git API documentation",
+            "file:///usr/share/doc/git/technical/api-index.html",
+        ),
+        ("git@vger.kernel.org", "mailto:git@vger.kernel.org"),
+        (
+            "git-security@googlegroups.com",
+            "mailto:git-security@googlegroups.com",
+        ),
+    ];
+    let notes = common::section(document, "NOTES");
+    assert_eq!(notes.blocks.len(), references.len());
+    for (index, (block, (caption, address))) in notes.blocks.iter().zip(references).enumerate() {
+        let Block::DefinitionList { items, .. } = block else {
+            panic!("authored NOTES definition at {index}");
+        };
+        let [item] = items.as_slice() else {
+            panic!("one NOTES owner at {index}");
+        };
+        let [term] = item.terms.as_slice() else {
+            panic!("one quoted NOTES label at {index}");
+        };
+        assert_eq!(inline_plain_text(term), format!(" {}.", index + 1));
+        assert_eq!(item.head_body_relation, HeadBodyRelation::separated());
+        assert_eq!(
+            item.source.unwrap().line,
+            2238 + 5 * u32::try_from(index).unwrap()
+        );
+        assert!(item.entry.is_none());
+        assert!(matches!(
+            item.description.as_slice(),
+            [Block::Paragraph { children: first, .. }, Block::Paragraph { children: second, .. }]
+                if inline_plain_text(first) == caption && inline_plain_text(second) == address
+        ));
+    }
 }
 
 fn assert_git_add_reference(add: &mant_ir::DefinitionItem) {

@@ -7,6 +7,8 @@ use mant_ir::{
 };
 use mant_protocol::ContentSelector;
 
+mod quoted_labels;
+
 const MDOC: &str = concat!(
     ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n",
     ".Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n",
