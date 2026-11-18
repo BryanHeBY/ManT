@@ -239,7 +239,11 @@ fn assert_address_loss(header: &str, body: &str, property: &str, occurrences: us
     }
 }
 
-fn change_address(document: &mut Document, index: usize, replacement: Option<LinkTarget>) {
+pub(super) fn change_address(
+    document: &mut Document,
+    index: usize,
+    replacement: Option<LinkTarget>,
+) {
     struct Change {
         wanted: usize,
         seen: usize,

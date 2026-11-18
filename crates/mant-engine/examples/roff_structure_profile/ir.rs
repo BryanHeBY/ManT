@@ -6,14 +6,17 @@ use super::{
 };
 
 pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
-    let mut profile = IrStructure {
-        unresolved_section_references: document
-            .diagnostics
-            .iter()
-            .filter(|diagnostic| diagnostic.code.as_deref() == Some("unresolved-section-reference"))
-            .count(),
-        ..IrStructure::default()
-    };
+    let mut profile = IrStructure::default();
+    for diagnostic in &document.diagnostics {
+        match diagnostic.code.as_deref() {
+            Some("unresolved-section-reference") => {
+                profile.unresolved_section_references += 1;
+                profile.section_outcomes.record_diagnostic(diagnostic);
+            }
+            Some("ir.invalid-manual-reference") => profile.invalid_manual_diagnostics += 1,
+            _ => {}
+        }
+    }
     let mut topology = IrTopology::default();
     collect_blocks(&document.blocks, false, &mut profile, &mut topology);
     for section in &document.sections {
@@ -30,6 +33,7 @@ pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
 }
 
 fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut IrTopology) {
+    profile.section_outcomes.record_heading(section);
     collect_inlines(
         &section.heading.content,
         section.source.map_or(0, |source| source.line),
@@ -171,13 +175,27 @@ fn collect_inlines(
                 target, children, ..
             } => {
                 match target {
-                    LinkTarget::Manual { .. } => profile.manual_links += 1,
+                    LinkTarget::Manual { .. } if target.to_uri().is_none() => {
+                        profile.invalid_manual_links.record_target(target);
+                    }
+                    LinkTarget::Manual { .. } => {
+                        profile.manual_links += 1;
+                        profile.known_links.record_target(target);
+                    }
                     LinkTarget::External { .. } => profile.external_links += 1,
                     LinkTarget::Email { .. } => profile.email_links += 1,
-                    LinkTarget::Section { .. } => profile.section_links += 1,
+                    LinkTarget::Section { id } => {
+                        profile.section_links += 1;
+                        profile.section_outcomes.record_resolved(id.as_str());
+                    }
                     LinkTarget::Document { .. } => {}
                 }
-                profile.known_links.record_target(target);
+                if matches!(
+                    target,
+                    LinkTarget::Email { .. } | LinkTarget::External { .. }
+                ) {
+                    profile.known_links.record_target(target);
+                }
                 collect_inlines(children, source_line, inside_table, profile, topology);
             }
             Inline::LineBreak { .. } => profile.hard_breaks += 1,

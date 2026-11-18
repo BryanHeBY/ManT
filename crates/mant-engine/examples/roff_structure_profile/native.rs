@@ -6,13 +6,13 @@ use super::{
     special_character,
 };
 
-pub(super) fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
+pub(super) fn ast_profile(document: &libmandoc_rs::Document) -> (AstStructure, AstTopology) {
+    let root = &document.root;
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
     collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
-    super::links::native_link_obligations(root, &mut profile);
-    profile.section_links = semantic_link_origins(root, "Sx", NodeKind::Element).len();
+    super::links::native_link_obligations(root, document.metadata.name.as_deref(), &mut profile);
     let mut topology = AstTopology::default();
     collect_ast_topology(root, false, &mut topology);
     topology.lists.sort_by_key(|list| list.source_line);

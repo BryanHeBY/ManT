@@ -15,7 +15,7 @@ fn parsed(source: &str) -> (AstStructure, AstTopology, Document) {
     })
     .parse_bytes("audit.1", source.as_bytes())
     .unwrap();
-    let (expected, topology) = ast_profile(&report.document.root);
+    let (expected, topology) = ast_profile(&report.document);
     let document =
         mant_codec::parse_roff_bytes(std::path::Path::new("audit.1"), source.as_bytes()).unwrap();
     (expected, topology, document)
@@ -204,7 +204,7 @@ fn headless_continuation_is_located_without_waiving_a_lower_item_count() {
     })
     .parse_bytes("audit.1", source.as_bytes())
     .unwrap();
-    let (expected, _) = ast_profile(&report.document.root);
+    let (expected, _) = ast_profile(&report.document);
     let mut document =
         mant_codec::parse_roff_bytes(std::path::Path::new("audit.1"), source.as_bytes()).unwrap();
     let observed = ir_profile(&document).0;

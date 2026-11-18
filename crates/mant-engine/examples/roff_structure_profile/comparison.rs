@@ -48,47 +48,7 @@ pub(super) fn compare_structure(
         expected.table_spanning_cells,
         observed.table_spanning_cells,
     );
-    underflow(
-        &mut violations,
-        "manual-links",
-        expected.manual_links,
-        observed.manual_links,
-    );
-    underflow(
-        &mut violations,
-        "external-links",
-        expected.external_links,
-        observed.external_links,
-    );
-    underflow(
-        &mut violations,
-        "email-links",
-        expected.email_links,
-        observed.email_links,
-    );
-    if expected.unclassified_address_links > 0 {
-        underflow(
-            &mut violations,
-            "address-links",
-            expected.external_links + expected.email_links + expected.unclassified_address_links,
-            observed.external_links + observed.email_links,
-        );
-    }
-    let (known, matched) = expected.known_links.match_counts(&observed.known_links);
-    if observed.manual_links >= expected.manual_links
-        && observed.external_links >= expected.external_links
-        && observed.email_links >= expected.email_links
-    {
-        underflow(&mut violations, "known-link-targets", known, matched);
-    }
-    underflow(
-        &mut violations,
-        "section-links-or-diagnostics",
-        expected.section_links,
-        observed
-            .section_links
-            .saturating_add(observed.unresolved_section_references),
-    );
+    compare_link_obligations(expected, observed, &mut violations);
     if expected.positive_relative_indent_scopes > 0 && observed.max_indent_columns == 0 {
         violations.push(format!(
             "relative-indent: expected positive indentation from {} RS scopes (nested depth {}), observed no indented IR block",
@@ -111,6 +71,75 @@ pub(super) fn compare_structure(
         &observed_topology.equations,
     );
     violations
+}
+
+fn compare_link_obligations(
+    expected: &AstStructure,
+    observed: &IrStructure,
+    violations: &mut Vec<String>,
+) {
+    underflow(
+        violations,
+        "manual-links",
+        expected.manual_links,
+        observed.manual_links,
+    );
+    let (invalid, matched) = expected
+        .invalid_manual_links
+        .match_counts(&observed.invalid_manual_links);
+    underflow(violations, "invalid-manual-targets", invalid, matched);
+    underflow(
+        violations,
+        "invalid-manual-reference-diagnostics",
+        invalid,
+        observed.invalid_manual_diagnostics,
+    );
+    if expected.unclassified_manual_links > 0 {
+        underflow(
+            violations,
+            "manual-link-observations",
+            expected.manual_links + invalid + expected.unclassified_manual_links,
+            observed.manual_links + observed.invalid_manual_links.len(),
+        );
+    }
+    underflow(
+        violations,
+        "external-links",
+        expected.external_links,
+        observed.external_links,
+    );
+    underflow(
+        violations,
+        "email-links",
+        expected.email_links,
+        observed.email_links,
+    );
+    if expected.unclassified_address_links > 0 {
+        underflow(
+            violations,
+            "address-links",
+            expected.external_links + expected.email_links + expected.unclassified_address_links,
+            observed.external_links + observed.email_links,
+        );
+    }
+    let (known, matched) = expected.known_links.match_counts(&observed.known_links);
+    if observed.manual_links >= expected.manual_links
+        && observed.external_links >= expected.external_links
+        && observed.email_links >= expected.email_links
+    {
+        underflow(violations, "known-link-targets", known, matched);
+    }
+    underflow(
+        violations,
+        "section-links-or-diagnostics",
+        expected.section_links,
+        observed
+            .section_links
+            .saturating_add(observed.unresolved_section_references),
+    );
+    expected
+        .section_outcomes
+        .compare(&observed.section_outcomes, violations);
 }
 
 fn compare_equation_topology(

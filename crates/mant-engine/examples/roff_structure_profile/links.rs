@@ -2,10 +2,14 @@
 
 use std::collections::BTreeMap;
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
 use mant_ir::{LinkTarget, email_address_from_mailto_uri};
 
 use super::{AstStructure, native::node_part_children};
+
+#[path = "links/sections.rs"]
+mod sections;
+pub(super) use sections::{NativeSectionLinks, ObservedSectionLinks};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum Identity {
@@ -44,14 +48,34 @@ impl LinkOccurrences {
         }
         (expected, matched)
     }
+
+    pub(super) fn len(&self) -> usize {
+        self.0.values().sum()
+    }
 }
 
 /// The owned AST visits a link once at its canonical structural view. Equal
 /// addresses and equal source coordinates can each belong to separate links.
-pub(super) fn native_link_obligations(node: &Node, profile: &mut AstStructure) {
+pub(super) fn native_link_obligations(
+    root: &Node,
+    default_name: Option<&str>,
+    profile: &mut AstStructure,
+) {
+    collect_links(root, default_name, None, profile);
+}
+
+fn collect_links(
+    node: &Node,
+    default_name: Option<&str>,
+    list: Option<NormalizedListKind>,
+    profile: &mut AstStructure,
+) {
+    let token = node.macro_token.as_deref();
     if node.line > 0 && !node.flags.generated && !node.flags.no_print {
-        match (node.kind, node.macro_token.as_deref()) {
-            (NodeKind::Element, Some("Xr" | "MR")) => manual_link(node, profile),
+        match (node.kind, token) {
+            (NodeKind::Element, Some(name @ ("Xr" | "MR"))) => {
+                manual_link(node, name == "MR", profile);
+            }
             // CVS man_UR_pre() reads the first operand of the HEAD and
             // emits a mailto template for MT; BODY contributes only text.
             (NodeKind::Block, Some(name @ ("UR" | "MT"))) => {
@@ -75,15 +99,46 @@ pub(super) fn native_link_obligations(node: &Node, profile: &mut AstStructure) {
                 }
             }
             (NodeKind::Element, Some("%R")) => rfc_link(node, profile),
+            (NodeKind::Element, Some("Sx")) => {
+                profile.section_links += usize::from(
+                    profile
+                        .section_outcomes
+                        .record_reference(node, default_name),
+                );
+            }
+            (NodeKind::Block, Some("Sh" | "Ss")) => {
+                profile.section_outcomes.record_heading(node, default_name);
+            }
             _ => {}
         }
     }
+    let list = if node.kind == NodeKind::Block && token == Some("Bl") {
+        node.list_kind
+    } else {
+        list
+    };
+    // CVS mdoc_it_pre() skips the authored HEAD of marker and plain items.
+    // The raw parser diagnostics and historical source-origin view still
+    // describe that source; it cannot establish an executed link obligation.
+    let skip_head = node.kind == NodeKind::Block
+        && token == Some("It")
+        && matches!(
+            list,
+            Some(
+                NormalizedListKind::Bullet
+                    | NormalizedListKind::Dash
+                    | NormalizedListKind::Plain
+                    | NormalizedListKind::Ordered
+            )
+        );
     for child in &node.children {
-        native_link_obligations(child, profile);
+        if !skip_head || child.kind != NodeKind::Head {
+            collect_links(child, default_name, list, profile);
+        }
     }
 }
 
-fn manual_link(node: &Node, profile: &mut AstStructure) {
+fn manual_link(node: &Node, man: bool, profile: &mut AstStructure) {
     // CVS mdoc_xr_pre()/man_MR_pre() treat name and section separately;
     // optional MR suffix punctuation does not participate in the target.
     let Some(name) = node
@@ -93,18 +148,31 @@ fn manual_link(node: &Node, profile: &mut AstStructure) {
     else {
         return;
     };
-    if name.is_empty() {
-        return;
-    }
-    profile.manual_links += 1;
     let section = node
         .children
         .get(1)
         .and_then(|operand| operand.text.as_deref());
-    if let Some(name) = observe_operand(name)
-        && let Some(section) = section.map_or(Some(None), |value| observe_operand(value).map(Some))
-    {
-        profile.known_links.record(Identity::Manual(name, section));
+    let (Some(name), Some(manual_section)) = (
+        observe_operand(name),
+        section.map_or(Some(None), |value| observe_operand(value).map(Some)),
+    ) else {
+        profile.unclassified_manual_links += 1;
+        return;
+    };
+    if name.trim().is_empty() && manual_section.is_none() && !man {
+        // A sectionless mdoc Xr has no generated parentheses. A name with
+        // no nonwhitespace glyph then produces at most inert spacing.
+        return;
+    }
+    let target = LinkTarget::Manual {
+        name,
+        manual_section,
+    };
+    if target.to_uri().is_some() {
+        profile.manual_links += 1;
+        profile.known_links.record_target(&target);
+    } else {
+        profile.invalid_manual_links.record_target(&target);
     }
 }
 

@@ -75,7 +75,13 @@ struct AstStructure {
     unclassified_address_links: usize,
     #[serde(skip)]
     known_links: links::LinkOccurrences,
+    #[serde(skip)]
+    invalid_manual_links: links::LinkOccurrences,
+    #[serde(skip)]
+    unclassified_manual_links: usize,
     section_links: usize,
+    #[serde(skip)]
+    section_outcomes: links::NativeSectionLinks,
     equation_configurations: usize,
     display_equations: usize,
     inline_equations: usize,
@@ -99,8 +105,14 @@ struct IrStructure {
     email_links: usize,
     #[serde(skip)]
     known_links: links::LinkOccurrences,
+    #[serde(skip)]
+    invalid_manual_links: links::LinkOccurrences,
+    #[serde(skip)]
+    invalid_manual_diagnostics: usize,
     section_links: usize,
     unresolved_section_references: usize,
+    #[serde(skip)]
+    section_outcomes: links::ObservedSectionLinks,
     display_equations: usize,
     inline_equation_candidates: usize,
     table_equation_candidates: usize,
@@ -260,7 +272,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
-    let (expected, mut expected_topology) = ast_profile(&report.document.root);
+    let (expected, mut expected_topology) = ast_profile(&report.document);
     // Only actual owned Equation nodes establish an obligation. CVS
     // roff_parseln bypasses equation delimiters while tbl consumes a cell;
     // a root-source scan cannot invent an executed eqn environment here.

@@ -70,7 +70,10 @@ operands: one for each `Xr` or `MR`, the first address of `UR`, `MT`, `Lk`, or
 `%U`, and one for each address operand of `Mt`. A `%R` field with an authored
 RFC number also contributes its generated URL. The audit visits the link
 block or element once and preserves multiplicity when macro expansion shares
-a source coordinate or repeats a destination.
+a source coordinate or repeats a destination. Marker-list and plain-list
+`It` heads skipped by CVS remain parser diagnostics and source origins;
+their child links have no execution obligation. Visible definition terms,
+column cells, and list bodies retain theirs.
 
 The audit checks the link class and counts each proven destination separately.
 A decoded single-mailbox `mailto:` address from `UR`, `Lk`, or `%U` counts as
@@ -78,12 +81,22 @@ an email. A proven empty address does not require a link. A valid address
 with an empty label still requires one. Where recovery or a decoding limit
 prevents an exact address observation, an unclassified `UR`, `Lk`, or `%U`
 still contributes to the combined external and email count. An explicit
-email macro continues to require an email link. An unresolvable `.Sx` is
-allowed to degrade to visible text only when the normal
-lowering path also emits its structured
-`unresolved-section-reference` diagnostic; the audit therefore detects silent
-loss without pretending that a cross-document or absent section is a valid
-same-document target.
+email macro continues to require an email link. Manual counts cover usable
+typed addresses. An `Xr` with an empty or whitespace-only name and no section
+has no address obligation. If the name still produces a visible label such as
+`(3)`, the audit requires the retained invalid target and its structured
+`ir.invalid-manual-reference` diagnostic. Space and escape recovery affect
+the known or unclassified status of the name and optional section.
+
+Each executed `Sx` shares the parser's authored title spelling. The audit
+pairs native headings with emitted section owners at matching source
+coordinates, retaining occurrence order for sections from the same macro
+expansion. With complete heading-owner evidence, the observed resolved links
+must contain the expected canonical targets in order, and a distinct
+`unresolved-section-reference` diagnostic must name each unresolvable
+authored reference. Additional observations can occur where formatting splits
+a link into more than one piece. Incomplete heading-owner evidence limits
+the audit to the aggregate executed-reference count for that page.
 
 `sourceLinkOrigins` keeps the existing coordinate sets for `Xr`, `UR`/`Lk`,
 `MT`/`Mt`, and `Sx`. The obligation count also covers direct `MR` and reference
