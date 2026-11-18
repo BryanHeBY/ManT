@@ -77,6 +77,8 @@ that crate was not published for that change.
 - Place column paragraph and display targets at their native cell positions.
   Keep separate canonical IDs for repeated tags, including already-normalized
   author aliases.
+- Resume roff anchor suffix allocation from the last candidate for each slug.
+  Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.
   Honor canonical author IDs and use final owners for both local and
   self-document fragments, including collisions and ambiguous aliases.

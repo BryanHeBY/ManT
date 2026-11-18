@@ -43,20 +43,29 @@ pub(super) fn normalize_generated_anchors(
         explicit_targets: &'targets HashSet<String>,
         used: HashSet<String>,
         conflicting_canonicals: HashSet<String>,
+        next_suffix: HashMap<String, usize>,
     }
 
     impl Normalizer<'_> {
         fn allocate(&mut self, base: &str, original: &str) -> String {
-            let mut candidate = base.to_owned();
-            let mut suffix = 2;
-            while self.used.contains(&candidate)
-                || (candidate != original && self.explicit_targets.contains(&candidate))
+            let candidate = base.to_owned();
+            if (base == original || !self.explicit_targets.contains(base))
+                && self.used.insert(candidate.clone())
             {
-                candidate = format!("{base}-{suffix}");
-                suffix += 1;
+                return candidate;
             }
-            self.used.insert(candidate.clone());
-            candidate
+            let suffix = self.next_suffix.entry(candidate).or_insert(2);
+            loop {
+                let candidate = format!("{base}-{suffix}");
+                *suffix += 1;
+                // Occupied IDs and authored reservations only accumulate.
+                // An exact reserved suffix is checked as its own slug above.
+                if !self.explicit_targets.contains(&candidate)
+                    && self.used.insert(candidate.clone())
+                {
+                    return candidate;
+                }
+            }
         }
     }
 
@@ -122,6 +131,7 @@ pub(super) fn normalize_generated_anchors(
         explicit_targets,
         used,
         conflicting_canonicals: HashSet::new(),
+        next_suffix: HashMap::new(),
     };
     for block in &mut *blocks {
         normalizer.visit_block_mut(block);
@@ -432,11 +442,63 @@ pub(super) fn section_id_base(title: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
-    use mant_ir::{Inline, LinkTarget};
+    use mant_ir::{Block, Inline, InlineLayout, LayoutHint, LinkTarget};
 
-    use super::{SectionTargets, promote_manual_reference_inlines, resolve_section_target};
+    use super::{
+        SectionTargets, normalize_generated_anchors, promote_manual_reference_inlines,
+        resolve_section_target,
+    };
+
+    #[test]
+    fn anchor_suffix_cursor_keeps_source_order_and_authored_reservations() {
+        // The uppercase and dotted spellings use the same slug namespace.
+        // The reserved base can still be used later by its exact owner.
+        let mut blocks = [Block::Paragraph {
+            children: ["TAG", "tag", "tag-2", "tag", "TAG", "Tag.2", "tag"]
+                .into_iter()
+                .map(Inline::anchor)
+                .collect(),
+            layout: LayoutHint::default(),
+            inline_layout: InlineLayout::default(),
+            source: None,
+        }];
+        let reserved = HashSet::from(["tag".to_owned(), "tag-2".to_owned()]);
+        normalize_generated_anchors(&mut blocks, &mut [], &reserved);
+        let [Block::Paragraph { children, .. }] = &blocks else {
+            panic!("one anchor carrier");
+        };
+        let projected = children
+            .iter()
+            .map(|child| {
+                let Inline::Anchor {
+                    id,
+                    fragment_aliases,
+                    ..
+                } = child
+                else {
+                    panic!("expected one anchor: {child:?}");
+                };
+                (
+                    id.as_str(),
+                    fragment_aliases.first().map(mant_ir::FragmentAlias::as_str),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            projected,
+            [
+                ("tag-3", None),
+                ("tag-7", Some("tag")),
+                ("tag-2", None),
+                ("tag-4", Some("tag")),
+                ("tag-5", None),
+                ("tag-2-2", None),
+                ("tag-6", Some("tag")),
+            ]
+        );
+    }
 
     #[test]
     fn resolves_one_parenthetically_qualified_section_title() {
