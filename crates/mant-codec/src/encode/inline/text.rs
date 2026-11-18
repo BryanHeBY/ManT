@@ -111,6 +111,9 @@ pub(in crate::encode) fn block_prefix_escape_position(line: &str) -> Option<usiz
         || marker == b'>'
         || (matches!(marker, b'-' | b'+' | b'*')
             && bytes.get(1).copied().is_none_or(block_separator))
+        // The reader enables pulldown-cmark's plus-delimited metadata
+        // extension. A literal row must not open or close that block.
+        || bytes == b"+++"
         || is_underline(bytes, marker)
     {
         Some(0)

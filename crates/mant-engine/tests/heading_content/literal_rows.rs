@@ -1,5 +1,5 @@
-use mant_codec::encode::render_markdown;
-use mant_ir::{Block, Inline, ResolvedContent, inline_plain_text};
+use mant_codec::encode::{MarkdownOptions, render_markdown, render_markdown_with_options};
+use mant_ir::{Block, Inline, LinkTarget, ResolvedContent, inline_plain_text};
 use mant_loader::load_markdown_text;
 
 #[test]
@@ -21,6 +21,9 @@ fn hard_rows_cannot_create_blocks_in_setext_headings_or_prose() {
         "1) words",
         "-",
         "+",
+        "+++",
+        "++++",
+        "+++ words",
         "1.",
         "0)",
         "2.",
@@ -68,6 +71,148 @@ fn hard_rows_cannot_create_blocks_in_setext_headings_or_prose() {
             }
         }
     }
+}
+
+#[test]
+fn literal_plus_rows_stay_out_of_metadata_on_repeated_export() {
+    let label = "**[HEADING](https://example.test/target)**";
+    for (authored, visible, hard_rows) in [
+        (format!("+++<br>{label}"), "+++\nHEADING", 1),
+        (format!("{label}<br>+++<br>tail"), "HEADING\n+++\ntail", 2),
+        (format!("{label}<br>+++"), "HEADING\n+++", 1),
+    ] {
+        for level in [0, 1, 2] {
+            for close in [false, true] {
+                let first = match level {
+                    1 => format!("# {authored}\n\n"),
+                    2 => format!("# Probe\n\n## {authored}\n\n"),
+                    _ => format!("# Probe\n\n{authored}\n\n"),
+                };
+                let source = format!(
+                    "{first}BODY-ALPHA.\n\n{}BODY-BETA.\n\n+ List item.\n\n***\n",
+                    if close { "+++\n\n" } else { "" },
+                );
+                for options in [MarkdownOptions::default(), MarkdownOptions::ADDRESSABLE] {
+                    let mut content = load_markdown_text(&source, None).unwrap();
+                    for round in 0..=2 {
+                        assert_plus_row_owners(&content, level, visible, hard_rows, close, &source);
+                        if round < 2 {
+                            let exported = render_markdown_with_options(&content, options);
+                            content = load_markdown_text(&exported, None)
+                                .unwrap_or_else(|error| panic!("{source}\n{exported}\n{error}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn assert_plus_row_owners(
+    content: &ResolvedContent,
+    level: usize,
+    visible: &str,
+    hard_rows: usize,
+    close: bool,
+    source: &str,
+) {
+    let document = content.document.as_ref().unwrap();
+    let heading = document.heading.as_ref().expect(source);
+    let root_blocks = body_blocks(&document.blocks).collect::<Vec<_>>();
+    let section_blocks;
+    let (inlines, blocks) = match (level, document.sections.as_slice(), root_blocks.as_slice()) {
+        (1, [], body) => (&heading.content, body),
+        (2, [section], []) => {
+            section_blocks = body_blocks(&section.blocks).collect::<Vec<_>>();
+            (&section.heading.content, section_blocks.as_slice())
+        }
+        (0, [], [Block::Paragraph { children, .. }, rest @ ..]) => (children, rest),
+        _ => panic!("expected one designated owner for {source}: {document:#?}"),
+    };
+    assert_eq!(
+        heading.plain_text(),
+        if level == 1 { visible } else { "Probe" }
+    );
+    assert_eq!(inline_plain_text(inlines), visible, "{source}");
+    assert_eq!(
+        inlines
+            .iter()
+            .filter(|item| matches!(item, Inline::LineBreak { .. }))
+            .count(),
+        hard_rows,
+        "{source}"
+    );
+    assert_eq!(
+        super::links(document),
+        [LinkTarget::External {
+            uri: "https://example.test/target".to_owned()
+        }],
+        "{source}"
+    );
+    let [
+        paragraphs @ ..,
+        Block::List { items, .. },
+        Block::ThematicBreak { .. },
+    ] = blocks
+    else {
+        panic!("only the real list and rule belong to this owner: {source}\n{blocks:?}");
+    };
+    assert_eq!(items.len(), 1, "{source}");
+    let paragraphs = paragraphs
+        .iter()
+        .map(|block| {
+            let Block::Paragraph { children, .. } = block else {
+                panic!("literal plus rows must remain paragraphs: {source}\n{block:?}");
+            };
+            inline_plain_text(children)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paragraphs,
+        if close {
+            vec!["BODY-ALPHA.", "+++", "BODY-BETA."]
+        } else {
+            vec!["BODY-ALPHA.", "BODY-BETA."]
+        },
+        "{source}"
+    );
+}
+
+fn body_blocks(blocks: &[Block]) -> impl Iterator<Item = &Block> {
+    blocks.iter().filter(|block| {
+        // Addressable Markdown writes raw HTML destinations. Their visible
+        // source fallback on reimport is separate from the authored body.
+        if let Block::Paragraph { children, .. } = block
+            && let [Inline::Text { value }] = children.as_slice()
+            && value.starts_with("<a id=\"")
+            && value.ends_with("\"></a>")
+        {
+            return false;
+        }
+        !matches!(block, Block::VerticalSpace { .. })
+    })
+}
+
+#[test]
+fn authored_plus_metadata_is_still_read_as_an_unsupported_source_block() {
+    let metadata = "+++\nkey = \"value\"\n+++\n";
+    let source = format!("{metadata}\n# Probe\n\nBODY-SENTINEL.\n");
+    let content = load_markdown_text(&source, None).unwrap();
+    let document = content.document.as_ref().unwrap();
+    let [
+        Block::Unsupported { name, text, .. },
+        Block::Paragraph { children, .. },
+    ] = document.blocks.as_slice()
+    else {
+        panic!(
+            "authored metadata and body have separate owners: {:?}",
+            document.blocks
+        );
+    };
+    assert_eq!(name.as_deref(), Some("metadata block"));
+    assert_eq!(text.trim_end(), metadata.trim_end());
+    assert_eq!(inline_plain_text(children), "BODY-SENTINEL.");
+    assert_eq!(document.heading.as_ref().unwrap().plain_text(), "Probe");
 }
 
 #[test]

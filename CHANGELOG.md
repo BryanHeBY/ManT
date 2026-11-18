@@ -67,6 +67,8 @@ that crate was not published for that change.
   self-document fragments, including collisions and ambiguous aliases.
 - Preserve literal thematic and list marker prefixes on Markdown hard rows
   through repeated export and readback. Keep heading levels and section bodies.
+- Escape a literal `+++` physical line in Markdown headings and prose so
+  metadata parsing cannot consume the surrounding content on readback.
 - Keep generated semantic entry IDs within the selector limit, including
   when a long form cannot publish names. The full form remains readable.
 - Fit roff and Markdown section IDs within the selector byte budget after
