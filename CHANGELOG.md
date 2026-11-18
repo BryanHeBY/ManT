@@ -139,9 +139,15 @@ that crate was not published for that change.
 - Keep an independently separated declaration in its original definition
   when a table and an enclosure also appear in the label. Keep cell text and
   unsupported connectors out of the name index.
+- Recover independently delimited command and function subjects after a
+  weak prefix. Keep punctuation inside a single prose operand from starting
+  a new declaration.
 - Account for tbl cursor retreats, absolute motion, and drawn lines when
   measuring the first printed field. Unprinted cells do not add a word
   separator, and completed empty rows keep their native count.
+- Keep the author words after a drawn line and a native word-end break.
+  Preserve table word boundaries when overstrike, cursor movement, or a
+  drawn stroke in an earlier cell affects the first printed field.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.
