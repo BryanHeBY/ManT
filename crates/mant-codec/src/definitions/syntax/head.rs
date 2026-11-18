@@ -150,6 +150,7 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
         names,
         occurrences: vec![occurrences],
         limit: None,
+        semantic: true,
     })
 }
 

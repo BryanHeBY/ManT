@@ -12,7 +12,7 @@ use mant_protocol::{
 };
 
 #[path = "../support/json_roundtrip.rs"]
-mod json_roundtrip;
+pub(super) mod json_roundtrip;
 
 pub(super) fn load(source: &str) -> ResolvedContent {
     let original = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();

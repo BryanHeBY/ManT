@@ -22,6 +22,7 @@ pub(in crate::definitions) struct InferredIdentity {
     pub(in crate::definitions) names: Vec<String>,
     pub(in crate::definitions) occurrences: Vec<Vec<RecognizedName>>,
     pub(in crate::definitions) limit: Option<DeclarationLimit>,
+    pub(in crate::definitions) semantic: bool,
 }
 
 pub(in crate::definitions) fn infer_identity(
@@ -113,6 +114,7 @@ impl InferredIdentity {
             names,
             occurrences: recognized.occurrences,
             limit: recognized.limit,
+            semantic: recognized.semantic,
         }
     }
 }
@@ -124,7 +126,9 @@ fn continued_occurrences(
     leading_option: bool,
     recognized: &mut HeadNames,
 ) -> Option<EntryKind> {
-    let HeadNames { occurrences, limit } = recognized;
+    let HeadNames {
+        occurrences, limit, ..
+    } = recognized;
     if leading_option {
         let mut mixed = false;
         for (index, (term, names)) in item.terms.iter().zip(occurrences).enumerate().skip(1) {

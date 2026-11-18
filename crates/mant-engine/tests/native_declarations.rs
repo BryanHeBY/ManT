@@ -7,6 +7,8 @@ use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
 
 #[path = "native_declarations/boundaries.rs"]
 mod boundaries;
+#[path = "native_declarations/bsd_symbols.rs"]
+mod bsd_symbols;
 #[path = "native_declarations/eligibility.rs"]
 mod eligibility;
 #[path = "native_declarations/hanging.rs"]

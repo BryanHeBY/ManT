@@ -32,13 +32,13 @@ enum SubjectSequence {
 }
 
 impl SubjectSequence {
-    fn from_subject(subject: Option<NativeSubject>, enclosure: Option<u32>) -> Option<Self> {
+    fn from_subject(subject: NativeSubject, enclosure: Option<u32>) -> Self {
         match subject {
-            Some(NativeSubject::Constant) => Some(Self::Constant(enclosure)),
+            NativeSubject::Constant => Self::Constant(enclosure),
             // Fo's generated arguments already carry the Argument role;
             // a following Fa outside its BODY can be independent.
-            Some(NativeSubject::Function) => Some(Self::Function(enclosure)),
-            _ => None,
+            NativeSubject::Function => Self::Function(enclosure),
+            _ => Self::Subjects,
         }
     }
 }
@@ -102,14 +102,12 @@ impl Candidates {
     }
 
     fn admit_subject(&mut self, subject: Option<NativeSubject>, enclosure: Option<u32>) -> bool {
-        // A retained Dv role controls Fa even if the Dv spelling cannot
-        // name an entry. CVS termp_fa_pre distinguishes fields from the
-        // arguments inside Fo; a comma-delimited Fa after a function lead
-        // likewise does not establish a new declaration here.
-        if let Some(sequence) = SubjectSequence::from_subject(subject, enclosure) {
-            self.sequence = sequence;
-        }
-        if subject != Some(NativeSubject::Field) {
+        let Some(subject) = subject else { return true };
+        // An independently established subject changes the sequence even
+        // when its name is unavailable. CVS termp_fa_pre distinguishes
+        // ordinary Fa from its use as a function argument.
+        if subject != NativeSubject::Field {
+            self.sequence = SubjectSequence::from_subject(subject, enclosure);
             return true;
         }
         match self.sequence {
@@ -140,7 +138,10 @@ impl Candidates {
                 .collect();
             return (
                 kind.unwrap_or(EntryKind::Term),
-                Recognition { names, limit: None },
+                Recognition {
+                    names,
+                    ..Recognition::default()
+                },
             );
         };
         let limit = match rejected {
@@ -150,8 +151,8 @@ impl Candidates {
         (
             EntryKind::Term,
             Recognition {
-                names: Vec::new(),
                 limit,
+                ..Recognition::default()
             },
         )
     }
@@ -203,37 +204,22 @@ fn collect(
         if uses.covers(&span, search_argument) {
             continue;
         }
-        let lead = operand_at(operands, start);
-        let leading_role = lead.and_then(|operand| operand.role.subject());
-        let same_scope = leading_role.is_none_or(|receipt| receipt.enclosure == enclosure);
-        if let Some(receipt) = leading_role
-            && receipt.kind == NativeSubject::Field
-            && (!same_scope || !uses.covers(&span, |role| role.subject() == leading_role))
-        {
-            // Fa must occupy the complete group in this proven scope. A
-            // missing delimiter can expose the Field's text without making
-            // it a direct operand of this head.
+        let Ok(subject) = group_subject(text, &span, operands, enclosure) else {
             candidates.unproved_part = true;
             continue;
-        }
-        let subject = leading_role
-            .filter(|_| same_scope)
-            .map(|receipt| receipt.kind);
-        let subject = if subject == Some(NativeSubject::ReturnType) {
-            let first = operands.partition_point(|operand| operand.bytes.end <= start);
-            following_function(text, &operands[first..], span.clone()).map(|(_, function)| function)
-        } else {
-            subject
         };
         if !candidates.admit_subject(subject, enclosure) {
             continue;
         }
-        let explicit = lead.is_some_and(|operand| {
+        let lead = operand_at(operands, start);
+        let operand_label = lead.is_some_and(|operand| {
             operand.role == NativeOperandRole::ExplicitOption
                 || operand.role == NativeOperandRole::Placeholder
-                || operand.role.subject().is_some()
         });
-        let Ok((kind, result)) = recognize_group(text, part, span, operands, uses, admission)
+        let explicit =
+            operand_label || lead.is_some_and(|operand| operand.role.subject().is_some());
+        let Ok((kind, result)) =
+            recognize_group(text, part, span, operands, uses, admission, enclosure)
         else {
             candidates.unproved_part = true;
             continue;
@@ -243,10 +229,7 @@ fn collect(
         }
         if result.names.is_empty() {
             candidates.unproved_part = true;
-        } else if explicit
-            && same_scope
-            && SubjectSequence::from_subject(subject, enclosure).is_none()
-        {
+        } else if operand_label {
             candidates.sequence = SubjectSequence::Subjects;
         }
         candidates
@@ -258,6 +241,42 @@ fn collect(
             }));
     }
     Ok(())
+}
+
+fn group_subject(
+    text: &str,
+    span: &Range<usize>,
+    operands: &[NativeOperand],
+    enclosure: Option<u32>,
+) -> Result<Option<NativeSubject>, RejectedPart> {
+    let first = operands.partition_point(|operand| operand.bytes.end <= span.start);
+    let lead = operands
+        .get(first)
+        .filter(|operand| operand.bytes.contains(&span.start));
+    let Some(receipt) = lead.and_then(|operand| operand.role.subject()) else {
+        return Ok(None);
+    };
+    // A group can consist of multiple Fa nodes. Each must come from the
+    // same proven enclosure, including the case of a direct It HEAD. A
+    // missing delimiter can expose the text from a different scope.
+    if receipt.kind == NativeSubject::Field
+        && !OperandUses::new(operands).covers(span, |role| {
+            role.subject().is_some_and(|field| {
+                field.kind == NativeSubject::Field && field.enclosure == enclosure
+            })
+        })
+    {
+        return Err(RejectedPart::Unproved);
+    }
+    if receipt.enclosure != enclosure {
+        return Ok(None);
+    }
+    if receipt.kind == NativeSubject::ReturnType
+        && let Some((_, function)) = following_function(text, &operands[first..], span.clone())
+    {
+        return Ok(Some(function));
+    }
+    Ok(Some(receipt.kind))
 }
 
 fn independent_groups<'a>(
@@ -282,6 +301,7 @@ fn independent_groups<'a>(
                 && (operand.role.is_parameter()
                     || match operand.role {
                         NativeOperandRole::ExplicitOption
+                        | NativeOperandRole::Description
                         | NativeOperandRole::EnclosureStart(_)
                         | NativeOperandRole::EnclosureEnd(_) => true,
                         NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
@@ -298,6 +318,7 @@ fn recognize_group(
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
     admission: Admission,
+    enclosure: Option<u32>,
 ) -> Result<(EntryKind, Recognition), RejectedPart> {
     if let Some(option) = operand_at(operands, span.start)
         && option.role == NativeOperandRole::ExplicitOption
@@ -318,7 +339,7 @@ fn recognize_group(
     {
         return Err(RejectedPart::Unproved);
     }
-    if let Some(result) = recognize_part(text, part, operands) {
+    if let Some(result) = recognize_part(text, part, operands, enclosure) {
         return Ok(result);
     }
     if admission == Admission::TypedSubjects {
@@ -331,7 +352,13 @@ fn recognize_group(
         .filter(|name| uses.permits(name, NameSource::Lexical))
         .map(|name| rebase(name, span.start))
         .collect();
-    Ok((EntryKind::Term, Recognition { names, limit: None }))
+    Ok((
+        EntryKind::Term,
+        Recognition {
+            names,
+            ..Recognition::default()
+        },
+    ))
 }
 
 fn option_group(

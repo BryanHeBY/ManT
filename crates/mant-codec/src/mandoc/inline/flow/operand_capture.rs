@@ -212,7 +212,9 @@ impl super::InlineBuilder {
             };
             let role = capture
                 .operand_role
+                .filter(|role| *role != NativeOperandRole::Description)
                 .or_else(|| capture.search_head.as_ref()?.role(text?.0))
+                .or(capture.operand_role)
                 .or_else(|| enclosure().map(NativeOperandRole::EnclosureContent))
                 .or_else(|| {
                     text?

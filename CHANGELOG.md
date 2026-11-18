@@ -49,6 +49,9 @@ that crate was not published for that change.
 - Bind parallel mdoc fields to their shared description. Track argument
   tails through constants without queryable names and through complete
   custom enclosure delimiters.
+- Bind numbered BSD error names and annotated constants at their exact
+  ranges. Keep types, descriptions and unproved enclosed arguments out
+  of direct definition results.
 - Keep generated semantic entry IDs within the selector limit, including
   when a long form cannot publish names. The full form remains readable.
 - Fit roff and Markdown section IDs within the selector byte budget after

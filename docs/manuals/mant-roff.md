@@ -644,6 +644,14 @@ types or argument labels use term entries. Arrays, C function-pointer
 declarators, and ambiguous multiple-variable forms retain their complete
 forms with no guessed identifier.
 
+In a numbered `Er` definition, the surviving error symbol is the name.
+The number and an independently styled description remain in the complete
+form. A `Dv` definition similarly binds its subject while retaining attached
+type and argument operands. Additional names require independent declaration
+evidence such as the separate native invocations produced by comma-delimited
+symbols. A parameter or description word within one invocation does not
+become another name.
+
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand
 remains an argument across font changes. Each `TQ` term retains its own name

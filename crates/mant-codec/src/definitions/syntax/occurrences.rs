@@ -13,6 +13,7 @@ use mant_ir::{DefinitionItem, EntryKind, Inline, ParameterKind, inline_plain_tex
 pub(super) struct HeadNames {
     pub(super) occurrences: Vec<Vec<RecognizedName>>,
     pub(super) limit: Option<DeclarationLimit>,
+    pub(super) semantic: bool,
 }
 
 impl HeadNames {
@@ -20,6 +21,7 @@ impl HeadNames {
         Self {
             occurrences,
             limit: None,
+            semantic: true,
         }
     }
 
@@ -67,6 +69,7 @@ pub(super) fn recognize_head_names(
             return HeadNames {
                 occurrences: found.occurrences,
                 limit,
+                semantic: true,
             };
         }
         Some(NativeHeadRole::Environment) => item

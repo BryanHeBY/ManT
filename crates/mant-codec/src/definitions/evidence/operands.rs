@@ -39,6 +39,9 @@ pub(crate) enum NativeOperandRole {
     /// The first actual man OP operand still has to spell a complete flag.
     #[cfg(feature = "roff")]
     OptionalKey,
+    /// Styled text executed by its own mdoc macro in a declaration HEAD.
+    #[cfg(feature = "roff")]
+    Description,
     #[cfg(feature = "roff")]
     Subject(SubjectReceipt),
     /// Publication retained the native subject's role within the form,
@@ -172,7 +175,9 @@ impl CapturedHeadOperands {
                 .find(|operand| {
                     !matches!(
                         operand.role,
-                        NativeOperandRole::EnclosureStart(_) | NativeOperandRole::EnclosureEnd(_)
+                        NativeOperandRole::EnclosureStart(_)
+                            | NativeOperandRole::EnclosureEnd(_)
+                            | NativeOperandRole::Description
                     )
                 })
                 .is_some_and(|operand| operand.role.is_operand_label());

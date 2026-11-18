@@ -3,6 +3,7 @@ use mant_ir::{EntryKind, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceClass, OutlineNode};
 
 mod receipts;
+mod symbols;
 
 fn fixture(head: &str, space_off: bool) -> ResolvedContent {
     let spacing = if space_off { ".Sm off\n" } else { "" };

@@ -137,7 +137,14 @@ fn append_reference_body(builder: &mut InlineBuilder, nodes: &[Node], name: Opti
 fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let children = inline_children(node);
     if let Some(font) = super::mdoc_text_font(node.macro_token.as_ref()) {
-        builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
+        let append = |builder: &mut InlineBuilder| {
+            builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
+        };
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::No)) {
+            append(builder);
+        } else {
+            builder.with_native_operand_role(NativeOperandRole::Description, append);
+        }
         return;
     }
     match node.macro_token.as_ref() {

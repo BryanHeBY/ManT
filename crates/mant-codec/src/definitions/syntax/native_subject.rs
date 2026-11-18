@@ -1,6 +1,6 @@
 //! Name only the accepted operands of a typed mdoc definition head.
 use super::eligibility::{NameSource, OperandUses};
-use super::scan::{MAX_NAMES, MAX_NESTING};
+use super::scan::MAX_NESTING;
 use super::{DeclarationLimit, named, occurrences::HeadNames};
 use crate::definitions::{
     NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, evidence::HeadOperands,
@@ -9,6 +9,7 @@ use mant_ir::{DefinitionItem, EntryKind, inline_plain_text};
 use std::ops::Range;
 
 mod declaration_parts;
+mod symbols;
 
 pub(super) fn recognize_head(
     item: &DefinitionItem,
@@ -17,6 +18,7 @@ pub(super) fn recognize_head(
 ) -> Option<(EntryKind, HeadNames)> {
     let (kind, first) = recognize(first, operands.for_term(0)?)?;
     let mut limit = first.limit;
+    let mut semantic = !first.unproved_field;
     let mut occurrences = vec![first.names];
     for (index, term) in item.terms.iter().enumerate().skip(1) {
         let mut names = Vec::new();
@@ -25,29 +27,40 @@ pub(super) fn recognize_head(
         {
             names = term.names;
             limit = limit.or(term.limit);
+            semantic |= !term.unproved_field;
+        } else {
+            semantic = true;
         }
         occurrences.push(names);
     }
-    Some((kind, HeadNames { occurrences, limit }))
+    Some((
+        kind,
+        HeadNames {
+            occurrences,
+            limit,
+            semantic,
+        },
+    ))
 }
 
 #[derive(Default)]
 struct Recognition {
     names: Vec<RecognizedName>,
     limit: Option<DeclarationLimit>,
+    unproved_field: bool,
 }
 
 impl Recognition {
     fn one(name: Option<RecognizedName>) -> Self {
         Self {
             names: name.into_iter().collect(),
-            limit: None,
+            ..Self::default()
         }
     }
 }
 
 fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recognition)> {
-    let (head, _) = unwrapped(text, text, operands);
+    let (head, enclosure) = unwrapped(text, text, operands);
     let start = offset(text, head);
     let first = operands.partition_point(|operand| operand.bytes.end <= start);
     let leading = operands
@@ -82,13 +95,14 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
     {
         return Some(identity);
     }
-    recognize_part(text, head, operands)
+    recognize_part(text, head, operands, enclosure)
 }
 
 fn recognize_part(
     text: &str,
     head: &str,
     operands: &[NativeOperand],
+    enclosure: Option<u32>,
 ) -> Option<(EntryKind, Recognition)> {
     let mut start = offset(text, head);
     let end = start + head.len();
@@ -100,30 +114,13 @@ fn recognize_part(
         || matches!(lead.role, NativeOperandRole::SearchArgument(_))
             && head.len() < text.trim().len()
     {
-        // Ar can label a real definition or a placeholder in a syntax
-        // expression. Its spelling alone proves neither a command nor an
-        // environment variable. A surviving generated enclosure gives an
-        // enclosed search form the same scope for independent declarations.
-        // The role check still prevents a search argument from naming one.
-        let uses = OperandUses::new(operands).shifted(start);
-        let names = named::term_occurrences(head, uses)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|name| {
-                uses.permits(name, NameSource::Operand(NativeOperandRole::Placeholder))
-                    || uses.permits(name, NameSource::Lexical)
-            })
-            .map(|mut name| {
-                for part in &mut name.parts {
-                    part.start += start;
-                    part.end += start;
-                }
-                name
-            })
-            .collect();
-        return Some((EntryKind::Term, Recognition { names, limit: None }));
+        return Some((
+            EntryKind::Term,
+            recognize_operand_label(head, start, operands),
+        ));
     }
-    let mut subject = lead.role.subject()?.kind;
+    let receipt = lead.role.subject()?;
+    let mut subject = receipt.kind;
     if subject == NativeSubject::ReturnType {
         // Ft supplies a type before the following function's own name.
         // Keep an isolated or unsupported descriptor as an unnamed term.
@@ -137,8 +134,20 @@ fn recognize_part(
     }
     let name = match subject {
         NativeSubject::Constant | NativeSubject::Error => {
-            let symbols = symbol_group(text, start..end, &operands[first..], subject);
+            let symbols = symbols::recognize(text, &(start..end), &operands[first..]);
             return Some((EntryKind::Term, symbols));
+        }
+        NativeSubject::Field if receipt.enclosure != enclosure => {
+            // An exact form is independently queryable even without names.
+            // Keep this label and its BODY outside the semantic entry index
+            // until both bounds prove that its Fa can act as a subject.
+            return Some((
+                EntryKind::Term,
+                Recognition {
+                    unproved_field: true,
+                    ..Recognition::default()
+                },
+            ));
         }
         NativeSubject::Type | NativeSubject::Field => {
             // A type/field can be the subject of a term, but the type
@@ -193,6 +202,31 @@ fn recognize_part(
         kind,
         Recognition::one(name.filter(|name| uses.permits(name, scope))),
     ))
+}
+
+fn recognize_operand_label(head: &str, start: usize, operands: &[NativeOperand]) -> Recognition {
+    // Ar can label a definition or supply a parameter in a search form.
+    // In a proved enclosure only actual labels and names qualify.
+    let uses = OperandUses::new(operands).shifted(start);
+    let names = named::term_occurrences(head, uses)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|name| {
+            uses.permits(name, NameSource::Operand(NativeOperandRole::Placeholder))
+                || uses.permits(name, NameSource::Lexical)
+        })
+        .map(|mut name| {
+            for part in &mut name.parts {
+                part.start += start;
+                part.end += start;
+            }
+            name
+        })
+        .collect();
+    Recognition {
+        names,
+        ..Recognition::default()
+    }
 }
 
 fn following_function(
@@ -252,89 +286,6 @@ fn matching_subject_span(
         span.end = operand.bytes.end;
     }
     Some(span)
-}
-
-fn symbol_group(
-    text: &str,
-    head: Range<usize>,
-    operands: &[NativeOperand],
-    subject: NativeSubject,
-) -> Recognition {
-    let mut names = Vec::new();
-    let mut cursor = head.start;
-    let mut previous_node = None;
-    let mut limit = None;
-    for operand in operands
-        .iter()
-        .take_while(|operand| operand.bytes.end <= head.end)
-    {
-        let Some(receipt) = operand.role.subject() else {
-            continue;
-        };
-        let start = operand.bytes.start.max(head.start);
-        let Some(gap) = text.get(cursor..start).map(str::trim) else {
-            return Recognition::default();
-        };
-        if receipt.kind == NativeSubject::Field
-            && subject == NativeSubject::Constant
-            && !names.is_empty()
-        {
-            if gap.is_empty() {
-                cursor = operand.bytes.end;
-                continue;
-            }
-            if enclosed_field_suffix(text, &text[cursor..head.end], operands) {
-                cursor = head.end;
-                break;
-            }
-            return Recognition::default();
-        }
-        if receipt.kind != subject || !matches!(operand.role, NativeOperandRole::Subject(..)) {
-            continue;
-        }
-        let Some(name) = text
-            .get(start..operand.bytes.end)
-            .and_then(|word| plain_identifier(word.trim()))
-        else {
-            continue;
-        };
-        if !gap.is_empty() || !names.is_empty() && previous_node != Some(receipt.node) {
-            return Recognition::default();
-        }
-        let name = RecognizedName::contiguous(name, offset(text, name));
-        if !OperandUses::new(operands).permits(&name, NameSource::Operand(operand.role)) {
-            continue;
-        }
-        if names.len() == MAX_NAMES {
-            limit = Some(DeclarationLimit::Names);
-        } else {
-            names.push(name);
-        }
-        cursor = operand.bytes.end;
-        previous_node = Some(receipt.node);
-    }
-    if text
-        .get(cursor..head.end)
-        .is_some_and(|suffix| suffix.trim().is_empty())
-    {
-        if limit.is_some() {
-            names.clear();
-        }
-        Recognition { names, limit }
-    } else {
-        Recognition::default()
-    }
-}
-
-fn enclosed_field_suffix(text: &str, suffix: &str, operands: &[NativeOperand]) -> bool {
-    let (inner, enclosure) = unwrapped(text, suffix, operands);
-    let start = offset(text, inner);
-    enclosure.is_some()
-        && OperandUses::new(operands).covers(&(start..start + inner.len()), |role| {
-            role.subject().is_some_and(|receipt| {
-                receipt.kind == NativeSubject::Field && receipt.enclosure == enclosure
-            })
-        })
 }
 
 fn unwrapped<'a>(

@@ -1,0 +1,247 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Numbered mdoc errors and constant declarations with parameters or parallel subjects.",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "file": "freebsd-errno.2.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man2/errno.2.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man2/errno.2.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "b7ef69c786c53fde4b6efaad09ba5024ae93f4010032cc82cb437694bb73e4c8",
+      "fixtureSha256": "b7ef69c786c53fde4b6efaad09ba5024ae93f4010032cc82cb437694bb73e4c8",
+      "decompressedSha256": "23d7c9b627df7cbdd06933e2432390cfb1d846aedeae22c436c906c8ed21ef15",
+      "sourceBytes": 10361,
+      "fixtureBytes": 10361,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-3-Clause",
+      "licenseFile": "freebsd-errno.2.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "Numbered error-code heads retain their exact error names.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "de912e846e4d9ecf3975aeee860ce5ce754f6a2bf320c6e7bccfb3217892149c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 34979,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "6ec719fafb1a6bdb7fab71102e9dc52b3ca40b760e366f0c8027481ee4a73bf1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 35024,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "de2937e0fcf4adf89814e39f521b3fd48922c5dd05d1704e4f7f314cbec51ea5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 49772,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "f65c5bc187c35b62bf8166a29b7f1099f3071f45b5c49697b2f6ad094f3f2388",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 93197,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "92f7e7b9024e15f5bf1b67d70020fe8c65b3ce6beec76afd107d100083f1acf4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 772,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-ioctl.2.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man2/ioctl.2.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man2/ioctl.2.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "ae70d7f9cbe0e65d82c09e0c6a881fc77bb108853cef70b66c3972a35b848130",
+      "fixtureSha256": "ae70d7f9cbe0e65d82c09e0c6a881fc77bb108853cef70b66c3972a35b848130",
+      "decompressedSha256": "f212b8a9a87cd36afae58a0a866baadc5d39e94684db4b68d8010da6d0fc7e1b",
+      "sourceBytes": 2087,
+      "fixtureBytes": 2087,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-3-Clause",
+      "licenseFile": "freebsd-ioctl.2.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "An ioctl identifier can bind without publishing its type annotation.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "76374e9cf46f093e505f693f023d15801aa19c4e66008f08bfb31f21bfcf6199",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3729,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "8bd8e0535a60465c20e9f206bf80f07793edcc3ed9a39d1dab997d02539de62c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3741,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "c3280356a0f6c20f5513b83110b468b94d54e109f39da27d097aa64d06a57199",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8916,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "fe44e38f1ba023d4e1bcf4c9d02f77da5d0cbdbe851bf66b399291a83b83e79d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 12108,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 0,
+          "stderrBytes": 0,
+          "status": "Captured"
+        }
+      }
+    },
+    {
+      "file": "freebsd-ppi.4.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man4/ppi.4.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man4/ppi.4.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "4f5e939daef56b4872ae8b530aa08d6367eb172c866c96c3d8928dba21f76025",
+      "fixtureSha256": "4f5e939daef56b4872ae8b530aa08d6367eb172c866c96c3d8928dba21f76025",
+      "decompressedSha256": "83b7675f7fcf47400adca1294a0cd13d80f5437bb1a0c688ac6abc8f09b923e0",
+      "sourceBytes": 1633,
+      "fixtureBytes": 1633,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-2-Clause",
+      "licenseFile": "freebsd-ppi.4.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "The two comma-delimited constants keep their shared body.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "31d69d1cb011bd2e51ac060a5e3e7b2b1af6486220230baac3833c14fafc4433",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2733,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "456657e3bba1645bcfff4f275424bb8fff8a2734c2c8b9afc6943ff7bcc04218",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2735,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "67cf5c99e9778c15958f06539f963db84b440eb392cdc0e57d00ffe10c14105f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 7203,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "e0c395d82713c8b8d7eff80da95fc757e72356e3036277f4d1d9844d713031cf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8952,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "c5c0cd9e53a26ce8003df1d67e4549e76a22197b7575581d97e67d6a606beb14",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 102,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "dragonflybsd-sc.4.gz",
+      "sourceIdentity": "dragonflybsd-6.4.2-x86_64:man/man4/sc.4.gz",
+      "originUrl": "https://avalon.dragonflybsd.org/iso-images/dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archive": "dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archiveMember": "usr/share/man/man4/sc.4.gz",
+      "archiveSha256": "373150a21eeb7ce0f20c7faf1b8129145bf3bf0463a45d0dc18aad274f7ed661",
+      "sourceSha256": "e4b425adbfb1849ec4de14b715e2f8ca208cb33fa4364e5cac109d3867e811cb",
+      "fixtureSha256": "e4b425adbfb1849ec4de14b715e2f8ca208cb33fa4364e5cac109d3867e811cb",
+      "decompressedSha256": "19998fb3275dad696bdcaab84ed919ece92c931981bc6daada80c115892cb0a5",
+      "sourceBytes": 8089,
+      "fixtureBytes": 8089,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-2-Clause",
+      "licenseFile": "dragonflybsd-sc.4.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "An Ar type and pointer annotation leave the ioctl subject visible and queryable.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "4671954a4f8c28b56d82366395100be95553dff2bd529786670d62a57d722674",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 27945,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "5d54998c2d8db8c2156177e542f429b807b6127aa26b6b096d1f66d369515e58",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 27946,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "af152bf0ea97dc2eef9f1b735bbf12e915f4206a9f45728f8d2c9ee44e1c6072",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 45720,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "21450714f235414350106b695b3f40eba6669800d2b5d7be9131a11b67bab787",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 78954,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "2f3d033b26baea5de99adac0ea050315f912613db0ad3b48ffab964f042a40be",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3751,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    }
+  ]
+}
