@@ -105,6 +105,16 @@ impl<'a> OperandUses<'a> {
         self.protects(&(offset..offset + 1))
     }
 
+    pub(super) fn protects_declaration_separator(self, offset: usize) -> bool {
+        #[cfg(feature = "roff")]
+        if operand_at(self.operands, self.offset + offset)
+            .is_some_and(|operand| operand.role == NativeOperandRole::LiteralPunctuation)
+        {
+            return true;
+        }
+        self.protects_syntax(offset)
+    }
+
     #[cfg(feature = "roff")]
     pub(super) fn is_parameter_only(self, part: &Range<usize>) -> bool {
         self.covers(part, |role| {

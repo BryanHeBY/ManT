@@ -351,7 +351,7 @@ fn is_supplement(
     plain_text: bool,
     bounded: bool,
 ) -> bool {
-    role == NativeOperandRole::Description
+    role.is_description()
         || role.is_operand_label()
         || role.subject().is_some_and(|receipt| {
             matches!(receipt.kind, NativeSubject::Field | NativeSubject::Type)
@@ -367,7 +367,9 @@ fn is_supplement(
                 NativeOperandRole::Environment {
                     enclosure: owner, ..
                 } => enclosure == owner,
-                NativeOperandRole::Literal | NativeOperandRole::ClippedEnvironment { .. } => true,
+                NativeOperandRole::Literal
+                | NativeOperandRole::LiteralPunctuation
+                | NativeOperandRole::ClippedEnvironment { .. } => true,
                 _ => false,
             }
 }

@@ -3,6 +3,8 @@ use super::{HEADER, check_direct, definitions, exact_word, explain, load};
 use mant_ir::{EntryOwner, inline_plain_text};
 use std::fmt::Write;
 
+#[path = "scoped_intervals/continuations.rs"]
+mod continuations;
 #[path = "scoped_intervals/environment.rs"]
 mod environment;
 #[path = "scoped_intervals/primary.rs"]

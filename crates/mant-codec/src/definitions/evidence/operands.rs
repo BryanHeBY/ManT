@@ -10,6 +10,9 @@ pub(crate) enum NativeOperandRole {
     /// A visible No operand that can intentionally continue an Ev spelling.
     #[cfg(feature = "roff")]
     LiteralContinuation(Option<u32>),
+    /// A comma or pipe belongs to the complete text of a No operand.
+    #[cfg(feature = "roff")]
+    LiteralPunctuation,
     #[cfg(any(feature = "roff", test))]
     Argument,
     /// A tbl cell contributes readable content without declaring a name or form.
@@ -51,6 +54,14 @@ pub(crate) enum NativeOperandRole {
     /// Styled text executed by its own mdoc macro in a declaration HEAD.
     #[cfg(feature = "roff")]
     Description,
+    /// An executed Cm/Ic operand can open an independent command declaration.
+    #[cfg(feature = "roff")]
+    Command,
+    /// The device wrote this Fn/Fo signature delimiter.
+    #[cfg(feature = "roff")]
+    FunctionSignature {
+        opening: bool,
+    },
     /// Visible link operands, including the terminal's generated suffix.
     #[cfg(feature = "roff")]
     ReferenceText(Option<u32>),
@@ -154,6 +165,11 @@ impl NativeOperandRole {
     }
 
     #[cfg(feature = "roff")]
+    pub(crate) fn is_description(self) -> bool {
+        matches!(self, Self::Description | Self::Command)
+    }
+
+    #[cfg(feature = "roff")]
     pub(crate) fn subject_word(kind: NativeSubject, node: u32, invocation: Option<u32>) -> Self {
         Self::Subject(SubjectReceipt {
             kind,
@@ -203,7 +219,8 @@ impl NativeOperandRole {
                 invocation,
                 enclosure,
             },
-            Self::LiteralContinuation(_) => Self::Argument,
+            Self::LiteralContinuation(_) | Self::FunctionSignature { .. } => Self::Argument,
+            Self::Command => Self::Description,
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,
         }
@@ -334,6 +351,7 @@ impl CapturedHeadOperands {
                             | NativeOperandRole::EnclosureEnd(_)
                             | NativeOperandRole::LiteralDelimiter { .. }
                             | NativeOperandRole::Description
+                            | NativeOperandRole::Command
                     )
                 })
                 .is_some_and(|operand| operand.role.is_operand_label());

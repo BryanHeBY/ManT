@@ -48,7 +48,7 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
         append_name(builder);
     }
     builder.tighten_next_boundary();
-    builder.append_text("(");
+    builder.append_function_signature_mark(true, false);
     builder.tighten_next_boundary();
     for (index, argument) in arguments.iter().enumerate() {
         builder.with_native_operand_role(NativeOperandRole::Argument, |builder| {
@@ -70,11 +70,7 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
         }
     }
     builder.tighten_next_boundary();
-    builder.append_text(if node.flags.synopsis_pretty {
-        ");"
-    } else {
-        ")"
-    });
+    builder.append_function_signature_mark(false, node.flags.synopsis_pretty);
     if node.flags.synopsis_pretty {
         builder.flush_native_field();
     }

@@ -166,6 +166,8 @@ impl HeadOperandCapture {
                     | NativeOperandRole::Subject(..)
                     | NativeOperandRole::Environment { .. }
                     | NativeOperandRole::LiteralContinuation(_)
+                    | NativeOperandRole::Command
+                    | NativeOperandRole::FunctionSignature { .. }
                     | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_)
             ) {
@@ -236,10 +238,8 @@ impl super::InlineBuilder {
             let role = capture
                 .operand_role
                 .filter(|role| {
-                    !matches!(
-                        role,
-                        NativeOperandRole::Description | NativeOperandRole::LiteralContinuation(_)
-                    )
+                    !role.is_description()
+                        && !matches!(role, NativeOperandRole::LiteralContinuation(_))
                 })
                 .or_else(|| capture.search_head.as_ref()?.role(text?.0.id))
                 .or_else(|| {
@@ -262,11 +262,13 @@ impl super::InlineBuilder {
                     .then_some(NativeOperandRole::OptionPunctuation)
                 })
                 .or_else(|| {
-                    capture.operand_role.filter(|role| {
-                        capture.has_environment
-                            || !matches!(role, NativeOperandRole::LiteralContinuation(_))
-                            || text.is_some_and(|(_, decoded)| declaration_separator(decoded))
-                    })
+                    let role = capture.operand_role?;
+                    if matches!(role, NativeOperandRole::LiteralContinuation(_))
+                        && !capture.has_environment
+                    {
+                        return literal_declaration_role(text?.1);
+                    }
+                    Some(role)
                 })
                 .or_else(|| enclosure().map(NativeOperandRole::EnclosureContent))
                 .or_else(|| {
@@ -371,7 +373,9 @@ impl super::InlineBuilder {
     ) {
         let has_declaration = self.head_operand_capture.as_ref().is_some_and(|capture| {
             let capture = capture.borrow();
-            capture.has_environment || capture.has_option && role == NativeOperandRole::Description
+            capture.has_environment
+                || capture.has_option && role == NativeOperandRole::Description
+                || role == NativeOperandRole::Command
         });
         if has_declaration {
             self.with_native_operand_role(role, operation);
@@ -409,14 +413,35 @@ fn literal_delimiter(node: &Node) -> Option<char> {
 }
 
 fn declaration_separator(decoded: &DecodedText) -> bool {
-    let mut words = decoded.events.iter().filter_map(|event| match event {
-        RoffInlineEvent::Font(_)
-        | RoffInlineEvent::PreviousFont
-        | RoffInlineEvent::ZeroWidthGlyph => None,
-        RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word) => Some(word.trim()),
-        _ => Some(""),
-    });
-    matches!(words.next(), Some("," | "|" | "or")) && words.next().is_none()
+    // term_word() runs multiple TEXT/font/zero-width events in a single
+    // No operand. Its surviving glyph ranges still determine the spelling.
+    let mut chars = decoded
+        .events
+        .iter()
+        .flat_map(|event| match event {
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::ZeroWidthGlyph => "".chars(),
+            RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word) => word.chars(),
+            _ => "\0".chars(),
+        })
+        .skip_while(|glyph| glyph.is_whitespace());
+    let separator = match chars.next() {
+        Some(',' | '|') => true,
+        Some('o') => chars.next() == Some('r'),
+        _ => false,
+    };
+    separator && chars.all(char::is_whitespace)
+}
+
+fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOperandRole> {
+    if declaration_separator(decoded) {
+        Some(NativeOperandRole::LiteralContinuation(None))
+    } else {
+        decoded.events.iter().any(|event| matches!(
+            event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) if value.contains([',', '|'])
+        )).then_some(NativeOperandRole::LiteralPunctuation)
+    }
 }
 
 fn assignment_prefix(events: &[RoffInlineEvent]) -> Option<String> {

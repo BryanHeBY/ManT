@@ -346,7 +346,7 @@ impl Declarations<'_> {
     }
 }
 
-fn assert_query(
+pub(super) fn assert_query(
     content: &ResolvedContent,
     name: &str,
     sources: &[(&DefinitionItem, &str)],
@@ -359,6 +359,11 @@ fn assert_query(
         .filter(|evidence| evidence.class == EvidenceClass::DirectEntry)
         .collect();
     assert_eq!(actual.len(), sources.len(), "{name}\n{source}");
+    assert_eq!(
+        result.counts.direct_entry.total as usize,
+        sources.len(),
+        "{name}\n{source}"
+    );
     if !sources.is_empty() {
         assert!(
             assert_ranges(&result, name) >= sources.len(),

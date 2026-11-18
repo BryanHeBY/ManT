@@ -185,7 +185,7 @@ impl<'a> HeadView<'a> {
                 .operand(offset)
                 .is_some_and(|operand| match operand.role {
                     #[cfg(feature = "roff")]
-                    NativeOperandRole::Description => !self.style(offset).emphasis,
+                    role if role.is_description() => !self.style(offset).emphasis,
                     _ => false,
                 })
     }

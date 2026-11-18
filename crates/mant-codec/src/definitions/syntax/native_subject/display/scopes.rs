@@ -56,8 +56,8 @@ pub(super) fn display_boundaries(
             {}
             if let Some(body) = bodies.next_if(|body| body.contains(&operand.bytes.start)) {
                 scan.literal_marks(gap..body.start.max(gap));
-                if scan.scopes.is_empty() && (scan.has_prefix || scan.has_text_before(body.start)) {
-                    scan.has_prefix = true;
+                if scan.scopes.is_empty() && scan.has_prefix_before(body.start) {
+                    scan.retain_prefix();
                     end = body.end;
                     scan.cut(body.clone(), BoundaryKind::Annotation);
                     continue;
@@ -88,9 +88,18 @@ struct ScopeScan<'a> {
     scopes: Vec<OpenMark<'a>>,
     start: usize,
     top_level_start: usize,
-    has_prefix: bool,
+    signature_depth: usize,
+    slot: SlotPrefix,
     opaque: bool,
     exhausted: bool,
+}
+
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+enum SlotPrefix {
+    #[default]
+    Empty,
+    Text,
+    Option,
 }
 
 impl<'a> ScopeScan<'a> {
@@ -101,19 +110,27 @@ impl<'a> ScopeScan<'a> {
         self.boundaries.push(Boundary { bytes, kind });
     }
 
-    fn has_text_before(&self, end: usize) -> bool {
-        self.text
-            .get(self.top_level_start..end)
-            .is_some_and(|text| !text.trim().is_empty())
+    fn has_prefix_before(&self, end: usize) -> bool {
+        self.slot != SlotPrefix::Empty
+            || self
+                .text
+                .get(self.top_level_start..end)
+                .is_some_and(|text| !text.trim().is_empty())
+    }
+
+    fn retain_prefix(&mut self) {
+        if self.slot == SlotPrefix::Empty {
+            self.slot = SlotPrefix::Text;
+        }
     }
 
     fn separator(&mut self, bytes: Range<usize>, alternative: bool) {
-        if !alternative {
+        if !alternative || self.slot == SlotPrefix::Option {
             // The next proved native BODY starts a new declaration slot.
             // Older words only turn a lexical scope into an annotation
             // when they still belong to the current slot.
             self.top_level_start = bytes.end;
-            self.has_prefix = false;
+            self.slot = SlotPrefix::Empty;
         }
         self.separators.push(Separator { bytes, alternative });
     }
@@ -122,13 +139,26 @@ impl<'a> ScopeScan<'a> {
         let role = operand.role;
         let bytes = operand.bytes.clone();
         if role.display_only() {
-            if self.scopes.is_empty() && !within_native_body {
-                self.has_prefix |= self.has_text_before(bytes.start);
+            if self.signature_depth == 0 && self.scopes.is_empty() && !within_native_body {
+                if self.has_prefix_before(bytes.start) {
+                    self.retain_prefix();
+                }
                 self.cut(bytes, BoundaryKind::Display);
             } else if !self.opaque || self.scopes.is_empty() {
                 self.cut(bytes, BoundaryKind::EnclosedDisplay);
             }
-        } else {
+        } else if let NativeOperandRole::FunctionSignature { opening } = role {
+            // mdoc_term.c::termp_fn_pre/termp_fo_pre write the signature's
+            // own delimiters. They do not open a supplementary annotation.
+            if opening {
+                self.signature_depth += 1;
+            } else {
+                self.signature_depth = self.signature_depth.saturating_sub(1);
+            }
+        } else if self.signature_depth == 0 {
+            if role == NativeOperandRole::ExplicitOption && !self.opaque {
+                self.slot = SlotPrefix::Option;
+            }
             self.accept_non_display(operand, bytes, within_native_body);
         }
     }
@@ -164,6 +194,7 @@ impl<'a> ScopeScan<'a> {
                 role,
                 NativeOperandRole::Literal
                     | NativeOperandRole::LiteralContinuation(_)
+                    | NativeOperandRole::LiteralPunctuation
                     | NativeOperandRole::EnclosureContent(_)
             )
         {
@@ -179,8 +210,10 @@ impl<'a> ScopeScan<'a> {
             Mark::Open(boundary, parent) => {
                 if self.scopes.is_empty() {
                     self.start = bytes.start;
-                    self.opaque = self.has_prefix || self.has_text_before(self.start);
-                    self.has_prefix |= self.opaque;
+                    self.opaque = self.has_prefix_before(self.start);
+                    if self.opaque {
+                        self.retain_prefix();
+                    }
                 } else if let Some(active) = self.scopes.last_mut() {
                     active.admits_scope(parent, true);
                 }
@@ -197,7 +230,7 @@ impl<'a> ScopeScan<'a> {
                     .is_some_and(|open| open.closes(boundary, true)) =>
             {
                 self.scopes.pop();
-                if self.scopes.is_empty() && self.opaque {
+                if self.scopes.is_empty() && std::mem::take(&mut self.opaque) {
                     self.cut(self.start..bytes.end, BoundaryKind::Annotation);
                 }
             }
@@ -206,6 +239,9 @@ impl<'a> ScopeScan<'a> {
     }
 
     fn literal_marks(&mut self, range: Range<usize>) {
+        if self.signature_depth > 0 {
+            return;
+        }
         let text = self.text;
         for (index, glyph) in text[range.clone()].char_indices() {
             if self.exhausted {

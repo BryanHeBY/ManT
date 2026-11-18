@@ -62,7 +62,7 @@ impl<'a> DeclarationState<'a> {
             self.begin_argument();
         }
         let next_offset = self.offset + character.len_utf8();
-        let eligible = eligible && !self.uses.protects_syntax(self.offset);
+        let eligible = eligible && !self.uses.protects_declaration_separator(self.offset);
         // This method sees every visible scalar, not just separators. Avoid
         // rescanning the remaining head for every character in a long form.
         if !eligible {

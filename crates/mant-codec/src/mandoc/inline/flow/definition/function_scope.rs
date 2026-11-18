@@ -103,11 +103,11 @@ impl InlineBuilder {
             self.execution.enter_native_field_scope();
             self.with_function_name_field(|builder| {
                 builder.tighten_next_boundary();
-                builder.append_text("(");
+                builder.append_function_signature_mark(true, false);
             });
         } else {
             self.tighten_next_boundary();
-            self.append_text("(");
+            self.append_function_signature_mark(true, false);
         }
         self.tighten_next_boundary();
     }
@@ -116,11 +116,31 @@ impl InlineBuilder {
     /// registration, so its later AST return cannot repeat punctuation/flush.
     pub(in crate::mandoc) fn finish_function_body(&mut self, pretty: bool) {
         self.tighten_next_boundary();
-        self.append_text(if pretty { ");" } else { ")" });
+        self.append_function_signature_mark(false, pretty);
         if pretty {
             self.flush_native_field();
             self.execution.exit_native_field_scope();
         }
+    }
+
+    pub(in crate::mandoc::inline) fn append_function_signature_mark(
+        &mut self,
+        opening: bool,
+        pretty: bool,
+    ) {
+        let value = if opening {
+            "("
+        } else if pretty {
+            ");"
+        } else {
+            ")"
+        };
+        self.with_native_operand_role(
+            crate::definitions::NativeOperandRole::FunctionSignature { opening },
+            |builder| {
+                builder.append_text(value);
+            },
+        );
     }
 
     /// term.c:113-116: NOPAD suppresses offset padding for only the first

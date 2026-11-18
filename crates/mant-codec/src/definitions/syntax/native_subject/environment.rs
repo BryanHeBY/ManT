@@ -374,7 +374,7 @@ fn environment_with_described_suffix(
     let prefix = &text[start..offset(text, suffix.trim_start())];
     if (prefix.ends_with(char::is_whitespace) || first_suffix.role.display_only())
         && !prefix.contains('=')
-        && (first_suffix.role == NativeOperandRole::Description
+        && (first_suffix.role.is_description()
             || first_suffix.role.display_only()
             || first_suffix.role.subject().is_some())
     {
@@ -429,8 +429,5 @@ fn is_environment(role: NativeOperandRole) -> bool {
 }
 
 fn is_description(role: NativeOperandRole) -> bool {
-    matches!(
-        role,
-        NativeOperandRole::Description | NativeOperandRole::ReferenceText(_)
-    )
+    role.is_description() || matches!(role, NativeOperandRole::ReferenceText(_))
 }

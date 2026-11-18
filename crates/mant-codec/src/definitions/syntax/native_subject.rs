@@ -21,6 +21,32 @@ pub(super) fn recognize_head(
     first: &str,
     operands: HeadOperands<'_>,
 ) -> Option<(EntryKind, HeadNames)> {
+    recognize_terms(terms, first, operands, recognize)
+}
+
+pub(super) fn recognize_after_separator(
+    terms: &[DefinitionTerm],
+    first: &str,
+    operands: HeadOperands<'_>,
+) -> Option<(EntryKind, HeadNames)> {
+    recognize_terms(terms, first, operands, |text, ranges| {
+        ranges
+            .iter()
+            .any(|operand| operand.role.subject().is_some())
+            .then_some(())?;
+        declaration_parts::recognize(text, ranges, declaration_parts::Admission::AfterSeparator)
+    })
+    .filter(|(_, names)| !names.is_empty())
+}
+
+type TermRecognizer = fn(&str, &[NativeOperand]) -> Option<(EntryKind, Recognition)>;
+
+fn recognize_terms(
+    terms: &[DefinitionTerm],
+    first: &str,
+    operands: HeadOperands<'_>,
+    recognize: TermRecognizer,
+) -> Option<(EntryKind, HeadNames)> {
     let (kind, first) = recognize(first, operands.for_term(0)?)?;
     let mut limit = first.limit;
     let mut semantic = !first.unproved_field;

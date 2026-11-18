@@ -25,12 +25,13 @@ pub(super) fn retained_intervals(
             &partition.separators,
             start..boundary.bytes.start,
         );
-        plan.join = match boundary.kind {
-            BoundaryKind::EnclosedDisplay => Join::Enclosure,
-            BoundaryKind::Annotation => Join::AwaitSeparator,
-            BoundaryKind::Display if plan.join == Join::AwaitSeparator => Join::AwaitSeparator,
-            BoundaryKind::Display => Join::AcrossDisplay,
-        };
+        if plan.join != Join::AwaitSeparator {
+            plan.join = match boundary.kind {
+                BoundaryKind::EnclosedDisplay => Join::Enclosure,
+                BoundaryKind::Annotation => Join::AwaitSeparator,
+                BoundaryKind::Display => Join::AcrossDisplay,
+            };
+        }
         start = boundary.bytes.end;
     }
     plan.intervals
@@ -85,6 +86,7 @@ impl GroupPlan {
                 .take_while(|separator| separator.bytes.end <= bytes.end)
                 .find(|separator| !separator.alternative)
             else {
+                self.join = Join::AwaitSeparator;
                 return;
             };
             bytes.start = separator.bytes.end;
@@ -105,10 +107,18 @@ impl GroupPlan {
         });
         let end = first + visible.len();
         let after = separators.partition_point(|separator| separator.bytes.end <= end);
-        self.trailing_separator = separators[..after].last().is_some_and(|separator| {
-            separator.bytes.end == end && (!separator.alternative || self.admits_alternative)
-        });
-        self.join = Join::AcrossDisplay;
+        let trailing = separators[..after]
+            .last()
+            .filter(|separator| separator.bytes.end == end);
+        let rejects_alternative =
+            trailing.is_some_and(|separator| separator.alternative) && !self.admits_alternative;
+        self.trailing_separator = trailing.is_some() && !rejects_alternative;
+        if rejects_alternative {
+            bytes.end = trailing.expect("the rejected connector").bytes.start;
+            self.join = Join::AwaitSeparator;
+        } else {
+            self.join = Join::AcrossDisplay;
+        }
         let written = text[bytes.clone()].trim();
         let start = written.as_ptr() as usize - text.as_ptr() as usize;
         self.intervals

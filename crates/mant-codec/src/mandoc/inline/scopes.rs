@@ -178,13 +178,13 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         // mdoc_term.c routes Cd and Fd through termp_fd_pre = termp_bold_pre
         // (dispatch lines 142/149): unconditional Strong in every section.
         Some(Mdoc(
-            MdocMacro::Cm | MdocMacro::Ic | MdocMacro::Ms | MdocMacro::Cd | MdocMacro::Fd,
+            macro_token @ (MdocMacro::Cm
+            | MdocMacro::Ic
+            | MdocMacro::Ms
+            | MdocMacro::Cd
+            | MdocMacro::Fd),
         )) => {
-            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
-                builder.with_font_scope(Font::Strong, |builder| {
-                    append_inline_nodes(builder, children, name);
-                });
-            });
+            append_literal_declaration(builder, *macro_token, children, name);
         }
         Some(Mdoc(MdocMacro::Ar)) => {
             let role = builder.mdoc_argument_role(node.id);
@@ -252,6 +252,24 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         }
         _ => append_inline_nodes(builder, children, name),
     }
+}
+
+fn append_literal_declaration(
+    builder: &mut InlineBuilder,
+    token: MdocMacro,
+    children: &[Node],
+    name: Option<&str>,
+) {
+    let role = if matches!(token, MdocMacro::Cm | MdocMacro::Ic) {
+        NativeOperandRole::Command
+    } else {
+        NativeOperandRole::Description
+    };
+    builder.with_declaration_operand(role, |builder| {
+        builder.with_font_scope(Font::Strong, |builder| {
+            append_inline_nodes(builder, children, name);
+        });
+    });
 }
 
 fn append_native_subject(

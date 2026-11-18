@@ -171,15 +171,17 @@ impl Projection {
                 || operand.role.is_operand_label()
                 || operand.role.is_search()
         });
+        let text = mant_ir::inline_plain_text(&self.content);
         let styled_command = context == DefinitionContext::Commands
-            && commands::leading_styled_command_name(&self.content).is_some();
+            && (commands::leading_styled_command_name(&self.content).is_some()
+                || self.has_separated_command(&text));
         if !(native || styled_command || hint == Some(NativeHeadRole::Literal)) {
             return None;
         }
         let term = DefinitionTerm::from(self.content);
         // A separator written before a table can be covered by the previous
         // receipt. Clip that edge to the span read by the head grammar.
-        let end = mant_ir::inline_plain_text(&term).trim_end().len();
+        let end = text.trim_end().len();
         self.operands.retain_mut(|operand| {
             operand.bytes.end = operand.bytes.end.min(end);
             !operand.bytes.is_empty()
@@ -205,6 +207,22 @@ impl Projection {
             });
         }
         Some(found)
+    }
+
+    fn has_separated_command(&self, text: &str) -> bool {
+        // A confirmed Cm/Ic after the author's separate delimiter supplies
+        // its own evidence even when the preceding clause has no name.
+        self.operands
+            .iter()
+            .zip(self.operands.iter().skip(1))
+            .any(|(separator, command)| {
+                separator.role == NativeOperandRole::LiteralContinuation(None)
+                    && command.role == NativeOperandRole::Command
+                    && matches!(text[separator.bytes.clone()].trim(), "," | "|")
+                    && text[separator.bytes.end..command.bytes.start]
+                        .trim()
+                        .is_empty()
+            })
     }
 }
 

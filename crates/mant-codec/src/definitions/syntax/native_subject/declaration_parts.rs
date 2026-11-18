@@ -61,6 +61,7 @@ enum RejectedPart {
 pub(super) enum Admission {
     TypedSubjects,
     ProtectedSyntax,
+    AfterSeparator,
 }
 
 pub(super) fn recognize(
@@ -174,8 +175,8 @@ fn collect(
     }
     let start = offset(text, head);
     let uses = OperandUses::new(operands);
-    let groups =
-        independent_groups(head, start, enclosure, operands).ok_or(RejectedPart::Unproved)?;
+    let groups = independent_groups(head, start, enclosure, operands, admission)
+        .ok_or(RejectedPart::Unproved)?;
     candidates.separated |= groups.len() > 1;
     for group in groups {
         if matches!(candidates.sequence, SubjectSequence::ArgumentTail(_)) {
@@ -292,6 +293,7 @@ fn independent_groups<'a>(
     start: usize,
     enclosure: Option<u32>,
     operands: &[NativeOperand],
+    admission: Admission,
 ) -> Option<Vec<&'a str>> {
     // Protect accepted words in a nested enclosure even if its opening or
     // closing glyph was overwritten. Only the unwrapped BODY/ELEM supplies
@@ -304,21 +306,34 @@ fn independent_groups<'a>(
         while let Some(operand) = receipts.next_if(|operand| operand.bytes.start <= offset) {
             last = Some(operand);
         }
-        last.is_some_and(|operand| {
-            operand.bytes.contains(&offset)
-                && (operand.role.is_parameter()
-                    || match operand.role {
-                        NativeOperandRole::ExplicitOption
-                        | NativeOperandRole::Description
-                        | NativeOperandRole::ReferenceText(_)
-                        | NativeOperandRole::EnclosureStart { .. }
-                        | NativeOperandRole::EnclosureEnd(_) => true,
-                        NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
-                        NativeOperandRole::LiteralDelimiter {
-                            enclosure: owner, ..
-                        } => enclosure != owner,
-                        _ => false,
-                    })
+        let current = last.filter(|operand| operand.bytes.contains(&offset));
+        if admission == Admission::AfterSeparator && matches!(head.as_bytes()[index], b',' | b'|') {
+            // In a weak prefix, punctuation embedded in a prose operand
+            // cannot authorize a later native subject as its own declaration.
+            return current.is_none_or(|operand| {
+                let role = operand.role;
+                role != NativeOperandRole::LiteralContinuation(enclosure)
+                    || operand.bytes.start < start
+                    || head
+                        .get(operand.bytes.start - start..operand.bytes.end - start)
+                        .is_none_or(|value| !matches!(value.trim(), "," | "|"))
+            });
+        }
+        current.is_some_and(|operand| {
+            operand.role.is_parameter()
+                || match operand.role {
+                    NativeOperandRole::ExplicitOption
+                    | NativeOperandRole::Description
+                    | NativeOperandRole::Command
+                    | NativeOperandRole::ReferenceText(_)
+                    | NativeOperandRole::EnclosureStart { .. }
+                    | NativeOperandRole::EnclosureEnd(_) => true,
+                    NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
+                    NativeOperandRole::LiteralDelimiter {
+                        enclosure: owner, ..
+                    } => enclosure != owner,
+                    _ => false,
+                }
         })
     })
 }
@@ -344,7 +359,7 @@ fn recognize_group(
         // nor a new lexical spelling containing both operands.
         return Err(RejectedPart::Unproved);
     }
-    if admission == Admission::TypedSubjects
+    if admission != Admission::ProtectedSyntax
         && operand_at(operands, span.start).is_none_or(|operand| operand.role.subject().is_none())
     {
         return Err(RejectedPart::Unproved);
@@ -352,7 +367,7 @@ fn recognize_group(
     if let Some(result) = recognize_part(text, part, operands, enclosure) {
         return Ok(result);
     }
-    if admission == Admission::TypedSubjects {
+    if admission != Admission::ProtectedSyntax {
         return Err(RejectedPart::Unproved);
     }
     let uses = uses.shifted(span.start);
