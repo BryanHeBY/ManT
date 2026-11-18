@@ -1,6 +1,10 @@
 //! Recognize Ev names from accepted operands and their own annotation.
-use super::{annotations, offset, operand_at};
-use crate::definitions::syntax::{eligibility::OperandUses, named, scan::HeadView};
+use super::{annotations, offset, operand_at, operand_cursor};
+use crate::definitions::syntax::{
+    eligibility::{OperandUses, intersecting_operands},
+    named,
+    scan::HeadView,
+};
 use crate::definitions::{NativeOperand, NativeOperandRole, RecognizedName};
 use mant_ir::Inline;
 use std::ops::Range;
@@ -186,7 +190,7 @@ fn independent_environment(
         return false;
     };
     let offset_of_next = offset(text, next.trim_start());
-    let index = operands.partition_point(|operand| operand.bytes.end <= offset_of_next);
+    let index = operand_cursor(operands, offset_of_next);
     let Some(operand) = operands.get(index) else {
         return false;
     };
@@ -306,16 +310,6 @@ fn is_annotation_boundary(role: NativeOperandRole) -> bool {
             | NativeOperandRole::LiteralDelimiter { .. }
             | NativeOperandRole::ClippedEnclosure
     )
-}
-
-fn intersecting_operands(
-    operands: &[NativeOperand],
-    range: Range<usize>,
-) -> impl Iterator<Item = &NativeOperand> {
-    let start = operands.partition_point(|operand| operand.bytes.end <= range.start);
-    operands[start..]
-        .iter()
-        .take_while(move |operand| operand.bytes.start < range.end)
 }
 
 fn environment_with_operand_suffix(

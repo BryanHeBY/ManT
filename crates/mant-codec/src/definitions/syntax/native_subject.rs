@@ -1,5 +1,5 @@
 //! Name only the accepted operands of a typed mdoc definition head.
-use super::eligibility::{NameSource, OperandUses};
+use super::eligibility::{NameSource, OperandUses, operand_at, operand_cursor};
 use super::scan::MAX_NESTING;
 use super::{DeclarationLimit, named, occurrences::HeadNames};
 use crate::definitions::{
@@ -66,7 +66,7 @@ impl Recognition {
 fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recognition)> {
     let (head, enclosure) = unwrapped(text, text, operands);
     let start = offset(text, head);
-    let first = operands.partition_point(|operand| operand.bytes.end <= start);
+    let first = operand_cursor(operands, start);
     let leading = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&start));
@@ -110,7 +110,7 @@ fn recognize_part(
 ) -> Option<(EntryKind, Recognition)> {
     let mut start = offset(text, head);
     let end = start + head.len();
-    let mut first = operands.partition_point(|operand| operand.bytes.end <= start);
+    let mut first = operand_cursor(operands, start);
     let lead = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&start))?;
@@ -261,7 +261,7 @@ fn following_function(
     head: Range<usize>,
 ) -> Option<(usize, NativeSubject)> {
     let descriptor = matching_subject_span(text, operands, head)?;
-    let index = operands.partition_point(|operand| operand.bytes.end <= descriptor.end);
+    let index = operand_cursor(operands, descriptor.end);
     let next = operands.get(index)?;
     let NativeOperandRole::Subject(receipt) = next.role else {
         return None;
@@ -359,12 +359,6 @@ fn enclosure_inner<'a>(
         return None;
     }
     Some((text.get(opening.bytes.end..closing.bytes.start)?, scope))
-}
-
-fn operand_at(operands: &[NativeOperand], offset: usize) -> Option<&NativeOperand> {
-    operands
-        .get(operands.partition_point(|operand| operand.bytes.end <= offset))
-        .filter(|operand| operand.bytes.contains(&offset))
 }
 
 fn simple_binding(

@@ -1,10 +1,11 @@
 //! Recognize independent names in a native HEAD with protected operands.
 use super::{
-    Recognition, annotations, following_function, offset, operand_at, recognize_part, unwrapped,
+    Recognition, annotations, following_function, offset, operand_at, operand_cursor,
+    recognize_part, unwrapped,
 };
 use crate::definitions::syntax::{
     DeclarationLimit,
-    eligibility::{NameSource, OperandUses},
+    eligibility::{NameSource, OperandUses, intersecting_operands},
     named, options,
     scan::{MAX_NAMES, MAX_NESTING},
 };
@@ -251,7 +252,7 @@ fn group_subject(
     operands: &[NativeOperand],
     enclosure: Option<u32>,
 ) -> Result<Option<NativeSubject>, RejectedPart> {
-    let first = operands.partition_point(|operand| operand.bytes.end <= span.start);
+    let first = operand_cursor(operands, span.start);
     let lead = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&span.start));
@@ -295,7 +296,7 @@ fn independent_groups<'a>(
     // Protect accepted words in a nested enclosure even if its opening or
     // closing glyph was overwritten. Only the unwrapped BODY/ELEM supplies
     // separators at this level.
-    let first = operands.partition_point(|operand| operand.bytes.end <= start);
+    let first = operand_cursor(operands, start);
     let mut receipts = operands[first..].iter().peekable();
     let mut last = None;
     named::split_named_groups(head, |index, _| {
@@ -336,9 +337,7 @@ fn recognize_group(
     {
         return option_group(text, span, option, operands, uses);
     }
-    if operands[operands.partition_point(|operand| operand.bytes.end <= span.start)..]
-        .iter()
-        .take_while(|operand| operand.bytes.start < span.end)
+    if intersecting_operands(operands, span.clone())
         .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
     {
         // Joined text from another operand is neither a complete option

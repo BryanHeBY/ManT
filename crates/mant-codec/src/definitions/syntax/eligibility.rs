@@ -5,6 +5,33 @@ use std::ops::Range;
 #[cfg(feature = "roff")]
 use crate::definitions::NativeOperandRole;
 
+/// The first receipt whose end is after this cursor. It can start later
+/// than the cursor when the accepted output has an unowned gap.
+pub(in crate::definitions::syntax) fn operand_cursor(
+    operands: &[NativeOperand],
+    at: usize,
+) -> usize {
+    operands.partition_point(|operand| operand.bytes.end <= at)
+}
+
+pub(in crate::definitions::syntax) fn operand_at(
+    operands: &[NativeOperand],
+    at: usize,
+) -> Option<&NativeOperand> {
+    operands
+        .get(operand_cursor(operands, at))
+        .filter(|operand| operand.bytes.contains(&at))
+}
+
+pub(in crate::definitions::syntax) fn intersecting_operands(
+    operands: &[NativeOperand],
+    span: Range<usize>,
+) -> impl Iterator<Item = &NativeOperand> {
+    operands[operand_cursor(operands, span.start)..]
+        .iter()
+        .take_while(move |operand| operand.bytes.start < span.end)
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum NameSource {
     Lexical,
@@ -35,13 +62,10 @@ impl<'a> OperandUses<'a> {
     }
 
     fn intersecting(self, part: &Range<usize>) -> impl Iterator<Item = &'a NativeOperand> {
-        let end = self.offset + part.end;
-        let start = self
-            .operands
-            .partition_point(|operand| operand.bytes.end <= self.offset + part.start);
-        self.operands[start..]
-            .iter()
-            .take_while(move |operand| operand.bytes.start < end)
+        intersecting_operands(
+            self.operands,
+            self.offset + part.start..self.offset + part.end,
+        )
     }
 
     pub(super) fn permits(self, name: &RecognizedName, source: NameSource) -> bool {

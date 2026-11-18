@@ -1,7 +1,7 @@
 //! Resolve supplemental declaration text using accepted native boundaries.
 use std::ops::Range;
 
-use super::{offset, operand_at};
+use super::{offset, operand_at, operand_cursor};
 use crate::definitions::syntax::scan::{MAX_NESTING, closing, quote_closer};
 use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject};
 
@@ -120,7 +120,7 @@ pub(super) fn suffix(
             return pending.is_empty();
         };
         let start = offset(text, rest);
-        let index = operands.partition_point(|operand| operand.bytes.end <= start);
+        let index = operand_cursor(operands, start);
         let receipt = operands.get(index);
         let plain_text = tail.allows_plain_text(!pending.is_empty());
         let Some(operand) = receipt.filter(|operand| operand.bytes.contains(&start)) else {

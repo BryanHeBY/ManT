@@ -1,5 +1,6 @@
 //! Accepted visible bytes, effective fonts and actual native operand receipts.
 use super::{Inline, NativeOperand, NativeOperandRole, Range};
+use crate::definitions::syntax::eligibility::operand_at;
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct Style {
@@ -128,12 +129,7 @@ impl<'a> HeadView<'a> {
     }
 
     pub(super) fn operand(&self, offset: usize) -> Option<&NativeOperand> {
-        let index = self
-            .operands
-            .partition_point(|operand| operand.bytes.end <= offset);
-        self.operands
-            .get(index)
-            .filter(|operand| operand.bytes.contains(&offset))
+        operand_at(self.operands, offset)
     }
 
     pub(super) fn is_parameter(&self, offset: usize) -> bool {
