@@ -219,6 +219,58 @@ fn punctuated_mdoc_definition_ordinals_compare_as_recovered_ordered_lists() {
 }
 
 #[test]
+fn ordinal_recovery_uses_complete_bounded_sequences() {
+    // mdoc_validate.c::post_it retains tagged HEAD/BODY owners; the fixed
+    // HTML showed one dt/dd pair for each exact source item below. The audit
+    // allows a ManT ordered list only for a complete consecutive sequence.
+    let header = concat!(
+        ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n",
+        ".Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n",
+    );
+    let assert_topology = |style: &str, body: &str, recovered| {
+        let source = format!("{header}.Bl {style}\n{body}.El\n");
+        let (expected, topology, document) = parsed_structure(&source);
+        let (observed, observed_topology) = super::ir_profile(&document);
+        let want = if recovered {
+            super::ListTopologyKind::Generic
+        } else {
+            super::ListTopologyKind::Definition
+        };
+        assert_eq!(topology.lists[0].kind, want, "{source}");
+        let violations =
+            super::compare_structure(&expected, &observed, &topology, &observed_topology);
+        assert!(violations.is_empty(), "{source}: {violations:?}");
+    };
+    for (body, recovered) in [
+        (".It 4294967295.\nFIRST\n.It 1.\nSECOND\n", false),
+        (".It 4294967295.\nFIRST\n.It 4294967296.\nSECOND\n", true),
+        (".It 18446744073709551615.\nFIRST\n.It 1.\nSECOND\n", false),
+        (
+            ".It 18446744073709551614.\nFIRST\n.It 18446744073709551615.\nSECOND\n",
+            true,
+        ),
+        (".It 1.\nFIRST\n", false),
+        (".It 1)\nFIRST\n.It 2)\nSECOND\n", true),
+        (".It (1)\nFIRST\n.It (2)\nSECOND\n", true),
+        (".It 1.\nFIRST\n.It 2)\nSECOND\n", false),
+        (".It 1.\n.It 2.\nSECOND\n", false),
+        (".It 1.\nFIRST\n.It 2.\n", false),
+        (".It 1)\n.Sm off\n.It 2)\nSECOND\n", false),
+        (".It 1)\n\\&\n.It 2)\nSECOND\n", false),
+        (".It 1)\n.Tg Before\n.It 2)\nSECOND\n", false),
+        (".It 1)\n.sp 0\n.It 2)\nSECOND\n", true),
+        (".It 1)\n.sp 1\n.It 2)\nSECOND\n", true),
+        (".It 1\\fR)\nFIRST\n.It 2\\fR)\nSECOND\n", true),
+        (".It Sy 1)\nFIRST\n.It Sy 2)\nSECOND\n", true),
+    ] {
+        assert_topology("-tag -width Ds", body, recovered);
+    }
+    for style in ["-hang", "-inset", "-ohang", "-diag"] {
+        assert_topology(style, ".It 1)\nFIRST\n.It 2)\nSECOND\n", false);
+    }
+}
+
+#[test]
 fn ip_list_obligations_require_complete_authored_named_bullets() {
     let source = concat!(
         ".TH AUDIT 1\n.SH BODY\n",

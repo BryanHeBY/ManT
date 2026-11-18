@@ -568,39 +568,91 @@ fn collect_ast_topology(
 }
 
 fn mdoc_definition_is_recoverable_ordinal_list(node: &Node) -> bool {
-    let mut heads = node
+    if node.definition_list_style != Some(libmandoc_rs::DefinitionListStyle::Tag) {
+        return false;
+    }
+    let items = node
         .children
         .iter()
         .filter(|part| part.kind == NodeKind::Body)
         .flat_map(|body| &body.children)
-        .filter(|item| item.macro_token.as_deref() == Some("It"))
-        .filter_map(|item| {
-            item.children
-                .iter()
-                .find(|part| part.kind == NodeKind::Head)
-        });
-    let mut previous = None;
+        .filter(|item| item.macro_token.as_deref() == Some("It"));
+    let mut previous: Option<(u64, OrdinalPunctuation)> = None;
     let mut count = 0usize;
-    for head in &mut heads {
-        let text = head
-            .children
+    for item in items {
+        if !node_part_children(item, NodeKind::Body)
             .iter()
-            .filter_map(|child| child.text.as_deref())
-            .collect::<String>();
-        let Some(number) = text
-            .trim()
-            .strip_suffix('.')
-            .and_then(|value| value.parse::<u32>().ok())
-        else {
-            return false;
-        };
-        if previous.is_some_and(|prior| number != prior + 1) {
+            .any(has_ordinal_description)
+        {
             return false;
         }
-        previous = Some(number);
+        let mut label = String::new();
+        if !collect_ordinal_label(node_part_children(item, NodeKind::Head), &mut label) {
+            return false;
+        }
+        let Some((number, punctuation)) = explicit_ordinal(&label) else {
+            return false;
+        };
+        if previous.is_some_and(|(prior, mark)| {
+            prior.checked_add(1) != Some(number) || mark != punctuation
+        }) {
+            return false;
+        }
+        previous = Some((number, punctuation));
         count += 1;
     }
-    count > 0
+    count > 1
+}
+
+fn has_ordinal_description(node: &Node) -> bool {
+    if node.flags.no_print || node.kind == NodeKind::Comment || is_stateful_request(node) {
+        return false;
+    }
+    // A spacing request may supply a layout-only description. Font and
+    // spacing controls themselves, and a stray `\&`, supply no such owner.
+    matches!(node.macro_token.as_deref(), Some("sp"))
+        || matches!(node.kind, NodeKind::Equation | NodeKind::Table)
+        || node.text.as_deref().is_some_and(is_printable_no_fill_text)
+        || node.children.iter().any(has_ordinal_description)
+}
+
+fn collect_ordinal_label(nodes: &[Node], label: &mut String) -> bool {
+    nodes.iter().all(|node| {
+        if node.flags.no_print || node.kind == NodeKind::Comment {
+            return true;
+        }
+        if node.kind == NodeKind::Text {
+            label.push_str(&strip_tag_font_escapes(
+                node.text.as_deref().unwrap_or_default(),
+            ));
+            return true;
+        }
+        // These pre-handlers apply presentation to their authored words.
+        matches!(node.macro_token.as_deref(), Some("Sy" | "Em" | "Li" | "No"))
+            && collect_ordinal_label(&node.children, label)
+    })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OrdinalPunctuation {
+    Period,
+    Close,
+    Paired,
+}
+
+fn explicit_ordinal(text: &str) -> Option<(u64, OrdinalPunctuation)> {
+    let text = text.trim();
+    let (number, punctuation) = if let Some(number) = text.strip_suffix('.') {
+        (number, OrdinalPunctuation::Period)
+    } else {
+        let number = text.strip_suffix(')')?;
+        number
+            .strip_prefix('(')
+            .map_or((number, OrdinalPunctuation::Close), |number| {
+                (number, OrdinalPunctuation::Paired)
+            })
+    };
+    Some((number.parse().ok()?, punctuation))
 }
 
 fn equation_is_display(node: &Node) -> bool {
