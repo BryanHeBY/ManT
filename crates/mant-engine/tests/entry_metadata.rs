@@ -6,6 +6,11 @@ use mant_ir::{
 use mant_loader::load_markdown_text;
 use std::collections::BTreeMap;
 
+#[path = "entry_metadata/identity.rs"]
+mod identity;
+#[path = "support/json_roundtrip.rs"]
+mod json_roundtrip;
+
 fn parse(body: &str) -> Document {
     load_markdown_text(
         &format!("# Probe\n\n<!-- mant:entries role=option case=sensitive -->\n{body}\n"),

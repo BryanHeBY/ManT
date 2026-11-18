@@ -53,6 +53,9 @@ that crate was not published for that change.
   when a long form cannot publish names. The full form remains readable.
 - Fit roff and Markdown section IDs within the selector byte budget after
   disambiguation. Preserve full headings and their original fragments.
+- Apply the selector byte limit to authored Markdown entry IDs and aliases.
+  Keep rejected entries readable under their generated IDs and prevent
+  rejected author claims from redirecting a relation to another entry.
 - Check declaration names against their executed operand roles. An `Ar`
   placeholder cannot complete a concrete option, symbol, environment
   variable or command name. Standalone operand labels and independent

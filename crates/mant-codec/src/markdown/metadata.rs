@@ -34,7 +34,7 @@ fn validate_groups(groups: &[Vec<String>]) -> Result<(), &'static str> {
 }
 
 fn valid_id(id: &str) -> bool {
-    id.chars().count() <= 512
+    id.len() <= crate::producer_identity::MAX_CONTENT_ID_BYTES
         && mant_ir::is_normalized_node_id(id)
         // Entry IDs may use role-qualified prefixes, including derived IDs.
         && !matches!(id, mant_ir::DOCUMENT_ROOT_ID | "tldr")

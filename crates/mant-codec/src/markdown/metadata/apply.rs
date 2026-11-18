@@ -39,13 +39,18 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
     let mut counts = BTreeMap::new();
     for value in plans.values().filter_map(|p| p.value.as_ref()) {
         if let Some(id) = &value.id {
-            *counts.entry(id.clone()).or_insert(0usize) += 1;
+            *counts.entry(id.as_str()).or_insert(0usize) += 1;
         }
     }
-    let rejected_ids = counts
+    // A rejected author claim cannot turn into an alias to the unrelated
+    // owner that already held the spelling.
+    let rejected_ids = plans
         .iter()
-        .filter(|(_, count)| **count > 1)
-        .map(|(id, _)| id.clone())
+        .filter_map(|(derived_id, plan)| {
+            let id = plan.value.as_ref()?.id.as_deref()?;
+            (!valid_id(id) || counts[id] > 1 || (index.contains(id) && id != derived_id))
+                .then_some(id)
+        })
         .collect::<BTreeSet<_>>();
     let mut sources = BTreeMap::new();
     let mut renamed = Vec::new();
@@ -61,10 +66,7 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
             return;
         };
         if let Some(id) = &value.id {
-            if !valid_id(id)
-                || rejected_ids.contains(id)
-                || (index.contains(id) && id != facts.id.as_str())
-            {
+            if rejected_ids.contains(id.as_str()) {
                 diagnostic(
                     &mut diagnostics,
                     *source,
@@ -79,11 +81,11 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
             facts.alias_groups.clone_from(groups);
         }
         if let Some(target) = &value.alias_of {
-            if !valid_id(target) || rejected_ids.contains(target) {
+            if !valid_id(target) || rejected_ids.contains(target.as_str()) {
                 diagnostic(
                     &mut diagnostics,
                     *source,
-                    "aliasOf target is invalid or names a duplicated explicit identity; the relation was omitted",
+                    "aliasOf target is invalid or uses a rejected explicit identity; the relation was omitted",
                 );
             } else {
                 facts.alias_of = Some(target.as_str().into());
