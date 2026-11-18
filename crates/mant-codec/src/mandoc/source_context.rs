@@ -54,6 +54,13 @@ pub(super) struct HeadNodes<'a> {
     pub(super) source_origin_units: Option<usize>,
 }
 
+fn has_environment_operand(nodes: &[Node]) -> bool {
+    nodes.iter().any(|node| {
+        node.macro_token == Some(libmandoc_rs::MacroToken::Mdoc(libmandoc_rs::MdocMacro::Ev))
+            || has_environment_operand(&node.children)
+    })
+}
+
 impl<'a> LoweringContext<'a> {
     pub(super) fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self::with_table_recovery(
@@ -98,7 +105,14 @@ impl<'a> LoweringContext<'a> {
         } else {
             None
         };
-        Rc::new(RefCell::new(inline::HeadOperandCapture::new(search_head)))
+        // mdoc_macro.c::in_line gives No and Ev independent nodes. Capture
+        // the No spelling regardless of which one executes first in the HEAD.
+        let has_environment = self.macro_set == MacroSet::Mdoc
+            && (has_environment_operand(nodes.before) || has_environment_operand(nodes.content));
+        Rc::new(RefCell::new(inline::HeadOperandCapture::new(
+            search_head,
+            has_environment,
+        )))
     }
 
     pub(super) fn replace_mdoc_section(&self, section: MdocSectionContext) -> MdocSectionContext {

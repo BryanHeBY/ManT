@@ -15,6 +15,8 @@ use crate::mandoc::roff_escape::{DecodedText, RoffInlineEvent};
 use libmandoc_rs::Node;
 use mant_ir::Inline;
 
+mod table_scopes;
+
 #[derive(Clone, Default)]
 pub(in crate::mandoc) struct HeadOperandCapture {
     search_head: Option<SearchHead>,
@@ -24,6 +26,8 @@ pub(in crate::mandoc) struct HeadOperandCapture {
     fl_assignment_prefixes: HashMap<u64, String>,
     captured: CapturedHeadOperands,
     last_owner: Option<u64>,
+    option_dash: Option<u64>,
+    table_scopes: table_scopes::AcceptedTableScopes,
     operand_role: Option<NativeOperandRole>,
     enclosures: Vec<u32>,
     has_operand_label: bool,
@@ -32,9 +36,10 @@ pub(in crate::mandoc) struct HeadOperandCapture {
 }
 
 impl HeadOperandCapture {
-    pub(in crate::mandoc) fn new(search_head: Option<SearchHead>) -> Self {
+    pub(in crate::mandoc) fn new(search_head: Option<SearchHead>, has_environment: bool) -> Self {
         Self {
             search_head,
+            has_environment,
             ..Self::default()
         }
     }
@@ -100,6 +105,7 @@ impl HeadOperandCapture {
         }
         self.unsplit_receipts.clear();
         captured.qualify_optional_keys();
+        self.table_scopes.restrict(&mut captured.operands);
         captured.qualify_fl_keys(self.search_head.is_some());
         captured
     }
@@ -144,6 +150,12 @@ impl HeadOperandCapture {
             return;
         }
         let end = self.captured.text.len();
+        self.table_scopes.observe(
+            start..end,
+            serial,
+            role == NativeOperandRole::DisplayOnly,
+            &self.captured.text,
+        );
         if let Some(previous) = self.captured.operands.last_mut()
             && previous.bytes.end == start
             && previous.role == role
@@ -217,6 +229,7 @@ impl super::InlineBuilder {
     ) {
         if let Some(capture) = &self.head_operand_capture {
             let mut capture = capture.borrow_mut();
+            let serial = self.execution.native_owner_serial;
             let enclosure = || {
                 capture
                     .enclosures
@@ -241,6 +254,18 @@ impl super::InlineBuilder {
                         enclosure: enclosure(),
                     })
                 })
+                .or_else(|| {
+                    // mdoc_macro.c::in_line can allocate an empty Fl when
+                    // the argument is closing punctuation, then execute
+                    // its following TEXT as a separate native word.
+                    let node = text?.0;
+                    (capture
+                        .option_dash
+                        .is_some_and(|dash| dash.wrapping_add(1) == serial)
+                        && node.flags.delimiter_close
+                        && matches!(node.decoder_text(), Some("," | "." | ";" | ":" | "?" | "!")))
+                    .then_some(NativeOperandRole::OptionPunctuation)
+                })
                 .or(capture.operand_role)
                 .or_else(|| enclosure().map(NativeOperandRole::EnclosureContent))
                 .or_else(|| {
@@ -252,7 +277,19 @@ impl super::InlineBuilder {
                         .then_some(NativeOperandRole::Literal)
                 });
             if let Some(role) = role {
-                let role = match role.record_enclosure(enclosure) {
+                let role = role.record_enclosure(enclosure);
+                let outermost = capture
+                    .enclosures
+                    .iter()
+                    .find(|&&scope| !self.scope_posts.ended(scope))
+                    .copied();
+                if let Some(scope) = outermost {
+                    capture.table_scopes.record(serial, scope);
+                }
+                if matches!(role, NativeOperandRole::FlDash(_)) {
+                    capture.option_dash = Some(serial);
+                }
+                let role = match role {
                     NativeOperandRole::FlDash(_) | NativeOperandRole::FlWord(_)
                         if !capture.has_operand_label && capture.search_head.is_none() =>
                     {
@@ -271,7 +308,6 @@ impl super::InlineBuilder {
                 } else {
                     role
                 };
-                let serial = self.execution.native_owner_serial;
                 if matches!(role, NativeOperandRole::FlWord(_))
                     && let Some((_, decoded)) = text
                     && let Some(prefix) = assignment_prefix(&decoded.events)

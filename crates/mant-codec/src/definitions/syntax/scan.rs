@@ -362,8 +362,7 @@ impl<'a> Scanner<'a> {
             return false;
         }
         if native && let Some(marker) = self.explicit_marker(start) {
-            self.names.push(RecognizedName::contiguous(marker, start));
-            self.cursor += marker.len();
+            self.accept_name(marker, true, false);
             return true;
         }
         let mut end = start + 1;
@@ -378,17 +377,7 @@ impl<'a> Scanner<'a> {
             end = offset + next.len_utf8();
         }
         if let Some(name) = super::options::option_prefix(&self.view.text[start..end]) {
-            self.names.push(RecognizedName::contiguous(name, start));
-            self.cursor = start + name.len();
-            let foreign_tail = native
-                && self
-                    .current()
-                    .is_some_and(|character| !character.is_whitespace())
-                && self.view.independent_option_suffix(self.cursor);
-            self.unproved_form |= foreign_tail;
-            if self.cursor < end || foreign_tail {
-                self.begin_argument();
-            }
+            self.accept_name(name, native, start + name.len() < end);
             return true;
         }
         let pattern_end = self.view.text[start..]
@@ -417,23 +406,45 @@ impl<'a> Scanner<'a> {
         false
     }
 
+    fn accept_name(&mut self, name: &str, native: bool, begins_argument: bool) {
+        self.names
+            .push(RecognizedName::contiguous(name, self.cursor));
+        self.cursor += name.len();
+        let foreign_tail = native
+            && self.current().is_some_and(|ch| !ch.is_whitespace())
+            && self.view.independent_option_suffix(self.cursor);
+        self.unproved_form |= foreign_tail;
+        if begins_argument || foreign_tail {
+            self.begin_argument();
+        }
+    }
+
     // Keep literal mdoc Fl spellings even through generated wrappers or
     // font escapes. Every emitted byte has to belong to a Fl receipt; one
     // generated dash does not prove a following Ar/template or Cm literal.
-    fn explicit_marker(&self, start: usize) -> Option<&'static str> {
+    fn explicit_marker(&self, start: usize) -> Option<&'a str> {
         let remaining = &self.view.text[start..];
-        ["--%", "--"].into_iter().find(|marker| {
-            remaining.strip_prefix(marker).is_some_and(|suffix| {
-                suffix.chars().next().is_none_or(|ch| {
-                    ch.is_whitespace()
-                        || matches!(ch, ',' | '|' | '/')
-                        || self
-                            .wrappers
-                            .last()
-                            .is_some_and(|wrapper| wrapper.closer() == ch)
-                })
-            }) && (start..start + marker.len()).all(|offset| self.view.explicit_option(offset))
-        })
+        let punctuation = remaining
+            .get(..2)
+            .filter(|flag| flag.as_bytes()[1].is_ascii_punctuation() && flag.as_bytes()[1] != b'-');
+        [Some("--%"), Some("--"), punctuation]
+            .into_iter()
+            .flatten()
+            .find(|marker| {
+                let end = start + marker.len();
+                remaining.strip_prefix(marker).is_some_and(|suffix| {
+                    suffix.chars().next().is_none_or(|ch| {
+                        ch.is_whitespace()
+                            || matches!(ch, ',' | '|' | '/')
+                            || self.view.independent_option_suffix(end)
+                            || self
+                                .wrappers
+                                .last()
+                                .is_some_and(|wrapper| wrapper.closer() == ch)
+                    })
+                }) && ((start..end).all(|offset| self.view.explicit_option(offset))
+                    || marker.len() == 2 && self.view.option_punctuation(start + 1))
+            })
     }
 
     fn next_is_parameter_token(&self) -> bool {

@@ -159,6 +159,15 @@ impl<'a> HeadView<'a> {
             .is_some_and(|operand| operand.role == NativeOperandRole::ExplicitOption)
     }
 
+    pub(super) fn option_punctuation(&self, offset: usize) -> bool {
+        self.operand(offset)
+            .is_some_and(|operand| match operand.role {
+                #[cfg(feature = "roff")]
+                NativeOperandRole::OptionPunctuation => true,
+                _ => false,
+            })
+    }
+
     pub(super) fn reference_or_environment(&self, offset: usize) -> bool {
         self.operand(offset)
             .is_some_and(|operand| match operand.role {

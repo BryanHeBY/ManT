@@ -11,6 +11,8 @@ use mant_protocol::{
 
 use crate::support::explanation_ranges;
 
+#[path = "table_declarations/scoped_intervals.rs"]
+mod scoped_intervals;
 #[path = "table_declarations/styled_intervals.rs"]
 mod styled_intervals;
 

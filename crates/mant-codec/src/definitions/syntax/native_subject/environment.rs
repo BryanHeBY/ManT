@@ -18,7 +18,7 @@ pub(in crate::definitions::syntax) fn environment_names(
     }
     let view = HeadView::new(term, operands);
     let uses = OperandUses::new(operands);
-    Some(recognize(&view, operands, uses).unwrap_or_default())
+    Some(recognize(&view, operands, uses))
 }
 
 #[derive(Default)]
@@ -27,15 +27,21 @@ pub(in crate::definitions::syntax) struct EnvironmentNames {
     pub(in crate::definitions::syntax) unproved_exact_form: bool,
 }
 
-pub(super) fn recognize(
+fn recognize(
     view: &HeadView<'_>,
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
-) -> Option<EnvironmentNames> {
+) -> EnvironmentNames {
     let text = view.text.as_str();
-    let (parts, assignments) = split_groups(view, operands, uses)?;
+    let (parts, assignments, complete) = split_groups(view, operands, uses);
+    let mut result = EnvironmentNames {
+        // With no complete group boundary, the bad surface may still be
+        // an authored, aliasless label. A tail after an executed separator
+        // cannot republish earlier groups as a complete declaration.
+        unproved_exact_form: !complete && !parts.is_empty(),
+        ..EnvironmentNames::default()
+    };
     let mut parts = parts.into_iter().peekable();
-    let mut result = EnvironmentNames::default();
     let mut has_native_group = false;
     let mut has_unproved_group = false;
     while let Some(part) = parts.next() {
@@ -53,10 +59,10 @@ pub(super) fn recognize(
             // A lexical separator in the RHS keeps belonging to the
             // assignment until a distinct executed Ev starts a new atom.
             // The parser's invocation ID is independent of source coords.
-            while let Some(next) = parts.peek()
-                && !independent_environment(text, next, operands, leading, start)
+            while let Some(next) =
+                parts.next_if(|next| !independent_environment(text, next, operands, leading, start))
             {
-                let value = parts.next()?.trim_end();
+                let value = next.trim_end();
                 end = offset(text, value) + value.len();
             }
         }
@@ -78,14 +84,14 @@ pub(super) fn recognize(
     // without starting a declaration atom. Only an actual environment
     // group makes an unrelated sibling disqualify the complete form.
     result.unproved_exact_form |= has_native_group && has_unproved_group;
-    Some(result)
+    result
 }
 
 fn split_groups<'a>(
     view: &'a HeadView<'_>,
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
-) -> Option<(Vec<&'a str>, Vec<usize>)> {
+) -> (Vec<&'a str>, Vec<usize>, bool) {
     let text = view.text.as_str();
     let mut assignments = Vec::new();
     let mut value_word = None;
@@ -116,11 +122,11 @@ fn split_groups<'a>(
         let start = offset(text, literal);
         (literal == "or").then_some(start..start + literal.len())
     });
-    let groups =
+    let (groups, complete) =
         named::split_named_groups_with_connectors(text, protect, connectors, |left, end| {
             alternative_environment_connector(view, operands, uses, left, end).is_some()
-        })?;
-    Some((groups, assignments))
+        });
+    (groups, assignments, complete)
 }
 
 fn alternative_environment_connector(
@@ -310,7 +316,12 @@ fn name_in_atom(
         let Some(NativeOperandRole::Environment { enclosure, .. }) = leading else {
             return None;
         };
-        if !annotations::trailing_parenthesis(text, start..range.end, operands, enclosure, None) {
+        if !annotations::trailing_environment_annotation(
+            text,
+            start..range.end,
+            operands,
+            enclosure,
+        ) {
             return None;
         }
         &text[range.start..start]

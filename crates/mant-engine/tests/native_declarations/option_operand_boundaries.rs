@@ -214,3 +214,172 @@ fn a_parenthesized_ev_keeps_an_ordinary_form_without_polluting_declarations() {
         }
     }
 }
+
+#[test]
+fn punctuation_option_names_use_the_same_native_suffix_boundary_as_letters() {
+    // termp_fl_pre emits the flag in its own scope. termp_ns_pre removes
+    // spacing but cannot make Xr or Ev part of that spelling. in_line
+    // can leave closing punctuation as TEXT next to an empty Fl. All 48
+    // exact sources ran in fixed tree, terminal, HTML and lint first.
+    for flag in ['q', '@', '%', ',', '.', '!', '?'] {
+        for (suffix, visible, foreign) in [
+            ("Xr printf 3", "printf(3)", true),
+            ("Ev FILES", "FILES", true),
+            ("Ar FILE", "FILE", false),
+            ("No FILES", "FILES", false),
+        ] {
+            if suffix.starts_with("No") && !matches!(flag, 'q' | '@' | '%') {
+                continue;
+            }
+            for joined in [false, true] {
+                let spacing = if joined { " Ns" } else { "" };
+                let head = format!("Fl {flag}{spacing} {suffix}");
+                let flag = format!("-{flag}");
+                let gap = if joined { "" } else { " " };
+                let form = format!("{flag}{gap}{visible}");
+                let key = if joined && suffix.starts_with("No") {
+                    (flag == "-q").then_some(form.as_str())
+                } else if flag == "-?" && suffix.starts_with("Ar") {
+                    // The source's search-template grammar protects its
+                    // question-mark sign and explicitly typed operand.
+                    None
+                } else {
+                    Some(flag.as_str())
+                };
+                let content = load(&source(&head, "OPTIONS"));
+                let items = definitions(content.document.as_ref().unwrap());
+                let item = items[0];
+                assert_eq!(inline_plain_text(&item.terms[0]), form, "{head}");
+                assert_eq!(
+                    EntryOwner::Definition(item).validated_names().unwrap(),
+                    key.into_iter().collect::<Vec<_>>(),
+                    "{head}"
+                );
+                if let Some(key) = key {
+                    check_owned_name(&content, &explain(&content, key), item, key, &form);
+                }
+                assert_eq!(
+                    explain(&content, &form).counts.direct_entry.total,
+                    u32::from(!(joined && foreign)),
+                    "{head}"
+                );
+                if suffix.starts_with("Xr") {
+                    assert!(
+                        item.terms[0].iter().any(|inline| matches!(inline,
+                            Inline::Link { target: LinkTarget::Manual { name, manual_section }, .. }
+                                if name == "printf" && manual_section.as_deref() == Some("3")
+                        )),
+                        "{head}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn literal_environment_siblings_keep_their_role_in_both_source_orders() {
+    // in_line gives No and Ev separate accepted operands in either order.
+    for separator in [",", "|"] {
+        for swapped in [false, true] {
+            let (head, first, second) = if swapped {
+                (format!("Ev SECOND {separator} No FIRST"), "SECOND", "FIRST")
+            } else {
+                (format!("No FIRST {separator} Ev SECOND"), "FIRST", "SECOND")
+            };
+            let between = if separator == "," { ", " } else { " | " };
+            let visible = format!("{first}{between}{second}");
+            assert_environment(&head, &visible, &[first, second], true);
+        }
+    }
+    for (head, visible, names, complete) in [
+        ("No FIRST", "FIRST", &["FIRST"][..], true),
+        (
+            r#"No "Words here" , Ev SECOND"#,
+            "Words here, SECOND",
+            &["SECOND"],
+            false,
+        ),
+        (
+            r#"No "Words here" | Ev SECOND"#,
+            "Words here | SECOND",
+            &["SECOND"],
+            false,
+        ),
+        (
+            "Ev FIRST=left,right , Ev SECOND",
+            "FIRST=left,right, SECOND",
+            &["FIRST", "SECOND"],
+            true,
+        ),
+        (
+            "Ev FIRST=left|right | Ev SECOND",
+            "FIRST=left|right | SECOND",
+            &["FIRST", "SECOND"],
+            true,
+        ),
+        (
+            "Ev FIRST=left , No SECOND",
+            "FIRST=left, SECOND",
+            &["FIRST"],
+            true,
+        ),
+        (
+            "Ev HOME Po No FIRST Pc , Ev SECOND",
+            "HOME (FIRST), SECOND",
+            &["HOME", "SECOND"],
+            true,
+        ),
+    ] {
+        assert_environment(head, visible, names, complete);
+    }
+}
+
+#[test]
+fn a_malformed_tail_cannot_cancel_closed_environment_groups() {
+    // The native Ev operands and literal No tail execute independently.
+    // A broken delimiter can invalidate only its own declaration group.
+    for (tail, word, names) in [
+        (r#"No "Words here""#, "Words here", &["GOOD"][..]),
+        (r#"No "x(""#, "x(", &["GOOD"]),
+        ("Ev BAD[", "BAD[", &["GOOD"]),
+        (r#"No "x<""#, "x<", &["GOOD"]),
+        (r#"No "x>""#, "x>", &["GOOD"]),
+        (r#"No "x( R )""#, "x( R )", &["GOOD"]),
+        ("Ev BAD=left[,right", "BAD=left[,right", &["GOOD", "BAD"]),
+    ] {
+        assert_environment(
+            &format!("Ev GOOD , Ev HOME Ns Nm FILES , {tail}"),
+            &format!("GOOD, HOMEFILES, {word}"),
+            names,
+            false,
+        );
+    }
+}
+
+fn assert_environment(head: &str, visible: &str, names: &[&str], complete: bool) {
+    let content = load(&source(head, "ENVIRONMENT"));
+    let items = definitions(content.document.as_ref().unwrap());
+    let item = items[0];
+    assert_eq!(inline_plain_text(&item.terms[0]), visible, "{head}");
+    assert_eq!(
+        EntryOwner::Definition(item).validated_names().unwrap(),
+        names,
+        "{head}"
+    );
+    assert_eq!(
+        explain(&content, visible).counts.direct_entry.total,
+        u32::from(complete),
+        "{head}"
+    );
+    for name in names {
+        check_owned_name(&content, &explain(&content, name), item, name, visible);
+    }
+    for rejected in ["HOMEFILES", "Words here", "BAD[", "left", "right"] {
+        assert_eq!(
+            explain(&content, rejected).counts.direct_entry.total,
+            0,
+            "{head}: {rejected}"
+        );
+    }
+}

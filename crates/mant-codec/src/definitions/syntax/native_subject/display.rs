@@ -13,6 +13,8 @@ use crate::definitions::{
 use mant_ir::{DefinitionTerm, EntryKind, Inline, NameCase};
 use std::{ops::Range, rc::Rc};
 
+mod scopes;
+
 pub(in crate::definitions::syntax) fn infer_display_head(
     terms: &[DefinitionTerm],
     context: DefinitionContext,
@@ -138,7 +140,7 @@ impl Segment<'_> {
             .iter()
             .take_while(|operand| operand.bytes.start < end)
             .map(|operand| NativeOperand {
-                bytes: operand.bytes.start - self.bytes.start
+                bytes: operand.bytes.start.max(self.bytes.start) - self.bytes.start
                     ..operand.bytes.end.min(end) - self.bytes.start,
                 role: operand.role,
             })
@@ -156,21 +158,41 @@ impl Segment<'_> {
 }
 
 fn segments<'a>(term: &[Inline], operands: &'a [NativeOperand]) -> Vec<Segment<'a>> {
-    let mut start = 0;
-    let mut end = 0;
+    let text = mant_ir::inline_plain_text(term);
+    let boundaries = scopes::display_boundaries(&text, operands);
+    let mut start = 0usize;
+    let mut needs_separator = false;
+    let mut first_receipt = 0usize;
     let mut segments = Vec::new();
-    for receipts in operands.split(|operand| operand.role.display_only()) {
-        let boundary = operands.get(end + receipts.len());
-        let end_at = boundary.map_or(usize::MAX, |operand| operand.bytes.start);
-        if start < end_at {
+    for boundary in boundaries
+        .into_iter()
+        .chain(std::iter::once(scopes::Boundary {
+            bytes: text.len()..text.len(),
+            annotation: false,
+        }))
+    {
+        let end = boundary.bytes.start;
+        let form_start = if needs_separator {
+            let suffix = text[start..end].trim_start();
+            suffix
+                .strip_prefix([',', '|'])
+                .map(|after| end - after.len())
+        } else {
+            Some(start)
+        };
+        if let Some(start) = form_start.filter(|start| *start < end) {
+            first_receipt +=
+                operands[first_receipt..].partition_point(|operand| operand.bytes.end <= start);
+            let count =
+                operands[first_receipt..].partition_point(|operand| operand.bytes.start < end);
             segments.push(Segment {
-                bytes: start..end_at,
-                operands: receipts,
+                bytes: start..end,
+                operands: &operands[first_receipt..first_receipt + count],
                 content: Vec::new(),
             });
         }
-        end += receipts.len() + 1;
-        start = boundary.map_or(usize::MAX, |operand| operand.bytes.end);
+        start = boundary.bytes.end;
+        needs_separator = boundary.annotation;
     }
     if !segments.is_empty() {
         collect_inline_intervals(term, &mut segments, &mut 0, &mut 0);

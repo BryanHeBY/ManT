@@ -6,31 +6,40 @@ use crate::definitions::syntax::scan::{MAX_NESTING, closing, quote_closer};
 use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Boundary<'a> {
+pub(super) enum Boundary<'a> {
     Native(u32, &'a str),
     Literal(Option<u32>, char),
 }
 
-enum Mark<'a> {
+#[derive(Clone, Copy)]
+pub(super) enum Mark<'a> {
     Open(Boundary<'a>, Option<u32>),
     Close(Boundary<'a>),
 }
 
-struct OpenMark<'a> {
+pub(super) struct OpenMark<'a> {
     boundary: Boundary<'a>,
     enclosing: Option<u32>,
     literal_body: Option<u32>,
 }
 
-impl OpenMark<'_> {
-    fn active_scope(&self) -> Option<u32> {
+impl<'a> OpenMark<'a> {
+    pub(super) fn new(boundary: Boundary<'a>, enclosing: Option<u32>) -> Self {
+        Self {
+            boundary,
+            enclosing,
+            literal_body: None,
+        }
+    }
+
+    pub(super) fn active_scope(&self) -> Option<u32> {
         match self.boundary {
             Boundary::Native(body, _) => Some(body),
             Boundary::Literal(..) => self.literal_body.or(self.enclosing),
         }
     }
 
-    fn closes(&self, close: Boundary<'_>, mixed: bool) -> bool {
+    pub(super) fn closes(&self, close: Boundary<'_>, mixed: bool) -> bool {
         match (self.boundary, close) {
             (Boundary::Native(open, left), Boundary::Native(close, right)) => {
                 open == close && (!mixed || native_delimiters_match(left, right))
@@ -53,7 +62,7 @@ impl OpenMark<'_> {
         }
     }
 
-    fn admits_scope(&mut self, scope: Option<u32>, allow_literal_body: bool) -> bool {
+    pub(super) fn admits_scope(&mut self, scope: Option<u32>, allow_literal_body: bool) -> bool {
         if self.active_scope() == scope {
             return true;
         }
@@ -67,6 +76,14 @@ impl OpenMark<'_> {
                 self.literal_body = Some(scope);
                 true
             })
+    }
+
+    pub(super) fn is_literal_quote(&self) -> bool {
+        matches!(self.boundary, Boundary::Literal(_, glyph) if quote_closer(glyph).is_some())
+    }
+
+    pub(super) const fn enclosing(&self) -> Option<u32> {
+        self.enclosing
     }
 }
 
@@ -147,11 +164,7 @@ pub(super) fn suffix(
                 {
                     return false;
                 }
-                pending.push(OpenMark {
-                    boundary,
-                    enclosing: parent,
-                    literal_body: None,
-                });
+                pending.push(OpenMark::new(boundary, parent));
             }
             Some(Mark::Close(boundary)) => {
                 let Some(mark) = pending.pop() else {
@@ -216,13 +229,11 @@ pub(super) fn argument_group(
     false
 }
 
-fn marker<'a>(text: &'a str, start: usize, operand: &NativeOperand) -> Option<Mark<'a>> {
-    let word = &text[operand.bytes.clone()];
-    if word.contains('\n') || offset(text, word.trim_start()) != start {
-        return None;
-    }
-    let word = word.trim();
-    if word.is_empty() {
+pub(super) fn marker<'a>(text: &'a str, start: usize, operand: &NativeOperand) -> Option<Mark<'a>> {
+    let word = text[operand.bytes.clone()].trim();
+    // A table may commit the accepted line ending inside the preceding
+    // operand's range. Only whitespace within the mark changes its grammar.
+    if word.is_empty() || word.contains('\n') || offset(text, word) != start {
         return None;
     }
     match operand.role {
@@ -261,7 +272,7 @@ fn native_delimiters_match(left: &str, right: &str) -> bool {
         }))
 }
 
-fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
+pub(super) fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
     match role {
         NativeOperandRole::EnclosureContent(owner) => Some(owner),
         NativeOperandRole::Environment { enclosure, .. }
@@ -284,10 +295,37 @@ pub(in crate::definitions::syntax) fn trailing_parenthesis(
     enclosure: Option<u32>,
     owner: Option<NativeOperandRole>,
 ) -> bool {
+    trailing_annotation(text, span, operands, enclosure, owner, false)
+}
+
+pub(super) fn trailing_environment_annotation(
+    text: &str,
+    span: Range<usize>,
+    operands: &[NativeOperand],
+    enclosure: Option<u32>,
+) -> bool {
+    trailing_annotation(text, span, operands, enclosure, None, true)
+}
+
+fn trailing_annotation(
+    text: &str,
+    span: Range<usize>,
+    operands: &[NativeOperand],
+    enclosure: Option<u32>,
+    owner: Option<NativeOperandRole>,
+    brackets: bool,
+) -> bool {
     let rest = text[span.clone()].trim();
     let Some(body) = rest
         .strip_prefix('(')
         .and_then(|rest| rest.strip_suffix(')'))
+        .or_else(|| {
+            if brackets {
+                rest.strip_prefix('[')?.strip_suffix(']')
+            } else {
+                None
+            }
+        })
     else {
         return false;
     };

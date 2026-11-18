@@ -126,15 +126,18 @@ pub(super) fn split_named_groups(
     text: &str,
     is_protected: impl FnMut(usize, bool) -> bool,
 ) -> Option<Vec<&str>> {
-    split_named_groups_with_connectors(text, is_protected, std::iter::empty(), |_, _| false)
+    let (parts, complete) =
+        split_named_groups_with_connectors(text, is_protected, std::iter::empty(), |_, _| false);
+    complete.then_some(parts)
 }
 
+/// Keep groups that ended at a proven separator before any malformed tail.
 pub(super) fn split_named_groups_with_connectors(
     text: &str,
     mut is_protected: impl FnMut(usize, bool) -> bool,
     connectors: impl Iterator<Item = std::ops::Range<usize>>,
     mut accept_connector: impl FnMut(&str, usize) -> bool,
-) -> Option<Vec<&str>> {
+) -> (Vec<&str>, bool) {
     let mut parts = Vec::new();
     let mut start = 0;
     let mut closers = Vec::new();
@@ -168,7 +171,7 @@ pub(super) fn split_named_groups_with_connectors(
         match character {
             '(' | '<' | '[' | '{' => {
                 if closers.len() >= 64 {
-                    return None;
+                    return (parts, false);
                 }
                 closers.push(match character {
                     '(' => ')',
@@ -177,7 +180,7 @@ pub(super) fn split_named_groups_with_connectors(
                     _ => '}',
                 });
             }
-            ')' | '>' | ']' | '}' if closers.pop() != Some(character) => return None,
+            ')' | '>' | ']' | '}' if closers.pop() != Some(character) => return (parts, false),
             ',' | '|' if closers.is_empty() => {
                 parts.push(&text[start..index]);
                 start = index + 1;
@@ -188,10 +191,10 @@ pub(super) fn split_named_groups_with_connectors(
         }
     }
     if !closers.is_empty() {
-        return None;
+        return (parts, false);
     }
     parts.push(&text[start..]);
-    Some(parts)
+    (parts, true)
 }
 
 pub(super) fn named_occurrences(

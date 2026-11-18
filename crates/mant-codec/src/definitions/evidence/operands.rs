@@ -15,6 +15,9 @@ pub(crate) enum NativeOperandRole {
     /// A tbl cell contributes readable content without declaring a name or form.
     #[cfg(feature = "roff")]
     DisplayOnly,
+    /// A native enclosure BODY whose accepted range contains display rows.
+    #[cfg(feature = "roff")]
+    DisplayEnclosure,
     /// An `Ar` spelling may name an authored operand definition directly.
     #[cfg(feature = "roff")]
     Placeholder,
@@ -42,6 +45,9 @@ pub(crate) enum NativeOperandRole {
     FlDash(u32),
     #[cfg(feature = "roff")]
     FlWord(u32),
+    /// A closing TEXT delimiter can be adjacent to an empty Fl's dash.
+    #[cfg(feature = "roff")]
+    OptionPunctuation,
     /// The first actual man OP operand still has to spell a complete flag.
     #[cfg(feature = "roff")]
     OptionalKey,
@@ -117,6 +123,7 @@ impl NativeOperandRole {
             Self::Argument => true,
             #[cfg(feature = "roff")]
             Self::DisplayOnly
+            | Self::DisplayEnclosure
             | Self::Placeholder
             | Self::IncompletePlaceholder
             | Self::SearchArgument(_)
@@ -131,7 +138,7 @@ impl NativeOperandRole {
 
     #[cfg(feature = "roff")]
     pub(in crate::definitions) fn display_only(self) -> bool {
-        self == Self::DisplayOnly
+        matches!(self, Self::DisplayOnly | Self::DisplayEnclosure)
     }
 
     #[cfg(feature = "roff")]
