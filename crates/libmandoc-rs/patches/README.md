@@ -76,6 +76,11 @@ Patch `0040` follows pre-increment register bytes through native argument
 expansion. Only the actual first `IP` operand can publish the resulting
 producer flag. Macro call coordinates and unrelated arguments cannot set it.
 
+Patch `0041` keeps `Tg` provenance on the native target selected by validation.
+The flag follows target relocation and clears with a superseded `NODE_ID`.
+The original validated tag remains available when later macro validation
+rewrites the source operands.
+
 ## Number mapping
 
 The previous names below refer to commit `343ba431`. `Historical-Replaces`

@@ -17,6 +17,8 @@ snapshot_node_flags(const struct roff_node *source)
 		flags |= MANT_MANDOC_NODE_BROKEN;
 	if (source->flags & NODE_ID)
 		flags |= MANT_MANDOC_NODE_DEEP_LINK_TARGET;
+	if (source->flags & NODE_AUTHORED_TAG)
+		flags |= MANT_MANDOC_NODE_AUTHORED_TAG;
 	if (source->flags & NODE_HREF)
 		flags |= MANT_MANDOC_NODE_PERMALINK;
 	if (source->flags & NODE_LINE)

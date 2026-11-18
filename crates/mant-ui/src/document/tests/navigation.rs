@@ -340,6 +340,43 @@ fn expanded_argumentless_target_lands_at_the_relocated_paragraph() {
 }
 
 #[test]
+fn native_structural_targets_reveal_their_definition_head_rows() {
+    // CVS post_tg() puts the ID on direct display/list BODY wrappers in
+    // both cases. The emitted target must land on the structure's content.
+    let header = ".Dd November 18, 2026\n.Dt TARGET 7\n.Os\n.Sh NAME\n.Nm target\n.Nd navigation probe\n.Sh DESCRIPTION\n";
+    for structure in [
+        ".D1 MARK",
+        ".Dl MARK",
+        ".Bd -literal\nMARK\n.Ed",
+        ".Bl -bullet\n.It\nMARK\n.El",
+        ".Bl -column one two\n.It MARK Ta LAST\n.El",
+    ] {
+        let request = format!(".Tg Mixed.Target\n{structure}");
+        for body in [
+            format!("{request}\n.Pp\nBODY.\n"),
+            format!(".Bl -tag -width Ds\n.It Xo\n{request}\n.Xc\nBODY.\n.El\n"),
+        ] {
+            let query = mant_loader::load_roff_bytes(format!("{header}{body}").as_bytes()).unwrap();
+            let view = DocumentView::new(&query);
+            assert!(view.validate_fragment("Mixed.Target").is_ok(), "{body}");
+            for width in [32, 80] {
+                let rendered = view.render(width);
+                let row = rendered.anchor_row("Mixed.Target").unwrap();
+                assert_eq!(rendered.anchor_row("mixed-target"), Some(row), "{body}");
+                let marks = rendered.search("MARK");
+                let body_text = rendered.search("BODY.");
+                let (mark, description) = (&marks[0], &body_text[0]);
+                assert_eq!(mark.row, row, "{body}");
+                assert!(
+                    (row, mark.start_column) < (description.row, description.start_column),
+                    "{body}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn manual_references_preserve_their_unresolved_section_query() {
     let lines = styled_inline_lines(
         &[Inline::Link {

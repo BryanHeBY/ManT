@@ -18,3 +18,6 @@ mod target_ownership;
 
 #[path = "navigation/target_successors.rs"]
 mod target_successors;
+
+#[path = "navigation/target_structural.rs"]
+mod target_structural;

@@ -1,6 +1,7 @@
 //! Execute nested list structures in the caller's formatter stream.
 
 use super::super::{Font, InlineBuilder, Node, NodeKind, append_inline_nodes};
+use super::{append_targets, targets};
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
 pub(super) fn append_column_list(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
@@ -19,6 +20,7 @@ pub(super) fn append_column_list(builder: &mut InlineBuilder, node: &Node, name:
         return;
     };
     builder.begin_executed_node(body);
+    let mut list_targets = targets::structural_target_owners(node);
     let mut first_item = true;
     for item in &body.children {
         if item.kind != NodeKind::Block || item.macro_token.as_ref() != Some(&Mdoc(MdocMacro::It)) {
@@ -34,6 +36,10 @@ pub(super) fn append_column_list(builder: &mut InlineBuilder, node: &Node, name:
             builder.native_vertical_space(1);
         }
         first_item = false;
+        // The list wrapper starts at the first displayed item, beyond
+        // CVS's native pre-item vertical space.
+        append_targets(builder, std::mem::take(&mut list_targets));
+        append_targets(builder, targets::item_target_owners(item));
         if let Some(head) = item
             .children
             .iter()
@@ -62,6 +68,7 @@ pub(super) fn append_column_list(builder: &mut InlineBuilder, node: &Node, name:
         }
         builder.execution.finish_executed_node(item);
     }
+    append_targets(builder, list_targets);
     builder.execution.finish_executed_node(body);
     // Bl BLOCK post calls term_newln() before resetting the default stops.
     builder.no_fill_source_line();
@@ -183,6 +190,7 @@ pub(super) fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name:
         return;
     };
     builder.begin_executed_node(body);
+    let mut list_targets = targets::structural_target_owners(node);
     let mut item_count = 0usize;
     let mut previous_body_empty = false;
     for item in &body.children {
@@ -203,6 +211,8 @@ pub(super) fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name:
             builder.native_vertical_space(1);
         }
         item_count = item_count.saturating_add(1);
+        append_targets(builder, std::mem::take(&mut list_targets));
+        append_targets(builder, targets::item_target_owners(item));
         let head = item
             .children
             .iter()
@@ -265,6 +275,7 @@ pub(super) fn append_nested_list(builder: &mut InlineBuilder, node: &Node, name:
         builder.execution.finish_executed_node(item);
         previous_body_empty = body_empty;
     }
+    append_targets(builder, list_targets);
     builder.execution.finish_executed_node(body);
     builder.no_fill_source_line();
     super::super::display_tabs::exit_post(&mut builder.execution, node);

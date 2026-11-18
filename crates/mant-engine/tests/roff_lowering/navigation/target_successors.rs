@@ -8,11 +8,11 @@ use mant_loader::load_roff_bytes;
 const HEADER: &str = ".Dd November 18, 2026\n.Dt TARGET 7\n.Os\n.Sh NAME\n.Nm target\n.Nd navigation probe\n.Sh DESCRIPTION\n";
 const TARGET: &str = "Mixed.Target";
 
-fn load(body: &str) -> ResolvedContent {
+pub(super) fn load(body: &str) -> ResolvedContent {
     load_roff_bytes(format!("{HEADER}{body}").as_bytes()).unwrap()
 }
 
-fn anchor_line(document: &mant_ir::Document, fragment: &str, line: u32) {
+pub(super) fn anchor_line(document: &mant_ir::Document, fragment: &str, line: u32) {
     let index = DocumentIndex::build(document);
     let id = index
         .fragment_target(fragment)
@@ -132,4 +132,95 @@ fn a_removed_or_invalid_argumentless_request_does_not_publish_a_fragment() {
             assert!(index.fragment_target(fragment).is_none(), "{body}");
         }
     }
+}
+
+#[test]
+fn authored_target_spelling_survives_native_operand_normalization() {
+    // CVS post_tg() selects the original operand before post_xx()/post_at()
+    // insert generated text. The later Fn has an independent automatic tag.
+    for (successor, authored, id, automatic, automatic_id) in [
+        (
+            "Cm Mixed.Target",
+            TARGET,
+            "mixed-target",
+            "Later.Automatic",
+            "later-automatic",
+        ),
+        ("Ox 7.6", "7.6", "7-6", "OpenBSD", "openbsd"),
+        ("At III", "III", "iii", "AT&T", "at-t"),
+    ] {
+        for explicit in [false, true] {
+            let operand = if explicit {
+                format!(" {authored}")
+            } else {
+                String::new()
+            };
+            let request = format!(".Tg{operand}\n.{successor}\n");
+            for (source, direct_line) in [
+                (
+                    request.clone(),
+                    if successor.starts_with("Cm ") { 10 } else { 9 },
+                ),
+                (format!(".de XX\n{request}..\n.XX\n"), 13),
+            ] {
+                for paragraph in [false, true] {
+                    let prior = if paragraph { ".Pp\n" } else { "" };
+                    let body = format!("INTRO.\n{prior}{source}ALPHA.\n");
+                    let later_line =
+                        u32::try_from(HEADER.lines().count() + body.lines().count() + 1).unwrap();
+                    let owner_line = if paragraph { 9 } else { direct_line };
+                    for later in [String::new(), format!(".Pp\n.Fn \"{automatic}\"\nBETA.\n")] {
+                        let query =
+                            json_roundtrip::json_string_roundtrip(&load(&format!("{body}{later}")));
+                        let document = query.document.as_ref().unwrap();
+                        let index = DocumentIndex::build(document);
+                        assert_eq!(
+                            index.fragment_target(authored).map(NodeId::as_str),
+                            Some(id),
+                            "{body}"
+                        );
+                        assert_eq!(index.fragment_target(automatic), None, "{body}{later}");
+                        anchor_line(document, authored, owner_line);
+                        let markdown =
+                            render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+                        let marker = format!("<a id=\"{authored}\"></a>");
+                        assert_eq!(markdown.matches(&marker).count(), 1, "{markdown}");
+                        assert!(markdown.find(&marker).unwrap() < markdown.find("ALPHA.").unwrap());
+                        if !later.is_empty() {
+                            anchor_line(document, automatic_id, later_line);
+                            let marker = format!("<a id=\"{automatic_id}\"></a>");
+                            let automatic_pos = markdown.find(&marker).unwrap();
+                            assert!(markdown.find("ALPHA.").unwrap() < automatic_pos);
+                            assert!(automatic_pos < markdown.find("BETA.").unwrap());
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn reordered_or_superseded_tags_keep_only_their_actual_owner() {
+    // CVS preserves a separate automatic OpenBSD paragraph before .Tg, and
+    // suppresses an older automatic Mixed.Target when .Tg claims its key.
+    let query = load("INTRO.\n.Pp\n.Fn OpenBSD\nBETA.\n.Pp\n.Tg\n.Ox 7.6\nALPHA.\n");
+    let document = query.document.as_ref().unwrap();
+    anchor_line(document, "openbsd", 9);
+    anchor_line(document, "7.6", 12);
+    assert!(
+        DocumentIndex::build(document)
+            .fragment_target("OpenBSD")
+            .is_none()
+    );
+
+    let query = load(
+        "INTRO.\n.Pp\n.Fn Mixed.Target\nFIRSTBODY.\n.Pp\n.Tg Mixed.Target\n.Cm actual\nSECONDBODY.\n",
+    );
+    let document = query.document.as_ref().unwrap();
+    anchor_line(document, TARGET, 12);
+    let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    let marker = markdown.find("<a id=\"Mixed.Target\"></a>").unwrap();
+    assert!(markdown.find("FIRSTBODY.").unwrap() < marker);
+    assert!(marker < markdown.find("SECONDBODY.").unwrap());
 }

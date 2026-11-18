@@ -6,6 +6,7 @@ use super::{
     authored_section_phrase, inline_children, navigation_anchor,
 };
 use crate::definitions::{NativeOperandRole, NativeSubject};
+use crate::mandoc::targets::{self, OwnedTarget};
 mod nested;
 use nested::{append_column_list, append_nested_list};
 
@@ -75,9 +76,6 @@ fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Optio
             Some(Mdoc(MdocMacro::D1 | MdocMacro::Dl | MdocMacro::Bd))
         )
     {
-        if let Some(anchor) = navigation_anchor(node) {
-            builder.append(vec![anchor]);
-        }
         append_display(builder, node, name);
         return true;
     }
@@ -327,6 +325,7 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
         // negative vertical-space debt before asserting an output row.
         builder.native_vertical_space(1);
     }
+    append_targets(builder, targets::structural_target_owners(node));
     super::display_tabs::enter_pre(&mut builder.execution, node);
     if matches!(
         node.macro_token.as_ref(),
@@ -369,6 +368,15 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
     if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
         posts.exit_display_fill(body.id);
     }
+}
+
+fn append_targets(builder: &mut InlineBuilder, targets: Vec<OwnedTarget>) {
+    builder.append(
+        targets
+            .into_iter()
+            .map(|target| Inline::anchor_at(target.name, target.owner_source))
+            .collect(),
+    );
 }
 
 struct InlineContainerSink<'a> {

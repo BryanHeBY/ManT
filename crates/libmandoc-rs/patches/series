@@ -65,3 +65,6 @@
 
 # Executed man(7) label provenance
 0040-retain-executed-ip-register-labels.patch
+
+# Native mdoc tag provenance
+0041-retain-authored-tag-owners.patch

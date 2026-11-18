@@ -343,6 +343,13 @@ pub struct NodeFlags {
     pub broken: bool,
     /// libmandoc selected this node as a same-document destination.
     pub deep_link_target: bool,
+    /// A validated `.Tg` assigned this destination, including a destination
+    /// relocated to a structural owner during native tag postprocessing.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "std::ops::Not::not")
+    )]
+    pub authored_tag: bool,
     /// libmandoc renders a self-link for this destination.
     pub permalink: bool,
     /// This node begins a roff input line (`NODE_LINE`).

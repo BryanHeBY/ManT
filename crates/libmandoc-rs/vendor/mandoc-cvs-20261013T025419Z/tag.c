@@ -205,7 +205,7 @@ tag_put(const char *s, int prio, struct roff_node *n)
 	else if (entry->prio > prio || prio == TAG_FALLBACK) {
 		while (entry->nnodes > 0) {
 			nold = entry->nodes[--entry->nnodes];
-			nold->flags &= ~NODE_ID;
+			nold->flags &= ~(NODE_ID | NODE_AUTHORED_TAG);
 			free(nold->tag);
 			nold->tag = NULL;
 		}
@@ -225,6 +225,8 @@ tag_put(const char *s, int prio, struct roff_node *n)
 	entry->nodes[entry->nnodes++] = n;
 	entry->prio = prio;
 	n->flags |= NODE_ID;
+	if (prio == TAG_MANUAL)
+		n->flags |= NODE_AUTHORED_TAG;
 	if (changed) {
 		assert(n->tag == NULL);
 		n->tag = mandoc_strndup(s, len);
@@ -279,8 +281,8 @@ tag_move_id(struct roff_node *n)
 			if (np->tag == NULL) {
 				np->tag = mandoc_strdup(n->tag == NULL ?
 				    n->child->string : n->tag);
-				np->flags |= NODE_ID;
-				n->flags &= ~NODE_ID;
+				np->flags |= n->flags & (NODE_ID | NODE_AUTHORED_TAG);
+				n->flags &= ~(NODE_ID | NODE_AUTHORED_TAG);
 			}
 			return;
 		case MDOC_Sh:

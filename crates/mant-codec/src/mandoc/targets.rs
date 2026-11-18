@@ -18,11 +18,10 @@ pub(super) use owned::{OwnedTarget, PendingTargets};
 
 /// Document-wide target facts that must be known before structural lowering.
 ///
-/// libmandoc moves target ownership between AST wrappers, and an argument-less
-/// `.Tg` derives its authored fragment spelling from the following source
-/// macro. Computing that source-level namespace once keeps section allocation,
-/// anchor normalization, semantic discovery, and navigation pruning on the
-/// same target policy.
+/// libmandoc retains authored tag provenance on the selected owner even if
+/// validation rewrites the argument of an argument-less `.Tg`. Computing
+/// the namespace once keeps section allocation, anchor normalization and
+/// semantic discovery on the same target policy.
 #[derive(Debug)]
 pub(super) struct NativeTargetPlan {
     /// Authored fragment namespace, including permitted removed-owner recovery.
@@ -38,9 +37,7 @@ impl NativeTargetPlan {
             validated_owners: HashSet::new(),
         };
         let mut lists = Vec::new();
-        plan.collect(root, None, &mut lists);
-        plan.explicit
-            .retain(|target| plan.validated_owners.contains(target));
+        plan.collect(root, &mut lists);
 
         // The list stream also recovers authored targets whose empty owner was
         // removed by native validation. Reserve exactly that recovery set so
@@ -55,39 +52,20 @@ impl NativeTargetPlan {
         plan
     }
 
-    fn collect<'node>(
-        &mut self,
-        node: &'node Node,
-        successor: Option<&'node Node>,
-        lists: &mut Vec<&'node Node>,
-    ) {
-        let target = raw_target(node);
-        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
-            if let Some(authored) = target
-                .clone()
-                .or_else(|| explicit_target_argument(node))
-                .or_else(|| derived_target_argument(node, successor))
-            {
-                self.explicit.insert(authored);
+    fn collect<'node>(&mut self, node: &'node Node, lists: &mut Vec<&'node Node>) {
+        if let Some(target) = raw_target(node) {
+            // A surviving Tg is also its own provenance for older owned
+            // snapshots. Relocated IDs require the actual native receipt.
+            if node.flags.authored_tag || node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
+                self.explicit.insert(target.clone());
             }
-        } else if node.kind == NodeKind::Body
-            && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl))
-        {
-            lists.push(node);
-        }
-        if let Some(target) = target {
             self.validated_owners.insert(target);
         }
-
-        for (index, child) in node.children.iter().enumerate() {
-            // CVS mdoc_validate.c::post_tg() ascends until it finds a next
-            // sibling on something other than a HEAD/BODY/TAIL. The lookup
-            // is structural and source coordinates may repeat after expansion.
-            let successor = match child.kind {
-                NodeKind::Head | NodeKind::Body | NodeKind::Tail => successor,
-                _ => node.children.get(index + 1).or(successor),
-            };
-            self.collect(child, successor, lists);
+        if node.kind == NodeKind::Body && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl)) {
+            lists.push(node);
+        }
+        for child in &node.children {
+            self.collect(child, lists);
         }
     }
 
@@ -168,17 +146,6 @@ pub(super) fn explicit_target_argument(node: &Node) -> Option<String> {
     target_argument(node.children.first()?)
 }
 
-fn derived_target_argument(node: &Node, successor: Option<&Node>) -> Option<String> {
-    // post_tg() hides a request that transferred its target. The eventual
-    // NODE_ID may sit on an earlier wrapper after tag.c::tag_move_id(), so
-    // use the logical successor only for spelling and let surviving owners
-    // govern publication. post_tg() accepts one complete native TEXT atom.
-    if !node.flags.no_print || !node.children.is_empty() {
-        return None;
-    }
-    target_argument(successor?.children.first()?)
-}
-
 fn target_argument(operand: &Node) -> Option<String> {
     if operand.kind != NodeKind::Text {
         return None;
@@ -195,6 +162,13 @@ fn target_argument(operand: &Node) -> Option<String> {
 /// Only direct `Head`/`Body`/`Tail` wrappers belong to this construct. A
 /// recursive search would steal a target from an independently lowered child.
 pub(super) fn structural_targets(node: &Node) -> Vec<String> {
+    structural_target_owners(node)
+        .into_iter()
+        .map(|target| target.name)
+        .collect()
+}
+
+pub(super) fn structural_target_owners(node: &Node) -> Vec<OwnedTarget> {
     if !matches!(
         node.macro_token.as_ref(),
         Some(Mdoc(
@@ -208,6 +182,13 @@ pub(super) fn structural_targets(node: &Node) -> Vec<String> {
 
 /// Collect targets moved onto an mdoc list item's structural wrappers.
 pub(super) fn item_targets(node: &Node) -> Vec<String> {
+    item_target_owners(node)
+        .into_iter()
+        .map(|target| target.name)
+        .collect()
+}
+
+pub(super) fn item_target_owners(node: &Node) -> Vec<OwnedTarget> {
     if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::It)) {
         return Vec::new();
     }
@@ -592,7 +573,7 @@ fn first_text(node: &Node) -> Option<&str> {
     node.children.iter().find_map(first_text)
 }
 
-fn node_and_part_targets(node: &Node) -> Vec<String> {
+fn node_and_part_targets(node: &Node) -> Vec<OwnedTarget> {
     let mut targets = Vec::new();
     let mut seen = HashSet::new();
     for owner in std::iter::once(node).chain(
@@ -603,7 +584,7 @@ fn node_and_part_targets(node: &Node) -> Vec<String> {
         if let Some(target) = raw_target(owner)
             && seen.insert(target.clone())
         {
-            targets.push(target);
+            targets.push(OwnedTarget::new(target, super::source_span(owner)));
         }
     }
     targets

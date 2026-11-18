@@ -30,6 +30,7 @@ const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
 const NODE_TABLE_START: u32 = 1 << 10;
 const NODE_EQUATION_INLINE: u32 = 1 << 12;
 const NODE_IP_INCREMENT: u32 = 1 << 13;
+const NODE_AUTHORED_TAG: u32 = 1 << 14;
 const MAX_OWNED_NODE_DEPTH: usize = 256;
 
 #[derive(Default)]
@@ -236,6 +237,7 @@ fn node_flags(bits: u32, line_continuation: bool) -> NodeFlags {
         no_fill: bits & NODE_NO_FILL != 0,
         broken: bits & NODE_BROKEN != 0,
         deep_link_target: bits & NODE_DEEP_LINK_TARGET != 0,
+        authored_tag: bits & NODE_AUTHORED_TAG != 0,
         permalink: bits & NODE_PERMALINK != 0,
         line_start: bits & NODE_LINE_START != 0,
         delimiter_open: bits & NODE_DELIMITER_OPEN != 0,

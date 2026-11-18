@@ -26,6 +26,9 @@ that crate was not published for that change.
 - The 0.15 Rust AST exposes the executed first IP operand's number-register
   provenance through `NodeFlags::ip_incremented_register`. Initialize it
   explicitly or use `..NodeFlags::default()` in exhaustive flag literals.
+- Expose `NodeFlags::authored_tag` for a validated mdoc `Tg` target. The flag
+  follows the native ID when validation moves it to its final owner. Existing
+  serialized ASTs default the flag to `false`.
 
 ### mant-codec
 
@@ -57,6 +60,8 @@ that crate was not published for that change.
   annotations and require a visible word boundary around each bound name.
 - Preserve the exact fragment of an argument-less mdoc `Tg` when a user
   macro emits it and its target at the same source position.
+- Preserve author fragments through native validation rewrites and retain
+  structural targets inside extended definition heads.
 - Preserve literal Markdown heading tails through export and readback.
   Honor canonical author IDs and use final owners for both local and
   self-document fragments, including collisions and ambiguous aliases.

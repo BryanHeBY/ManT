@@ -565,13 +565,18 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree is the pinned pristine source subset plus the
-38 ordered patches in `patches/series`. The stack follows build prerequisites,
+41 ordered patches in `patches/series`. The stack follows build prerequisites,
 parser safety, embedding, execution evidence, compatibility, rendering,
 allocation performance, and HTML scope lifetime. Patch numbers identify the
 patch stack. Cargo features select compiled capabilities.
 See [the patch guide](https://github.com/BryanHeBY/ManT/blob/main/crates/libmandoc-rs/patches/README.md) for dependencies and the previous
 number mapping. `Historical-Replaces` headers refer to older superseded stacks;
 they never refer to a patch number in the current series.
+
+`NodeFlags::authored_tag` identifies the final owner of a validated mdoc `Tg`
+target, including owners selected by relocation. The spelling comes from the
+node's `tag`. Older serialized flags default to `false`, and serialization
+only writes `authored_tag` when it is set.
 
 #### Build and platform configuration
 

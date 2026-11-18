@@ -29,6 +29,62 @@ fn parser_copies_validated_same_document_navigation() {
 }
 
 #[test]
+fn authored_tag_provenance_follows_only_the_validated_destination() {
+    // CVS post_tg() reads 7.6 before post_xx() adds OpenBSD. tag_move_id()
+    // moves the validated destination onto the earlier Pp in both variants.
+    let report = Parser::default()
+        .parse_bytes(
+            "tg-owner.7",
+            b".Dd November 18, 2026\n.Dt TARGET 7\n.Os\n.Sh NAME\n.Nm target\n.Nd navigation probe\n.Sh DESCRIPTION\nINTRO.\n.Pp\n.Tg\n.Ox 7.6\nALPHA.\n.Pp\n.Fn OpenBSD\nBETA.\n",
+        )
+        .unwrap();
+    let root = &report.document.root;
+    let authored = find_node(root, &|node| node.flags.authored_tag).unwrap();
+    assert_eq!(authored.tag.as_deref(), Some("7.6"));
+    assert_eq!(authored.macro_token.as_deref(), Some("Pp"));
+    assert_eq!(authored.line, 9);
+    assert!(authored.flags.deep_link_target);
+    let automatic = find_node(root, &|node| node.tag.as_deref() == Some("OpenBSD")).unwrap();
+    assert_eq!(automatic.line, 13);
+    assert!(automatic.flags.deep_link_target && !automatic.flags.authored_tag);
+    let relocated = find_macro(root, "Tg").unwrap();
+    assert!(!relocated.flags.deep_link_target && !relocated.flags.authored_tag);
+
+    #[cfg(feature = "serde")]
+    {
+        let mut flags = serde_json::to_value(authored.flags).unwrap();
+        assert_eq!(flags["authored_tag"], true);
+        assert_eq!(
+            serde_json::from_value::<crate::NodeFlags>(flags.clone()).unwrap(),
+            authored.flags
+        );
+        flags.as_object_mut().unwrap().remove("authored_tag");
+        let older = serde_json::from_value::<crate::NodeFlags>(flags.clone()).unwrap();
+        assert!(!older.authored_tag);
+        assert_eq!(serde_json::to_value(older).unwrap(), flags);
+    }
+}
+
+#[test]
+fn authored_tag_supersedes_an_earlier_automatic_destination() {
+    // CVS tag_put() retains only the manual target where the following Cm
+    // tagged the second paragraph, even though the first Fn used that key.
+    let report = Parser::default()
+        .parse_bytes(
+            "tg-priority.7",
+            b".Dd November 18, 2026\n.Dt TARGET 7\n.Os\n.Sh NAME\n.Nm target\n.Nd navigation probe\n.Sh DESCRIPTION\nINTRO.\n.Pp\n.Fn Mixed.Target\nFIRSTBODY.\n.Pp\n.Tg Mixed.Target\n.Cm actual\nSECONDBODY.\n",
+        )
+        .unwrap();
+    let root = &report.document.root;
+    let authored = find_node(root, &|node| node.flags.authored_tag).unwrap();
+    assert_eq!(authored.tag.as_deref(), Some("Mixed.Target"));
+    assert_eq!(authored.line, 12);
+    assert!(authored.flags.deep_link_target);
+    let superseded = find_macro(root, "Fn").unwrap();
+    assert!(!superseded.flags.deep_link_target && !superseded.flags.authored_tag);
+}
+
+#[test]
 fn explicit_target_before_an_already_tagged_subsection_remains_separate() {
     let report = Parser::default()
         .parse_bytes(

@@ -1,0 +1,49 @@
+Subject: retain the authored origin of validated mdoc tags
+Upstream-Status: Local shim contract
+
+Follow the validated manual tag to its selected owner, including a
+paragraph or list item reached by tag_move_id. Superseded tags lose
+their origin together with NODE_ID. Formatting and tag selection stay
+in the native implementation.
+
+--- a/roff.h
++++ b/roff.h
+@@ -543,6 +543,7 @@
+ #define	NODE_HREF	 (1 << 12) /* Link to another place in this page. */
+ #define	NODE_EQN_INLINE	 (1 << 13) /* Originated in equation delimiters. */
+ #define	NODE_IP_INCREMENT (1 << 14) /* IP label expands an incremented register. */
++#define	NODE_AUTHORED_TAG (1 << 15) /* Destination assigned by Tg. */
+ 	int		  prev_font; /* Before entering this node. */
+ 	int		  aux;     /* Decoded node data, type-dependent. */
+ 	enum roff_tok	  tok;     /* Request or macro ID. */
+--- a/tag.c
++++ b/tag.c
+@@ -205,7 +205,7 @@
+ 	else if (entry->prio > prio || prio == TAG_FALLBACK) {
+ 		while (entry->nnodes > 0) {
+ 			nold = entry->nodes[--entry->nnodes];
+-			nold->flags &= ~NODE_ID;
++			nold->flags &= ~(NODE_ID | NODE_AUTHORED_TAG);
+ 			free(nold->tag);
+ 			nold->tag = NULL;
+ 		}
+@@ -225,6 +225,8 @@
+ 	entry->nodes[entry->nnodes++] = n;
+ 	entry->prio = prio;
+ 	n->flags |= NODE_ID;
++	if (prio == TAG_MANUAL)
++		n->flags |= NODE_AUTHORED_TAG;
+ 	if (changed) {
+ 		assert(n->tag == NULL);
+ 		n->tag = mandoc_strndup(s, len);
+@@ -279,8 +281,8 @@
+ 			if (np->tag == NULL) {
+ 				np->tag = mandoc_strdup(n->tag == NULL ?
+ 				    n->child->string : n->tag);
+-				np->flags |= NODE_ID;
+-				n->flags &= ~NODE_ID;
++				np->flags |= n->flags & (NODE_ID | NODE_AUTHORED_TAG);
++				n->flags &= ~(NODE_ID | NODE_AUTHORED_TAG);
+ 			}
+ 			return;
+ 		case MDOC_Sh:
