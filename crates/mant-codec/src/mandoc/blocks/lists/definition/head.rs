@@ -102,11 +102,10 @@ pub(super) fn lower_definition_head(
     }
 }
 
-/// Preserve libmandoc's tag on a man(7) `.TP`/`.IP` head. Unlike mdoc `Fl`
-/// tags, this identity lives on the structural head rather than a visible
-/// inline child, so it has to be copied before lowering discards that wrapper.
-pub(super) fn definition_head_anchor(node: &Node) -> Option<String> {
-    targets::part_target(node, NodeKind::Head)
+/// Publish the structural man or mdoc HEAD's own target once, before
+/// dropping the native wrapper. An independently tagged child keeps its ID.
+pub(super) fn definition_head_target(node: &Node) -> Option<targets::OwnedTarget> {
+    targets::part_target_with_source(node, NodeKind::Head)
 }
 
 /// Return only document content from a definition macro's mixed-purpose head.

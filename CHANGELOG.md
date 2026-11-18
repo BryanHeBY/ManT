@@ -77,6 +77,8 @@ that crate was not published for that change.
 - Place column paragraph and display targets at their native cell positions.
   Keep separate canonical IDs for repeated tags, including already-normalized
   author aliases.
+- Publish display BODY targets after authored opening punctuation. Keep
+  independent destinations when parent and child structures use the same tag.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.

@@ -73,6 +73,42 @@ fn native_column_targets_follow_their_own_rows_after_resize() {
     }
 }
 
+#[test]
+fn ancestral_and_display_body_targets_reveal_their_own_visible_rows() {
+    // CVS post_tg and mdoc_d1_pre publish the outer table and inner
+    // display destinations separately. The display BODY begins after '('.
+    let header = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
+    for (body, targets) in [
+        (
+            ".Tg Mixed.Target\n.Bl -column Ds\n.It FIRST\n.Tg Mixed.Target\n.D1 TARGET\n.El\n",
+            &[("mixed-target", "FIRST"), ("mixed-target-2", "TARGET")][..],
+        ),
+        (
+            ".No BEFORE\n.Tg Mixed.Target\n.D1 ( MARK )\n",
+            &[("mixed-target", "MARK")][..],
+        ),
+    ] {
+        let source = format!("{header}{body}");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let view = DocumentView::new(&query);
+        assert_eq!(
+            view.validate_fragment("Mixed.Target").is_err(),
+            targets.len() == 2
+        );
+        for width in [14, 78, 14] {
+            let rendered = view.render(width);
+            for (id, word) in targets {
+                assert!(view.validate_fragment(id).is_ok());
+                assert_eq!(
+                    rendered.anchor_row(id),
+                    Some(rendered.search(word)[0].row),
+                    "{source}: width {width}"
+                );
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Prefix {
     Empty,

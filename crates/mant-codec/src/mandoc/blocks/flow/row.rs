@@ -19,6 +19,20 @@ impl RowOwner {
 }
 
 impl BlockState {
+    /// Publish a validated structural target into its active output at entry.
+    /// A column keeps the same vector until its real field post; a detached
+    /// display instead selects its inline owner using the source node's mode.
+    pub(in crate::mandoc::blocks) fn append_native_target(&mut self, node: &libmandoc_rs::Node) {
+        if let Some(target) = crate::mandoc::targets::owned_target(node) {
+            let owner = if self.formatter.execution.has_column_output_scope() {
+                RowOwner::from_literal(self.uses_literal_output())
+            } else {
+                self.row_owner(node.flags.no_fill)
+            };
+            self.with_row_builder(owner, |builder| builder.append(vec![target.into_anchor()]));
+        }
+    }
+
     pub(in crate::mandoc::blocks) const fn inline_output_role(&self) -> InlineOutputRole {
         self.inline_output_role
     }

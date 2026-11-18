@@ -19,11 +19,9 @@ impl BlockLowerer<'_, '_> {
                     .definition_geometry_checkpoint(child);
                 self.state.enter_column_node(child);
                 let saved_font = self.state.formatter.font.checkpoint();
-                if self.column_field {
-                    // D1/Dl may have leading punctuation outside the tagged
-                    // BODY (mdoc_html.c::mdoc_d1_pre).
-                    self.state.append_column_target(child);
-                }
+                // D1/Dl may have leading punctuation outside the tagged
+                // BODY (mdoc_html.c::mdoc_d1_pre).
+                self.state.append_native_target(child);
                 self.push_nodes(&child.children);
                 self.state.formatter.font.pop_scope(saved_font);
                 self.state.formatter.execution.finish_executed_node(child);
@@ -67,7 +65,7 @@ impl BlockLowerer<'_, '_> {
         let inbound_presentation = self.state.single_line_display_owner;
         self.state.single_line_display_owner = !is_bd;
         crate::mandoc::inline::display_tabs::enter_pre(&mut self.state.formatter.execution, node);
-        self.state.append_column_target(node);
+        self.state.append_native_target(node);
         let body_index = node
             .children
             .iter()
@@ -86,7 +84,7 @@ impl BlockLowerer<'_, '_> {
                 &self.state.formatter.font,
                 is_bd.then_some(inbound_fill),
             );
-            self.state.append_column_target(body);
+            self.state.append_native_target(body);
             self.push_nodes(&body.children);
             for child in node.children[index + 1..]
                 .iter()
@@ -149,22 +147,29 @@ pub(super) fn preformatted_blocks(
         std::mem::take(formatter),
     );
     lowerer.paragraph_predecessor = paragraph_predecessor;
-    lowerer.display_fill = Some(if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
+    let is_bd = node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd));
+    lowerer.display_fill = Some(if is_bd {
         DisplayFillMode::NodeFlags
     } else {
         DisplayFillMode::SingleLine
     });
-    lowerer.state.single_line_display_owner =
-        node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Bd));
+    lowerer.state.single_line_display_owner = !is_bd;
     // The enclosing block driver already settled the former output row.
     // Display pre handlers use the same execution state as inline HEADs.
     crate::mandoc::inline::display_tabs::enter_pre(&mut lowerer.state.formatter.execution, node);
+    if is_bd {
+        lowerer
+            .state
+            .queue_targets(crate::mandoc::targets::owned_target(node));
+    } else {
+        lowerer.state.append_native_target(node);
+    }
 
     let body_index = node
         .children
         .iter()
         .position(|child| child.kind == NodeKind::Body);
-    if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Bd)) {
+    if !is_bd {
         // termp_d1_pre(BLOCK) already selected the display origin/stops.
         // The generic native traversal includes leading and trailing direct
         // children, not merely BODY plus delimiter-close TEXT.
@@ -178,8 +183,14 @@ pub(super) fn preformatted_blocks(
         context.scope_posts.enter_display_body(
             body.id,
             &lowerer.state.formatter.font,
-            (node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))).then_some(inbound_no_fill),
+            Some(inbound_no_fill),
         );
+        // mdoc_bd_pre opens the tagged BODY before the first printable node
+        // selects fill in html_fillmode. Publish into the actual display
+        // output owner even if the initial control changes the fill mode.
+        lowerer
+            .state
+            .queue_targets(crate::mandoc::targets::owned_target(body));
         lowerer.push_nodes(&body.children);
         // Native validation can retain delimiter-close children after BODY.
         // They are source nodes and must use the same driver as BODY content.
@@ -198,19 +209,17 @@ pub(super) fn preformatted_blocks(
 
     // A crossed .Ed restores fill at its source marker. If that marker has
     // already consumed the checkpoint, a later .nf remains in force here.
-    let returned_fill = body_index.and_then(|index| {
-        (node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd))).then(|| {
-            context
-                .scope_posts
-                .exit_display_fill(node.children[index].id)
-        })
+    let returned_fill = body_index.filter(|_| is_bd).map(|index| {
+        context
+            .scope_posts
+            .exit_display_fill(node.children[index].id)
     });
     let close_at_source_marker = returned_fill == Some(None);
     if !close_at_source_marker {
         // D1/Dl BLOCK post is termp_bl_post(): consume the live field before
         // geometry returns (mdoc_term.c:1142-1148). Its literal presentation
         // does not set NODE_NOFILL or choose a different execution lifetime.
-        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bd)) {
+        if is_bd {
             lowerer.state.finish_column_display_body(node.display_kind);
         } else {
             lowerer.state.finish_native_body_line();

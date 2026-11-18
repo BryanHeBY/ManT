@@ -336,7 +336,7 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
         // negative vertical-space debt before asserting an output row.
         builder.native_vertical_space(1);
     }
-    append_targets(builder, targets::structural_target_owners(node));
+    append_target(builder, node);
     super::display_tabs::enter_pre(&mut builder.execution, node);
     if matches!(
         node.macro_token.as_ref(),
@@ -364,6 +364,7 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
     );
     builder.begin_executed_node(body);
     super::display_tabs::enter_pre(&mut builder.execution, body);
+    append_target(builder, body);
     append_inline_nodes(builder, &body.children, name);
     posts.restore_body_font(body.id, &mut builder.font);
     if !posts.ended(body.id) {
@@ -382,12 +383,13 @@ fn append_display(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) 
 }
 
 fn append_targets(builder: &mut InlineBuilder, targets: Vec<OwnedTarget>) {
-    builder.append(
-        targets
-            .into_iter()
-            .map(|target| Inline::anchor_at(target.name, target.owner_source))
-            .collect(),
-    );
+    builder.append(targets.into_iter().map(OwnedTarget::into_anchor).collect());
+}
+
+pub(super) fn append_target(builder: &mut InlineBuilder, node: &Node) {
+    if let Some(target) = targets::owned_target(node) {
+        builder.append(vec![target.into_anchor()]);
+    }
 }
 
 struct InlineContainerSink<'a> {

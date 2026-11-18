@@ -9,10 +9,9 @@ use mant_ir::{Block, Inline};
 impl BlockState {
     pub(in crate::mandoc::blocks) fn queue_targets(
         &mut self,
-        targets: impl IntoIterator<Item = String>,
-        owner_source: Option<mant_ir::SourceSpan>,
+        targets: impl IntoIterator<Item = crate::mandoc::targets::OwnedTarget>,
     ) {
-        self.pending_targets.queue(targets, owner_source);
+        self.pending_targets.queue(targets);
     }
 
     pub(in crate::mandoc::blocks) fn attach_pending_to_new_output(&mut self, output_start: usize) {

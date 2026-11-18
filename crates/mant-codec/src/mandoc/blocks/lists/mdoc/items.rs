@@ -1,8 +1,8 @@
 //! Collect item/control/target ownership without executing the collected stream.
 
 use super::{
-    Block, DefinitionItem, Inline, ListItem, LoweringContext, Mdoc, MdocMacro, Node, NodeKind,
-    column, first_part_children, source_span, targets,
+    Block, DefinitionItem, ListItem, LoweringContext, Mdoc, MdocMacro, Node, NodeKind, column,
+    first_part_children, targets,
 };
 
 pub(super) fn is_mdoc_list_item(node: &Node) -> bool {
@@ -17,21 +17,17 @@ pub(super) struct MdocListItem<'a> {
 
 impl MdocListItem<'_> {
     pub(super) fn targets(&self) -> Vec<targets::OwnedTarget> {
-        let native = targets::item_targets(self.node);
+        let native = targets::item_target_owners(self.node);
         // Prefer the actual It wrapper when native validation moved ownership
         // there. Otherwise the pending Tg remains the owner, including native
         // argument-less targets and authored recovery of removed empty rows.
         let mut targets = self
             .leading_targets
             .iter()
-            .filter(|target| !native.contains(&target.name))
+            .filter(|target| !native.iter().any(|owner| owner.node_id == target.node_id))
             .cloned()
             .collect::<Vec<_>>();
-        targets.extend(
-            native
-                .into_iter()
-                .map(|target| targets::OwnedTarget::new(target, source_span(self.node))),
-        );
+        targets.extend(native);
         targets
     }
 }
@@ -41,12 +37,8 @@ pub(super) fn attach_item_targets(
     item: &MdocListItem<'_>,
     layout: mant_ir::LayoutHint,
 ) {
-    for targets::OwnedTarget {
-        name: target,
-        owner_source: source,
-    } in item.targets().into_iter().rev()
-    {
-        targets::attach_targets(blocks, [target], layout, source);
+    for target in item.targets().into_iter().rev() {
+        targets::attach_owned_target(blocks, target, layout);
     }
 }
 
@@ -73,10 +65,8 @@ pub(super) fn mdoc_list_items<'node>(
     let mut items = Vec::new();
     let mut pending_targets: Vec<targets::OwnedTarget> = Vec::new();
     for (index, child) in body.iter().enumerate() {
-        if let Some(target) = targets::list_stream_target(child, &context.native_target_owners)
-            && !pending_targets.iter().any(|pending| pending.name == target)
-        {
-            pending_targets.push(targets::OwnedTarget::new(target, source_span(child)));
+        if let Some(target) = targets::list_stream_target(child, &context.native_target_owners) {
+            pending_targets.push(target);
         }
         if is_mdoc_list_item(child) {
             items.push(MdocListItem {
@@ -96,13 +86,9 @@ pub(super) fn mdoc_list_items<'node>(
 
 pub(super) fn append_list_targets(
     block: &mut Block,
-    targets: Vec<String>,
+    target: targets::OwnedTarget,
     layout: mant_ir::LayoutHint,
-    source: Option<mant_ir::SourceSpan>,
 ) {
-    if targets.is_empty() {
-        return;
-    }
     match block {
         Block::List { items, .. } => {
             if items.is_empty() {
@@ -113,30 +99,21 @@ pub(super) fn append_list_targets(
                     blocks: Vec::new(),
                 });
             }
-            targets::append_targets(
+            targets::append_owned_target(
                 &mut items.last_mut().expect("list item inserted").blocks,
-                targets,
+                target,
                 layout,
-                source,
             );
         }
         Block::DefinitionList { items, .. } => {
             if let Some(item) = items.last_mut() {
-                targets::append_definition_targets(item, targets, layout, source);
+                targets::append_definition_target(item, target, layout);
             } else {
                 items.push(DefinitionItem {
                     head_body_relation: mant_ir::HeadBodyRelation::from(true),
                     source: None,
                     entry: None,
-                    terms: (vec![
-                        targets
-                            .into_iter()
-                            .map(|target| Inline::anchor_at(target, source))
-                            .collect::<Vec<_>>(),
-                    ])
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
+                    terms: vec![vec![target.into_anchor()].into()],
                     description: Vec::new(),
                     layout: mant_ir::DefinitionLayout {
                         body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
@@ -146,7 +123,7 @@ pub(super) fn append_list_targets(
                 });
             }
         }
-        Block::Table { rows, .. } => column::append_targets(rows, targets, layout, source),
+        Block::Table { rows, .. } => column::append_target(rows, target, layout),
         _ => unreachable!("mdoc list lowering returns a list-like block"),
     }
 }

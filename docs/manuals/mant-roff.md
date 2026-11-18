@@ -734,9 +734,12 @@ decoration cannot change an identity.
 When libmandoc moves a target onto a paragraph, display, list, item, function
 block, or section wrapper, ManT attaches it to the corresponding addressable
 descendant or section without adding visible text. Display and list wrappers
-retain their targets inside extended definition heads. In a column list, a
-row target stays at its `It`, and a paragraph or display target follows the
-spacing or delimiters that precede its native owner in that cell. Target-only
+retain their targets inside extended definition heads. A display BODY target
+follows its authored opening delimiters in prose, lists, and literal displays.
+In a column list, a row target stays at its `It`, and a paragraph or display
+target follows the spacing or delimiters that precede its native owner in that
+cell. Parent and child structures with the same authored target each retain
+their own destination. Target-only
 and empty mdoc list items retain zero-width anchors for bullet, dash, ordered, plain,
 column, and definition layouts. Root and section content share local-link and
 traditional-manual-reference resolution.

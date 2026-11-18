@@ -117,14 +117,6 @@ pub(super) fn normalize_generated_anchors(
         }
     }
 
-    fn reserve_section_targets(sections: &[Section], used: &mut HashSet<String>) {
-        for section in sections {
-            used.insert(section.id.to_string());
-            used.extend(section.fragment_aliases.iter().map(ToString::to_string));
-            reserve_section_targets(&section.children, used);
-        }
-    }
-
     let mut used = HashSet::new();
     reserve_section_targets(sections, &mut used);
     let mut normalizer = Normalizer {
@@ -151,6 +143,14 @@ pub(super) fn normalize_generated_anchors(
     }
     for section in sections {
         aliases.visit_section_mut(section);
+    }
+}
+
+fn reserve_section_targets(sections: &[Section], used: &mut HashSet<String>) {
+    for section in sections {
+        used.insert(section.id.to_string());
+        used.extend(section.fragment_aliases.iter().map(ToString::to_string));
+        reserve_section_targets(&section.children, used);
     }
 }
 

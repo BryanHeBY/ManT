@@ -182,12 +182,18 @@ fn lower_mdoc_definition_item(
         },
         formatter,
     );
-    for targets::OwnedTarget {
-        name: target,
-        owner_source: source,
-    } in item.targets().into_iter().rev()
+    let published_head = item
+        .node
+        .children
+        .iter()
+        .find(|part| part.kind == NodeKind::Head);
+    for target in item
+        .targets()
+        .into_iter()
+        .rev()
+        .filter(|target| published_head.is_none_or(|head| target.node_id != head.id))
     {
-        targets::attach_definition_targets(&mut lowered, [target], source);
+        targets::attach_definition_target(&mut lowered, target);
     }
     lowered
 }
@@ -212,15 +218,12 @@ fn mdoc_list_item_from_definition(
         definition_layout.body_indent_columns,
         marker_width,
     );
-    let owner_source = terms
-        .iter()
-        .find_map(|term| targets::inline_anchor_owner_source(term))
-        .or(source);
     let mut anchors = Vec::new();
-    for term in &terms {
-        targets::inline_anchor_ids(term, &mut anchors);
+    for term in terms {
+        targets::move_inline_anchors(term.content, &mut anchors);
     }
-    targets::attach_targets(
+    let owner_source = targets::inline_anchor_owner_source(&anchors).or(source);
+    targets::prepend_anchors(
         &mut description,
         anchors,
         mant_ir::LayoutHint::default(),

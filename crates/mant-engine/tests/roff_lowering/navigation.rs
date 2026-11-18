@@ -24,3 +24,6 @@ mod target_successors;
 
 #[path = "navigation/target_structural.rs"]
 mod target_structural;
+
+#[path = "navigation/target_structural_owners.rs"]
+mod target_structural_owners;

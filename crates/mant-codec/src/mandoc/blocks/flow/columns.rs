@@ -94,16 +94,4 @@ impl BlockState {
         };
         self.with_row_boundary(RowOwner::from_literal(self.uses_literal_output()), execute);
     }
-
-    /// Put a validated tag at the current column execution position. A
-    /// pending block target would instead land before any earlier rows
-    /// already retained in the same column owner.
-    pub(in crate::mandoc::blocks) fn append_column_target(&mut self, node: &libmandoc_rs::Node) {
-        if let Some(target) = crate::mandoc::targets::owned_target(node) {
-            self.with_row_builder(
-                RowOwner::from_literal(self.uses_literal_output()),
-                |builder| builder.append(vec![target.into_anchor()]),
-            );
-        }
-    }
 }

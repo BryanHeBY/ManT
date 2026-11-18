@@ -20,7 +20,7 @@ use super::{
     TableEmbedding, TableEmbeddingPlan, adjacent_ip_run, is_native_transparent_sibling,
     man_nofill::no_fill_boundary,
     mdoc_macros::{reference_author_conjunction, reference_field_post},
-    participates_in_inline_flow, restores_macro_indent, source_span, synopsis, targets,
+    participates_in_inline_flow, restores_macro_indent, synopsis, targets,
 };
 
 impl BlockLowerer<'_, '_> {
@@ -174,26 +174,19 @@ impl BlockLowerer<'_, '_> {
         if self.push_node_pre_handlers(node, siblings, source) {
             return;
         }
-        let structural_targets = targets::structural_targets(node);
         if self.push_executed_spacing(node) {
-            self.state
-                .queue_targets(structural_targets, source_span(node));
             return;
         }
-        if self.push_mdoc_paragraph_spacing(node, &structural_targets) {
+        if self.push_mdoc_paragraph_spacing(node) {
             return;
         }
         // Nm's HEAD and BODY consume the current native field. Changing its
         // IR owner before HEAD post would lose an enclosing It's live row.
         if self.push_name_block(node, synopsis_previous) {
-            self.state
-                .queue_targets(structural_targets, source_span(node));
             return;
         }
         let single_line_literal = self.display_fill == Some(DisplayFillMode::SingleLine);
         if self.push_no_fill_lines(node, siblings, source.line_entered, single_line_literal) {
-            self.state
-                .queue_targets(structural_targets, source_span(node));
             return;
         }
         if self.push_configuration_equation(node, siblings) {
@@ -270,8 +263,10 @@ impl BlockLowerer<'_, '_> {
                 self.state
                     .set_source_indent(self.indent_columns.macro_origin());
             }
-            self.state
-                .queue_targets(structural_targets, source_span(node));
+            if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Bl)) {
+                self.state
+                    .queue_targets(targets::structural_target_owners(node));
+            }
             self.state
                 .finish_structural_output(output_start, accepted_before);
             self.state.attach_pending_to_structural_output(output_start);
@@ -326,7 +321,7 @@ impl BlockLowerer<'_, '_> {
             // mdoc_term.c::termp_pp_pre tags the current line after
             // term_vspace(). Keep it in this cell alongside its next word.
             self.state.column_vertical_space(1);
-            self.state.append_column_target(node);
+            self.state.append_native_target(node);
             return true;
         }
         if participates_in_inline_flow(node)

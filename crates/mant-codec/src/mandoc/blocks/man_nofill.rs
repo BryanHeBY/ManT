@@ -1,7 +1,7 @@
 //! Man no-fill words retain executed empty rows, not formatter operands.
 use super::{
     Node, NodeKind, ends_with_line_continuation, first_part_children, participates_in_inline_flow,
-    source_span, targets,
+    source_span,
 };
 use crate::mandoc::controls::{FormatterBoundary, formatter_control};
 use libmandoc_rs::{
@@ -119,8 +119,6 @@ impl super::BlockLowerer<'_, '_> {
         // owner; the ordinary synopsis driver executes those later modes.
         self.state.flush_paragraph();
         self.state.flush_preformatted();
-        self.state
-            .queue_targets(targets::structural_targets(node), source_span(node));
         let head = first_part_children(node, NodeKind::Head);
         let nodes = super::synopsis::execute_synopsis_head(
             node,

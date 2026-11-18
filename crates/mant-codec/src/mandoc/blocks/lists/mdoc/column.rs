@@ -156,11 +156,10 @@ fn attach_column_item_targets(
 }
 
 /// Attach targets after the final item, making a cell only when necessary.
-pub(super) fn append_targets(
+pub(super) fn append_target(
     rows: &mut Vec<TableRow>,
-    targets: Vec<String>,
+    target: targets::OwnedTarget,
     layout: mant_ir::LayoutHint,
-    source: Option<mant_ir::SourceSpan>,
 ) {
     if rows.is_empty() {
         rows.push(TableRow {
@@ -181,5 +180,5 @@ pub(super) fn append_targets(
         .last_mut()
         .and_then(|row| row.cells.last_mut())
         .expect("table cell inserted");
-    targets::append_targets(&mut cell.blocks, targets, layout, source);
+    targets::append_owned_target(&mut cell.blocks, target, layout);
 }

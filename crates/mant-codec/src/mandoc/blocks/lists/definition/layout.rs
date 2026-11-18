@@ -1,6 +1,6 @@
 //! Resolve executed definition rows into source-neutral head/body layout.
 
-use super::head::definition_head_anchor;
+use super::head::definition_head_target;
 use super::{Block, DefinitionFlow, DefinitionHeadFlow, Inline, Node, source_span};
 
 pub(super) fn apply_executed_definition_body_layout(
@@ -94,11 +94,11 @@ pub(super) fn normalize_executed_definition_head(
             }
         }
     }
-    if let Some(id) = definition_head_anchor(node) {
+    if let Some(target) = definition_head_target(node) {
         if terms.is_empty() {
             terms.push(Vec::new());
         }
-        terms[0].insert(0, Inline::anchor_at(id, source_span(node)));
+        terms[0].insert(0, target.into_anchor());
     }
     // Only an executed line boundary can close the HEAD row. An empty
     // operand without NODE_LINE still runs term_word(), not term_vspace()

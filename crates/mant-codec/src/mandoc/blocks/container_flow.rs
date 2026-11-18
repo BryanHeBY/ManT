@@ -1,5 +1,5 @@
 //! Container events re-enter the single driver and preserve font/flush lifetimes.
-use super::{InlineBuilder, Node, source_span, targets};
+use super::{InlineBuilder, Node, source_span};
 use crate::mandoc::containers::{ContainerSink, EnclosureMark, Event};
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
@@ -120,7 +120,6 @@ impl super::BlockLowerer<'_, '_> {
             lowerer: self,
             root: node,
             emission_source: node,
-            started: false,
         };
         crate::mandoc::containers::drive(node, &posts, &mut sink)
     }
@@ -130,7 +129,6 @@ struct BlockContainerSink<'l, 'a, 'source> {
     lowerer: &'l mut super::BlockLowerer<'a, 'source>,
     root: &'l Node,
     emission_source: &'l Node,
-    started: bool,
 }
 
 impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
@@ -174,13 +172,6 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
     }
 
     fn source_node(&mut self, source: &'node Node, starts_line: bool) {
-        if !self.started {
-            self.lowerer.state.queue_targets(
-                targets::structural_targets(self.root),
-                source_span(self.root),
-            );
-            self.started = true;
-        }
         self.emission_source = source;
         self.lowerer.observe_source_fill_mode(source);
         if self.lowerer.column_field {

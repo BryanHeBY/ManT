@@ -1,7 +1,7 @@
 //! State-only requests execute before printable fallback and never leak operands.
 use super::{
     Block, BlockState, LoweringContext, Node, NodeKind, SourceSequence, is_section,
-    lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text, source_span,
+    lower_inline_nodes, lower_inline_nodes_with_font_state, plain_text, source_span, targets,
     update_paragraph_distance, vertical_space_delta,
 };
 use libmandoc_rs::{
@@ -70,11 +70,7 @@ impl super::BlockLowerer<'_, '_> {
     }
 
     /// A retained Pp executes vspace independently of the native fill mode.
-    pub(super) fn push_mdoc_paragraph_spacing(
-        &mut self,
-        node: &Node,
-        structural_targets: &[String],
-    ) -> bool {
+    pub(super) fn push_mdoc_paragraph_spacing(&mut self, node: &Node) -> bool {
         if node.macro_token.as_ref() != Some(&Mdoc(MdocMacro::Pp)) {
             return false;
         }
@@ -88,8 +84,7 @@ impl super::BlockLowerer<'_, '_> {
             .execution
             .finish_native_vertical_rows(usize::from(lines));
         self.state.flush_paragraph_for_line_request();
-        self.state
-            .queue_targets(structural_targets.iter().cloned(), source_span(node));
+        self.state.queue_targets(targets::owned_target(node));
         // Empty output cannot cancel an already executed endline.
         if lines > 0 {
             self.state.output.push(Block::VerticalSpace {

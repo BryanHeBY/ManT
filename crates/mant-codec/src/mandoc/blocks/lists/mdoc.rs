@@ -1,10 +1,9 @@
 //! Lowers mdoc(7) `.Bl` and `.It` list structures.
 
 use super::{
-    Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem, DefinitionListStyle, Inline,
-    ListItem, ListKind, LoweringContext, Node, NodeKind, NormalizedListKind, RunInHeadStyle,
-    ScopeFlow, definition_item, first_part_children, layout, ordinal_sequence, source_span,
-    targets,
+    Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem, DefinitionListStyle, ListItem,
+    ListKind, LoweringContext, Node, NodeKind, NormalizedListKind, RunInHeadStyle, ScopeFlow,
+    definition_item, first_part_children, layout, ordinal_sequence, source_span, targets,
 };
 use libmandoc_rs::{MacroToken::Mdoc, MdocMacro};
 
@@ -105,17 +104,8 @@ pub(in crate::mandoc::blocks) fn lower_mdoc_list(
             formatter,
         )
     };
-    for targets::OwnedTarget {
-        name: target,
-        owner_source: source,
-    } in trailing_targets
-    {
-        append_list_targets(
-            &mut block,
-            vec![target],
-            layout(list_indent.content_origin()),
-            source,
-        );
+    for target in trailing_targets {
+        append_list_targets(&mut block, target, layout(list_indent.content_origin()));
     }
     context.lower_inline_with_spacing(trailing_controls, formatter.spacing_enabled(), formatter);
     crate::mandoc::inline::display_tabs::exit_post(&mut formatter.execution, node);

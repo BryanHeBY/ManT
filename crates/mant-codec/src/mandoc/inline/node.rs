@@ -149,6 +149,7 @@ fn append_ordered_declaration_or_display_part(
             if node.kind == NodeKind::Body {
                 posts.enter_display_body(node.id, &builder.font, None);
             }
+            scopes::append_target(builder, node);
             append_inline_nodes(builder, &node.children, default_name);
             if node.kind == NodeKind::Body {
                 posts.restore_body_font(node.id, &mut builder.font);
