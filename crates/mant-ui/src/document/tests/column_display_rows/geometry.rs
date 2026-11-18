@@ -106,7 +106,7 @@ fn last_display_block_paints_its_pre_and_post_gaps_independently() {
                     "{source}: width {width}"
                 );
                 assert!(rows[f + 1..mid].iter().all(|row| row.trim().is_empty()));
-                assert!(rows[mid + 1].trim().is_empty());
+                assert_eq!(rows[mid + 1].trim(), "");
                 assert_eq!(
                     rendered.anchor_row("Mixed.Target"),
                     (!tag.is_empty()).then_some(mid)
