@@ -20,6 +20,7 @@ mod links;
 pub(in crate::mandoc) mod names;
 pub(in crate::mandoc) mod ownership;
 pub(in crate::mandoc) use flow::split_output_scope_prefix;
+pub(super) use links::identity::link_identity_with_evidence;
 pub(super) use links::{append_man_link, man_link_destination};
 mod scopes;
 mod source_fragment;

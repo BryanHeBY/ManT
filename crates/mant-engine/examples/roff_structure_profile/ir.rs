@@ -177,6 +177,7 @@ fn collect_inlines(
                     LinkTarget::Section { .. } => profile.section_links += 1,
                     LinkTarget::Document { .. } => {}
                 }
+                profile.known_links.record_target(target);
                 collect_inlines(children, source_line, inside_table, profile, topology);
             }
             Inline::LineBreak { .. } => profile.hard_breaks += 1,

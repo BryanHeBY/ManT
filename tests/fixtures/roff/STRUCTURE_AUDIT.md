@@ -63,25 +63,33 @@ v4 reports a candidate only if a non-empty `RS` scope produces neither an
 indented block nor a semantic list/definition container whose renderer owns
 the indentation. Paragraph-boundary and raw `.br` counts remain report
 telemetry rather than failure conditions: empty or stateful requests can
-legitimately have no
-independent output block. Typed manual, external, email, and section links are
-checked independently by unique printable source occurrence, so duplicated
-AST views and empty closing macros cannot manufacture an obligation while a
-surviving link still cannot mask loss in a known target class. A
-literal single-mailbox `mailto:` operand in `UR` or `Lk` counts as an email.
-One macro expansion can create distinct address targets at the same source
-coordinate. Each distinct address still contributes an obligation.
-An escaped address operand whose type requires roff execution still counts
-toward the total number of external and email links. An
-unresolvable `.Sx` is allowed to degrade to visible text only when the normal
+legitimately have no independent output block.
+
+Native link obligations come from the structural node that owns the
+operands: one for each `Xr` or `MR`, the first address of `UR`, `MT`, `Lk`, or
+`%U`, and one for each address operand of `Mt`. A `%R` field with an authored
+RFC number also contributes its generated URL. The audit visits the link
+block or element once and preserves multiplicity when macro expansion shares
+a source coordinate or repeats a destination.
+
+The audit checks the link class and counts each proven destination separately.
+A decoded single-mailbox `mailto:` address from `UR`, `Lk`, or `%U` counts as
+an email. A proven empty address does not require a link. A valid address
+with an empty label still requires one. Where recovery or a decoding limit
+prevents an exact address observation, an unclassified `UR`, `Lk`, or `%U`
+still contributes to the combined external and email count. An explicit
+email macro continues to require an email link. An unresolvable `.Sx` is
+allowed to degrade to visible text only when the normal
 lowering path also emits its structured
 `unresolved-section-reference` diagnostic; the audit therefore detects silent
 loss without pretending that a cross-document or absent section is a valid
 same-document target.
 
-JSON reports retain the exact source coordinates for each link macro family
-under `sourceLinkOrigins`; this makes a count candidate manually auditable
-without turning local paths or the verbose topology into a product protocol.
+`sourceLinkOrigins` keeps the existing coordinate sets for `Xr`, `UR`/`Lk`,
+`MT`/`Mt`, and `Sx`. The obligation count also covers direct `MR` and reference
+fields. A fallback macro that expands `MR` into styled `IR` operands, as in
+`addftinfo(1)`, can yield extra manual links through the product's independent
+manual-reference recognition. The native count follows the expanded tree.
 
 Equation topology is source-addressed by line and context. Native
 `Node::equation_inline` mode determines inline/display ownership independently

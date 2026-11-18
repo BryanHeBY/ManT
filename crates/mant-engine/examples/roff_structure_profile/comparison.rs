@@ -74,6 +74,13 @@ pub(super) fn compare_structure(
             observed.external_links + observed.email_links,
         );
     }
+    let (known, matched) = expected.known_links.match_counts(&observed.known_links);
+    if observed.manual_links >= expected.manual_links
+        && observed.external_links >= expected.external_links
+        && observed.email_links >= expected.email_links
+    {
+        underflow(&mut violations, "known-link-targets", known, matched);
+    }
     underflow(
         &mut violations,
         "section-links-or-diagnostics",

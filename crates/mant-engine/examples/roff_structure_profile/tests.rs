@@ -6,6 +6,9 @@ use super::{
     retained_no_fill_rows,
 };
 
+#[path = "link_tests.rs"]
+mod link_tests;
+
 fn parsed_structure(source: &str) -> (super::AstStructure, super::AstTopology, super::Document) {
     let report = super::Parser::new(super::ParseOptions {
         includes: super::IncludePolicy::Deny,
@@ -42,8 +45,8 @@ fn address_obligations_follow_the_target_operand() {
         let (expected, expected_topology, document) = parsed_structure(source);
         let (mut observed, topology) = super::ir_profile(&document);
         assert_eq!(expected.external_links, 2);
-        assert_eq!(expected.email_links, 2);
-        assert_eq!(expected.unclassified_address_links, 1);
+        assert_eq!(expected.email_links, 3);
+        assert_eq!(expected.unclassified_address_links, 0);
         assert_eq!(observed.external_links, 2);
         assert_eq!(observed.email_links, 3);
         let compare = |observed: &super::IrStructure| {
@@ -54,13 +57,7 @@ fn address_obligations_follow_the_target_operand() {
         observed.email_links = 2;
         assert_eq!(
             compare(&observed),
-            ["address-links: expected at least 5, observed 4"]
-        );
-        observed.email_links = 1;
-        assert!(
-            compare(&observed)
-                .iter()
-                .any(|item| item.starts_with("email-links:"))
+            ["email-links: expected at least 3, observed 2"]
         );
         observed.email_links = 3;
         observed.external_links = 1;

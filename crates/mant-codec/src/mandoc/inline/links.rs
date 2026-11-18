@@ -5,7 +5,7 @@ use super::{
 };
 use libmandoc_rs::{MacroToken::Man, ManMacro};
 
-pub(in crate::mandoc::inline) mod identity;
+pub(in crate::mandoc) mod identity;
 pub(in crate::mandoc::inline) mod presentation;
 
 mod annotation;

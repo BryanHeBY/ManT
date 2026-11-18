@@ -23,9 +23,15 @@ use crate::mandoc::roff_escape::{RoffInlineEvent, decode_link_operand};
 /// prevents a later sibling from changing a typed destination and lets the
 /// label retain its own formatter state.
 pub(in crate::mandoc::inline) fn link_identity_text(source: &str) -> String {
+    link_identity_with_evidence(source).0
+}
+
+pub(in crate::mandoc) fn link_identity_with_evidence(source: &str) -> (String, bool) {
+    let decoded = decode_link_operand(source);
+    let exact = decoded.proves_native_glyphs();
     let mut identity = String::new();
     let mut skip_next_glyph = false;
-    for event in decode_link_operand(source) {
+    for event in decoded.events {
         match event {
             RoffInlineEvent::Text(value) => {
                 for character in value.chars() {
@@ -100,7 +106,7 @@ pub(in crate::mandoc::inline) fn link_identity_text(source: &str) -> String {
             | RoffInlineEvent::Presentation { .. } => skip_next_glyph = false,
         }
     }
-    identity
+    (identity, exact)
 }
 
 #[cfg(test)]

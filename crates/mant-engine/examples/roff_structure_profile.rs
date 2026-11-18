@@ -33,6 +33,8 @@ mod structure_items;
 mod comparison;
 #[path = "roff_structure_profile/ir.rs"]
 mod ir;
+#[path = "roff_structure_profile/links.rs"]
+mod links;
 #[path = "roff_structure_profile/native.rs"]
 mod native;
 use comparison::compare_structure;
@@ -71,6 +73,8 @@ struct AstStructure {
     email_links: usize,
     #[serde(skip)]
     unclassified_address_links: usize,
+    #[serde(skip)]
+    known_links: links::LinkOccurrences,
     section_links: usize,
     equation_configurations: usize,
     display_equations: usize,
@@ -93,6 +97,8 @@ struct IrStructure {
     manual_links: usize,
     external_links: usize,
     email_links: usize,
+    #[serde(skip)]
+    known_links: links::LinkOccurrences,
     section_links: usize,
     unresolved_section_references: usize,
     display_equations: usize,

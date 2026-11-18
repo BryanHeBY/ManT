@@ -46,6 +46,16 @@ use mant_ir::{
 use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
 use crate::text_safety::mask_terminal_control_bytes;
 
+/// Observe the exact identity of an already parsed roff link operand.
+/// An empty string is a proven empty identity. `None` means that recovery
+/// or an execution limit prevented an exact observation.
+#[doc(hidden)]
+#[must_use]
+pub fn observe_roff_link_operand(source: &str) -> Option<String> {
+    let (identity, exact) = inline::link_identity_with_evidence(source);
+    exact.then_some(identity)
+}
+
 /// Parse already prepared bytes; `path` is a source label, never opened.
 /// Includes are disabled and compression must already have been decoded.
 ///

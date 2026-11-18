@@ -11,37 +11,7 @@ pub(super) fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
     let mut no_fill_lines = BTreeMap::new();
     collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
-    profile.manual_links = semantic_link_origins(root, "Xr", NodeKind::Element).len();
-    profile.email_links = semantic_link_origins(root, "Mt", NodeKind::Element).len()
-        + semantic_link_origins(root, "MT", NodeKind::Block).len();
-    for (name, kind) in [("Lk", NodeKind::Element), ("UR", NodeKind::Block)] {
-        let mut targets = BTreeSet::new();
-        visit_semantic_link_nodes(root, name, kind, &mut |node| {
-            // CVS man_UR_pre and mdoc_lk_pre take the first target operand.
-            let operands = if kind == NodeKind::Block {
-                node_part_children(node, NodeKind::Head)
-            } else {
-                &node.children
-            };
-            let target = operands.first().and_then(|operand| operand.text.as_deref());
-            // Distinct targets emitted by one user macro can share a source
-            // coordinate. Keep those obligations while deduplicating views.
-            targets.insert((node.line, node.column, target));
-        });
-        for (_, _, target) in targets {
-            // An escaped operand can require roff execution to classify it.
-            match target {
-                Some(target) if !target.contains('\\') => {
-                    if mant_ir::email_address_from_mailto_uri(target).is_some() {
-                        profile.email_links += 1;
-                    } else {
-                        profile.external_links += 1;
-                    }
-                }
-                _ => profile.unclassified_address_links += 1,
-            }
-        }
-    }
+    super::links::native_link_obligations(root, &mut profile);
     profile.section_links = semantic_link_origins(root, "Sx", NodeKind::Element).len();
     let mut topology = AstTopology::default();
     collect_ast_topology(root, false, &mut topology);
@@ -233,7 +203,7 @@ fn visit_semantic_link_nodes<'a>(
     }
 }
 
-fn node_part_children(node: &Node, kind: NodeKind) -> &[Node] {
+pub(super) fn node_part_children(node: &Node, kind: NodeKind) -> &[Node] {
     node.children
         .iter()
         .find(|part| part.kind == kind)

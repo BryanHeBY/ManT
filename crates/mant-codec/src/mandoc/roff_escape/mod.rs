@@ -165,8 +165,8 @@ pub(in crate::mandoc) fn decode_word_with_status(source: &str, spaces: WordSpace
 /// Decode an identity operand without synthesizing reading-layout spaces.
 /// CVS `html.c::print_encode()` ignores horizontal motion in attributes; the
 /// terminal reading approximation belongs only to the visible text stream.
-pub(in crate::mandoc) fn decode_link_operand(source: &str) -> Vec<RoffInlineEvent> {
-    decode_with_options(source, false, WordSpace::Breakable).events
+pub(super) fn decode_link_operand(source: &str) -> DecodedText {
+    decode_with_options(source, false, WordSpace::Breakable)
 }
 
 fn decode_with_options(

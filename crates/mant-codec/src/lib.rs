@@ -21,6 +21,10 @@ pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse
 pub use tldr::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 
 #[cfg(feature = "roff")]
+#[doc(hidden)]
+pub use mandoc::observe_roff_link_operand;
+
+#[cfg(feature = "roff")]
 pub use mandoc::{
     RedirectSyntaxError, lower_mandoc_document, parse_plain_manual as parse_roff_bytes,
     parse_plain_manual_report as parse_roff_bytes_with_report, redirect_target,
