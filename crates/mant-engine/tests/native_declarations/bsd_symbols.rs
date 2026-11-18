@@ -7,6 +7,8 @@ use super::support::{check_head, check_occurrences, explain, json_roundtrip};
 
 #[path = "bsd_symbols/netbsd_bpf.rs"]
 mod netbsd_bpf;
+#[path = "bsd_symbols/openbsd_ports.rs"]
+mod openbsd_ports;
 
 fn fixture(name: &str) -> ResolvedContent {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))

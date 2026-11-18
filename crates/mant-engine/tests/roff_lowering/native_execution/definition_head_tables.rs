@@ -174,3 +174,20 @@ fn head_rows_run_empty_columns_and_width_dependent_buffers() {
         verify_consumers(&lower(&source), &["PRE", expected, "ENDING"], &source);
     }
 }
+
+#[test]
+fn native_cell_text_does_not_replace_its_environment_declaration() {
+    // The fixed HTML puts HOME's Ev marker and FAKE_ENV's cell in the same
+    // dt, with neither the cell nor its word belonging to that Ev operand.
+    let source = format!(
+        "{HEADER}.Bl -tag -width Ds\n.It Xo\n.Ev HOME\n.TS\nl.\nFAKE_ENV\n.TE\n.Xc\nEND\n.El\n"
+    );
+    let query = lower(&source);
+    verify_consumers(&query, &["HOME", "FAKE_ENV", "END"], &source);
+    let document = query.document.as_ref().unwrap();
+    let [Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_slice() else {
+        panic!("{source}");
+    };
+    let entry = items[0].entry.as_ref().expect("environment declaration");
+    assert_eq!(entry.names, ["HOME"], "{entry:?}");
+}

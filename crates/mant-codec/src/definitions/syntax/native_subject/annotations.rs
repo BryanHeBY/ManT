@@ -166,7 +166,7 @@ pub(super) fn suffix(
             }
             None => {
                 let active = pending.last().map_or(enclosure, OpenMark::active_scope);
-                if !(is_supplement(operand.role, active, plain_text)
+                if !(is_supplement(operand.role, active, plain_text, !pending.is_empty())
                     || tail.owns(operand.role, !pending.is_empty())
                     || supplementary_body(operand.role).is_some_and(|scope| {
                         pending
@@ -265,7 +265,8 @@ fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
     match role {
         NativeOperandRole::EnclosureContent(owner) => Some(owner),
         NativeOperandRole::Environment { enclosure, .. }
-        | NativeOperandRole::ReferenceText(enclosure) => enclosure,
+        | NativeOperandRole::ReferenceText(enclosure)
+        | NativeOperandRole::LiteralContinuation(enclosure) => enclosure,
         _ => {
             role.subject()
                 .filter(|receipt| {
@@ -306,7 +307,12 @@ pub(in crate::definitions::syntax) fn trailing_parenthesis(
     )
 }
 
-fn is_supplement(role: NativeOperandRole, enclosure: Option<u32>, plain_text: bool) -> bool {
+fn is_supplement(
+    role: NativeOperandRole,
+    enclosure: Option<u32>,
+    plain_text: bool,
+    bounded: bool,
+) -> bool {
     role == NativeOperandRole::Description
         || role.is_operand_label()
         || role.subject().is_some_and(|receipt| {
@@ -315,8 +321,11 @@ fn is_supplement(role: NativeOperandRole, enclosure: Option<u32>, plain_text: bo
         })
         || plain_text
             && match role {
-                NativeOperandRole::EnclosureContent(owner)
-                | NativeOperandRole::ReferenceText(Some(owner)) => enclosure == Some(owner),
+                NativeOperandRole::EnclosureContent(owner) => enclosure == Some(owner),
+                NativeOperandRole::ReferenceText(owner)
+                | NativeOperandRole::LiteralContinuation(owner) => {
+                    enclosure == owner && (owner.is_some() || bounded)
+                }
                 NativeOperandRole::Environment {
                     enclosure: owner, ..
                 } => enclosure == owner,

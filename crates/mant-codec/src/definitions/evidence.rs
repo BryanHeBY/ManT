@@ -84,7 +84,7 @@ impl NativeHeadEvidence {
         key: usize,
         retired_break: bool,
     ) {
-        let Some(mut captured) = self.pending_operands.remove(&key) else {
+        let Some(captured) = self.pending_operands.remove(&key) else {
             return;
         };
         let Some(source) = item.source else { return };
@@ -93,26 +93,8 @@ impl NativeHeadEvidence {
         };
         // Geometry may split/trim accepted HEAD output. A complete original
         // receipt, not a matching substring, is necessary to reuse operands.
-        let operands = if let [term] = item.terms.as_slice() {
-            let actual = mant_ir::inline_plain_text(term);
-            if retired_break && captured.text.strip_suffix('\n') == Some(&actual) {
-                // Definition layout moved one actual HEAD endline into
-                // the head/body boundary. Only that known trailing cell
-                // can disappear without invalidating the original proof.
-                captured.operands.retain_mut(|operand| {
-                    operand.bytes.end = operand.bytes.end.min(actual.len());
-                    operand.bytes.start < operand.bytes.end
-                });
-                captured.text.truncate(actual.len());
-            }
-            if actual == captured.text {
-                vec![TermOperands::Accepted(Rc::new(captured.operands))]
-            } else {
-                vec![TermOperands::Unavailable]
-            }
-        } else {
-            vec![TermOperands::Unavailable; item.terms.len()]
-        };
+        let operands = operands::split_accepted_term_operands(captured, &item.terms, retired_break)
+            .unwrap_or_else(|| vec![TermOperands::Unavailable; item.terms.len()]);
         let terms = self.shared_head(item);
         self.operand_witnesses.insert(
             owner,

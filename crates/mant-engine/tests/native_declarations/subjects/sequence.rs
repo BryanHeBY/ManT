@@ -4,6 +4,7 @@ use mant_protocol::{ContentSelector, EntryProjection, EvidenceClass, OutlineNode
 
 mod annotations;
 mod environment_atoms;
+mod environment_subjects;
 mod invocations;
 mod nested_annotations;
 mod receipts;
@@ -55,13 +56,18 @@ fn check_query(
     let outline = roundtrip(
         &mant_query::build_outline_projection(query, EntryProjection::All, None).unwrap(),
     );
+    let entries = outline
+        .nodes
+        .iter()
+        .flat_map(OutlineNode::children)
+        .collect::<Vec<_>>();
     let [
         entry @ OutlineNode::DocumentEntry {
             names: indexed,
             forms,
             ..
         },
-    ] = outline.nodes.last().unwrap().children()
+    ] = entries.as_slice()
     else {
         panic!("one owner for {head}");
     };

@@ -1,6 +1,6 @@
 {
   "schema": "mant.real-source-fixtures/v1",
-  "scope": "Numbered mdoc errors and constant declarations with parameters or parallel subjects.",
+  "scope": "Native BSD declarations, including numbered errors, constant annotations, parallel subjects and environment templates.",
   "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
   "cases": [
     {
@@ -418,6 +418,66 @@
           "stdoutSha256": "6e55eda0c1e697dbce5ca4735578745153e21cf59ab94d96d98e9e28183628e1",
           "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "stdoutBytes": 423,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "openbsd-bsd.port.mk.5",
+      "sourceIdentity": "openbsd-7.9-amd64:man/man5/bsd.port.mk.5",
+      "originUrl": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/man79.tgz",
+      "archive": "man79.tgz",
+      "archiveMember": "./usr/share/man/man5/bsd.port.mk.5",
+      "archiveSha256": "7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af",
+      "sourceSha256": "79762fced19b5608899ef53a8b32495ccacf588d73e921d12e8d27e52e5b96a2",
+      "fixtureSha256": "79762fced19b5608899ef53a8b32495ccacf588d73e921d12e8d27e52e5b96a2",
+      "decompressedSha256": "79762fced19b5608899ef53a8b32495ccacf588d73e921d12e8d27e52e5b96a2",
+      "sourceBytes": 119413,
+      "fixtureBytes": 119413,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-2-Clause",
+      "licenseFile": "openbsd-bsd.port.mk.5",
+      "transformation": "Exact uncompressed release member with a portable fixture basename.",
+      "selectionReason": "Environment templates retain their forms and owners without publishing brace alternatives as names.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "b56146ae3bc6f29b259b5bfa7acacc5984d94a6de679b0f7f33569d7617e9c6d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 149790,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "23386750c785625f524ffe220528999aa270f293c6e6374f6de80edbfd602b94",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 150588,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "ebf54c1fc9b1a2765d8394c07036715caa1d9b1fb37f363c9263b870a0793383",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 213102,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "90ba893f5262b8b1ada262ef222f9ab9e369b4d45168d95553a7a96542ca0b1c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 439043,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "3e5a4ce421dbf07294d52e090d4a8d9334d6bb76f09067d31e72860bfbbec0b7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3758,
           "stderrBytes": 0,
           "status": "CapturedWithDiagnostics"
         }

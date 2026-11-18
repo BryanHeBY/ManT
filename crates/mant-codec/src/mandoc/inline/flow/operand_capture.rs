@@ -27,6 +27,7 @@ pub(in crate::mandoc) struct HeadOperandCapture {
     operand_role: Option<NativeOperandRole>,
     enclosures: Vec<u32>,
     has_operand_label: bool,
+    has_environment: bool,
 }
 
 impl HeadOperandCapture {
@@ -39,6 +40,7 @@ impl HeadOperandCapture {
 
     pub(super) fn record(&mut self, serial: u64, role: NativeOperandRole) {
         self.has_operand_label |= role.is_operand_label();
+        self.has_environment |= matches!(role, NativeOperandRole::Environment { .. });
         self.roles.insert(serial, role);
     }
 
@@ -149,6 +151,7 @@ impl HeadOperandCapture {
                     | NativeOperandRole::FlWord(_)
                     | NativeOperandRole::Subject(..)
                     | NativeOperandRole::Environment { .. }
+                    | NativeOperandRole::LiteralContinuation(_)
                     | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_)
             ) {
@@ -217,7 +220,12 @@ impl super::InlineBuilder {
             };
             let role = capture
                 .operand_role
-                .filter(|role| *role != NativeOperandRole::Description)
+                .filter(|role| {
+                    !matches!(
+                        role,
+                        NativeOperandRole::Description | NativeOperandRole::LiteralContinuation(_)
+                    )
+                })
                 .or_else(|| capture.search_head.as_ref()?.role(text?.0.id))
                 .or_else(|| {
                     let glyph = literal_delimiter(text?.0)?;
@@ -303,6 +311,22 @@ impl super::InlineBuilder {
         operation(self);
         if let Some(capture) = capture {
             capture.borrow_mut().operand_role = previous;
+        }
+    }
+
+    pub(in crate::mandoc) fn with_environment_operand(
+        &mut self,
+        role: NativeOperandRole,
+        operation: impl FnOnce(&mut Self),
+    ) {
+        let has_environment = self
+            .head_operand_capture
+            .as_ref()
+            .is_some_and(|capture| capture.borrow().has_environment);
+        if has_environment {
+            self.with_native_operand_role(role, operation);
+        } else {
+            operation(self);
         }
     }
 

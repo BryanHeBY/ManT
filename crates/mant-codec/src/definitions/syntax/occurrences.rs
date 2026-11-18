@@ -12,6 +12,7 @@ use mant_ir::{DefinitionItem, EntryKind, Inline, ParameterKind, inline_plain_tex
 
 pub(super) struct HeadNames {
     pub(super) occurrences: Vec<Vec<RecognizedName>>,
+    pub(super) excluded_forms: Vec<usize>,
     pub(super) limit: Option<DeclarationLimit>,
     pub(super) semantic: bool,
 }
@@ -20,6 +21,7 @@ impl HeadNames {
     fn from_occurrences(occurrences: Vec<Vec<RecognizedName>>) -> Self {
         Self {
             occurrences,
+            excluded_forms: Vec::new(),
             limit: None,
             semantic: true,
         }
@@ -68,33 +70,52 @@ pub(super) fn recognize_head_names(
             };
             return HeadNames {
                 occurrences: found.occurrences,
+                excluded_forms: Vec::new(),
                 limit,
                 semantic: true,
             };
         }
-        Some(NativeHeadRole::Environment) => item
-            .terms
-            .iter()
-            .enumerate()
-            .map(|(index, term)| {
-                operands.for_term(index).map_or_else(Vec::new, |ranges| {
-                    native_environment_occurrences(term.as_ref(), ranges)
-                })
-            })
-            .collect(),
+        Some(NativeHeadRole::Environment) => return environment_head_names(item, operands),
         _ => name_occurrences_with_operands(item, kind, operands),
     };
     HeadNames::from_occurrences(occurrences)
+}
+
+fn environment_head_names(item: &DefinitionItem, operands: HeadOperands<'_>) -> HeadNames {
+    #[cfg(feature = "roff")]
+    let mut excluded_forms = Vec::new();
+    #[cfg(not(feature = "roff"))]
+    let excluded_forms = Vec::<usize>::new();
+    let occurrences = item
+        .terms
+        .iter()
+        .enumerate()
+        .map(|(index, term)| {
+            let Some(ranges) = operands.for_term(index) else {
+                return Vec::new();
+            };
+            #[cfg(feature = "roff")]
+            if let Some(recognition) = super::native_subject::environment_names(term, ranges) {
+                if recognition.unproved_exact_form {
+                    excluded_forms.push(index);
+                }
+                return recognition.names;
+            }
+            native_environment_occurrences(term, ranges)
+        })
+        .collect();
+    HeadNames {
+        occurrences,
+        semantic: excluded_forms.len() < item.terms.len(),
+        excluded_forms,
+        limit: None,
+    }
 }
 
 fn native_environment_occurrences(
     term: &[Inline],
     operands: &[NativeOperand],
 ) -> Vec<RecognizedName> {
-    #[cfg(feature = "roff")]
-    if let Some(names) = super::native_subject::environment_names(term, operands) {
-        return names;
-    }
     let uses = OperandUses::new(operands);
     let mut names = forms::environment_prefix(term)
         .and_then(|prefix| named::environment_occurrences_with_uses(&prefix, uses))

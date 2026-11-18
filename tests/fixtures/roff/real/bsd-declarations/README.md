@@ -14,6 +14,7 @@ otherwise identical to the upstream release members.
 | `freebsd-ng_deflate.4.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man4/ng_deflate.4.gz` | `NGM_DEFLATE_CONFIG` retains its original description alongside the parenthesized command alias. |
 | `freebsd-archive_entry_acl.3.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man3/archive_entry_acl.3.gz` | Styled permission shorthand in literal parentheses preserves both bodyless and described constant owners. |
 | `netbsd-bpf.4` | NetBSD 10.1 amd64 `man.tar.xz`, `usr/share/man/man4/bpf.4` | The 28 ioctl names in 21 original definition heads bind through punctuation that reopens the native invocation. |
+| `openbsd-bsd.port.mk.5` | OpenBSD 7.9 amd64 `man79.tgz`, `./usr/share/man/man5/bsd.port.mk.5` | Install templates keep their full forms and descriptions. The independently listed architecture names remain selectable. |
 
 Each member retains its complete BSD redistribution notice. The
 [manifest](manifest.json) records the licenses, artifact and member hashes,

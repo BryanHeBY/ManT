@@ -40,6 +40,7 @@ pub(super) fn recognize_head(
         kind,
         HeadNames {
             occurrences,
+            excluded_forms: Vec::new(),
             limit,
             semantic,
         },

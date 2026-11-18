@@ -43,6 +43,7 @@ pub(super) struct IdentityPlan {
     pub(super) case: NameCase,
     pub(super) names: Vec<String>,
     occurrences: Vec<Vec<super::RecognizedName>>,
+    excluded_forms: Vec<usize>,
     pub(super) value_domain: Option<ValueDomain>,
     pub(super) preferred: String,
     pub(super) limit: Option<super::syntax::DeclarationLimit>,
@@ -94,7 +95,7 @@ pub(super) fn identity_plan(
     operands: super::evidence::HeadOperands<'_>,
 ) -> IdentityPlan {
     let inferred = item.entry.is_none();
-    let (kind, case, names, occurrences, value_domain, limit, semantic) =
+    let (kind, case, names, occurrences, excluded_forms, value_domain, limit, semantic) =
         item.entry.as_ref().map_or_else(
             || {
                 let inferred = infer_identity(item, context, hint, operands);
@@ -103,6 +104,7 @@ pub(super) fn identity_plan(
                     inferred.case,
                     inferred.names,
                     inferred.occurrences,
+                    inferred.excluded_forms,
                     None,
                     inferred.limit,
                     inferred.semantic,
@@ -114,6 +116,7 @@ pub(super) fn identity_plan(
                     identity.case,
                     identity.names.clone(),
                     super::syntax::name_occurrences(item, identity.kind),
+                    Vec::new(),
                     identity.value_domain.clone(),
                     None,
                     true,
@@ -122,8 +125,10 @@ pub(super) fn identity_plan(
         );
     let name = names.first().cloned().unwrap_or_else(|| {
         item.terms
-            .first()
-            .map_or_else(|| "entry".to_owned(), |term| plain_text(term))
+            .iter()
+            .enumerate()
+            .find(|(index, _)| excluded_forms.binary_search(index).is_err())
+            .map_or_else(|| "entry".to_owned(), |(_, term)| plain_text(term))
     });
     let preferred = format!("{}-{}", role_id_prefix(kind), role_name_slug(kind, &name));
     // Whole template declarations can lack exact names. Reuse the bounded
@@ -178,6 +183,7 @@ pub(super) fn identity_plan(
         case,
         names,
         occurrences,
+        excluded_forms,
         value_domain,
         preferred,
         limit,
@@ -256,6 +262,7 @@ pub(super) fn identify_item(
         case,
         names,
         occurrences,
+        excluded_forms,
         value_domain,
         mut preferred,
         limit: _,
@@ -302,6 +309,7 @@ pub(super) fn identify_item(
         alias_groups: Vec::new(),
         alias_of: None,
         forms: (0..item.terms.len())
+            .filter(|index| excluded_forms.binary_search(index).is_err())
             .map(mant_ir::EntryForm::term)
             .collect(),
         id: id.into(),

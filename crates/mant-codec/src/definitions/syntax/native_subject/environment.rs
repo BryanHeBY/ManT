@@ -8,7 +8,7 @@ use std::ops::Range;
 pub(in crate::definitions::syntax) fn environment_names(
     term: &[Inline],
     operands: &[NativeOperand],
-) -> Option<Vec<RecognizedName>> {
+) -> Option<EnvironmentNames> {
     if !operands.iter().any(|operand| is_environment(operand.role)) {
         return None;
     }
@@ -17,52 +17,33 @@ pub(in crate::definitions::syntax) fn environment_names(
     Some(recognize(&view, operands, uses).unwrap_or_default())
 }
 
+#[derive(Default)]
+pub(in crate::definitions::syntax) struct EnvironmentNames {
+    pub(in crate::definitions::syntax) names: Vec<RecognizedName>,
+    pub(in crate::definitions::syntax) unproved_exact_form: bool,
+}
+
 fn recognize(
     view: &HeadView<'_>,
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
-) -> Option<Vec<RecognizedName>> {
+) -> Option<EnvironmentNames> {
     let text = view.text.as_str();
-    // in_line() retains punctuation inside one Ev word, but emits
-    // standalone delimiters as their own nodes. An Env word may have
-    // literal parentheses in its name or punctuation in its value.
-    let mut environment_word = None;
-    let mut parts = named::split_named_groups(text, |at| {
-        if uses.protects_syntax(at) {
-            return true;
-        }
-        let Some(operand) = operand_at(operands, at) else {
-            return false;
-        };
-        if is_description(operand.role) {
-            return true;
-        }
-        if !is_environment(operand.role) {
-            return false;
-        }
-        if !matches!(text.as_bytes()[at], b',' | b'|') {
-            return true;
-        }
-        let start = operand.bytes.start;
-        // The delimiter walk is in byte order. Scan each word once
-        // even if a long assignment contains many separators.
-        if environment_word.is_none_or(|(previous, _)| previous != start) {
-            environment_word = Some((start, text[operand.bytes.clone()].find(['=', '('])));
-        }
-        environment_word
-            .and_then(|(_, marker)| marker)
-            .is_some_and(|marker| start + marker < at)
-    })?
-    .into_iter()
-    .peekable();
-    let mut names = Vec::new();
+    let (parts, assignments) = split_groups(text, operands, uses)?;
+    let mut parts = parts.into_iter().peekable();
+    let mut result = EnvironmentNames::default();
+    let mut unproved_join = false;
     while let Some(part) = parts.next() {
         let first = part.trim();
         let start = offset(text, first);
         let mut end = start + first.len();
         let leading = operand_at(operands, start).map(|operand| operand.role);
         let annotation = annotation_start(text, &(start..end), operands);
-        if text[start..annotation.unwrap_or(end)].contains('=') {
+        let next_assignment = assignments.partition_point(|at| *at < start);
+        if assignments
+            .get(next_assignment)
+            .is_some_and(|at| *at < annotation.unwrap_or(end))
+        {
             // A lexical separator in the RHS keeps belonging to the
             // assignment until a distinct executed Ev starts a new atom.
             // The parser's invocation ID is independent of source coords.
@@ -74,14 +55,12 @@ fn recognize(
             }
         }
         let range = start..end;
-        let name = name_in_atom(view, &range, operands, leading, uses);
-        if let Some(name) = name.filter(|name| {
-            // A lexically valid word can still cross into an unrelated
-            // macro's glyphs when Ns removes the separator.
-            !intersecting_operands(operands, start..start + name.len())
-                .any(|operand| is_description(operand.role))
-        }) {
-            names.push(RecognizedName::contiguous(&name, start));
+        if let Some(name) = name_in_atom(view, &range, operands, leading, uses)
+            .filter(|name| proven_spelling(uses, &(start..start + name.len()), leading))
+        {
+            result.names.push(RecognizedName::contiguous(&name, start));
+        } else if let Some(role @ NativeOperandRole::Environment { .. }) = leading {
+            unproved_join |= joined_foreign_operand(text, &range, operands, role);
         } else if !leading.is_some_and(|role| is_environment(role) || is_description(role))
             && !named::environment_template(&text[range.clone()])
             && !uses.protects(&range)
@@ -90,7 +69,110 @@ fn recognize(
             return None;
         }
     }
-    Some(names)
+    // The authored label remains visible. Its exact text cannot claim an
+    // aliasless semantic owner when only unrelated operands made it look
+    // like a declaration. An independently named atom still owns the form.
+    result.unproved_exact_form = unproved_join && result.names.is_empty();
+    Some(result)
+}
+
+fn split_groups<'a>(
+    text: &'a str,
+    operands: &[NativeOperand],
+    uses: OperandUses<'_>,
+) -> Option<(Vec<&'a str>, Vec<usize>)> {
+    let mut assignments = Vec::new();
+    let mut value_word = None;
+    let groups = named::split_named_groups(text, |at, outside_group| {
+        let role = operand_at(operands, at);
+        if uses.protects_syntax(at) || role.is_some_and(|operand| is_description(operand.role)) {
+            return true;
+        }
+        if value_word.is_some()
+            && role.is_some_and(|operand| Some(operand.bytes.start) == value_word)
+        {
+            return !new_environment_after_rhs_separator(text, at, operands, role);
+        }
+        if outside_group && text.as_bytes()[at] == b'=' {
+            assignments.push(at);
+            value_word = role.map(|operand| operand.bytes.start);
+        }
+        // A native word can contain balanced template syntax before '='.
+        // Once assignment begins, the rest of that word is its literal
+        // RHS, including unmatched delimiters and comma/pipe characters.
+        false
+    })?;
+    Some((groups, assignments))
+}
+
+fn proven_spelling(
+    uses: OperandUses<'_>,
+    bytes: &Range<usize>,
+    leading: Option<NativeOperandRole>,
+) -> bool {
+    match leading {
+        Some(role @ NativeOperandRole::Environment { .. }) => {
+            uses.covers(bytes, |part| continues_environment(role, part))
+        }
+        Some(role @ NativeOperandRole::LiteralContinuation(_)) => {
+            uses.covers(bytes, |part| part == role)
+        }
+        _ => false,
+    }
+}
+
+fn continues_environment(lead: NativeOperandRole, part: NativeOperandRole) -> bool {
+    part == lead
+        || matches!(lead, NativeOperandRole::Environment { enclosure, .. }
+            if part == NativeOperandRole::LiteralContinuation(enclosure))
+}
+
+fn joined_foreign_operand(
+    text: &str,
+    range: &Range<usize>,
+    operands: &[NativeOperand],
+    lead: NativeOperandRole,
+) -> bool {
+    let mut end = range.start;
+    for operand in intersecting_operands(operands, range.clone()) {
+        let start = operand.bytes.start.max(range.start);
+        if start != end
+            || text[start..operand.bytes.end.min(range.end)].starts_with(char::is_whitespace)
+        {
+            return false;
+        }
+        if !continues_environment(lead, operand.role) {
+            let prefix = &text[range.start..start];
+            // A typed boundary still carries authored annotation syntax,
+            // even when its contents fail the complete-name grammar. A
+            // literal `PREFIX_` followed by Ar is an explicit template.
+            return !(is_annotation_boundary(operand.role)
+                || prefix.ends_with('_') && operand.role.is_operand_label())
+                && named::environment_variable_alias(prefix).is_some_and(|name| name == prefix);
+        }
+        end = operand.bytes.end;
+    }
+    false
+}
+
+fn new_environment_after_rhs_separator(
+    text: &str,
+    at: usize,
+    operands: &[NativeOperand],
+    current: Option<&NativeOperand>,
+) -> bool {
+    let Some(current) = current else { return false };
+    if !matches!(text.as_bytes()[at], b',' | b'|') || current.bytes.end != at + 1 {
+        return false;
+    }
+    let suffix = text[at + 1..].trim_start();
+    let next = operand_at(operands, offset(text, suffix)).map(|operand| operand.role);
+    // A final separator in the RHS word can also precede a new Ev. The
+    // native invocation distinguishes it from an ordinary RHS continuation.
+    matches!((current.role, next), (
+        NativeOperandRole::Environment { invocation: Some(a), enclosure: left },
+        Some(NativeOperandRole::Environment { invocation: Some(b), enclosure: right }),
+    ) if a != b && left == right)
 }
 
 fn independent_environment(
@@ -167,12 +249,17 @@ fn name_in_atom(
     };
     named::environment_atom(part.trim_end())
         .or_else(|| environment_with_operand_suffix(text, part, uses))
+        .or_else(|| environment_with_described_suffix(text, part, operands, leading?))
         .or_else(|| {
             // A separate styled operand can supplement the Ev name, for
             // example a link label. This fallback stays inside the current
             // atom and cannot bypass a failed native delimiter proof above.
-            leading.filter(|role| is_environment(*role))?;
-            let end = view.emphasized_operand_start(range.start..range.start + part.len())?;
+            let operand = operand_at(operands, range.start)?;
+            if !is_environment(operand.role) {
+                return None;
+            }
+            let limit = range.start + part.len();
+            let end = view.emphasized_operand_start(operand.bytes.end.min(limit)..limit)?;
             let prefix = &text[range.start..end];
             if prefix.ends_with(char::is_whitespace) && !prefix.contains('=') {
                 named::environment_atom(prefix.trim_end())
@@ -182,18 +269,43 @@ fn name_in_atom(
         })
 }
 
+fn environment_with_described_suffix(
+    text: &str,
+    part: &str,
+    operands: &[NativeOperand],
+    lead: NativeOperandRole,
+) -> Option<String> {
+    let start = offset(text, part);
+    let first_suffix = intersecting_operands(operands, start..start + part.len())
+        .find(|operand| !continues_environment(lead, operand.role))?;
+    let suffix =
+        &text[first_suffix.bytes.start.max(start)..first_suffix.bytes.end.min(start + part.len())];
+    let prefix = &text[start..offset(text, suffix.trim_start())];
+    if prefix.ends_with(char::is_whitespace)
+        && !prefix.contains('=')
+        && (first_suffix.role == NativeOperandRole::Description
+            || first_suffix.role.subject().is_some())
+    {
+        named::environment_atom(prefix.trim_end())
+    } else {
+        None
+    }
+}
+
 fn annotation_start(text: &str, range: &Range<usize>, operands: &[NativeOperand]) -> Option<usize> {
     intersecting_operands(operands, range.clone())
-        .find(|operand| {
-            matches!(
-                operand.role,
-                NativeOperandRole::EnclosureStart { .. }
-                    | NativeOperandRole::EnclosureEnd(_)
-                    | NativeOperandRole::LiteralDelimiter { .. }
-                    | NativeOperandRole::ClippedEnclosure
-            )
-        })
+        .find(|operand| is_annotation_boundary(operand.role))
         .map(|operand| offset(text, text[operand.bytes.clone()].trim_start()))
+}
+
+fn is_annotation_boundary(role: NativeOperandRole) -> bool {
+    matches!(
+        role,
+        NativeOperandRole::EnclosureStart { .. }
+            | NativeOperandRole::EnclosureEnd(_)
+            | NativeOperandRole::LiteralDelimiter { .. }
+            | NativeOperandRole::ClippedEnclosure
+    )
 }
 
 fn intersecting_operands(

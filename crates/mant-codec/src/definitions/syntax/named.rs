@@ -119,12 +119,12 @@ fn annotation_end(value: &str) -> Option<usize> {
 /// Delimiters inside a bounded annotation or placeholder are not declaration
 /// separators. Every outer part still has to pass its entire name grammar.
 pub(super) fn named_groups<'a>(text: &'a str, uses: OperandUses<'_>) -> Option<Vec<&'a str>> {
-    split_named_groups(text, |index| uses.protects_syntax(index))
+    split_named_groups(text, |index, _| uses.protects_syntax(index))
 }
 
 pub(super) fn split_named_groups(
     text: &str,
-    mut is_protected: impl FnMut(usize) -> bool,
+    mut is_protected: impl FnMut(usize, bool) -> bool,
 ) -> Option<Vec<&str>> {
     let mut parts = Vec::new();
     let mut start = 0;
@@ -132,8 +132,8 @@ pub(super) fn split_named_groups(
     for (index, character) in text.char_indices() {
         if matches!(
             character,
-            '(' | ')' | '<' | '>' | '[' | ']' | '{' | '}' | ',' | '|'
-        ) && is_protected(index)
+            '(' | ')' | '<' | '>' | '[' | ']' | '{' | '}' | ',' | '|' | '='
+        ) && is_protected(index, closers.is_empty())
         {
             continue;
         }

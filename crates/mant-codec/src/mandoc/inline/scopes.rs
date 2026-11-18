@@ -139,7 +139,9 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
         };
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::No)) {
-            append(builder);
+            // termp_li_pre executes explicit literal text. It may
+            // continue an Ev spelling where Ns removed the separator.
+            builder.with_environment_operand(NativeOperandRole::LiteralContinuation(None), append);
         } else {
             builder.with_native_operand_role(NativeOperandRole::Description, append);
         }
@@ -175,8 +177,10 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         Some(Mdoc(
             MdocMacro::Cm | MdocMacro::Ic | MdocMacro::Ms | MdocMacro::Cd | MdocMacro::Fd,
         )) => {
-            builder.with_font_scope(Font::Strong, |builder| {
-                append_inline_nodes(builder, children, name);
+            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+                builder.with_font_scope(Font::Strong, |builder| {
+                    append_inline_nodes(builder, children, name);
+                });
             });
         }
         Some(Mdoc(MdocMacro::Ar)) => {
@@ -201,8 +205,10 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             append_native_subject(builder, node, children, name);
         }
         Some(Mdoc(MdocMacro::Pa | MdocMacro::Ad | MdocMacro::Fr)) => {
-            builder.with_font_scope(Font::Emphasis, |builder| {
-                append_inline_nodes(builder, children, name);
+            builder.with_native_operand_role(NativeOperandRole::ReferenceText(None), |builder| {
+                builder.with_font_scope(Font::Emphasis, |builder| {
+                    append_inline_nodes(builder, children, name);
+                });
             });
         }
         Some(Mdoc(MdocMacro::Sx)) => append_section_reference(builder, children, name),
@@ -299,8 +305,10 @@ fn append_section_reference(builder: &mut InlineBuilder, children: &[Node], name
         registered.key,
         false,
         |builder| {
-            builder.with_font_scope(Font::Emphasis, |builder| {
-                append_inline_nodes(builder, children, name);
+            builder.with_native_operand_role(NativeOperandRole::ReferenceText(None), |builder| {
+                builder.with_font_scope(Font::Emphasis, |builder| {
+                    append_inline_nodes(builder, children, name);
+                });
             });
         },
         |children| {

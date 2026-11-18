@@ -146,7 +146,7 @@ fn executed_description_and_reference_operands_keep_their_own_word_boundaries() 
     for (tail, value, supplemental) in [
         ("Ar FILE", "FILE", true),
         ("Em FILE", "FILE", true),
-        ("Sy FILE", "FILE", false),
+        ("Sy FILE", "FILE", true),
         (
             "Lk https://example.test FILE",
             "FILE: https://example.test",
@@ -156,17 +156,22 @@ fn executed_description_and_reference_operands_keep_their_own_word_boundaries() 
         ("Xr printf 3", "printf(3)", false),
     ] {
         for (join, gap) in [("", " "), ("Ns ", "")] {
+            let head = format!("Ev HOME {join}{tail}");
+            let form = format!("HOME{gap}{value}");
+            if !join.is_empty() {
+                let query = section_fixture("ENVIRONMENT", "", &head);
+                let items = super::super::super::definitions(query.document.as_ref().unwrap());
+                assert_eq!(mant_ir::inline_plain_text(&items[0].terms[0]), form);
+                assert!(items[0].entry.is_none());
+                assert_eq!(explain(&query, &form).counts.direct_entry.total, 0);
+                continue;
+            }
             let names = if supplemental && join.is_empty() {
                 &["HOME"][..]
             } else {
                 &[]
             };
-            check(
-                &format!("Ev HOME {join}{tail}"),
-                names,
-                &format!("HOME{gap}{value}"),
-                &["FILE", "printf"],
-            );
+            check(&head, names, &form, &["FILE", "printf"]);
         }
     }
 }
@@ -270,7 +275,6 @@ fn rejected_annotation_cannot_be_rescanned_as_an_environment_name() {
         ),
         ("Xo Ev HOME Ns\n.Eo x\n.Ic note\n.Ec z\n.Xc", "HOMExnotez"),
         ("Xo Ev HOME Ns\n.Eo (\n.Ic note\n.Ec\n.Xc", "HOME(note"),
-        ("Ev HOME Ns Ar OTHER", "HOMEOTHER"),
     ] {
         check(head, &[], form, &["HOME", "OTHER", "note", "tail"]);
     }

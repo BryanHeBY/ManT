@@ -175,12 +175,6 @@ fn environment_annotations_require_an_actual_word_boundary() {
             &["other"][..],
         ),
         (
-            "Ev HOME Ns Ar OTHER",
-            &[][..],
-            "HOMEOTHER",
-            &["HOME", "OTHER"][..],
-        ),
-        (
             "Ev HOME ( Em other",
             &[][..],
             "HOME (other",

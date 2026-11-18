@@ -21,6 +21,7 @@ pub(in crate::definitions) struct InferredIdentity {
     pub(in crate::definitions) case: NameCase,
     pub(in crate::definitions) names: Vec<String>,
     pub(in crate::definitions) occurrences: Vec<Vec<RecognizedName>>,
+    pub(in crate::definitions) excluded_forms: Vec<usize>,
     pub(in crate::definitions) limit: Option<DeclarationLimit>,
     pub(in crate::definitions) semantic: bool,
 }
@@ -113,6 +114,7 @@ impl InferredIdentity {
             case,
             names,
             occurrences: recognized.occurrences,
+            excluded_forms: recognized.excluded_forms,
             limit: recognized.limit,
             semantic: recognized.semantic,
         }

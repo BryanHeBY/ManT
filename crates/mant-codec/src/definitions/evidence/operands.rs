@@ -7,6 +7,9 @@ use std::{ops::Range, rc::Rc};
 pub(crate) enum NativeOperandRole {
     #[cfg(any(feature = "roff", test))]
     Literal,
+    /// A visible No operand that can intentionally continue an Ev spelling.
+    #[cfg(feature = "roff")]
+    LiteralContinuation(Option<u32>),
     #[cfg(any(feature = "roff", test))]
     Argument,
     /// An `Ar` spelling may name an authored operand definition directly.
@@ -164,6 +167,7 @@ impl NativeOperandRole {
                 parent: enclosure(),
             },
             Self::ReferenceText(_) => Self::ReferenceText(enclosure()),
+            Self::LiteralContinuation(_) => Self::LiteralContinuation(enclosure()),
             role => role,
         }
     }
@@ -187,6 +191,7 @@ impl NativeOperandRole {
                 invocation,
                 enclosure,
             },
+            Self::LiteralContinuation(_) => Self::Argument,
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,
         }
@@ -204,6 +209,71 @@ pub(crate) struct NativeOperand {
 pub(crate) struct CapturedHeadOperands {
     pub(crate) text: String,
     pub(crate) operands: Vec<NativeOperand>,
+}
+
+#[cfg(feature = "roff")]
+pub(super) fn split_accepted_term_operands(
+    mut captured: CapturedHeadOperands,
+    terms: &[mant_ir::DefinitionTerm],
+    retired_break: bool,
+) -> Option<Vec<TermOperands>> {
+    let mut offset = 0;
+    let mut bounds = Vec::new();
+    for (index, term) in terms.iter().enumerate() {
+        let actual = mant_ir::inline_plain_text(term);
+        let end = offset + actual.len();
+        if captured.text.get(offset..end)? != actual {
+            return None;
+        }
+        let next = if index + 1 < terms.len() {
+            // split_definition_terms consumes the alt-marker's single
+            // executed line break. It keeps earlier device rows as text.
+            (captured.text.as_bytes().get(end) == Some(&b'\n')).then_some(end + 1)?
+        } else {
+            end
+        };
+        if terms.len() > 1 {
+            bounds.push((offset..end, next));
+        }
+        offset = next;
+    }
+    match &captured.text[offset..] {
+        "" => {}
+        "\n" if retired_break => {
+            // Definition layout retired the actual final HEAD endline.
+            // No other dropped or rearranged text can prove name ranges.
+            captured.operands.retain_mut(|operand| {
+                operand.bytes.end = operand.bytes.end.min(offset);
+                operand.bytes.start < operand.bytes.end
+            });
+        }
+        _ => return None,
+    }
+    if let [_] = terms {
+        return Some(vec![TermOperands::Accepted(Rc::new(captured.operands))]);
+    }
+    let mut native = captured.operands.into_iter().peekable();
+    let mut result = Vec::with_capacity(bounds.len());
+    for (bound, next) in bounds {
+        let mut local = Vec::new();
+        while let Some(mut operand) = native.next_if(|operand| operand.bytes.start < next) {
+            if operand.bytes.start < bound.start || operand.bytes.end > next {
+                // Only the structural separator may be removed, never a
+                // word spanning visible glyphs from two different terms.
+                return None;
+            }
+            if operand.bytes.start == bound.end {
+                // The discarded separator may have its own receipt.
+                continue;
+            }
+            operand.bytes.end = operand.bytes.end.min(bound.end);
+            operand.bytes.start -= bound.start;
+            operand.bytes.end -= bound.start;
+            local.push(operand);
+        }
+        result.push(TermOperands::Accepted(Rc::new(local)));
+    }
+    native.next().is_none().then_some(result)
 }
 
 #[cfg(feature = "roff")]

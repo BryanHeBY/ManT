@@ -149,6 +149,7 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
         case,
         names,
         occurrences: vec![occurrences],
+        excluded_forms: Vec::new(),
         limit: None,
         semantic: true,
     })

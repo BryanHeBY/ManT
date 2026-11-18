@@ -298,7 +298,7 @@ fn independent_groups<'a>(
     let first = operands.partition_point(|operand| operand.bytes.end <= start);
     let mut receipts = operands[first..].iter().peekable();
     let mut last = None;
-    named::split_named_groups(head, |index| {
+    named::split_named_groups(head, |index, _| {
         let offset = start + index;
         while let Some(operand) = receipts.next_if(|operand| operand.bytes.start <= offset) {
             last = Some(operand);
