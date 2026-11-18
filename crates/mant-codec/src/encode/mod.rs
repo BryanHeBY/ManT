@@ -38,6 +38,9 @@ pub use math_markdown::{
 };
 pub use navigation::render_scoped_report_page;
 
+// CommonMark admits at most nine decimal digits in an ordered marker.
+const MAX_MARKDOWN_ORDINAL: u64 = 999_999_999;
+
 /// Optional report decoration expressed only as source-neutral inline IR.
 ///
 /// Document artifacts never accept this projection: their coordinates always

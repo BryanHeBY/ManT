@@ -2,6 +2,30 @@
 use super::*;
 
 #[test]
+fn incomplete_option_list_requires_leading_option_evidence() {
+    for (body, warns) in [
+        ("- Use `--alpha` for this.\n- Then use `--beta`.\n", false),
+        (
+            "- 1000000000\\. `--alpha`: First.\n- 1000000001\\. `--beta`: Second.\n",
+            false,
+        ),
+        ("- `--alpha`: First.\n- `--beta` missing delimiter.\n", true),
+    ] {
+        let document = parse_markdown(&format!("# Tool\n\n{body}"), None)
+            .unwrap()
+            .document;
+        assert_eq!(
+            document.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
+            }),
+            warns,
+            "{body}: {:?}",
+            document.diagnostics,
+        );
+    }
+}
+
+#[test]
 fn declared_choice_domains_require_values_and_preserve_exhaustiveness() {
     for (policy, exhaustive) in [("exhaustive", true), ("open", false)] {
         for newline in ["\n", "\r\n"] {

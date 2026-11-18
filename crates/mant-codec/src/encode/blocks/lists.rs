@@ -2,13 +2,10 @@
 use super::{assembly, mapped_sequence};
 use crate::encode::math_markdown::RenderOptions;
 use crate::encode::{
-    MarkdownInlineProjection,
+    MAX_MARKDOWN_ORDINAL, MarkdownInlineProjection,
     mapped::{BlockSyntax, MappedText},
 };
 use mant_ir::{Block, EntryOwner, ListItem, ListKind};
-
-// CommonMark admits at most nine decimal digits in an ordered marker.
-const MAX_MARKDOWN_ORDINAL: u64 = 999_999_999;
 
 pub(super) fn render_list(
     kind: ListKind,
@@ -21,72 +18,43 @@ pub(super) fn render_list(
 ) -> Option<MappedText> {
     let bullet = format!("{} ", previous.following_list_marker('-', '+'));
     let period = previous.following_list_marker('.', ')');
-    let mut explicit_ordinals = None;
+    let prepared: Vec<_> = items
+        .iter()
+        .map(|item| render_list_item(item, options, locations, track))
+        .collect();
+    let explicit_ordinals = needs_explicit_ordinals(kind, &prepared);
     let rendered = items
         .iter()
+        .zip(prepared)
         .enumerate()
-        .filter_map(|(index, item)| {
-            let mut blocks = list_item_blocks(&item.blocks, options, locations, track);
-            if options.preserve_semantics
-                && let Some(facts) = &item.entry
+        .filter_map(|(index, (item, mut content))| {
+            if explicit_ordinals
+                && content.contribution.rows
+                && let Some(ordinal) = kind.ordinal(index)
             {
-                if let Some(head) = blocks.first_mut() {
-                    // Metadata has no author text cell. Keep its comment on
-                    // its own source line: a separating SP would survive the
-                    // reader's annotation removal, while direct concatenation
-                    // would change the final style delimiter's lexical flank.
-                    // HTML comments interrupt phrasing without a blank line,
-                    // so this does not change a compact list's paragraph gaps.
-                    if !head.text.ends_with('\n') {
-                        head.text.push('\n');
-                    }
-                    head.text
-                        .push_str(crate::encode::semantic::metadata(facts).trim_start_matches(' '));
-                }
-                if let Some(domain) = facts
-                    .value_domain
-                    .as_ref()
-                    .and_then(crate::encode::semantic::domain)
-                {
-                    blocks.insert(1, domain.into());
-                }
+                content = with_explicit_ordinal(content, ordinal);
             }
-            let mut content = assembly::join(blocks);
-            let marker =
-                if let Some(ordinal) = kind.ordinal(index).filter(|_| content.contribution.rows) {
-                    if *explicit_ordinals.get_or_insert(ordinal > MAX_MARKDOWN_ORDINAL) {
-                        content = with_explicit_ordinal(content, ordinal);
-                        bullet.clone()
-                    } else if ordinal <= MAX_MARKDOWN_ORDINAL {
-                        format!("{ordinal}{period} ")
-                    } else {
-                        // Only the opening marker determines the list start.
-                        format!("1{period} ")
-                    }
-                } else {
-                    bullet.clone()
-                };
             content.contribution.before |= mant_ir::geometry::list_item_spacing(
                 item.layout.spacing_before_lines,
                 index,
                 compact,
             ) > 0;
-            if content.text.is_empty() {
-                content = content.syntax_site(BlockSyntax::Phrasing);
-            }
-            if !options.preserve_semantics
-                && options.preserve_anchors
-                && let Some(facts) = &item.entry
-                && let Some(anchor) = options.anchor(&facts.id)
-            {
-                // A retained anchor uses the actual first block's syntax;
-                // it cannot be glued to a fence or steal a child's receiver.
-                content.attach_navigation(&anchor);
-            }
             let content = content
                 .with_owner(EntryOwner::List(item), track)
                 .nonempty()?;
             if content.contribution.rows {
+                let marker =
+                    if let Some(ordinal) = kind.ordinal(index).filter(|_| !explicit_ordinals) {
+                        // Only the opening marker determines the effective start.
+                        let ordinal = if ordinal <= MAX_MARKDOWN_ORDINAL {
+                            ordinal
+                        } else {
+                            1
+                        };
+                        format!("{ordinal}{period} ")
+                    } else {
+                        bullet.clone()
+                    };
                 content
                     .prefix(&marker)
                     .map(|content| (content, item.layout.spacing_before_lines))
@@ -105,6 +73,65 @@ pub(super) fn render_list(
         );
     }
     Some(content)
+}
+
+fn render_list_item(
+    item: &ListItem,
+    options: RenderOptions<'_>,
+    locations: Option<&dyn MarkdownInlineProjection>,
+    track: bool,
+) -> MappedText {
+    let mut blocks = list_item_blocks(&item.blocks, options, locations, track);
+    if options.preserve_semantics
+        && let Some(facts) = &item.entry
+    {
+        if let Some(head) = blocks.first_mut() {
+            // Metadata is on its own syntax line. Adding a separating space
+            // would change the visible head once the comment is consumed.
+            if !head.text.ends_with('\n') {
+                head.text.push('\n');
+            }
+            head.text
+                .push_str(crate::encode::semantic::metadata(facts).trim_start_matches(' '));
+        }
+        if let Some(domain) = facts
+            .value_domain
+            .as_ref()
+            .and_then(crate::encode::semantic::domain)
+        {
+            blocks.insert(1, domain.into());
+        }
+    }
+    let mut content = assembly::join(blocks);
+    if content.text.is_empty() {
+        content = content.syntax_site(BlockSyntax::Phrasing);
+    }
+    if !options.preserve_semantics
+        && options.preserve_anchors
+        && let Some(facts) = &item.entry
+        && let Some(anchor) = options.anchor(&facts.id)
+    {
+        // Navigation uses the original content grammar, including leading
+        // fences. The generated ordinal label has no authored destination.
+        content.attach_navigation(&anchor);
+    }
+    content
+}
+
+fn needs_explicit_ordinals(kind: ListKind, items: &[MappedText]) -> bool {
+    let mut retained = items
+        .iter()
+        .enumerate()
+        .filter_map(|(index, item)| item.contribution.rows.then_some(index));
+    let Some(first) = retained.next() else {
+        return false;
+    };
+    kind.ordinal(first).is_some_and(|start| {
+        start > MAX_MARKDOWN_ORDINAL
+            // After the first marker, CommonMark always counts consecutively.
+            // A missing interior owner therefore needs visible explicit labels.
+            || retained.zip(first + 1..).any(|(actual, expected)| actual != expected)
+    })
 }
 
 fn with_explicit_ordinal(mut content: MappedText, ordinal: u64) -> MappedText {

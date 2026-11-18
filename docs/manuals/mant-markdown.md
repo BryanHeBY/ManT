@@ -468,7 +468,7 @@ For each annotated list, export proves that either the default attached-value po
 
 The Rust renderer's `MarkdownOptions.preserve_semantics` opt-in emits list declarations, item IDs, explicit alias groups, same-document aliasOf relationships and supported value-domain comments. It supports documents whose annotated owners are ordinary lists containing only successfully declared items with the same role/case within each list. Nested lists are checked independently. Relation comments escape HTML delimiter characters in JSON strings. Reimport rebuilds bindings against the new content; original source spans are not retained.
 
-Documents with native definition owners, inferred or mixed/partly rejected lists, invalid IR facts, or an entry-set reference without a representable document destination fall back to ordinary portable Markdown without semantic comments. The same whole-document fallback applies when valid IR metadata exceeds the authoring limits: 32 alias groups, 32 members per group, 512 characters per explicit ID, or 8192 bytes of escaped JSON per item. Import and export share these checks; they are Markdown representation limits, not general IR limits. Roff shared names never manufacture alias groups. Except for the heading-local-link fallback described above, semantic export takes precedence over raw HTML anchor export when both options are set: entry IDs are carried by metadata, not injected into the head. Heading IDs, arbitrary native layout, unsupported containers and exact source bytes are outside this subset. Use IR JSON for a complete facts/bindings serialization; Markdown is not a lossless semantic round trip.
+Documents with native definition owners, inferred or mixed/partly rejected lists, invalid IR facts, or an entry-set reference without a representable document destination fall back to ordinary portable Markdown without semantic comments. The same whole-document fallback applies when valid IR metadata exceeds the authoring limits: 32 alias groups, 32 members per group, 512 characters per explicit ID, or 8192 bytes of escaped JSON per item. A declared list also uses the portable fallback if its opening ordinal needs a visible number label or an item's leading spacing needs visible hard rows. Both put content before the head code that a semantic declaration requires. Import and export share these checks; they are Markdown representation limits, not general IR limits. Roff shared names never manufacture alias groups. Except for the heading-local-link fallback described above, semantic export takes precedence over raw HTML anchor export when both options are set: entry IDs are carried by metadata, not injected into the head. Heading IDs, arbitrary native layout, unsupported containers and exact source bytes are outside this subset. Use IR JSON for a complete facts/bindings serialization; Markdown is not a lossless semantic round trip.
 
 ## Mathematical Export
 
@@ -761,12 +761,13 @@ At a detached root, an actual newline entity or hard-row spelling retains a
 boundary without a neighboring receiver. Fences, rules and ordinary lists can
 interrupt that empty phrasing row. A first retained ordered marker other than one
 also requires a blank syntax separator, following CommonMark's interruption
-rule; source distance simplifies to this minimum framing. Skipped items never
-renumber the retained markers. Ordered lists retain a representable opening
+rule; source distance simplifies to this minimum framing. Skipping items
+preserves the visible source ordinals of retained items. Ordered lists retain a representable opening
 ordinal and use a short continuation marker when a later ordinal exceeds
-CommonMark's nine-digit limit. When the opening ordinal itself is too wide,
-portable export uses bullet items with explicit number labels and preserves
-each original item's body. Adjacent lists use distinct marker spellings when
+CommonMark's nine-digit limit. If the opening ordinal is too wide or an omitted
+interior item leaves a gap, portable export uses bullet items with explicit
+number labels. The labels and each original item's body survive Markdown readback.
+Adjacent lists use distinct marker spellings when
 needed to keep their items separate on readback. JSON retains the exact
 ordered start.
 A preformatted root with no authored children contributes

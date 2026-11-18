@@ -16,10 +16,15 @@ pub(super) fn supported(document: &Document, math: super::MarkdownMath) -> bool 
             if matches!(block, Block::Equation { .. }) && self.1 != super::MarkdownMath::Readable {
                 self.0 = false;
             }
-            if let Block::List { items, .. } = block
+            if let Block::List { kind, items, .. } = block
                 && let Some(first) = items.iter().find_map(|item| item.entry.as_ref())
             {
-                self.0 &= crate::markdown::export_attached_policy(items).is_some()
+                // Explicit numeric labels in the portable fallback occupy
+                // the leading code slot required by the entry grammar.
+                self.0 &= kind
+                    .ordinal(0)
+                    .is_none_or(|start| start <= super::MAX_MARKDOWN_ORDINAL)
+                    && crate::markdown::export_attached_policy(items).is_some()
                     && items.iter().all(|item| {
                         item.entry.as_ref().is_some_and(|facts| {
                             facts.kind == first.kind
@@ -29,7 +34,8 @@ pub(super) fn supported(document: &Document, math: super::MarkdownMath) -> bool 
                                     .name_bindings
                                     .iter()
                                     .all(|b| b.evidence == EntryNameEvidence::Declared)
-                                && matches!(item.blocks.first(), Some(Block::Paragraph { .. }))
+                                && matches!(item.blocks.first(), Some(Block::Paragraph { layout, .. })
+                                    if layout.spacing_before_lines == 0)
                                 && crate::markdown::export_entry_metadata(facts).is_some()
                                 && facts
                                     .value_domain

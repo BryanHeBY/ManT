@@ -27,6 +27,26 @@ fn list(query: &ResolvedContent) -> (ListKind, &[mant_ir::ListItem]) {
     (*kind, items)
 }
 
+fn read_list(query: &ResolvedContent) -> (ListKind, &[mant_ir::ListItem]) {
+    // Addressable export can carry raw HTML destinations before the body.
+    let mut lists = query
+        .document
+        .as_ref()
+        .unwrap()
+        .blocks
+        .iter()
+        .filter_map(|block| {
+            if let Block::List { kind, items, .. } = block {
+                Some((*kind, items.as_slice()))
+            } else {
+                None
+            }
+        });
+    let result = lists.next().expect("the exported list");
+    assert!(lists.next().is_none(), "unexpected second list");
+    result
+}
+
 fn text(block: &Block) -> String {
     let Block::Paragraph { children, .. } = block else {
         panic!("wanted a paragraph, found {block:?}");
@@ -216,6 +236,186 @@ fn native_ordinals_cross_the_markdown_digit_limit_without_escaping_their_list() 
             assert_eq!(text(&items[1].blocks[0]), format!("{}. BETA", start + 1));
         }
     }
+}
+
+#[test]
+fn omitted_items_keep_their_neighbors_numbered_across_readback() {
+    use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+    for start in [0, 3, MAX - 1, MAX] {
+        // The second CommonMark marker may be 1 because the parser derives
+        // its ordinal from the opening marker and the number of item owners.
+        for bitmask in 0_u8..7 {
+            let items = (0..3)
+                .map(|index| {
+                    if bitmask & (1 << index) != 0 {
+                        ""
+                    } else {
+                        ["Alpha", "Beta", "Gamma"][index]
+                    }
+                })
+                .collect::<Vec<_>>();
+            let source = format!(
+                "# Page\n\n{start}. {}\n1. {}\n1. {}\n",
+                items[0], items[1], items[2]
+            );
+            let original = load_markdown_text(&source, None).unwrap();
+            let retained: Vec<_> = items
+                .iter()
+                .enumerate()
+                .filter(|(_, text)| !text.is_empty())
+                .collect();
+            let first = retained.first().unwrap().0;
+            let last = retained.last().unwrap().0;
+            let explicit = start + first as u64 > MAX || last - first + 1 != retained.len();
+            for options in [MarkdownOptions::default(), MarkdownOptions::ADDRESSABLE] {
+                let mut current = original.clone();
+                for _ in 0..2 {
+                    let markdown = render_markdown_with_options(&current, options);
+                    current = load_markdown_text(&markdown, None).unwrap();
+                    let (kind, items) = read_list(&current);
+                    assert_eq!(items.len(), retained.len(), "source {source:?}\n{markdown}");
+                    if explicit {
+                        assert_eq!(kind, ListKind::Bullet, "{markdown}");
+                    }
+                    for (position, ((index, word), item)) in retained.iter().zip(items).enumerate()
+                    {
+                        let ordinal = start + u64::try_from(*index).unwrap();
+                        if explicit {
+                            assert_eq!(
+                                text(&item.blocks[0]),
+                                format!("{ordinal}. {word}"),
+                                "{markdown}"
+                            );
+                        } else {
+                            assert_eq!(kind.ordinal(position), Some(ordinal), "{markdown}");
+                            assert_eq!(text(&item.blocks[0]), **word, "{markdown}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn semantic_comments_only_accompany_a_reimportable_ordered_grammar() {
+    use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+    let source = concat!(
+        "# Page\n\n<!-- mant:entries role=option case=sensitive -->\n",
+        "1. `-a`: First.\n\n   ```text\n   EXTRA\n   ```\n\n",
+        "2. `-a`: See [Second](https://example.test).\n\n",
+        "   | Column |\n   | --- |\n   | Table-content |\n",
+    );
+    for start in [3, MAX, MAX + 1, u64::MAX] {
+        let mut original = load_markdown_text(source, None).unwrap();
+        let document = original.document.as_mut().unwrap();
+        let Block::List { kind, items, .. } = &mut document.blocks[0] else {
+            unreachable!();
+        };
+        *kind = ListKind::Ordered { start: Some(start) };
+        let facts: Vec<_> = items
+            .iter()
+            .map(|item| item.entry.clone().unwrap())
+            .collect();
+        assert_eq!(facts[0].names, facts[1].names);
+        assert_ne!(facts[0].id, facts[1].id);
+
+        for options in [
+            MarkdownOptions::default(),
+            MarkdownOptions {
+                preserve_semantics: true,
+                ..MarkdownOptions::default()
+            },
+            MarkdownOptions {
+                preserve_semantics: true,
+                ..MarkdownOptions::ADDRESSABLE
+            },
+        ] {
+            let semantic = options.preserve_semantics && start <= MAX;
+            let mut current = original.clone();
+            for _ in 0..2 {
+                let markdown = render_markdown_with_options(&current, options);
+                assert_eq!(
+                    markdown.matches("<!-- mant:entries ").count(),
+                    usize::from(semantic)
+                );
+                assert_eq!(
+                    markdown.matches("<!-- mant:entry ").count(),
+                    2 * usize::from(semantic)
+                );
+                current = load_markdown_text(&markdown, None).unwrap();
+                let doc = current.document.as_ref().unwrap();
+                assert!(
+                    !doc.diagnostics.iter().any(|diagnostic| diagnostic
+                        .code
+                        .as_deref()
+                        .is_some_and(|code| code.starts_with("markdown.semantic"))),
+                    "{markdown}: {:?}",
+                    doc.diagnostics
+                );
+                let (kind, items) = read_list(&current);
+                assert_eq!(items.len(), 2);
+                for (index, item) in items.iter().enumerate() {
+                    if semantic {
+                        assert_eq!(item.entry.as_ref(), Some(&facts[index]), "{markdown}");
+                        assert_eq!(kind.ordinal(index), Some(start + index as u64));
+                    } else if start > MAX {
+                        assert!(item.entry.is_none());
+                        assert_eq!(kind, ListKind::Bullet);
+                        let ordinal = start.saturating_add(index as u64);
+                        assert!(
+                            text(&item.blocks[0]).starts_with(&format!("{ordinal}. ")),
+                            "{markdown}"
+                        );
+                    }
+                }
+                assert!(
+                    matches!(&items[0].blocks[1], Block::Preformatted { children, .. } if mant_ir::inline_plain_text(children) == "EXTRA")
+                );
+                assert!(
+                    matches!(&items[1].blocks[0], Block::Paragraph { children, .. } if children.iter().any(|i| matches!(i, Inline::Link {target: mant_ir::LinkTarget::External {uri}, ..} if uri == "https://example.test")))
+                );
+                assert!(
+                    matches!(&items[1].blocks[1], Block::Preformatted { children, .. }
+                    if mant_ir::inline_plain_text(children).contains("Table-content"))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn leading_item_rows_do_not_publish_unreadable_semantic_comments() {
+    use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+    let source = concat!(
+        "# Page\n\n<!-- mant:entries role=option case=sensitive -->\n",
+        "3. `-a`: First.\n4. `-b`: Second.\n",
+    );
+    let mut original = load_markdown_text(source, None).unwrap();
+    let document = original.document.as_mut().unwrap();
+    let Block::List { items, .. } = &mut document.blocks[0] else {
+        unreachable!()
+    };
+    let Block::Paragraph { layout, .. } = &mut items[0].blocks[0] else {
+        unreachable!()
+    };
+    layout.spacing_before_lines = 1;
+    let options = MarkdownOptions {
+        preserve_semantics: true,
+        ..MarkdownOptions::default()
+    };
+    let markdown = render_markdown_with_options(&original, options);
+    assert!(!markdown.contains("<!-- mant:"), "{markdown}");
+    let read = load_markdown_text(&markdown, None).unwrap();
+    assert!(
+        read.document.as_ref().unwrap().diagnostics.is_empty(),
+        "{markdown}: {:?}",
+        read.document.as_ref().unwrap().diagnostics,
+    );
+    let (kind, items) = list(&read);
+    assert_eq!(kind.ordinal(0), Some(3));
+    assert_eq!(items.len(), 2);
+    assert!(items[0].blocks.iter().any(|body| matches!(body, Block::Paragraph { children, .. } if mant_ir::inline_plain_text(children).contains("-a: First."))));
 }
 
 #[test]
