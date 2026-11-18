@@ -1,19 +1,16 @@
 //! Publishes navigation annotations after the full section tree is known.
 //!
-//! libmandoc validates `.Sx` syntax but represents its target as display text.
-//! This pass converts that temporary title into `ManT`'s stable section ID and
-//! downgrades invalid or ambiguous references without emitting broken links.
-
-use std::collections::{HashMap, HashSet};
+//! Resolve authored section destinations and recognize conventional manual
+//! references as typed links before publishing the document.
 
 use super::{
     reference::{is_manual_reference_name, is_manual_section},
-    section_identity::{RoffSectionHeading, RoffSectionTargets},
+    section_identity::RoffSectionTargets,
 };
-use mant_ir::{
-    Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section,
-    visit::{self, VisitMut},
-};
+use mant_ir::{Diagnostic, DiagnosticLevel, Inline, LinkTarget};
+
+mod anchors;
+pub(super) use anchors::normalize_generated_anchors;
 
 pub(super) fn publish_inline_navigation(
     nodes: &mut Vec<Inline>,
@@ -27,132 +24,6 @@ pub(super) fn publish_inline_navigation(
     // ambiguous.
     let changed = resolve_section_references(nodes, targets, diagnostics);
     promote_manual_reference_inlines(nodes) || changed
-}
-
-/// Normalize and uniquely allocate formatter-generated native anchors.
-///
-/// Explicit `.Tg` identities remain source-authored destinations. Other man
-/// and mdoc tags are formatter conveniences, so expose them through the same
-/// document-local slug contract as semantic entries and disambiguate repeated
-/// tags before IR validation observes them.
-pub(super) fn normalize_generated_anchors(
-    blocks: &mut [Block],
-    sections: &mut [Section],
-    explicit_targets: &HashSet<String>,
-) {
-    struct Normalizer<'targets> {
-        explicit_targets: &'targets HashSet<String>,
-        used: HashSet<String>,
-        conflicting_canonicals: HashSet<String>,
-        next_suffix: HashMap<String, usize>,
-    }
-
-    impl Normalizer<'_> {
-        fn allocate(&mut self, base: &str, original: &str) -> String {
-            let candidate = base.to_owned();
-            if (base == original || !self.explicit_targets.contains(base))
-                && self.used.insert(candidate.clone())
-            {
-                return candidate;
-            }
-            let suffix = self.next_suffix.entry(candidate).or_insert(2);
-            loop {
-                let candidate = format!("{base}-{suffix}");
-                *suffix += 1;
-                // Occupied IDs and authored reservations only accumulate.
-                // An exact reserved suffix is checked as its own slug above.
-                if !self.explicit_targets.contains(&candidate)
-                    && self.used.insert(candidate.clone())
-                {
-                    return candidate;
-                }
-            }
-        }
-    }
-
-    impl VisitMut for Normalizer<'_> {
-        fn visit_inline_mut(&mut self, inline: &mut Inline) {
-            if let Inline::Anchor {
-                id,
-                fragment_aliases,
-                ..
-            } = inline
-            {
-                if crate::definitions::is_internal_definition_owner_marker(id.as_str()) {
-                    return;
-                }
-                let original = id.to_string();
-                let base = crate::definitions::document_id_slug(&original);
-                let candidate = self.allocate(&base, &original);
-                if candidate != original && self.explicit_targets.contains(&original) {
-                    if base == original {
-                        self.conflicting_canonicals.insert(original.clone());
-                    }
-                    fragment_aliases.push(original.into());
-                }
-                *id = candidate.into();
-                return;
-            }
-            visit::walk_inline_mut(self, inline);
-        }
-    }
-
-    struct ReassignAmbiguousCanonical<'a, 'targets>(&'a mut Normalizer<'targets>);
-
-    impl VisitMut for ReassignAmbiguousCanonical<'_, '_> {
-        fn visit_inline_mut(&mut self, inline: &mut Inline) {
-            if let Inline::Anchor {
-                id,
-                fragment_aliases,
-                ..
-            } = inline
-                && self.0.conflicting_canonicals.remove(id.as_str())
-            {
-                let original = id.as_str();
-                let canonical = self.0.allocate(original, original);
-                fragment_aliases.push(original.into());
-                *id = canonical.into();
-                return;
-            }
-            visit::walk_inline_mut(self, inline);
-        }
-    }
-
-    let mut used = HashSet::new();
-    reserve_section_targets(sections, &mut used);
-    let mut normalizer = Normalizer {
-        explicit_targets,
-        used,
-        conflicting_canonicals: HashSet::new(),
-        next_suffix: HashMap::new(),
-    };
-    for block in &mut *blocks {
-        normalizer.visit_block_mut(block);
-    }
-    for section in &mut *sections {
-        normalizer.visit_section_mut(section);
-    }
-    // The shared author spelling must be ambiguous, while each canonical
-    // stays addressable. Move only the shadowed canonical after allocating
-    // the other IDs, so links to existing suffixed IDs keep their owners.
-    if normalizer.conflicting_canonicals.is_empty() {
-        return;
-    }
-    let mut aliases = ReassignAmbiguousCanonical(&mut normalizer);
-    for block in blocks {
-        aliases.visit_block_mut(block);
-    }
-    for section in sections {
-        aliases.visit_section_mut(section);
-    }
-}
-
-fn reserve_section_targets(sections: &[Section], used: &mut HashSet<String>) {
-    for section in sections {
-        used.insert(section.id.to_string());
-        used.extend(section.fragment_aliases.iter().map(ToString::to_string));
-        reserve_section_targets(&section.children, used);
-    }
 }
 
 fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) -> bool {
@@ -297,162 +168,11 @@ fn resolve_section_references(
     changed
 }
 
-use super::{LoweringContext, Node, first_part_children, inline, targets};
-use libmandoc_rs::NodeKind;
-
-pub(super) struct PendingSectionIdentity {
-    heading: RoffSectionHeading,
-    base: String,
-    full: crate::producer_identity::FullHeadingId,
-}
-
-impl LoweringContext<'_> {
-    pub(super) fn reserve_section_ids(&mut self, ids: &HashSet<String>) {
-        self.explicit_targets.clone_from(ids);
-        self.section_ids.reserve(ids);
-    }
-
-    pub(super) fn record_section_identity(&mut self, node: &Node) -> Vec<mant_ir::FragmentAlias> {
-        let heading = RoffSectionHeading::from_node(node);
-        let head = first_part_children(node, NodeKind::Head);
-        let base = if head.iter().all(|child| child.kind == NodeKind::Text) {
-            section_id_base(&heading.title)
-        } else {
-            // Published IDs for macro-bearing headings historically used a
-            // detached display label (for example `label-https-example-org`
-            // for `Lk https://example.org Label`). Preserve those IDs while
-            // resolving Sx solely through the authored namespace above.
-            section_id_base(&inline::plain_text(&inline::lower_inline_nodes(
-                head,
-                self.default_name,
-            )))
-        };
-        let full = self.section_ids.claim_full(&base);
-        self.pending_section_ids.push(PendingSectionIdentity {
-            heading,
-            base,
-            full,
-        });
-        targets::section_target(node)
-            .filter(|target| self.explicit_targets.contains(target))
-            .map(mant_ir::FragmentAlias::from)
-            .into_iter()
-            .collect()
-    }
-
-    pub(super) fn complete_section_identities(&mut self, sections: &mut [Section]) {
-        fn complete(
-            sections: &mut [Section],
-            ids: &mut crate::producer_identity::HeadingIds,
-            plans: &mut impl Iterator<Item = PendingSectionIdentity>,
-            targets: &mut RoffSectionTargets,
-        ) {
-            for section in sections {
-                let plan = plans.next().expect("one identity per lowered heading");
-                let (id, long_fragment) = ids.complete(&plan.base, plan.full);
-                if let Some(fragment) = long_fragment
-                    && !section.fragment_aliases.contains(&fragment)
-                {
-                    section.fragment_aliases.push(fragment);
-                }
-                section.id = id.clone().into();
-                targets.register(plan.heading, id);
-                complete(&mut section.children, ids, plans, targets);
-            }
-        }
-
-        // The lowering walk has claimed every full spelling in pre-order.
-        // A shortened ID must not occupy a later section's full spelling.
-        let mut plans = std::mem::take(&mut self.pending_section_ids).into_iter();
-        complete(
-            sections,
-            &mut self.section_ids,
-            &mut plans,
-            &mut self.authored_section_targets,
-        );
-        debug_assert!(plans.next().is_none());
-    }
-}
-
-pub(super) fn section_id_base(title: &str) -> String {
-    let mut slug = String::new();
-    let mut separator = false;
-    for character in title.chars().flat_map(char::to_lowercase) {
-        if character.is_alphanumeric() {
-            if separator && !slug.is_empty() {
-                slug.push('-');
-            }
-            separator = false;
-            slug.push(character);
-        } else {
-            separator = true;
-        }
-    }
-    if slug.is_empty() {
-        "section".to_owned()
-    } else if crate::producer_identity::is_reserved_selector(&slug) {
-        format!("{slug}-section")
-    } else {
-        slug
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use mant_ir::{Inline, LinkTarget};
 
-    use mant_ir::{Block, Inline, InlineLayout, LayoutHint, LinkTarget};
-
-    use super::{normalize_generated_anchors, promote_manual_reference_inlines};
-
-    #[test]
-    fn anchor_suffix_cursor_keeps_source_order_and_authored_reservations() {
-        // The uppercase and dotted spellings use the same slug namespace.
-        // The reserved base can still be used later by its exact owner.
-        let mut blocks = [Block::Paragraph {
-            children: ["TAG", "tag", "tag-2", "tag", "TAG", "Tag.2", "tag"]
-                .into_iter()
-                .map(Inline::anchor)
-                .collect(),
-            layout: LayoutHint::default(),
-            inline_layout: InlineLayout::default(),
-            source: None,
-        }];
-        let reserved = HashSet::from(["tag".to_owned(), "tag-2".to_owned()]);
-        normalize_generated_anchors(&mut blocks, &mut [], &reserved);
-        let [Block::Paragraph { children, .. }] = &blocks else {
-            panic!("one anchor carrier");
-        };
-        let projected = children
-            .iter()
-            .map(|child| {
-                let Inline::Anchor {
-                    id,
-                    fragment_aliases,
-                    ..
-                } = child
-                else {
-                    panic!("expected one anchor: {child:?}");
-                };
-                (
-                    id.as_str(),
-                    fragment_aliases.first().map(mant_ir::FragmentAlias::as_str),
-                )
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            projected,
-            [
-                ("tag-3", None),
-                ("tag-7", Some("tag")),
-                ("tag-2", None),
-                ("tag-4", Some("tag")),
-                ("tag-5", None),
-                ("tag-2-2", None),
-                ("tag-6", Some("tag")),
-            ]
-        );
-    }
+    use super::promote_manual_reference_inlines;
 
     #[test]
     fn promotes_traditional_see_also_pairs_without_consuming_punctuation() {

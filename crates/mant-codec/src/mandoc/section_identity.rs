@@ -247,5 +247,10 @@ pub fn section_label_has_glyphs(nodes: &[Node]) -> bool {
     })
 }
 
+mod canonical;
+pub(super) use canonical::PendingSectionIdentity;
+#[cfg(test)]
+pub(super) use canonical::section_id_base;
+
 #[cfg(test)]
 mod tests;

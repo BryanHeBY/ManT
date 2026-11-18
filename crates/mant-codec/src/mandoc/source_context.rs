@@ -29,7 +29,7 @@ pub(super) struct LoweringContext<'a> {
     pub(super) table_recovery_budget: RefCell<super::table_recovery_budget::TableRecoveryBudget>,
     pub(super) table_layout_budget: RefCell<super::table_layout_budget::TableLayoutBudget>,
     pub(super) section_ids: crate::producer_identity::HeadingIds,
-    pub(super) pending_section_ids: Vec<super::navigation::PendingSectionIdentity>,
+    pub(super) pending_section_ids: Vec<super::section_identity::PendingSectionIdentity>,
     pub(super) authored_section_targets: super::section_identity::RoffSectionTargets,
     /// Immutable authored namespace reserved for normalized identities.
     pub(super) explicit_targets: HashSet<String>,

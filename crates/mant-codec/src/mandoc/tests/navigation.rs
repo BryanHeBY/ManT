@@ -135,7 +135,7 @@ fn native_section_ids(titles: &[&str]) -> Vec<String> {
     let claims = titles
         .iter()
         .map(|title| {
-            let base = crate::mandoc::navigation::section_id_base(title);
+            let base = crate::mandoc::section_identity::section_id_base(title);
             let full = ids.claim_full(&base);
             (base, full)
         })

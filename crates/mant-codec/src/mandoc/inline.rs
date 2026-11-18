@@ -115,7 +115,10 @@ fn append_inline_sequence(
         if node.kind == NodeKind::Table {
             if !node.flags.no_print {
                 let plan = tables.get_or_insert_with(|| {
-                    Box::new(super::blocks::InlineTableSequence::new(nodes, &builder.execution))
+                    Box::new(super::blocks::InlineTableSequence::new(
+                        nodes,
+                        &builder.execution,
+                    ))
                 });
                 builder.append_table_span(node, plan, index);
             }
