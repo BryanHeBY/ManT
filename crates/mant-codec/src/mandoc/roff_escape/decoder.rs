@@ -126,12 +126,34 @@ impl Decoder {
                 };
                 trigger = next;
             }
-            self.decode_escape(trigger);
+            if self.projection == Projection::LinkIdentity {
+                self.decode_link_escape(trigger);
+            } else {
+                self.decode_escape(trigger);
+            }
         }
         self.flush_text();
         DecodedText {
             events: self.events,
             status: self.status,
+        }
+    }
+
+    fn decode_link_escape(&mut self, trigger: char) {
+        // html.c::print_encode handles ESCAPE_ERROR before HTML_SKIPCHAR.
+        // Terminal recovery may still have produced a glyph or an event.
+        self.flush_text();
+        let start = self.events.len();
+        self.decode_escape(trigger);
+        if self.argument_kind == grammar::EscapeKind::Error {
+            self.events.truncate(start);
+            self.text.clear();
+        } else if self.argument_kind == grammar::EscapeKind::Unsupported
+            && self.events.len() == start
+            && self.text.is_empty()
+        {
+            // A recognized but unsupported escape reaches the skip check.
+            self.emit(RoffInlineEvent::ZeroWidthGlyph);
         }
     }
 
@@ -329,7 +351,7 @@ impl Decoder {
     /// footprint.
     fn decode_character_descriptor(&mut self) {
         if let DelimitedArgument::Closed(name) = self.take_delimited_argument('C')
-            && !name.is_empty()
+            && (!name.is_empty() || self.projection == Projection::LinkIdentity)
         {
             self.push_special_character(&name, NamedCharacterSyntax::CharacterDescriptor);
         } else {
@@ -429,6 +451,30 @@ impl Decoder {
     }
 
     fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
+        if self.projection == Projection::LinkIdentity {
+            // roff_escape.c SPECIAL validation decides whether this is a
+            // native Unicode scalar, a named character, or ESCAPE_ERROR.
+            // Extended terminal spellings do not participate in hrefs.
+            if name.is_empty()
+                || (!matches!(syntax, NamedCharacterSyntax::TwoCharacter)
+                    && name.len() == 1
+                    && name != "-")
+            {
+                self.argument_kind = grammar::EscapeKind::Error;
+                self.note_recovery();
+            } else if grammar::native_unicode_name(name.as_bytes()) {
+                let character = u32::from_str_radix(&name[1..], 16)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .expect("native Unicode name");
+                self.emit(RoffInlineEvent::Glyph(
+                    escaped_codepoint(character).to_string(),
+                ));
+            } else {
+                self.push_native_special_character(name, syntax);
+            }
+            return;
+        }
         // roff_escape.c's SPECIAL validation rejects one-byte named forms
         // other than '-': \[:] and \C':' are not aliases for direct \:.
         // The catalog now exposes U+200B for ':', but an invalid source
