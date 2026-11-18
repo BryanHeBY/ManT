@@ -193,13 +193,19 @@ pub(super) fn lower_scope(
 
 /// A column owner also receives the final accepted physical row boundary.
 /// This result owns no source registers or event history.
+#[derive(Clone, Copy)]
+pub(super) struct ColumnBoundaries {
+    pub(super) previous_field_closed: bool,
+    pub(super) break_after: bool,
+}
+
 pub(super) fn lower_scope_with_boundary(
     nodes: &[Node],
     context: &LoweringContext<'_>,
     paragraph_distance: &mut u16,
     formatter: &mut crate::mandoc::formatter::FormatterState,
     flow: ScopeFlow<'_>,
-) -> (Vec<Block>, bool) {
+) -> (Vec<Block>, ColumnBoundaries) {
     let next_column_entry = flow.column_nodes.as_ref().and_then(|nodes| nodes.next);
     let row_boundary = flow.row_boundary;
     walk_scope(nodes, context, paragraph_distance, formatter, flow).finish_into_before_column_entry(
@@ -385,10 +391,10 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: FormatterRowBoundary,
         next_column_entry: Option<&Node>,
-    ) -> (Vec<Block>, bool) {
-        let (blocks, break_after, assembly) =
+    ) -> (Vec<Block>, ColumnBoundaries) {
+        let (blocks, boundaries, assembly) =
             self.finish_into_with_assembly(formatter, row_boundary, next_column_entry);
-        (assembly.finish(blocks), break_after)
+        (assembly.finish(blocks), boundaries)
     }
 
     /// A transparent RS moves the existing output and its private owner ranges
@@ -398,7 +404,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: FormatterRowBoundary,
         next_column_entry: Option<&Node>,
-    ) -> (Vec<Block>, bool, flow::LiteralAssembly) {
+    ) -> (Vec<Block>, ColumnBoundaries, flow::LiteralAssembly) {
         let row_boundary = if row_boundary == FormatterRowBoundary::SectionBodyPost
             || matches!(row_boundary, FormatterRowBoundary::BeforeSection(entry)
                 if entry.needs_newline(*self.paragraph_distance))
@@ -418,11 +424,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.state.finish_column_nested_row();
             self.settle_no_fill_inline();
         }
-        let (blocks, break_after, assembly) =
+        let (blocks, boundaries, assembly) =
             self.state
                 .finish_with_formatter(formatter, row_boundary, next_column_entry);
         self.context.check_gap_bounds(&blocks);
-        (blocks, break_after, assembly)
+        (blocks, boundaries, assembly)
     }
 }
 

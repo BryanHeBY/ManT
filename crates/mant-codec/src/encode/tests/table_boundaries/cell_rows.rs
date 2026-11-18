@@ -1,6 +1,6 @@
 //! Occupied cell closure and completed empty rows remain separate.
 use super::super::Block;
-use super::fixtures::{cell, literal_readback, table};
+use super::fixtures::{assert_mapped_readback, cell, cell_blocks, literal_readback, owned, table};
 
 #[test]
 fn closed_occupied_cells_and_completed_empty_rows_have_distinct_readback() {
@@ -74,4 +74,31 @@ fn completed_cell_gaps_share_the_existing_bounded_output_budget() {
             "\n".repeat(usize::from(mant_ir::geometry::MAX_GAP_ROWS) + 1)
         )
     );
+}
+
+#[test]
+fn completed_final_cell_rows_supply_the_next_data_row_boundary() {
+    // The pinned mdoc column fixture puts two completed blank rows between
+    // FIRST and AFTER. Its last D1 closes the field in termp_bl_post(); a new
+    // It must reuse the row reached by that close rather than add another gap.
+    for (completed, boundary) in [(0, "\n"), (1, "\n"), (3, "\n\n\n")] {
+        for closed in [false, true] {
+            let mut block = table(vec![
+                cell_blocks(vec![owned("αFIRST", "first")], false),
+                cell("", closed, completed),
+            ]);
+            let Block::Table { rows, .. } = &mut block else {
+                unreachable!();
+            };
+            rows.push(mant_ir::TableRow {
+                cells: vec![cell_blocks(vec![owned("中AFTER", "next")], false)],
+                ..rows[0].clone()
+            });
+            assert_mapped_readback(
+                &block,
+                &format!("αFIRST | {boundary}中AFTER | "),
+                &[("first", "αFIRST"), ("next", "中AFTER")],
+            );
+        }
+    }
 }

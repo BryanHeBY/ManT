@@ -79,6 +79,8 @@ that crate was not published for that change.
   author aliases.
 - Publish display BODY targets after authored opening punctuation. Keep
   independent destinations when parent and child structures use the same tag.
+- Keep native column display row closures with or without zero-width targets.
+  Markdown table fences reuse already completed gaps between data rows.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.

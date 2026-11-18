@@ -19,7 +19,7 @@ use paragraph::ParagraphFlow;
 #[derive(Clone, Copy)]
 struct ClosedOutputTail {
     output_end: usize,
-    owner: usize,
+    owner: Option<usize>,
     row_end: OutputRowEnd,
 }
 
@@ -44,6 +44,9 @@ pub(super) struct BlockState {
     // an empty vector or a device row which has just ended. Neither fact is
     // permission to run the same native buffer against a different Vec.
     column_display_owner: bool,
+    // This field's pre closed the device row of the preceding column.
+    // Return that boundary to its owner instead of fabricating a gap.
+    closes_previous_column: bool,
     /// D1/Dl present one literal owner without changing source fill mode.
     pub(in crate::mandoc::blocks) single_line_display_owner: bool,
     // Only the latest accepted output tail can hand a closed graph boundary
@@ -248,6 +251,7 @@ impl BlockState {
             literal: LiteralFlow::new(),
             inline_output_role: InlineOutputRole::SourceMode,
             column_display_owner: false,
+            closes_previous_column: false,
             single_line_display_owner: false,
             closed_output_tail: None,
             pending_targets: targets::PendingTargets::new(),

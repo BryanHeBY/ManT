@@ -38,7 +38,7 @@ pub(in crate::mandoc) use output::{
     has_rendered_formatter_glyph, native_row_origin, prepare_inline_output,
     retain_inline_identities, split_output_scope_prefix, split_row_origin,
     strip_native_projection_markers, take_definition_term_breaks, take_inline_layout,
-    trailing_completed_row_origins,
+    take_leading_column_device_end, trailing_completed_row_origins,
 };
 
 /// Reading projection of one executed formatter word.

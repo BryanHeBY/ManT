@@ -156,8 +156,11 @@ fn join(values: impl IntoIterator<Item = Projection>, separator: &str) -> Projec
     output
 }
 
-pub(super) fn rows(rows: &[TableRow], track: bool) -> Vec<MappedText> {
-    project_rows(rows, track).map(Projection::finish).collect()
+pub(super) fn payload(rows: &[TableRow], track: bool) -> Option<MappedText> {
+    // Compose data rows before discarding their tails. A completed gap has
+    // already advanced to the next physical row and supplies its boundary.
+    let output = join(project_rows(rows, track), "\n");
+    output.physical.then(|| output.finish())
 }
 
 #[cfg(test)]

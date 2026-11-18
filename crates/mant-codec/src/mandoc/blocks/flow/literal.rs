@@ -378,12 +378,21 @@ impl LiteralFlow {
         self.adopted_layout = Some(layout);
     }
 
-    pub(super) fn take(&mut self, indent: crate::mandoc::layout::SourceIndent) -> Vec<Block> {
+    pub(super) fn take(
+        &mut self,
+        indent: crate::mandoc::layout::SourceIndent,
+        begins_column_output: bool,
+    ) -> (Vec<Block>, bool) {
         let mut previous = std::mem::replace(self, Self::new());
         let origins = crate::mandoc::inline::trailing_completed_row_origins(&previous.nodes);
         // The typed receipts retain their original order across this owner.
         // Empty TEXT content must not enter the bounded spacing-request plan.
         retire_completed_tail(&mut previous.nodes, origins.len());
+        let closes_previous_field = begins_column_output
+            && crate::mandoc::inline::take_leading_column_device_end(
+                &mut previous.nodes,
+                !origins.is_empty(),
+            );
         // An already closed formatter row is joined to the next block once.
         // This decision belongs to the producer's actual row receipt:
         // public literal LineBreak remains content for every consumer.
@@ -402,7 +411,7 @@ impl LiteralFlow {
         let layout = previous.adopted_layout.unwrap_or_else(|| layout(indent));
         let mut blocks = origins::literal_blocks(previous.nodes, layout, previous.source);
         append_completed_rows(&mut blocks, &origins, layout, previous.source);
-        blocks
+        (blocks, closes_previous_field)
     }
 }
 

@@ -21,18 +21,16 @@ pub(super) fn render_table(
     } else {
         String::new()
     };
-    let rows = crate::encode::table_projection::rows(rows, track);
-    if rows.is_empty() {
+    let Some(payload) = crate::encode::table_projection::payload(rows, track) else {
         return nonempty(markers).map(|mut markers| {
             markers.contribution.rows = false;
             markers.syntax_site(BlockSyntax::Phrasing)
         });
-    }
+    };
     Some({
         // Each role has already produced its final reading payload before
         // owners were recorded. Framing only appends syntax, so text bytes
         // and owner offsets are composed through the same mapped operation.
-        let payload = MappedText::join(rows, "\n");
         let (opening, closing) = code_fences(&payload.text, None);
         let mut body = MappedText::from(opening);
         body.append(payload);

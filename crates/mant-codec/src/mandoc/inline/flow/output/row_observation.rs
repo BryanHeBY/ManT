@@ -79,6 +79,44 @@ pub(super) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> OutputRowEnd 
     .unwrap_or(OutputRowEnd::Open)
 }
 
+/// Transfer an earlier field's device end before column display content.
+/// Completed empty rows still belong to this literal and its reading
+/// policy. Only `DeviceEnd` closes the preceding cell's existing row.
+pub(in crate::mandoc) fn take_leading_column_device_end(
+    nodes: &mut Vec<Inline>,
+    has_later_completed_rows: bool,
+) -> bool {
+    let Some(first) = nodes.iter().position(|node| {
+        !matches!(node, Inline::Anchor { .. })
+            && !matches!(node, Inline::Text { value } if value.is_empty())
+    }) else {
+        return false;
+    };
+    if !matches!(nodes[first], Inline::LineBreak { .. }) {
+        return false;
+    }
+    let following = &nodes[first + 1..];
+    let has_device_end = nodes[..first]
+        .iter()
+        .chain(
+            following
+                .iter()
+                .take_while(|node| matches!(node, Inline::Anchor { .. })),
+        )
+        .any(|node| matches!(RowReceipt::of(node), Some(RowReceipt::DeviceEnd)));
+    if !has_device_end
+        || !(has_later_completed_rows || mant_ir::geometry::has_literal_rows(following))
+    {
+        return false;
+    }
+    let identities = nodes
+        .drain(..=first)
+        .filter(|node| matches!(node, Inline::Anchor { .. }))
+        .collect::<Vec<_>>();
+    nodes.splice(..0, identities);
+    true
+}
+
 /// Receipts are read only after native acceptance has removed rejected
 /// glyphs. A literal-origin receipt retires earlier paragraph rows, while
 /// a literal drain keeps that receipt in order with other completed rows.

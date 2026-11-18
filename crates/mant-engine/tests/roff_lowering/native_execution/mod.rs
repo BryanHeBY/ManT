@@ -1,6 +1,7 @@
 //! Native formatter execution, accepted fields and semantic owners.
 
 mod accepted_word_rows;
+mod column_display_rows;
 mod column_execution_boundaries;
 mod column_margin_rows;
 mod container_word_rows;

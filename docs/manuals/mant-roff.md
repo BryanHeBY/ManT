@@ -1433,6 +1433,11 @@ content or resolved spacing. The default false does not close an open tail or
 undo an already completed row. The boundary is source-neutral: readers consume
 it without replaying a request or retaining formatter state.
 
+A display can close a column field even when its body has no visible glyphs.
+Adding a `Tg` to that display changes navigation only. A completed row before
+literal content retains its layout role, and the Markdown table fence reuses
+an already completed boundary when it advances to the next data row.
+
 Nested lists, displays and tables retain their block identities. Their
 responsive reading layout can differ from mandoc's device column geometry;
 this never permits dropping or duplicating cell content, rules or spans.

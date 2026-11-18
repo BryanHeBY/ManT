@@ -45,8 +45,10 @@ impl BlockState {
         {
             // Target fallback may insert a zero-width paragraph. It writes
             // no native cell and cannot reopen the accepted physical tail.
-            if tail.owner >= output_start {
-                tail.owner += self.output.len().saturating_sub(previous_end);
+            if let Some(owner) = &mut tail.owner
+                && *owner >= output_start
+            {
+                *owner += self.output.len().saturating_sub(previous_end);
             }
             tail.output_end = self.output.len();
         }
@@ -237,7 +239,7 @@ impl BlockState {
         if self.output.len() > output_start {
             self.closed_output_tail = closed_tail.is_closed().then_some(ClosedOutputTail {
                 output_end: self.output.len(),
-                owner: output_start,
+                owner: Some(output_start),
                 row_end: closed_tail,
             });
             self.consume_hanging_first_line();
@@ -290,7 +292,11 @@ impl BlockState {
         let closed_tail = self.literal.closed_graph_tail();
         let retires_active_owner =
             self.literal.has_output() && self.inline_output_is_literal(self.formatter.no_fill);
-        self.output.extend(self.literal.take(self.indent_columns));
+        let begins_column_output = self.column_display_owner && output_start == 0;
+        let (blocks, closes_previous) =
+            self.literal.take(self.indent_columns, begins_column_output);
+        self.closes_previous_column |= closes_previous;
+        self.output.extend(blocks);
         if retire && retires_active_owner {
             // D1/Dl's post already consumed its native row (mdoc_term.c:
             // termp_bl_post). This Vec's indices cannot address a later
@@ -298,15 +304,19 @@ impl BlockState {
             // offset, input cells, NOSPACE or the enclosing Nm BODY scope.
             self.formatter.execution.retire_output_owner();
         }
-        if self.output.len() > output_start {
+        let projected_owner = (self.output.len() > output_start).then(|| self.output.len() - 1);
+        if closed_tail.is_closed() || projected_owner.is_some() {
             self.closed_output_tail = closed_tail.is_closed().then_some(ClosedOutputTail {
                 output_end: self.output.len(),
                 // Completed layout rows can add separate gap/empty-literal
                 // fragments. The tail proof belongs to the final projected
-                // owner, before source-proven assembly changes their topology.
-                owner: self.output.len() - 1,
+                // owner if any. term_flushln() can close an invisible
+                // formatter field with no surviving public literal block.
+                owner: projected_owner,
                 row_end: closed_tail,
             });
+        }
+        if projected_owner.is_some() {
             self.consume_hanging_first_line();
         }
         self.attach_pending_to_new_output(output_start);
@@ -362,10 +372,21 @@ impl BlockState {
         formatter: &mut crate::mandoc::formatter::FormatterState,
         row_boundary: super::super::FormatterRowBoundary,
         next_column_entry: Option<&libmandoc_rs::Node>,
-    ) -> (Vec<Block>, bool, super::LiteralAssembly) {
+    ) -> (
+        Vec<Block>,
+        super::super::ColumnBoundaries,
+        super::LiteralAssembly,
+    ) {
         let break_after = self.settle(row_boundary, next_column_entry);
         *formatter = self.formatter;
-        (self.output, break_after, self.literal_assembly)
+        (
+            self.output,
+            super::super::ColumnBoundaries {
+                previous_field_closed: self.closes_previous_column,
+                break_after,
+            },
+            self.literal_assembly,
+        )
     }
 
     pub(super) fn settle(
@@ -462,7 +483,7 @@ impl BlockState {
                     inline_layout,
                     ..
                 },
-            ) = self.output.get_mut(tail.owner)
+            ) = tail.owner.and_then(|owner| self.output.get_mut(owner))
         {
             // Every column BODY post retires its proved generated delimiter,
             // including the last field: the whole table row owns that close.

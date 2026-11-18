@@ -475,6 +475,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
 }
 
 mod code_highlighting;
+mod column_display_rows;
 mod column_preferences;
 mod consumer_boundaries;
 mod control_line_payloads;

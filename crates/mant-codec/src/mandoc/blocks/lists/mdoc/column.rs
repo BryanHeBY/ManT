@@ -66,46 +66,50 @@ pub(super) fn lower_mdoc_column_list(
                 .iter()
                 .filter(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
                 .collect::<Vec<_>>();
-            let mut cells = bodies
-                .iter()
-                .enumerate()
-                .map(|(index, body)| {
-                    let width = column_preferences.widths.get(index).map_or(10, |width| {
-                        width.saturating_add(column_preferences.gap_columns)
-                    });
-                    let origin = origins.as_ref().map_or(0, |columns| columns.start(index));
-                    let (blocks, break_after) = lower_scope_with_boundary(
-                        &body.children,
-                        context,
-                        paragraph_distance,
-                        formatter,
-                        ScopeFlow::column_post(
-                            cell_indent.content_origin(),
-                            formatter.spacing_enabled(),
-                            if index + 1 == bodies.len() {
-                                u16::MAX
-                            } else {
-                                width
-                            },
-                            origin,
-                            index + 1 == bodies.len(),
-                        )
-                        .with_column_nodes(
-                            (index == 0).then_some(*body),
-                            bodies.get(index + 1).copied(),
-                        ),
-                    );
-                    AstTableCell {
-                        preferred_width_columns: None,
-                        kind: mant_ir::TableCellKind::Text,
-                        blocks,
-                        column_span: 1,
-                        row_span: 1,
-                        alignment: Some(AstTableAlignment::Left),
-                        break_after,
-                    }
-                })
-                .collect::<Vec<_>>();
+            let mut cells: Vec<AstTableCell> = Vec::with_capacity(bodies.len());
+            for (index, body) in bodies.iter().enumerate() {
+                let width = column_preferences.widths.get(index).map_or(10, |width| {
+                    width.saturating_add(column_preferences.gap_columns)
+                });
+                let origin = origins.as_ref().map_or(0, |columns| columns.start(index));
+                let (blocks, boundaries) = lower_scope_with_boundary(
+                    &body.children,
+                    context,
+                    paragraph_distance,
+                    formatter,
+                    ScopeFlow::column_post(
+                        cell_indent.content_origin(),
+                        formatter.spacing_enabled(),
+                        if index + 1 == bodies.len() {
+                            u16::MAX
+                        } else {
+                            width
+                        },
+                        origin,
+                        index + 1 == bodies.len(),
+                    )
+                    .with_column_nodes(
+                        (index == 0).then_some(*body),
+                        bodies.get(index + 1).copied(),
+                    ),
+                );
+                if boundaries.previous_field_closed
+                    && let Some(previous) = cells.last_mut()
+                {
+                    // The display pre ran in this field, but it closed
+                    // the row advanced by the preceding field.
+                    previous.break_after = true;
+                }
+                cells.push(AstTableCell {
+                    preferred_width_columns: None,
+                    kind: mant_ir::TableCellKind::Text,
+                    blocks,
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: Some(AstTableAlignment::Left),
+                    break_after: boundaries.break_after,
+                });
+            }
             attach_column_item_targets(&mut cells, &item, cell_indent);
             TableRow {
                 column_borders: vec![],

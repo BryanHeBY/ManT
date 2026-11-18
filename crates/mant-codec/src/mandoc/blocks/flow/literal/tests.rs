@@ -108,7 +108,7 @@ fn typed_completed_rows_keep_content_outside_the_spacing_budget() {
 
     let mut owner = LiteralFlow::new();
     owner.nodes = vec![Inline::anchor("authored")];
-    let output = owner.take(0.into());
+    let (output, _) = owner.take(0.into(), false);
     assert!(
         matches!(output.as_slice(), [Block::Preformatted { children, .. }]
         if children == &[Inline::anchor("authored")])

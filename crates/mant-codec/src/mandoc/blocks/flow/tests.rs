@@ -1,6 +1,6 @@
 use mant_ir::{Block, Inline, SourceSpan};
 
-use super::{BlockState, layout};
+use super::{BlockState, layout, targets};
 use crate::mandoc::inline::plain_text;
 
 fn text(value: &str) -> Vec<Inline> {
@@ -114,7 +114,11 @@ fn block_state_finish_keeps_target_only_tail_and_original_source() {
         Vec::new(),
         crate::mandoc::formatter::FormatterState::default(),
     );
-    state.queue_targets(["tail-target".to_owned()], Some(source(9)));
+    state.queue_targets([targets::OwnedTarget::new(
+        "tail-target".to_owned(),
+        Some(source(9)),
+        1,
+    )]);
     state.flush_paragraph();
     state.flush_preformatted();
     let blocks = state.finish();
@@ -145,7 +149,11 @@ fn block_state_literal_take_resets_continuation_occupancy_and_provenance() {
     state.push_preformatted(text("first"), Some(source(1)), true, true, true);
     state.flush_preformatted();
     state.flush_preformatted();
-    state.queue_targets(["second".to_owned()], Some(source(3)));
+    state.queue_targets([targets::OwnedTarget::new(
+        "second".to_owned(),
+        Some(source(3)),
+        1,
+    )]);
     state.push_preformatted(Vec::new(), Some(source(3)), false, true, true);
     state.push_preformatted(text("second"), Some(source(4)), false, true, true);
     let blocks = state.finish();
@@ -212,7 +220,11 @@ fn block_state_hp_flushes_first_literal_row_once_and_keeps_targets() {
         crate::mandoc::formatter::FormatterState::default(),
     );
     state.start_hanging(8.into());
-    state.queue_targets(["first".to_owned()], Some(source(1)));
+    state.queue_targets([targets::OwnedTarget::new(
+        "first".to_owned(),
+        Some(source(1)),
+        1,
+    )]);
     state.push_preformatted(text("one"), Some(source(1)), true, true, true);
     state.push_preformatted(text("continued"), Some(source(2)), false, true, true);
     state.push_preformatted(text("body"), Some(source(3)), false, true, true);
