@@ -15,7 +15,7 @@ use crate::mandoc::roff_escape::{DecodedText, RoffInlineEvent};
 use libmandoc_rs::Node;
 use mant_ir::Inline;
 
-mod table_scopes;
+mod body_spans;
 
 #[derive(Clone, Default)]
 pub(in crate::mandoc) struct HeadOperandCapture {
@@ -27,7 +27,7 @@ pub(in crate::mandoc) struct HeadOperandCapture {
     captured: CapturedHeadOperands,
     last_owner: Option<u64>,
     option_dash: Option<u64>,
-    table_scopes: table_scopes::AcceptedTableScopes,
+    bodies: body_spans::AcceptedBodies,
     operand_role: Option<NativeOperandRole>,
     enclosures: Vec<u32>,
     has_operand_label: bool,
@@ -105,7 +105,7 @@ impl HeadOperandCapture {
         }
         self.unsplit_receipts.clear();
         captured.qualify_optional_keys();
-        self.table_scopes.restrict(&mut captured.operands);
+        captured.bodies = self.bodies.take();
         captured.qualify_fl_keys(self.search_head.is_some());
         captured
     }
@@ -150,12 +150,7 @@ impl HeadOperandCapture {
             return;
         }
         let end = self.captured.text.len();
-        self.table_scopes.observe(
-            start..end,
-            serial,
-            role == NativeOperandRole::DisplayOnly,
-            &self.captured.text,
-        );
+        self.bodies.observe(start..end, serial, &self.captured.text);
         if let Some(previous) = self.captured.operands.last_mut()
             && previous.bytes.end == start
             && previous.role == role
@@ -284,7 +279,7 @@ impl super::InlineBuilder {
                     .find(|&&scope| !self.scope_posts.ended(scope))
                     .copied();
                 if let Some(scope) = outermost {
-                    capture.table_scopes.record(serial, scope);
+                    capture.bodies.record(serial, scope);
                 }
                 if matches!(role, NativeOperandRole::FlDash(_)) {
                     capture.option_dash = Some(serial);

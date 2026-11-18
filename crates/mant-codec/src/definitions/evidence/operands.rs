@@ -15,9 +15,6 @@ pub(crate) enum NativeOperandRole {
     /// A tbl cell contributes readable content without declaring a name or form.
     #[cfg(feature = "roff")]
     DisplayOnly,
-    /// A native enclosure BODY whose accepted range contains display rows.
-    #[cfg(feature = "roff")]
-    DisplayEnclosure,
     /// An `Ar` spelling may name an authored operand definition directly.
     #[cfg(feature = "roff")]
     Placeholder,
@@ -123,7 +120,6 @@ impl NativeOperandRole {
             Self::Argument => true,
             #[cfg(feature = "roff")]
             Self::DisplayOnly
-            | Self::DisplayEnclosure
             | Self::Placeholder
             | Self::IncompletePlaceholder
             | Self::SearchArgument(_)
@@ -138,7 +134,7 @@ impl NativeOperandRole {
 
     #[cfg(feature = "roff")]
     pub(in crate::definitions) fn display_only(self) -> bool {
-        matches!(self, Self::DisplayOnly | Self::DisplayEnclosure)
+        self == Self::DisplayOnly
     }
 
     #[cfg(feature = "roff")]
@@ -225,6 +221,14 @@ pub(crate) struct NativeOperand {
 pub(crate) struct CapturedHeadOperands {
     pub(crate) text: String,
     pub(crate) operands: Vec<NativeOperand>,
+    pub(crate) bodies: Vec<Range<usize>>,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct AcceptedOperands {
+    pub(in crate::definitions) operands: Vec<NativeOperand>,
+    #[cfg(feature = "roff")]
+    pub(in crate::definitions) bodies: Vec<Range<usize>>,
 }
 
 #[cfg(feature = "roff")]
@@ -266,9 +270,18 @@ pub(super) fn split_accepted_term_operands(
         _ => return None,
     }
     if let [_] = terms {
-        return Some(vec![TermOperands::Accepted(Rc::new(captured.operands))]);
+        let mut accepted = AcceptedOperands {
+            operands: captured.operands,
+            bodies: captured.bodies,
+        };
+        accepted.bodies.retain_mut(|span| {
+            span.end = span.end.min(offset);
+            span.start < span.end
+        });
+        return Some(vec![TermOperands::Accepted(Rc::new(accepted))]);
     }
     let mut native = captured.operands.into_iter().peekable();
+    let mut bodies = captured.bodies.into_iter().peekable();
     let mut result = Vec::with_capacity(bounds.len());
     for (bound, next) in bounds {
         let mut local = Vec::new();
@@ -287,7 +300,22 @@ pub(super) fn split_accepted_term_operands(
             operand.bytes.end -= bound.start;
             local.push(operand);
         }
-        result.push(TermOperands::Accepted(Rc::new(local)));
+        let mut local_bodies = Vec::new();
+        while let Some(span) = bodies.peek().filter(|span| span.start < bound.end) {
+            let start = span.start.max(bound.start).min(bound.end);
+            let end = span.end.min(bound.end);
+            if start < end {
+                local_bodies.push(start - bound.start..end - bound.start);
+            }
+            if span.end > next {
+                break;
+            }
+            bodies.next();
+        }
+        result.push(TermOperands::Accepted(Rc::new(AcceptedOperands {
+            operands: local,
+            bodies: local_bodies,
+        })));
     }
     native.next().is_none().then_some(result)
 }
@@ -376,7 +404,7 @@ pub(crate) enum OperandEvidence<T> {
     Unavailable,
 }
 
-pub(crate) type TermOperands = OperandEvidence<Rc<Vec<NativeOperand>>>;
+pub(crate) type TermOperands = OperandEvidence<Rc<AcceptedOperands>>;
 pub(in crate::definitions) type HeadOperands<'a> = OperandEvidence<&'a [TermOperands]>;
 
 impl<'a> HeadOperands<'a> {
@@ -387,11 +415,21 @@ impl<'a> HeadOperands<'a> {
             Self::Absent => Some(&[]),
             Self::Accepted(terms) => match terms.get(index)? {
                 TermOperands::Absent => Some(&[]),
-                TermOperands::Accepted(operands) => Some(operands),
+                TermOperands::Accepted(accepted) => Some(&accepted.operands),
                 TermOperands::Unavailable => None,
             },
             Self::Unavailable => None,
         }
+    }
+
+    #[cfg(feature = "roff")]
+    pub(in crate::definitions) fn body_ranges(self, index: usize) -> &'a [Range<usize>] {
+        if let Self::Accepted(terms) = self
+            && let Some(TermOperands::Accepted(accepted)) = terms.get(index)
+        {
+            return &accepted.bodies;
+        }
+        &[]
     }
 
     pub(in crate::definitions) fn proves_option(self) -> bool {

@@ -34,11 +34,12 @@ fn recognize(
 ) -> EnvironmentNames {
     let text = view.text.as_str();
     let (parts, assignments, complete) = split_groups(view, operands, uses);
+    let unproved_exact_form =
+        !complete && (!parts.is_empty() || foreign_join_at_start(text, operands));
     let mut result = EnvironmentNames {
-        // With no complete group boundary, the bad surface may still be
-        // an authored, aliasless label. A tail after an executed separator
-        // cannot republish earlier groups as a complete declaration.
-        unproved_exact_form: !complete && !parts.is_empty(),
+        // A malformed label may still be the author's aliasless form.
+        // A proved foreign join survives even when its group never closes.
+        unproved_exact_form,
         ..EnvironmentNames::default()
     };
     let mut parts = parts.into_iter().peekable();
@@ -85,6 +86,15 @@ fn recognize(
     // group makes an unrelated sibling disqualify the complete form.
     result.unproved_exact_form |= has_native_group && has_unproved_group;
     result
+}
+
+fn foreign_join_at_start(text: &str, operands: &[NativeOperand]) -> bool {
+    let part = text.trim();
+    let start = offset(text, part);
+    operand_at(operands, start).is_some_and(|lead| {
+        matches!(lead.role, NativeOperandRole::Environment { .. })
+            && joined_foreign_operand(text, &(start..start + part.len()), operands, lead.role)
+    })
 }
 
 fn split_groups<'a>(

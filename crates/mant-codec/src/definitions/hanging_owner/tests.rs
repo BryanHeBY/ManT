@@ -173,6 +173,7 @@ fn matching_literal_transform_rebases_operands_without_changing_body_identity() 
                     role: NativeOperandRole::Argument,
                 },
             ],
+            ..CapturedHeadOperands::default()
         },
     );
     proof.body(&mut body, 11);

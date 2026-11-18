@@ -529,6 +529,7 @@ fn accepted_native_name_limit_survives_the_h_owner_change_without_partial_names(
                 crate::definitions::CapturedHeadOperands {
                     text: value.clone(),
                     operands,
+                    ..crate::definitions::CapturedHeadOperands::default()
                 },
             );
             evidence.record_operands(&witness, 20, false);

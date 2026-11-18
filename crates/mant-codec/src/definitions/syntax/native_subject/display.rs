@@ -8,11 +8,12 @@ use crate::definitions::syntax::{
 use crate::definitions::{
     NativeHeadRole, NativeOperand, NativeOperandRole,
     context::DefinitionContext,
-    evidence::{HeadOperands, TermOperands},
+    evidence::{AcceptedOperands, HeadOperands, TermOperands},
 };
 use mant_ir::{DefinitionTerm, EntryKind, Inline, NameCase};
 use std::{ops::Range, rc::Rc};
 
+mod plans;
 mod scopes;
 
 pub(in crate::definitions::syntax) fn infer_display_head(
@@ -43,21 +44,29 @@ pub(in crate::definitions::syntax) fn infer_display_head(
                 // The complete authored term stays in the public owner.
                 // Its display-only bytes cannot supply a queryable form.
                 head.excluded_forms.push(index);
-                let segments = segments(term, ranges);
-                let first = segments
-                    .iter()
-                    .position(|segment| mant_ir::has_printable_character(&segment.content));
-                for (position, segment) in segments.into_iter().enumerate() {
-                    let original_hint = (index == 0 && first == Some(position))
-                        .then_some(hint)
-                        .flatten();
-                    let Some(segment) = segment.infer(context, original_hint) else {
+                let mut segments = segments(term, ranges, operands.body_ranges(index))
+                    .into_iter()
+                    .peekable();
+                let mut first = true;
+                while let Some(segment) = segments.next() {
+                    let group = segment.group;
+                    let mut projected = Projection::default();
+                    projected.push(segment);
+                    while let Some(next) = segments.next_if(|next| next.group == group) {
+                        projected.push(next);
+                    }
+                    let original_hint = (index == 0 && first).then_some(hint).flatten();
+                    if !mant_ir::has_printable_character(&projected.content) {
+                        continue;
+                    }
+                    first = false;
+                    let Some(segment) = projected.infer(context, original_hint) else {
                         continue;
                     };
                     append_names(segment, &mut names, &mut kind, &mut head.limit);
                 }
             } else {
-                let local = [TermOperands::Accepted(Rc::new(ranges.to_vec()))];
+                let local = [local_operands(ranges.to_vec())];
                 let inherited = (index == 0).then_some(hint).flatten();
                 let inferred = infer_terms(
                     std::slice::from_ref(term),
@@ -104,14 +113,50 @@ fn append_names(
 }
 
 struct Segment<'a> {
+    group: usize,
     bytes: Range<usize>,
     operands: &'a [NativeOperand],
     content: Vec<Inline>,
 }
 
-impl Segment<'_> {
+#[derive(Default)]
+struct Projection {
+    content: Vec<Inline>,
+    operands: Vec<NativeOperand>,
+    intervals: Vec<(Range<usize>, usize)>,
+    bytes: usize,
+}
+
+fn local_operands(operands: Vec<NativeOperand>) -> TermOperands {
+    TermOperands::Accepted(Rc::new(AcceptedOperands {
+        operands,
+        bodies: Vec::new(),
+    }))
+}
+
+impl Projection {
+    fn push(&mut self, segment: Segment<'_>) {
+        if self.bytes > 0 {
+            // A removed display span is never evidence that two native
+            // words compose one name. This private gap has no public range.
+            self.content.push(Inline::Text { value: " ".into() });
+            self.bytes += 1;
+        }
+        let offset = self.bytes;
+        self.bytes += segment.bytes.len();
+        self.intervals
+            .push((offset..self.bytes, segment.bytes.start));
+        self.operands
+            .extend(segment.operands.iter().map(|operand| NativeOperand {
+                bytes: offset + operand.bytes.start.max(segment.bytes.start) - segment.bytes.start
+                    ..offset + operand.bytes.end.min(segment.bytes.end) - segment.bytes.start,
+                role: operand.role,
+            }));
+        self.content.extend(segment.content);
+    }
+
     fn infer(
-        self,
+        mut self,
         context: DefinitionContext,
         hint: Option<NativeHeadRole>,
     ) -> Option<InferredIdentity> {
@@ -134,65 +179,55 @@ impl Segment<'_> {
         let term = DefinitionTerm::from(self.content);
         // A separator written before a table can be covered by the previous
         // receipt. Clip that edge to the span read by the head grammar.
-        let end = self.bytes.start + mant_ir::inline_plain_text(&term).trim_end().len();
-        let local = self
-            .operands
-            .iter()
-            .take_while(|operand| operand.bytes.start < end)
-            .map(|operand| NativeOperand {
-                bytes: operand.bytes.start.max(self.bytes.start) - self.bytes.start
-                    ..operand.bytes.end.min(end) - self.bytes.start,
-                role: operand.role,
-            })
-            .collect();
-        let operands = [TermOperands::Accepted(Rc::new(local))];
+        let end = mant_ir::inline_plain_text(&term).trim_end().len();
+        self.operands.retain_mut(|operand| {
+            operand.bytes.end = operand.bytes.end.min(end);
+            !operand.bytes.is_empty()
+        });
+        let operands = [local_operands(self.operands)];
         let mut found = infer_terms(&[term], context, hint, HeadOperands::Accepted(&operands));
-        for name in found.occurrences.iter_mut().flatten() {
-            for part in &mut name.parts {
-                part.start += self.bytes.start;
-                part.end += self.bytes.start;
-            }
+        for names in &mut found.occurrences {
+            names.retain_mut(|name| {
+                name.parts.iter_mut().all(|part| {
+                    let index = self
+                        .intervals
+                        .partition_point(|(span, _)| span.end <= part.start);
+                    if let Some((span, original)) = self.intervals.get(index)
+                        && span.start <= part.start
+                        && part.end <= span.end
+                    {
+                        *part =
+                            original + part.start - span.start..original + part.end - span.start;
+                        return true;
+                    }
+                    false
+                })
+            });
         }
         Some(found)
     }
 }
 
-fn segments<'a>(term: &[Inline], operands: &'a [NativeOperand]) -> Vec<Segment<'a>> {
+fn segments<'a>(
+    term: &[Inline],
+    operands: &'a [NativeOperand],
+    bodies: &[Range<usize>],
+) -> Vec<Segment<'a>> {
     let text = mant_ir::inline_plain_text(term);
-    let boundaries = scopes::display_boundaries(&text, operands);
-    let mut start = 0usize;
-    let mut needs_separator = false;
+    let boundaries = scopes::display_boundaries(&text, operands, bodies);
     let mut first_receipt = 0usize;
     let mut segments = Vec::new();
-    for boundary in boundaries
-        .into_iter()
-        .chain(std::iter::once(scopes::Boundary {
-            bytes: text.len()..text.len(),
-            annotation: false,
-        }))
-    {
-        let end = boundary.bytes.start;
-        let form_start = if needs_separator {
-            let suffix = text[start..end].trim_start();
-            suffix
-                .strip_prefix([',', '|'])
-                .map(|after| end - after.len())
-        } else {
-            Some(start)
-        };
-        if let Some(start) = form_start.filter(|start| *start < end) {
-            first_receipt +=
-                operands[first_receipt..].partition_point(|operand| operand.bytes.end <= start);
-            let count =
-                operands[first_receipt..].partition_point(|operand| operand.bytes.start < end);
-            segments.push(Segment {
-                bytes: start..end,
-                operands: &operands[first_receipt..first_receipt + count],
-                content: Vec::new(),
-            });
-        }
-        start = boundary.bytes.end;
-        needs_separator = boundary.annotation;
+    for (group, bytes) in plans::retained_intervals(&text, operands, boundaries) {
+        first_receipt +=
+            operands[first_receipt..].partition_point(|operand| operand.bytes.end <= bytes.start);
+        let count =
+            operands[first_receipt..].partition_point(|operand| operand.bytes.start < bytes.end);
+        segments.push(Segment {
+            group,
+            bytes,
+            operands: &operands[first_receipt..first_receipt + count],
+            content: Vec::new(),
+        });
     }
     if !segments.is_empty() {
         collect_inline_intervals(term, &mut segments, &mut 0, &mut 0);

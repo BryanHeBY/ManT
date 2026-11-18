@@ -264,14 +264,19 @@ impl<F: FnMut(&mut Vec<Inline>) -> InlinePublication> Publisher<'_, F> {
                 && let Some(witness) = &mut witness
                 && let TermOperands::Accepted(operands) = &mut witness.operands[index]
             {
+                let accepted = Rc::make_mut(operands);
                 if let Some(lost_key) = publication.rebase_operands(
-                    Rc::make_mut(operands),
+                    &mut accepted.operands,
                     &witness.terms[index],
                     &term.content,
                 ) {
                     lost_operands |= lost_key;
+                    accepted.bodies.retain_mut(|span| {
+                        *span = publication.offset(span.start)..publication.offset(span.end);
+                        span.start < span.end
+                    });
                 } else {
-                    lost_operands |= !operands.is_empty();
+                    lost_operands |= !accepted.operands.is_empty();
                     witness.operands[index] = TermOperands::Unavailable;
                 }
             }

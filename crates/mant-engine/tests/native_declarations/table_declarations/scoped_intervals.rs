@@ -3,6 +3,11 @@ use super::{HEADER, check_direct, definitions, exact_word, explain, load};
 use mant_ir::{EntryOwner, inline_plain_text};
 use std::fmt::Write;
 
+#[path = "scoped_intervals/environment.rs"]
+mod environment;
+#[path = "scoped_intervals/primary.rs"]
+mod primary;
+
 const TABLE: &str = ".TS\nl.\nSENTINEL\n.TE\n";
 const POSITIONS: [&str; 6] = [
     "none",

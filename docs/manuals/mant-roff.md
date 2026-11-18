@@ -684,6 +684,12 @@ their bindings. A table inside a declaration annotation stays inside that
 annotation, so a styled name only inside the annotation cannot be promoted by
 splitting at a cell boundary.
 
+An outer enclosure can also wrap the declaration itself. In that position,
+the declaration still uses its executed macro operands on either side of a
+table. Table cells contribute readable content independently of the name
+bindings. A top-level `No or` can separate two independently executed `Ev`
+names across an intervening display or annotation.
+
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand
 remains an argument across font changes. Each `TQ` term retains its own name

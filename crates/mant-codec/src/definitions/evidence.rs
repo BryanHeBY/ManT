@@ -8,6 +8,8 @@ mod operands;
 #[cfg(feature = "roff")]
 mod publication;
 
+#[cfg(feature = "roff")]
+pub(super) use operands::AcceptedOperands;
 pub(super) use operands::HeadOperands;
 #[cfg(feature = "roff")]
 pub(crate) use operands::{CapturedHeadOperands, NativeSubject};
@@ -163,7 +165,7 @@ impl NativeHeadEvidence {
         let [TermOperands::Accepted(operands)] = witness.operands.as_slice() else {
             return false;
         };
-        let [opening, first_argument, suffix @ ..] = operands.as_slice() else {
+        let [opening, first_argument, suffix @ ..] = operands.operands.as_slice() else {
             return false;
         };
         let NativeOperandRole::SearchOpen {

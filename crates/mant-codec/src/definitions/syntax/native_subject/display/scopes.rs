@@ -6,23 +6,63 @@ use std::ops::Range;
 
 pub(super) struct Boundary {
     pub(super) bytes: Range<usize>,
-    pub(super) annotation: bool,
+    pub(super) kind: BoundaryKind,
 }
 
-pub(super) fn display_boundaries(text: &str, operands: &[NativeOperand]) -> Vec<Boundary> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum BoundaryKind {
+    Display,
+    EnclosedDisplay,
+    Annotation,
+}
+
+pub(super) fn display_boundaries(
+    text: &str,
+    operands: &[NativeOperand],
+    bodies: &[Range<usize>],
+) -> Vec<Boundary> {
     let mut scan = ScopeScan {
         text,
         ..ScopeScan::default()
     };
     let mut end = 0;
+    let mut bodies = bodies.iter().peekable();
+    let mut active_body = None;
     for operand in operands {
-        scan.literal_marks(end..operand.bytes.start);
-        scan.operand(operand);
+        if operand.bytes.start < end {
+            continue;
+        }
+        // Scan ordinary syntax around the native BODY. Inside it, the
+        // ordinary grammar sees the retained full scope in one group.
+        // Generated Fn parentheses must not start a new annotation here.
+        let mut gap = active_body.as_ref().map_or(end, |body: &&Range<usize>| {
+            end.max(body.end.min(operand.bytes.start))
+        });
+        if active_body.is_none_or(|body| body.end <= operand.bytes.start) {
+            active_body = None;
+            while bodies
+                .next_if(|body| body.end <= operand.bytes.start)
+                .is_some()
+            {}
+            if let Some(body) = bodies.next_if(|body| body.contains(&operand.bytes.start)) {
+                scan.literal_marks(gap..body.start.max(gap));
+                if scan.scopes.is_empty() && (scan.has_prefix || scan.has_text_before(body.start)) {
+                    scan.has_prefix = true;
+                    end = body.end;
+                    scan.cut(body.clone(), BoundaryKind::Annotation);
+                    continue;
+                }
+                active_body = Some(body);
+                gap = operand.bytes.start;
+            }
+        }
+        scan.literal_marks(gap..operand.bytes.start);
+        scan.operand(operand, active_body.is_some());
         end = operand.bytes.end;
     }
-    scan.literal_marks(end..text.len());
+    scan.literal_marks(active_body.map_or(end, |body| end.max(body.end))..text.len());
     if !scan.scopes.is_empty() && scan.opaque {
-        scan.cut(scan.start..text.len(), true);
+        scan.cut(scan.start..text.len(), BoundaryKind::Annotation);
     }
     scan.boundaries
 }
@@ -40,31 +80,38 @@ struct ScopeScan<'a> {
 }
 
 impl<'a> ScopeScan<'a> {
-    fn cut(&mut self, bytes: Range<usize>, annotation: bool) {
-        self.top_level_start = bytes.end;
-        self.boundaries.push(Boundary { bytes, annotation });
+    fn cut(&mut self, bytes: Range<usize>, kind: BoundaryKind) {
+        if kind != BoundaryKind::EnclosedDisplay {
+            self.top_level_start = bytes.end;
+        }
+        self.boundaries.push(Boundary { bytes, kind });
     }
 
     fn has_text_before(&self, end: usize) -> bool {
         !self.text[self.top_level_start..end].trim().is_empty()
     }
 
-    fn operand(&mut self, operand: &NativeOperand) {
+    fn operand(&mut self, operand: &NativeOperand, within_native_body: bool) {
         let role = operand.role;
         let bytes = operand.bytes.clone();
         if role.display_only() {
-            if self.scopes.is_empty() {
+            if self.scopes.is_empty() && !within_native_body {
                 self.has_prefix |= self.has_text_before(bytes.start);
-                self.cut(bytes, role == NativeOperandRole::DisplayEnclosure);
-            } else {
-                self.opaque = true;
+                self.cut(bytes, BoundaryKind::Display);
+            } else if !self.opaque || self.scopes.is_empty() {
+                self.cut(bytes, BoundaryKind::EnclosedDisplay);
             }
         } else {
-            self.accept_non_display(operand, bytes);
+            self.accept_non_display(operand, bytes, within_native_body);
         }
     }
 
-    fn accept_non_display(&mut self, operand: &NativeOperand, bytes: Range<usize>) {
+    fn accept_non_display(
+        &mut self,
+        operand: &NativeOperand,
+        bytes: Range<usize>,
+        within_native_body: bool,
+    ) {
         let role = operand.role;
         let mark_start = bytes.end - self.text[bytes.clone()].trim_start().len();
         if let Some(mark) = annotations::marker(self.text, mark_start, operand) {
@@ -76,12 +123,14 @@ impl<'a> ScopeScan<'a> {
         {
             active.admits_scope(Some(body), true);
         }
-        if matches!(
-            role,
-            NativeOperandRole::Literal
-                | NativeOperandRole::LiteralContinuation(_)
-                | NativeOperandRole::EnclosureContent(_)
-        ) {
+        if !within_native_body
+            && matches!(
+                role,
+                NativeOperandRole::Literal
+                    | NativeOperandRole::LiteralContinuation(_)
+                    | NativeOperandRole::EnclosureContent(_)
+            )
+        {
             self.literal_marks(bytes);
         }
     }
@@ -113,7 +162,7 @@ impl<'a> ScopeScan<'a> {
             {
                 self.scopes.pop();
                 if self.scopes.is_empty() && self.opaque {
-                    self.cut(self.start..bytes.end, true);
+                    self.cut(self.start..bytes.end, BoundaryKind::Annotation);
                 }
             }
             Mark::Close(_) => {}

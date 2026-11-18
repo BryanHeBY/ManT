@@ -137,6 +137,7 @@ fn recorded_owner() -> (DefinitionItem, NativeHeadEvidence) {
                 bytes: 0..4,
                 role: NativeOperandRole::Literal,
             }],
+            ..CapturedHeadOperands::default()
         },
     );
     evidence.record_operands(&original, 20, false);
@@ -222,6 +223,7 @@ fn continuation_retains_independent_operand_states() {
                 bytes: 0..4,
                 role: NativeOperandRole::Argument,
             }],
+            ..CapturedHeadOperands::default()
         },
     );
     evidence.record_operands(&stale, 40, false);
@@ -306,6 +308,7 @@ fn publication_rebinds_only_the_proved_owner_once() {
                 bytes: 0..4,
                 role: NativeOperandRole::Literal,
             }],
+            ..CapturedHeadOperands::default()
         },
     );
     evidence.record_operands(&original, 20, false);
