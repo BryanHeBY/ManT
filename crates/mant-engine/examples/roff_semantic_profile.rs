@@ -22,14 +22,12 @@ mod declarations;
 #[path = "roff_semantic_profile/queries.rs"]
 mod queries;
 
-use conversions::{conversion_violations, ordinal_conversions};
-
 #[path = "support/ordinal_labels.rs"]
 mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v5";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v6";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -160,8 +158,8 @@ fn profile_document(
             .into_iter()
             .partition(|candidate| !bracketed_ordinal_marker(&candidate.form));
     let value_domain_violations = value_domain_violations(document);
-    let ordinal_conversions = ordinal_conversions(native_root, document);
-    let ordinal_conversion_violations = conversion_violations(&ordinal_conversions);
+    let ordinal_audit = conversions::audit_ordinals(native_root, document);
+    let ordinal_conversion_violations = ordinal_audit.violations();
     let declaration_groups = declarations::profile(native_root, document);
     let declaration_group_violations = declarations::violations(&declaration_groups);
     let aliasless_generic_terms = entries
@@ -207,7 +205,8 @@ fn profile_document(
         "noteLikeEntryCount": note_like_entries.len(),
         "noteLikeEntrySamples": note_like_entries.into_iter().take(SAMPLE_LIMIT).collect::<Vec<_>>(),
         "valueDomainViolations": value_domain_violations,
-        "ordinalConversions": ordinal_conversions,
+        "ordinalConversions": ordinal_audit.conversions,
+        "ordinalCasesForReview": ordinal_audit.cases_for_review,
         "ordinalConversionViolations": ordinal_conversion_violations,
         "declarationGroups": declaration_groups,
         "declarationGroupViolations": declaration_group_violations,
@@ -584,7 +583,7 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 mod tests {
     #[test]
     fn jsonl_ordinal_findings_follow_the_native_owner_observation() {
-        use crate::ordinal_labels::cases::{LINK_JSON, execution_inputs};
+        use crate::ordinal_labels::cases::{LINK_JSON, body_and_boundary_inputs, execution_inputs};
         use serde_json::json;
 
         let path =
@@ -592,6 +591,17 @@ mod tests {
         for (source, labels, recovered) in
             std::iter::once((LINK_JSON.to_owned(), ["1.", "2.", "3."], false))
                 .chain(execution_inputs())
+                .map(|(source, labels, recovered)| {
+                    (
+                        source,
+                        labels.map(str::to_owned).into_iter().collect::<Vec<_>>(),
+                        recovered,
+                    )
+                })
+                .chain(
+                    body_and_boundary_inputs()
+                        .map(|(source, labels, recovered)| (source, labels.into(), recovered)),
+                )
         {
             std::fs::write(&path, &source).unwrap();
             let profile =
@@ -619,12 +629,53 @@ mod tests {
                 "{source}"
             );
             assert_eq!(profile["violations"], json!([]), "{source}\n{profile}");
+            assert_eq!(profile["ordinalCasesForReview"], json!([]), "{source}");
             if source == LINK_JSON {
                 // Each native Sx had its own href in the fixed HTML; the
                 // retained terms are still enumerated by the public census.
                 assert_eq!(profile["ordinalDefinitions"].as_array().unwrap().len(), 3);
             }
         }
+    }
+
+    #[test]
+    fn ordinal_jsonl_review_retains_missing_owner_diagnostics() {
+        use crate::ordinal_labels::cases::{bare_zero_advance_with_empty_row, body_needs_review};
+        use serde_json::json;
+        let source = body_needs_review();
+        let path =
+            std::env::temp_dir().join(format!("mant-ordinal-review-{}.1", std::process::id()));
+        for source in [&source, &bare_zero_advance_with_empty_row()] {
+            std::fs::write(&path, source).unwrap();
+            let profile =
+                super::profile_request(&json!({"id": "review", "path": path}).to_string());
+            std::fs::remove_file(&path).unwrap();
+            let profile = profile.unwrap();
+            assert_eq!(profile["ordinalCasesForReview"], json!([[8, 2]]));
+            assert_eq!(profile["ordinalConversions"], json!([]));
+            assert_eq!(profile["violations"], json!([]));
+        }
+
+        let report = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", source.as_bytes())
+            .unwrap();
+        let mut document =
+            mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &report);
+        document.sections[1].blocks.clear();
+        let missing = super::profile_document("missing", &report.document.root, &document, 0);
+        assert_eq!(missing["ordinalCasesForReview"], json!([[8, 2]]));
+        assert!(
+            missing["violations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| {
+                    value
+                        .as_str()
+                        .unwrap()
+                        .contains("missing ordinal owner at 8:2")
+                })
+        );
     }
 
     #[test]

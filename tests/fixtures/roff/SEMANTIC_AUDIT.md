@@ -10,6 +10,14 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
+The current semantic profile is `mant.roff-semantic-profile/v6`. An incremental
+scan revisits matching corpus, path and source hash records from earlier profiles.
+It preserves human review dispositions and notes. Use `--recorded-only` to replay
+every unchanged recorded source. Verification requires a current profile row.
+An ordinal-shaped list with an unproved BODY effect is recorded with its
+source coordinates and reason. The audit still checks that its owner is
+present.
+
 ## Oracle and scope
 
 The separate [query gold](ENTRY_QUERY_GOLD.json) retains the 17 checkout queries

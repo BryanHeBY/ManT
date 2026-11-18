@@ -6,6 +6,7 @@ use super::{
     EquationContext, ListTopologyKind, equation_context_order, head_payloads::HeadPayloads,
     native::equation_visible_text, ordinal_labels,
 };
+use ordinal_labels::OrdinalDisposition;
 
 pub(super) fn collect(root: &Node, head_payloads: &HeadPayloads) -> AstTopology {
     let mut topology = AstTopology::default();
@@ -129,25 +130,27 @@ fn collect_ast_topology(
         && let Some(kind) = mdoc_list_topology_kind(node)
         && node.line > 0
     {
-        let kind = if kind == MdocContainerKind::Definition
-            && mdoc_definition_is_recoverable_ordinal_list(node, spacing)
+        let ordinal_disposition = if kind == MdocContainerKind::Definition
+            && node.definition_list_style == Some(libmandoc_rs::DefinitionListStyle::Tag)
         {
-            // Lowering deliberately recovers explicit `1.`, `2.` tag heads
-            // as an ordered generic list. The audit must compare semantic
-            // topology, not the implementation-private native list subtype.
-            ListTopologyKind::Generic
+            ordinal_labels::observe(mdoc_list_items(node), spacing)
+                .map(|labels| labels.disposition())
         } else {
-            match kind {
-                MdocContainerKind::Generic => ListTopologyKind::Generic,
-                MdocContainerKind::Definition => ListTopologyKind::Definition,
-                MdocContainerKind::Table => unreachable!("column lists are tables"),
+            None
+        };
+        let kind = match (kind, ordinal_disposition) {
+            (_, Some(OrdinalDisposition::Recovered)) | (MdocContainerKind::Generic, _) => {
+                ListTopologyKind::Generic
             }
+            (MdocContainerKind::Definition, _) => ListTopologyKind::Definition,
+            (MdocContainerKind::Table, _) => unreachable!("column lists are tables"),
         };
         topology.lists.push(AstListTopology {
             source_line: node.line,
             source_column: node.column,
             kind,
             items: mdoc_list_items(node).count(),
+            ordinal_uncertain: ordinal_disposition == Some(OrdinalDisposition::Uncertain),
         });
     }
 
@@ -190,15 +193,6 @@ fn collect_ast_topology(
             spacing,
         );
     }
-}
-
-fn mdoc_definition_is_recoverable_ordinal_list(
-    node: &Node,
-    spacing: &ordinal_labels::HeadSpacing,
-) -> bool {
-    node.definition_list_style == Some(libmandoc_rs::DefinitionListStyle::Tag)
-        && ordinal_labels::observe(mdoc_list_items(node), spacing)
-            .is_some_and(|labels| labels.recoverable())
 }
 
 pub(super) fn equation_is_display(node: &Node, head_payloads: &HeadPayloads) -> bool {

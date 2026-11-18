@@ -11,13 +11,14 @@ import re
 import subprocess
 import sys
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
+    SourceReview,
     merge_clean_review_state,
     compile_source_patterns,
     discover_pages,
@@ -25,6 +26,7 @@ from scripts.roff.lib.roff_audit_common import (
     manual_hierarchy_root,
     manual_section,
     non_negative_integer,
+    ordinal_source_reviews,
     relative_label,
     run_jsonl_profile_batch,
     source_digest,
@@ -36,8 +38,15 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v5"
-SUPPORTED_PROFILE_SCHEMAS = {"mant.roff-semantic-profile/v1", "mant.roff-semantic-profile/v2", "mant.roff-semantic-profile/v3", "mant.roff-semantic-profile/v4", PROFILE_SCHEMA}
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v6"
+SUPPORTED_PROFILE_SCHEMAS = {
+    "mant.roff-semantic-profile/v1",
+    "mant.roff-semantic-profile/v2",
+    "mant.roff-semantic-profile/v3",
+    "mant.roff-semantic-profile/v4",
+    "mant.roff-semantic-profile/v5",
+    PROFILE_SCHEMA,
+}
 DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -98,6 +107,7 @@ class Finding:
     ordinal_conversions: list[dict[str, object]] | None = None
     ordinal_conversion_violations: list[str] | None = None
     declaration_groups: dict | None = None
+    source_review: list[SourceReview] = field(default_factory=list)
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -299,6 +309,7 @@ def profile_findings(
             ordinal_conversions = response.get("ordinalConversions")
             ordinal_conversion_violations = response.get("ordinalConversionViolations")
             violations = response.get("violations")
+            source_review = ordinal_source_reviews(response)
             valid = (
                 isinstance(entries, list)
                 and all(valid_entry(entry) for entry in entries)
@@ -334,13 +345,14 @@ def profile_findings(
                 and valid_violation_summary(response)
                 and isinstance(response.get("declarationGroups"), dict)
                 and isinstance(response.get("declarationGroupViolations"), list)
+                and source_review is not None
             )
             if not valid:
                 yield Finding(label, "hard-failure", [], "invalid profiler response")
                 continue
             yield Finding(
                 label,
-                "review" if violations else "clean",
+                "review" if violations or source_review else "clean",
                 violations,
                 entry_count=len(entries),
                 entry_counts=entry_counts,
@@ -353,6 +365,7 @@ def profile_findings(
                 ordinal_conversions=ordinal_conversions,
                 ordinal_conversion_violations=ordinal_conversion_violations,
                 declaration_groups=response["declarationGroups"],
+                source_review=source_review,
             )
 
 
@@ -517,8 +530,8 @@ def main(argv: Sequence[str]) -> int:
             pages = [
                 page
                 for page in pages
-                if records[page][1] is None
-                or (corpus, records[page][0], records[page][1]) not in database
+                if (previous := database.get((corpus, *records[page]))) is None
+                or previous.profile_schema != PROFILE_SCHEMA
             ]
         pages = stable_sample(pages, arguments.max_pages)
         if arguments.verify and not pages:
@@ -538,6 +551,7 @@ def main(argv: Sequence[str]) -> int:
     findings = list(profile_findings(pages, roots, arguments.profiler, arguments.timeout))
     by_label = {finding.path: finding for finding in findings}
     summary = Counter(finding.status for finding in findings)
+    source_review_count = sum(len(finding.source_review) for finding in findings)
     entry_counts = Counter()
     total_entries = 0
     aliasless_count = 0
@@ -567,14 +581,20 @@ def main(argv: Sequence[str]) -> int:
         finding = by_label[label]
         if not arguments.findings_only or finding.status != "clean":
             detail = f" — {finding.detail}" if finding.detail else ""
-            suffix = f": {'; '.join(finding.violations)}" if finding.violations else ""
+            observations = [
+                *finding.violations,
+                *(f"source {review.line}:{review.column}: {review.reason}"
+                  for review in finding.source_review),
+            ]
+            suffix = f": {'; '.join(observations)}" if observations else ""
             print(f"{finding.status.upper():12} {label}{detail}{suffix}")
         if digest is None:
             continue
         key = (corpus, label, digest)
         previous = database.get(key)
         if arguments.verify:
-            if previous is None or previous.scan_status != finding.status:
+            if (previous is None or previous.profile_schema != PROFILE_SCHEMA
+                    or previous.scan_status != finding.status):
                 verification_failed = True
             continue
         database[key] = AuditRecord(
@@ -591,7 +611,8 @@ def main(argv: Sequence[str]) -> int:
     print()
     print(
         f"summary: examined={len(findings)}, clean={summary['clean']}, "
-        f"review={summary['review']}, hard={summary['hard-failure']}"
+        f"review={summary['review']}, hard={summary['hard-failure']}, "
+        f"source_review={source_review_count}"
     )
     print(
         f"semantic entries: total={total_entries}, ordinal={ordinal_entry_count}, "
@@ -628,6 +649,7 @@ def main(argv: Sequence[str]) -> int:
                     "entryCounts": dict(entry_counts),
                     "ordinalConversionCount": ordinal_conversion_count,
                     "ordinalConversionViolationCount": ordinal_conversion_violation_count,
+                    "sourceReviewOccurrences": source_review_count,
                     "summary": dict(summary),
                     "findings": [asdict(finding) for finding in findings],
                 },

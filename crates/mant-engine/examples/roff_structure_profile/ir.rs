@@ -94,6 +94,7 @@ fn collect_blocks(
                 collect_flow_inlines(block, children, inside_table, profile, topology);
             }
             Block::List {
+                kind,
                 items,
                 layout,
                 source,
@@ -105,6 +106,7 @@ fn collect_blocks(
                     layout.indent_columns,
                     *source,
                     ListTopologyKind::Generic,
+                    matches!(kind, mant_ir::ListKind::Ordered { .. }),
                     profile,
                     topology,
                 );
@@ -124,6 +126,7 @@ fn collect_blocks(
                     layout.indent_columns,
                     *source,
                     ListTopologyKind::Definition,
+                    false,
                     profile,
                     topology,
                 );
@@ -295,6 +298,7 @@ fn record_list_layout(
     indent_columns: i32,
     source: Option<mant_ir::SourceSpan>,
     kind: ListTopologyKind,
+    ordered: bool,
     profile: &mut IrStructure,
     topology: &mut IrTopology,
 ) {
@@ -308,6 +312,7 @@ fn record_list_layout(
             source_column: source.column,
             kind,
             items,
+            ordered,
         });
     }
 }

@@ -6,7 +6,7 @@ use libmandoc_rs::{DefinitionListStyle, Node, NodeKind, NormalizedListKind};
 use mant_ir::{Block, Document, ListKind, Section, SourceSpan};
 use serde::Serialize;
 
-use super::ordinal_labels;
+use super::ordinal_labels::{self, OrdinalDisposition};
 
 type Origin = (u32, u32);
 type ObservedLists = HashMap<Origin, Vec<ObservedBlock>>;
@@ -22,7 +22,22 @@ pub(super) struct OrdinalConversion {
     pub(super) observed_ir_paths: Vec<String>,
 }
 
-pub(super) fn ordinal_conversions(root: &Node, document: &Document) -> Vec<OrdinalConversion> {
+#[derive(Default)]
+pub(super) struct OrdinalAudit {
+    pub(super) conversions: Vec<OrdinalConversion>,
+    pub(super) cases_for_review: Vec<Origin>,
+    uncertain_owner_violations: Vec<String>,
+}
+
+impl OrdinalAudit {
+    pub(super) fn violations(&self) -> Vec<String> {
+        let mut violations = conversion_violations(&self.conversions);
+        violations.extend(self.uncertain_owner_violations.iter().cloned());
+        violations
+    }
+}
+
+pub(super) fn audit_ordinals(root: &Node, document: &Document) -> OrdinalAudit {
     let mut candidates = Vec::new();
     let mut slots = HashMap::new();
     let spacing = ordinal_labels::HeadSpacing::collect(root);
@@ -32,31 +47,43 @@ pub(super) fn ordinal_conversions(root: &Node, document: &Document) -> Vec<Ordin
     for (index, section) in document.sections.iter().enumerate() {
         collect_section(section, &format!("section[{index}]"), &mut observed);
     }
-    candidates
-        .into_iter()
-        .map(|candidate| {
-            let matching = observed
-                .get(&candidate.origin)
-                // A removed sibling must not shift every later occurrence
-                // and let an unrelated list satisfy the missing candidate.
-                .filter(|blocks| blocks.len() == slots[&candidate.origin])
-                .and_then(|blocks| blocks.get(candidate.slot));
-            OrdinalConversion {
-                source_line: candidate.origin.0,
-                list_style: candidate.list_style,
-                terms: candidate.terms,
-                expected_disposition: candidate.expected_disposition,
-                observed_dispositions: matching
-                    .map(|block| block.disposition)
-                    .into_iter()
-                    .collect(),
-                observed_ir_paths: matching
-                    .map(|block| block.path.clone())
-                    .into_iter()
-                    .collect(),
+    let mut audit = OrdinalAudit::default();
+    for candidate in candidates {
+        let matching = observed
+            .get(&candidate.origin)
+            // A removed sibling must not shift every later occurrence.
+            .filter(|blocks| blocks.len() == slots[&candidate.origin])
+            .and_then(|blocks| blocks.get(candidate.slot));
+        let expected_disposition = match candidate.disposition {
+            OrdinalDisposition::Recovered => "recovered-ordered-list",
+            OrdinalDisposition::Retained => "retained-definition-list",
+            OrdinalDisposition::Uncertain => {
+                audit.cases_for_review.push(candidate.origin);
+                if matching.is_none_or(|block| block.disposition == "other-list") {
+                    audit.uncertain_owner_violations.push(format!(
+                        "missing ordinal owner at {}:{} (disposition needs source review)",
+                        candidate.origin.0, candidate.origin.1
+                    ));
+                }
+                continue;
             }
-        })
-        .collect()
+        };
+        audit.conversions.push(OrdinalConversion {
+            source_line: candidate.origin.0,
+            list_style: candidate.list_style,
+            terms: candidate.terms,
+            expected_disposition,
+            observed_dispositions: matching
+                .map(|block| block.disposition)
+                .into_iter()
+                .collect(),
+            observed_ir_paths: matching
+                .map(|block| block.path.clone())
+                .into_iter()
+                .collect(),
+        });
+    }
+    audit
 }
 
 pub(super) fn conversion_violations(conversions: &[OrdinalConversion]) -> Vec<String> {
@@ -84,7 +111,7 @@ struct SourceCandidate {
     slot: usize,
     list_style: &'static str,
     terms: Vec<String>,
-    expected_disposition: &'static str,
+    disposition: OrdinalDisposition,
 }
 
 fn collect_source_candidates(
@@ -113,16 +140,16 @@ fn collect_source_candidates(
                 spacing,
             )
         {
-            let recovered = style == DefinitionListStyle::Tag && labels.recoverable();
+            let disposition = labels.disposition();
             output.push(SourceCandidate {
                 origin,
                 slot: *slot,
                 list_style: style_name(style),
                 terms: labels.terms,
-                expected_disposition: if recovered {
-                    "recovered-ordered-list"
+                disposition: if style == DefinitionListStyle::Tag {
+                    disposition
                 } else {
-                    "retained-definition-list"
+                    OrdinalDisposition::Retained
                 },
             });
         }
@@ -238,7 +265,14 @@ mod tests {
     use mant_codec::lower_mandoc_document;
     use mant_ir::{Block, LayoutHint, ListKind};
 
-    use super::{conversion_violations, ordinal_conversions};
+    use super::{OrdinalConversion, audit_ordinals, conversion_violations};
+
+    fn ordinal_conversions(
+        root: &libmandoc_rs::Node,
+        document: &mant_ir::Document,
+    ) -> Vec<OrdinalConversion> {
+        audit_ordinals(root, document).conversions
+    }
 
     fn parse(style: &str) -> (libmandoc_rs::ParseReport, mant_ir::Document) {
         let source = format!(

@@ -198,8 +198,9 @@ fn compare_list_topology(
             .and_then(VecDeque::pop_front);
         match observed_list {
             Some(observed_list)
-                if observed_list.kind == expected_list.kind
-                    && observed_list.items == expected_list.items => {}
+                if observed_list.items == expected_list.items
+                    && (observed_list.kind == expected_list.kind
+                        || expected_list.ordinal_uncertain && observed_list.ordered) => {}
             Some(observed_list) => violations.push(format!(
                 "list-topology at line {}:{}: expected {} {} items, observed {} {} items",
                 expected_list.source_line,

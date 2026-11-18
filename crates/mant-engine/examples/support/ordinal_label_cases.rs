@@ -50,6 +50,76 @@ pub(crate) fn execution_inputs() -> impl Iterator<Item = (String, [&'static str;
     ), ["10.", "20.", "3 0."], false)))
 }
 
+pub(crate) fn body_and_boundary_inputs() -> impl Iterator<Item = (String, [String; 2], bool)> {
+    // A glyphless word can own a row in no-fill, while a pure continuation
+    // never writes a cell. CVS quote pre/post and Ap emit their own glyphs.
+    let bodies = [
+        (".Ap", true),
+        (".Pq", true),
+        (".Po\n.Pc", true),
+        (r".No \zX", true),
+        (r".No \~", true),
+        (r".No \c", false),
+        (r".No \p", false),
+        (r".No \&", false),
+        (r".No \z", false),
+        (r".No \fB", false),
+        (".sp 0", true),
+        (".sp 1", true),
+        (".sp -1\n.sp 1", true),
+        (".nf\n\n.fi", true),
+        (".nf\n.No \\&\n.fi", true),
+        (".nf\n.No \\p\n.fi", true),
+        (".nf\n.No \\c\n.fi", false),
+        (".nf\n.No \\c\n\n.fi", false),
+    ]
+    .into_iter()
+    .map(|(body, recover)| {
+        (
+            format!("{REVIEW_HEADER}.Bl -tag -width Ds\n.It 1.\n{body}\n.It 2.\n{body}\n.El\n"),
+            ["1.".to_owned(), "2.".to_owned()],
+            recover,
+        )
+    });
+    let labels = [
+        ("Pq NUM", "(NUM)", true),
+        ("Po NUM Pc", "(NUM)", true),
+        (r"NUM.\c", "NUM.", true),
+        (r"NUM.\p", "NUM.", true),
+        (r"No NUM\c .", "NUM.", true),
+        (r"Pq NUM\p", "(NUM)", true),
+        ("\"        NUM.\"", "        NUM.", false),
+        ("\"NUM.        \"", "NUM.        ", false),
+    ]
+    .into_iter()
+    .map(|(source_form, term, recover)| {
+        let [first, second] = ["1", "2"].map(|number| source_form.replace("NUM", number));
+        let labels = ["1", "2"].map(|number| term.replace("NUM", number));
+        (
+            format!(
+                "{REVIEW_HEADER}.Bl -tag -width Ds\n.It {first}\nBODY1\n.It {second}\nBODY2\n.El\n"
+            ),
+            labels,
+            recover,
+        )
+    });
+    bodies.chain(labels)
+}
+
+pub(crate) fn body_needs_review() -> String {
+    // The fixed terminal emits x for this overstrike; the bounded ordinal
+    // observer records uncertainty rather than claiming a space or glyph.
+    format!("{REVIEW_HEADER}.Bl -tag -width Ds\n.It 1.\n.No \\o'x'\n.It 2.\n.No \\o'x'\n.El\n")
+}
+
+pub(crate) fn bare_zero_advance_with_empty_row() -> String {
+    // CVS leaves backspacing armed across an empty no-fill input boundary.
+    // The second label in this input can no longer be certified by spelling.
+    format!(
+        "{REVIEW_HEADER}.Bl -tag -width Ds\n.It 1.\n.nf\n.No \\z\n\n.fi\n.It 2.\n.nf\n.No \\z\n\n.fi\n.El\n"
+    )
+}
+
 pub(crate) fn inputs() -> impl Iterator<Item = (String, bool)> {
     [
         ("tag -width Ds", ["1.", "2.", "3."], true),
@@ -76,5 +146,6 @@ pub(crate) fn inputs() -> impl Iterator<Item = (String, bool)> {
         );
         (source, recovered)
     }).chain(execution_inputs().map(|(source, _, recovered)| (source, recovered)))
+        .chain(body_and_boundary_inputs().map(|(source, _, recovered)| (source, recovered)))
         .chain(std::iter::once((LINK_JSON.to_owned(), false)))
 }

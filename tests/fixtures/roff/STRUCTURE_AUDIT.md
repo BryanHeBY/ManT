@@ -19,7 +19,7 @@ oracle.
 | Field | Meaning |
 | --- | --- |
 | `corpus`, `path`, `section`, `source_sha256` | Same exact decompressed-source identity used by `FIDELITY_AUDIT.csv` |
-| `profile_schema` | Structural checks that produced the row; changing it requires a deliberate recheck |
+| `profile_schema` | Structural checks that produced the row. A stale version triggers a new scan for the same source identity. |
 | `scan_status` | Latest automatic result: `clean`, `review`, or `hard-failure` |
 | `review_status` | Human disposition: `not-required`, `pending`, `false-positive`, `confirmed-open`, or `confirmed-fixed` |
 | `note` | Reason for the human conclusion and any focused regression |
@@ -30,7 +30,7 @@ mapping. A `review` row is useful precisely because it may identify an
 unanticipated topology loss; inspect source, AST/IR JSON, and both ManT text
 renderers before deciding whether to add a Rust regression.
 
-## What v4 verifies
+## What v5 verifies
 
 The profiler retains compact topology signatures in the JSON report. An mdoc
 `Bl` is matched to the IR container at the same source line and must retain its
@@ -59,7 +59,7 @@ not claim printable content. Literal display wrappers may be transparently
 coalesced, so their minimum-presence check is made against retained
 preformatted rows rather than the number of IR containers. Relative `RS`
 nesting is deliberately weaker: roff distances are not terminal columns, so
-v4 reports a candidate only if a non-empty `RS` scope produces neither an
+the profiler reports a candidate only if a non-empty `RS` scope produces neither an
 indented block nor a semantic list/definition container whose renderer owns
 the indentation. Paragraph-boundary and raw `.br` counts remain report
 telemetry rather than failure conditions: empty or stateful requests can
@@ -98,6 +98,12 @@ source coordinates and reason in `source_review` and marks the ledger row
 structural violations. Independently visible labels on the same source line
 keep their own obligations. A followed alias leaves this review with the
 actual target's source identity.
+
+The section lookup check also considers surviving authored destinations on
+paragraphs, terms and inline content. A duplicate spelling must stay
+unresolved. For ordinal-shaped lists, an unproved BODY effect is reported at
+the source list occurrence in `source_review`. The list owner and its item
+count still have to survive.
 Section references use recursively collected authored words and the validated native heading
 target. The audit pairs native headings with emitted section owners at matching
 source coordinates, retaining occurrence order through macro expansion. With
@@ -171,7 +177,9 @@ python3 -m scripts.roff.audit.audit_roff_structure --manpath /usr/share/man \
 `--recorded-only` rechecks unchanged structure-ledger rows; omit both replay
 options to scan new or changed pages. A newer profiler schema also makes an
 otherwise unchanged row eligible for a normal recheck, so expanded checks never
-silently inherit old coverage. `--source-pattern` is the preferred way
+silently inherit old coverage. The scan state is replaced for that source
+identity, while authored review dispositions and notes are carried forward.
+`--source-pattern` is the preferred way
 to run complete high-risk sweeps for `.nf`/`.fi`, `.EX`/`.EE`, `.TP`/`.IP`,
 `.Bl`, `.TS`/`.TE`, or mdoc display families. The profiler is a local batch
 tool, not a public CLI or MCP interface, and its host-only results never gate

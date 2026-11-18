@@ -33,7 +33,10 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
-from scripts.roff.lib.roff_audit_common import discover_pages, manual_section, run_jsonl_profile_batch
+from scripts.roff.lib.roff_audit_common import (
+    SourceReview, discover_pages, manual_section, ordinal_source_reviews,
+    run_jsonl_profile_batch, source_reviews,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -41,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v4"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v5"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -85,13 +88,6 @@ class Finding:
     expected: dict[str, int] | None = None
     observed: dict[str, int] | None = None
     source_review: list[SourceReview] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class SourceReview:
-    line: int
-    column: int
-    reason: str
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -462,7 +458,7 @@ def profile_findings(
                 expected = response.get("expected")
                 observed = response.get("observed")
                 topology = response.get("topology")
-                source_review = section_label_reviews(response)
+                source_review = structure_source_reviews(response)
                 if (
                     not isinstance(violations, list)
                     or not all(isinstance(item, str) for item in violations)
@@ -483,28 +479,21 @@ def profile_findings(
                     )
 
 
-def section_label_reviews(response: dict[str, object]) -> list[SourceReview] | None:
+def structure_source_reviews(response: dict[str, object]) -> list[SourceReview] | None:
     if response.get("alias") is True:
         # The followed target has its own source identity and review row.
         return []
     origins = response.get("sourceLinkOrigins", {})
     if not isinstance(origins, dict):
         return None
-    positions = origins.get("sectionLabelsForReview", [])
-    if not isinstance(positions, list):
+    section_reviews = source_reviews(
+        origins.get("sectionLabelsForReview", []),
+        "section label depends on recovery of an invalid roff escape",
+    )
+    ordinal_reviews = ordinal_source_reviews(response)
+    if section_reviews is None or ordinal_reviews is None:
         return None
-    reviews = []
-    for position in positions:
-        if (
-            not isinstance(position, list)
-            or len(position) != 2
-            or any(type(value) is not int or value < 0 for value in position)
-        ):
-            return None
-        reviews.append(SourceReview(
-            *position, reason="section label depends on recovery of an invalid roff escape",
-        ))
-    return reviews
+    return [*section_reviews, *ordinal_reviews]
 
 
 def valid_structure_counts(value: object) -> bool:
@@ -583,10 +572,8 @@ def main(argv: Sequence[str]) -> int:
             pages = [
                 page
                 for page in pages
-                if records[page][1] is None
-                or (corpus, records[page][0], records[page][1]) not in database
-                or database[(corpus, records[page][0], records[page][1])].profile_schema
-                != PROFILE_SCHEMA
+                if (previous := database.get((corpus, *records[page]))) is None
+                or previous.profile_schema != PROFILE_SCHEMA
             ]
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)

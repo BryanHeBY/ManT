@@ -249,6 +249,56 @@ fn independent_ordinal_truth_rejects_same_count_owner_corruption() {
 }
 
 #[test]
+fn ordinal_jsonl_keeps_confirmed_structure_separate_from_source_review() {
+    use super::ordinal_labels::cases::{
+        bare_zero_advance_with_empty_row, body_and_boundary_inputs, body_needs_review,
+    };
+    use serde_json::json;
+    let root = std::env::temp_dir();
+    let path = root.join(format!("mant-ordinal-structure-{}.1", std::process::id()));
+    let review = body_needs_review();
+    for (source, expected_kind) in body_and_boundary_inputs()
+        .map(|(source, _, recovered)| {
+            (
+                source,
+                Some(if recovered { "generic" } else { "definition" }),
+            )
+        })
+        .chain([
+            (review.clone(), None),
+            (bare_zero_advance_with_empty_row(), None),
+        ])
+    {
+        std::fs::write(&path, &source).unwrap();
+        let profile =
+            super::profile_request(&json!({"id":"ordinal","path":path,"root":root}).to_string());
+        std::fs::remove_file(&path).unwrap();
+        let profile = profile.unwrap();
+        assert_eq!(profile["violations"], json!([]), "{source}\n{profile}");
+        if let Some(kind) = expected_kind {
+            assert_eq!(profile["ordinalCasesForReview"], json!([]), "{source}");
+            assert_eq!(
+                profile["topology"]["expected"]["lists"][0]["kind"], kind,
+                "{source}"
+            );
+        } else {
+            assert_eq!(profile["ordinalCasesForReview"], json!([[8, 2]]));
+        }
+    }
+
+    let (expected, topology, mut document) = parsed_structure(&review);
+    document.sections[1].blocks.clear();
+    let (observed, actual) = super::ir_profile(&document);
+    let violations = super::compare_structure(&expected, &observed, &topology, &actual);
+    assert!(
+        violations
+            .iter()
+            .any(|error| error.contains("list-topology at line 8:2")),
+        "{violations:?}"
+    );
+}
+
+#[test]
 fn same_origin_ordinal_topology_requires_the_original_occurrence_order() {
     let (expected, topology, document) =
         parsed_structure(super::ordinal_labels::cases::SAME_ORIGIN);

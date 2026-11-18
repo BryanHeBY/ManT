@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v4";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v5";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -210,6 +210,8 @@ struct AstListTopology {
     source_column: u32,
     kind: ListTopologyKind,
     items: usize,
+    #[serde(skip)]
+    ordinal_uncertain: bool,
 }
 
 #[derive(Eq, PartialEq, Serialize)]
@@ -220,6 +222,8 @@ struct IrListTopology {
     source_column: u32,
     kind: ListTopologyKind,
     items: usize,
+    #[serde(skip)]
+    ordered: bool,
 }
 
 #[derive(PartialEq, Serialize)]
@@ -336,6 +340,10 @@ fn profile_request(line: &str) -> Result<Value, String> {
             "sectionLabelsForReview": expected.section_outcomes.uncertain_labels(),
         },
         "alias": is_alias,
+        "ordinalCasesForReview": expected_topology.lists.iter()
+            .filter(|list| list.ordinal_uncertain)
+            .map(|list| [list.source_line, list.source_column])
+            .collect::<Vec<_>>(),
         "violations": violations,
         "itemCensus": item_census,
     }))

@@ -4,19 +4,37 @@ use std::collections::HashSet;
 
 use libmandoc_rs::{Node, NodeKind, TableCellKind};
 
+#[path = "ordinal_labels/description.rs"]
+mod description;
+#[path = "ordinal_labels/source_word.rs"]
+mod source_word;
+use description::{Description, description};
+use source_word::{NativeWord, WordEffect};
+
 #[cfg(test)]
 #[path = "ordinal_label_cases.rs"]
 pub(crate) mod cases;
 
 pub(crate) struct NativeOrdinalLabels {
     pub(crate) terms: Vec<String>,
-    consecutive: bool,
+    disposition: OrdinalDisposition,
 }
 
 impl NativeOrdinalLabels {
-    pub(crate) fn recoverable(&self) -> bool {
-        self.consecutive && self.terms.len() >= 2
+    pub(crate) fn disposition(&self) -> OrdinalDisposition {
+        if self.terms.len() >= 2 {
+            self.disposition
+        } else {
+            OrdinalDisposition::Retained
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum OrdinalDisposition {
+    Recovered,
+    Retained,
+    Uncertain,
 }
 
 pub(crate) struct HeadSpacing(HashSet<u32>);
@@ -70,7 +88,7 @@ pub(crate) fn observe<'a>(
 ) -> Option<NativeOrdinalLabels> {
     let mut terms = Vec::new();
     let mut has_candidate = false;
-    let mut consecutive = true;
+    let mut disposition = OrdinalDisposition::Recovered;
     let mut previous = None;
     for item in items {
         let mut label = NativeLabel::default();
@@ -78,7 +96,7 @@ pub(crate) fn observe<'a>(
             label.no_space_mode = spacing.0.contains(&head.id);
             label.walk(head);
         }
-        let text = label.text.trim_ascii();
+        let text = label.text.as_str();
         let marker = split_ordinal(text.trim()).and_then(|(digits, punctuation)| {
             let mut words = digits.split_whitespace().peekable();
             has_candidate |= words.peek().is_some()
@@ -91,17 +109,23 @@ pub(crate) fn observe<'a>(
                 && number.to_string() == digits)
                 .then_some((number, punctuation))
         });
-        consecutive &= !label.retains_payload
-            && part(item, NodeKind::Body).is_some_and(has_description)
-            && marker.is_some_and(|(number, punctuation)| {
-                previous.is_none_or(|(prior, mark): (u64, Punctuation)| {
-                    prior.checked_add(1) == Some(number) && mark == punctuation
-                })
-            });
+        let follows = marker.is_some_and(|(number, punctuation)| {
+            previous.is_none_or(|(prior, mark): (u64, Punctuation)| {
+                prior.checked_add(1) == Some(number) && mark == punctuation
+            })
+        });
+        let body = part(item, NodeKind::Body).map_or(Description::Absent, |body| {
+            description(body, label.tail.continues)
+        });
+        if !follows || label.retains_payload || body == Description::Absent {
+            disposition = OrdinalDisposition::Retained;
+        } else if disposition != OrdinalDisposition::Retained && body == Description::Uncertain {
+            disposition = OrdinalDisposition::Uncertain;
+        }
         previous = marker;
         terms.push(text.to_owned());
     }
-    has_candidate.then_some(NativeOrdinalLabels { terms, consecutive })
+    has_candidate.then_some(NativeOrdinalLabels { terms, disposition })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -136,6 +160,13 @@ struct NativeLabel {
     join_next: bool,
     no_space_mode: bool,
     retains_payload: bool,
+    tail: WordTail,
+}
+
+#[derive(Default)]
+struct WordTail {
+    continues: bool,
+    pending_break: bool,
 }
 
 impl NativeLabel {
@@ -146,11 +177,24 @@ impl NativeLabel {
         if node.kind == NodeKind::Text {
             // CVS print_mdoc_node() sets NOSPACE for delimiter TEXT around
             // term_word(). Styling wrappers alone do not suppress spaces.
-            if node.flags.no_fill && node.flags.line_start && !self.text.is_empty() {
+            if node.flags.no_fill
+                && node.flags.line_start
+                && !self.tail.continues
+                && !self.text.is_empty()
+            {
                 self.text.push('\n');
             }
-            let word = marker_word(node.text.as_deref().unwrap_or_default());
-            self.word(&word, node.flags.delimiter_close, node.flags.delimiter_open);
+            let word = NativeWord::read(node.text.as_deref().unwrap_or_default());
+            self.word(
+                &word.text,
+                node.flags.delimiter_close,
+                node.flags.delimiter_open,
+            );
+            self.retains_payload |=
+                word.has(WordEffect::EmittedBreak) || word.has(WordEffect::Unclassified);
+            self.tail.pending_break |= word.has(WordEffect::WordEndBreak);
+            self.tail.continues = word.has(WordEffect::Continues);
+            self.join_next |= self.tail.continues;
             return;
         }
         if node.kind == NodeKind::Equation {
@@ -171,7 +215,7 @@ impl NativeLabel {
                     && !cell.vertical_continuation
                     && let Some(text) = cell.text.as_deref()
                 {
-                    self.word(&marker_word(text), false, false);
+                    self.word(&NativeWord::read(text).text, false, false);
                 }
             }
             self.no_space_mode = false;
@@ -192,8 +236,8 @@ impl NativeLabel {
                 }
                 return;
             }
-            (NodeKind::Block, Some("Pq" | "Bq")) => {
-                let (open, close) = if token == Some("Pq") {
+            (NodeKind::Block, Some("Pq" | "Po" | "Bq" | "Bo")) => {
+                let (open, close) = if matches!(token, Some("Pq" | "Po")) {
                     ("(", ")")
                 } else {
                     ("[", "]")
@@ -205,7 +249,15 @@ impl NativeLabel {
                 self.word(close, true, node.flags.delimiter_open);
                 return;
             }
-            (_, Some("It" | "Xo" | "Bf" | "Bk" | "Sy" | "Em" | "Li" | "No" | "Pq" | "Bq")) => {}
+            // Paired enclosure parts carry positions but their delimiters
+            // are already emitted around the corresponding block body.
+            (
+                _,
+                Some(
+                    "It" | "Xo" | "Bf" | "Bk" | "Sy" | "Em" | "Li" | "No" | "Pq" | "Po" | "Pc"
+                    | "Bq" | "Bo" | "Bc",
+                ),
+            ) => {}
             // Native links and unmodeled nodes cannot prove that this is
             // solely a replaceable numeral. Their words can still mark the
             // label as a candidate that requires a retained owner.
@@ -218,109 +270,12 @@ impl NativeLabel {
 
     fn word(&mut self, word: &str, closes: bool, opens: bool) {
         if !self.text.is_empty() && !self.join_next && !closes {
+            self.retains_payload |= self.tail.pending_break;
+            self.tail.pending_break = false;
             self.text.push(' ');
         }
         self.text.push_str(word);
         self.join_next = self.no_space_mode || opens;
+        self.tail.continues = false;
     }
-}
-
-fn marker_word(source: &str) -> String {
-    // term_word() writes no visible scalar for these controls. Leave unknown
-    // glyph spellings alone so they cannot prove a replaceable numeral.
-    let mut out = String::with_capacity(source.len());
-    let mut rest = source;
-    while let Some(index) = rest.find('\\') {
-        out.push_str(&rest[..index]);
-        let escape = &rest[index + 1..];
-        if let Some((glyph, next)) =
-            unicode_marker_character(escape).or_else(|| numbered_marker_character(escape))
-        {
-            out.push(glyph);
-            rest = next;
-            continue;
-        }
-        rest = match escape.as_bytes().first() {
-            Some(b'&' | b'%' | b':') => &escape[1..],
-            Some(b'~' | b'0') => {
-                out.push('\u{a0}');
-                &escape[1..]
-            }
-            Some(b'z') if escape.len() == 2 && matches!(escape.as_bytes()[1], b'.' | b')') => {
-                // term_word() writes the final glyph before setting the
-                // backtracking flag. A completed ordinal HEAD retains it.
-                &escape[1..]
-            }
-            Some(b'f') => match font_suffix(&escape[1..]) {
-                Some(next) => next,
-                None => return [out.as_str(), &rest[index..]].concat(),
-            },
-            _ => {
-                out.push('\\');
-                escape
-            }
-        };
-    }
-    out.push_str(rest);
-    out
-}
-
-fn unicode_marker_character(escape: &str) -> Option<(char, &str)> {
-    let (digits, rest) = escape.strip_prefix("[u")?.split_once(']')?;
-    // The four-character native Unicode form suffices for ASCII ordinals.
-    // In particular, do not treat GNU multi-scalar recovery as evidence.
-    if digits.len() != 4 || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return None;
-    }
-    let glyph = char::from_u32(u32::from_str_radix(digits, 16).ok()?)?;
-    is_marker_character(glyph).then_some((glyph, rest))
-}
-
-fn numbered_marker_character(escape: &str) -> Option<(char, &str)> {
-    let argument = escape.strip_prefix('N')?;
-    let delimiter = argument.chars().next()?;
-    // roff_escape.c rejects these literal delimiters for \\N; other
-    // escape-based delimiters are outside this bounded source witness.
-    if !delimiter.is_ascii() || " %&()*+-./0123456789:<=>\\".contains(delimiter) {
-        return None;
-    }
-    let (number, rest) = argument[1..].split_once(delimiter)?;
-    let glyph = char::from(number.parse::<u8>().ok()?);
-    is_marker_character(glyph).then_some((glyph, rest))
-}
-
-fn is_marker_character(glyph: char) -> bool {
-    glyph.is_ascii_digit() || matches!(glyph, '.' | '(' | ')' | '[' | ']' | '+' | '\u{a0}')
-}
-
-fn font_suffix(font: &str) -> Option<&str> {
-    if let Some(named) = font.strip_prefix('[') {
-        return named.split_once(']').map(|(_, suffix)| suffix);
-    }
-    if let Some(named) = font.strip_prefix('(') {
-        return named.get(2..);
-    }
-    font.get(font.chars().next()?.len_utf8()..)
-}
-
-fn has_description(node: &Node) -> bool {
-    if node.flags.no_print || node.kind == NodeKind::Comment {
-        return false;
-    }
-    if matches!(
-        node.macro_token.as_deref(),
-        Some("Sm" | "ft" | "ll" | "po" | "in" | "ti" | "ta" | "DT" | "PD" | "Tg")
-    ) {
-        return false;
-    }
-    // These requests have a layout contribution even with no visible text.
-    matches!(
-        node.macro_token.as_deref(),
-        Some("sp" | "Bd" | "D1" | "Dl" | "Ox" | "Nx" | "Fx" | "Dx" | "Ux" | "Bsx")
-    ) || matches!(node.kind, NodeKind::Equation | NodeKind::Table)
-        || node
-            .text
-            .as_deref()
-            .is_some_and(|text| !marker_word(text).trim().is_empty())
-        || node.children.iter().any(has_description)
 }

@@ -44,6 +44,33 @@ AUDIT_FDS_PER_WORKER = 8
 
 
 @dataclass(frozen=True)
+class SourceReview:
+    line: int
+    column: int
+    reason: str
+
+
+def source_reviews(positions: object, reason: str) -> list[SourceReview] | None:
+    """Validate the source's coordinates and retain every occurrence."""
+    if not isinstance(positions, list):
+        return None
+    reviews = []
+    for position in positions:
+        if (not isinstance(position, list) or len(position) != 2
+                or any(type(value) is not int or value < 0 for value in position)):
+            return None
+        reviews.append(SourceReview(*position, reason=reason))
+    return reviews
+
+
+def ordinal_source_reviews(response: dict[str, object]) -> list[SourceReview] | None:
+    return source_reviews(
+        response.get("ordinalCasesForReview", []),
+        "ordinal list BODY has unproved roff execution effects",
+    )
+
+
+@dataclass(frozen=True)
 class AuditParallelism:
     """Resolved local audit concurrency and the bounded-resource inputs.
 
