@@ -10,16 +10,16 @@ fn names(case: &Case<'_>) -> &'static [&'static str] {
         (_, "flag", _) => &["-f"],
         ("OPTIONS" | "ENVIRONMENT", "command", "sy") => &["run FILE"],
         (_, "command", _) => &["run"],
-        (_, "env", "xr" | "sy") => &[],
+        (_, "env", "xr") => &[],
         (_, "env", _) => &["DEMO_HOME"],
         _ => panic!("unknown head {}", case.id),
     }
 }
 
 pub(super) fn head(case: &Case<'_>, blocks: &[Value]) {
-    // CVS mdoc_term.c termp_fl_pre/termp_ev_pre execute the role-bearing
-    // first operand. The entry role and admissible lexical names follow
-    // the documented ManT classification contract for those operands.
+    // CVS mdoc_term.c executes the Ev words before termp_bold_pre for Sy.
+    // Fixed HTML gives them separate code.Ev and b.Sy owners. The spaced
+    // bold suffix leaves the proved environment name available to queries.
     assert_eq!(blocks.len(), 1, "{}", case.id);
     assert_eq!(blocks[0]["type"], "definition-list", "{}", case.id);
     let items = array(&blocks[0]["items"]);
