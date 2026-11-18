@@ -139,9 +139,9 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
         };
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::No)) {
-            // termp_li_pre executes explicit literal text. A complete
-            // declaration may bind it independently or continue an Ev.
-            builder.with_declaration_operand(NativeOperandRole::LiteralContinuation(None), append);
+            // termp_li_pre executes explicit literal text. In a HEAD it
+            // may supply a declaration operand or an independent separator.
+            builder.with_native_operand_role(NativeOperandRole::LiteralContinuation(None), append);
         } else {
             builder.with_native_operand_role(NativeOperandRole::Description, append);
         }

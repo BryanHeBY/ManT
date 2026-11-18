@@ -70,7 +70,7 @@ fn primary_and_supplemental_enclosures_distinguish_typed_operands_from_table_cel
     }
 }
 
-fn binding_start(owner: EntryOwner<'_>, name: &str) -> usize {
+pub(super) fn binding_start(owner: EntryOwner<'_>, name: &str) -> usize {
     let EntryOwner::Definition(item) = owner else {
         panic!("expected a definition owner")
     };

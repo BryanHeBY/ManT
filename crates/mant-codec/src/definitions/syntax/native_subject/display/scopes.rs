@@ -16,11 +16,21 @@ pub(super) enum BoundaryKind {
     Annotation,
 }
 
+pub(super) struct HeadPartition {
+    pub(super) omitted: Vec<Boundary>,
+    pub(super) separators: Vec<Separator>,
+}
+
+pub(super) struct Separator {
+    pub(super) bytes: Range<usize>,
+    pub(super) alternative: bool,
+}
+
 pub(super) fn display_boundaries(
     text: &str,
     operands: &[NativeOperand],
     bodies: &[Range<usize>],
-) -> Vec<Boundary> {
+) -> HeadPartition {
     let mut scan = ScopeScan {
         text,
         ..ScopeScan::default()
@@ -64,13 +74,17 @@ pub(super) fn display_boundaries(
     if !scan.scopes.is_empty() && scan.opaque {
         scan.cut(scan.start..text.len(), BoundaryKind::Annotation);
     }
-    scan.boundaries
+    HeadPartition {
+        omitted: scan.boundaries,
+        separators: scan.separators,
+    }
 }
 
 #[derive(Default)]
 struct ScopeScan<'a> {
     text: &'a str,
     boundaries: Vec<Boundary>,
+    separators: Vec<Separator>,
     scopes: Vec<OpenMark<'a>>,
     start: usize,
     top_level_start: usize,
@@ -88,7 +102,20 @@ impl<'a> ScopeScan<'a> {
     }
 
     fn has_text_before(&self, end: usize) -> bool {
-        !self.text[self.top_level_start..end].trim().is_empty()
+        self.text
+            .get(self.top_level_start..end)
+            .is_some_and(|text| !text.trim().is_empty())
+    }
+
+    fn separator(&mut self, bytes: Range<usize>, alternative: bool) {
+        if !alternative {
+            // The next proved native BODY starts a new declaration slot.
+            // Older words only turn a lexical scope into an annotation
+            // when they still belong to the current slot.
+            self.top_level_start = bytes.end;
+            self.has_prefix = false;
+        }
+        self.separators.push(Separator { bytes, alternative });
     }
 
     fn operand(&mut self, operand: &NativeOperand, within_native_body: bool) {
@@ -116,6 +143,15 @@ impl<'a> ScopeScan<'a> {
         let mark_start = bytes.end - self.text[bytes.clone()].trim_start().len();
         if let Some(mark) = annotations::marker(self.text, mark_start, operand) {
             self.mark(mark, bytes);
+            return;
+        }
+        let word = self.text[mark_start..bytes.end].trim_end();
+        if !within_native_body
+            && self.scopes.is_empty()
+            && role == NativeOperandRole::LiteralContinuation(None)
+            && matches!(word, "," | "|" | "or")
+        {
+            self.separator(mark_start..mark_start + word.len(), word == "or");
             return;
         }
         if let Some(active) = self.scopes.last_mut()

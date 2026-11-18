@@ -7,6 +7,8 @@ use std::fmt::Write;
 mod environment;
 #[path = "scoped_intervals/primary.rs"]
 mod primary;
+#[path = "scoped_intervals/separators.rs"]
+mod separators;
 
 const TABLE: &str = ".TS\nl.\nSENTINEL\n.TE\n";
 const POSITIONS: [&str; 6] = [

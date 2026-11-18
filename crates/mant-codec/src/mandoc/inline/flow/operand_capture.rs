@@ -261,8 +261,20 @@ impl super::InlineBuilder {
                         && matches!(node.decoder_text(), Some("," | "." | ";" | ":" | "?" | "!")))
                     .then_some(NativeOperandRole::OptionPunctuation)
                 })
-                .or(capture.operand_role)
+                .or_else(|| {
+                    capture.operand_role.filter(|role| {
+                        capture.has_environment
+                            || !matches!(role, NativeOperandRole::LiteralContinuation(_))
+                            || text.is_some_and(|(_, decoded)| declaration_separator(decoded))
+                    })
+                })
                 .or_else(|| enclosure().map(NativeOperandRole::EnclosureContent))
+                .or_else(|| {
+                    // append_delims() can execute a bare comma or pipe as a
+                    // sibling TEXT, outside the macro that parsed it.
+                    matches!(text?.0.decoder_text(), Some("," | "|"))
+                        .then_some(NativeOperandRole::LiteralContinuation(None))
+                })
                 .or_else(|| {
                     text?
                         .1
@@ -394,6 +406,17 @@ fn literal_delimiter(node: &Node) -> Option<char> {
         "]" if node.flags.delimiter_close => Some(']'),
         _ => None,
     }
+}
+
+fn declaration_separator(decoded: &DecodedText) -> bool {
+    let mut words = decoded.events.iter().filter_map(|event| match event {
+        RoffInlineEvent::Font(_)
+        | RoffInlineEvent::PreviousFont
+        | RoffInlineEvent::ZeroWidthGlyph => None,
+        RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word) => Some(word.trim()),
+        _ => Some(""),
+    });
+    matches!(words.next(), Some("," | "|" | "or")) && words.next().is_none()
 }
 
 fn assignment_prefix(events: &[RoffInlineEvent]) -> Option<String> {
