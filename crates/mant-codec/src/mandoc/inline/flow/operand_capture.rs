@@ -56,7 +56,11 @@ impl HeadOperandCapture {
                     // CVS term_word() can intentionally write the displayed
                     // subject spelling through an internal overstrike. A
                     // different word overwriting its glyph clips its operand.
-                    NativeOperandRole::Subject(..) if writer == Some(owner) => *role,
+                    NativeOperandRole::Subject(..) | NativeOperandRole::Environment { .. }
+                        if writer == Some(owner) =>
+                    {
+                        *role
+                    }
                     role => role.without_complete_spelling(),
                 };
             }
@@ -144,7 +148,8 @@ impl HeadOperandCapture {
                     | NativeOperandRole::FlDash(_)
                     | NativeOperandRole::FlWord(_)
                     | NativeOperandRole::Subject(..)
-                    | NativeOperandRole::EnclosureStart(_)
+                    | NativeOperandRole::Environment { .. }
+                    | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_)
             ) {
                 self.spelling_receipts
@@ -157,16 +162,15 @@ impl HeadOperandCapture {
                 NativeOperandRole::OptionalKey
                     | NativeOperandRole::FlDash(_)
                     | NativeOperandRole::FlWord(_)
-                    | NativeOperandRole::EnclosureStart(_)
+                    | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_)
             ) && let Some(previous) = self
                 .unsplit_receipts
                 .insert(serial, self.captured.operands.len())
             {
                 role = match role {
-                    NativeOperandRole::EnclosureStart(_) | NativeOperandRole::EnclosureEnd(_) => {
-                        role.without_complete_spelling()
-                    }
+                    NativeOperandRole::EnclosureStart { .. }
+                    | NativeOperandRole::EnclosureEnd(_) => role.without_complete_spelling(),
                     _ => NativeOperandRole::Argument,
                 };
                 self.captured.operands[previous].role = role;

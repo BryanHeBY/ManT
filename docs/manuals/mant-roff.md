@@ -659,6 +659,11 @@ Environment and variable definitions keep their names before one complete
 trailing parenthetical note, including styled descriptions. The enclosing
 marks and note remain in the form. A custom enclosure only separates a name
 when its executed opening glyph supplies a visible word boundary.
+Nested annotations retain each native body and its paired visible marks.
+In an `Ev` declaration, the executed operand determines the name boundary,
+including literal parentheses in a name such as `BASH_FUNC_home()`. An
+assignment retains its value and any internal comma or pipe in the form.
+A separate executed declaration can introduce another name after that value.
 
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand

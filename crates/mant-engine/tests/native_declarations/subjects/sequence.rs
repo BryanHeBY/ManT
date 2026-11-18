@@ -3,14 +3,23 @@ use mant_ir::{EntryKind, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceClass, OutlineNode};
 
 mod annotations;
+mod environment_atoms;
 mod invocations;
+mod nested_annotations;
 mod receipts;
 mod symbols;
 
+const DECLARATION_HEADER: &str =
+    ".Dd November 18, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd checker\n";
+
 fn fixture(head: &str, space_off: bool) -> ResolvedContent {
     let spacing = if space_off { ".Sm off\n" } else { "" };
+    section_fixture("DESCRIPTION", spacing, head)
+}
+
+fn section_fixture(section: &str, preamble: &str, head: &str) -> ResolvedContent {
     load(&format!(
-        ".Dd November 18, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd checker\n.Sh DESCRIPTION\n{spacing}.Bl -tag -width Ds\n.It {head}\nOWNERBODY.\n.El\n"
+        "{DECLARATION_HEADER}.Sh {section}\n{preamble}.Bl -tag -width Ds\n.It {head}\nOWNERBODY.\n.El\n"
     ))
 }
 

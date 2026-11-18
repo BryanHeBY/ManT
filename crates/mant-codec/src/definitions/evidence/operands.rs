@@ -49,7 +49,20 @@ pub(crate) enum NativeOperandRole {
     #[cfg(feature = "roff")]
     ClippedSubject(SubjectReceipt),
     #[cfg(feature = "roff")]
-    EnclosureStart(u32),
+    Environment {
+        invocation: Option<u32>,
+        enclosure: Option<u32>,
+    },
+    #[cfg(feature = "roff")]
+    ClippedEnvironment {
+        invocation: Option<u32>,
+        enclosure: Option<u32>,
+    },
+    #[cfg(feature = "roff")]
+    EnclosureStart {
+        body: u32,
+        parent: Option<u32>,
+    },
     #[cfg(feature = "roff")]
     EnclosureEnd(u32),
     /// Accepted residue of a delimiter that cannot prove a paired boundary.
@@ -100,6 +113,7 @@ impl NativeOperandRole {
             | Self::OptionalKey
             | Self::Subject(..)
             | Self::ClippedSubject(..)
+            | Self::ClippedEnvironment { .. }
             | Self::ClippedEnclosure => true,
             _ => false,
         }
@@ -138,6 +152,14 @@ impl NativeOperandRole {
                 subject.enclosure = enclosure();
                 Self::Subject(subject)
             }
+            Self::Environment { invocation, .. } => Self::Environment {
+                invocation,
+                enclosure: enclosure(),
+            },
+            Self::EnclosureStart { body, .. } => Self::EnclosureStart {
+                body,
+                parent: enclosure(),
+            },
             role => role,
         }
     }
@@ -154,7 +176,14 @@ impl NativeOperandRole {
     pub(crate) fn without_complete_spelling(self) -> Self {
         match self {
             Self::Subject(subject) => Self::ClippedSubject(subject),
-            Self::EnclosureStart(_) | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
+            Self::Environment {
+                invocation,
+                enclosure,
+            } => Self::ClippedEnvironment {
+                invocation,
+                enclosure,
+            },
+            Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,
         }
     }
@@ -183,7 +212,7 @@ impl CapturedHeadOperands {
                 .find(|operand| {
                     !matches!(
                         operand.role,
-                        NativeOperandRole::EnclosureStart(_)
+                        NativeOperandRole::EnclosureStart { .. }
                             | NativeOperandRole::EnclosureEnd(_)
                             | NativeOperandRole::LiteralDelimiter { .. }
                             | NativeOperandRole::Description

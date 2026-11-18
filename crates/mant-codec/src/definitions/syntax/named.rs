@@ -331,7 +331,7 @@ pub(super) fn environment_atom(part: &str) -> Option<String> {
     })
 }
 
-pub(super) fn environment_occurrences_in_groups(
+fn environment_occurrences_in_groups(
     text: &str,
     uses: OperandUses<'_>,
     parts: Vec<&str>,
@@ -362,7 +362,7 @@ fn has_assignment(text: &str, uses: OperandUses<'_>) -> bool {
 // A bounded literal/placeholder environment head is a declaration, but not
 // an exact environment-variable name. Keep it opaque alongside concrete names;
 // do not salvage words from prose or expand template instances.
-fn environment_template(value: &str) -> bool {
+pub(super) fn environment_template(value: &str) -> bool {
     if value.len() > 512 || value.chars().any(char::is_whitespace) {
         return false;
     }

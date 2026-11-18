@@ -159,6 +159,17 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             builder.with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
         }
         Some(Mdoc(MdocMacro::Fl)) => append_option(builder, node.id, children, name),
+        Some(Mdoc(MdocMacro::Ev)) => {
+            // mdoc_term.c dispatches Ev directly to its children. Capture
+            // their executed words independently of any following annotation.
+            builder.with_native_operand_role(
+                NativeOperandRole::Environment {
+                    invocation: node.inline_invocation,
+                    enclosure: None,
+                },
+                |builder| append_inline_nodes(builder, children, name),
+            );
+        }
         // mdoc_term.c routes Cd and Fd through termp_fd_pre = termp_bold_pre
         // (dispatch lines 142/149): unconditional Strong in every section.
         Some(Mdoc(
@@ -465,7 +476,10 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 opening,
             } => {
                 let role = if opening {
-                    NativeOperandRole::EnclosureStart(scope)
+                    NativeOperandRole::EnclosureStart {
+                        body: scope,
+                        parent: None,
+                    }
                 } else {
                     NativeOperandRole::EnclosureEnd(scope)
                 };

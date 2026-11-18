@@ -67,6 +67,9 @@ that crate was not published for that change.
   across multiple AST nodes. Preserve variable names before complete
   parenthetical notes and use the executed glyphs to distinguish a visible
   enclosure from text glued to the name.
+- Use accepted `Ev` operands to distinguish an environment name, its value,
+  and its annotation. Retain declaration names through nested `Eo`/`Ec`
+  annotations with matching visible marks and native bodies.
 - Preserve the exact fragment of an argument-less mdoc `Tg` when a user
   macro emits it and its target at the same source position.
 - Preserve author fragments through native validation rewrites and retain

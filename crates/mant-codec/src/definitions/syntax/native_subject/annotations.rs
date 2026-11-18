@@ -11,6 +11,11 @@ enum Boundary<'a> {
     Literal(Option<u32>, char),
 }
 
+enum Mark<'a> {
+    Open(Boundary<'a>, Option<u32>),
+    Close(Boundary<'a>),
+}
+
 struct OpenMark<'a> {
     boundary: Boundary<'a>,
     enclosing: Option<u32>,
@@ -18,6 +23,13 @@ struct OpenMark<'a> {
 }
 
 impl OpenMark<'_> {
+    fn active_scope(&self) -> Option<u32> {
+        match self.boundary {
+            Boundary::Native(body, _) => Some(body),
+            Boundary::Literal(..) => self.literal_body.or(self.enclosing),
+        }
+    }
+
     fn closes(&self, close: Boundary<'_>, mixed: bool) -> bool {
         match (self.boundary, close) {
             (Boundary::Native(open, left), Boundary::Native(close, right)) => {
@@ -41,9 +53,20 @@ impl OpenMark<'_> {
         }
     }
 
-    fn accepts_literal_body(&mut self, body: u32) -> bool {
-        matches!(self.boundary, Boundary::Literal(..))
-            && *self.literal_body.get_or_insert(body) == body
+    fn admits_scope(&mut self, scope: Option<u32>, allow_literal_body: bool) -> bool {
+        if self.active_scope() == scope {
+            return true;
+        }
+        // Bare Eo delimiters sit outside the native BODY. Its first
+        // scoped operand or nested opening establishes the actual BODY;
+        // a subsequent sibling cannot reassign the same opening.
+        allow_literal_body
+            && matches!(self.boundary, Boundary::Literal(..))
+            && self.literal_body.is_none()
+            && scope.is_some_and(|scope| {
+                self.literal_body = Some(scope);
+                true
+            })
     }
 }
 
@@ -87,7 +110,7 @@ pub(super) fn suffix(
     text: &str,
     span: &Range<usize>,
     operands: &[NativeOperand],
-    mut enclosure: Option<u32>,
+    enclosure: Option<u32>,
     tail: Tail,
 ) -> bool {
     let mut pending: Vec<OpenMark<'_>> = Vec::new();
@@ -114,43 +137,46 @@ pub(super) fn suffix(
         if !text[cursor..operand.bytes.end].trim().is_empty() {
             return false;
         }
-        if let Some((boundary, opening)) = marker(text, start, operand) {
-            if opening {
+        let allow_literal_body = tail.allows_literal_bounds();
+        match marker(text, start, operand) {
+            Some(Mark::Open(boundary, parent)) => {
                 if pending.len() == MAX_NESTING
-                    || matches!(boundary, Boundary::Literal(owner, _) if owner != enclosure)
+                    || !pending.last_mut().map_or(parent == enclosure, |mark| {
+                        mark.admits_scope(parent, allow_literal_body)
+                    })
                 {
                     return false;
                 }
                 pending.push(OpenMark {
                     boundary,
-                    enclosing: enclosure,
+                    enclosing: parent,
                     literal_body: None,
                 });
-                if let Boundary::Native(body, _) = boundary {
-                    enclosure = Some(body);
-                }
-            } else {
+            }
+            Some(Mark::Close(boundary)) => {
                 let Some(mark) = pending.pop() else {
                     return false;
                 };
-                if !mark.closes(boundary, tail.allows_literal_bounds()) {
+                if !mark.closes(boundary, allow_literal_body) {
                     return false;
                 }
-                enclosure = mark.enclosing;
                 if pending.is_empty() && matches!(tail, Tail::SingleAnnotation(_)) {
                     return text[cursor..span.end].trim().is_empty();
                 }
             }
-        } else if !(is_supplement(operand.role, enclosure, plain_text)
-            || tail.owns(operand.role, !pending.is_empty())
-            || tail.allows_literal_bounds()
-                && supplementary_body(operand.role).is_some_and(|scope| {
-                    pending
-                        .last_mut()
-                        .is_some_and(|mark| mark.accepts_literal_body(scope))
-                }))
-        {
-            return false;
+            None => {
+                let active = pending.last().map_or(enclosure, OpenMark::active_scope);
+                if !(is_supplement(operand.role, active, plain_text)
+                    || tail.owns(operand.role, !pending.is_empty())
+                    || supplementary_body(operand.role).is_some_and(|scope| {
+                        pending
+                            .last_mut()
+                            .is_some_and(|mark| mark.admits_scope(Some(scope), allow_literal_body))
+                    }))
+                {
+                    return false;
+                }
+            }
         }
     }
     false
@@ -179,7 +205,7 @@ pub(super) fn argument_group(
             // The suffix pass proves their closing marks in the same HEAD.
             return suffix(text, span, operands, enclosure, Tail::ArgumentGroup);
         }
-        let Some((boundary, true)) = marker(text, start, operand) else {
+        let Some(Mark::Open(boundary, _)) = marker(text, start, operand) else {
             return false;
         };
         if let Boundary::Native(body, _) = boundary {
@@ -190,11 +216,7 @@ pub(super) fn argument_group(
     false
 }
 
-fn marker<'a>(
-    text: &'a str,
-    start: usize,
-    operand: &NativeOperand,
-) -> Option<(Boundary<'a>, bool)> {
+fn marker<'a>(text: &'a str, start: usize, operand: &NativeOperand) -> Option<Mark<'a>> {
     let word = &text[operand.bytes.clone()];
     if word.contains('\n') || offset(text, word.trim_start()) != start {
         return None;
@@ -204,14 +226,16 @@ fn marker<'a>(
         return None;
     }
     match operand.role {
-        NativeOperandRole::EnclosureStart(scope) => Some((Boundary::Native(scope, word), true)),
-        NativeOperandRole::EnclosureEnd(scope) => Some((Boundary::Native(scope, word), false)),
+        NativeOperandRole::EnclosureStart { body, parent } => {
+            Some(Mark::Open(Boundary::Native(body, word), parent))
+        }
+        NativeOperandRole::EnclosureEnd(scope) => Some(Mark::Close(Boundary::Native(scope, word))),
         NativeOperandRole::LiteralDelimiter {
             glyph,
             enclosure: owner,
         } if single_glyph(word) == Some(glyph) => match glyph {
-            '(' | '[' => Some((Boundary::Literal(owner, glyph), true)),
-            ')' | ']' => Some((Boundary::Literal(owner, glyph), false)),
+            '(' | '[' => Some(Mark::Open(Boundary::Literal(owner, glyph), owner)),
+            ')' | ']' => Some(Mark::Close(Boundary::Literal(owner, glyph))),
             _ => None,
         },
         _ => None,
@@ -238,12 +262,16 @@ fn native_delimiters_match(left: &str, right: &str) -> bool {
 }
 
 fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
-    if let NativeOperandRole::EnclosureContent(owner) = role {
-        Some(owner)
-    } else {
-        role.subject()
-            .filter(|receipt| matches!(receipt.kind, NativeSubject::Field | NativeSubject::Type))?
-            .enclosure
+    match role {
+        NativeOperandRole::EnclosureContent(owner) => Some(owner),
+        NativeOperandRole::Environment { enclosure, .. } => enclosure,
+        _ => {
+            role.subject()
+                .filter(|receipt| {
+                    matches!(receipt.kind, NativeSubject::Field | NativeSubject::Type)
+                })?
+                .enclosure
+        }
     }
 }
 
@@ -265,16 +293,16 @@ pub(in crate::definitions::syntax) fn trailing_parenthesis(
         return false;
     }
     let start = offset(text, rest);
-    operand_at(operands, start)
-        .and_then(|operand| marker(text, start, operand))
-        .is_some_and(|(_, opening)| opening)
-        && suffix(
-            text,
-            &span,
-            operands,
-            enclosure,
-            Tail::SingleAnnotation(owner),
-        )
+    matches!(
+        operand_at(operands, start).and_then(|operand| marker(text, start, operand)),
+        Some(Mark::Open(..))
+    ) && suffix(
+        text,
+        &span,
+        operands,
+        enclosure,
+        Tail::SingleAnnotation(owner),
+    )
 }
 
 fn is_supplement(role: NativeOperandRole, enclosure: Option<u32>, plain_text: bool) -> bool {
@@ -287,7 +315,10 @@ fn is_supplement(role: NativeOperandRole, enclosure: Option<u32>, plain_text: bo
         || plain_text
             && match role {
                 NativeOperandRole::EnclosureContent(owner) => enclosure == Some(owner),
-                NativeOperandRole::Literal => true,
+                NativeOperandRole::Environment {
+                    enclosure: owner, ..
+                } => enclosure == owner,
+                NativeOperandRole::Literal | NativeOperandRole::ClippedEnvironment { .. } => true,
                 _ => false,
             }
 }
@@ -303,7 +334,7 @@ pub(super) fn has_word_boundary(
     };
     rest.is_empty() || rest.starts_with(char::is_whitespace)
         || rest.starts_with(|character| mate(character).is_some())
-            && operand_at(operands, start).and_then(|operand| marker(text, start, operand)).is_some_and(|(_, opening)| opening)
+            && matches!(operand_at(operands, start).and_then(|operand| marker(text, start, operand)), Some(Mark::Open(..)))
         // A punctuation-only suffix is independent of where styles split
         // its bytes. `SYS.cache` remains joined even across two receipts.
         || rest.split_whitespace().next().is_some_and(|word| word.chars().all(is_closing_punctuation))

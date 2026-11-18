@@ -5,8 +5,6 @@ use super::{
     forms, named, options,
     scan::DeclarationLimit,
 };
-#[cfg(feature = "roff")]
-use crate::definitions::NativeOperandRole;
 use crate::definitions::{
     NativeHeadRole, NativeOperand, RecognizedName, context, evidence::HeadOperands,
 };
@@ -93,89 +91,22 @@ fn native_environment_occurrences(
     term: &[Inline],
     operands: &[NativeOperand],
 ) -> Vec<RecognizedName> {
+    #[cfg(feature = "roff")]
+    if let Some(names) = super::native_subject::environment_names(term, operands) {
+        return names;
+    }
     let uses = OperandUses::new(operands);
-    let names = forms::environment_prefix(term)
+    let mut names = forms::environment_prefix(term)
         .and_then(|prefix| named::environment_occurrences_with_uses(&prefix, uses))
         .unwrap_or_default();
-    #[cfg(feature = "roff")]
-    let annotated = annotated_environment_occurrences(term, operands, uses);
-    #[cfg(not(feature = "roff"))]
-    let annotated: Option<Vec<RecognizedName>> = None;
-    let complete = annotated.or_else(|| {
-        uses.has_parameters()
-            .then(|| named::environment_occurrences_with_uses(&plain_text(term), uses))
-            .flatten()
-    });
-    let Some(mut complete) = complete else {
-        return names;
-    };
-    // A styled parameter may stop the prefix scan. A full occurrence
-    // with proved native bounds takes precedence over a lexical alias
-    // starting at the same position (for example, `HOME(other)`).
-    complete.extend(names);
-    complete.sort_by_key(|name| name.parts[0].start);
-    complete.dedup_by_key(|name| name.parts[0].start);
-    complete
-}
-
-#[cfg(feature = "roff")]
-fn annotated_environment_occurrences(
-    term: &[Inline],
-    operands: &[NativeOperand],
-    uses: OperandUses<'_>,
-) -> Option<Vec<RecognizedName>> {
-    if !operands.iter().any(|operand| {
-        matches!(
-            operand.role,
-            NativeOperandRole::EnclosureStart(_)
-                | NativeOperandRole::LiteralDelimiter { glyph: '(', .. }
-        )
-    }) {
-        return None;
+    if uses.has_parameters()
+        && let Some(complete) = named::environment_occurrences_with_uses(&plain_text(term), uses)
+    {
+        names.extend(complete);
+        names.sort_by_key(|name| name.parts[0].start);
+        names.dedup_by_key(|name| name.parts[0].start);
     }
-    let text = plain_text(term);
-    let parts = named::named_groups(&text, uses)?;
-    named::environment_occurrences_in_groups(&text, uses, parts, |part| {
-        let annotated = part.find('(').and_then(|opening| {
-            let (name, suffix) = part.split_at(opening);
-            let start = suffix.as_ptr() as usize - text.as_ptr() as usize;
-            super::native_subject::trailing_parenthesis(
-                &text,
-                start..start + suffix.len(),
-                operands,
-                None,
-                None,
-            )
-            .then_some(name)
-        });
-        annotated
-            .and_then(named::environment_variable_alias)
-            .or_else(|| named::environment_atom(part))
-            .or_else(|| environment_with_operand_suffix(&text, part, uses))
-    })
-}
-
-#[cfg(feature = "roff")]
-fn environment_with_operand_suffix(
-    text: &str,
-    part: &str,
-    uses: OperandUses<'_>,
-) -> Option<String> {
-    let (name, suffix) = part.split_once(char::is_whitespace)?;
-    // Ar (termp_under_pre) is a proved separate operand, like the
-    // prefix used for one Ev followed by Ar. Use its executed ranges
-    // for each atom, even if an earlier annotation contains Em.
-    suffix
-        .split_whitespace()
-        .all(|word| {
-            let start = word.as_ptr() as usize - text.as_ptr() as usize;
-            uses.covers(
-                &(start..start + word.len()),
-                NativeOperandRole::is_operand_label,
-            )
-        })
-        .then(|| named::environment_variable_alias(name))
-        .flatten()
+    names
 }
 
 pub(super) fn lexical_term_occurrences(

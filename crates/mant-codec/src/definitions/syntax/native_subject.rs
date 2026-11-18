@@ -9,8 +9,9 @@ use mant_ir::{DefinitionItem, EntryKind, inline_plain_text};
 use std::ops::Range;
 
 mod annotations;
-pub(super) use annotations::trailing_parenthesis;
 mod declaration_parts;
+mod environment;
+pub(super) use environment::environment_names;
 mod symbols;
 
 pub(super) fn recognize_head(
@@ -78,7 +79,7 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
             || !protected
                 && matches!(
                     operand.role,
-                    NativeOperandRole::EnclosureStart(_) | NativeOperandRole::ClippedEnclosure
+                    NativeOperandRole::EnclosureStart { .. } | NativeOperandRole::ClippedEnclosure
                 )
                 && operands[first..]
                     .iter()
@@ -338,7 +339,7 @@ fn enclosure_inner<'a>(
     let end = start + head.len();
     let opening = operand_at(operands, start)?;
     let closing = operand_at(operands, end.checked_sub(1)?)?;
-    let NativeOperandRole::EnclosureStart(scope) = opening.role else {
+    let NativeOperandRole::EnclosureStart { body: scope, .. } = opening.role else {
         return None;
     };
     if closing.role != NativeOperandRole::EnclosureEnd(scope) {
