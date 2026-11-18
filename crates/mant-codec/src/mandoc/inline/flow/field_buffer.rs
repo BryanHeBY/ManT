@@ -37,6 +37,7 @@ mod rewind;
 mod scan;
 mod writes;
 pub(in crate::mandoc::inline::flow) use rewind::{EntryRewind, RewoundGlyph};
+pub(super) use scan::compact_first_width;
 
 pub(in crate::mandoc::inline) use cells::DeferredSourceBlank;
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};

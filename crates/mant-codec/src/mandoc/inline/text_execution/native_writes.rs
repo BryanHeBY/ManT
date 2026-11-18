@@ -33,7 +33,7 @@ pub(super) fn qualify_rewound_graphs(
 /// `term.c::term_word()` buffers controls and invisible cells before
 /// `term_field()` projects printable output. Record these facts independently
 /// of the semantic IR and the zero-advance presentation machine.
-pub(super) fn record_native_event(
+pub(in crate::mandoc::inline) fn record_native_event(
     event: &RoffInlineEvent,
     writes: &mut Vec<crate::mandoc::inline::flow::field_buffer::FieldWrite>,
     fallback_projected: bool,

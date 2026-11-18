@@ -14,6 +14,13 @@ pub struct TableColumnMetrics {
 }
 
 impl TableColumnMetrics {
+    /// Parse a native motion length in basic units, leaving any drawing
+    /// glyph operand available to the caller.
+    #[must_use]
+    pub fn motion_argument(argument: &str) -> Option<(i32, &str)> {
+        crate::ffi::table_motion_argument(argument)
+    }
+
     /// Width in terminal cells written by a positive relative motion.
     /// Absolute motions depend on the live device column.
     #[must_use]

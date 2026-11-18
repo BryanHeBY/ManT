@@ -98,79 +98,19 @@ impl FieldBuffer {
                 );
                 self.normalized_until = self.normalized_until.max(ic + 1);
             }
-            match cell {
-                FieldCell::Backline => {
-                    let width = ic
-                        .checked_sub(1)
-                        .and_then(|previous| self.cells.get(previous))
-                        .map_or(0, cell_units);
-                    registers.vis = registers.vis.saturating_sub(width);
-                }
-                FieldCell::BreakableBlank | FieldCell::Breakpoint => {
-                    let vn = registers.vis
-                        + EN * usize::from(matches!(self.cells[ic], FieldCell::BreakableBlank));
-                    if registers.breakline || vn > vtarget {
-                        let boundary = if registers.breakline {
-                            FillBoundary::WordEndBreak
-                        } else {
-                            FillBoundary::Width
-                        };
-                        let result =
-                            finish_pass(*registers, vtarget).map(|pass| pass.stopped_at(boundary));
-                        scan.stopped = Some(PassStop::from(result));
-                        return result;
-                    }
-                    if registers.graph {
-                        registers.nbr = ic;
-                        registers.vbr = registers.vis;
-                        registers.graph = false;
-                        registers.break_candidate = Some(FillBoundary::Width);
-                    }
-                    registers.vis = vn;
-                }
-                FieldCell::BreakMarker => registers.breakline = true,
-                FieldCell::Hyphen => {
-                    if let Some(stop) = registers.consume_hyphen(vtarget) {
-                        scan.stopped = Some(stop);
-                        return stop.accepted();
-                    }
-                }
-                FieldCell::ZeroWidthGraph => registers.graph = true,
-                FieldCell::NonBreakingBlank | FieldCell::Graph { .. } => {
-                    let width = match cell {
-                        FieldCell::Graph { width, .. } => width,
-                        _ => 1,
-                    };
-                    registers.vis += width.saturating_mul(EN);
-                    registers.graph = true;
-                    if registers.vis > vtarget && registers.nbr > 0 {
-                        let result =
-                            Some(FillPass::new(registers.nbr, registers.vbr).stopped_at(
-                                registers.break_candidate.unwrap_or(FillBoundary::Width),
-                            ));
-                        scan.stopped = Some(PassStop::from(result));
-                        return result;
-                    }
-                }
-                FieldCell::Tab => {
-                    // term.c:327-338: TABREF and the persistent tcol offset
-                    // determine the origin under the current .ta settings.
-                    registers.vis = advance_tab(&self.tabs, registers.vis, registers.tab_offset);
-                    registers.graph = true;
-                    if registers.vis > vtarget && registers.nbr > 0 {
-                        let result =
-                            Some(FillPass::new(registers.nbr, registers.vbr).stopped_at(
-                                registers.break_candidate.unwrap_or(FillBoundary::Width),
-                            ));
-                        scan.stopped = Some(PassStop::from(result));
-                        return result;
-                    }
-                }
-                FieldCell::TabReference => {
-                    registers.tab_offset = -signed(registers.vis).saturating_add(signed(EN));
-                }
+            let previous_units = if cell == FieldCell::Backline {
+                ic.checked_sub(1)
+                    .and_then(|previous| self.cells.get(previous))
+                    .map_or(0, cell_units)
+            } else {
+                0
+            };
+            if let Some(stop) =
+                registers.consume_cell(&cell, 1, previous_units, vtarget, &self.tabs)
+            {
+                scan.stopped = Some(stop);
+                return stop.accepted();
             }
-            registers.index += 1;
         }
         finish_pass(scan.registers, vtarget)
     }
@@ -204,5 +144,99 @@ impl FieldBuffer {
         } else if position == scan.registers.index {
             scan.stopped = None;
         }
+    }
+}
+
+/// The same first-pass decision for weighted tbl scratch cells. Motions
+/// can write a long repeated run without materializing each native slot.
+pub(in crate::mandoc::inline::flow) fn compact_first_width(
+    cells: impl IntoIterator<Item = (FieldCell, usize)>,
+    target: usize,
+    tabs: &super::TabStops,
+) -> usize {
+    let target = target.saturating_add(EN / 2);
+    let mut registers = FillRegisters::default();
+    let mut previous_units = 0;
+    for (cell, count) in cells {
+        if let Some(stop) = registers.consume_cell(&cell, count, previous_units, target, tabs) {
+            return stop.accepted().map_or(0, |pass| pass.units);
+        }
+        previous_units = cell_units(&cell);
+    }
+    finish_pass(registers, target).map_or(0, |pass| pass.units)
+}
+
+impl FillRegisters {
+    fn consume_cell(
+        &mut self,
+        cell: &FieldCell,
+        count: usize,
+        previous_units: usize,
+        target: usize,
+        tabs: &super::TabStops,
+    ) -> Option<PassStop> {
+        match cell {
+            FieldCell::Backline => self.vis = self.vis.saturating_sub(previous_units),
+            FieldCell::BreakableBlank | FieldCell::Breakpoint => {
+                let units = cell_units(cell);
+                if self.breakline || self.vis.saturating_add(units) > target {
+                    let boundary = if self.breakline {
+                        FillBoundary::WordEndBreak
+                    } else {
+                        FillBoundary::Width
+                    };
+                    return Some(PassStop::from(
+                        finish_pass(*self, target).map(|pass| pass.stopped_at(boundary)),
+                    ));
+                }
+                if self.graph {
+                    self.nbr = self.index;
+                    self.vbr = self.vis;
+                    self.graph = false;
+                    self.break_candidate = Some(FillBoundary::Width);
+                }
+                self.vis = self.vis.saturating_add(units.saturating_mul(count));
+                if self.vis > target {
+                    return Some(PassStop::from(
+                        finish_pass(*self, target).map(|pass| pass.stopped_at(FillBoundary::Width)),
+                    ));
+                }
+            }
+            FieldCell::BreakMarker => self.breakline = true,
+            FieldCell::Hyphen => {
+                if let Some(stop) = self.consume_hyphen(target) {
+                    return Some(stop);
+                }
+            }
+            FieldCell::ZeroWidthGraph => self.graph = true,
+            FieldCell::NonBreakingBlank | FieldCell::Graph { .. } => {
+                self.vis = self
+                    .vis
+                    .saturating_add(cell_units(cell).saturating_mul(count));
+                self.graph = true;
+            }
+            FieldCell::Tab => {
+                self.vis = advance_tab(tabs, self.vis, self.tab_offset);
+                self.graph = true;
+            }
+            FieldCell::TabReference => {
+                self.tab_offset = -signed(self.vis).saturating_add(signed(EN));
+            }
+        }
+        if self.graph
+            && self.vis > target
+            && self.nbr > 0
+            && matches!(
+                cell,
+                FieldCell::NonBreakingBlank | FieldCell::Graph { .. } | FieldCell::Tab
+            )
+        {
+            return Some(PassStop::Accepted(
+                FillPass::new(self.nbr, self.vbr)
+                    .stopped_at(self.break_candidate.unwrap_or(FillBoundary::Width)),
+            ));
+        }
+        self.index = self.index.saturating_add(count);
+        None
     }
 }

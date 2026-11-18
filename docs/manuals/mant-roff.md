@@ -1509,7 +1509,9 @@ cell. A cell's pending word-end break and the native row end close an occupied
 row only once. Empty data rows retain their own line boundaries. The phrasing
 form can simplify grid geometry. A drawn horizontal or vertical rule before
 the first visible cell still establishes a word boundary. The first fill pass
-also counts native numeric padding and positive relative horizontal motion.
+counts native numeric padding and measures relative and absolute horizontal
+motion, overwritten cells and drawn lines. Ordinary blank-only cells do not
+insert a separator before the first printed cell.
 The same opening spacing request applies to block tables and can be offset
 by an earlier negative `.sp`. Cell execution supplies completed empty rows
 independently of the table's final row boundary.

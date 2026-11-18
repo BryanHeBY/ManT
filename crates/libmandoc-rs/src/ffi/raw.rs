@@ -186,6 +186,11 @@ unsafe extern "C" {
     pub(super) fn mant_mandoc_table_hline_input(argument: *const c_char) -> i32;
     pub(super) fn mant_mandoc_table_hmotion_input(argument: *const c_char, backbefore: i32) -> i32;
     pub(super) fn mant_mandoc_table_hmotion_columns(argument: *const c_char) -> usize;
+    pub(super) fn mant_mandoc_table_motion_argument(
+        argument: *const c_char,
+        width: *mut i32,
+        end: *mut usize,
+    ) -> i32;
     pub(super) fn mant_mandoc_table_line_length(
         current: usize,
         previous: usize,

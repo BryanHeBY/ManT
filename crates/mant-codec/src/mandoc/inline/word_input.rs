@@ -102,7 +102,6 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
             font: &mut builder.execution.font,
             zero_advance: &mut builder.execution.zero_advance,
             defer_leading_blanks,
-            measure_table_motion: false,
             policy: font::TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: true,

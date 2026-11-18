@@ -73,6 +73,7 @@ impl<'a> InlineTableSequence<'a> {
             &self.context,
             crate::mandoc::layout::SourceIndent::default(),
             embedding,
+            prefix.is_some(),
             formatter,
         );
         self.context
@@ -96,18 +97,17 @@ impl<'a> InlineTableSequence<'a> {
                         .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
                         .count();
                     native_height = native_height.max(1 + interior + cell.empty_tail);
-                    projected_height += interior;
-                    if children.is_empty() {
-                        continue;
-                    }
-                    if !output.is_empty() {
-                        output.push(Inline::Text { value: " ".into() });
-                    }
-                    if prefix.is_some()
-                        && first.is_none()
-                        && crate::mandoc::inline::has_rendered_formatter_glyph(&children)
-                    {
-                        first = Some(index);
+                    if crate::mandoc::inline::has_rendered_formatter_glyph(&children) {
+                        if first.is_some() {
+                            output.push(Inline::Text { value: " ".into() });
+                        }
+                        first.get_or_insert_with(|| (index, cell.entry_font.clone()));
+                        projected_height += interior;
+                    } else {
+                        // term_field defers SP/TAB until a real glyph.
+                        // An earlier unprinted cell adds neither padding
+                        // nor the separator used between visible cells.
+                        crate::mandoc::inline::retain_inline_identities(&mut children);
                     }
                     output.extend(children);
                 }
@@ -124,7 +124,7 @@ impl<'a> InlineTableSequence<'a> {
             content: output,
             data: kind == mant_ir::TableRowKind::Data,
             separates_prefix: prefix.is_some_and(|prefix| {
-                first.is_some_and(|index| {
+                first.is_some_and(|(index, entry_font)| {
                     embedding.map_or_else(
                         || prefix.left_pad(0) > 12,
                         |plan| {
@@ -133,6 +133,7 @@ impl<'a> InlineTableSequence<'a> {
                                 &node.table_cells[index],
                                 prefix,
                                 &formatter.execution,
+                                entry_font,
                             )
                         },
                     )
@@ -161,10 +162,18 @@ pub(super) fn append_table_row(
         // structurally inconsistent foreign snapshot as printable contents.
         return;
     }
-    let cells = cells::lower_cells(node, &kind, context, indent_columns, embedding, formatter)
-        .into_iter()
-        .map(cells::ExecutedCell::into_block_cell)
-        .collect();
+    let cells = cells::lower_cells(
+        node,
+        &kind,
+        context,
+        indent_columns,
+        embedding,
+        false,
+        formatter,
+    )
+    .into_iter()
+    .map(cells::ExecutedCell::into_block_cell)
+    .collect();
     let (column_borders, newly_reduced) = table_row_borders(node, context);
     let row = TableRow {
         kind,

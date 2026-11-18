@@ -142,6 +142,7 @@ size_t mant_mandoc_table_number_padding(const char *, unsigned char, size_t,
 int mant_mandoc_table_hline_input(const char *);
 int mant_mandoc_table_hmotion_input(const char *, int);
 size_t mant_mandoc_table_hmotion_columns(const char *);
+int mant_mandoc_table_motion_argument(const char *, int *, size_t *);
 size_t mant_mandoc_table_line_length(size_t, size_t, const char *);
 size_t mant_mandoc_table_measure_cell_size(void);
 size_t mant_mandoc_table_measure_cell_align(void);

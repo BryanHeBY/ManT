@@ -411,7 +411,7 @@ pub(in crate::mandoc) fn trim_trailing_breakable_spaces(nodes: &mut Vec<Inline>,
 }
 
 /// Count executed hard-row boundaries through semantic wrappers.
-pub(super) fn line_break_count(nodes: &[Inline]) -> usize {
+pub(in crate::mandoc::inline::flow) fn line_break_count(nodes: &[Inline]) -> usize {
     nodes
         .iter()
         .map(|node| match node {

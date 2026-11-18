@@ -385,7 +385,6 @@ impl<'a> LoweringContext<'a> {
                 font: &mut formatter.font,
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
-                measure_table_motion: false,
                 policy: inline::TextExecutionPolicy {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
                     record_native_cells,

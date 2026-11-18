@@ -3,6 +3,10 @@ use super::{InlineBuilder, InlineExecutionState};
 use crate::{definitions::NativeOperandRole, mandoc::blocks::InlineTablePrefix};
 use mant_ir::Inline;
 
+pub(in crate::mandoc) fn table_word_uses_motion(text: &str) -> bool {
+    text.contains("\\h") || text.contains("\\l")
+}
+
 /// Effects of the selected tbl column transaction. A source fragment can
 /// carry its own completed rows; only raw tbl's scan records its empty tail.
 #[derive(Clone, Copy, Default)]
@@ -112,23 +116,21 @@ impl InlineExecutionState {
         field.configure_tabs(&self.tab_stops);
         field.apply_writes(writes);
         let endlines = field.table_word_endlines();
-        if output
-            .iter()
-            .any(|inline| matches!(inline, Inline::LineBreak { .. }))
-        {
-            // term_field never emits a final run of ordinary spaces.
-            // Zero-width content after a breakpoint may have left just
-            // that run on the projected tail, before its row is settled.
-            super::trim_trailing_breakable_spaces(output, usize::MAX);
+        if super::output::line_break_count(output) > 0 {
+            // Reconcile the entire empty suffix. A run of ordinary blanks
+            // between provisional endlines never prints by itself; a later
+            // accepted pass can still reintroduce the exact completed rows.
+            loop {
+                super::trim_trailing_breakable_spaces(output, usize::MAX);
+                if !crate::mandoc::inline::consume_one_row_ending(output) {
+                    break;
+                }
+            }
         }
-        while crate::mandoc::inline::consume_one_row_ending(output) {}
         // Interior word breaks already separate two projected text
         // intervals. Only the remaining device rows need to be expressed
         // at the cell's tail, before the span's independently owned end.
-        let projected = output
-            .iter()
-            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
-            .count();
+        let projected = super::output::line_break_count(output);
         let trailing_rows = endlines.saturating_sub(projected);
         if let Some(cell) = &mut self.table_cell {
             cell.trailing_rows = trailing_rows;
@@ -139,7 +141,26 @@ impl InlineExecutionState {
     /// The first accepted `term_fill()` width (`vbr`) excludes a trailing
     /// terminal blank run but includes fixed blanks. tblcalc's whole-cell
     /// measurement is a distinct operation and still uses the full input.
-    pub(in crate::mandoc) fn table_first_pass_width(&self, text: &str, target: usize) -> usize {
+    pub(in crate::mandoc) fn table_first_pass_width(
+        &self,
+        text: &str,
+        target: usize,
+        cell_width: usize,
+        font: Option<crate::mandoc::roff_escape::RoffFont>,
+        entry_font: Option<super::FontState>,
+    ) -> usize {
+        if let Some(mut active_font) = entry_font {
+            if let Some(font) = font {
+                active_font.push_scope(font);
+            }
+            return super::table_pass::first_pass_width(
+                text,
+                target,
+                cell_width,
+                &self.tab_stops,
+                &mut active_font,
+            );
+        }
         let mut font = super::FontState::new();
         let mut zero_advance = crate::mandoc::inline::ZeroAdvanceState::default();
         // tbl_term.c clears both BACK registers before filling each column.
@@ -149,7 +170,6 @@ impl InlineExecutionState {
                 font: &mut font,
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
-                measure_table_motion: true,
                 policy: crate::mandoc::inline::TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: true,

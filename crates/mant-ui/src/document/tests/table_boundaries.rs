@@ -357,6 +357,53 @@ fn native_table_passes_keep_completed_empty_rows_in_paint_and_copy() {
 }
 
 #[test]
+fn native_cell_motion_preserves_the_prefix_seam_in_paint_and_copy() {
+    // Exact E3 sources under fixed CVS c/r alignment. The reading text
+    // keeps XYZ and Q while device writes only decide the prefix seam.
+    const HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n";
+    for (request, layout, data, expected) in [
+        (
+            ".br",
+            "c",
+            "XYZ\\h'3n'\\h'-2n'Q\nWWWWWWWWWWWW",
+            "LONGPREFIX XYZ",
+        ),
+        (".br", "r", "XYZ\\h'|5n'\nWWWWWWWWW", "LONGPREFIXXYZ"),
+        (".br", "c", "XYZ\\l'3n'\nWWWWWWWWWW", "LONGPREFIXXYZ"),
+        (".sp -1", "l0 l", "  \tXYZ\n1\tQ", "LONGPREFIXXYZ"),
+    ] {
+        let source = format!(
+            "{HEADER}.Bl -hang -width 4n\n.It Xo\n.No LONGPREFIX\n{request}\n.TS\n{layout}.\n{data}\n.TE\n.Xc\nENDING\n.El\n"
+        );
+        let query = restored(&source);
+        let view = DocumentView::new(&query);
+        for width in [24, 78, 24] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let hits = rendered.search(expected);
+            let [hit] = hits.as_slice() else {
+                panic!("{source}: width {width}");
+            };
+            assert_eq!(
+                painted(&buffer, hit.row, hit.start_column, hit.end_column),
+                expected
+            );
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: hit.row,
+                    column: hit.start_column,
+                },
+                focus: TextPosition {
+                    row: hit.row,
+                    column: hit.end_column - 1,
+                },
+            });
+            assert_eq!(copied, expected, "{source}");
+        }
+    }
+}
+
+#[test]
 fn source_backed_head_cell_keeps_its_exact_click_and_copy_parts() {
     // Fixed tbl_cdata witnesses the same raw operand in either form. Only
     // the source-backed T{} cell recovers the Mt semantic link.

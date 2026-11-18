@@ -13,6 +13,7 @@ impl TableExecution<'_> {
         cell: &TableCell,
         prefix: InlineTablePrefix,
         execution: &crate::mandoc::inline::InlineExecutionState,
+        entry_font: Option<crate::mandoc::inline::FontState>,
     ) -> bool {
         let column = cell.column as usize;
         let kind = node
@@ -77,7 +78,13 @@ impl TableExecution<'_> {
             // after the live prefix, not the entire declared cell width.
             let aligned = match kind {
                 Kind::Center | Kind::Right => {
-                    let printed = execution.table_first_pass_width(text, target);
+                    let printed = execution.table_first_pass_width(
+                        text,
+                        target,
+                        width,
+                        super::super::table_cell_font(cell.font),
+                        entry_font,
+                    );
                     let slack = target.saturating_sub(printed);
                     if kind == Kind::Center {
                         slack / 2

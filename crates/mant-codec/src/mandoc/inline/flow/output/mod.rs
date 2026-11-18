@@ -81,7 +81,7 @@ mod words;
 
 pub(in crate::mandoc) use projection::consume_one_row_ending;
 pub(in crate::mandoc) use projection::has_rendered_formatter_glyph;
-use projection::line_break_count;
+pub(in crate::mandoc::inline::flow) use projection::line_break_count;
 pub(in crate::mandoc) use projection::retain_inline_identities;
 pub(in crate::mandoc::inline) use projection::trailing_ascii_spaces;
 pub(in crate::mandoc) use projection::trim_trailing_breakable_spaces;

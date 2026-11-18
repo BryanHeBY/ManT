@@ -11,6 +11,7 @@ use mant_ir::{Block, LayoutHint, TableCell as AstTableCell};
 pub(super) struct ExecutedCell {
     pub(super) cell: AstTableCell,
     pub(super) empty_tail: usize,
+    pub(super) entry_font: Option<crate::mandoc::inline::FontState>,
 }
 
 impl ExecutedCell {
@@ -47,6 +48,7 @@ pub(super) fn lower_cells(
     context: &LoweringContext<'_>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     embedding: Option<&TableEmbedding<'_>>,
+    measure_prefix: bool,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<ExecutedCell> {
     let execution = embedding.map(|embedding| embedding.execution.as_ref());
@@ -97,6 +99,20 @@ pub(super) fn lower_cells(
                 && node.table_cells[index].kind == TableCellKind::Text
             {
                 let cell = &node.table_cells[index];
+                if measure_prefix
+                    && matches!(
+                        column.kind,
+                        libmandoc_rs::TableLayoutKind::Center
+                            | libmandoc_rs::TableLayoutKind::Right
+                    )
+                    && cell
+                        .decoder_text()
+                        .is_some_and(crate::mandoc::inline::table_word_uses_motion)
+                {
+                    // term_tbl feeds each word before any tcol prints.
+                    // Later column font changes cannot remeasure this word.
+                    cells[index].entry_font = Some(formatter.font.clone());
+                }
                 let blocks =
                     project_text_cell(cell, index, node, context, text_blocks[index], formatter);
                 if !cell.vertical_continuation {
@@ -171,6 +187,7 @@ fn cell_owners(node: &Node) -> Vec<ExecutedCell> {
                 alignment: Some(table_alignment(cell.alignment)),
             },
             empty_tail: 0,
+            entry_font: None,
         })
         .collect::<Vec<_>>()
 }
