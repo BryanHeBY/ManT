@@ -447,16 +447,26 @@ fn keep_words_tracks_repeated_macro_execution_and_transparent_targets() {
         };
         assert_eq!(inline_text(children), expected, "{label}: {children:?}");
         if label == "target-between-lines" {
-            assert!(
-                children
-                    .iter()
-                    .filter(
-                        |inline| matches!(inline, Inline::Anchor { id, .. } if id == "inside-macro")
-                    )
-                    .count()
-                    >= 1,
-                "{children:?}"
-            );
+            // CVS post_tg retains two independent targets after the two
+            // expansions. ManT reserves their shared authored spelling.
+            let anchors: Vec<_> = children
+                .iter()
+                .filter_map(|inline| match inline {
+                    Inline::Anchor {
+                        id,
+                        fragment_aliases,
+                        ..
+                    } => {
+                        assert_eq!(
+                            fragment_aliases.as_slice(),
+                            [mant_ir::FragmentAlias::from("inside-macro")]
+                        );
+                        Some(id.as_str())
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(anchors, ["inside-macro-3", "inside-macro-2"]);
         }
     }
 }

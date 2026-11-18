@@ -4,6 +4,75 @@ use super::*;
 const EMPTY_URI: &str = "https://example.test/empty";
 const BODY_URI: &str = "https://example.test/body";
 
+#[test]
+fn native_column_targets_follow_their_own_rows_after_resize() {
+    // CVS mdoc_html.c emits a row tag on It, a paragraph tag after Pp's
+    // spacing, and separate tags on the two display BODY nodes.
+    let header = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd review sample\n.Sh DESCRIPTION\n";
+    for (body, alias, first, second, duplicate) in [
+        (
+            ".Bl -column a b\n.Tg Outer.Target\n.It FIRST Ta SECOND\n.Tg Mixed.Target\n.Pp\nTARGETONE\n.El\n",
+            "Mixed.Target",
+            ("outer-target", "FIRST"),
+            ("mixed-target", "TARGETONE"),
+            false,
+        ),
+        (
+            ".Bl -column a b\n.It FIRST Ta SECOND\n.Tg Mixed.Target\n.D1 TARGETONE\n.Tg Mixed.Target\n.Dl TARGETTWO\n.El\n",
+            "Mixed.Target",
+            ("mixed-target", "TARGETONE"),
+            ("mixed-target-2", "TARGETTWO"),
+            true,
+        ),
+        (
+            ".Bl -column a\n.Tg Mixed.Target\n.It FIRST\n.Tg Mixed.Target\n.D1 TARGETONE\n.El\n",
+            "Mixed.Target",
+            ("mixed-target", "FIRST"),
+            ("mixed-target-2", "TARGETONE"),
+            true,
+        ),
+        (
+            ".Bl -column a b\n.It FIRST Ta SECOND\n.Tg mixed-target\n.D1 TARGETONE\n.Tg mixed-target\n.Dl TARGETTWO\n.El\n",
+            "mixed-target",
+            ("mixed-target-3", "TARGETONE"),
+            ("mixed-target-2", "TARGETTWO"),
+            true,
+        ),
+        (
+            ".No BEFORE\n.Tg mixed-target\n.D1 TARGETONE\n.Tg mixed-target\n.Dl TARGETTWO\n",
+            "mixed-target",
+            ("mixed-target-3", "TARGETONE"),
+            ("mixed-target-2", "TARGETTWO"),
+            true,
+        ),
+    ] {
+        let source = format!("{header}{body}");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let view = DocumentView::new(&query);
+        assert_eq!(view.validate_fragment(alias).is_err(), duplicate);
+        for width in [80, 12, 32, 80] {
+            let rendered = view.render(width);
+            let mut rows = Vec::new();
+            for (id, word) in [first, second] {
+                assert!(view.validate_fragment(id).is_ok(), "{body}");
+                let matches = rendered.search(word);
+                assert_eq!(matches.len(), 1, "width={width}: {body}");
+                let row = matches[0].row;
+                assert_eq!(rendered.anchor_row(id), Some(row), "width={width}: {body}");
+                rows.push(row);
+            }
+            assert!(rows[0] < rows[1], "width={width}: {body}");
+            if !duplicate {
+                assert_eq!(
+                    rendered.anchor_row(alias),
+                    Some(rows[1]),
+                    "width={width}: {body}"
+                );
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Prefix {
     Empty,

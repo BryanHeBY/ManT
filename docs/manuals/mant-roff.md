@@ -729,12 +729,14 @@ decoration cannot change an identity.
 When libmandoc moves a target onto a paragraph, display, list, item, function
 block, or section wrapper, ManT attaches it to the corresponding addressable
 descendant or section without adding visible text. Display and list wrappers
-retain their targets inside extended definition heads. Target-only and empty
-mdoc list items retain zero-width anchors for bullet, dash, ordered, plain,
+retain their targets inside extended definition heads. In a column list, a
+row target stays at its `It`, and a paragraph or display target follows the
+spacing or delimiters that precede its native owner in that cell. Target-only
+and empty mdoc list items retain zero-width anchors for bullet, dash, ordered, plain,
 column, and definition layouts. Root and section content share local-link and
 traditional-manual-reference resolution.
 
-Authored target recovery applies only when native validation left no surviving owner for that destination. A hidden `Tg` whose ID moved to a later paragraph does not create another anchor at the original stream position. Actual repeated native ID owners remain separate targets under the existing fragment ambiguity policy. Navigation carriers do not create list items for paragraph spacing: that request belongs to normalized native `It` blocks, even when a target-only IR item preserves an otherwise empty list destination.
+Authored target recovery applies only when native validation left no surviving owner for that destination. A hidden `Tg` whose ID moved to a later paragraph does not create another anchor at the original stream position. Repeated native targets share an ambiguous author alias, including when its spelling already matches the canonical form. Each owner has a reachable canonical ID, and existing suffixed IDs retain their destinations. Navigation carriers do not create list items for paragraph spacing: that request belongs to normalized native `It` blocks, even when a target-only IR item preserves an otherwise empty list destination.
 
 A table row containing one unspanned text cell of anchor-only paragraphs is a navigation carrier. It adds no physical row in text, Markdown or TUI output. TUI navigation waits for the next physical output; Markdown preserves its anchor markers outside table fences. Empty text, hard breaks, literal rows and completed vertical rows retain their separate output facts. Multi-cell and spanning rows preserve their physical topology even when they contain no visible glyphs.
 

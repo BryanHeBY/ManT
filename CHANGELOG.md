@@ -69,6 +69,9 @@ that crate was not published for that change.
   macro emits it and its target at the same source position.
 - Preserve author fragments through native validation rewrites and retain
   structural targets inside extended definition heads.
+- Place column paragraph and display targets at their native cell positions.
+  Keep separate canonical IDs for repeated tags, including already-normalized
+  author aliases.
 - Preserve literal Markdown heading tails through export and readback.
   Honor canonical author IDs and use final owners for both local and
   self-document fragments, including collisions and ambiguous aliases.

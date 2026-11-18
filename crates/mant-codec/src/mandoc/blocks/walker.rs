@@ -323,7 +323,10 @@ impl BlockLowerer<'_, '_> {
     /// structural nodes continue through the ordinary block driver below.
     fn push_column_payload(&mut self, node: &Node, siblings: Siblings<'_>) -> bool {
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Pp)) {
+            // mdoc_term.c::termp_pp_pre tags the current line after
+            // term_vspace(). Keep it in this cell alongside its next word.
             self.state.column_vertical_space(1);
+            self.state.append_column_target(node);
             return true;
         }
         if participates_in_inline_flow(node)

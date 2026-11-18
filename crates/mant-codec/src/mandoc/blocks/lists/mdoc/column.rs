@@ -5,7 +5,7 @@ use super::super::{
     AstTableAlignment, AstTableCell, Block, LoweringContext, Node, NodeKind, ScopeFlow, TableRow,
     first_part_children, layout, source_span, targets,
 };
-use super::{MdocListItem, attach_item_targets};
+use super::MdocListItem;
 
 /// Preserve every body sibling of an mdoc `Bl -column` item as one table cell.
 ///
@@ -132,18 +132,22 @@ fn attach_column_item_targets(
     item: &MdocListItem<'_>,
     indent: crate::mandoc::layout::SourceIndent,
 ) {
-    if let Some(cell) = cells.first_mut() {
-        attach_item_targets(&mut cell.blocks, item, layout(indent.content_origin()));
-        return;
+    // An It tag represents the entire row. Its owner is independent of
+    // tags emitted during the cell's lowering (mdoc_html.c::mdoc_it_pre).
+    let layout = layout(indent.content_origin());
+    let mut fallback = Vec::new();
+    let blocks = cells
+        .first_mut()
+        .map_or(&mut fallback, |cell| &mut cell.blocks);
+    for target in item.targets().into_iter().rev() {
+        targets::attach_owned_target(blocks, target, layout);
     }
-    let mut blocks = Vec::new();
-    attach_item_targets(&mut blocks, item, layout(indent.content_origin()));
-    if !blocks.is_empty() {
+    if !fallback.is_empty() {
         cells.push(AstTableCell {
             preferred_width_columns: None,
             break_after: false,
             kind: mant_ir::TableCellKind::Text,
-            blocks,
+            blocks: fallback,
             column_span: 1,
             row_span: 1,
             alignment: Some(AstTableAlignment::Left),

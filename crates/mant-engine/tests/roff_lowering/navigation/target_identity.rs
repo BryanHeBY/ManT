@@ -44,13 +44,24 @@ last text\n\
             .count(),
         1
     );
-    assert_eq!(
-        anchors
-            .iter()
-            .filter(|target| target.as_str() == "repeated-target")
-            .count(),
-        1
-    );
+    // A repeated spelling stays ambiguous. Preserve the second native
+    // owner's existing suffixed ID when making the first owner addressable.
+    let index = mant_ir::DocumentIndex::build(&document);
+    assert!(index.is_fragment_ambiguous("repeated-target"));
+    assert!(index.fragment_target("repeated-target").is_none());
+    for id in ["repeated-target-3", "repeated-target-2"] {
+        assert_eq!(
+            anchors
+                .iter()
+                .filter(|target| target.as_str() == id)
+                .count(),
+            1
+        );
+        assert_eq!(
+            index.fragment_target(id).map(mant_ir::NodeId::as_str),
+            Some(id)
+        );
+    }
     assert!(anchors.iter().all(|target| !target.is_empty()));
     let visible = visible_document_text(&document);
     assert!(!visible.contains("explicit-target"));

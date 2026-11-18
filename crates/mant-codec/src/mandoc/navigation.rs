@@ -42,6 +42,22 @@ pub(super) fn normalize_generated_anchors(
     struct Normalizer<'targets> {
         explicit_targets: &'targets HashSet<String>,
         used: HashSet<String>,
+        conflicting_canonicals: HashSet<String>,
+    }
+
+    impl Normalizer<'_> {
+        fn allocate(&mut self, base: &str, original: &str) -> String {
+            let mut candidate = base.to_owned();
+            let mut suffix = 2;
+            while self.used.contains(&candidate)
+                || (candidate != original && self.explicit_targets.contains(&candidate))
+            {
+                candidate = format!("{base}-{suffix}");
+                suffix += 1;
+            }
+            self.used.insert(candidate.clone());
+            candidate
+        }
     }
 
     impl VisitMut for Normalizer<'_> {
@@ -57,19 +73,35 @@ pub(super) fn normalize_generated_anchors(
                 }
                 let original = id.to_string();
                 let base = crate::definitions::document_id_slug(&original);
-                let mut candidate = base.clone();
-                let mut suffix = 2;
-                while self.used.contains(&candidate)
-                    || (candidate != original && self.explicit_targets.contains(&candidate))
-                {
-                    candidate = format!("{base}-{suffix}");
-                    suffix += 1;
-                }
-                self.used.insert(candidate.clone());
+                let candidate = self.allocate(&base, &original);
                 if candidate != original && self.explicit_targets.contains(&original) {
+                    if base == original {
+                        self.conflicting_canonicals.insert(original.clone());
+                    }
                     fragment_aliases.push(original.into());
                 }
                 *id = candidate.into();
+                return;
+            }
+            visit::walk_inline_mut(self, inline);
+        }
+    }
+
+    struct ReassignAmbiguousCanonical<'a, 'targets>(&'a mut Normalizer<'targets>);
+
+    impl VisitMut for ReassignAmbiguousCanonical<'_, '_> {
+        fn visit_inline_mut(&mut self, inline: &mut Inline) {
+            if let Inline::Anchor {
+                id,
+                fragment_aliases,
+                ..
+            } = inline
+                && self.0.conflicting_canonicals.remove(id.as_str())
+            {
+                let original = id.as_str();
+                let canonical = self.0.allocate(original, original);
+                fragment_aliases.push(original.into());
+                *id = canonical.into();
                 return;
             }
             visit::walk_inline_mut(self, inline);
@@ -89,12 +121,26 @@ pub(super) fn normalize_generated_anchors(
     let mut normalizer = Normalizer {
         explicit_targets,
         used,
+        conflicting_canonicals: HashSet::new(),
     };
-    for block in blocks {
+    for block in &mut *blocks {
         normalizer.visit_block_mut(block);
     }
-    for section in sections {
+    for section in &mut *sections {
         normalizer.visit_section_mut(section);
+    }
+    // The shared author spelling must be ambiguous, while each canonical
+    // stays addressable. Move only the shadowed canonical after allocating
+    // the other IDs, so links to existing suffixed IDs keep their owners.
+    if normalizer.conflicting_canonicals.is_empty() {
+        return;
+    }
+    let mut aliases = ReassignAmbiguousCanonical(&mut normalizer);
+    for block in blocks {
+        aliases.visit_block_mut(block);
+    }
+    for section in sections {
+        aliases.visit_section_mut(section);
     }
 }
 

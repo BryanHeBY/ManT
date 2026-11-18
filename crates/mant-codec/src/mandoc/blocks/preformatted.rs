@@ -19,6 +19,11 @@ impl BlockLowerer<'_, '_> {
                     .definition_geometry_checkpoint(child);
                 self.state.enter_column_node(child);
                 let saved_font = self.state.formatter.font.checkpoint();
+                if self.column_field {
+                    // D1/Dl may have leading punctuation outside the tagged
+                    // BODY (mdoc_html.c::mdoc_d1_pre).
+                    self.state.append_column_target(child);
+                }
                 self.push_nodes(&child.children);
                 self.state.formatter.font.pop_scope(saved_font);
                 self.state.formatter.execution.finish_executed_node(child);
@@ -62,6 +67,7 @@ impl BlockLowerer<'_, '_> {
         let inbound_presentation = self.state.single_line_display_owner;
         self.state.single_line_display_owner = !is_bd;
         crate::mandoc::inline::display_tabs::enter_pre(&mut self.state.formatter.execution, node);
+        self.state.append_column_target(node);
         let body_index = node
             .children
             .iter()
@@ -80,6 +86,7 @@ impl BlockLowerer<'_, '_> {
                 &self.state.formatter.font,
                 is_bd.then_some(inbound_fill),
             );
+            self.state.append_column_target(body);
             self.push_nodes(&body.children);
             for child in node.children[index + 1..]
                 .iter()
@@ -115,10 +122,6 @@ impl BlockLowerer<'_, '_> {
             .restore_definition_geometry(geometry);
         self.state.single_line_display_owner = inbound_presentation;
         self.display_fill = inbound_display;
-        self.state.queue_targets(
-            super::targets::structural_targets(node),
-            super::source_span(node),
-        );
         true
     }
 }

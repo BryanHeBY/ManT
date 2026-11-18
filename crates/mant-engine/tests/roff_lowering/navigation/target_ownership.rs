@@ -107,7 +107,10 @@ fn same_named_list_target_owners_retain_their_individual_source_positions() {
         .into_iter()
         .filter(|(id, _)| id == "same" || id.starts_with("same-"))
         .collect::<Vec<_>>();
-    assert_eq!(owners, [("same".to_owned(), 7), ("same-2".to_owned(), 10)]);
+    assert_eq!(
+        owners,
+        [("same-3".to_owned(), 7), ("same-2".to_owned(), 10)]
+    );
 }
 
 #[test]
@@ -286,7 +289,7 @@ fn surviving_authored_owners_keep_real_duplicates_and_source_positions() {
     for (source, owners, ambiguous) in [
         (
             b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -bullet\n.Tg repeated-target\n.It\nFIRST\n.Tg repeated-target\n.It\nSECOND\n.El\n".as_slice(),
-            [("repeated-target", 8), ("repeated-target-2", 11)],
+            [("repeated-target-3", 8), ("repeated-target-2", 11)],
             true,
         ),
         (
@@ -296,7 +299,7 @@ fn surviving_authored_owners_keep_real_duplicates_and_source_positions() {
         ),
         (
             b".Dd September 9, 2026\n.Dt TARGET 1\n.Os\n.Sh DESCRIPTION\nBEFORE\n.Bl -bullet\n.Tg repeated-target\n.It\n.El\n.Pp\n.Tg repeated-target\n.No AFTER\n".as_slice(),
-            [("repeated-target", 7), ("repeated-target-2", 10)],
+            [("repeated-target-3", 7), ("repeated-target-2", 10)],
             true,
         ),
     ] {

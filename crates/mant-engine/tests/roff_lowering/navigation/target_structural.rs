@@ -5,6 +5,9 @@ use super::*;
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 use mant_ir::{DocumentIndex, NodeId};
 
+#[path = "target_columns.rs"]
+mod column_targets;
+
 #[test]
 fn structural_target_survives_body_and_definition_head_lowering() {
     // Fixed CVS post_tg() assigns all five tags to the structure's direct

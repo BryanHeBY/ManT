@@ -120,6 +120,10 @@ pub(super) fn raw_target(node: &Node) -> Option<String> {
     (!target.is_empty()).then(|| target.to_owned())
 }
 
+pub(super) fn owned_target(node: &Node) -> Option<OwnedTarget> {
+    raw_target(node).map(|name| OwnedTarget::new(name, super::source_span(node)))
+}
+
 /// Return the first printable source token used by automatic mdoc targets.
 pub(super) fn source_token(node: &Node) -> Option<String> {
     let value = visible_text(first_text(node)?);
@@ -225,9 +229,7 @@ pub(super) fn part_target_with_source(node: &Node, kind: NodeKind) -> Option<Own
     node.children
         .iter()
         .filter(|child| child.kind == kind)
-        .find_map(|child| {
-            raw_target(child).map(|target| OwnedTarget::new(target, super::source_span(child)))
-        })
+        .find_map(owned_target)
 }
 
 /// Attach zero-width targets to the first addressable descendant.
@@ -243,18 +245,37 @@ pub(super) fn attach_targets(
     source: Option<SourceSpan>,
 ) {
     let mut seen = HashSet::new();
-    let mut targets = targets
+    let targets = targets
         .into_iter()
         .filter(|target| seen.insert(target.clone()) && !contains_anchor(blocks, target))
         .collect::<Vec<_>>();
     if targets.is_empty() {
         return;
     }
+    prepend_targets(blocks, targets, layout, source);
+}
+
+/// Attach a distinct structural owner even when its descendant has a
+/// different native target with the same authored spelling.
+pub(super) fn attach_owned_target(
+    blocks: &mut Vec<Block>,
+    target: OwnedTarget,
+    layout: LayoutHint,
+) {
+    prepend_targets(blocks, vec![target.name], layout, target.owner_source);
+}
+
+fn prepend_targets(
+    blocks: &mut Vec<Block>,
+    targets: Vec<String>,
+    layout: LayoutHint,
+    source: Option<SourceSpan>,
+) {
     if prepend_to_first_descendant(blocks, &targets, source) {
         return;
     }
     let children = targets
-        .drain(..)
+        .into_iter()
         .map(|target| Inline::anchor_at(target, source))
         .collect();
     let insertion = blocks
