@@ -85,7 +85,7 @@ that crate was not published for that change.
   Markdown table fences reuse already completed gaps between data rows.
 - Keep native tbl cell text and formatter effects inside extended definition
   labels. Visible searches respect the boundary between a tight list label
-  and a following Markdown code fence.
+  and a nested list or Markdown code fence.
 - Read environment aliases from executed operands. Balanced templates,
   assignment values and unrelated operands cannot publish their inner words
   as names. Internal font changes preserve the complete proved name.

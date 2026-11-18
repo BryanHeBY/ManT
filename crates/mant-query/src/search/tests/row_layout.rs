@@ -5,16 +5,21 @@ use mant_ir::{Block, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{QueryBundle, QueryExplanation, QuerySearch, SearchScope};
 
 #[test]
-fn tight_list_fence_starts_a_separate_visible_word_with_source_coordinates() {
-    let markdown = "- LABEL\n  ```\n  中CELL\n  ```\n";
-    let visible = super::super::mapping::SearchableText::new(markdown, SearchScope::Visible);
-    assert_eq!(visible.text, "LABEL\n中CELL\n");
-    let start = "LABEL\n".len();
-    let end = start + "中CELL".len();
-    assert_eq!(
-        &markdown[visible.markdown_start(start)..visible.markdown_end(end)],
-        "中CELL"
-    );
+fn tight_list_nested_blocks_start_a_visible_word_with_source_coordinates() {
+    for markdown in [
+        "- LABEL\n  ```\n  中CELL\n  ```\n",
+        "- LABEL\n  - 中CELL\n",
+        "1. LABEL\n   1. 中CELL\n",
+    ] {
+        let visible = super::super::mapping::SearchableText::new(markdown, SearchScope::Visible);
+        assert_eq!(visible.text, "LABEL\n中CELL\n");
+        let start = "LABEL\n".len();
+        let end = start + "中CELL".len();
+        assert_eq!(
+            &markdown[visible.markdown_start(start)..visible.markdown_end(end)],
+            "中CELL"
+        );
+    }
 }
 
 fn content() -> ResolvedContent {

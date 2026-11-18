@@ -310,9 +310,9 @@ impl SearchableText {
                     visible.push_mapped(&value, source, InlineMappingKind::Code);
                 }
                 Event::SoftBreak | Event::HardBreak | Event::Rule => visible.push_break(source),
-                Event::Start(Tag::CodeBlock(_)) => {
+                Event::Start(Tag::CodeBlock(_) | Tag::List(_)) => {
                     // CommonMark omits Paragraph events for tight list text.
-                    // The fence still begins a separate visible line.
+                    // A fence or nested list begins a separate visible line.
                     visible.push_break(source.start..source.start);
                 }
                 Event::End(
