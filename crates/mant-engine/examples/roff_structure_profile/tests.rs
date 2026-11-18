@@ -252,12 +252,13 @@ fn independent_ordinal_truth_rejects_same_count_owner_corruption() {
 fn ordinal_jsonl_keeps_confirmed_structure_separate_from_source_review() {
     use super::ordinal_labels::cases::{
         bare_zero_advance_with_empty_row, body_and_boundary_inputs, body_needs_review,
+        generated_and_control_inputs, heads_needing_review,
     };
     use serde_json::json;
     let root = std::env::temp_dir();
     let path = root.join(format!("mant-ordinal-structure-{}.1", std::process::id()));
-    let review = body_needs_review();
     for (source, expected_kind) in body_and_boundary_inputs()
+        .chain(generated_and_control_inputs())
         .map(|(source, _, recovered)| {
             (
                 source,
@@ -265,9 +266,10 @@ fn ordinal_jsonl_keeps_confirmed_structure_separate_from_source_review() {
             )
         })
         .chain([
-            (review.clone(), None),
+            (body_needs_review(), None),
             (bare_zero_advance_with_empty_row(), None),
         ])
+        .chain(heads_needing_review().map(|source| (source, None)))
     {
         std::fs::write(&path, &source).unwrap();
         let profile =
@@ -282,20 +284,23 @@ fn ordinal_jsonl_keeps_confirmed_structure_separate_from_source_review() {
                 "{source}"
             );
         } else {
-            assert_eq!(profile["ordinalCasesForReview"], json!([[8, 2]]));
+            assert_eq!(
+                profile["ordinalCasesForReview"],
+                json!([[8, 2]]),
+                "{source}"
+            );
+            let (expected, topology, mut document) = parsed_structure(&source);
+            document.sections[1].blocks.clear();
+            let (observed, actual) = super::ir_profile(&document);
+            let violations = super::compare_structure(&expected, &observed, &topology, &actual);
+            assert!(
+                violations
+                    .iter()
+                    .any(|error| error.contains("list-topology at line 8:2")),
+                "{source}\n{violations:?}"
+            );
         }
     }
-
-    let (expected, topology, mut document) = parsed_structure(&review);
-    document.sections[1].blocks.clear();
-    let (observed, actual) = super::ir_profile(&document);
-    let violations = super::compare_structure(&expected, &observed, &topology, &actual);
-    assert!(
-        violations
-            .iter()
-            .any(|error| error.contains("list-topology at line 8:2")),
-        "{violations:?}"
-    );
 }
 
 #[test]

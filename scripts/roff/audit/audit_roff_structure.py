@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v5"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v6"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -483,11 +483,11 @@ def structure_source_reviews(response: dict[str, object]) -> list[SourceReview] 
     if response.get("alias") is True:
         # The followed target has its own source identity and review row.
         return []
-    origins = response.get("sourceLinkOrigins", {})
+    origins = response.get("sourceLinkOrigins")
     if not isinstance(origins, dict):
         return None
     section_reviews = source_reviews(
-        origins.get("sectionLabelsForReview", []),
+        origins.get("sectionLabelsForReview"),
         "section label depends on recovery of an invalid roff escape",
     )
     ordinal_reviews = ordinal_source_reviews(response)

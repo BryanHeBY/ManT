@@ -65,8 +65,8 @@ def source_reviews(positions: object, reason: str) -> list[SourceReview] | None:
 
 def ordinal_source_reviews(response: dict[str, object]) -> list[SourceReview] | None:
     return source_reviews(
-        response.get("ordinalCasesForReview", []),
-        "ordinal list BODY has unproved roff execution effects",
+        response.get("ordinalCasesForReview"),
+        "ordinal list HEAD or BODY has unproved roff execution effects",
     )
 
 

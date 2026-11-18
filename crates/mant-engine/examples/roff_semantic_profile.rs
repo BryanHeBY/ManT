@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v6";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v7";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -583,7 +583,9 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 mod tests {
     #[test]
     fn jsonl_ordinal_findings_follow_the_native_owner_observation() {
-        use crate::ordinal_labels::cases::{LINK_JSON, body_and_boundary_inputs, execution_inputs};
+        use crate::ordinal_labels::cases::{
+            LINK_JSON, body_and_boundary_inputs, execution_inputs, generated_and_control_inputs,
+        };
         use serde_json::json;
 
         let path =
@@ -600,6 +602,7 @@ mod tests {
                 })
                 .chain(
                     body_and_boundary_inputs()
+                        .chain(generated_and_control_inputs())
                         .map(|(source, labels, recovered)| (source, labels.into(), recovered)),
                 )
         {
@@ -640,42 +643,51 @@ mod tests {
 
     #[test]
     fn ordinal_jsonl_review_retains_missing_owner_diagnostics() {
-        use crate::ordinal_labels::cases::{bare_zero_advance_with_empty_row, body_needs_review};
+        use crate::ordinal_labels::cases::{
+            bare_zero_advance_with_empty_row, body_needs_review, heads_needing_review,
+        };
         use serde_json::json;
-        let source = body_needs_review();
         let path =
             std::env::temp_dir().join(format!("mant-ordinal-review-{}.1", std::process::id()));
-        for source in [&source, &bare_zero_advance_with_empty_row()] {
-            std::fs::write(&path, source).unwrap();
+        for source in [body_needs_review(), bare_zero_advance_with_empty_row()]
+            .into_iter()
+            .chain(heads_needing_review())
+        {
+            std::fs::write(&path, &source).unwrap();
             let profile =
                 super::profile_request(&json!({"id": "review", "path": path}).to_string());
             std::fs::remove_file(&path).unwrap();
             let profile = profile.unwrap();
-            assert_eq!(profile["ordinalCasesForReview"], json!([[8, 2]]));
+            assert_eq!(
+                profile["ordinalCasesForReview"],
+                json!([[8, 2]]),
+                "{source}"
+            );
             assert_eq!(profile["ordinalConversions"], json!([]));
             assert_eq!(profile["violations"], json!([]));
-        }
 
-        let report = libmandoc_rs::Parser::default()
-            .parse_bytes("probe.1", source.as_bytes())
-            .unwrap();
-        let mut document =
-            mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &report);
-        document.sections[1].blocks.clear();
-        let missing = super::profile_document("missing", &report.document.root, &document, 0);
-        assert_eq!(missing["ordinalCasesForReview"], json!([[8, 2]]));
-        assert!(
-            missing["violations"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|value| {
-                    value
-                        .as_str()
-                        .unwrap()
-                        .contains("missing ordinal owner at 8:2")
-                })
-        );
+            let report = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", source.as_bytes())
+                .unwrap();
+            let mut document =
+                mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &report);
+            document.sections[1].blocks.clear();
+            let missing = super::profile_document("missing", &report.document.root, &document, 0);
+            assert_eq!(missing["ordinalCasesForReview"], json!([[8, 2]]));
+            assert!(
+                missing["violations"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|value| {
+                        value
+                            .as_str()
+                            .unwrap()
+                            .contains("missing ordinal owner at 8:2")
+                    }),
+                "{source}"
+            );
+        }
     }
 
     #[test]

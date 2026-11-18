@@ -120,6 +120,64 @@ pub(crate) fn bare_zero_advance_with_empty_row() -> String {
     )
 }
 
+fn evidence_page(head: &str, body: &str) -> String {
+    let item = |number: &str| {
+        let head = head.replace("NUM", number);
+        let body = body.replace("NUM", number);
+        format!(".It {head}\n{body}\n")
+    };
+    format!(
+        ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n{}{}.El\n",
+        item("1"),
+        item("2")
+    )
+}
+
+pub(crate) fn generated_and_control_inputs() -> impl Iterator<Item = (String, [String; 2], bool)> {
+    // CVS termp_fl_pre emits '-' without children. Size and color operands
+    // belong to their escapes; only a suffix can supply a visible BODY.
+    [
+        (".Fl", true),
+        (".Pq", true),
+        (r".No \c", false),
+        (r".No \s12", false),
+        (r".No \s(12", false),
+        (r".No \s[12]", false),
+        (r".No \s'12'", false),
+        (r".No \m[red]", false),
+        (r".No \m(re", false),
+        (r".No \mR", false),
+        (r".No \F[SYM]", false),
+        (r".No \s12VISIBLE", true),
+        (r".No \m[red]VISIBLE", true),
+    ]
+    .into_iter()
+    .map(|(body, recovered)| (evidence_page("NUM.", body), ordinal_terms(), recovered))
+    .chain(
+        ["Pf NUM .", r"\s12NUM.", r"\m[red]NUM.", r"NUM.\s[12]"]
+            .into_iter()
+            .map(|head| (evidence_page(head, "BODYNUM"), ordinal_terms(), true)),
+    )
+}
+
+pub(crate) fn heads_needing_review() -> impl Iterator<Item = String> {
+    // These CVS labels read as ordinary 1. and 2., but proving that result is
+    // a layout decision (motion, overwritten cells, or overstrikes).
+    [
+        r"\h'0n'NUM.",
+        r"\h'+0n'NUM.",
+        r"\zXNUM.",
+        r"\z\m[red]XNUM.",
+        r"\o'XNUM'.",
+    ]
+    .into_iter()
+    .map(|head| evidence_page(head, "BODYNUM"))
+}
+
+fn ordinal_terms() -> [String; 2] {
+    ["1.".to_owned(), "2.".to_owned()]
+}
+
 pub(crate) fn inputs() -> impl Iterator<Item = (String, bool)> {
     [
         ("tag -width Ds", ["1.", "2.", "3."], true),
@@ -147,5 +205,6 @@ pub(crate) fn inputs() -> impl Iterator<Item = (String, bool)> {
         (source, recovered)
     }).chain(execution_inputs().map(|(source, _, recovered)| (source, recovered)))
         .chain(body_and_boundary_inputs().map(|(source, _, recovered)| (source, recovered)))
+        .chain(generated_and_control_inputs().map(|(source, _, recovered)| (source, recovered)))
         .chain(std::iter::once((LINK_JSON.to_owned(), false)))
 }

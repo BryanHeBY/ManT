@@ -6,10 +6,8 @@ use libmandoc_rs::{Node, NodeKind, TableCellKind};
 
 #[path = "ordinal_labels/description.rs"]
 mod description;
-#[path = "ordinal_labels/source_word.rs"]
-mod source_word;
 use description::{Description, description};
-use source_word::{NativeWord, WordEffect};
+use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
 
 #[cfg(test)]
 #[path = "ordinal_label_cases.rs"]
@@ -94,7 +92,7 @@ pub(crate) fn observe<'a>(
         let mut label = NativeLabel::default();
         if let Some(head) = part(item, NodeKind::Head) {
             label.no_space_mode = spacing.0.contains(&head.id);
-            label.walk(head);
+            label.walk(head, None);
         }
         let text = label.text.as_str();
         let marker = split_ordinal(text.trim()).and_then(|(digits, punctuation)| {
@@ -117,9 +115,14 @@ pub(crate) fn observe<'a>(
         let body = part(item, NodeKind::Body).map_or(Description::Absent, |body| {
             description(body, label.tail.continues)
         });
-        if !follows || label.retains_payload || body == Description::Absent {
+        if (!follows && label.effect != LabelEffect::Uncertain)
+            || label.effect == LabelEffect::Retained
+            || body == Description::Absent
+        {
             disposition = OrdinalDisposition::Retained;
-        } else if disposition != OrdinalDisposition::Retained && body == Description::Uncertain {
+        } else if disposition != OrdinalDisposition::Retained
+            && (label.effect == LabelEffect::Uncertain || body == Description::Uncertain)
+        {
             disposition = OrdinalDisposition::Uncertain;
         }
         previous = marker;
@@ -159,7 +162,7 @@ struct NativeLabel {
     text: String,
     join_next: bool,
     no_space_mode: bool,
-    retains_payload: bool,
+    effect: LabelEffect,
     tail: WordTail,
 }
 
@@ -169,8 +172,16 @@ struct WordTail {
     pending_break: bool,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+enum LabelEffect {
+    #[default]
+    Replaceable,
+    Uncertain,
+    Retained,
+}
+
 impl NativeLabel {
-    fn walk(&mut self, node: &Node) {
+    fn walk(&mut self, node: &Node, next: Option<&Node>) {
         if node.flags.no_print || node.kind == NodeKind::Comment {
             return;
         }
@@ -190,8 +201,11 @@ impl NativeLabel {
                 node.flags.delimiter_close,
                 node.flags.delimiter_open,
             );
-            self.retains_payload |=
-                word.has(WordEffect::EmittedBreak) || word.has(WordEffect::Unclassified);
+            if word.has(WordEffect::EmittedBreak) {
+                self.effect = LabelEffect::Retained;
+            } else if word.has(WordEffect::Unclassified) {
+                self.effect = self.effect.max(LabelEffect::Uncertain);
+            }
             self.tail.pending_break |= word.has(WordEffect::WordEndBreak);
             self.tail.continues = word.has(WordEffect::Continues);
             self.join_next |= self.tail.continues;
@@ -200,7 +214,7 @@ impl NativeLabel {
         if node.kind == NodeKind::Equation {
             // Eqn glyphs may also spell an ordinal, but the expression is
             // independent of its reading text and must stay in its term.
-            self.retains_payload = true;
+            self.effect = LabelEffect::Retained;
             if let Some(equation) = &node.equation {
                 self.word(&equation.readable_text(), false, false);
             }
@@ -209,7 +223,7 @@ impl NativeLabel {
         if node.kind == NodeKind::Table {
             // A native data span includes independent row and cell owners,
             // even when its only cell has the spelling of a list marker.
-            self.retains_payload = true;
+            self.effect = LabelEffect::Retained;
             for cell in &node.table_cells {
                 if cell.kind == TableCellKind::Text
                     && !cell.vertical_continuation
@@ -236,6 +250,13 @@ impl NativeLabel {
                 }
                 return;
             }
+            (_, Some("Pf")) => {
+                self.walk_children(node);
+                // CVS termp_pf_post() selects NOSPACE only before the next
+                // sibling, and only if that sibling does not start a line.
+                self.join_next |= next.is_some_and(|next| !next.flags.line_start);
+                return;
+            }
             (NodeKind::Block, Some("Pq" | "Po" | "Bq" | "Bo")) => {
                 let (open, close) = if matches!(token, Some("Pq" | "Po")) {
                     ("(", ")")
@@ -244,7 +265,7 @@ impl NativeLabel {
                 };
                 self.word(open, node.flags.delimiter_close, true);
                 if let Some(body) = part(node, NodeKind::Body) {
-                    self.walk(body);
+                    self.walk(body, None);
                 }
                 self.word(close, true, node.flags.delimiter_open);
                 return;
@@ -258,19 +279,29 @@ impl NativeLabel {
                     | "Bq" | "Bo" | "Bc",
                 ),
             ) => {}
-            // Native links and unmodeled nodes cannot prove that this is
-            // solely a replaceable numeral. Their words can still mark the
-            // label as a candidate that requires a retained owner.
-            _ => self.retains_payload = true,
+            // A native link or real boundary remains meaningful even
+            // when its own displayed words resemble an ordinal marker.
+            (_, Some("Sx" | "Xr" | "Lk" | "Mt" | "br" | "sp" | "Pp")) => {
+                self.effect = LabelEffect::Retained;
+            }
+            // An unmodeled node can expose a candidate spelling without
+            // proving whether the complete label can be replaced.
+            _ => self.effect = self.effect.max(LabelEffect::Uncertain),
         }
-        for child in &node.children {
-            self.walk(child);
+        self.walk_children(node);
+    }
+
+    fn walk_children(&mut self, node: &Node) {
+        for (index, child) in node.children.iter().enumerate() {
+            self.walk(child, node.children.get(index + 1));
         }
     }
 
     fn word(&mut self, word: &str, closes: bool, opens: bool) {
         if !self.text.is_empty() && !self.join_next && !closes {
-            self.retains_payload |= self.tail.pending_break;
+            if self.tail.pending_break {
+                self.effect = LabelEffect::Retained;
+            }
             self.tail.pending_break = false;
             self.text.push(' ');
         }

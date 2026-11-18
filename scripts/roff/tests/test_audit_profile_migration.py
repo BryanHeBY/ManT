@@ -14,19 +14,22 @@ from scripts.roff.audit import audit_roff_structure as structure
 
 class AuditProfileMigrationTests(unittest.TestCase):
     def test_ordinal_review_positions_keep_occurrences_and_reject_malformed_data(self):
-        for observe in (structure.structure_source_reviews, semantic.ordinal_source_reviews):
+        for observe, required in (
+            (structure.structure_source_reviews, {'sourceLinkOrigins': {'sectionLabelsForReview': []}}),
+            (semantic.ordinal_source_reviews, {}),
+        ):
             positions = [[8, 2], [8, 2], [9, 2]]
-            reviews = observe({'ordinalCasesForReview': positions})
+            reviews = observe({**required, 'ordinalCasesForReview': positions})
             self.assertEqual([[row.line, row.column] for row in reviews], positions)
             self.assertTrue(all('unproved roff execution' in row.reason for row in reviews))
             for invalid in (None, [None], [[True, 2]], [[8, -1]], [[8, 2, 1]]):
-                self.assertIsNone(observe({'ordinalCasesForReview': invalid}))
+                self.assertIsNone(observe({**required, 'ordinalCasesForReview': invalid}))
 
     def test_stale_profiles_are_rescanned_once_without_losing_annotations(self):
         for audit, old_schema, read, write in (
-            (structure, 'mant.roff-structure-profile/v4',
+            (structure, 'mant.roff-structure-profile/v5',
              structure.read_structure_database, structure.write_structure_database),
-            (semantic, 'mant.roff-semantic-profile/v5', semantic.read_database, semantic.write_database),
+            (semantic, 'mant.roff-semantic-profile/v6', semantic.read_database, semantic.write_database),
         ):
             with self.subTest(audit=audit.__name__), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)

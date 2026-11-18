@@ -2,7 +2,7 @@
 
 use libmandoc_rs::{Node, NodeKind};
 
-use super::source_word::{NativeWord, WordEffect};
+use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum Description {
@@ -36,7 +36,7 @@ impl DescriptionProbe {
             // mdoc_term.c :: termp_quote_pre/post write the delimiters even
             // with no BODY children. The macro label itself is not an operand.
             (NodeKind::Equation, _)
-            | (NodeKind::Element, Some("Ap"))
+            | (NodeKind::Element, Some("Ap" | "Fl"))
             | (
                 NodeKind::Body | NodeKind::Element,
                 Some(
@@ -86,14 +86,14 @@ impl DescriptionProbe {
         self.continues = word.has(WordEffect::Continues);
         self.zero_advance =
             word.has(WordEffect::ZeroAdvance) || self.zero_advance && word.text.is_empty();
-        if word
+        if word.has(WordEffect::Unclassified) {
+            Description::Uncertain
+        } else if word
             .text
             .chars()
             .any(|ch| !ch.is_whitespace() || ch == '\u{a0}')
         {
             Description::Visible
-        } else if word.has(WordEffect::Unclassified) {
-            Description::Uncertain
         } else if node.flags.no_fill && (word.has(WordEffect::Buffered) || !word.text.is_empty()) {
             // A buffered zero-width cell or line marker can still own a
             // physical no-fill row. A bare control writes no cell.

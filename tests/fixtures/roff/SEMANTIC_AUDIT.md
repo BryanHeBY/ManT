@@ -10,13 +10,14 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v6`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v7`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
-An ordinal-shaped list with an unproved BODY effect is recorded with its
-source coordinates and reason. The audit still checks that its owner is
-present.
+An ordinal-shaped list with unproved HEAD or BODY execution is recorded with
+its source coordinates and reason. The audit still checks that its owner is
+present. The successful page response always carries `ordinalCasesForReview`,
+including an empty array when every case has conclusive evidence.
 
 ## Oracle and scope
 

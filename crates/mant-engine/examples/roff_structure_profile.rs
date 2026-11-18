@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v5";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v6";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]

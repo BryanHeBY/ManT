@@ -17,6 +17,7 @@ mod redirect;
 mod reference;
 mod roff_escape;
 pub use redirect::{RedirectSyntaxError, redirect_target};
+pub use roff_escape::{RoffWordEffect, RoffWordEvidence};
 mod source_context;
 mod source_lines;
 mod table_layout_budget;
