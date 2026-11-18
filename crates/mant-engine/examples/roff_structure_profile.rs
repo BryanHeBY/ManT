@@ -31,6 +31,8 @@ mod structure_items;
 
 #[path = "roff_structure_profile/comparison.rs"]
 mod comparison;
+#[path = "roff_structure_profile/head_tables.rs"]
+mod head_tables;
 #[path = "roff_structure_profile/ir.rs"]
 mod ir;
 #[path = "roff_structure_profile/links.rs"]
@@ -134,6 +136,8 @@ struct AstTopology {
     lists: Vec<AstListTopology>,
     table_rows: Vec<AstTableRowTopology>,
     equations: Vec<AstEquationTopology>,
+    #[serde(skip)]
+    head_tables: head_tables::HeadTables,
 }
 
 #[derive(Default, Serialize)]
@@ -297,7 +301,12 @@ fn profile_request(line: &str) -> Result<Value, String> {
     let violations = if is_alias {
         Vec::new()
     } else {
-        compare_structure(&expected, &observed, &expected_topology, &observed_topology)
+        let mut violations =
+            compare_structure(&expected, &observed, &expected_topology, &observed_topology);
+        expected_topology
+            .head_tables
+            .compare(&document, &mut violations);
+        violations
     };
 
     let item_census = request

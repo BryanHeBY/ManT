@@ -5,11 +5,70 @@ use libmandoc_rs::{
     Node, TableAlignment as MandocTableAlignment, TableCellKind, TableFont,
     TableRowKind as MandocTableRowKind, TableRuleCellKind as MandocTableRuleCellKind,
 };
-use mant_ir::{Block, TableAlignment as AstTableAlignment, TableRow};
+use mant_ir::{Block, Inline, TableAlignment as AstTableAlignment, TableRow};
 mod cells;
 mod execution;
 mod recovery;
 pub(super) use recovery::{TableEmbedding, TableEmbeddingPlan};
+
+/// A phrasing owner projects a native row's readable cells without device
+/// borders. Column entry and width-dependent fills still use the table plan.
+pub(in crate::mandoc) struct InlineTableSequence<'a> {
+    context: LoweringContext<'static>,
+    plan: TableEmbeddingPlan<'a>,
+}
+
+impl<'a> InlineTableSequence<'a> {
+    pub(in crate::mandoc) fn new(
+        siblings: &'a [Node],
+        execution: &crate::mandoc::inline::InlineExecutionState,
+    ) -> Self {
+        let mut context = LoweringContext::new(None, None);
+        context.macro_set = execution.macro_set;
+        if let Some(annotations) = &execution.zero_advance.annotations {
+            context.annotations = annotations.clone();
+        }
+        let plan = TableEmbeddingPlan::new(siblings, &context);
+        Self { context, plan }
+    }
+
+    pub(in crate::mandoc) fn lower_row(
+        &self,
+        node: &Node,
+        index: usize,
+        formatter: &mut crate::mandoc::formatter::FormatterState,
+    ) -> Vec<Inline> {
+        let Some(kind) = table_row_kind(node) else {
+            return Vec::new();
+        };
+        let cells = cells::lower_cells(
+            node,
+            &kind,
+            &self.context,
+            crate::mandoc::layout::SourceIndent::default(),
+            self.plan.embedding(index),
+            formatter,
+        );
+        self.context
+            .annotations
+            .record_diagnostics(self.context.diagnostics.take());
+        finish_table_span(formatter);
+        let mut output = Vec::new();
+        for cell in cells {
+            for block in cell.blocks {
+                if let Block::Paragraph { children, .. } = block
+                    && !children.is_empty()
+                {
+                    if !output.is_empty() {
+                        output.push(Inline::Text { value: " ".into() });
+                    }
+                    output.extend(children);
+                }
+            }
+        }
+        output
+    }
+}
 
 pub(super) fn append_table_row(
     output: &mut Vec<Block>,
@@ -63,6 +122,10 @@ pub(super) fn append_table_row(
             source: source_span(node),
         });
     }
+    finish_table_span(formatter);
+}
+
+fn finish_table_span(formatter: &mut crate::mandoc::formatter::FormatterState) {
     // term_tbl() selects NOSPACE|NONOSPACE before each span and removes
     // only NONOSPACE afterwards (tbl_term.c:175,608). Cell recovery uses a
     // local inline flow; its last word cannot replace the table's outgoing

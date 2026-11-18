@@ -2,6 +2,49 @@
 
 use super::*;
 
+#[test]
+fn a_native_table_inside_an_extended_definition_head_paints_every_cell() {
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        widgets::{Paragraph, Widget},
+    };
+    let header = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
+    // CVS term_tbl emits both cells inside Xo, before the original It BODY.
+    for tag in ["", ".Tg Table.Point\n"] {
+        let source = format!(
+            "{header}.Bl -tag -width Ds\n.It Xo\n.No PRE\n{tag}.TS\ntab(|);\nl l.\nXYZ|SECOND\n.TE\n.No AFTER\n.Xc\nEND\n.El\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let view = DocumentView::new(&query);
+        for width in [18, 78] {
+            let rendered = view.render(width);
+            let area = Rect::new(0, 0, width, rendered.row_count.try_into().unwrap());
+            let mut buffer = Buffer::empty(area);
+            Paragraph::new(rendered.text.clone()).render(area, &mut buffer);
+            let mut previous = (0, 0);
+            for text in ["PRE", "XYZ", "SECOND", "AFTER", "END"] {
+                let hits = rendered.search(text);
+                assert_eq!(hits.len(), 1, "{source}: {text}");
+                let hit = &hits[0];
+                let painted: String = (hit.start_column..hit.end_column)
+                    .map(|col| {
+                        buffer[(col.try_into().unwrap(), hit.row.try_into().unwrap())].symbol()
+                    })
+                    .collect();
+                assert_eq!(painted, text);
+                let location = (hit.row, hit.start_column);
+                assert!(location >= previous, "{source}: {text}");
+                previous = location;
+            }
+            assert_eq!(
+                view.validate_fragment("Table.Point").is_ok(),
+                !tag.is_empty()
+            );
+        }
+    }
+}
+
 fn cell(blocks: Vec<Block>, break_after: bool) -> TableCell {
     TableCell {
         preferred_width_columns: None,

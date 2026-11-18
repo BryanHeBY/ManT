@@ -330,6 +330,12 @@ impl InlineBuilder {
         }
     }
 
+    pub(in crate::mandoc::inline::flow) fn commit_table_row_projection(&mut self) {
+        self.finish_hard_break_projection(true);
+        self.record_device_row_end();
+        self.tighten_next_boundary();
+    }
+
     pub(in crate::mandoc) fn has_formatter_cell(&self) -> bool {
         self.execution.formatter_column == FormatterColumn::Advanced
             || self.execution.zero_advance.has_buffered_glyph()

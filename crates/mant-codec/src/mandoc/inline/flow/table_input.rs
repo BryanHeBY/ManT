@@ -1,5 +1,44 @@
 //! Table input observations borrow the shared word and source registers.
-use super::InlineExecutionState;
+use super::{InlineBuilder, InlineExecutionState};
+use crate::definitions::NativeOperandRole;
+use mant_ir::Inline;
+
+impl InlineBuilder {
+    pub(in crate::mandoc::inline) fn append_table_span(
+        &mut self,
+        node: &libmandoc_rs::Node,
+        table: &crate::mandoc::blocks::InlineTableSequence<'_>,
+        index: usize,
+    ) {
+        self.begin_executed_node(node);
+        let geometry = self.definition_geometry_checkpoint(node);
+        // mdoc_term.c::print_mdoc_node flushes the preceding word before the
+        // first span. tbl_term.c accepts the cell contents and ends its device
+        // row separately. Later HEAD field passes cannot reject that prefix.
+        if node.flags.table_start {
+            self.hard_break();
+        }
+        let mut formatter = crate::mandoc::formatter::FormatterState::default();
+        formatter.execution = std::mem::take(&mut self.execution);
+        let row = table.lower_row(node, index, &mut formatter);
+        self.execution = formatter.execution;
+        if !row.is_empty() && self.head_operand_capture.is_some() {
+            // The table cells belong to the term's readable content only.
+            self.with_native_operand_role(NativeOperandRole::Description, |builder| {
+                builder.begin_native_word_owner();
+            });
+            if let Some(marker) = self.execution.native_word_owner.take() {
+                self.nodes.push(Inline::anchor(marker));
+            }
+        }
+        if !row.is_empty() {
+            self.append_projected(row);
+            self.commit_table_row_projection();
+        }
+        self.finish_executed_node(node);
+        self.restore_definition_geometry(geometry);
+    }
+}
 
 impl InlineExecutionState {
     pub(in crate::mandoc) fn observe_table_word_writes(

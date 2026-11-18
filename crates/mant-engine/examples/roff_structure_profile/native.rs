@@ -10,11 +10,21 @@ pub(super) fn ast_profile(document: &libmandoc_rs::Document) -> (AstStructure, A
     let root = &document.root;
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
-    collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
+    let head_tables = super::head_tables::HeadTables::collect(root);
+    collect_ast_structure(
+        root,
+        false,
+        false,
+        0,
+        &mut profile,
+        &mut no_fill_lines,
+        &head_tables.row_ids,
+    );
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
     super::links::native_link_obligations(root, document.metadata.name.as_deref(), &mut profile);
     let mut topology = AstTopology::default();
-    collect_ast_topology(root, false, &mut topology);
+    collect_ast_topology(root, false, &mut topology, &head_tables.row_ids);
+    topology.head_tables = head_tables;
     topology.lists.sort_by_key(|list| list.source_line);
     topology.equations.sort_by_key(|equation| {
         (
@@ -32,6 +42,7 @@ fn collect_ast_structure(
     relative_indent_depth: usize,
     profile: &mut AstStructure,
     no_fill_lines: &mut BTreeMap<u32, NoFillSourceLine>,
+    inline_table_rows: &std::collections::HashSet<u32>,
 ) {
     let nonprinting = inherited_nonprinting || node.flags.no_print || is_stateful_request(node);
     if node.flags.no_fill
@@ -88,7 +99,10 @@ fn collect_ast_structure(
     if node.macro_token.as_deref() == Some("br") && node.kind == NodeKind::Element {
         profile.hard_breaks += 1;
     }
-    if node.kind == NodeKind::Table && node.table_row_kind.is_some() {
+    if node.kind == NodeKind::Table
+        && node.table_row_kind.is_some()
+        && !inline_table_rows.contains(&node.id)
+    {
         profile.table_rows += 1;
         profile.table_spanning_cells += node
             .table_cells
@@ -128,6 +142,7 @@ fn collect_ast_structure(
             child_indent_depth,
             profile,
             no_fill_lines,
+            inline_table_rows,
         );
     }
 }
@@ -457,7 +472,12 @@ fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
         .collect()
 }
 
-fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopology) {
+fn collect_ast_topology(
+    node: &Node,
+    inside_table: bool,
+    topology: &mut AstTopology,
+    inline_table_rows: &std::collections::HashSet<u32>,
+) {
     if node.kind == NodeKind::Equation
         && let Some(value) = node
             .equation
@@ -511,6 +531,7 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
     let mut row_index = 0;
     for child in &node.children {
         if child.kind == NodeKind::Table
+            && !inline_table_rows.contains(&child.id)
             && let Some(kind) = native_table_kind(child)
         {
             if child.flags.table_start || table_origin.is_none() {
@@ -534,13 +555,14 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
                     .collect(),
             });
             row_index += 1;
-            collect_ast_topology(child, true, topology);
+            collect_ast_topology(child, true, topology, inline_table_rows);
             continue;
         }
         collect_ast_topology(
             child,
             inside_table || node.kind == NodeKind::Table,
             topology,
+            inline_table_rows,
         );
     }
 }

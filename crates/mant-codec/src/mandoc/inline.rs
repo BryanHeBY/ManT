@@ -167,7 +167,17 @@ fn append_inline_sequence(
     default_name: Option<&str>,
     function_body: bool,
 ) {
-    for (node, siblings) in super::adjacency::with_siblings(nodes) {
+    let mut tables = None;
+    for (index, (node, siblings)) in super::adjacency::with_siblings(nodes).enumerate() {
+        if node.kind == NodeKind::Table {
+            if !node.flags.no_print {
+                let plan = tables.get_or_insert_with(|| {
+                    Box::new(super::blocks::InlineTableSequence::new(nodes, &builder.execution))
+                });
+                builder.append_table_span(node, plan, index);
+            }
+            continue;
+        }
         // mandoc joins the final pair in a contiguous mdoc bibliography
         // author run with "and". The conjunction is formatter-generated, so
         // it is not a child of either `%A` node and must be restored while the

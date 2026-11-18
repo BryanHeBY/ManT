@@ -61,6 +61,14 @@ pub(in crate::mandoc) fn append_inline_node_with_source(
         builder.finish_executed_node(node);
         return;
     }
+    if node.kind == NodeKind::Table {
+        let table = crate::mandoc::blocks::InlineTableSequence::new(
+            std::slice::from_ref(node),
+            &builder.execution,
+        );
+        builder.append_table_span(node, &table, 0);
+        return;
+    }
     let final_word_join_before = builder.final_word_join_state();
     if node.scope_end.is_some()
         && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Eo))

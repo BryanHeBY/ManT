@@ -21,6 +21,40 @@ fn parsed(source: &str) -> (AstStructure, AstTopology, Document) {
     (expected, topology, document)
 }
 
+#[test]
+fn missing_table_cell_in_a_head_cannot_be_replaced_by_the_same_word_in_body() {
+    // Pinned HTML prints XYZ and SECOND as separate td elements of the
+    // native HEAD, followed by a dd that happens to use SECOND as well.
+    let source = concat!(
+        ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n",
+        ".Bl -tag -width Ds\n.It Xo\n.TS\ntab(|);\nl l.\nXYZ|SECOND\n.TE\n",
+        ".No AFTER\n.Xc\nSECOND END\n.El\n",
+    );
+    let (expected, native, mut document) = parsed(source);
+    assert_eq!(expected.table_rows, 0);
+    assert!(native.table_rows.is_empty());
+    let mut violations = Vec::new();
+    native.head_tables.compare(&document, &mut violations);
+    assert!(violations.is_empty(), "{violations:?}");
+    let [mant_ir::Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_mut_slice()
+    else {
+        panic!("expected one definition list");
+    };
+    let [item] = items.as_mut_slice() else {
+        panic!("expected one definition");
+    };
+    for inline in &mut item.terms[0].content {
+        if let mant_ir::Inline::Text { value } = inline {
+            *value = value.replace("SECOND", "");
+        }
+    }
+    native.head_tables.compare(&document, &mut violations);
+    assert_eq!(
+        violations,
+        ["definition-head-table at 9:2, occurrence 1: missing cell word \"SECOND\" in term"]
+    );
+}
+
 fn row_kind(kind: &mant_ir::TableRowKind) -> &'static str {
     match kind {
         mant_ir::TableRowKind::Data => "data",

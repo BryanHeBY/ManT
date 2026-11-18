@@ -4,6 +4,19 @@ use crate::{search_query, select_explanation};
 use mant_ir::{Block, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{QueryBundle, QueryExplanation, QuerySearch, SearchScope};
 
+#[test]
+fn tight_list_fence_starts_a_separate_visible_word_with_source_coordinates() {
+    let markdown = "- LABEL\n  ```\n  中CELL\n  ```\n";
+    let visible = super::super::mapping::SearchableText::new(markdown, SearchScope::Visible);
+    assert_eq!(visible.text, "LABEL\n中CELL\n");
+    let start = "LABEL\n".len();
+    let end = start + "中CELL".len();
+    assert_eq!(
+        &markdown[visible.markdown_start(start)..visible.markdown_end(end)],
+        "中CELL"
+    );
+}
+
 fn content() -> ResolvedContent {
     let block: Block = serde_json::from_str(r#"{
         "type":"list","kind":{"kind":"plain"},"compact":true,"items":[{

@@ -73,11 +73,13 @@ struct Destinations {
     targets: HashMap<String, Destination>,
     published: HashSet<String>,
     reduced: HashMap<AnnotationKey, Option<SourceSpan>>,
+    diagnostics: Vec<mant_ir::Diagnostic>,
 }
 
 pub(in crate::mandoc) struct AnnotationTransaction {
     pool: AnnotationPool,
     first: usize,
+    diagnostic_start: usize,
     committed: bool,
 }
 
@@ -94,6 +96,7 @@ impl Drop for AnnotationTransaction {
             for key in self.first..destinations.next {
                 destinations.targets.remove(&markers::target_key(key));
             }
+            destinations.diagnostics.truncate(self.diagnostic_start);
         }
     }
 }
@@ -107,10 +110,18 @@ impl Eq for AnnotationPool {}
 
 impl AnnotationPool {
     pub(in crate::mandoc) fn transaction(&self) -> AnnotationTransaction {
+        let destinations = self.0.borrow();
         AnnotationTransaction {
             pool: self.clone(),
-            first: self.0.borrow().next,
+            first: destinations.next,
+            diagnostic_start: destinations.diagnostics.len(),
             committed: false,
+        }
+    }
+
+    pub(in crate::mandoc) fn record_diagnostics(&self, diagnostics: Vec<mant_ir::Diagnostic>) {
+        if !diagnostics.is_empty() {
+            self.0.borrow_mut().diagnostics.extend(diagnostics);
         }
     }
     pub(in crate::mandoc) fn deferred() -> Self {
@@ -325,15 +336,21 @@ impl AnnotationPool {
     }
 
     pub(in crate::mandoc) fn take_diagnostics(&self) -> Vec<mant_ir::Diagnostic> {
-        let mut reduced: Vec<_> = self.0.borrow_mut().reduced.drain().collect();
+        let (mut reduced, mut diagnostics) = {
+            let mut destinations = self.0.borrow_mut();
+            (
+                destinations.reduced.drain().collect::<Vec<_>>(),
+                std::mem::take(&mut destinations.diagnostics),
+            )
+        };
         reduced.sort_unstable_by_key(|(key, _)| key.0);
-        let mut diagnostics: Vec<_> = reduced.into_iter().map(|(_, source)| mant_ir::Diagnostic {
+        diagnostics.extend(reduced.into_iter().map(|(_, source)| mant_ir::Diagnostic {
             level: mant_ir::DiagnosticLevel::Warning,
             impact: mant_ir::DiagnosticImpact::SemanticCoverage,
             code: Some("manual.annotation-coverage".into()),
             message: "a source annotation could not include all its accepted members in one owner; its initial identity and all accepted content were retained".into(),
             source,
-        }).collect();
+        }));
         self.take_equation_diagnostics(&mut diagnostics);
         diagnostics
     }
