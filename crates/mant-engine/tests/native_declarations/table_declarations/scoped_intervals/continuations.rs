@@ -1,6 +1,6 @@
 //! Independent declaration clauses after a weak or unsupported prefix.
 use super::{definitions, exact_word, load, primary::binding_start, separators::assert_query};
-use mant_ir::{EntryOwner, inline_plain_text};
+use mant_ir::{EntryOwner, ResolvedContent, inline_plain_text};
 
 const HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n";
 const TABLE: &str = ".TS\nl.\nSENTINEL\n.TE";
@@ -10,7 +10,7 @@ const BOTH: Match = Match::Both;
 const NEITHER: Match = Match::Absent;
 
 #[derive(Clone, Copy)]
-enum Match {
+pub(super) enum Match {
     Owner,
     Decoy,
     Both,
@@ -253,7 +253,7 @@ fn neutral_display_does_not_restart_a_rejected_alternative() {
     }
 }
 
-fn insert_table(mut head: Vec<&str>, position: Option<usize>) -> Vec<&str> {
+pub(super) fn insert_table(mut head: Vec<&str>, position: Option<usize>) -> Vec<&str> {
     if let Some(index) = position {
         head.insert(index, TABLE);
     }
@@ -269,7 +269,12 @@ fn wrap<'a>(head: &[&'a str], wrapped: bool) -> Vec<&'a str> {
         .collect()
 }
 
-fn check(section: &str, head: &[&str], decoy: Option<&str>, expectations: &[(&str, Match)]) {
+pub(super) fn check(
+    section: &str,
+    head: &[&str],
+    decoy: Option<&str>,
+    expectations: &[(&str, Match)],
+) -> ResolvedContent {
     let head_text = head.join("\n");
     let decoy_text = decoy.map_or_else(String::new, |decoy| format!(".It {decoy}\nDECOYBODY.\n"));
     let source = format!(
@@ -316,4 +321,5 @@ fn check(section: &str, head: &[&str], decoy: Option<&str>, expectations: &[(&st
             Match::Absent => assert_query(&content, name, &[], &source),
         }
     }
+    content
 }

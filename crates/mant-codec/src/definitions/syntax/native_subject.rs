@@ -5,7 +5,7 @@ use super::{DeclarationLimit, named, occurrences::HeadNames};
 use crate::definitions::{
     NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, evidence::HeadOperands,
 };
-use mant_ir::{DefinitionTerm, EntryKind, inline_plain_text};
+use mant_ir::{DefinitionTerm, EntryKind, Inline, inline_plain_text};
 use std::ops::Range;
 
 mod annotations;
@@ -21,40 +21,14 @@ pub(super) fn recognize_head(
     first: &str,
     operands: HeadOperands<'_>,
 ) -> Option<(EntryKind, HeadNames)> {
-    recognize_terms(terms, first, operands, recognize)
-}
-
-pub(super) fn recognize_after_separator(
-    terms: &[DefinitionTerm],
-    first: &str,
-    operands: HeadOperands<'_>,
-) -> Option<(EntryKind, HeadNames)> {
-    recognize_terms(terms, first, operands, |text, ranges| {
-        ranges
-            .iter()
-            .any(|operand| operand.role.subject().is_some())
-            .then_some(())?;
-        declaration_parts::recognize(text, ranges, declaration_parts::Admission::AfterSeparator)
-    })
-    .filter(|(_, names)| !names.is_empty())
-}
-
-type TermRecognizer = fn(&str, &[NativeOperand]) -> Option<(EntryKind, Recognition)>;
-
-fn recognize_terms(
-    terms: &[DefinitionTerm],
-    first: &str,
-    operands: HeadOperands<'_>,
-    recognize: TermRecognizer,
-) -> Option<(EntryKind, HeadNames)> {
-    let (kind, first) = recognize(first, operands.for_term(0)?)?;
+    let (kind, first) = recognize(terms.first()?, first, operands.for_term(0)?)?;
     let mut limit = first.limit;
     let mut semantic = !first.unproved_field;
     let mut occurrences = vec![first.names];
     for (index, term) in terms.iter().enumerate().skip(1) {
         let mut names = Vec::new();
         if let Some(ranges) = operands.for_term(index)
-            && let Some((_, term)) = recognize(&inline_plain_text(term), ranges)
+            && let Some((_, term)) = recognize(term, &inline_plain_text(term), ranges)
         {
             names = term.names;
             limit = limit.or(term.limit);
@@ -91,7 +65,11 @@ impl Recognition {
     }
 }
 
-fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recognition)> {
+fn recognize(
+    nodes: &[Inline],
+    text: &str,
+    operands: &[NativeOperand],
+) -> Option<(EntryKind, Recognition)> {
     let (head, enclosure) = unwrapped(text, text, operands);
     let start = offset(text, head);
     let first = operand_cursor(operands, start);
@@ -114,16 +92,22 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
                     .iter()
                     .any(|operand| operand.role.subject().is_some())
     });
-    if (typed || protected)
-        && let Some(identity) = declaration_parts::recognize(
-            text,
-            operands,
-            if typed {
-                declaration_parts::Admission::TypedSubjects
-            } else {
-                declaration_parts::Admission::ProtectedSyntax
-            },
-        )
+    let admission = if typed {
+        Some(declaration_parts::Admission::TypedSubjects)
+    } else if protected {
+        Some(declaration_parts::Admission::ProtectedSyntax)
+    } else if operands
+        .iter()
+        .any(|operand| operand.role.subject().is_some())
+    {
+        Some(declaration_parts::Admission::AfterSeparator)
+    } else {
+        None
+    };
+    if let Some(admission) = admission
+        && let Some(identity) = declaration_parts::recognize(nodes, text, operands, admission)
+        && (admission != declaration_parts::Admission::AfterSeparator
+            || !identity.1.names.is_empty())
     {
         return Some(identity);
     }

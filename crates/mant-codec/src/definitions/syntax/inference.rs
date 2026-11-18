@@ -114,12 +114,6 @@ pub(super) fn infer_terms(
         case = NameCase::Sensitive;
     }
     if recognized.is_empty() && !keep_unnamed_kind {
-        #[cfg(feature = "roff")]
-        if let Some((kind, names)) =
-            native_subject::recognize_after_separator(terms, &first, operands)
-        {
-            return InferredIdentity::classify(names, kind, NameCase::Sensitive, false);
-        }
         recognized.occurrences = name_occurrences_with_operands(terms, EntryKind::Term, operands);
         recognized.constrain(operands);
         kind = EntryKind::Term;

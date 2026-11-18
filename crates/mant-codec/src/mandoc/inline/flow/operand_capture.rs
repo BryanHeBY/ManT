@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
 use crate::mandoc::declaration_groups::search::SearchHead;
-use crate::mandoc::roff_escape::{DecodedText, RoffInlineEvent};
+use crate::mandoc::roff_escape::{DecodedText, PresentationKind, RoffInlineEvent};
 use libmandoc_rs::Node;
 use mant_ir::Inline;
 
@@ -263,10 +263,10 @@ impl super::InlineBuilder {
                 })
                 .or_else(|| {
                     let role = capture.operand_role?;
-                    if matches!(role, NativeOperandRole::LiteralContinuation(_))
-                        && !capture.has_environment
-                    {
-                        return literal_declaration_role(text?.1);
+                    if matches!(role, NativeOperandRole::LiteralContinuation(_)) {
+                        return text
+                            .and_then(|(_, decoded)| literal_declaration_role(decoded))
+                            .or(capture.has_environment.then_some(role));
                     }
                     Some(role)
                 })
@@ -413,15 +413,20 @@ fn literal_delimiter(node: &Node) -> Option<char> {
 }
 
 fn declaration_separator(decoded: &DecodedText) -> bool {
-    // term_word() runs multiple TEXT/font/zero-width events in a single
-    // No operand. Its surviving glyph ranges still determine the spelling.
+    // CVS term_word() writes a zero-width cell for the ESCAPE_IGNORE
+    // produced by roff_escape.c for color and point-size escapes. Those
+    // cells and font controls do not change one No operand's spelling.
     let mut chars = decoded
         .events
         .iter()
         .flat_map(|event| match event {
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
-            | RoffInlineEvent::ZeroWidthGlyph => "".chars(),
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Presentation {
+                kind: PresentationKind::Color | PresentationKind::PointSize,
+                ..
+            } => "".chars(),
             RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word) => word.chars(),
             _ => "\0".chars(),
         })

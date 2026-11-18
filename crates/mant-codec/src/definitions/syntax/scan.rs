@@ -220,7 +220,10 @@ impl<'a> Scanner<'a> {
                 self.consume_argument(character);
                 continue;
             }
-            if character.is_whitespace() || matches!(character, ',' | '|' | '/') {
+            if character.is_whitespace()
+                || matches!(character, ',' | '|' | '/')
+                    && !self.view.literal_punctuation(self.cursor)
+            {
                 self.consume_separator(character);
                 continue;
             }
@@ -498,10 +501,12 @@ impl<'a> Scanner<'a> {
         let mut next_offset = self.cursor + character.len_utf8();
         let role = self.view.operand(self.cursor);
         let parameter = self.view.is_parameter(self.cursor);
+        let separator =
+            matches!(character, ',' | '|') && !self.view.literal_punctuation(self.cursor);
         self.styled_argument |= parameter;
         if self.lexical.is_top_level() {
             let mut following = next_offset;
-            if matches!(character, ',' | '|') || character.is_whitespace() {
+            if separator || character.is_whitespace() {
                 while self.view.text[following..].starts_with(char::is_whitespace) {
                     following += self.view.text[following..]
                         .chars()
@@ -516,8 +521,8 @@ impl<'a> Scanner<'a> {
             // a new native word. Punctuation still inside a parameter cannot
             // supply this proof, nor can a multiword styled prose suffix.
             let complete_parameter = self.complete_parameter_token(parameter)
-                || matches!(character, ',' | '|') && self.complete_bare_parameter(following);
-            let boundary = matches!(character, ',' | '|')
+                || separator && self.complete_bare_parameter(following);
+            let boundary = separator
                 && (self.styled_argument || self.structured_argument || complete_parameter)
                 || (self.view.literal_operand_starts(self.cursor)
                     || self.view.literal_operand_starts(following))
@@ -564,7 +569,7 @@ impl<'a> Scanner<'a> {
                 // suffix of a long argument whitespace run.
                 next_offset = following;
             }
-            if matches!(character, ',' | '|') {
+            if separator {
                 self.separator = Some(self.cursor);
             } else if !character.is_whitespace() {
                 self.separator = None;

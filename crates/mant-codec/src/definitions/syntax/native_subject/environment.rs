@@ -27,6 +27,18 @@ pub(in crate::definitions::syntax) struct EnvironmentNames {
     pub(in crate::definitions::syntax) unproved_exact_form: bool,
 }
 
+pub(super) fn native_atom(
+    view: &HeadView<'_>,
+    range: &Range<usize>,
+    operands: &[NativeOperand],
+    lead: NativeOperandRole,
+) -> Option<RecognizedName> {
+    let uses = OperandUses::new(operands);
+    let name = name_in_atom(view, range, operands, Some(lead), uses)?;
+    proven_spelling(uses, &(range.start..range.start + name.len()), Some(lead))
+        .then(|| RecognizedName::contiguous(&name, range.start))
+}
+
 fn recognize(
     view: &HeadView<'_>,
     operands: &[NativeOperand],
@@ -107,7 +119,9 @@ fn split_groups<'a>(
     let mut value_word = None;
     let protect = |at, outside_group| {
         let role = operand_at(operands, at);
-        if uses.protects_syntax(at) || role.is_some_and(|operand| is_description(operand.role)) {
+        if uses.protects_declaration_separator(at)
+            || role.is_some_and(|operand| is_description(operand.role))
+        {
             return true;
         }
         if value_word.is_some()

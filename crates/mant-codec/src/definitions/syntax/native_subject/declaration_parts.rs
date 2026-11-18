@@ -1,17 +1,17 @@
 //! Recognize independent names in a native HEAD with protected operands.
 use super::{
-    Recognition, annotations, following_function, offset, operand_at, operand_cursor,
+    Recognition, annotations, environment, following_function, offset, operand_at, operand_cursor,
     recognize_part, unwrapped,
 };
 use crate::definitions::syntax::{
-    DeclarationLimit,
+    DeclarationLimit, commands,
     eligibility::{NameSource, OperandUses, intersecting_operands},
     named, options,
-    scan::{MAX_NAMES, MAX_NESTING},
+    scan::{HeadView, MAX_NAMES, MAX_NESTING},
 };
 use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject, RecognizedName};
-use mant_ir::{EntryKind, ParameterKind};
-use std::ops::Range;
+use mant_ir::{EntryKind, Inline, ParameterKind};
+use std::{cell::OnceCell, ops::Range};
 
 const OPTION: EntryKind = EntryKind::Parameter {
     parameter_kind: ParameterKind::Option,
@@ -64,7 +64,22 @@ pub(super) enum Admission {
     AfterSeparator,
 }
 
+struct Head<'a> {
+    nodes: &'a [Inline],
+    text: &'a str,
+    operands: &'a [NativeOperand],
+    view: OnceCell<HeadView<'a>>,
+}
+
+impl<'a> Head<'a> {
+    fn view(&self) -> &HeadView<'a> {
+        self.view
+            .get_or_init(|| HeadView::new(self.nodes, self.operands))
+    }
+}
+
 pub(super) fn recognize(
+    nodes: &[Inline],
     text: &str,
     operands: &[NativeOperand],
     admission: Admission,
@@ -72,11 +87,16 @@ pub(super) fn recognize(
     if !text.contains([',', '|']) {
         return None;
     }
+    let source = Head {
+        nodes,
+        text,
+        operands,
+        view: OnceCell::new(),
+    };
     let mut candidates = Candidates::default();
     let collected = collect(
-        text,
+        &source,
         unwrap_search(text, text, operands),
-        operands,
         0,
         admission,
         &mut candidates,
@@ -84,7 +104,10 @@ pub(super) fn recognize(
     // A flag or search sign in the arguments of a single invocation does
     // not establish a separately declared name. Its existing grammar still
     // owns the invocation (for example read [-n n | -N n] [vname?prompt]).
-    if !candidates.separated {
+    if !candidates.separated
+        || admission == Admission::AfterSeparator
+            && !candidates.names.iter().any(|name| name.explicit)
+    {
         return None;
     }
     Some(candidates.resolve(collected))
@@ -163,9 +186,8 @@ impl Candidates {
 }
 
 fn collect(
-    text: &str,
+    source: &Head<'_>,
     (head, enclosure): (&str, Option<u32>),
-    operands: &[NativeOperand],
     depth: usize,
     admission: Admission,
     candidates: &mut Candidates,
@@ -173,6 +195,7 @@ fn collect(
     if depth == MAX_NESTING {
         return Err(RejectedPart::Unproved);
     }
+    let (text, operands) = (source.text, source.operands);
     let start = offset(text, head);
     let uses = OperandUses::new(operands);
     let groups = independent_groups(head, start, enclosure, operands, admission)
@@ -186,9 +209,8 @@ fn collect(
         let (part, nested) = unwrap_search(text, group, operands);
         if part.len() != group.len() {
             let result = collect(
-                text,
+                source,
                 (part, nested.or(enclosure)),
-                operands,
                 depth + 1,
                 admission,
                 candidates,
@@ -220,11 +242,11 @@ fn collect(
             operand.role == NativeOperandRole::ExplicitOption
                 || operand.role == NativeOperandRole::Placeholder
         });
-        let explicit =
-            operand_label || lead.is_some_and(|operand| operand.role.subject().is_some());
-        let Ok((kind, result)) =
-            recognize_group(text, part, span, operands, uses, admission, enclosure)
-        else {
+        let explicit = lead.is_some_and(|operand| {
+            admission != Admission::ProtectedSyntax && independent_role(operand.role)
+                || operand.role.subject().is_some()
+        }) || operand_label;
+        let Ok((kind, result)) = recognize_group(source, span, admission, enclosure) else {
             candidates.unproved_part = true;
             continue;
         };
@@ -233,7 +255,7 @@ fn collect(
         }
         if result.names.is_empty() {
             candidates.unproved_part = true;
-        } else if operand_label {
+        } else if subject.is_none() && explicit {
             candidates.sequence = SubjectSequence::Subjects;
         }
         candidates
@@ -307,12 +329,15 @@ fn independent_groups<'a>(
             last = Some(operand);
         }
         let current = last.filter(|operand| operand.bytes.contains(&offset));
-        if admission == Admission::AfterSeparator && matches!(head.as_bytes()[index], b',' | b'|') {
+        if matches!(head.as_bytes()[index], b',' | b'|') && admission != Admission::ProtectedSyntax
+        {
             // In a weak prefix, punctuation embedded in a prose operand
             // cannot authorize a later native subject as its own declaration.
             return current.is_none_or(|operand| {
-                let role = operand.role;
-                role != NativeOperandRole::LiteralContinuation(enclosure)
+                !(operand.role == NativeOperandRole::LiteralContinuation(enclosure)
+                    || enclosure.is_some_and(|body| {
+                        operand.role == NativeOperandRole::EnclosureContent(body)
+                    }))
                     || operand.bytes.start < start
                     || head
                         .get(operand.bytes.start - start..operand.bytes.end - start)
@@ -325,6 +350,7 @@ fn independent_groups<'a>(
                     NativeOperandRole::ExplicitOption
                     | NativeOperandRole::Description
                     | NativeOperandRole::Command
+                    | NativeOperandRole::LiteralPunctuation
                     | NativeOperandRole::ReferenceText(_)
                     | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_) => true,
@@ -339,18 +365,31 @@ fn independent_groups<'a>(
 }
 
 fn recognize_group(
-    text: &str,
-    part: &str,
+    source: &Head<'_>,
     span: Range<usize>,
-    operands: &[NativeOperand],
-    uses: OperandUses<'_>,
     admission: Admission,
     enclosure: Option<u32>,
 ) -> Result<(EntryKind, Recognition), RejectedPart> {
-    if let Some(option) = operand_at(operands, span.start)
-        && option.role == NativeOperandRole::ExplicitOption
-    {
-        return option_group(text, span, option, operands, uses);
+    let (text, operands) = (source.text, source.operands);
+    let part = &text[span.clone()];
+    let uses = OperandUses::new(operands);
+    if let Some(lead) = operand_at(operands, span.start) {
+        match lead.role {
+            NativeOperandRole::ExplicitOption => {
+                return option_group(text, span, lead, operands, uses);
+            }
+            NativeOperandRole::Environment {
+                enclosure: scope, ..
+            } if admission != Admission::ProtectedSyntax && scope == enclosure => {
+                let name = environment::native_atom(source.view(), &span, operands, lead.role);
+                return Ok((EntryKind::EnvironmentVariable, Recognition::one(name)));
+            }
+            NativeOperandRole::Command if admission != Admission::ProtectedSyntax => {
+                let name = command_group(text, span, lead, uses);
+                return Ok((EntryKind::Command, Recognition::one(name)));
+            }
+            _ => {}
+        }
     }
     if intersecting_operands(operands, span.clone())
         .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
@@ -359,7 +398,7 @@ fn recognize_group(
         // nor a new lexical spelling containing both operands.
         return Err(RejectedPart::Unproved);
     }
-    if admission != Admission::ProtectedSyntax
+    if admission == Admission::TypedSubjects
         && operand_at(operands, span.start).is_none_or(|operand| operand.role.subject().is_none())
     {
         return Err(RejectedPart::Unproved);
@@ -367,7 +406,7 @@ fn recognize_group(
     if let Some(result) = recognize_part(text, part, operands, enclosure) {
         return Ok(result);
     }
-    if admission != Admission::ProtectedSyntax {
+    if admission == Admission::TypedSubjects {
         return Err(RejectedPart::Unproved);
     }
     let uses = uses.shifted(span.start);
@@ -386,6 +425,13 @@ fn recognize_group(
     ))
 }
 
+fn independent_role(role: NativeOperandRole) -> bool {
+    matches!(
+        role,
+        NativeOperandRole::Environment { .. } | NativeOperandRole::Command
+    )
+}
+
 fn option_group(
     text: &str,
     span: Range<usize>,
@@ -396,10 +442,23 @@ fn option_group(
     if !text[option.bytes.start..span.start].trim().is_empty() {
         return Err(RejectedPart::Unproved);
     }
-    let end = option.bytes.end.min(span.end);
-    if !text[end..option.bytes.end].trim().is_empty() {
+    // termp_fl_pre writes a separate dash followed by the accepted Fl word.
+    // Both receipts must cover the contiguous key; a later operand starts
+    // only after the ordinary word boundary.
+    let mut end = option.bytes.end;
+    let mut saw_operand = !text[option.bytes.clone()].trim().bytes().all(|b| b == b'-');
+    for next in intersecting_operands(operands, span.clone()).skip(1) {
+        if saw_operand || next.role != NativeOperandRole::ExplicitOption || next.bytes.start != end
+        {
+            break;
+        }
+        end = next.bytes.end;
+        saw_operand = !text[next.bytes.clone()].trim().bytes().all(|b| b == b'-');
+    }
+    if !text[span.end.min(end)..end].trim().is_empty() {
         return Err(RejectedPart::Unproved);
     }
+    let end = end.min(span.end);
     let (suffix, _) = unwrapped(text, &text[end..span.end], operands);
     let suffix_start = offset(text, suffix);
     if !suffix.is_empty()
@@ -412,6 +471,24 @@ fn option_group(
     let name =
         options::native_option_key(&text[span.start..end]).map(|name| rebase(name, span.start));
     Ok((OPTION, Recognition::one(name)))
+}
+
+fn command_group(
+    text: &str,
+    span: Range<usize>,
+    lead: &NativeOperand,
+    uses: OperandUses<'_>,
+) -> Option<RecognizedName> {
+    let name = text
+        .get(span.start..lead.bytes.end.min(span.end))?
+        .trim_end();
+    let tail = text.get(span.start + name.len()..span.end)?;
+    if commands::is_command_name(name) && (tail.is_empty() || tail.starts_with(char::is_whitespace))
+    {
+        commands::command_binding(&text[span.clone()], name, span.start, uses)
+    } else {
+        None
+    }
 }
 
 fn unwrap_search<'a>(
