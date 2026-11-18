@@ -10,6 +10,9 @@ mod contracts;
 #[path = "navigation/references.rs"]
 mod references;
 
+#[path = "navigation/section_qualifiers.rs"]
+mod section_qualifiers;
+
 #[path = "navigation/target_identity.rs"]
 mod target_identity;
 

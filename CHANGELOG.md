@@ -87,6 +87,8 @@ that crate was not published for that change.
   generated abbreviation cannot take a later heading's exact fragment.
 - Resolve abbreviated `Sx` references only through a unique heading with
   one complete parenthetical qualifier, after checking the exact title.
+- Require a nonblank `Sx` subject and count eligible qualifiers after
+  multiple authored separator spaces when checking ambiguity.
 - Apply the selector byte limit to authored Markdown entry IDs and aliases.
   Keep rejected entries readable under their generated IDs and prevent
   rejected author claims from redirecting a relation to another entry.

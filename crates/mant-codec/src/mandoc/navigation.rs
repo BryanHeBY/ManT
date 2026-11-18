@@ -294,7 +294,11 @@ fn resolve_section_references(
 /// (Field Splitting)`.  Accept that form only when it identifies one target;
 /// every other prefix remains unresolved rather than becoming a surprising
 /// navigation jump.
-fn resolve_section_target<'a>(targets: &'a SectionTargets, reference: &str) -> Option<&'a str> {
+#[must_use]
+pub fn resolve_section_target<'a>(targets: &'a SectionTargets, reference: &str) -> Option<&'a str> {
+    if reference.trim().is_empty() {
+        return None;
+    }
     if let Some(exact) = targets.get(reference) {
         return exact.as_deref();
     }
@@ -315,8 +319,7 @@ fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool 
         return false;
     };
     let Some(body) = suffix
-        .strip_prefix(' ')
-        .unwrap_or(suffix)
+        .trim_start_matches([' ', '\t'])
         .strip_prefix('(')
         .and_then(|body| body.strip_suffix(')'))
     else {

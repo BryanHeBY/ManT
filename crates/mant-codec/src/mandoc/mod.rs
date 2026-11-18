@@ -46,6 +46,9 @@ use mant_ir::{
 use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
 use crate::text_safety::mask_terminal_control_bytes;
 
+pub use inline::authored_section_phrase as observe_roff_section_phrase;
+pub use navigation::resolve_section_target as observe_roff_section_target;
+
 /// Observe the exact identity of an already parsed roff link operand.
 /// An empty string is a proven empty identity. `None` means that recovery
 /// or an execution limit prevented an exact observation.

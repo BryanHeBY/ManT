@@ -78,7 +78,8 @@ pub(super) fn lower_inline_nodes_with_spacing(
 /// CVS uses the same source-derived phrase for `Sh`/`Ss` identities and for
 /// `Sx` destinations.  The terminal label is executed separately and may be
 /// changed by persistent state such as `Sm off` or a preceding bare `\z`.
-pub(super) fn authored_section_phrase(nodes: &[Node], default_name: Option<&str>) -> String {
+#[must_use]
+pub fn authored_section_phrase(nodes: &[Node], default_name: Option<&str>) -> String {
     if nodes.iter().all(|node| node.kind == NodeKind::Text) {
         return nodes
             .iter()
