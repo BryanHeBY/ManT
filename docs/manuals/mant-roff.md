@@ -1017,6 +1017,10 @@ Bibliographies and table cells inherit the enclosing font state; a rejected cell
 
 Link identity extraction is pure and does not execute font or zero-advance effects twice. `UR`, `MT`, `Lk`, `Mt` and `%U` decode their destinations according to the HTML attribute path in `html.c::print_encode(norecurse=1)`; the authored target word still executes separately in the native stream. Thus a device escape selects `html` for the destination and `utf8` for native text, a `\z` glyph is absent from the destination, and an overstrike takes its final source character, including an invalid trailing space. These facts remain typed identity data; URI/email validation controls host activation without changing the safe label or terminal target word. `%R` checks the original first operand before that decoding: only the exact `RFC ` prefix followed by ASCII digits qualifies for an rfc-editor target. The CVS loop also accepts an empty digit suffix. Font or zero-width escapes do not qualify an otherwise similar visible spelling. Typed destinations do not insert text into bibliography display. Decoded non-ASCII URI characters remain observable and are diagnosed under ManT's separate RFC 3986 URI policy rather than silently enabling host activation.
 
+For link identities, named Unicode and numbered escapes use the same CVS
+attribute rule. Decoded C0 and C1 controls and DEL become U+FFFD, with ASCII
+tab retained for validation. Visible text follows the terminal projection.
+
 Markdown export retains its explicit angle-URI autolink policy. A native `UR` suffix such as `<https://example.org/utf8>` can therefore parse as an additional Markdown autolink beside the BODY label's typed destination, even when that destination ends in `html`. This is export syntax over existing visible text; it does not add a typed IR occurrence, native execution, or TUI activation range. Angle email text is escaped as literal Markdown text.
 
 A URI destination from `UR`, `Lk`, or `%U` is an email reference when it is a

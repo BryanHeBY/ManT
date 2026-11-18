@@ -43,6 +43,8 @@ that crate was not published for that change.
   of numbered man list items.
 - Publish valid single-mailbox `mailto:` links from roff as email references
   so the labels remain clickable through Markdown export and readback.
+- Decode named Unicode and numbered roff escapes to the same HTML attribute
+  codepoints when they spell the same link destination.
 - Preserve per-term option and argument evidence across man `TP` and
   `TQ`, and bind `OP` names only from complete executed keys.
 - Bind supported mdoc errors, constants, variables and function names to their

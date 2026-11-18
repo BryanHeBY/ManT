@@ -4,10 +4,21 @@ use super::glyphs::{
 use super::scanner::{ArgumentCompletion, QuotedOutcome, scan_argument, scan_quoted_argument};
 use super::{
     ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, ASCII_NBRZW, ASCII_TABREF, DecodedText,
-    EscapeDecodeStatus, PresentationKind, RoffInlineEvent, WordSpace, font, grammar, scanner,
+    EscapeDecodeStatus, PresentationKind, Projection, RoffInlineEvent, WordSpace, font, grammar,
+    scanner,
 };
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
+
+/// CVS `print_encode()` normalizes cooked attribute codepoints after escape
+/// decoding. Its UTF-8 terminal uses the same range for numbered escapes.
+fn escaped_codepoint(character: char) -> char {
+    if (character < ' ' && character != '\t') || ('\u{7f}'..='\u{9f}').contains(&character) {
+        '\u{fffd}'
+    } else {
+        character
+    }
+}
 
 /// Project the one terminal cell written by CVS `ESCAPE_OVERSTRIKE`.
 ///
@@ -58,7 +69,7 @@ enum DelimitedArgument {
 
 pub(super) struct Decoder {
     pub(super) measurement: bool,
-    pub(super) reading_motion_spacing: bool,
+    pub(super) projection: Projection,
     pub(super) word_space: WordSpace,
     status: EscapeDecodeStatus,
     argument_completion: ArgumentCompletion,
@@ -73,7 +84,7 @@ impl Decoder {
     pub(super) fn new(source: &str) -> Self {
         Self {
             measurement: false,
-            reading_motion_spacing: true,
+            projection: Projection::Terminal,
             word_space: WordSpace::Breakable,
             status: EscapeDecodeStatus::Complete,
             argument_completion: ArgumentCompletion::Complete,
@@ -364,14 +375,9 @@ impl Decoder {
                 // for filling purposes. Its UTF-8 terminal replaces unsafe
                 // C0/C1 controls rather than silently turning them into
                 // breakable spaces.
-                let character = if (character < ' ' && character != '\t')
-                    || ('\u{7f}'..='\u{9f}').contains(&character)
-                {
-                    '\u{fffd}'
-                } else {
-                    character
-                };
-                self.emit(RoffInlineEvent::Glyph(character.to_string()));
+                self.emit(RoffInlineEvent::Glyph(
+                    escaped_codepoint(character).to_string(),
+                ));
             }
         } else {
             self.note_recovery();
@@ -410,7 +416,7 @@ impl Decoder {
         // A positive literal advance only exists for a closed argument with
         // a kept payload: unclosed and rejected motion renders nothing.
         let argument = self.take_presentation_argument('h');
-        let reading_blank = self.reading_motion_spacing
+        let reading_blank = self.projection == Projection::Terminal
             && !self.measurement
             && argument.as_deref().is_some_and(|argument| {
                 is_positive_literal_motion(argument)
@@ -454,7 +460,7 @@ impl Decoder {
             }
             let mut glyph = String::new();
             for character in value.chars() {
-                push_terminal_safe(&mut glyph, character);
+                self.push_decoded_character(&mut glyph, character);
             }
             self.emit(RoffInlineEvent::Glyph(glyph));
             return;
@@ -466,7 +472,7 @@ impl Decoder {
         match libmandoc_rs::special_character(name) {
             Some(SpecialCharacter::Visible(character)) => {
                 let mut glyph = String::new();
-                push_terminal_safe(&mut glyph, character);
+                self.push_decoded_character(&mut glyph, character);
                 self.emit(RoffInlineEvent::Glyph(glyph));
             }
             Some(SpecialCharacter::ZeroWidth) => self.emit(RoffInlineEvent::ZeroWidthGlyph),
@@ -487,6 +493,13 @@ impl Decoder {
         }
         value.push_str(suffix);
         self.emit(RoffInlineEvent::FallbackGlyph(value));
+    }
+
+    fn push_decoded_character(&self, target: &mut String, character: char) {
+        match self.projection {
+            Projection::Terminal => push_terminal_safe(target, character),
+            Projection::LinkIdentity => target.push(escaped_codepoint(character)),
+        }
     }
 
     fn push_source_character(&mut self, character: char) {

@@ -159,21 +159,22 @@ pub(in crate::mandoc) enum WordSpace {
 }
 
 pub(in crate::mandoc) fn decode_word_with_status(source: &str, spaces: WordSpace) -> DecodedText {
-    decode_with_options(source, true, spaces)
+    decode_with_projection(source, Projection::Terminal, spaces)
 }
 
-/// Decode an identity operand without synthesizing reading-layout spaces.
-/// CVS `html.c::print_encode()` ignores horizontal motion in attributes; the
-/// terminal reading approximation belongs only to the visible text stream.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Projection {
+    Terminal,
+    LinkIdentity,
+}
+
+/// Decode an identity operand with CVS `html.c::print_encode()` codepoints
+/// and without the reading-layout spaces synthesized for horizontal motion.
 pub(super) fn decode_link_operand(source: &str) -> DecodedText {
-    decode_with_options(source, false, WordSpace::Breakable)
+    decode_with_projection(source, Projection::LinkIdentity, WordSpace::Breakable)
 }
 
-fn decode_with_options(
-    source: &str,
-    reading_motion_spacing: bool,
-    spaces: WordSpace,
-) -> DecodedText {
+fn decode_with_projection(source: &str, projection: Projection, spaces: WordSpace) -> DecodedText {
     // term.c::term_word() copies ordinary runs before interpreting escapes.
     // Sentinel and unsafe control bytes still need the full classifier; the
     // fast path must not bypass their masking or native-cell evidence.
@@ -192,7 +193,7 @@ fn decode_with_options(
         };
     }
     let mut decoder = Decoder::new(source);
-    decoder.reading_motion_spacing = reading_motion_spacing;
+    decoder.projection = projection;
     decoder.word_space = spaces;
     decoder.decode_with_status()
 }

@@ -5,6 +5,9 @@
 use super::{LinkTargets, link_targets};
 use mant_ir::{Inline, LinkTarget, ResolvedContent, visit::Visit};
 
+#[path = "link_controls.rs"]
+mod link_controls;
+
 const PRE: &str =
     ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
 
