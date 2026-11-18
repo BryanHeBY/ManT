@@ -12,6 +12,7 @@ impl TableExecution<'_> {
         node: &Node,
         cell: &libmandoc_rs::TableCell,
         prefix: InlineTablePrefix,
+        execution: &crate::mandoc::inline::InlineExecutionState,
     ) -> bool {
         let column = cell.column as usize;
         let kind = node
@@ -21,11 +22,15 @@ impl TableExecution<'_> {
             .map_or(Kind::Left, |slot| slot.kind);
         let centered = node.table_alignment == Some(TableAlignment::Center);
         let boxed = node.table_frame.is_some();
-        let left_edge = self.rows.iter().any(|row| {
-            row.table_layout
-                .as_ref()
-                .is_some_and(|layout| layout.left_border.is_some())
-        });
+        // If skipvsp suppressed the opening vertical space, an occupied
+        // prefix can still reach the left rule. tbl_term.c draws a left
+        // rule from this row or its immediate successor, then advances an
+        // en before the first graph. The shared width of a later rule
+        // alone does not prove this separation.
+        if node.flags.table_start && self.rows.iter().copied().take(2).any(row_has_left_border) {
+            return true;
+        }
+        let left_edge = self.rows.iter().copied().any(row_has_left_border);
         let frame = usize::from(boxed || left_edge) * 2 * EN;
         // tbl_term.c::term_tbl sets offsets including left-edge allowance
         // and all earlier columns, including cells with no visible graph.
@@ -67,10 +72,16 @@ impl TableExecution<'_> {
                 .saturating_sub(prefix.printed.saturating_add(padding));
             // term.c::term_flushln uses the available part of the cell
             // after the live prefix, not the entire declared cell width.
-            let slack = target.saturating_sub(measure(text));
             let aligned = match kind {
-                Kind::Center => slack / 2,
-                Kind::Right => slack,
+                Kind::Center | Kind::Right => {
+                    let printed = execution.table_first_pass_width(text, target);
+                    let slack = target.saturating_sub(printed);
+                    if kind == Kind::Center {
+                        slack / 2
+                    } else {
+                        slack
+                    }
+                }
                 Kind::Number => node
                     .table_layout
                     .as_ref()
@@ -119,6 +130,12 @@ impl TableExecution<'_> {
         prefix.offset = offset.saturating_add(margin).saturating_sub(width) / EN / 2 * EN;
         prefix
     }
+}
+
+fn row_has_left_border(row: &Node) -> bool {
+    row.table_layout
+        .as_ref()
+        .is_some_and(|layout| layout.left_border.is_some())
 }
 
 fn column_extent(metrics: &[TableColumnMetrics], include_final_spacing: bool) -> usize {

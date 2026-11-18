@@ -14,7 +14,7 @@ pub(super) fn reading_rows(text: &str) -> Vec<String> {
         .0;
     body.lines()
         .map(|line| {
-            let line = line.trim();
+            let line = line.trim_matches(' ');
             if line == "•" {
                 return String::new();
             }

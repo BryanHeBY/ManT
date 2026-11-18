@@ -236,6 +236,7 @@ enum mant_mandoc_author_mode {
 #define MANT_MANDOC_NODE_EQUATION_INLINE (1U << 12)
 #define MANT_MANDOC_NODE_IP_INCREMENT (1U << 13)
 #define MANT_MANDOC_NODE_AUTHORED_TAG (1U << 14)
+#define MANT_MANDOC_NODE_TABLE_LEADING_SPACE (1U << 15)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(
     const char *, const char *, int, int, const char *);

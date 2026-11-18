@@ -17,6 +17,16 @@ impl InlineBuilder {
         // device row. The table's endline is a separate operation.
         if node.flags.table_start {
             self.execute_native_newline_with_tail();
+            // The inferred vertical edge spacing runs before any box rule
+            // or cell writes, and consumes the same skipvsp as roff .sp.
+            // A box rule closes an occupied line too, but its decoration
+            // contributes no independent row to this phrasing projection.
+            if node.flags.table_leading_space {
+                self.native_vertical_space(1);
+            }
+            if node.table_frame.is_some() && self.execution.has_open_native_device_row() {
+                self.commit_table_row_projection(true, false);
+            }
         }
         let open = self.execution.has_open_native_device_row();
         let prefix = self.table_prefix(open);
@@ -77,6 +87,33 @@ impl InlineBuilder {
 }
 
 impl InlineExecutionState {
+    /// The first accepted `term_fill()` width (`vbr`) excludes a trailing
+    /// terminal blank run but includes fixed blanks. tblcalc's whole-cell
+    /// measurement is a distinct operation and still uses the full input.
+    pub(in crate::mandoc) fn table_first_pass_width(&self, text: &str, target: usize) -> usize {
+        let mut font = super::FontState::new();
+        let mut zero_advance = crate::mandoc::inline::ZeroAdvanceState::default();
+        // tbl_term.c clears both BACK registers before filling each column.
+        let word = crate::mandoc::inline::parse_roff_text_with_zero_advance(
+            text,
+            crate::mandoc::inline::TextExecutionContext {
+                font: &mut font,
+                zero_advance: &mut zero_advance,
+                defer_leading_blanks: false,
+                policy: crate::mandoc::inline::TextExecutionPolicy {
+                    recognize_generated_references: false,
+                    record_native_cells: true,
+                    field_authoritative: true,
+                    word_space: crate::mandoc::roff_escape::WordSpace::Breakable,
+                },
+            },
+        );
+        let mut field = super::field_buffer::FieldBuffer::default();
+        field.configure_tabs(&self.tab_stops);
+        field.apply_writes(&word.native_writes);
+        field.fill_pass_units(target).map_or(0, |pass| pass.units)
+    }
+
     pub(in crate::mandoc) fn observe_table_word_writes(
         &mut self,
         writes: &[super::field_buffer::FieldWrite],

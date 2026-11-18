@@ -107,8 +107,12 @@ impl<'a> InlineTableSequence<'a> {
                     embedding.map_or_else(
                         || prefix.left_pad(0) > 12,
                         |plan| {
-                            plan.execution
-                                .separates_prefix(node, &node.table_cells[index], prefix)
+                            plan.execution.separates_prefix(
+                                node,
+                                &node.table_cells[index],
+                                prefix,
+                                &formatter.execution,
+                            )
                         },
                     )
                 })

@@ -181,6 +181,114 @@ fn visible_cell_alignment_places_the_same_word_boundary_in_paint_and_copy() {
 }
 
 #[test]
+fn table_opening_preserves_painted_and_copied_row_boundaries() {
+    // Fixed CVS tbl_term places border spacing/frame before the first cell.
+    // The portable term omits its drawings while keeping the actual endline.
+    for (options, layout, first, second, joined) in [
+        ("", "l", "XYZ", "WIDESTCELL", Some("LONGPREFIXXYZ")),
+        ("", "c", "XYZ  ", "WIDESTCELL", Some("LONGPREFIX XYZ")),
+        ("", "c", r"XYZ\~\~", "WIDESTCELL", Some("LONGPREFIXXYZ")),
+        ("", "r", "XYZ  ", "WWWWWWWW", Some("LONGPREFIX XYZ")),
+        ("", "|l", "XYZ", "WIDESTCELL", None),
+        ("", "l|", "XYZ", "WIDESTCELL", None),
+        ("box;\n", "l", "XYZ", "WIDESTCELL", None),
+        ("allbox;\n", "l", "XYZ", "WIDESTCELL", None),
+    ] {
+        let source = format!(
+            "{REVIEW_HEADER}.Bl -hang -width 4n\n.It Xo\n.No LONGPREFIX\n.br\n.TS\n{options}{layout}.\n{first}\n{second}\n.TE\n.Xc\nENDING\n.El\n.Sh EXAMPLES\nTAIL\n"
+        );
+        let query = restored(&source);
+        let view = DocumentView::new(&query);
+        for width in [24, 78, 24] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let prefix = &rendered.search("LONGPREFIX")[0];
+            let cell = &rendered.search("XYZ")[0];
+            assert_eq!(
+                cell.row - prefix.row,
+                usize::from(joined.is_none()),
+                "{source}"
+            );
+            if let Some(joined) = joined {
+                assert_eq!(
+                    painted(&buffer, cell.row, prefix.start_column, cell.end_column),
+                    joined,
+                    "{source}"
+                );
+            } else {
+                assert_eq!(
+                    painted(&buffer, cell.row, cell.start_column, cell.end_column),
+                    "XYZ"
+                );
+            }
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: prefix.row,
+                    column: prefix.start_column,
+                },
+                focus: TextPosition {
+                    row: cell.row,
+                    column: cell.end_column - 1,
+                },
+            });
+            let rows = copied
+                .lines()
+                .map(|line| line.trim_matches(' '))
+                .collect::<Vec<_>>();
+            if let Some(joined) = joined {
+                assert_eq!(rows, [joined], "{source}");
+            } else {
+                assert_eq!(rows, ["LONGPREFIX", "XYZ"], "{source}");
+            }
+        }
+    }
+}
+
+#[test]
+fn cell_pending_word_end_break_never_adds_another_painted_row() {
+    // Exact fixed-CVS rows separate accepted internal \p and the data row
+    // end, including a real line holding only a nonbreaking blank.
+    for (first, word, rows) in [
+        (r"AA\pBB", "AABB", 2),
+        (r"AA\p BB", "AA", 3),
+        (r"AA\pBB\p", "AABB", 2),
+        (r"AA\p  ", "AA", 2),
+        (r"AA\p \&", "AA", 2),
+        (r"AA\p \~", "AA", 3),
+    ] {
+        let source = format!(
+            "{REVIEW_HEADER}.Bl -tag -width 4n\n.It Xo\n.TS\nl.\nFIRST\n{first}\nLAST\n.TE\n.Xc\nENDING\n.El\n.Sh EXAMPLES\nTAIL\n"
+        );
+        let query = restored(&source);
+        let view = DocumentView::new(&query);
+        for width in [20, 78, 20] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let start = &rendered.search("FIRST")[0];
+            let middle = &rendered.search(word)[0];
+            let end = &rendered.search("LAST")[0];
+            assert_eq!(middle.row - start.row, 1, "{source}");
+            assert_eq!(end.row - start.row, rows, "{source}");
+            assert_eq!(
+                painted(&buffer, middle.row, middle.start_column, middle.end_column),
+                word
+            );
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: start.row,
+                    column: start.start_column,
+                },
+                focus: TextPosition {
+                    row: end.row,
+                    column: end.end_column - 1,
+                },
+            });
+            assert_eq!(copied.lines().count(), rows + 1, "{source}: {copied:?}");
+        }
+    }
+}
+
+#[test]
 fn source_backed_head_cell_keeps_its_exact_click_and_copy_parts() {
     // Fixed tbl_cdata witnesses the same raw operand in either form. Only
     // the source-backed T{} cell recovers the Mt semantic link.

@@ -185,6 +185,9 @@ without creating synthetic data cells.
 edges as styles rather than terminal glyphs. `table_layout` shares an immutable
 `Arc<TableLayout>` across rows that use the same native declaration, including
 `T&` restarts, row-local vertical edges and minimum widths in basic units.
+The first span's `flags.table_leading_space` records the layout parser's
+resolved vertical-space request before a table. The formatter decides whether
+that request is suppressed by preceding spacing state.
 Layouts are copied and charged to the ownership-transfer budget once. Each
 data cell retains its zero-based `column`; its `column_span` and `row_span`
 are u32, so the formerly narrow 65,535-column boundary cannot silently move

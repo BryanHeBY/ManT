@@ -39,8 +39,12 @@ snapshot_node_flags(const struct roff_node *source)
 		 * keeps the same chain.  Mark its actual first span so consumers do
 		 * not attach a leading rule to the preceding native table. */
 		previous = source->span->prev;
-		if (previous == NULL)
+		if (previous == NULL) {
 			flags |= MANT_MANDOC_NODE_TABLE_START;
+			/* The final layout controls term_tbl()'s initial term_vspace(). */
+			if (source->span->opts->opts & TBL_OPT_VSPACE)
+				flags |= MANT_MANDOC_NODE_TABLE_LEADING_SPACE;
+		}
 	}
 	return flags;
 }

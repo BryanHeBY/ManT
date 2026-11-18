@@ -391,15 +391,17 @@ impl<'a> LoweringContext<'a> {
             formatter.execution.table_line_needs_width |= execution.table_line_needs_width;
         }
         let mut output = execution.output;
-        if execution.pending_word_end_break {
-            output.push(mant_ir::Inline::line_break());
-        }
         // Even a control-only tbl word enters term_word(): it clears
         // formatter-global skipvsp and can leave a bare BACKAFTER request for
         // the next cell-external word.
         formatter.execute_word();
         formatter.inherit_zero_advance_armed(zero_advance.take_armed());
         zero_advance.finish_into(&mut output);
+        // tbl_term.c flushes the remainder of each cell before its data
+        // span's endline. A trailing \p or a break followed only by
+        // ordinary blanks/zero-width cells does not leave another pass
+        // with text (term.c::term_flushln). Its row is the span's row.
+        inline::consume_one_row_ending(&mut output);
         output
     }
 }
