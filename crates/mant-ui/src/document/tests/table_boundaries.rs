@@ -31,6 +31,67 @@ fn painted(buffer: &Buffer, row: usize, start: usize, end: usize) -> String {
 }
 
 #[test]
+fn native_slot_writes_preserve_painting_copy_search_and_link_hits() {
+    // Exact inputs ran the pinned CVS terminal profiles. term_word()
+    // changes slots before term_fill() decides whether to keep NEEDLE.
+    let header = ".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\n";
+    let target = LinkTarget::External(ExternalUri::parse("https://example.test/r").unwrap());
+    for (open, close) in [
+        ("", ""),
+        (".TS\nl.\n", ".TE\n"),
+        (".UR https://example.test/r\n", ".UE\n"),
+    ] {
+        for (operation, keeps_needle) in [
+            ("P", true),
+            (r"\l'1n '", false),
+            (r"P\l'1n '\h'0n'\h'|5n'", true),
+            (r"\l'1n.'\h'-1n'", false),
+            (r"Q\l'1n '\h'-1n'", true),
+            (r"START\p \o' '", true),
+        ] {
+            let source =
+                format!("{header}{open}{operation}\\p NEEDLE\nTAILWORD\n{close}.PP\nENDTEXT\n");
+            let view = DocumentView::new(&restored(&source));
+            for width in [24, 78] {
+                let rendered = view.render(width);
+                let buffer = paint(&rendered, width);
+                let shown = (0..rendered.row_count)
+                    .map(|row| {
+                        painted(&buffer, row, 0, width.into())
+                            .matches("NEEDLE")
+                            .count()
+                    })
+                    .sum::<usize>();
+                let copy = rendered.selected_text(RenderedSelection {
+                    anchor: TextPosition { row: 0, column: 0 },
+                    focus: TextPosition {
+                        row: rendered.row_count - 1,
+                        column: usize::from(width) - 1,
+                    },
+                });
+                let hits = rendered.search("NEEDLE");
+                assert_eq!(
+                    [shown, copy.matches("NEEDLE").count(), hits.len()],
+                    [usize::from(keeps_needle); 3],
+                    "{source} at {width}"
+                );
+                let expected_target = (close == ".UE\n").then_some(&target);
+                for hit in hits {
+                    for column in hit.start_column..hit.end_column {
+                        assert_eq!(
+                            rendered.link_target_at(hit.row, column),
+                            expected_target,
+                            "{source}"
+                        );
+                    }
+                }
+                assert_eq!(rendered.search("ENDTEXT").len(), 1);
+            }
+        }
+    }
+}
+
+#[test]
 fn a_native_table_inside_an_extended_definition_head_paints_every_cell() {
     let header = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
     // CVS term_tbl emits both cells inside Xo, before the original It BODY.
@@ -850,6 +911,59 @@ fn structural_data_rows_separate_incoming_gap_budgets_and_keep_empty_copy() {
                 }),
                 ""
             );
+        }
+    }
+}
+
+#[test]
+fn native_table_passes_keep_their_authored_cells_in_paint_and_copy() {
+    // The native table driver closes both the accepted device-only pass and
+    // the attempted follow-up. A HANG HEAD keeps NOBREAK, so the same hidden
+    // drawing can leave different accepted words in the inline and block
+    // owners without changing their physical row count.
+    const HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n";
+    for (owner, operations, lines) in [
+        ("block", r"\l'1n.' ", ["", ""]),
+        ("body", r"Q\l'2n.'\l'2n '\h'1n'", ["Q", ""]),
+        ("head", r"Q\l'2n.'\l'2n '\h'1n'", ["Q", "XYZ"]),
+    ] {
+        let table = format!(".TS\nl.\nSTART\n{operations}\\p XYZ\nLAST\n.TE\n");
+        let source = match owner {
+            "head" => format!("{HEADER}.Bl -hang -width 4n\n.It Xo\n{table}.Xc\nENDING\n.El\n"),
+            "body" => format!("{HEADER}.Bl -tag -width 4n\n.It TAG\n{table}ENDING\n.El\n"),
+            _ => format!("{HEADER}{table}ENDING\n"),
+        };
+        let query = restored(&source);
+        let view = DocumentView::new(&query);
+        for width in [24, 78, 24] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let start = &rendered.search("START")[0];
+            let last = &rendered.search("LAST")[0];
+            assert_eq!(last.row - start.row, 3, "{source}");
+            for (index, line) in lines.iter().enumerate() {
+                assert_eq!(
+                    painted(&buffer, start.row + index + 1, 0, usize::from(width)).trim(),
+                    *line,
+                    "{source}"
+                );
+            }
+            let copy = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: start.row,
+                    column: start.start_column,
+                },
+                focus: TextPosition {
+                    row: last.row,
+                    column: last.end_column - 1,
+                },
+            });
+            assert_eq!(
+                copy.lines().map(str::trim).collect::<Vec<_>>(),
+                ["START", lines[0], lines[1], "LAST"],
+                "{source}"
+            );
+            assert_eq!(rendered.search("XYZ").len(), usize::from(owner == "head"));
         }
     }
 }

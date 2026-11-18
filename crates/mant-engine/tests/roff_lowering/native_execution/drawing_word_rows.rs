@@ -9,6 +9,10 @@ const END: &str = "\n.PP\nENDTEXT\n";
 const OWNERS: [&str; 7] = ["paragraph", "nofill", "ip", "tp", "heading", "table", "ur"];
 
 fn source(owner: &str, word: &str) -> String {
+    source_with_header(HEADER, owner, word)
+}
+
+fn source_with_header(header: &str, owner: &str, word: &str) -> String {
     let body = match owner {
         "paragraph" => format!("{word}\nTAILWORD"),
         "nofill" => format!(".nf\n{word}\nTAILWORD\n.fi"),
@@ -19,7 +23,127 @@ fn source(owner: &str, word: &str) -> String {
         "ur" => format!(".UR https://example.test/r\n{word}\nTAILWORD\n.UE"),
         _ => unreachable!(),
     };
-    format!("{HEADER}{body}{END}")
+    format!("{header}{body}{END}")
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SlotOracle {
+    prefixes: Vec<String>,
+    strokes: Vec<String>,
+    motions: Vec<String>,
+    paragraph: Vec<Vec<Option<String>>>,
+    owners: Vec<String>,
+    words: Vec<String>,
+    by_owner: Vec<Vec<Option<String>>>,
+}
+
+const SLOT_HEADER: &str =
+    ".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- example\n.SH DESCRIPTION\n";
+
+fn markers(text: &str) -> Vec<&'static str> {
+    let mut words: Vec<_> = ["NEEDLE", "TAILWORD", "ENDTEXT"]
+        .into_iter()
+        .flat_map(|word| {
+            text.match_indices(word)
+                .map(move |(index, _)| (index, word))
+        })
+        .collect();
+    words.sort_unstable_by_key(|(index, _)| *index);
+    words.into_iter().map(|(_, word)| word).collect()
+}
+
+fn slot_oracle() -> SlotOracle {
+    // The matrix preserves both terminal devices' visible marker order.
+    // Every exact source ran fixed CVS lint, ASCII and UTF-8 first.
+    // A null position records device disagreement.
+    serde_json::from_str(include_str!("drawing_word_rows/slot_oracle.json")).unwrap()
+}
+
+#[test]
+fn chained_slot_operations_retain_exact_marker_order_in_paragraphs() {
+    let matrix = slot_oracle();
+    let mut bitmap = matrix.paragraph.iter();
+    let mut reviewed = 0;
+    let mut passed = 0;
+    for prefix in &matrix.prefixes {
+        for stroke in &matrix.strokes {
+            for (motion, expected) in matrix.motions.iter().zip(bitmap.next().unwrap()) {
+                let Some(expected) = expected else {
+                    reviewed += 1;
+                    continue;
+                };
+                let word = format!(r"{prefix}{stroke}{motion}\p NEEDLE");
+                let source = source_with_header(SLOT_HEADER, "paragraph", &word);
+                let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+                let actual = markers(&mant_render::render_query_text(&query));
+                assert!(
+                    actual.iter().copied().eq(expected.split_whitespace()),
+                    "{source}\n{actual:?}"
+                );
+                passed += 1;
+            }
+        }
+    }
+    assert!(bitmap.next().is_none());
+    assert_eq!((passed, reviewed), (740, 44));
+}
+
+#[test]
+fn overwritten_markers_and_blank_overstrikes_follow_the_exact_source_owner() {
+    let matrix = slot_oracle();
+    let mut passed = 0;
+    let mut reviewed = 0;
+    for (owner, expected) in matrix.owners.iter().zip(matrix.by_owner) {
+        for (word, outcome) in matrix.words.iter().zip(expected) {
+            let Some(outcome) = outcome else {
+                reviewed += 1;
+                continue;
+            };
+            let word = format!(r"{word}\p NEEDLE");
+            let source = source_with_header(SLOT_HEADER, owner, &word);
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let restored = crate::json_roundtrip::json_string_roundtrip(&query);
+            let actual = markers(&mant_render::render_query_text(&restored));
+            let expected: Vec<_> = outcome.split_whitespace().collect();
+            assert_eq!(actual, expected, "{source}");
+            let markdown = mant_codec::encode::render_markdown(&restored);
+            let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            let mut exported = markers(&mant_render::render_query_text(&readback));
+            exported.sort_unstable();
+            exported.dedup();
+            let mut emitted = expected.clone();
+            emitted.sort_unstable();
+            emitted.dedup();
+            assert_eq!(exported, emitted, "{source}\n{markdown}");
+            let count = expected.iter().filter(|&&word| word == "NEEDLE").count();
+            if count == 1 {
+                assert!(needle_in_original_owner(&restored, owner), "{source}");
+            }
+            assert_eq!(word_hits(&restored, "NEEDLE"), count, "{source}");
+            passed += 1;
+        }
+    }
+    assert_eq!((passed, reviewed), (58, 5));
+}
+
+fn word_hits(query: &ResolvedContent, word: &str) -> usize {
+    mant_query::search_query(
+        query,
+        &SearchQuery {
+            pattern: word.into(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: true,
+            context_lines: 0,
+            limit: default_search_limit(),
+            offset: 0,
+        },
+    )
+    .unwrap()
+    .matches
+    .len()
 }
 
 fn has_link_label(nodes: &[Inline], label: &str) -> bool {

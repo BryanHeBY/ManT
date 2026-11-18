@@ -129,9 +129,10 @@ impl FieldWrite {
             Self::ArmBackafter => EntryWrite::ArmBackafter,
             Self::CancelBackafter => EntryWrite::CancelBackafter,
             Self::CancelBackbefore => EntryWrite::CancelBackbefore,
-            Self::RewindWordEntry(_) | Self::DrawSpaces(_) | Self::MoveInDrawing { .. } => {
-                EntryWrite::Rewind
-            }
+            Self::RewindWordEntry(_)
+            | Self::DrawSpaces(_)
+            | Self::MoveInDrawing { .. }
+            | Self::Placed { .. } => EntryWrite::Rewind,
         }
     }
 }

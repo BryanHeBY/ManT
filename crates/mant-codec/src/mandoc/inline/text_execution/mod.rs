@@ -4,6 +4,7 @@
 //! selects another decoder or resets the caller's persistent text state.
 
 mod event_state;
+mod geometry_word;
 mod native_writes;
 mod references;
 mod word;
@@ -37,6 +38,8 @@ pub(in crate::mandoc) struct TextExecutionContext<'state> {
     pub(in crate::mandoc) defer_leading_blanks: bool,
     /// Native right margin minus offset, for lengthless drawing operands.
     pub(in crate::mandoc) line_width_units: usize,
+    /// Native tbl field bound for words that explicitly mutate device slots.
+    pub(in crate::mandoc) table_field_units: Option<usize>,
     pub(in crate::mandoc) policy: TextExecutionPolicy,
 }
 
@@ -74,6 +77,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
             zero_advance: &mut zero_advance,
             defer_leading_blanks: false,
             line_width_units: 78 * 24,
+            table_field_units: None,
             policy: TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: false,
@@ -186,6 +190,10 @@ fn execute_formatter_word_events(
 ) -> TextExecution {
     let mut word = WordExecution::new(&context);
     context.zero_advance.begin_fragment();
+    if geometry_word::applies(events, &context) {
+        geometry_word::execute(events, &mut context, &mut word);
+        return finish_text_execution(events, context.zero_advance, word);
+    }
     for (index, event) in events.iter().enumerate() {
         let write_start = word.native_writes.len();
         // These native writes have no reading-text glyph. Keep their receipt

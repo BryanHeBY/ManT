@@ -5,6 +5,7 @@ use mant_ir::ResolvedContent;
 
 mod movement;
 mod overstrike;
+mod slot_sequences;
 
 const HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n";
 const MAN_HEADER: &str = ".TH PROBE 1 \"November 18, 2026\" Test Manual\n.SH NAME\nprobe \\- test page\n.SH DESCRIPTION\n";

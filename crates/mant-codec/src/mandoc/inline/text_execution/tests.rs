@@ -17,6 +17,7 @@ fn contiguous_deferred_source_spaces_use_one_run_receipt() {
             zero_advance: &mut zero,
             defer_leading_blanks: false,
             line_width_units: 78 * 24,
+            table_field_units: None,
             policy: TextExecutionPolicy {
                 recognize_generated_references: false,
                 record_native_cells: true,
@@ -59,6 +60,7 @@ fn function_word_policy_changes_only_literal_source_blanks() {
                     zero_advance: &mut zero,
                     defer_leading_blanks: false,
                     line_width_units: 78 * 24,
+                    table_field_units: None,
                     policy: TextExecutionPolicy {
                         recognize_generated_references: false,
                         record_native_cells: true,
@@ -121,6 +123,7 @@ fn breakpoint_writes_do_not_claim_zero_width_graph_acceptance() {
             zero_advance: &mut zero,
             defer_leading_blanks: false,
             line_width_units: 78 * 24,
+            table_field_units: None,
             policy: TextExecutionPolicy {
                 recognize_generated_references: false,
                 record_native_cells: true,
@@ -155,6 +158,7 @@ fn field_recording_does_not_select_another_text_executor() {
                 zero_advance: &mut zero,
                 defer_leading_blanks: false,
                 line_width_units: 78 * 24,
+                table_field_units: None,
                 policy: TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: record,

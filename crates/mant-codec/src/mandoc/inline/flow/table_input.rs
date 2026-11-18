@@ -14,6 +14,7 @@ pub(in crate::mandoc) struct TableCellExecution {
     pub(in crate::mandoc) buffered: bool,
     pub(in crate::mandoc) trailing_rows: usize,
     pub(in crate::mandoc) line_width_units: Option<usize>,
+    pub(in crate::mandoc) field_width_units: Option<usize>,
 }
 
 impl InlineBuilder {
@@ -100,22 +101,34 @@ impl InlineBuilder {
 }
 
 impl InlineExecutionState {
+    pub(in crate::mandoc) fn table_word_fill_width(&self) -> Option<usize> {
+        // tbl_term.c keeps TERMP_NOBREAK on the surrounding HEAD. Such
+        // cells still fill against the page, not the shortened column.
+        let no_break = self.definition.as_ref().is_some_and(|field| {
+            !field.no_break_cleared
+                && !field.head_flags_cleared
+                && self.author_execution.as_ref().is_some_and(|author| {
+                    matches!(author.break_effect, super::AuthorBreakEffect::Field { flags, .. }
+                        if flags.contains(super::FieldFlag::NoBreak))
+                })
+        });
+        self.table_cell?.field_width_units.filter(|_| !no_break)
+    }
+
     pub(in crate::mandoc) fn finish_table_word_rows(
         &mut self,
         writes: &[super::field_buffer::FieldWrite],
         output: &mut Vec<Inline>,
+        table_field_units: Option<usize>,
     ) {
-        use super::field_buffer::{FieldBuffer, FieldCell, FieldWrite};
-        if !writes
-            .iter()
-            .any(|write| matches!(write, FieldWrite::Cell(FieldCell::BreakMarker)))
-        {
+        use super::field_buffer::{FieldBuffer, FieldWrite};
+        if !writes.iter().any(FieldWrite::is_break_marker) {
             return;
         }
         let mut field = FieldBuffer::default();
         field.configure_tabs(&self.tab_stops);
         field.apply_writes(writes);
-        let endlines = field.table_word_endlines();
+        let endlines = field.table_word_endlines(table_field_units);
         if super::output::line_break_count(output) > 0 {
             // Reconcile the entire empty suffix. A run of ordinary blanks
             // between provisional endlines never prints by itself; a later
@@ -164,6 +177,7 @@ impl InlineExecutionState {
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
                 line_width_units: cell_width,
+                table_field_units: None,
                 policy: crate::mandoc::inline::TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: true,

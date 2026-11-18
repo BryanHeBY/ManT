@@ -34,10 +34,12 @@
 mod cells;
 mod drawing;
 mod flush;
+mod placement;
 mod rewind;
 mod scan;
 mod writes;
 pub(in crate::mandoc::inline) use drawing::DrawingProbe;
+pub(in crate::mandoc::inline) use placement::isolated_passes;
 pub(in crate::mandoc::inline::flow) use rewind::{EntryRewind, RewoundGlyph};
 pub(super) use scan::{CompactPass, compact_first_pass};
 

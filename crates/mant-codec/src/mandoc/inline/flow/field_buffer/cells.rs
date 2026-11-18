@@ -90,6 +90,12 @@ pub(in crate::mandoc) enum FieldWrite {
         absolute: bool,
         units: i32,
     },
+    /// A resolved slot range. Device writing and any backing up already
+    /// happened, and only its surviving source projection counts.
+    Placed {
+        cell: FieldCell,
+        scalars: usize,
+    },
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or
     /// an encode1 glyph (term.c:610-638).
@@ -140,6 +146,17 @@ pub(super) struct DeferredBlankRun {
 }
 
 impl FieldWrite {
+    pub(in crate::mandoc::inline) fn is_break_marker(&self) -> bool {
+        matches!(
+            self,
+            Self::Cell(FieldCell::BreakMarker)
+                | Self::Placed {
+                    cell: FieldCell::BreakMarker,
+                    ..
+                }
+        )
+    }
+
     pub(in crate::mandoc) fn literal(value: &str) -> Vec<Self> {
         value.chars().map(Self::literal_cell).collect()
     }
@@ -152,7 +169,7 @@ impl FieldWrite {
         writes.push(Self::literal_cell(character));
     }
 
-    fn literal_cell(character: char) -> Self {
+    pub(in crate::mandoc::inline) fn literal_cell(character: char) -> Self {
         Self::Cell(match character {
             ' ' => FieldCell::BreakableBlank,
             '\n' => FieldCell::BreakMarker,

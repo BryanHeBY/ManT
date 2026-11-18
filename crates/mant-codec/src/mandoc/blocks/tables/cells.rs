@@ -29,7 +29,10 @@ impl ExecutedCell {
             for _ in 0..self.empty_tail {
                 crate::mandoc::inline::consume_one_row_ending(children);
             }
-            let mut rows = self.empty_tail;
+            // A device-only accepted pass has no reading glyphs, but it
+            // owns the original data row in addition to any following
+            // completed empty passes. An empty paragraph supplies no row.
+            let mut rows = self.empty_tail + usize::from(children.is_empty());
             while rows != 0 {
                 let lines = u16::try_from(rows).unwrap_or(u16::MAX);
                 self.cell
@@ -87,17 +90,7 @@ pub(super) fn lower_cells(
             // including missing trailing data. All fills precede all flushes.
             formatter.clear_zero_advance();
             formatter.execution.table_cell = Some(TableCellExecution::default());
-            if let Some(index) = column.cell
-                && !matches!(
-                    column.kind,
-                    libmandoc_rs::TableLayoutKind::Down
-                        | libmandoc_rs::TableLayoutKind::Span
-                        | libmandoc_rs::TableLayoutKind::HorizontalRule
-                        | libmandoc_rs::TableLayoutKind::DoubleHorizontalRule
-                )
-                && node.table_cells[index].kind == TableCellKind::Text
-            {
-                let cell = &node.table_cells[index];
+            if let Some((index, cell)) = raw_word_for_column(node, column) {
                 let text = cell.decoder_text();
                 if measure_prefix
                     && text.is_some_and(crate::mandoc::inline::table_word_needs_native_slots)
@@ -107,7 +100,7 @@ pub(super) fn lower_cells(
                     cells[index].entry_font = Some(formatter.font.clone());
                 }
                 if let Some(cell_execution) = &mut formatter.execution.table_cell {
-                    cell_execution.line_width_units = cell_drawing_width(
+                    cell_execution.line_width_units = cell_device_width(
                         text,
                         execution.filter(|_| proved_columns),
                         column.logical,
@@ -115,6 +108,14 @@ pub(super) fn lower_cells(
                         node,
                         context,
                     );
+                    cell_execution.field_width_units =
+                        cell_execution.line_width_units.map(|width| {
+                            width.saturating_sub(
+                                24 * usize::from(
+                                    column.kind == libmandoc_rs::TableLayoutKind::Long,
+                                ),
+                            )
+                        });
                 }
                 let blocks =
                     project_text_cell(cell, index, node, context, text_blocks[index], formatter);
@@ -156,7 +157,26 @@ pub(super) fn lower_cells(
     cells
 }
 
-fn cell_drawing_width(
+fn raw_word_for_column<'a>(
+    node: &'a Node,
+    column: &execution::Column,
+) -> Option<(usize, &'a libmandoc_rs::TableCell)> {
+    use libmandoc_rs::TableLayoutKind;
+    if matches!(
+        column.kind,
+        TableLayoutKind::Down
+            | TableLayoutKind::Span
+            | TableLayoutKind::HorizontalRule
+            | TableLayoutKind::DoubleHorizontalRule
+    ) {
+        return None;
+    }
+    let index = column.cell?;
+    let cell = node.table_cells.get(index)?;
+    (cell.kind == TableCellKind::Text).then_some((index, cell))
+}
+
+fn cell_device_width(
     text: Option<&str>,
     execution: Option<&execution::TableExecution<'_>>,
     column: usize,
@@ -166,8 +186,9 @@ fn cell_drawing_width(
 ) -> Option<usize> {
     use crate::mandoc::roff_escape::{PresentationKind, RoffInlineEvent, decode};
     let execution = execution?;
-    let text = text.filter(|text| text.contains("\\l"))?;
+    let text = text.filter(|text| crate::mandoc::inline::table_word_needs_native_slots(text))?;
     let needs_width = decode(text).iter().any(|event| match event {
+        RoffInlineEvent::LineBreak => true,
         RoffInlineEvent::Presentation {
             kind: PresentationKind::HorizontalLine,
             argument: Some(argument),

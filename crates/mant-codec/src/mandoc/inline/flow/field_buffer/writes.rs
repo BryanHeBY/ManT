@@ -300,6 +300,7 @@ impl FieldBuffer {
                 FieldWrite::MoveInDrawing { absolute, units } => {
                     self.move_in_drawing(drawing_start, *absolute, *units);
                 }
+                FieldWrite::Placed { cell, scalars } => self.push_placed(cell, *scalars),
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
                 FieldWrite::DeferredBlanks { source, count } => {
                     let start = self.cells.len();

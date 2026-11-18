@@ -23,10 +23,15 @@ use super::{
 impl FieldBuffer {
     /// Additional explicit rows of one tbl cell. A nonempty remainder
     /// advances the outer multicollumn loop even if its next pass rejects.
-    /// Soft wrapping remains a consumer concern; scan at unlimited width.
-    pub(in crate::mandoc::inline::flow) fn table_word_endlines(&mut self) -> usize {
+    /// Ordinary responsive cells scan without a bound. A raw tbl word
+    /// with device writes can carry a native fill target for its markers.
+    pub(in crate::mandoc::inline::flow) fn table_word_endlines(
+        &mut self,
+        table_field_units: Option<usize>,
+    ) -> usize {
         let mut rows = 0;
-        while let Some(pass) = self.scan_fill_pass(usize::MAX / 4, true) {
+        let target = table_field_units.unwrap_or(usize::MAX / 4);
+        while let Some(pass) = self.scan_fill_pass(target, true) {
             // term.c::term_flushln's suffix sweep precedes the MULTICOL
             // return. Markers, breakpoints and NBRZW do not keep it alive.
             if !self.has_non_ignorable_after(pass.end, false) {
