@@ -75,6 +75,8 @@ that crate was not published for that change.
   disambiguation. Preserve full headings and their original fragments.
 - Reserve all full roff section spellings before shortening IDs, so a
   generated abbreviation cannot take a later heading's exact fragment.
+- Resolve abbreviated `Sx` references only through a unique heading with
+  one complete parenthetical qualifier, after checking the exact title.
 - Apply the selector byte limit to authored Markdown entry IDs and aliases.
   Keep rejected entries readable under their generated IDs and prevent
   rejected author claims from redirecting a relation to another entry.

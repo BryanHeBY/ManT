@@ -1,11 +1,11 @@
 //! Inputs recorded from the fixed CVS execution profiles before adding expectations.
 use mant_ir::{
-    Inline, LinkTarget, Section,
+    Block, Inline, LinkTarget, Section,
     visit::{self, Visit},
 };
 use mant_protocol::{ContentSelector, EntryProjection};
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Write as _};
 
 #[derive(Deserialize)]
 struct Matrix {
@@ -82,50 +82,163 @@ fn qualified_section_references_require_one_authored_candidate() {
     for case in cases {
         let query = case.load();
         let document = query.document.as_ref().unwrap();
-        let mut links = Links::default();
-        links.visit_section(&document.sections[1]);
-        let unresolved = document.diagnostics.iter().filter(|diagnostic| {
-            diagnostic.code.as_deref() == Some("unresolved-section-reference")
-        });
-        let markdown = mant_codec::encode::render_addressable_markdown(&query);
-        let (label, id) = (&case.label, &case.id);
-        if let Some(title) = &case.expected_heading {
-            let owner = find_heading(&document.sections, title);
-            let [(LinkTarget::Section { id: target }, children)] = links.0.as_slice() else {
-                panic!("{id}: exactly one resolved Sx: {:?}", links.0);
-            };
-            assert_eq!(target, &owner.id, "{id}");
-            assert_eq!(mant_ir::inline_plain_text(children), *label, "{id}");
-            assert_eq!(unresolved.count(), 0, "{id}");
-            let destination = LinkTarget::Section { id: target.clone() }.to_uri().unwrap();
-            assert!(
-                markdown.text().contains(&format!("]({destination})")),
-                "{id}: {}",
-                markdown.text()
-            );
-            let selector = ContentSelector::id(target.clone());
-            let outline = mant_query::build_outline_projection(
-                &query,
-                EntryProjection::All,
-                Some(selector.clone()),
-            )
-            .unwrap();
-            let excerpt = mant_query::select_excerpt(&query, &[selector]).unwrap();
-            assert_eq!(outline.nodes[0].id(), target.as_str(), "{id}");
+        assert_section_reference(
+            &query,
+            &document.sections[1],
+            &case.label,
+            case.expected_heading.as_deref(),
+            &case.id,
+        );
+    }
+}
+
+fn assert_section_reference(
+    query: &mant_ir::ResolvedContent,
+    reference_section: &Section,
+    label: &str,
+    expected_heading: Option<&str>,
+    case: &str,
+) {
+    let document = query.document.as_ref().unwrap();
+    let mut links = Links::default();
+    links.visit_section(reference_section);
+    let unresolved = document
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_deref() == Some("unresolved-section-reference"));
+    let markdown = mant_codec::encode::render_addressable_markdown(query);
+    if let Some(title) = expected_heading {
+        let owner = find_heading(&document.sections, title);
+        let [(LinkTarget::Section { id: target }, children)] = links.0.as_slice() else {
+            panic!("{case}: exactly one resolved Sx: {:?}", links.0);
+        };
+        assert_eq!(target, &owner.id, "{case}");
+        assert_eq!(mant_ir::inline_plain_text(children), label, "{case}");
+        assert_eq!(unresolved.count(), 0, "{case}");
+        let destination = LinkTarget::Section { id: target.clone() }.to_uri().unwrap();
+        assert!(
+            markdown.text().contains(&format!("]({destination})")),
+            "{case}: {}",
+            markdown.text()
+        );
+        let selector = ContentSelector::id(target.clone());
+        let outline = mant_query::build_outline_projection(
+            query,
+            EntryProjection::All,
+            Some(selector.clone()),
+        )
+        .unwrap();
+        assert_eq!(outline.nodes[0].id(), target.as_str(), "{case}");
+        for selector in [selector, ContentSelector::path(outline.nodes[0].path())] {
+            let excerpt = mant_query::select_excerpt(query, &[selector]).unwrap();
             let [mant_protocol::ExcerptSelection::DocumentSection { section, .. }] =
                 excerpt.selections.as_slice()
             else {
-                panic!("{id}: must read one original section")
+                panic!("{case}: must read one original section")
             };
-            assert_eq!(section, owner, "{id}");
-        } else {
-            assert!(links.0.is_empty(), "{id}: {:?}", links.0);
-            assert_eq!(unresolved.count(), 1, "{id}");
-            assert!(!markdown.text().contains(&format!("[{label}](#")), "{id}");
-            assert!(
-                mant_render::render_query_text(&query).contains(label),
-                "{id}"
-            );
+            assert_eq!(section, owner, "{case}");
+        }
+    } else {
+        assert!(links.0.is_empty(), "{case}: {:?}", links.0);
+        assert_eq!(unresolved.count(), 1, "{case}");
+        assert!(!markdown.text().contains(&format!("[{label}](#")), "{case}");
+        assert!(
+            mant_render::render_query_text(query).contains(label),
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn section_reference_fallback_uses_one_complete_parenthetical_qualifier() {
+    // Fixed CVS mdoc_sx_pre writes the original #Topic href and gives each
+    // authored heading its own ID. Qualified fallback is a ManT extension.
+    type Case = (
+        &'static [(&'static str, &'static str)],
+        Option<&'static str>,
+    );
+    let cases: &[Case] = &[
+        (&[("Topic (mode) unrelated words", "BODY-WRONG")], None),
+        (&[("Topic (unfinished", "BODY-WRONG")], None),
+        (&[("Topic (valid)", "BODY-RIGHT")], Some("Topic (valid)")),
+        (
+            &[("Topic(valid (nested mode))", "BODY-RIGHT")],
+            Some("Topic(valid (nested mode))"),
+        ),
+        (&[("Topic (mode)(extra)", "BODY-WRONG")], None),
+        (&[("Topic ((mode)", "BODY-WRONG")], None),
+        (&[("Topic (mode))", "BODY-WRONG")], None),
+        (&[("Topic ()", "BODY-WRONG")], None),
+        (
+            &[
+                ("Topic (mode) unrelated words", "BODY-WRONG"),
+                ("Topic (valid)", "BODY-RIGHT"),
+            ],
+            Some("Topic (valid)"),
+        ),
+        (
+            &[
+                ("Topic (unfinished", "BODY-WRONG"),
+                ("Topic (valid)", "BODY-RIGHT"),
+            ],
+            Some("Topic (valid)"),
+        ),
+        (
+            &[
+                ("Topic (mode)", "BODY-FIRST"),
+                ("Topic (valid)", "BODY-SECOND"),
+            ],
+            None,
+        ),
+        (
+            &[
+                ("Topic (mode)", "BODY-OTHER"),
+                ("Topic", "BODY-RIGHT"),
+                ("Topic (valid)", "BODY-SECOND"),
+            ],
+            Some("Topic"),
+        ),
+    ];
+    for &(headings, expected) in cases {
+        for nested in [false, true] {
+            for reference_after in [false, true] {
+                for reverse in [false, true] {
+                    let mut source = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd review sample\n".to_owned();
+                    let reference = ".Sh REFERENCES\n.Sx Topic\n";
+                    if !reference_after {
+                        source.push_str(reference);
+                    }
+                    let request = if nested {
+                        source.push_str(".Sh CANDIDATES\n");
+                        "Ss"
+                    } else {
+                        "Sh"
+                    };
+                    for index in 0..headings.len() {
+                        let (title, body) = headings[if reverse {
+                            headings.len() - 1 - index
+                        } else {
+                            index
+                        }];
+                        writeln!(source, ".{request} \"{title}\"\n{body}.").unwrap();
+                    }
+                    if reference_after {
+                        source.push_str(reference);
+                    }
+                    let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+                    let query = crate::json_roundtrip::json_string_roundtrip(&query);
+                    let document = query.document.as_ref().unwrap();
+                    let from = find_heading(&document.sections, "REFERENCES");
+                    assert_section_reference(&query, from, "Topic", expected, &source);
+                    if let Some(title) = expected {
+                        let owner = find_heading(&document.sections, title);
+                        let [Block::Paragraph { children, .. }] = owner.blocks.as_slice() else {
+                            panic!("{source}: target must own its paragraph");
+                        };
+                        assert_eq!(mant_ir::inline_plain_text(children), "BODY-RIGHT.");
+                    }
+                }
+            }
         }
     }
 }

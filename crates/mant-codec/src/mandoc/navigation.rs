@@ -265,9 +265,30 @@ fn resolve_section_target<'a>(targets: &'a SectionTargets, reference: &str) -> O
 }
 
 fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool {
-    title
-        .strip_prefix(reference)
-        .is_some_and(|suffix| suffix.starts_with('(') || suffix.starts_with(" ("))
+    let Some(suffix) = title.strip_prefix(reference) else {
+        return false;
+    };
+    let Some(body) = suffix
+        .strip_prefix(' ')
+        .unwrap_or(suffix)
+        .strip_prefix('(')
+        .and_then(|body| body.strip_suffix(')'))
+    else {
+        return false;
+    };
+    if body.trim().is_empty() {
+        return false;
+    }
+    let mut nested = 0usize;
+    for byte in body.bytes() {
+        match byte {
+            b'(' => nested += 1,
+            b')' if nested == 0 => return false,
+            b')' => nested -= 1,
+            _ => {}
+        }
+    }
+    nested == 0
 }
 
 use super::{LoweringContext, Node, targets};
