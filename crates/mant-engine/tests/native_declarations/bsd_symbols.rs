@@ -10,6 +10,29 @@ mod netbsd_bpf;
 #[path = "bsd_symbols/openbsd_ports.rs"]
 mod openbsd_ports;
 
+#[test]
+fn dragonfly_hack_environment_alternatives_share_the_original_definition() {
+    // CVS gives USER and LOGNAME separate Ev scopes with a literal No or.
+    let content = fixture("dragonflybsd-hack.6.gz");
+    check_queries(
+        &content,
+        152,
+        "USER or LOGNAME",
+        &["USER", "LOGNAME"],
+        "Your login name.",
+    );
+    check_queries(&content, 167, "HACKDIR", &["HACKDIR"], "Playground.");
+    let exact_form = explain(&content, "USER or LOGNAME");
+    assert_eq!(exact_form.counts.direct_entry.total, 1);
+    assert!(exact_form.evidence.iter().any(|hit| {
+        hit.source.is_some_and(|source| source.line == 152)
+            && hit
+                .bases
+                .iter()
+                .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Form { .. }))
+    }));
+}
+
 fn fixture(name: &str) -> ResolvedContent {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real/bsd-declarations")

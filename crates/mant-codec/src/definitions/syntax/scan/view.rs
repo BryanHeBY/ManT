@@ -22,7 +22,10 @@ pub(in crate::definitions::syntax) struct HeadView<'a> {
 
 impl<'a> HeadView<'a> {
     #[cfg(feature = "roff")]
-    pub(super) fn native_word(text: &str, operands: &'a [NativeOperand]) -> Self {
+    pub(in crate::definitions::syntax) fn native_word(
+        text: &str,
+        operands: &'a [NativeOperand],
+    ) -> Self {
         Self {
             text: text.to_owned(),
             runs: Vec::new(),

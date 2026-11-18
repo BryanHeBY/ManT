@@ -124,12 +124,32 @@ pub(super) fn named_groups<'a>(text: &'a str, uses: OperandUses<'_>) -> Option<V
 
 pub(super) fn split_named_groups(
     text: &str,
+    is_protected: impl FnMut(usize, bool) -> bool,
+) -> Option<Vec<&str>> {
+    split_named_groups_with_connectors(text, is_protected, std::iter::empty(), |_, _| false)
+}
+
+pub(super) fn split_named_groups_with_connectors(
+    text: &str,
     mut is_protected: impl FnMut(usize, bool) -> bool,
+    connectors: impl Iterator<Item = std::ops::Range<usize>>,
+    mut accept_connector: impl FnMut(&str, usize) -> bool,
 ) -> Option<Vec<&str>> {
     let mut parts = Vec::new();
     let mut start = 0;
     let mut closers = Vec::new();
+    let mut connectors = connectors.peekable();
+    let mut assignment = false;
     for (index, character) in text.char_indices() {
+        if let Some(connector) = connectors.next_if(|span| span.start == index)
+            && closers.is_empty()
+            && !assignment
+            && accept_connector(&text[start..index], connector.end)
+        {
+            parts.push(&text[start..index]);
+            start = connector.end;
+            continue;
+        }
         if matches!(
             character,
             '(' | ')' | '<' | '>' | '[' | ']' | '{' | '}' | ',' | '|' | '='
@@ -161,7 +181,9 @@ pub(super) fn split_named_groups(
             ',' | '|' if closers.is_empty() => {
                 parts.push(&text[start..index]);
                 start = index + 1;
+                assignment = false;
             }
+            '=' if closers.is_empty() => assignment = true,
             _ => {}
         }
     }

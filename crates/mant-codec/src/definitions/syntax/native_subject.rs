@@ -10,6 +10,8 @@ use std::ops::Range;
 
 mod annotations;
 mod declaration_parts;
+mod display;
+pub(super) use display::display_separated_names;
 mod environment;
 pub(super) use environment::environment_names;
 mod symbols;

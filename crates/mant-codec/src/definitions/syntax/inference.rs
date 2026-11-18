@@ -38,7 +38,14 @@ pub(in crate::definitions) fn infer_identity(
         .map_or_else(String::new, |term| plain_text(term));
     #[cfg(feature = "roff")]
     if let Some((kind, recognized)) = native_subject::recognize_head(item, &first, operands) {
-        return InferredIdentity::classify(recognized, kind, NameCase::Sensitive, false);
+        return InferredIdentity::classify(
+            recognized,
+            kind,
+            NameCase::Sensitive,
+            false,
+            item,
+            operands,
+        );
     }
     let trimmed = first.trim();
     let leading_option = hint.is_none()
@@ -93,17 +100,28 @@ pub(in crate::definitions) fn infer_identity(
         kind = mixed_kind;
         case = NameCase::Sensitive;
     }
-    InferredIdentity::classify(recognized, kind, case, keep_unnamed_kind)
+    InferredIdentity::classify(recognized, kind, case, keep_unnamed_kind, item, operands)
 }
 
 impl InferredIdentity {
     fn classify(
-        recognized: HeadNames,
+        mut recognized: HeadNames,
         kind: EntryKind,
         case: NameCase,
         keep_unnamed_kind: bool,
+        item: &DefinitionItem,
+        operands: HeadOperands<'_>,
     ) -> Self {
+        let actual = recognized.restrict_display_only_forms(item, operands, kind);
+        let (kind, case) = if actual == kind {
+            (kind, case)
+        } else {
+            (actual, NameCase::Sensitive)
+        };
         let names = ordered_names(&recognized.occurrences, kind);
+        let semantic = recognized.semantic
+            && (!names.is_empty()
+                || recognized.excluded_forms.len() < recognized.occurrences.len());
         let (kind, case) = if names.is_empty() && !keep_unnamed_kind {
             (EntryKind::Term, NameCase::Sensitive)
         } else {
@@ -116,7 +134,7 @@ impl InferredIdentity {
             occurrences: recognized.occurrences,
             excluded_forms: recognized.excluded_forms,
             limit: recognized.limit,
-            semantic: recognized.semantic,
+            semantic,
         }
     }
 }

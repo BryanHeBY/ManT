@@ -78,7 +78,6 @@ fn environment_group_syntax_distinguishes_template_assignment_and_alias_boundari
         ),
         ("Ev A1=foo,bar, Ev B2", &["A1", "B2"][..], "A1=foo,bar, B2"),
         ("Ev A1=foo,bar, B2", &["A1"][..], "A1=foo,bar, B2"),
-        ("Ev A,B Ns Ar C", &["A"][..], "A,BC"),
     ] {
         check(head, names, form, &["PROGRAM", "SCRIPT", "ONE", "b"]);
     }

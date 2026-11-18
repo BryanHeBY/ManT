@@ -244,6 +244,66 @@
       }
     },
     {
+      "file": "dragonflybsd-hack.6.gz",
+      "sourceIdentity": "dragonflybsd-6.4.2-x86_64:man/man6/hack.6.gz",
+      "originUrl": "https://avalon.dragonflybsd.org/iso-images/dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archive": "dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archiveMember": "usr/share/man/man6/hack.6.gz",
+      "archiveSha256": "373150a21eeb7ce0f20c7faf1b8129145bf3bf0463a45d0dc18aad274f7ed661",
+      "sourceSha256": "6ad584ad13e617a145ad15851a0b37744553a9f121cebecdecfee203ad6d8e0e",
+      "fixtureSha256": "6ad584ad13e617a145ad15851a0b37744553a9f121cebecdecfee203ad6d8e0e",
+      "decompressedSha256": "548153fbe20dc7fefe5b9094d15ca5e76bfa3f4d742426cc37339b0412cabb36",
+      "sourceBytes": 2979,
+      "fixtureBytes": 2979,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-3-Clause",
+      "licenseFile": "dragonflybsd-hack.6.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "Two independently authored Ev names joined by a literal conjunction bind to their common description.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "a8dcdc847c570cdc20e64e7eeea5a3daac294b5c5d1c7b905c252784763dd371",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 5057,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "ae459f8c6ad76883d30c828b77955d5774e7c6ed6da81c05094179b2be7fb36a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 5059,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "0aee8ffdfa0f74c455bee6adecdd33a828718c98d4dae169dfd59eb15e45a432",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 12133,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "8c4b184bcbffc4a8ecfe46123013df7123c2d3eadaf16d1260c6bbcad9c64115",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 17730,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "3bad33b5c1b95fe439e9290dd8efc1115093e8ce2ecf15ea1fdc87267fe8e39a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 85,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
       "file": "freebsd-ng_deflate.4.gz",
       "sourceIdentity": "freebsd-15.1-amd64:man/man4/ng_deflate.4.gz",
       "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",

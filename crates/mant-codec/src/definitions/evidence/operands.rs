@@ -12,6 +12,9 @@ pub(crate) enum NativeOperandRole {
     LiteralContinuation(Option<u32>),
     #[cfg(any(feature = "roff", test))]
     Argument,
+    /// A tbl cell contributes readable content without declaring a name or form.
+    #[cfg(feature = "roff")]
+    DisplayOnly,
     /// An `Ar` spelling may name an authored operand definition directly.
     #[cfg(feature = "roff")]
     Placeholder,
@@ -113,7 +116,8 @@ impl NativeOperandRole {
             #[cfg(any(feature = "roff", test))]
             Self::Argument => true,
             #[cfg(feature = "roff")]
-            Self::Placeholder
+            Self::DisplayOnly
+            | Self::Placeholder
             | Self::IncompletePlaceholder
             | Self::SearchArgument(_)
             | Self::OptionalKey
@@ -121,6 +125,14 @@ impl NativeOperandRole {
             | Self::ClippedSubject(..)
             | Self::ClippedEnvironment { .. }
             | Self::ClippedEnclosure => true,
+            _ => false,
+        }
+    }
+
+    pub(in crate::definitions) fn display_only(self) -> bool {
+        match self {
+            #[cfg(feature = "roff")]
+            Self::DisplayOnly => true,
             _ => false,
         }
     }

@@ -27,13 +27,13 @@ pub(in crate::definitions::syntax) struct EnvironmentNames {
     pub(in crate::definitions::syntax) unproved_exact_form: bool,
 }
 
-fn recognize(
+pub(super) fn recognize(
     view: &HeadView<'_>,
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
 ) -> Option<EnvironmentNames> {
     let text = view.text.as_str();
-    let (parts, assignments) = split_groups(text, operands, uses)?;
+    let (parts, assignments) = split_groups(view, operands, uses)?;
     let mut parts = parts.into_iter().peekable();
     let mut result = EnvironmentNames::default();
     let mut unproved_join = false;
@@ -76,18 +76,19 @@ fn recognize(
     // The authored label remains visible. Its exact text cannot claim an
     // aliasless semantic owner when only unrelated operands made it look
     // like a declaration. An independently named atom still owns the form.
-    result.unproved_exact_form = unproved_join && result.names.is_empty();
+    result.unproved_exact_form = unproved_join;
     Some(result)
 }
 
 fn split_groups<'a>(
-    text: &'a str,
+    view: &'a HeadView<'_>,
     operands: &[NativeOperand],
     uses: OperandUses<'_>,
 ) -> Option<(Vec<&'a str>, Vec<usize>)> {
+    let text = view.text.as_str();
     let mut assignments = Vec::new();
     let mut value_word = None;
-    let groups = named::split_named_groups(text, |at, outside_group| {
+    let protect = |at, outside_group| {
         let role = operand_at(operands, at);
         if uses.protects_syntax(at) || role.is_some_and(|operand| is_description(operand.role)) {
             return true;
@@ -105,8 +106,67 @@ fn split_groups<'a>(
         // Once assignment begins, the rest of that word is its literal
         // RHS, including unmatched delimiters and comma/pipe characters.
         false
-    })?;
+    };
+    let connectors = operands.iter().filter_map(|operand| {
+        if !matches!(operand.role, NativeOperandRole::LiteralContinuation(_)) {
+            return None;
+        }
+        let literal = text[operand.bytes.clone()].trim();
+        let start = offset(text, literal);
+        (literal == "or").then_some(start..start + literal.len())
+    });
+    let groups =
+        named::split_named_groups_with_connectors(text, protect, connectors, |left, end| {
+            alternative_environment_connector(view, operands, uses, left, end).is_some()
+        })?;
     Some((groups, assignments))
+}
+
+fn alternative_environment_connector(
+    view: &HeadView<'_>,
+    operands: &[NativeOperand],
+    uses: OperandUses<'_>,
+    left: &str,
+    end: usize,
+) -> Option<()> {
+    let text = view.text.as_str();
+    let (before, after) = (
+        left.ends_with(char::is_whitespace),
+        text[end..].starts_with(char::is_whitespace),
+    );
+    if !(before && after) {
+        return None;
+    }
+    let left = left.trim();
+    let start = offset(text, left);
+    let lead = operand_at(operands, start)?.role;
+    let right_start = offset(text, text[end..].trim_start());
+    let right = operand_at(operands, right_start)?;
+    let separator = operand_at(operands, end - "or".len())?;
+    // mdoc_macro.c::in_line gives each Ev its own invocation and executes
+    // the intervening No independently. A literal from an Ev RHS or a
+    // plain word spelling "or" supplies no such evidence.
+    let NativeOperandRole::LiteralContinuation(scope) = separator.role else {
+        return None;
+    };
+    if !matches!((lead, right.role), (
+        NativeOperandRole::Environment { invocation: Some(a), enclosure: first },
+        NativeOperandRole::Environment { invocation: Some(b), enclosure: last },
+    ) if a != b && first == scope && last == scope)
+    {
+        return None;
+    }
+    let next = text[right_start..right.bytes.end].trim_end();
+    let groups = named::split_named_groups(next, |_, _| false)?;
+    named::environment_atom(groups.first()?.trim())?;
+    let name = name_in_atom(
+        view,
+        &(start..start + left.len()),
+        operands,
+        Some(lead),
+        uses,
+    )?;
+    proven_spelling(uses, &(start..start + name.len()), Some(lead)).then_some(())
 }
 
 fn proven_spelling(
@@ -140,10 +200,8 @@ fn joined_foreign_operand(
     let mut end = range.start;
     for operand in intersecting_operands(operands, range.clone()) {
         let start = operand.bytes.start.max(range.start);
-        if start != end
-            || text[start..operand.bytes.end.min(range.end)].starts_with(char::is_whitespace)
-        {
-            return false;
+        if start != end {
+            return has_glued_suffix(text, range, end);
         }
         if !continues_environment(lead, operand.role) {
             let prefix = &text[range.start..start];
@@ -152,11 +210,18 @@ fn joined_foreign_operand(
             // literal `PREFIX_` followed by Ar is an explicit template.
             return !(is_annotation_boundary(operand.role)
                 || prefix.ends_with('_') && operand.role.is_operand_label())
-                && named::environment_variable_alias(prefix).is_some_and(|name| name == prefix);
+                && has_glued_suffix(text, range, start);
         }
-        end = operand.bytes.end;
+        end = operand.bytes.end.min(range.end);
     }
-    false
+    has_glued_suffix(text, range, end)
+}
+
+fn has_glued_suffix(text: &str, range: &Range<usize>, end: usize) -> bool {
+    let prefix = &text[range.start..end];
+    end < range.end
+        && !text[end..range.end].starts_with(char::is_whitespace)
+        && named::environment_variable_alias(prefix).is_some_and(|name| name == prefix)
 }
 
 fn new_environment_after_rhs_separator(
@@ -285,9 +350,10 @@ fn environment_with_described_suffix(
     let suffix =
         &text[first_suffix.bytes.start.max(start)..first_suffix.bytes.end.min(start + part.len())];
     let prefix = &text[start..offset(text, suffix.trim_start())];
-    if prefix.ends_with(char::is_whitespace)
+    if (prefix.ends_with(char::is_whitespace) || first_suffix.role.display_only())
         && !prefix.contains('=')
         && (first_suffix.role == NativeOperandRole::Description
+            || first_suffix.role.display_only()
             || first_suffix.role.subject().is_some())
     {
         named::environment_atom(prefix.trim_end())

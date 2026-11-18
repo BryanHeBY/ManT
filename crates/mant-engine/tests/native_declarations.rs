@@ -39,6 +39,8 @@ mod search_templates;
 mod subjects;
 #[path = "native_declarations/support.rs"]
 mod support;
+#[path = "native_declarations/table_declarations.rs"]
+mod table_declarations;
 
 fn definitions(document: &Document) -> Vec<&DefinitionItem> {
     struct Items<'a>(Vec<&'a DefinitionItem>);

@@ -60,9 +60,11 @@ impl IdentityPlan {
         debug_assert_eq!(item.terms.len(), 1);
         let mut name_bindings =
             super::binding::native_name_bindings(item, &self.names, &self.occurrences);
+        let mut forms = queryable_term_forms(item, &self.excluded_forms, &name_bindings);
         for part in name_bindings
             .iter_mut()
             .flat_map(|binding| &mut binding.occurrences)
+            .chain(&mut forms)
             .flat_map(|form| &mut form.parts)
         {
             part.root = mant_ir::EntryInlineRoot::Block { index: 0 };
@@ -73,13 +75,7 @@ impl IdentityPlan {
             kind: self.kind,
             case: self.case,
             names: self.names,
-            forms: vec![mant_ir::EntryForm {
-                parts: vec![mant_ir::EntryContentSlice {
-                    root: mant_ir::EntryInlineRoot::Block { index: 0 },
-                    path: Vec::new(),
-                    bytes: None,
-                }],
-            }],
+            forms,
             name_bindings,
             alias_groups: Vec::new(),
             alias_of: None,
@@ -304,14 +300,13 @@ pub(super) fn identify_item(
     {
         term.content.insert(0, Inline::anchor(id.clone()));
     }
+    let name_bindings = super::binding::native_name_bindings(item, &names, &occurrences);
+    let forms = queryable_term_forms(item, &excluded_forms, &name_bindings);
     item.entry = Some(EntryFacts {
-        name_bindings: super::binding::native_name_bindings(item, &names, &occurrences),
+        name_bindings,
         alias_groups: Vec::new(),
         alias_of: None,
-        forms: (0..item.terms.len())
-            .filter(|index| excluded_forms.binary_search(index).is_err())
-            .map(mant_ir::EntryForm::term)
-            .collect(),
+        forms,
         id: id.into(),
         kind,
         case,
@@ -319,6 +314,47 @@ pub(super) fn identify_item(
         value_domain,
     });
     kind
+}
+
+fn queryable_term_forms(
+    item: &DefinitionItem,
+    excluded: &[usize],
+    bindings: &[mant_ir::EntryNameBinding],
+) -> Vec<mant_ir::EntryForm> {
+    use mant_ir::{EntryForm, EntryInlineRoot};
+    if excluded.is_empty() {
+        return (0..item.terms.len()).map(EntryForm::term).collect();
+    }
+
+    // The entire physical term remains available for reading. When it also
+    // contains display-only or unproved text, just the actually declared
+    // name spans can support direct matching in that term.
+    let mut proved: Vec<_> = bindings
+        .iter()
+        .flat_map(|binding| &binding.occurrences)
+        .filter_map(|form| {
+            let start = form.parts.first()?;
+            let EntryInlineRoot::Term { index } = start.root else {
+                return None;
+            };
+            excluded.binary_search(&index).ok()?;
+            let bytes = start.bytes.as_ref().map_or(0, |range| range.start);
+            Some((index, &start.path, bytes, form))
+        })
+        .collect();
+    proved.sort_by(|a, b| (a.0, a.1, a.2).cmp(&(b.0, b.1, b.2)));
+    let mut proved = proved.into_iter().peekable();
+    let mut forms = Vec::new();
+    for index in 0..item.terms.len() {
+        if excluded.binary_search(&index).is_err() {
+            forms.push(EntryForm::term(index));
+        } else {
+            while let Some((_, _, _, form)) = proved.next_if(|part| part.0 == index) {
+                forms.push(form.clone());
+            }
+        }
+    }
+    forms
 }
 
 pub(super) fn has_semantic_spelling(item: &DefinitionItem, plan: &IdentityPlan) -> bool {

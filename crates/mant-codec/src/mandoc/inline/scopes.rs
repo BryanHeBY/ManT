@@ -158,7 +158,10 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             super::names::append_block(builder, node, None, name);
         }
         Some(Mdoc(MdocMacro::Nm)) => {
-            builder.with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
+            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+                builder
+                    .with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
+            });
         }
         Some(Mdoc(MdocMacro::Fl)) => append_option(builder, node.id, children, name),
         Some(Mdoc(MdocMacro::Ev)) => {
@@ -236,6 +239,14 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             MdocMacro::PercentB | MdocMacro::PercentI | MdocMacro::PercentJ | MdocMacro::PercentT,
         )) => {
             builder.with_font_scope(Font::Emphasis, |builder| {
+                append_inline_nodes(builder, children, name);
+            });
+        }
+        Some(Mdoc(_)) if node.kind == NodeKind::Element => {
+            // Unhandled mdoc elements execute their own child words in
+            // print_mdoc_node, including validator-generated St/OS text.
+            // Only the explicit No branch can continue an Ev's spelling.
+            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
                 append_inline_nodes(builder, children, name);
             });
         }
@@ -538,8 +549,18 @@ fn append_quoted_title(builder: &mut InlineBuilder, children: &[Node], name: Opt
 /// recreate an isolated zero-advance state.
 fn append_atomic(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -> bool {
     match node.macro_token.as_ref() {
-        Some(Mdoc(MdocMacro::In)) => append_include(builder, node, name),
-        Some(Mdoc(MdocMacro::Bx)) => append_bsd_reference(builder, node, name),
+        Some(Mdoc(MdocMacro::In)) => {
+            // termp_in_pre/post emits the surrounding angles as part of
+            // this independent include, along with its original operand.
+            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+                append_include(builder, node, name);
+            });
+        }
+        Some(Mdoc(MdocMacro::Bx)) => {
+            builder.with_environment_operand(NativeOperandRole::Description, |builder| {
+                append_bsd_reference(builder, node, name);
+            });
+        }
         Some(Mdoc(MdocMacro::Lk)) => {
             if let Some(anchor) = navigation_anchor(node) {
                 builder.append(vec![anchor]);

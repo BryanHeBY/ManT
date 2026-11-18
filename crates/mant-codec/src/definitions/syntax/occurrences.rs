@@ -36,6 +36,63 @@ impl HeadNames {
             constrain_term_names(names, operands.for_term(index));
         }
     }
+
+    pub(super) fn restrict_display_only_forms(
+        &mut self,
+        item: &DefinitionItem,
+        operands: HeadOperands<'_>,
+        kind: EntryKind,
+    ) -> EntryKind {
+        let original_kind = kind;
+        #[cfg(feature = "roff")]
+        let mut kind = (!self.is_empty()).then_some(kind);
+        for (index, names) in self.occurrences.iter_mut().enumerate() {
+            let Some(ranges) = operands.for_term(index) else {
+                continue;
+            };
+            if ranges.iter().any(|operand| operand.role.display_only()) {
+                let uses = OperandUses::new(ranges);
+                names.retain(|name| {
+                    name.parts
+                        .iter()
+                        .all(|range| !uses.overlaps_display_only(range))
+                });
+                if let Err(at) = self.excluded_forms.binary_search(&index) {
+                    self.excluded_forms.insert(at, index);
+                }
+                #[cfg(feature = "roff")]
+                {
+                    let found =
+                        super::native_subject::display_separated_names(&item.terms[index], ranges);
+                    self.limit = self.limit.or(found.limit);
+                    if let Some(inferred) = found.kind.filter(|_| !found.names.is_empty()) {
+                        kind = Some(match kind {
+                            Some(current) if inferred != current => EntryKind::Term,
+                            _ => inferred,
+                        });
+                    }
+                    for name in found.names {
+                        if !names
+                            .iter()
+                            .any(|old| old.name == name.name && old.parts == name.parts)
+                        {
+                            names.push(name);
+                        }
+                    }
+                    names.sort_by_key(|name| name.parts[0].start);
+                }
+            }
+        }
+        debug_assert_eq!(self.occurrences.len(), item.terms.len());
+        #[cfg(feature = "roff")]
+        {
+            kind.unwrap_or(original_kind)
+        }
+        #[cfg(not(feature = "roff"))]
+        {
+            original_kind
+        }
+    }
 }
 
 pub(super) fn recognize_head_names(
@@ -106,7 +163,7 @@ fn environment_head_names(item: &DefinitionItem, operands: HeadOperands<'_>) -> 
         .collect();
     HeadNames {
         occurrences,
-        semantic: excluded_forms.len() < item.terms.len(),
+        semantic: true,
         excluded_forms,
         limit: None,
     }

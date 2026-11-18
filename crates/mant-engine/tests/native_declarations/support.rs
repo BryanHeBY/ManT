@@ -11,6 +11,8 @@ use mant_protocol::{
     ExplanationOptions, ExplanationQuery, ExplanationSupport, QueryExcerpt, QueryExplanation,
 };
 
+#[path = "../support/explanation_ranges.rs"]
+pub(super) mod explanation_ranges;
 #[path = "../support/json_roundtrip.rs"]
 pub(super) mod json_roundtrip;
 

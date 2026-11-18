@@ -101,6 +101,11 @@ impl<'a> OperandUses<'a> {
             .any(|operand| operand.role.is_parameter())
     }
 
+    pub(super) fn overlaps_display_only(self, part: &Range<usize>) -> bool {
+        self.intersecting(part)
+            .any(|operand| operand.role.display_only())
+    }
+
     pub(super) fn protects_syntax(self, offset: usize) -> bool {
         self.protects(&(offset..offset + 1))
     }

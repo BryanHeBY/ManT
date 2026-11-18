@@ -53,7 +53,7 @@ impl InlineBuilder {
         }
         if !content.is_empty() && self.head_operand_capture.is_some() {
             // The table cells belong to the term's readable content only.
-            self.with_native_operand_role(NativeOperandRole::Description, |builder| {
+            self.with_native_operand_role(NativeOperandRole::DisplayOnly, |builder| {
                 builder.begin_native_word_owner();
             });
             if let Some(marker) = self.execution.native_word_owner.take() {

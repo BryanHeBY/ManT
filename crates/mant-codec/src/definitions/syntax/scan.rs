@@ -122,6 +122,11 @@ pub(super) fn option_head(nodes: &[Inline], operands: &[NativeOperand]) -> Optio
 }
 
 #[cfg(feature = "roff")]
+pub(super) fn native_option_head(text: &str, operands: &[NativeOperand]) -> OptionHead {
+    Scanner::new(&HeadView::native_word(text, operands)).scan()
+}
+
+#[cfg(feature = "roff")]
 pub(super) fn native_option_key(text: &str) -> Option<RecognizedName> {
     let operands = [NativeOperand {
         bytes: 0..text.len(),

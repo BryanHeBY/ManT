@@ -3,6 +3,7 @@ use mant_ir::{EntryKind, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceClass, OutlineNode};
 
 mod annotations;
+mod environment_alternatives;
 mod environment_atoms;
 mod environment_subjects;
 mod invocations;
