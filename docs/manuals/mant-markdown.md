@@ -16,7 +16,7 @@ Headings from H1 through H6 form a recursive section tree. The first heading, wh
 
 ATX and Setext headings retain their real inline content, including links, nested emphasis, code, anchors and supported hard breaks. A linked title is not automatically a command or another semantic entry. Plain outline labels and IDs derive from visible words, not from link destinations; changing only a destination does not change the heading's local ID.
 
-Markdown export uses Setext syntax for level-one/two headings containing hard breaks. Deeper ATX headings fold those breaks to spaces while retaining the level, words and links; the IR retains the original breaks.
+Markdown export uses Setext syntax for level-one/two headings containing hard breaks. Deeper ATX headings fold those breaks to spaces while retaining the level, words and links. The IR retains the original breaks. When writing a physical line in prose or a Setext title, export escapes literal rule and list markers that would otherwise start another block.
 
 Heading links retain their typed destinations in Markdown output. When a heading links to a local target, export automatically retains addressable HTML anchors, including the document-root target before its visible H1. This addressable fallback takes priority over optional semantic comments: otherwise dropping a non-heading target could leave the exported heading link dangling. Raw anchor HTML is not part of the semantic reimport subset; use IR JSON when every content and navigation fact must round-trip.
 

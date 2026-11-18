@@ -100,15 +100,18 @@ pub(in crate::encode) fn protect_block_prefix(line: &str) -> String {
 }
 
 pub(in crate::encode) fn block_prefix_escape_position(line: &str) -> Option<usize> {
+    let line = line
+        .split_once('\n')
+        .map_or(line, |(first, _)| first)
+        .trim_end_matches([' ', '\t']);
     let bytes = line.as_bytes();
+    let marker = *bytes.first()?;
     let hashes = bytes.iter().take_while(|byte| **byte == b'#').count();
     if (hashes > 0 && bytes.get(hashes).is_none_or(u8::is_ascii_whitespace))
-        || bytes.starts_with(b">")
-        || bytes.starts_with(b"- ")
-        || bytes.starts_with(b"+ ")
-        || bytes.starts_with(b"* ")
-        || (!bytes.is_empty() && bytes.iter().all(|byte| *byte == b'-'))
-        || (!bytes.is_empty() && bytes.iter().all(|byte| *byte == b'='))
+        || marker == b'>'
+        || (matches!(marker, b'-' | b'+' | b'*')
+            && bytes.get(1).copied().is_none_or(block_separator))
+        || is_underline(bytes, marker)
     {
         Some(0)
     } else {
@@ -116,12 +119,30 @@ pub(in crate::encode) fn block_prefix_escape_position(line: &str) -> Option<usiz
             .iter()
             .take_while(|byte| byte.is_ascii_digit())
             .count();
-        (digits > 0
-            && bytes
-                .get(digits..digits.saturating_add(2))
-                .is_some_and(|suffix| matches!(suffix, b". " | b") ")))
+        ((1..=9).contains(&digits)
+            && matches!(bytes.get(digits), Some(b'.' | b')'))
+            && bytes.get(digits + 1).copied().is_none_or(block_separator))
         .then_some(digits)
     }
+}
+
+fn block_separator(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t')
+}
+
+fn is_underline(bytes: &[u8], marker: u8) -> bool {
+    // An unbroken run can be a Setext underline. Three thematic markers
+    // may also be separated by spaces or tabs, without becoming a list.
+    (matches!(marker, b'-' | b'=') && bytes.iter().all(|&byte| byte == marker))
+        || (matches!(marker, b'-' | b'*' | b'_')
+            && bytes
+                .iter()
+                .filter(|&&byte| byte == marker)
+                .nth(2)
+                .is_some()
+            && bytes
+                .iter()
+                .all(|&byte| byte == marker || block_separator(byte)))
 }
 
 #[cfg(test)]

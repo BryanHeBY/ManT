@@ -11,6 +11,8 @@ use mant_render::render_query_text;
 
 #[path = "heading_content/attributes.rs"]
 mod attributes;
+#[path = "heading_content/literal_rows.rs"]
+mod literal_rows;
 
 fn links(document: &Document) -> Vec<LinkTarget> {
     #[derive(Default)]

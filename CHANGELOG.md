@@ -60,6 +60,8 @@ that crate was not published for that change.
 - Preserve literal Markdown heading tails through export and readback.
   Honor canonical author IDs and use final owners for both local and
   self-document fragments, including collisions and ambiguous aliases.
+- Preserve literal thematic and list marker prefixes on Markdown hard rows
+  through repeated export and readback. Keep heading levels and section bodies.
 - Keep generated semantic entry IDs within the selector limit, including
   when a long form cannot publish names. The full form remains readable.
 - Fit roff and Markdown section IDs within the selector byte budget after
