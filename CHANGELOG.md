@@ -131,6 +131,9 @@ that crate was not published for that change.
 - Keep trailing ASCII spaces in authored definition labels while aligning the
   shared description from the printable label end. CLI, TUI and Markdown
   use this reading rule for separated, indented fields.
+- Use tbl's painted rules, numeric padding and measured horizontal motion to
+  preserve word boundaries. Retain opening spacing and completed cell rows
+  in phrasing and block tables.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.

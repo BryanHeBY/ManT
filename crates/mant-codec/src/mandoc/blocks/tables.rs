@@ -81,11 +81,25 @@ impl<'a> InlineTableSequence<'a> {
         finish_table_span(formatter);
         let mut output = Vec::new();
         let mut first = None;
+        let mut native_height = 1;
+        let mut projected_height = 1;
         for (index, cell) in cells.into_iter().enumerate() {
-            for block in cell.blocks {
-                if let Block::Paragraph { children, .. } = block
+            for block in cell.cell.blocks {
+                if let Block::Paragraph { mut children, .. } = block
                     && !children.is_empty()
                 {
+                    for _ in 0..cell.empty_tail {
+                        crate::mandoc::inline::consume_one_row_ending(&mut children);
+                    }
+                    let interior = children
+                        .iter()
+                        .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
+                        .count();
+                    native_height = native_height.max(1 + interior + cell.empty_tail);
+                    projected_height += interior;
+                    if children.is_empty() {
+                        continue;
+                    }
                     if !output.is_empty() {
                         output.push(Inline::Text { value: " ".into() });
                     }
@@ -99,6 +113,13 @@ impl<'a> InlineTableSequence<'a> {
                 }
             }
         }
+        // A subsequent cell can print on an empty follow-up pass. Keep only
+        // the remaining empty rows after the phrasing projection has read
+        // every cell's actual text.
+        output.extend(
+            std::iter::repeat_with(Inline::line_break)
+                .take(native_height.saturating_sub(projected_height)),
+        );
         Some(InlineTableRow {
             content: output,
             data: kind == mant_ir::TableRowKind::Data,
@@ -140,7 +161,10 @@ pub(super) fn append_table_row(
         // structurally inconsistent foreign snapshot as printable contents.
         return;
     }
-    let cells = cells::lower_cells(node, &kind, context, indent_columns, embedding, formatter);
+    let cells = cells::lower_cells(node, &kind, context, indent_columns, embedding, formatter)
+        .into_iter()
+        .map(cells::ExecutedCell::into_block_cell)
+        .collect();
     let (column_borders, newly_reduced) = table_row_borders(node, context);
     let row = TableRow {
         kind,

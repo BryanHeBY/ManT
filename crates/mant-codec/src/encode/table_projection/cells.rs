@@ -62,6 +62,12 @@ pub(super) fn project_rows(
             // begins an independent budget; navigation-only rows were filtered
             // before reaching this physical boundary.
             output.complete_gap();
+            if matches!(output.tail, Tail::Open) && !output.literal_tail {
+                // A paragraph delimiter has already closed its last
+                // accepted table row. Joining the next data span must not
+                // put another separator into this open, unoccupied tail.
+                output.tail = Tail::CompletedRows;
+            }
             output
         })
 }

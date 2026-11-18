@@ -3,6 +3,15 @@ use super::{InlineBuilder, InlineExecutionState};
 use crate::{definitions::NativeOperandRole, mandoc::blocks::InlineTablePrefix};
 use mant_ir::Inline;
 
+/// Effects of the selected tbl column transaction. A source fragment can
+/// carry its own completed rows; only raw tbl's scan records its empty tail.
+#[derive(Clone, Copy, Default)]
+pub(in crate::mandoc) struct TableCellExecution {
+    pub(in crate::mandoc) buffered: bool,
+    pub(in crate::mandoc) needs_width: bool,
+    pub(in crate::mandoc) trailing_rows: usize,
+}
+
 impl InlineBuilder {
     pub(in crate::mandoc::inline) fn append_table_span(
         &mut self,
@@ -87,6 +96,46 @@ impl InlineBuilder {
 }
 
 impl InlineExecutionState {
+    pub(in crate::mandoc) fn finish_table_word_rows(
+        &mut self,
+        writes: &[super::field_buffer::FieldWrite],
+        output: &mut Vec<Inline>,
+    ) {
+        use super::field_buffer::{FieldBuffer, FieldCell, FieldWrite};
+        if !writes
+            .iter()
+            .any(|write| matches!(write, FieldWrite::Cell(FieldCell::BreakMarker)))
+        {
+            return;
+        }
+        let mut field = FieldBuffer::default();
+        field.configure_tabs(&self.tab_stops);
+        field.apply_writes(writes);
+        let endlines = field.table_word_endlines();
+        if output
+            .iter()
+            .any(|inline| matches!(inline, Inline::LineBreak { .. }))
+        {
+            // term_field never emits a final run of ordinary spaces.
+            // Zero-width content after a breakpoint may have left just
+            // that run on the projected tail, before its row is settled.
+            super::trim_trailing_breakable_spaces(output, usize::MAX);
+        }
+        while crate::mandoc::inline::consume_one_row_ending(output) {}
+        // Interior word breaks already separate two projected text
+        // intervals. Only the remaining device rows need to be expressed
+        // at the cell's tail, before the span's independently owned end.
+        let projected = output
+            .iter()
+            .filter(|inline| matches!(inline, Inline::LineBreak { .. }))
+            .count();
+        let trailing_rows = endlines.saturating_sub(projected);
+        if let Some(cell) = &mut self.table_cell {
+            cell.trailing_rows = trailing_rows;
+        }
+        output.extend(std::iter::repeat_with(Inline::line_break).take(trailing_rows));
+    }
+
     /// The first accepted `term_fill()` width (`vbr`) excludes a trailing
     /// terminal blank run but includes fixed blanks. tblcalc's whole-cell
     /// measurement is a distinct operation and still uses the full input.
@@ -100,6 +149,7 @@ impl InlineExecutionState {
                 font: &mut font,
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
+                measure_table_motion: true,
                 policy: crate::mandoc::inline::TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: true,
@@ -119,9 +169,9 @@ impl InlineExecutionState {
         writes: &[super::field_buffer::FieldWrite],
         separator: bool,
     ) {
-        if let Some(buffered) = &mut self.table_buffer_written {
+        if let Some(cell) = &mut self.table_cell {
             use super::field_buffer::FieldWrite;
-            *buffered |= separator
+            cell.buffered |= separator
                 || writes.iter().any(|write| {
                     !matches!(
                         write,

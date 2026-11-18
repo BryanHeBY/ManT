@@ -102,6 +102,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
             font: &mut builder.execution.font,
             zero_advance: &mut builder.execution.zero_advance,
             defer_leading_blanks,
+            measure_table_motion: false,
             policy: font::TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: true,
@@ -112,9 +113,9 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     );
     builder.ensure_definition_field_session();
     builder.escape_coverage.record(execution.escape_scan);
-    if let Some(buffered) = &mut builder.table_buffer_written {
-        *buffered |= execution.table_device_buffer_written;
-        builder.execution.table_line_needs_width |= execution.table_line_needs_width;
+    if let Some(cell) = &mut builder.table_cell {
+        cell.buffered |= execution.table_device_buffer_written;
+        cell.needs_width |= execution.table_line_needs_width;
     }
     builder.native_word_writes = Some(execution.native_writes);
     // A visited empty source TEXT takes the vertical path before reaching

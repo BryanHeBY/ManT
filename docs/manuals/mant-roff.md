@@ -1507,8 +1507,15 @@ cell excludes ordinary trailing fill blanks and retains fixed blanks. A tbl
 opening rule or device spacing request can close the live row before the first
 cell. A cell's pending word-end break and the native row end close an occupied
 row only once. Empty data rows retain their own line boundaries. The phrasing
-form omits grid geometry and shares
-the page's source recovery and work allowance with block tables. An implicit
+form can simplify grid geometry. A drawn horizontal or vertical rule before
+the first visible cell still establishes a word boundary. The first fill pass
+also counts native numeric padding and positive relative horizontal motion.
+The same opening spacing request applies to block tables and can be offset
+by an earlier negative `.sp`. Cell execution supplies completed empty rows
+independently of the table's final row boundary.
+
+Phrasing tables share the page's source recovery and work allowance with
+block tables. An implicit
 `Nm` in a recovered text block uses the enclosing page's executed name.
 Cell text is searchable and retains its links. Name and complete-form
 queries use independently proved declaration ranges with their original

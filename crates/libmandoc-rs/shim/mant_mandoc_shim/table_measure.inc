@@ -57,6 +57,22 @@ mant_mandoc_table_hmotion_input(const char *argument, int backbefore)
 }
 
 size_t
+mant_mandoc_table_hmotion_columns(const char *argument)
+{
+	struct roffsu units;
+	double basic;
+	if (argument == NULL || *argument == '|' ||
+	    a2roffsu(argument, &units, SCALE_EM) == NULL)
+		return 0;
+	/* term_word uses one ASCII_NBRSP write per positive en, rounding
+	 * up only after ascii_hspan's conversion to integer basic units. */
+	basic = mant_table_hspan(&units) + 0.01;
+	if (!(basic >= 1 && basic <= INT_MAX))
+		return 0;
+	return ((size_t)basic + 23) / 24;
+}
+
+size_t
 mant_mandoc_table_line_length(size_t current, size_t previous, const char *argument)
 {
 	struct roffsu units;

@@ -197,8 +197,21 @@ impl WordExecution {
                     self.native_writes.push(FieldWrite::CancelBackbefore);
                 }
                 if preserves_advance {
-                    self.native_writes
-                        .push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
+                    let width = argument
+                        .filter(|_| context.measure_table_motion)
+                        .map_or(1, libmandoc_rs::TableColumnMetrics::relative_motion_columns)
+                        .saturating_sub(usize::from(context.measure_table_motion && pending));
+                    let cell = if width > 1 {
+                        // This scratch first pass only needs the graph
+                        // and width of the positive fixed-blank run.
+                        FieldCell::Graph {
+                            text: '\u{a0}',
+                            width,
+                        }
+                    } else {
+                        FieldCell::NonBreakingBlank
+                    };
+                    self.native_writes.push(FieldWrite::Cell(cell));
                 }
             }
             if !rewind_entry {

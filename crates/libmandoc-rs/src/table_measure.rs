@@ -14,6 +14,13 @@ pub struct TableColumnMetrics {
 }
 
 impl TableColumnMetrics {
+    /// Width in terminal cells written by a positive relative motion.
+    /// Absolute motions depend on the live device column.
+    #[must_use]
+    pub fn relative_motion_columns(argument: &str) -> usize {
+        crate::ffi::table_hmotion_columns(argument)
+    }
+
     /// Execute the source line-width request used by the native tbl solver.
     /// Widths are basic units; an omitted/invalid argument restores `previous`.
     #[must_use]

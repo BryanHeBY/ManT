@@ -35,6 +35,9 @@ pub(in crate::mandoc) struct TextExecutionContext<'state> {
     pub(in crate::mandoc) font: &'state mut FontState,
     pub(in crate::mandoc) zero_advance: &'state mut ZeroAdvanceState,
     pub(in crate::mandoc) defer_leading_blanks: bool,
+    /// Measure native tbl's relative movement without expanding its cells
+    /// or changing the reading projection's single generated space.
+    pub(in crate::mandoc) measure_table_motion: bool,
     pub(in crate::mandoc) policy: TextExecutionPolicy,
 }
 
@@ -71,6 +74,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
             font: state,
             zero_advance: &mut zero_advance,
             defer_leading_blanks: false,
+            measure_table_motion: false,
             policy: TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: false,

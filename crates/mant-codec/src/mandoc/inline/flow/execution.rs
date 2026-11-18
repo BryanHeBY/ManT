@@ -286,7 +286,7 @@ impl InlineBuilder {
         // recovery parse does not give a tbl cell another source-line event.
         if node.flags.line_start
             && native.starts_with(' ')
-            && self.table_buffer_written.is_none()
+            && self.table_cell.is_none()
             && !self.final_source_continuation_or(false)
         {
             self.execute_native_newline();

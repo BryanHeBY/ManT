@@ -22,6 +22,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use tab_stops::TabStops;
+pub(in crate::mandoc) use table_input::TableCellExecution;
 mod no_fill;
 pub(in crate::mandoc) use native_field::{FieldFlag, FieldFlags};
 mod operand_capture;
@@ -225,8 +226,7 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pub(in crate::mandoc) native_word_writes: Option<Vec<field_buffer::FieldWrite>>,
     /// Row-local tbl observation of actual accepted `term_word` writes. It
     /// survives projection drains, but only a committed recovery publishes it.
-    pub(in crate::mandoc) table_buffer_written: Option<bool>,
-    pub(in crate::mandoc) table_line_needs_width: bool,
+    pub(in crate::mandoc) table_cell: Option<TableCellExecution>,
     pub(in crate::mandoc) table_recovery:
         Option<Rc<crate::mandoc::source_context::TableRecoverySource>>,
     /// Source page bounds used by tbl width execution, never viewport layout.

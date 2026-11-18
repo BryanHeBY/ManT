@@ -378,13 +378,14 @@ impl<'a> LoweringContext<'a> {
         let mut zero_advance = inline::ZeroAdvanceState::new();
         zero_advance.annotations = Some(self.annotations.clone());
         zero_advance.inherit_armed(formatter.take_zero_advance_armed());
-        let record_native_cells = formatter.execution.table_buffer_written.is_some();
+        let record_native_cells = formatter.execution.table_cell.is_some();
         let execution = inline::parse_roff_text_with_zero_advance(
             source,
             inline::TextExecutionContext {
                 font: &mut formatter.font,
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
+                measure_table_motion: false,
                 policy: inline::TextExecutionPolicy {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
                     record_native_cells,
@@ -400,9 +401,9 @@ impl<'a> LoweringContext<'a> {
         formatter
             .execution
             .observe_table_word_writes(&execution.native_writes, false);
-        if let Some(buffered) = &mut formatter.execution.table_buffer_written {
-            *buffered |= execution.table_device_buffer_written;
-            formatter.execution.table_line_needs_width |= execution.table_line_needs_width;
+        if let Some(cell) = &mut formatter.execution.table_cell {
+            cell.buffered |= execution.table_device_buffer_written;
+            cell.needs_width |= execution.table_line_needs_width;
         }
         let mut output = execution.output;
         // Even a control-only tbl word enters term_word(): it clears
@@ -411,11 +412,9 @@ impl<'a> LoweringContext<'a> {
         formatter.execute_word();
         formatter.inherit_zero_advance_armed(zero_advance.take_armed());
         zero_advance.finish_into(&mut output);
-        // tbl_term.c flushes the remainder of each cell before its data
-        // span's endline. A trailing \p or a break followed only by
-        // ordinary blanks/zero-width cells does not leave another pass
-        // with text (term.c::term_flushln). Its row is the span's row.
-        inline::consume_one_row_ending(&mut output);
+        formatter
+            .execution
+            .finish_table_word_rows(&execution.native_writes, &mut output);
         output
     }
 }

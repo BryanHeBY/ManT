@@ -3,8 +3,8 @@ mod owned;
 mod raw;
 mod table_measure;
 pub(crate) use table_measure::{
-    measure_table_columns, number_padding, table_hline_input, table_hmotion_input,
-    table_line_length,
+    measure_table_columns, number_padding, table_hline_input, table_hmotion_columns,
+    table_hmotion_input, table_line_length,
 };
 #[cfg(feature = "render")]
 mod render;

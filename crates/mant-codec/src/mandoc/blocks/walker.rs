@@ -237,6 +237,17 @@ impl BlockLowerer<'_, '_> {
         } else {
             self.state.flush_paragraph();
             self.end_literal_for_structure(node);
+            if node.flags.table_start && node.flags.table_leading_space {
+                // tbl_term's leading term_vspace happens after the parent
+                // line flush, before any cell word can clear skipvsp.
+                let rows = self.state.resolve_vertical_space(1);
+                self.state
+                    .formatter
+                    .execution
+                    .finish_native_vertical_rows(usize::from(rows));
+                self.state
+                    .request_leading_spacing(rows, crate::mandoc::source_span(node));
+            }
             let output_start = self.state.output.len();
             let accepted_before = self.state.formatter.execution.visible_content_checkpoint();
             let spacing_enabled = self.state.spacing_enabled();

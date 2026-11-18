@@ -4,9 +4,27 @@ use super::{
     TableEmbedding, execution, recovery, table_alignment, table_cell_font, table_cell_kind,
     table_cell_width,
 };
-use crate::mandoc::{LoweringContext, source_span};
+use crate::mandoc::{LoweringContext, inline::TableCellExecution, source_span};
 use libmandoc_rs::{Node, TableCellKind, TableFont};
-use mant_ir::{Block, LayoutHint, TableCell as AstTableCell};
+use mant_ir::{Block, Inline, LayoutHint, TableCell as AstTableCell};
+
+pub(super) struct ExecutedCell {
+    pub(super) cell: AstTableCell,
+    pub(super) empty_tail: usize,
+}
+
+impl ExecutedCell {
+    pub(super) fn into_block_cell(mut self) -> AstTableCell {
+        if self.empty_tail != 0
+            && let [Block::Paragraph { children, .. }] = self.cell.blocks.as_mut_slice()
+        {
+            // A raw tbl follow-up pass already owns an endline. Keep
+            // its empty row when placement retires the provisional tail.
+            children.push(Inline::line_break());
+        }
+        self.cell
+    }
+}
 
 pub(super) fn lower_cells(
     node: &Node,
@@ -15,7 +33,7 @@ pub(super) fn lower_cells(
     indent_columns: crate::mandoc::layout::SourceIndent,
     embedding: Option<&TableEmbedding<'_>>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> Vec<AstTableCell> {
+) -> Vec<ExecutedCell> {
     let execution = embedding.map(|embedding| embedding.execution.as_ref());
     if let Some(execution) = execution {
         execution.enter(formatter, indent_columns.physical_basic_units());
@@ -52,8 +70,7 @@ pub(super) fn lower_cells(
             // tbl_term.c::term_tbl: every non-hspan EXECUTION column enters,
             // including missing trailing data. All fills precede all flushes.
             formatter.clear_zero_advance();
-            formatter.execution.table_buffer_written = Some(false);
-            formatter.execution.table_line_needs_width = false;
+            formatter.execution.table_cell = Some(TableCellExecution::default());
             if let Some(index) = column.cell
                 && !matches!(
                     column.kind,
@@ -68,17 +85,18 @@ pub(super) fn lower_cells(
                 let blocks =
                     project_text_cell(cell, index, node, context, text_blocks[index], formatter);
                 if !cell.vertical_continuation {
-                    cells[index].blocks = blocks;
+                    cells[index].cell.blocks = blocks;
+                    cells[index].empty_tail = formatter
+                        .execution
+                        .table_cell
+                        .map_or(0, |cell| cell.trailing_rows);
                 }
             }
-            if std::mem::take(&mut formatter.execution.table_line_needs_width) {
+            let executed = formatter.execution.table_cell.take().unwrap_or_default();
+            if executed.needs_width {
                 width_dependent_lines.push(column.logical);
             }
-            buffered |= formatter
-                .execution
-                .table_buffer_written
-                .take()
-                .unwrap_or(false);
+            buffered |= executed.buffered;
         }
         if !buffered
             && proved_columns
@@ -124,17 +142,20 @@ fn text_blocks<'a>(
         })
         .collect::<Vec<_>>()
 }
-fn cell_owners(node: &Node) -> Vec<AstTableCell> {
+fn cell_owners(node: &Node) -> Vec<ExecutedCell> {
     node.table_cells
         .iter()
-        .map(|cell| AstTableCell {
-            preferred_width_columns: table_cell_width(node, cell),
-            break_after: false,
-            kind: table_cell_kind(cell.kind),
-            blocks: Vec::new(),
-            column_span: cell.column_span,
-            row_span: cell.row_span,
-            alignment: Some(table_alignment(cell.alignment)),
+        .map(|cell| ExecutedCell {
+            cell: AstTableCell {
+                preferred_width_columns: table_cell_width(node, cell),
+                break_after: false,
+                kind: table_cell_kind(cell.kind),
+                blocks: Vec::new(),
+                column_span: cell.column_span,
+                row_span: cell.row_span,
+                alignment: Some(table_alignment(cell.alignment)),
+            },
+            empty_tail: 0,
         })
         .collect::<Vec<_>>()
 }

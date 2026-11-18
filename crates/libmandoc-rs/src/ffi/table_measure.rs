@@ -19,6 +19,12 @@ pub(crate) fn table_hmotion_input(argument: &str, backbefore: bool) -> bool {
     })
 }
 
+pub(crate) fn table_hmotion_columns(argument: &str) -> usize {
+    CString::new(argument).map_or(0, |argument| unsafe {
+        raw::mant_mandoc_table_hmotion_columns(argument.as_ptr())
+    })
+}
+
 pub(crate) fn table_line_length(current: usize, previous: usize, argument: Option<&str>) -> usize {
     let argument = argument.and_then(|argument| CString::new(argument).ok());
     unsafe {

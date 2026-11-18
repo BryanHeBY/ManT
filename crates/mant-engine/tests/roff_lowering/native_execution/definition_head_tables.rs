@@ -4,6 +4,7 @@ use mant_ir::{Block, DocumentIndex, ResolvedContent, inline_plain_text};
 use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax, default_search_limit};
 
 mod device_boundaries;
+mod native_passes;
 mod row_boundaries;
 mod row_seams;
 mod source_recovery;

@@ -335,8 +335,7 @@ fn lower_body(
         .zero_advance
         .annotations
         .clone_from(&formatter.execution.zero_advance.annotations);
-    builder.table_buffer_written = formatter.execution.table_buffer_written;
-    builder.table_line_needs_width = formatter.execution.table_line_needs_width;
+    builder.table_cell = formatter.execution.table_cell;
     builder.escape_coverage = formatter.execution.escape_coverage.clone();
     builder.font = formatter.font.clone();
     builder.inherit_vertical_space_debt(formatter.vertical_space_debt);
@@ -375,8 +374,7 @@ fn lower_body(
         inlines.extend((0..delimiters).map(|_| Inline::line_break()));
     }
     formatter.font = builder.font.clone();
-    formatter.execution.table_buffer_written = builder.table_buffer_written;
-    formatter.execution.table_line_needs_width = builder.table_line_needs_width;
+    formatter.execution.table_cell = builder.table_cell;
     formatter.set_spacing_enabled(builder.spacing_enabled());
     formatter.vertical_space_debt = builder.vertical_space_debt();
     formatter.inherit_zero_advance_armed(builder.take_zero_advance_armed());

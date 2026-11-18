@@ -21,6 +21,24 @@ use super::{
 };
 
 impl FieldBuffer {
+    /// Additional explicit rows of one tbl cell. A nonempty remainder
+    /// advances the outer multicollumn loop even if its next pass rejects.
+    /// Soft wrapping remains a consumer concern; scan at unlimited width.
+    pub(in crate::mandoc::inline::flow) fn table_word_endlines(&mut self) -> usize {
+        let mut rows = 0;
+        while let Some(pass) = self.scan_fill_pass(usize::MAX / 4, true) {
+            // term.c::term_flushln's suffix sweep precedes the MULTICOL
+            // return. Markers, breakpoints and NBRZW do not keep it alive.
+            if !self.has_non_ignorable_after(pass.end, false) {
+                break;
+            }
+            rows += 1;
+            self.advance_past(pass.end);
+            self.consume_break_blanks();
+        }
+        rows
+    }
+
     /// One `term_fill()` pass from `resume` (term.c:263-367).
     ///
     /// Returns `None` for the nbr=0 rejection (143-146): nothing in this

@@ -185,6 +185,7 @@ extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
 unsafe extern "C" {
     pub(super) fn mant_mandoc_table_hline_input(argument: *const c_char) -> i32;
     pub(super) fn mant_mandoc_table_hmotion_input(argument: *const c_char, backbefore: i32) -> i32;
+    pub(super) fn mant_mandoc_table_hmotion_columns(argument: *const c_char) -> usize;
     pub(super) fn mant_mandoc_table_line_length(
         current: usize,
         previous: usize,

@@ -289,6 +289,74 @@ fn cell_pending_word_end_break_never_adds_another_painted_row() {
 }
 
 #[test]
+fn native_table_passes_keep_completed_empty_rows_in_paint_and_copy() {
+    // These five exact sources were checked in fixed CVS. A rejected
+    // second data pass can be a physical row even with no glyphs.
+    const HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n";
+    for (source, before, after, distance) in [
+        (
+            format!(
+                "{HEADER}.Bl -hang -width 4n\n.It Xo\n.TS\nl.\nSTART\\p \\p XYZ\nLAST\n.TE\n.Xc\nENDING\n.El\n"
+            ),
+            "START",
+            "LAST",
+            2,
+        ),
+        (
+            format!(
+                "{HEADER}.Bl -tag -width 4n\n.It TAG\n.TS\nl.\nSTART\\p \\p XYZ\nLAST\n.TE\nENDING\n.El\n"
+            ),
+            "START",
+            "LAST",
+            2,
+        ),
+        (
+            format!("{HEADER}.TS\nl.\nSTART\\p\\: \\&\nLAST\n.TE\nENDING\n"),
+            "START",
+            "LAST",
+            1,
+        ),
+        (
+            format!("{HEADER}LONGPREFIX\n.br\n.TS\nl|l.\nXYZ\tA\nLAST\tB\n.TE\nENDING\n"),
+            "LONGPREFIX",
+            "XYZ",
+            2,
+        ),
+        (
+            format!("{HEADER}LONGPREFIX\n.sp -1\n.TS\nl|l.\nXYZ\tA\nLAST\tB\n.TE\nENDING\n"),
+            "LONGPREFIX",
+            "XYZ",
+            1,
+        ),
+    ] {
+        let query = restored(&source);
+        let view = DocumentView::new(&query);
+        for width in [24, 78, 24] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let (a, b) = (&rendered.search(before)[0], &rendered.search(after)[0]);
+            assert_eq!(b.row - a.row, distance, "{source}");
+            assert_eq!(
+                painted(&buffer, a.row, a.start_column, a.end_column),
+                before
+            );
+            assert_eq!(painted(&buffer, b.row, b.start_column, b.end_column), after);
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: a.row,
+                    column: a.start_column,
+                },
+                focus: TextPosition {
+                    row: b.row,
+                    column: b.end_column - 1,
+                },
+            });
+            assert_eq!(copied.lines().count(), distance + 1, "{source}\n{copied:?}");
+        }
+    }
+}
+
+#[test]
 fn source_backed_head_cell_keeps_its_exact_click_and_copy_parts() {
     // Fixed tbl_cdata witnesses the same raw operand in either form. Only
     // the source-backed T{} cell recovers the Mt semantic link.
