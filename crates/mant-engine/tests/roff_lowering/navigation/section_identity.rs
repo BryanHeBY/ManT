@@ -335,6 +335,78 @@ fn multiword_section_lookup_rejects_lost_punctuation_and_duplicate_owners() {
     assert_destinations(&decoded(&mismatch), &[]);
 }
 
+#[test]
+fn section_references_respect_validated_targets_on_other_owner_kinds() {
+    // CVS post_tg() assigns the actual owner before html_make_id() adds
+    // ordinals. HTML takes the first owner of a normalized spelling. ManT
+    // declines duplicate authored destinations and distinguishes punctuation.
+    for (label, tag, other, fragment) in [
+        ("ZED", "ZED", "SAME", "ZED"),
+        ("W^X Test", "W^X_Test", "W>X_Test", "W_X_Test"),
+    ] {
+        for placement in ["paragraph", "definition", "inline"] {
+            for heading_first in [false, true] {
+                for competing_tag in [None, Some(tag), Some(other)] {
+                    let non_heading =
+                        competing_tag.map_or_else(String::new, |competing_tag| match placement {
+                            "paragraph" => format!(".Tg {competing_tag}\n.Pp\nBODY-A.\n"),
+                            "definition" => format!(
+                                ".Bl -tag -width Ds\n.Tg {competing_tag}\n.It LABEL\nBODY-A.\n.El\n"
+                            ),
+                            "inline" => format!(".Tg {competing_tag}\n.Sy LABEL\nBODY-A.\n"),
+                            _ => unreachable!(),
+                        });
+                    let heading = format!(".Tg {tag}\n.Sh OTHER\nBODY-B.\n");
+                    let (first, last) = if heading_first {
+                        (heading, non_heading)
+                    } else {
+                        (non_heading, heading)
+                    };
+                    let source = format!("{HEADER}.Sx {label}\n{first}{last}");
+                    let duplicate = competing_tag == Some(tag);
+                    let suffixed = format!("{fragment}~2");
+                    let heading_id = if !heading_first
+                        && (duplicate || tag != label && competing_tag.is_some())
+                    {
+                        suffixed.as_str()
+                    } else {
+                        fragment
+                    };
+                    assert_native_destinations(&source, &[fragment], &[Some(heading_id)]);
+                    let query = decoded(&source);
+                    let canonical = query.document.as_ref().unwrap().sections[2].id.as_str();
+                    if duplicate {
+                        assert_destinations(&query, &[]);
+                        let doc = query.document.as_ref().unwrap();
+                        assert!(
+                            doc.diagnostics.iter().any(|diagnostic| {
+                                diagnostic.code.as_deref() == Some("ir.ambiguous-fragment-alias")
+                            }),
+                            "{source}"
+                        );
+                    } else {
+                        // With heading-first input, a later non-heading owner
+                        // may also be in OTHER's body. Verify the destination.
+                        let ids = document_destinations(&query);
+                        assert_eq!(ids.len(), 1, "{source}");
+                        assert_eq!(ids[0], canonical, "{source}");
+                        let markdown = mant_codec::encode::render_addressable_markdown(&query);
+                        let reread =
+                            mant_loader::load_markdown_text(markdown.text(), None).unwrap();
+                        assert_eq!(document_destinations(&reread), ids, "{source}");
+                    }
+                    assert!(
+                        matches!(excerpt(&query, canonical).blocks.first(),
+                            Some(Block::Paragraph { children, .. }) if mant_ir::inline_plain_text(children).starts_with("BODY-B.")
+                        ),
+                        "{source}"
+                    );
+                }
+            }
+        }
+    }
+}
+
 fn document_destinations(query: &ResolvedContent) -> Vec<String> {
     query
         .document

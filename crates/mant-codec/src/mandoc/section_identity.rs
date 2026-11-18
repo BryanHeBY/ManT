@@ -1,8 +1,11 @@
 //! Authored section names and validated native heading destinations.
 
-use std::{borrow::Cow, collections::HashMap};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{MacroToken::Mdoc, MdocMacro, Node, NodeKind};
 
 use super::roff_escape::{RoffInlineEvent, decode};
 
@@ -41,14 +44,37 @@ impl RoffSectionHeading {
 }
 
 /// Map authored section names and surviving native targets to canonical IDs.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct RoffSectionTargets {
     authored: HashMap<String, Option<String>>,
     exact_native: HashMap<String, Option<String>>,
     native_word_keys: HashMap<String, Option<String>>,
+    non_heading_word_keys: HashSet<String>,
 }
 
 impl RoffSectionTargets {
+    /// Record a validated authored target attached to a non-heading owner.
+    pub fn record_non_heading_owner(&mut self, node: &Node) {
+        if !node.flags.deep_link_target
+            || matches!(node.macro_token, Some(Mdoc(MdocMacro::Sh | MdocMacro::Ss)))
+                && matches!(node.kind, NodeKind::Block | NodeKind::Head)
+            || !(node.flags.authored_tag || node.macro_token == Some(Mdoc(MdocMacro::Tg)))
+        {
+            return;
+        }
+        // post_tg() and tag_postprocess() may move NODE_ID to the actual
+        // owner. Compare its spelling before html_make_id() replaces punctuation.
+        if let Some(tag) = node.tag.as_deref().or_else(|| {
+            node.children
+                .first()
+                .filter(|child| child.kind == NodeKind::Text)
+                .and_then(|child| child.text.as_deref())
+        }) {
+            self.non_heading_word_keys
+                .insert(native_word_key(tag).into_owned());
+        }
+    }
+
     /// Associate one source heading with its canonical `ManT` ID.
     pub fn register(&mut self, heading: RoffSectionHeading, id: String) {
         if let Some(tag) = heading.native_tag {
@@ -68,7 +94,12 @@ impl RoffSectionTargets {
     /// or `ManT`'s uniquely parenthetically qualified title, in that order.
     #[must_use]
     pub fn resolve(&self, reference: &str) -> Option<&str> {
-        if reference.trim().is_empty() {
+        if reference.trim().is_empty()
+            || (!self.non_heading_word_keys.is_empty()
+                && self
+                    .non_heading_word_keys
+                    .contains(native_word_key(reference).as_ref()))
+        {
             return None;
         }
         // Keep validator-approved spellings even when html_make_id()

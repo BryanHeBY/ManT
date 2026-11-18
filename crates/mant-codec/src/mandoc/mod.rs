@@ -137,9 +137,10 @@ fn lower_mandoc_document_with_source(
     initial_code_row: InitialCodeRow,
 ) -> Document {
     let parsed: &MandocDocument = &report.document;
-    let target_plan = targets::NativeTargetPlan::build(&parsed.root);
-    let explicit_targets = target_plan.explicit();
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
+    let target_plan =
+        targets::NativeTargetPlan::build(&parsed.root, &mut context.authored_section_targets);
+    let explicit_targets = target_plan.explicit();
     context.macro_set = parsed.macro_set;
     context
         .native_target_owners

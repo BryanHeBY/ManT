@@ -207,6 +207,43 @@ fn unresolved_section_references_need_their_own_diagnostics() {
 }
 
 #[test]
+fn a_section_reference_with_a_competing_paragraph_target_requires_a_diagnostic() {
+    // CVS post_tg() puts the first target on Pp and the second on Sh HEAD.
+    // Choosing the heading silently loses the conflict with the paragraph.
+    let source = [
+        HEADER,
+        ".Sx W^X Test\n.Tg W^X_Test\n.Pp\nBODY-A.\n.Tg W^X_Test\n.Sh OTHER\nBODY-B.\n",
+    ]
+    .concat();
+    let (expected, native, mut document) = parsed_structure(&source);
+    let compare = |document: &Document| {
+        let (observed, topology) = ir_profile(document);
+        compare_structure(&expected, &observed, &native, &topology)
+    };
+    assert!(compare(&document).is_empty(), "{:?}", compare(&document));
+
+    let id = document.sections[2].id.clone();
+    let mant_ir::Block::Paragraph { children, .. } = &mut document.sections[1].blocks[0] else {
+        panic!("expected the Sx label in an ordinary paragraph");
+    };
+    let label = std::mem::take(children);
+    assert_eq!(inline_plain_text(&label), "W^X Test");
+    children.push(Inline::Link {
+        target: LinkTarget::Section { id },
+        title: None,
+        children: label,
+    });
+    document
+        .diagnostics
+        .retain(|diagnostic| diagnostic.code.as_deref() != Some("unresolved-section-reference"));
+    assert_finding(
+        &compare(&document),
+        "expected unresolved diagnostic",
+        "W^X Test",
+    );
+}
+
+#[test]
 fn section_link_obligations_distinguish_source_control_words_from_labels() {
     // Fixed CVS mdoc_sx_pre emits an empty HTML link for \fP and \s0. Tree
     // and term_word distinguish \& from the fixed blank \~ and its glyph.

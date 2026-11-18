@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, SourceSpan};
 
-use super::roff_escape::visible_text;
+use super::{roff_escape::visible_text, section_identity::RoffSectionTargets};
 
 mod owned;
 pub(super) use owned::{OwnedTarget, PendingTargets};
@@ -31,13 +31,13 @@ pub(super) struct NativeTargetPlan {
 }
 
 impl NativeTargetPlan {
-    pub(super) fn build(root: &Node) -> Self {
+    pub(super) fn build(root: &Node, sections: &mut RoffSectionTargets) -> Self {
         let mut plan = Self {
             explicit: HashSet::new(),
             validated_owners: HashSet::new(),
         };
         let mut lists = Vec::new();
-        plan.collect(root, &mut lists);
+        plan.collect(root, &mut lists, sections);
 
         // The list stream also recovers authored targets whose empty owner was
         // removed by native validation. Reserve exactly that recovery set so
@@ -53,7 +53,13 @@ impl NativeTargetPlan {
         plan
     }
 
-    fn collect<'node>(&mut self, node: &'node Node, lists: &mut Vec<&'node Node>) {
+    fn collect<'node>(
+        &mut self,
+        node: &'node Node,
+        lists: &mut Vec<&'node Node>,
+        sections: &mut RoffSectionTargets,
+    ) {
+        sections.record_non_heading_owner(node);
         if let Some(target) = raw_target(node) {
             // A surviving Tg is also its own provenance for older owned
             // snapshots. Relocated IDs require the actual native receipt.
@@ -66,7 +72,7 @@ impl NativeTargetPlan {
             lists.push(node);
         }
         for child in &node.children {
-            self.collect(child, lists);
+            self.collect(child, lists, sections);
         }
     }
 

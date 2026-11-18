@@ -11,6 +11,7 @@ type Origin = (u32, u32);
 #[derive(Default)]
 pub(crate) struct NativeSectionLinks {
     headings: Vec<(Origin, RoffSectionHeading)>,
+    native_targets: RoffSectionTargets,
     references: Vec<(Origin, Option<String>)>,
     uncertain_labels: Vec<Origin>,
 }
@@ -23,6 +24,10 @@ pub(crate) struct ObservedSectionLinks {
 }
 
 impl NativeSectionLinks {
+    pub(crate) fn record_owner(&mut self, node: &Node) {
+        self.native_targets.record_non_heading_owner(node);
+    }
+
     pub(crate) fn record_heading(&mut self, node: &Node) {
         self.headings.push((
             (node.line, node.column),
@@ -113,7 +118,7 @@ impl NativeSectionLinks {
             .iter()
             .map(|(origin, ids)| (*origin, ids.iter().collect()))
             .collect();
-        let mut targets = RoffSectionTargets::default();
+        let mut targets = self.native_targets.clone();
         for (origin, heading) in &self.headings {
             let id = by_origin.get_mut(origin)?.pop_front()?;
             targets.register(heading.clone(), id.clone());

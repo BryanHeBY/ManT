@@ -76,6 +76,7 @@ fn collect_links(
     profile: &mut AstStructure,
 ) {
     let token = node.macro_token.as_deref();
+    profile.section_outcomes.record_owner(node);
     if node.line > 0 && !node.flags.generated && !node.flags.no_print {
         match (node.kind, token) {
             (NodeKind::Element, Some(name @ ("Xr" | "MR"))) => {
