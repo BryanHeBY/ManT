@@ -148,6 +148,12 @@ that crate was not published for that change.
 - Keep the author words after a drawn line and a native word-end break.
   Preserve table word boundaries when overstrike, cursor movement, or a
   drawn stroke in an earlier cell affects the first printed field.
+- Use the same native write order for word-end breaks in prose and table
+  cells. Preserve surviving styled text, source word boundaries, and the
+  completed rows of inline tables in definition labels.
+- Bind independent native declaration groups across accepted delimiters.
+  Punctuation inside an operand or attached to a name cannot start another
+  group.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.

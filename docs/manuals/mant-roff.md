@@ -214,6 +214,12 @@ is not decoded again against the next TEXT's internal spaces. This keeps the
 same line result when validation represents several words in one TEXT or as
 separate operands, including diagnostic BODY text and suppressed separators.
 
+When one word combines `\p` with drawing, horizontal motion, or overstrike,
+ManT resolves the native writes before projecting the accepted text. Prose,
+headings, link labels, definition labels, and table cells use that write
+order. Reading output omits device-only strokes and retains authored word
+boundaries between surviving glyphs.
+
 Generated inset/diagnostic gaps keep the native nonbreaking cells for
 execution, including overstrikes and field acceptance. Their surviving reading
 projection uses ordinary spaces or resolved definition layout, as before;
@@ -656,6 +662,11 @@ note remains part of the original form, alongside command aliases, type text
 or styled permission shorthand. A separately invoked declaration inside the
 note does not prove another name. Name boundaries follow the accepted visible
 text even when several native operands or styles contribute to a single word.
+
+A combined definition can bind independent native declaration groups to the
+same owner. A delimiter must be an accepted separator between groups. Commas
+inside a function signature, a literal value or label, or a name glued to
+adjacent text do not establish a new group.
 
 Environment and variable definitions keep their names before one complete
 trailing parenthetical note, including styled descriptions. The enclosing
@@ -1522,6 +1533,11 @@ a pending `\p`. An ordinary drawn space instead acts as a break candidate.
 Neither adds author text to a search result. When a table cell overstrikes and
 then moves, its alignment uses the native write cursor and the reading text
 retains the surviving glyph.
+
+Block tables use the resolved column width for those fill passes. A table in
+a definition label uses the live native field for its opening pass, then
+preserves the completed rows and the original cell text separately. The
+projected reading width of a glyph does not stand in for its native advance.
 
 Phrasing tables share the page's source recovery and work allowance with
 block tables. An implicit
