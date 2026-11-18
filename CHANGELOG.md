@@ -105,6 +105,15 @@ that crate was not published for that change.
   or explicit number labels when the opening marker exceeds nine digits.
 - Retain literal angle brackets in native link addresses and recognize exact
   validator-approved section tags containing punctuation.
+- Preserve styled declaration operands beside table cells and keep proved
+  names when an unrelated operand prevents a complete form match.
+- Preserve the first visible table cell's word boundary, explicit definition
+  head spacing and the original page name in recovered table text blocks.
+- Keep independently executed rows, table cells and fixed blanks in ordinal
+  labels. Preserve nonconsecutive visible ordinals in Markdown and emit
+  semantic declarations only for list forms the reader can reconstruct.
+- Resolve punctuated multiword section references to unique authored targets.
+  Report uncertain source labels separately from structural audit violations.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.

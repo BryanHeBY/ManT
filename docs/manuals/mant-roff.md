@@ -1488,11 +1488,14 @@ Rule cells retain their column positions but no printable body. Both layout rule
 When a table is inside a phrasing owner such as an extended definition label,
 its readable cell content and fonts stay in that owner in row order, with
 portable cell separation. The formatter's actual entry flush determines
-whether preceding text stays on the same row. Empty data rows retain their
-own line boundaries. The phrasing form omits grid geometry and shares the
-page's source recovery and work allowance with block tables. Cell text is
-searchable and retains its links, while name and complete-form matches use
-independently proved declaration ranges.
+whether preceding text stays on the same row. The first visible cell's
+resolved alignment can supply a word separator, and empty data rows retain
+their own line boundaries. The phrasing form omits grid geometry and shares
+the page's source recovery and work allowance with block tables. An implicit
+`Nm` in a recovered text block uses the enclosing page's executed name.
+Cell text is searchable and retains its links. Name and complete-form
+queries use independently proved declaration ranges with their original
+styles and operand roles.
 
 `box`/`frame`, `doublebox`/`doubleframe`, `allbox`, and the single/double
 vertical boundaries declared with `|` are retained as author edge preferences.
