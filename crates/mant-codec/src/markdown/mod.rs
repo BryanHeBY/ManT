@@ -25,7 +25,6 @@ pub use container::TldrDirectiveError;
 pub(crate) use entries::export_attached_policy;
 pub(crate) use metadata::export_entry_metadata;
 
-use mant_ir::DOCUMENT_ROOT_ID;
 use std::{error::Error, fmt};
 
 use mant_ir::{
@@ -235,7 +234,6 @@ fn parse_document_with_entries(
         mut diagnostics,
         mut root_blocks,
         flat_sections,
-        mut ids,
         document_title_id,
     } = lower_document_structure(events, metadata_origins, &source);
     let mut sections = nest_sections(flat_sections);
@@ -246,7 +244,6 @@ fn parse_document_with_entries(
     );
     let mut document_fragment_aliases = Vec::new();
     let heading = extracted_title.map(|(heading, fragment_aliases)| {
-        ids.remap_target(document_title_id.as_deref(), Some(DOCUMENT_ROOT_ID));
         document_fragment_aliases = fragment_aliases;
         heading
     });
@@ -258,16 +255,16 @@ fn parse_document_with_entries(
     normalize_entry_lists(&mut root_blocks, &mut declarations, entry_diagnostics);
     normalize_section_entries(&mut sections, &mut declarations, entry_diagnostics);
     declarations.report_unattached(entry_diagnostics);
+    let reserved = headings::reserved_section_ids(&sections);
     let identification = crate::definitions::identify_definitions(
         &mut root_blocks,
         &mut sections,
         // Link aliases are selectors, not physical anchors. Reserve only the
         // final section destinations so an unrelated heading alias cannot
         // perturb a semantic entry's inferred ID.
-        &ids.reserved_targets(),
+        &reserved,
         source_path.as_deref(),
     );
-    ids.retain_targets(identification.targets);
     diagnostics.extend(identification.diagnostics);
     let mut document = Document {
         parser: Some(markdown_parser()),
@@ -282,15 +279,13 @@ fn parse_document_with_entries(
         blocks: root_blocks,
         sections,
     };
-    for (old, new) in metadata::apply(&mut document, declarations.bindings) {
-        ids.replace_target(&old, new);
-    }
+    metadata::apply(&mut document, declarations.bindings);
     entry_diagnostics.extend(crate::producer_identity::outline_identity_diagnostics(
         &document.blocks,
         &document.sections,
         "markdown",
     ));
-    ids.resolve_links(&mut document);
+    headings::resolve_local_links(&mut document);
     document.diagnostics.extend(validate_document(&document));
     document
 }

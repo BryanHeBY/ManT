@@ -320,7 +320,14 @@ its effective original number, including zero-based and u64::MAX lists.
 Bullet/plain with any start (even null), old string kinds, outer start, duplicate
 fields, and negative/fractional/oversized starts are rejected during decoding.
 
-Every canonical ID in `DocumentIndex` is a local navigation target, including entries attached directly to ordinary list items or native definitions. A `LinkTarget::Section` may target any such ID; its historical variant name does not restrict links to heading-backed sections. Entry targets do not need an additional inline anchor. Producers resolve exact authored fragments to canonical IDs before validation; duplicate identities and incompatible roles remain separate errors.
+Every canonical ID in `DocumentIndex` is a local navigation target, including
+entries attached directly to ordinary list items or native definitions. A
+`LinkTarget::Section` can use any such ID. Entry targets need no additional
+inline anchor. Producers normally resolve exact authored fragments to
+canonical IDs. If the fragment is ambiguous, or only the original spelling
+identifies one owner, producers keep that spelling for navigation. Ambiguous
+destinations cannot be activated. Duplicate identities and incompatible roles
+remain separate errors.
 
 A table's optional `columnCount` is its positive logical column range,
 including wholly unoccupied trailing columns. It must cover every cell span

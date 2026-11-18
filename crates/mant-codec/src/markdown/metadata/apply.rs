@@ -8,7 +8,7 @@ use mant_ir::{
     visit::{self, VisitMut},
 };
 
-pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<(String, String)> {
+pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) {
     let mut declarations = std::mem::take(&mut bindings.metadata);
     let mut plans = BTreeMap::new();
     let mut diagnostics = Vec::new();
@@ -35,6 +35,10 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
             "entry metadata did not resolve to a supported declared item",
         );
     }
+    if plans.is_empty() {
+        document.diagnostics.extend(diagnostics);
+        return;
+    }
     let index = mant_ir::DocumentIndex::build(document);
     let mut counts = BTreeMap::new();
     for value in plans.values().filter_map(|p| p.value.as_ref()) {
@@ -53,7 +57,6 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
         })
         .collect::<BTreeSet<_>>();
     let mut sources = BTreeMap::new();
-    let mut renamed = Vec::new();
     visit_items(document, &bindings, &mut |_, item| {
         let Some(facts) = &mut item.entry else {
             return;
@@ -73,7 +76,6 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
                     "explicit entry ID is invalid or duplicated; the derived identity was retained",
                 );
             } else {
-                renamed.push((facts.id.to_string(), id.clone()));
                 facts.id = id.as_str().into();
             }
         }
@@ -98,7 +100,6 @@ pub(crate) fn apply(document: &mut Document, mut bindings: ItemBindings) -> Vec<
     reject_relations(document, &bindings, &sources, true, &mut diagnostics);
     reject_relations(document, &bindings, &sources, false, &mut diagnostics);
     document.diagnostics.extend(diagnostics);
-    renamed
 }
 
 fn reject_relations(

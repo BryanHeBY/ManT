@@ -4,6 +4,7 @@
 mod definitions;
 /// Mathematical/readable document encoding and source-bound Markdown artifacts.
 pub mod encode;
+mod heading_attribute;
 #[cfg(feature = "roff")]
 mod mandoc;
 mod markdown;

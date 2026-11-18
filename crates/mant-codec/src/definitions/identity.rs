@@ -215,7 +215,6 @@ pub(super) fn identify_list_item(
     item: &mut ListItem,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
-    retained: &mut HashSet<String>,
     preferred_counts: &HashMap<String, usize>,
 ) -> Option<EntryKind> {
     let mut preferred = list_identity_base(item)?;
@@ -233,7 +232,6 @@ pub(super) fn identify_list_item(
         );
     }
     let id = unique_id(&preferred, used, reserved);
-    retained.insert(id.clone());
     let facts = item.entry.as_mut()?;
     facts.id = id.into();
     Some(facts.kind)
@@ -244,7 +242,6 @@ pub(super) fn identify_item(
     plan: IdentityPlan,
     used: &mut HashSet<String>,
     reserved: &HashSet<String>,
-    retained: &mut HashSet<String>,
     preferred_counts: &HashMap<String, usize>,
 ) -> EntryKind {
     // Native parser anchors are navigation destinations whose formatter tags
@@ -268,7 +265,6 @@ pub(super) fn identify_item(
     for term in &item.terms {
         collect_anchor_ids(term, &mut anchors);
     }
-    retained.extend(anchors.iter().cloned());
 
     // Presentation marks and target-only definitions are not semantic concepts.
     // Keep their native anchors without manufacturing outline entries.
@@ -301,7 +297,6 @@ pub(super) fn identify_item(
     {
         term.content.insert(0, Inline::anchor(id.clone()));
     }
-    retained.insert(id.clone());
     item.entry = Some(EntryFacts {
         name_bindings: super::binding::native_name_bindings(item, &names, &occurrences),
         alias_groups: Vec::new(),

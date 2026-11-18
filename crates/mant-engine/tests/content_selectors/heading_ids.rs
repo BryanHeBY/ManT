@@ -166,7 +166,7 @@ fn a_long_heading_attribute_keeps_its_spelling_as_a_single_fragment() {
     assert_eq!(section.heading.plain_text(), "Caption");
     assert_eq!(
         section.fragment_aliases,
-        [mant_ir::FragmentAlias::from(raw.as_str())]
+        [mant_ir::FragmentAlias::from(raw.as_str()), "caption".into()]
     );
     assert_eq!(
         DocumentIndex::build(document).fragment_target(&raw),

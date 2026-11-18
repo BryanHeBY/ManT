@@ -3,6 +3,8 @@ use mant_loader::load_markdown_text;
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceBasis, ExplanationQuery};
 use mant_query::{ProjectionError, build_outline_projection, select_excerpt};
 
+#[path = "content_selectors/heading_fragments.rs"]
+mod heading_fragments;
 #[path = "content_selectors/heading_ids.rs"]
 mod heading_ids;
 #[path = "support/json_roundtrip.rs"]

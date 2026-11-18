@@ -89,6 +89,15 @@ impl<'a> EventCursor<'a> {
         self.events.get(self.position)
     }
 
+    pub(super) fn heading_inlines(&mut self) -> &mut [SpannedEvent<'a>] {
+        let remaining = &mut self.events[self.position..];
+        let end = remaining
+            .iter()
+            .position(|(event, _)| matches!(event, Event::End(pulldown_cmark::TagEnd::Heading(_))))
+            .unwrap_or(remaining.len());
+        &mut remaining[..end]
+    }
+
     /// The parser wraps direct item paragraphs only in loose lists. Nested
     /// containers have their own tightness and must not influence this list.
     pub(super) fn item_has_direct_paragraph(&self) -> bool {

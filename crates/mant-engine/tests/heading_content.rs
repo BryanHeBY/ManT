@@ -9,6 +9,9 @@ use mant_loader::{load_markdown_text, load_roff_bytes};
 use mant_query::search_query;
 use mant_render::render_query_text;
 
+#[path = "heading_content/attributes.rs"]
+mod attributes;
+
 fn links(document: &Document) -> Vec<LinkTarget> {
     #[derive(Default)]
     struct Links(Vec<LinkTarget>);

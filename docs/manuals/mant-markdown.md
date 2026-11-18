@@ -31,11 +31,20 @@ brace text stay in the title. Headings such as `GET /users/{id}` and
 `Route /users/{#id}` preserve the path parameter. Internal IDs use lower-case
 Unicode alphanumeric characters and underscores, replace other runs with
 `-`, and receive numeric suffixes when needed.
+Attribute recognition uses the original Markdown spelling. Delimiters or
+separating spaces produced by escapes or entities remain title text, as
+does a marker touching a preceding inline span.
+Markdown export escapes literal attribute tails and ATX closing hash runs.
 
 The final internal ID fits within 512 UTF-8 bytes, including its duplicate
 suffix. Longer spellings use a shortened prefix and fingerprint. Exact
 authored fragments and full heading-derived fragments remain available to
 links.
+An unclaimed slug derived from the visible title remains a usable fragment
+after an explicit ID changes the canonical spelling. Canonical IDs and
+exact authored or retained fragments have priority over these inferred
+slugs. Multiple owners claiming an exact fragment leave it ambiguous.
+Local fragments and links to the same loaded document follow the same rules.
 
 ## Supported Blocks
 

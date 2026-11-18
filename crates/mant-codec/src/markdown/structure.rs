@@ -4,7 +4,7 @@ mod tests;
 use super::{
     blocks::parse_block,
     events::{EventCursor, SpannedEvent},
-    headings::{FlatSection, SectionIds, heading_level, take_explicit_heading_id},
+    headings::{FlatSection, assign_section_ids, heading_level, take_explicit_heading_id},
     inline::{inline_text, parse_inlines},
     source::MarkdownSource,
 };
@@ -15,7 +15,6 @@ pub(super) struct ParsedDocumentStructure {
     pub(super) diagnostics: Vec<Diagnostic>,
     pub(super) root_blocks: Vec<Block>,
     pub(super) flat_sections: Vec<FlatSection>,
-    pub(super) ids: SectionIds,
     pub(super) document_title_id: Option<String>,
 }
 
@@ -30,32 +29,18 @@ pub(super) fn lower_document_structure(
     let mut diagnostics = Vec::new();
     let mut root_blocks = Vec::new();
     let mut flat_sections = Vec::new();
-    let mut ids = SectionIds::default();
-    let mut document_title_id = None;
     let mut saw_heading = false;
 
     while let Some((event, range)) = cursor.peek().cloned() {
-        if let Event::Start(Tag::Heading {
-            level,
-            id: explicit_id,
-            ..
-        }) = event
-        {
+        if let Event::Start(Tag::Heading { level, .. }) = event {
             let _ = cursor.next();
-            let (mut children, end) = parse_inlines(
+            let explicit_id = take_explicit_heading_id(&mut cursor, source, range.start);
+            let (children, end) = parse_inlines(
                 &mut cursor,
                 source,
                 &mut diagnostics,
                 TagEnd::Heading(level),
             );
-            // `pulldown-cmark` treats every trailing brace group as heading
-            // attributes and removes it before reporting whether it contains
-            // a useful attribute.  ManT only consumes one explicit `#id`, so
-            // recognize that narrow extension ourselves and leave ordinary
-            // API paths such as `/users/{id}` in the title.
-            let explicit_id = explicit_id
-                .map(pulldown_cmark::CowStr::into_string)
-                .or_else(|| take_explicit_heading_id(&mut children));
             let heading = inline_text(&children);
             if heading.is_empty() {
                 diagnostics.push(Diagnostic {
@@ -68,16 +53,12 @@ pub(super) fn lower_document_structure(
             }
             let is_document_title = !saw_heading && level == HeadingLevel::H1;
             saw_heading = true;
-            let (id, fragment_aliases) = ids.allocate(&heading, explicit_id.as_deref());
-            if is_document_title {
-                document_title_id = Some(id.clone());
-            }
             flat_sections.push(FlatSection {
                 level: heading_level(level),
                 is_document_title,
                 section: Section {
-                    id: id.into(),
-                    fragment_aliases,
+                    id: "".into(),
+                    fragment_aliases: explicit_id.into_iter().map(Into::into).collect(),
                     heading: Heading {
                         inline_layout: mant_ir::InlineLayout::default(),
                         content: children,
@@ -102,11 +83,11 @@ pub(super) fn lower_document_structure(
         }
     }
 
+    let document_title_id = assign_section_ids(&mut flat_sections);
     ParsedDocumentStructure {
         diagnostics,
         root_blocks,
         flat_sections,
-        ids,
         document_title_id,
     }
 }

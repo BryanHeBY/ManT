@@ -65,31 +65,52 @@ struct HeadingOrdinals {
     bounded: usize,
 }
 
+pub(crate) struct FullHeadingId {
+    spelling: String,
+    ordinal: usize,
+}
+
 impl HeadingIds {
     pub(crate) fn reserve(&mut self, ids: &HashSet<String>) {
         self.assigned.extend(ids.iter().cloned());
     }
 
     pub(crate) fn allocate(&mut self, base: &str) -> (String, Option<FragmentAlias>) {
+        let full = self.claim_full(base);
+        self.complete(base, full)
+    }
+
+    pub(crate) fn claim_full(&mut self, base: &str) -> FullHeadingId {
         // The full slug can be a fragment even when the earlier selector
         // rejected it. Claim it independently so a collision on a shortened
         // ID cannot silently migrate that fragment to a different section.
         let ordinals = self.ordinals.entry(base.to_owned()).or_default();
-        let full = loop {
+        loop {
             ordinals.full += 1;
             let candidate = format!("{base}{}", duplicate_suffix(ordinals.full));
             if self.assigned.insert(candidate.clone()) {
-                break candidate;
+                return FullHeadingId {
+                    spelling: candidate,
+                    ordinal: ordinals.full,
+                };
             }
-        };
-        if full.len() <= MAX_CONTENT_ID_BYTES {
-            return (full, None);
         }
-        ordinals.bounded = ordinals.bounded.max(ordinals.full - 1);
+    }
+
+    pub(crate) fn complete(
+        &mut self,
+        base: &str,
+        full: FullHeadingId,
+    ) -> (String, Option<FragmentAlias>) {
+        if full.spelling.len() <= MAX_CONTENT_ID_BYTES {
+            return (full.spelling, None);
+        }
+        let ordinals = self.ordinals.get_mut(base).expect("reserved heading base");
+        ordinals.bounded = ordinals.bounded.max(full.ordinal - 1);
         let bounded = allocate_content_id(base, &mut ordinals.bounded, |candidate| {
             self.assigned.insert(candidate.to_owned())
         });
-        (bounded, Some(full.into()))
+        (bounded, Some(full.spelling.into()))
     }
 }
 

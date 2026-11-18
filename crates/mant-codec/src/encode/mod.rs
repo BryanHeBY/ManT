@@ -200,7 +200,24 @@ fn render_more_information(value: &str) -> String {
 /// Encode a plain heading, clamping its level to the `CommonMark` range 1–6.
 #[must_use]
 pub fn heading(depth: usize, title: &str) -> String {
-    format!("{} {}", "#".repeat(depth.clamp(1, 6)), escape_text(title))
+    format!(
+        "{} {}",
+        "#".repeat(depth.clamp(1, 6)),
+        protect_heading_tail(escape_text(title), true)
+    )
+}
+
+fn protect_heading_tail(mut value: String, atx: bool) -> String {
+    if let Some((opening, _)) = crate::heading_attribute::trailing_id(&value) {
+        value.insert(opening, '\\');
+    } else if atx {
+        let trimmed = value.trim_end_matches([' ', '\t']);
+        let prefix = trimmed.trim_end_matches('#');
+        if prefix.len() < trimmed.len() && (prefix.is_empty() || prefix.ends_with([' ', '\t'])) {
+            value.insert(prefix.len(), '\\');
+        }
+    }
+    value
 }
 
 /// A visible heading must not silently lose a local target merely because
@@ -256,7 +273,7 @@ fn render_heading<'ctx>(
         // paragraph before its underline and turn the heading into a rule.
         return format!(
             "{}\n{}",
-            content.trim_end_matches('\n'),
+            protect_heading_tail(content.trim_end_matches('\n').to_owned(), false),
             if depth == 1 { "===" } else { "---" }
         );
     }
@@ -266,10 +283,13 @@ fn render_heading<'ctx>(
     format!(
         "{} {}",
         "#".repeat(depth.clamp(1, 6)),
-        content
-            .replace("&#10;\n", " ")
-            .replace("<br>\n", " ")
-            .replace("  \n", " ")
+        protect_heading_tail(
+            content
+                .replace("&#10;\n", " ")
+                .replace("<br>\n", " ")
+                .replace("  \n", " "),
+            true,
+        )
     )
 }
 

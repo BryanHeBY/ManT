@@ -58,7 +58,6 @@ pub(crate) fn identify_definitions(
 }
 
 pub(crate) struct DefinitionIdentification {
-    pub(crate) targets: HashSet<String>,
     pub(crate) diagnostics: Vec<mant_ir::Diagnostic>,
 }
 
@@ -81,7 +80,6 @@ pub(crate) fn identify_definitions_with_evidence(
 
     let used = document_anchor_ids(blocks, sections);
     let mut discovery = DefinitionDiscovery {
-        retained: used.clone(),
         used,
         reserved: reserved_targets,
         preferred_counts: &prepared.preferred_counts,
@@ -97,7 +95,6 @@ pub(crate) fn identify_definitions_with_evidence(
     // never become addressable anchors, serialized fields, or rendered text.
     remove_native_definition_owner_markers(blocks, sections);
     DefinitionIdentification {
-        targets: discovery.retained,
         diagnostics: prepared.diagnostics,
     }
 }
@@ -106,7 +103,6 @@ struct DefinitionDiscovery<'a> {
     plans: std::vec::IntoIter<preparation::PreparedDefinition>,
     used: HashSet<String>,
     reserved: &'a HashSet<String>,
-    retained: HashSet<String>,
     preferred_counts: &'a HashMap<String, usize>,
 }
 
@@ -127,7 +123,6 @@ impl DefinitionDiscovery<'_> {
                             item,
                             &mut self.used,
                             self.reserved,
-                            &mut self.retained,
                             self.preferred_counts,
                         );
                         self.identify_blocks(&mut item.blocks);
@@ -145,7 +140,6 @@ impl DefinitionDiscovery<'_> {
                             plan,
                             &mut self.used,
                             self.reserved,
-                            &mut self.retained,
                             self.preferred_counts,
                         );
                         self.identify_blocks(&mut item.description);

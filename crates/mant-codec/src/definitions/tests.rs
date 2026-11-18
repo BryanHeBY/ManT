@@ -152,14 +152,16 @@ fn target_only_definitions_retain_anchors_without_becoming_entries() {
         source: None,
     }];
 
-    let retained =
-        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None).targets;
+    identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
 
     let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
         panic!("definition list");
     };
     assert!(items[0].entry.is_none());
-    assert!(retained.contains("native-target"));
+    assert!(matches!(
+        items[0].terms[0].first(),
+        Some(Inline::Anchor { id, .. }) if id == "native-target"
+    ));
 }
 
 #[test]
@@ -506,16 +508,18 @@ fn keeps_native_navigation_anchors_separate_from_semantic_ids() {
         source: None,
     }];
 
-    let retained =
-        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None).targets;
+    identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
     let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
         panic!("command definition list");
     };
     let identity = items[0].entry.as_ref().expect("command identity");
     assert_eq!(identity.id.as_str(), "command-set-mark");
     assert_eq!(identity.names, ["set-mark"]);
-    assert!(retained.contains("set"));
-    assert!(retained.contains("command-set-mark"));
+    assert!(
+        items[0].terms[0]
+            .iter()
+            .any(|node| matches!(node, Inline::Anchor { id, .. } if id == "set"))
+    );
 }
 
 #[test]
@@ -536,8 +540,7 @@ fn generic_terms_receive_the_anchor_their_projected_entry_advertises() {
         source: None,
     }];
 
-    let retained =
-        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None).targets;
+    identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
     let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
         panic!("term definition list");
     };
@@ -547,7 +550,6 @@ fn generic_terms_receive_the_anchor_their_projected_entry_advertises() {
         items[0].terms[0].first(),
         Some(Inline::Anchor { id, .. }) if id == "term-widget"
     ));
-    assert!(retained.contains("term-widget"));
 }
 
 #[test]

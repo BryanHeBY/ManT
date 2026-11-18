@@ -54,6 +54,9 @@ that crate was not published for that change.
   of direct definition results.
 - Preserve the exact fragment of an argument-less mdoc `Tg` when a user
   macro emits it and its target at the same source position.
+- Preserve literal Markdown heading tails through export and readback.
+  Honor canonical author IDs and use final owners for both local and
+  self-document fragments, including collisions and ambiguous aliases.
 - Keep generated semantic entry IDs within the selector limit, including
   when a long form cannot publish names. The full form remains readable.
 - Fit roff and Markdown section IDs within the selector byte budget after

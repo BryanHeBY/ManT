@@ -1,48 +1,64 @@
 //! Heading identity allocation, nesting and exact local-fragment remapping.
 use crate::producer_identity::HeadingIds;
 use mant_ir::{
-    Block, Document, FragmentAlias, Heading, Inline, Section,
+    Block, Document, DocumentIndex, FragmentAlias, Heading, Inline, Section,
     visit::{self, VisitMut},
 };
-use pulldown_cmark::HeadingLevel;
-use std::collections::{HashMap, HashSet};
+use pulldown_cmark::{Event, HeadingLevel};
+use std::collections::HashSet;
 
-pub(super) fn take_explicit_heading_id(children: &mut Vec<Inline>) -> Option<String> {
-    let (id, empty) = {
-        let Inline::Text { value } = children.last_mut()? else {
+fn heading_slug(heading: &Heading) -> String {
+    slug(&super::inline::inline_text(&heading.content))
+}
+
+/// Remove a source attribute without interpreting escaped or decoded text as
+/// marker syntax. The attribute itself can span several inline events (for
+/// example, the underscores of `{#_foo_}`), but cannot cross a title wrapper.
+pub(super) fn take_explicit_heading_id(
+    cursor: &mut super::EventCursor<'_>,
+    source: &super::source::MarkdownSource<'_>,
+    heading_start: usize,
+) -> Option<String> {
+    let inlines = cursor.heading_inlines();
+    let (Event::Text(_), last) = inlines.last()? else {
+        return None;
+    };
+    let raw = source.raw(&(heading_start..last.end));
+    let (opening, id) = crate::heading_attribute::trailing_id(raw)?;
+    let title = raw[..opening]
+        .trim_end_matches(|ch: char| ch.is_whitespace() && !matches!(ch, '\r' | '\n'));
+    let cut = heading_start + title.len();
+    let first = inlines.iter().position(|(_, range)| range.end > cut)?;
+    let (event, range) = &inlines[first];
+    let prefix = if range.start < cut {
+        let Event::Text(value) = event else {
             return None;
         };
-        let trimmed = value.trim_end();
-        let opening = trimmed.rfind("{#")?;
-        if !trimmed.ends_with('}') {
+        if value.as_ref() != source.raw(range) {
             return None;
         }
-        if opening != 0
-            && !trimmed[..opening]
-                .chars()
-                .next_back()
-                .is_some_and(char::is_whitespace)
-        {
-            return None;
-        }
-        let id = trimmed
-            .get(opening + 2..trimmed.len().checked_sub(1)?)?
-            .to_owned();
-        if id.is_empty()
-            || id.bytes().any(|byte| {
-                byte.is_ascii_whitespace() || matches!(byte, b'{' | b'}' | b'\\' | b'<' | b'>')
-            })
-        {
-            return None;
-        }
-        let title_end = trimmed[..opening].trim_end().len();
-        value.truncate(title_end);
-        (id, value.is_empty())
+        source.raw(&(range.start..cut))
+    } else {
+        ""
     };
-    if empty {
-        children.pop();
+    // A soft source wrap before the attribute is only a separator. A hard
+    // break is still part of the title.
+    let prefix_start = range.start;
+    let first =
+        if prefix.is_empty() && first > 0 && matches!(inlines[first - 1].0, Event::SoftBreak) {
+            first - 1
+        } else {
+            first
+        };
+    for (event, range) in &mut inlines[first..] {
+        *event = Event::Text("".into());
+        range.end = range.start;
     }
-    Some(id)
+    inlines[first].0 = Event::Text(prefix.to_owned().into());
+    if !prefix.is_empty() {
+        inlines[first].1 = prefix_start..cut;
+    }
+    Some(id.to_owned())
 }
 
 pub(super) fn heading_level(level: HeadingLevel) -> u8 {
@@ -113,112 +129,102 @@ fn attach_completed(stack: &mut Vec<FlatSection>, roots: &mut Vec<Section>) {
     }
 }
 
-#[derive(Default)]
-pub(super) struct SectionIds {
-    headings: HeadingIds,
-    targets: HashMap<String, String>,
+pub(super) fn assign_section_ids(sections: &mut [FlatSection]) -> Option<String> {
+    let mut ids = HeadingIds::default();
+    // Claim all the original slug spellings first. A shortened candidate
+    // must not take a later heading's already valid full identity.
+    let plans = sections
+        .iter()
+        .map(|flat| {
+            let authored = flat
+                .section
+                .fragment_aliases
+                .first()
+                .map(FragmentAlias::as_str);
+            let base = authored
+                .filter(|id| mant_ir::is_normalized_node_id(id))
+                .filter(|id| !crate::producer_identity::is_reserved_selector(id))
+                .map_or_else(|| heading_slug(&flat.section.heading), str::to_owned);
+            let base = if base.is_empty() {
+                "section".to_owned()
+            } else if crate::producer_identity::is_reserved_selector(&base) {
+                format!("{base}-section")
+            } else {
+                base
+            };
+            let full = ids.claim_full(&base);
+            (base, full)
+        })
+        .collect::<Vec<_>>();
+
+    let mut document_title_id = None;
+    for (flat, (base, full)) in sections.iter_mut().zip(plans) {
+        let (id, long_fragment) = ids.complete(&base, full);
+        if let Some(fragment) = long_fragment
+            && !flat.section.fragment_aliases.contains(&fragment)
+        {
+            flat.section.fragment_aliases.push(fragment);
+        }
+        if flat.is_document_title {
+            document_title_id = Some(id.clone());
+        }
+        flat.section.id = id.into();
+    }
+    document_title_id
 }
 
-impl SectionIds {
-    /// Reserve actual destinations, not authored aliases, during entry allocation.
-    pub(super) fn reserved_targets(&self) -> HashSet<String> {
-        self.targets.values().cloned().collect()
-    }
-
-    pub(super) fn retain_targets(&mut self, targets: impl IntoIterator<Item = String>) {
-        for target in targets {
-            self.targets.insert(target.clone(), target);
+pub(super) fn reserved_section_ids(sections: &[Section]) -> HashSet<String> {
+    fn collect(sections: &[Section], ids: &mut HashSet<String>) {
+        for section in sections {
+            ids.insert(section.id.to_string());
+            collect(&section.children, ids);
         }
     }
+    let mut ids = HashSet::new();
+    collect(sections, &mut ids);
+    ids
+}
 
-    /// Explicit entry metadata replaces only the old destination's mappings.
-    pub(super) fn replace_target(&mut self, old: &str, new: String) {
-        self.targets.retain(|_, target| target != old);
-        self.targets.insert(new.clone(), new);
-    }
-
-    pub(super) fn resolve_links(&self, document: &mut Document) {
-        LocalLinkResolver::new(&self.targets).visit_document_mut(document);
-    }
-
-    pub(super) fn allocate(
-        &mut self,
-        title: &str,
-        explicit: Option<&str>,
-    ) -> (String, Vec<FragmentAlias>) {
-        let mut fragments = explicit
-            .into_iter()
-            .map(FragmentAlias::from)
-            .collect::<Vec<_>>();
-        let explicit = explicit
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
-        let normalized_explicit = explicit
-            .as_deref()
-            .map(crate::definitions::document_id_slug);
-        let base = explicit
-            .as_deref()
-            .zip(normalized_explicit.as_deref())
-            .filter(|(authored, normalized)| {
-                *authored == *normalized
-                    && !crate::producer_identity::is_reserved_selector(authored)
-            })
-            .map_or_else(|| slug(title), |(_, normalized)| normalized.to_owned());
-        let base = if base.is_empty() {
-            "section".to_owned()
-        } else if crate::producer_identity::is_reserved_selector(&base) {
-            // Reserved selectors and bare tree paths would shadow this
-            // heading in excerpt selection; keep it addressable instead.
-            format!("{base}-section")
-        } else {
-            base
-        };
-        // Disambiguate on the final id, not the per-base count: `# Foo 2`
-        // slugs to base `foo-2`, which collides with the `foo-2` a second
-        // `# Foo` produces. Counting per base alone would hand both the same
-        // id, silently misattributing search ownership between them.
-        let (id, long_fragment) = self.headings.allocate(&base);
-        if let Some(fragment) = long_fragment {
-            self.targets
-                .insert(fragment.as_str().to_owned(), id.clone());
-            if !fragments.contains(&fragment) {
-                fragments.push(fragment);
-            }
+pub(super) fn resolve_local_links(document: &mut Document) {
+    fn publish_fallback(
+        heading: &Heading,
+        aliases: &mut Vec<FragmentAlias>,
+        claimed: &DocumentIndex,
+    ) -> bool {
+        // Canonical IDs and authored or retained fragments take precedence.
+        // Among unclaimed slugs, publish every heading claim so duplicate
+        // titles with distinct explicit IDs stay ambiguous.
+        let fragment = heading_slug(heading);
+        if fragment.is_empty()
+            || claimed.contains(&fragment)
+            || claimed.fragment_target(&fragment).is_some()
+            || claimed.is_fragment_ambiguous(&fragment)
+        {
+            return false;
         }
-        // Ambiguous human-facing keys resolve to the first section that
-        // claimed them, matching the bare slug this heading renders as its
-        // anchor. A later duplicate owns only its own disambiguated id.
-        self.targets
-            .entry(base.clone())
-            .or_insert_with(|| id.clone());
-        // Heading attributes are source-level link aliases. Preserve the
-        // original alias even when its final section ID had to move out of the
-        // selector namespace (`{#root}`, `{#2.1}`, or `{#2.1/e3}`).
-        if let Some(explicit) = explicit {
-            self.targets.entry(explicit).or_insert_with(|| id.clone());
-        }
-        self.targets
-            .entry(slug(title))
-            .or_insert_with(|| id.clone());
-        self.targets.insert(id.clone(), id.clone());
-        (id, fragments)
+        aliases.push(fragment.into());
+        true
     }
 
-    pub(super) fn remap_target(&mut self, current: Option<&str>, replacement: Option<&str>) {
-        let Some(current) = current else {
-            return;
-        };
-        if let Some(replacement) = replacement {
-            for target in self.targets.values_mut() {
-                if target == current {
-                    replacement.clone_into(target);
-                }
-            }
-        } else {
-            self.targets.retain(|_, target| target != current);
+    fn section_fallbacks(sections: &mut [Section], index: &DocumentIndex) -> bool {
+        let mut changed = false;
+        for section in sections {
+            changed |= publish_fallback(&section.heading, &mut section.fragment_aliases, index);
+            changed |= section_fallbacks(&mut section.children, index);
         }
+        changed
     }
+
+    let mut index = DocumentIndex::build(document);
+    let mut changed = false;
+    if let Some(heading) = &document.heading {
+        changed |= publish_fallback(heading, &mut document.fragment_aliases, &index);
+    }
+    changed |= section_fallbacks(&mut document.sections, &index);
+    if changed {
+        index = DocumentIndex::build(document);
+    }
+    LocalLinkResolver(&index).visit_document_mut(document);
 }
 
 fn slug(value: &str) -> String {
@@ -238,15 +244,7 @@ fn slug(value: &str) -> String {
     output.trim_matches('-').to_owned()
 }
 
-struct LocalLinkResolver<'targets> {
-    targets: &'targets HashMap<String, String>,
-}
-
-impl<'targets> LocalLinkResolver<'targets> {
-    fn new(targets: &'targets HashMap<String, String>) -> Self {
-        Self { targets }
-    }
-}
+struct LocalLinkResolver<'a>(&'a DocumentIndex);
 
 impl VisitMut for LocalLinkResolver<'_> {
     fn visit_inline_mut(&mut self, inline: &mut Inline) {
@@ -254,13 +252,12 @@ impl VisitMut for LocalLinkResolver<'_> {
             target: mant_ir::LinkTarget::Section { id },
             ..
         } = inline
+            && let Some(target) = self.0.fragment_target(id.as_str())
+            && self.0.fragment_target(target.as_str()) == Some(target)
         {
-            // URI syntax and percent decoding were consumed by link_target.
-            // The remaining fragment is an exact identity, not another URI
-            // or a heading title to trim/slug into a different destination.
-            if let Some(resolved) = self.targets.get(id.as_str()) {
-                *id = resolved.as_str().into();
-            }
+            // Keep a raw fragment when canonicalizing would lose ambiguity
+            // or the only unambiguous spelling of a target.
+            id.clone_from(target);
         }
         visit::walk_inline_mut(self, inline);
     }

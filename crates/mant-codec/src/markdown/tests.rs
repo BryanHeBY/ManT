@@ -141,7 +141,7 @@ fn heading_attributes_consume_only_an_explicit_id() {
             .iter()
             .map(mant_ir::FragmentAlias::as_str)
             .collect::<Vec<_>>(),
-        ["config-anchor"]
+        ["config-anchor", "config"]
     );
 }
 

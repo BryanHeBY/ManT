@@ -142,7 +142,14 @@ pub(super) fn validate_with_index(
     collector.visit_document(document);
     diagnostics.extend(collector.diagnostics);
     for id in collector.section_targets {
-        if !index.contains(id.as_str()) {
+        // A producer keeps an exact spelling when canonicalizing it would
+        // hide an ambiguity or lose the only unique route to the owner.
+        if !index.contains(id.as_str())
+            && !index.is_fragment_ambiguous(id.as_str())
+            && !index
+                .fragment_target(id.as_str())
+                .is_some_and(|target| index.is_fragment_ambiguous(target.as_str()))
+        {
             diagnostics.push(invariant(
                 "ir.dangling-section-link",
                 format!("section link target '{id}' does not exist"),
