@@ -183,7 +183,6 @@ fn profile_document(
     }
     let (violations, semantic_diagnostics) = collect_violations(
         &ordinal_entries,
-        &ordinal_definitions,
         &empty_entries,
         &value_domain_violations,
         &ordinal_conversion_violations,
@@ -222,7 +221,6 @@ fn profile_document(
 
 fn collect_violations(
     ordinal_entries: &[&EntryRecord],
-    ordinal_definitions: &[DefinitionCandidate],
     empty_entries: &[&EntryRecord],
     value_domain_violations: &[String],
     ordinal_conversion_violations: &[String],
@@ -243,12 +241,6 @@ fn collect_violations(
             )
         })
         .collect::<Vec<_>>();
-    violations.extend(ordinal_definitions.iter().map(|candidate| {
-        format!(
-            "ordinal definition {:?} remains at {}",
-            candidate.form, candidate.ir_path
-        )
-    }));
     violations.extend(empty_entries.iter().map(|entry| {
         format!(
             "semantic {} {:?} has no alias or visible form",
@@ -590,6 +582,51 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn jsonl_ordinal_findings_follow_the_native_owner_observation() {
+        use crate::ordinal_labels::cases::{LINK_JSON, execution_inputs};
+        use serde_json::json;
+
+        let path =
+            std::env::temp_dir().join(format!("mant-ordinal-profile-{}.1", std::process::id()));
+        for (source, labels, recovered) in
+            std::iter::once((LINK_JSON.to_owned(), ["1.", "2.", "3."], false))
+                .chain(execution_inputs())
+        {
+            std::fs::write(&path, &source).unwrap();
+            let profile =
+                super::profile_request(&json!({"id": "ordinal", "path": path}).to_string());
+            std::fs::remove_file(&path).unwrap();
+            let profile = profile.unwrap();
+            let wanted = if recovered {
+                "recovered-ordered-list"
+            } else {
+                "retained-definition-list"
+            };
+            let conversions = profile["ordinalConversions"].as_array().unwrap();
+            assert_eq!(conversions.len(), 1, "{source}");
+            let conversion = &conversions[0];
+            assert_eq!(conversion["terms"], json!(labels), "{source}");
+            assert_eq!(conversion["expectedDisposition"], wanted, "{source}");
+            assert_eq!(
+                conversion["observedDispositions"],
+                json!([wanted]),
+                "{source}"
+            );
+            assert_eq!(
+                conversion["observedIrPaths"],
+                json!(["section[1]/block[0]"]),
+                "{source}"
+            );
+            assert_eq!(profile["violations"], json!([]), "{source}\n{profile}");
+            if source == LINK_JSON {
+                // Each native Sx had its own href in the fixed HTML; the
+                // retained terms are still enumerated by the public census.
+                assert_eq!(profile["ordinalDefinitions"].as_array().unwrap().len(), 3);
+            }
+        }
+    }
+
     #[test]
     fn production_profiler_file_and_stdin_api_share_input_preparation_and_queries() {
         use std::io::Write;

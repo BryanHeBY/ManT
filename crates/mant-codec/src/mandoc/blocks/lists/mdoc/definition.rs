@@ -1,5 +1,6 @@
 //! Lower definition-list heads and bodies without changing their execution scopes.
 
+use super::super::LoweredDefinitionItem;
 use super::{
     Block, DefinitionFlow, DefinitionHeadFlow, DefinitionItem, DefinitionListStyle, ListItem,
     ListKind, LoweringContext, MdocListItem, Node, NodeKind, RunInHeadStyle, definition_item,
@@ -65,10 +66,11 @@ pub(super) fn lower_mdoc_definition_list(
             relation_override: None,
         },
     };
+    let mut all_ordinal_labels_replaceable = true;
     let lowered_items = items
         .into_iter()
         .map(|item| {
-            lower_mdoc_definition_item(
+            let lowered = lower_mdoc_definition_item(
                 &item,
                 context,
                 list_indent,
@@ -76,26 +78,26 @@ pub(super) fn lower_mdoc_definition_list(
                 geometry,
                 node.definition_list_style,
                 formatter,
-            )
+            );
+            all_ordinal_labels_replaceable &= lowered.ordinal_label_can_be_replaced;
+            lowered.item
         })
         .collect::<Vec<_>>();
     if node.definition_list_style == Some(DefinitionListStyle::Tag)
+        && all_ordinal_labels_replaceable
         && let Some(first) = ordinal_sequence(&lowered_items)
     {
+        let kind = ListKind::Ordered {
+            start: Some(first.value()),
+        };
         return Block::List {
-            kind: ListKind::Ordered {
-                start: Some(first.value()),
-            },
+            kind,
             compact: node.compact,
             items: lowered_items
                 .into_iter()
                 .enumerate()
                 .map(|(index, item)| {
-                    let ordinal = ListKind::Ordered {
-                        start: Some(first.value()),
-                    }
-                    .ordinal(index)
-                    .unwrap_or(u64::MAX);
+                    let ordinal = kind.ordinal(index).unwrap_or(u64::MAX);
                     let marker_width = mant_ir::geometry::coordinate(
                         mant_ir::geometry::text_width(&format!("{ordinal}. ")),
                     );
@@ -123,7 +125,7 @@ fn lower_mdoc_definition_item(
     geometry: crate::mandoc::layout::DefinitionGeometry,
     style: Option<DefinitionListStyle>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> DefinitionItem {
+) -> LoweredDefinitionItem {
     context.lower_inline_with_spacing(
         item.leading_controls,
         formatter.spacing_enabled(),
@@ -193,7 +195,7 @@ fn lower_mdoc_definition_item(
         .rev()
         .filter(|target| published_head.is_none_or(|head| target.node_id != head.id))
     {
-        targets::attach_definition_target(&mut lowered, target);
+        targets::attach_definition_target(&mut lowered.item, target);
     }
     lowered
 }

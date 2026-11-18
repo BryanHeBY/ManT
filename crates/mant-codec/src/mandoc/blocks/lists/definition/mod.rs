@@ -60,6 +60,11 @@ struct DefinitionHeadOutcome {
     run_in_execution: Option<RunInExecution>,
 }
 
+pub(super) struct LoweredDefinitionItem {
+    pub(super) item: DefinitionItem,
+    pub(super) ordinal_label_can_be_replaced: bool,
+}
+
 impl DefinitionHeadOutcome {
     fn into_parts(
         self,
@@ -133,18 +138,13 @@ pub(super) fn definition_item(
     mut geometry: crate::mandoc::layout::DefinitionGeometry,
     flow: DefinitionFlow,
     formatter: &mut crate::mandoc::formatter::FormatterState,
-) -> DefinitionItem {
+) -> LoweredDefinitionItem {
     close_pending_definition_prefix(formatter);
     let head = visible_definition_head(node);
     let head_nodes = definition_head_nodes(node, head, context.macro_set, indent_columns);
     let body = first_part_children(node, NodeKind::Body);
     let man_node = context.macro_set == libmandoc_rs::MacroSet::Man;
-    if man_node {
-        formatter.font.man_text_boundary(); // HEAD pre
-        // pre_IP/pre_TP(HEAD) assign mt->offset after BLOCK print_bvspace.
-        super::super::reset_man_macro_offset(formatter, indent_columns);
-    }
-    let session = DefinitionSession::enter(node, formatter, man_node);
+    let session = enter_definition_item(node, formatter, man_node, indent_columns);
     let (finished, run_in_execution) = lower_definition_head(
         head_nodes,
         context,
@@ -159,12 +159,7 @@ pub(super) fn definition_item(
     // evidence that the first no-fill BODY row still belongs on that line.
     let head_source_continues = formatter.execution.source_row_continues();
     if man_node {
-        formatter.font.man_text_boundary(); // HEAD post
-        formatter.font.man_text_boundary(); // BODY pre
-        // BODY uses its declared tag offset, without the HEAD's temporary
-        // correction. The independent ti still closes at device endline.
-        formatter.row_presentation.offset_shift = 0;
-        formatter.enter_man_definition_body();
+        handoff_man_definition_head(formatter);
     }
     if finished.definition_field_exited && !man_node {
         // man tag width fitting remains responsive IR geometry. The actual
@@ -245,7 +240,37 @@ pub(super) fn definition_item(
         closed_head_row,
     );
     session.finish(formatter);
-    item
+    LoweredDefinitionItem {
+        item,
+        // Layout may already own the last authored HEAD boundary, and tbl
+        // data can look just like plain digits after its rows are projected.
+        ordinal_label_can_be_replaced: !closed_head_row
+            && empty_head_rows == 0
+            && !finished.head_layout_must_survive,
+    }
+}
+
+fn enter_definition_item(
+    node: &Node,
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    man_node: bool,
+    indent_columns: crate::mandoc::layout::SourceIndent,
+) -> DefinitionSession {
+    if man_node {
+        formatter.font.man_text_boundary(); // HEAD pre
+        // pre_IP/pre_TP(HEAD) assign mt->offset after BLOCK print_bvspace.
+        super::super::reset_man_macro_offset(formatter, indent_columns);
+    }
+    DefinitionSession::enter(node, formatter, man_node)
+}
+
+fn handoff_man_definition_head(formatter: &mut crate::mandoc::formatter::FormatterState) {
+    formatter.font.man_text_boundary(); // HEAD post
+    formatter.font.man_text_boundary(); // BODY pre
+    // BODY uses its declared tag offset, without the HEAD's temporary
+    // correction. The independent ti still closes at device endline.
+    formatter.row_presentation.offset_shift = 0;
+    formatter.enter_man_definition_body();
 }
 
 fn capture_deferred_operands(

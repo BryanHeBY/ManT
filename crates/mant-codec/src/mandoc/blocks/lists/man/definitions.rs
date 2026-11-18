@@ -37,6 +37,7 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
     let LoweredManItem {
         mut item,
         max_width,
+        ordinal_label_can_be_replaced,
     } = lower_man_item(
         node,
         context,
@@ -64,17 +65,18 @@ pub(in crate::mandoc::blocks) fn lower_man_definition(
         Some(Man(ManMacro::Ip | ManMacro::Tp | ManMacro::Tq))
     ) && ip_run.is_none()
         && record_mark_role(node, &item, context);
-    let ordinal = matches!(macro_name, Some(Man(ManMacro::Ip | ManMacro::Tp)))
-        .then(|| {
-            ordinal_marker(
-                &item,
-                macro_name == Some(&Man(ManMacro::Ip))
-                    && first_part_children(node, NodeKind::Head)
-                        .first()
-                        .is_some_and(|operand| operand.flags.ip_incremented_register),
-            )
-        })
-        .flatten();
+    let ordinal = (ordinal_label_can_be_replaced
+        && matches!(macro_name, Some(Man(ManMacro::Ip | ManMacro::Tp))))
+    .then(|| {
+        ordinal_marker(
+            &item,
+            macro_name == Some(&Man(ManMacro::Ip))
+                && first_part_children(node, NodeKind::Head)
+                    .first()
+                    .is_some_and(|operand| operand.flags.ip_incremented_register),
+        )
+    })
+    .flatten();
     // Only TQ explicitly adds another tag to the immediately preceding empty
     // definition. Paragraph distance and empty independent IP/TP items never
     // authorize borrowing the next item's description.
@@ -171,6 +173,7 @@ fn emit_man_definition(
 struct LoweredManItem {
     item: DefinitionItem,
     max_width: usize,
+    ordinal_label_can_be_replaced: bool,
 }
 
 fn lower_man_item(
@@ -190,7 +193,10 @@ fn lower_man_item(
     update_man_definition_width(node, context, definition_hanging_width);
     let head_field_columns =
         u16::try_from(definition_hanging_width.position_columns().max(0)).unwrap_or(u16::MAX);
-    let item = definition_item(
+    let super::super::LoweredDefinitionItem {
+        item,
+        ordinal_label_can_be_replaced,
+    } = definition_item(
         node,
         context,
         indent_columns,
@@ -231,7 +237,11 @@ fn lower_man_item(
             .saturating_sub(i32::from(item.layout.min_term_gap_columns)),
     )
     .unwrap_or(0);
-    LoweredManItem { item, max_width }
+    LoweredManItem {
+        item,
+        max_width,
+        ordinal_label_can_be_replaced,
+    }
 }
 
 pub(in crate::mandoc::blocks) struct ManDefinitionState<'a> {

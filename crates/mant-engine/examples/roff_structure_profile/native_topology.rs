@@ -9,7 +9,8 @@ use super::{
 
 pub(super) fn collect(root: &Node, head_payloads: &HeadPayloads) -> AstTopology {
     let mut topology = AstTopology::default();
-    collect_ast_topology(root, false, &mut topology, head_payloads);
+    let spacing = ordinal_labels::HeadSpacing::collect(root);
+    collect_ast_topology(root, false, &mut topology, head_payloads, &spacing);
     topology.lists.sort_by_key(|list| list.source_line);
     topology.equations.sort_by_key(|equation| {
         (
@@ -96,6 +97,7 @@ fn collect_ast_topology(
     inside_table: bool,
     topology: &mut AstTopology,
     head_payloads: &HeadPayloads,
+    spacing: &ordinal_labels::HeadSpacing,
 ) {
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
     // cell. Only an owned Equation node establishes an obligation.
@@ -128,7 +130,7 @@ fn collect_ast_topology(
         && node.line > 0
     {
         let kind = if kind == MdocContainerKind::Definition
-            && mdoc_definition_is_recoverable_ordinal_list(node)
+            && mdoc_definition_is_recoverable_ordinal_list(node, spacing)
         {
             // Lowering deliberately recovers explicit `1.`, `2.` tag heads
             // as an ordered generic list. The audit must compare semantic
@@ -177,7 +179,7 @@ fn collect_ast_topology(
                     .collect(),
             });
             row_index += 1;
-            collect_ast_topology(child, true, topology, head_payloads);
+            collect_ast_topology(child, true, topology, head_payloads, spacing);
             continue;
         }
         collect_ast_topology(
@@ -185,13 +187,18 @@ fn collect_ast_topology(
             inside_table || node.kind == NodeKind::Table,
             topology,
             head_payloads,
+            spacing,
         );
     }
 }
 
-fn mdoc_definition_is_recoverable_ordinal_list(node: &Node) -> bool {
+fn mdoc_definition_is_recoverable_ordinal_list(
+    node: &Node,
+    spacing: &ordinal_labels::HeadSpacing,
+) -> bool {
     node.definition_list_style == Some(libmandoc_rs::DefinitionListStyle::Tag)
-        && ordinal_labels::observe(mdoc_list_items(node)).is_some_and(|labels| labels.recoverable())
+        && ordinal_labels::observe(mdoc_list_items(node), spacing)
+            .is_some_and(|labels| labels.recoverable())
 }
 
 pub(super) fn equation_is_display(node: &Node, head_payloads: &HeadPayloads) -> bool {

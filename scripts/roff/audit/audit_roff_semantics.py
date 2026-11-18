@@ -376,7 +376,7 @@ def valid_violation_summary(response: dict[str, object]) -> bool:
         and not (semantic and response["semanticsComplete"])
         and bool(response.get("violations")) == any(
             response.get(field) for field in (
-                "ordinalEntries", "ordinalDefinitions", "emptyEntries",
+                "ordinalEntries", "emptyEntries",
                 "valueDomainViolations", "ordinalConversionViolations", "semanticViolations",
                 "declarationGroupViolations",
             )
@@ -411,6 +411,20 @@ def self_check() -> None:
     # without violating a shared IR invariant or the precision-audit oracle.
     assert valid_violation_summary({
         "semanticViolations": [], "semanticsComplete": False, "violations": [],
+    })
+    # A published link or committed row can require retaining an ordinal
+    # definition. Observed shapes are census; the owner comparison is decisive.
+    retained_ordinal = {
+        "semanticViolations": [], "semanticsComplete": True, "violations": [],
+        "ordinalDefinitions": [{"form": "1.", "irPath": "section[1]/block[0]/definition[0]"}],
+    }
+    assert valid_violation_summary(retained_ordinal)
+    mismatch = ["mdoc -tag ordinal candidate expected recovered-ordered-list"]
+    assert not valid_violation_summary({
+        **retained_ordinal, "ordinalConversionViolations": mismatch,
+    })
+    assert valid_violation_summary({
+        **retained_ordinal, "ordinalConversionViolations": mismatch, "violations": mismatch,
     })
     for reviewed in ("false-positive", "confirmed-open", "confirmed-fixed"):
         for scanned in ("clean", "review", "hard-failure"):

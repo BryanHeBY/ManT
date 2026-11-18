@@ -1264,11 +1264,13 @@ python3 -m scripts.roff.audit.audit_roff_semantics --manpath /usr/share/man \
   --json /tmp/mant-roff-semantics.json
 ```
 
-Decimal punctuated integer definitions left outside an ordered list,
-corresponding `term` or `value` entries, entries with neither an alias nor a visible form,
+Punctuated integer `term` or `value` entries, entries with neither an alias nor a visible form,
 and non-`value` children inside a `Choices` domain are review findings.
-So are qualifying `Bl -tag` sequences that remain definitions and ordinal
-`-diag`, `-hang`, `-inset`, or `-ohang` definitions that become ordered lists.
+The ordinal source comparison flags qualifying `Bl -tag` sequences that
+remain definitions or any owner with an irreplaceable label that becomes an
+ordered list. For example, a linked numeral, a completed HEAD row, or a
+table data span can require retaining the definition. The `ordinalDefinitions`
+census is independent of the owner comparison and does not add violations.
 Aliasless generic terms and entries in NOTES, FOOTNOTES, or REFERENCES are
 reported as bounded census data, not failures: those categories can be valid
 and require source-aware human judgment. The fixture ledger is

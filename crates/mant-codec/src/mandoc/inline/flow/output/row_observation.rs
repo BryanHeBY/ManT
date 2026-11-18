@@ -170,6 +170,14 @@ pub(super) fn trailing_paragraph_row_origins(nodes: &[Inline]) -> Vec<CompletedR
     trailing_row_origins(nodes, RowProjection::Paragraph)
 }
 
+/// A table row may have been flattened to text but still owns a native endline.
+pub(super) fn has_table_data_row(nodes: &[Inline]) -> bool {
+    find_in_row_tail(nodes, &mut |node| {
+        matches!(RowReceipt::of(node), Some(RowReceipt::TableDataEnd)).then_some(())
+    })
+    .is_some()
+}
+
 /// Empty data rows remain distinct from completed `term_vspace()` requests.
 pub(super) fn trailing_table_data_rows(nodes: &[Inline]) -> u16 {
     let mut rows = 0_u16;

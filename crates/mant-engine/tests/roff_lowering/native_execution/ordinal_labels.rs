@@ -13,6 +13,109 @@ const MDOC: &str = concat!(
 );
 const MAN: &str = ".TH PROBE 1 \"November 18, 2026\"\n.SH DESCRIPTION\n";
 
+#[test]
+fn committed_head_rows_and_fixed_spaces_prevent_ordinal_replacement() {
+    // Fixed CVS termp_it_post() prints one distinct row for an explicit
+    // .br/.sp 0 or a tbl data span. term_word() keeps an authored \~ cell.
+    let header = MDOC.replace("exercise descriptors", "probe page");
+    for family in ["br", "sp0", "nbsp", "table"] {
+        for mask in 0_u8..8 {
+            let mut source = format!("{header}.Bl -tag -width Ds\n");
+            for number in 1..=3 {
+                let active = mask & (1 << (number - 1)) != 0;
+                let head = match (family, active) {
+                    ("table", true) => format!("Xo\n.TS\nl.\n({number})\n.TE\n.Xc"),
+                    ("table", false) => format!("Xo\n({number})\n.Xc"),
+                    ("br", true) => format!("Xo\n.No {number} .\n.br\n.Xc"),
+                    ("sp0", true) => format!("Xo\n.No {number} .\n.sp 0\n.Xc"),
+                    ("nbsp", true) => format!(r"\~{number}."),
+                    _ => format!("Xo\n.No {number} .\n.Xc"),
+                };
+                writeln!(source, ".It {head}\nBODY{number}").unwrap();
+            }
+            source.push_str(".El\n");
+            let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let content = crate::json_roundtrip::json_string_roundtrip(&loaded);
+            let [block] = content.document.as_ref().unwrap().sections[1]
+                .blocks
+                .as_slice()
+            else {
+                panic!("{source}");
+            };
+            if mask == 0 {
+                assert!(
+                    matches!(block, Block::List { kind: ListKind::Ordered { start: Some(1) }, items, .. } if items.len() == 3),
+                    "{source}"
+                );
+                continue;
+            }
+            let Block::DefinitionList { items, .. } = block else {
+                panic!("{source}\n{block:?}");
+            };
+            assert_eq!(items.len(), 3, "{source}");
+            let rendered = mant_render::render_query_man_at_width(&content, 78);
+            let rows: Vec<_> = rendered.lines().map(str::trim_ascii).collect();
+            for (number, item) in (1..=3).zip(items) {
+                let active = mask & (1 << (number - 1)) != 0;
+                let label = match (family, active) {
+                    ("table", _) => format!("({number})"),
+                    ("nbsp", true) => format!("\u{a0}{number}."),
+                    _ => format!("{number}."),
+                };
+                assert_eq!(
+                    mant_ir::inline_plain_text(&item.terms[0]),
+                    label,
+                    "{source}"
+                );
+                let body = format!("BODY{number}");
+                assert_eq!(
+                    mant_ir::inline_plain_text(paragraph(&item.description)),
+                    body
+                );
+                let body_row = rows.iter().position(|row| row.ends_with(&body)).unwrap();
+                if active && family != "nbsp" {
+                    assert_eq!(
+                        &rows[body_row - 1..=body_row],
+                        &[label.as_str(), body.as_str()],
+                        "{source}\n{rendered}"
+                    );
+                } else {
+                    assert!(rows[body_row].starts_with(&label), "{source}\n{rendered}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn man_ordinal_heads_keep_fixed_spaces_in_both_tag_macros() {
+    for (before, label) in [(".IP \"", r#"\~{number}.""#), (".TP\n.B ", r"\~{number}.")] {
+        let mut source = MAN.to_owned();
+        for number in 1..=3 {
+            let label = label.replace("{number}", &number.to_string());
+            writeln!(source, "{before}{label}\nBODY{number}").unwrap();
+        }
+        let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let [Block::DefinitionList { items, .. }] = content.document.as_ref().unwrap().sections[0]
+            .blocks
+            .as_slice()
+        else {
+            panic!("{source}");
+        };
+        assert_eq!(items.len(), 3);
+        for (number, item) in (1..=3).zip(items) {
+            assert_eq!(
+                mant_ir::inline_plain_text(&item.terms[0]),
+                format!("\u{a0}{number}.")
+            );
+            assert_eq!(
+                mant_ir::inline_plain_text(paragraph(&item.description)),
+                format!("BODY{number}")
+            );
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum Payload {
     Equation,

@@ -113,6 +113,10 @@ impl InlineBuilder {
         row_observation::trailing_table_data_rows(&self.nodes)
     }
 
+    pub(in crate::mandoc) fn has_table_data_row(&self) -> bool {
+        row_observation::has_table_data_row(&self.nodes)
+    }
+
     /// Retain one actual native graph-row end in its current output owner.
     /// This is a boundary receipt, not an additional completed empty row.
     pub(in crate::mandoc) fn record_device_row_end(&mut self) {

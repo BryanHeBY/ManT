@@ -11,6 +11,7 @@ pub(super) struct FinishedInlineLine {
     pub(super) definition_term_breaks: Vec<usize>,
     pub(super) definition_field_exited: bool,
     pub(super) definition_body_gap_consumed: bool,
+    pub(super) head_layout_must_survive: bool,
 }
 
 /// A HEAD post's observed physical row, independent of the output container.
@@ -443,6 +444,8 @@ impl FormatterState {
         } else {
             0
         };
+        let head_layout_must_survive =
+            builder.definition_control_exited_field() || builder.has_table_data_row();
         let (mut output, execution, occupied, retirement) =
             builder.finish_captured_formatter_line(preserve_rows, boundary);
         let definition_term_breaks = super::inline::take_definition_term_breaks(&mut output);
@@ -457,6 +460,7 @@ impl FormatterState {
             definition_term_breaks,
             definition_field_exited,
             definition_body_gap_consumed,
+            head_layout_must_survive,
         }
     }
 

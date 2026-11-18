@@ -21,7 +21,8 @@ mod mdoc;
 #[cfg(test)]
 use definition::split_definition_terms;
 use definition::{
-    DefinitionFlow, DefinitionHeadFlow, RunInHeadStyle, definition_item, prepend_definition_heads,
+    DefinitionFlow, DefinitionHeadFlow, LoweredDefinitionItem, RunInHeadStyle, definition_item,
+    prepend_definition_heads,
 };
 use man::ordered::{ManListState, append_ordered, ordinal_marker, ordinal_sequence};
 pub(super) use man::{ManDefinitionState, lower_man_definition};

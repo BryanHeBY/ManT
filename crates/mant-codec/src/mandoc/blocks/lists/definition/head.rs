@@ -77,6 +77,8 @@ pub(super) fn lower_definition_head(
                 definition_term_breaks: finished.term_breaks,
                 definition_field_exited: false,
                 definition_body_gap_consumed: false,
+                // Run-in inset and diagnostic heads never recover ordinals.
+                head_layout_must_survive: false,
             },
             run_in_execution: Some(RunInExecution {
                 state: finished.execution,

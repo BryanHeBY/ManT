@@ -91,6 +91,16 @@ impl InlineBuilder {
         })
     }
 
+    pub(in crate::mandoc) fn definition_control_exited_field(&self) -> bool {
+        // roff_term_pre_br() clears BRIND/NOBREAK after flushing the older
+        // field. The regular HEAD post can also end the row just because it
+        // overruns its width. Only the former is a source-imposed boundary.
+        self.execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.no_break_cleared && state.outcome.field_exited())
+    }
+
     pub(in crate::mandoc::inline::flow) fn reset_native_tab_origin(&mut self) {
         // term_newln() resets taboff even if there was no buffer to flush.
         if let Some(state) = &mut self.execution.definition {

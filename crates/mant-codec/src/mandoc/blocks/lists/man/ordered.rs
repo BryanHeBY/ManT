@@ -109,7 +109,8 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
     if !collect_marker_text(term, &mut text) {
         return None;
     }
-    let text = text.trim();
+    // Native fixed spaces are authored cells, unlike ordinary edge padding.
+    let text = text.trim_ascii();
     let (digits, style) = if let Some(digits) = text.strip_suffix('.') {
         (digits, IpOrdinalStyle::Period)
     } else if let Some(digits) = text.strip_suffix(')') {

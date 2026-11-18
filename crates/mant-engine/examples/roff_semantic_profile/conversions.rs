@@ -25,7 +25,8 @@ pub(super) struct OrdinalConversion {
 pub(super) fn ordinal_conversions(root: &Node, document: &Document) -> Vec<OrdinalConversion> {
     let mut candidates = Vec::new();
     let mut slots = HashMap::new();
-    collect_source_candidates(root, &mut slots, &mut candidates);
+    let spacing = ordinal_labels::HeadSpacing::collect(root);
+    collect_source_candidates(root, &spacing, &mut slots, &mut candidates);
     let mut observed = ObservedLists::new();
     collect_blocks(&document.blocks, "document", &mut observed);
     for (index, section) in document.sections.iter().enumerate() {
@@ -88,6 +89,7 @@ struct SourceCandidate {
 
 fn collect_source_candidates(
     node: &Node,
+    spacing: &ordinal_labels::HeadSpacing,
     slots: &mut HashMap<Origin, usize>,
     output: &mut Vec<SourceCandidate>,
 ) {
@@ -108,6 +110,7 @@ fn collect_source_candidates(
                     .filter(|part| part.kind == NodeKind::Body)
                     .flat_map(|body| &body.children)
                     .filter(|item| item.macro_token.as_deref() == Some("It")),
+                spacing,
             )
         {
             let recovered = style == DefinitionListStyle::Tag && labels.recoverable();
@@ -129,7 +132,7 @@ fn collect_source_candidates(
         *slot += 1;
     }
     for child in &node.children {
-        collect_source_candidates(child, slots, output);
+        collect_source_candidates(child, spacing, slots, output);
     }
 }
 
