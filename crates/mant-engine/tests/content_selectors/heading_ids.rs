@@ -268,6 +268,14 @@ fn libstdcxx_manual_keeps_the_complete_long_subsections_selectable() {
             .iter()
             .any(|alias| alias.as_str().len() == 697)
     );
+    let index = DocumentIndex::build(&document);
+    for heading in &document.sections[3].children[..12] {
+        let [fragment] = heading.fragment_aliases.as_slice() else {
+            panic!("each previously oversized ID survives as one fragment");
+        };
+        assert!(fragment.as_str().len() > 512);
+        assert_eq!(index.fragment_target(fragment.as_str()), Some(&heading.id));
+    }
     assert_readable_outline(&ResolvedContent {
         label: "gp_hash_table".into(),
         address: None,
