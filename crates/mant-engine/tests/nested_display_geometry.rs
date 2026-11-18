@@ -410,15 +410,41 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
                     assert_column_display_source(&source);
                 }
                 let content = load_roff_bytes(source.as_bytes()).unwrap();
-                let mut gap = Gap(None);
-                gap.visit_document(content.document.as_ref().unwrap());
-                // These 36 exact sources reran pristine before migration.
-                // A column's leading display request is assembled inside a
-                // complete code owner; its one initial row takes the approved
-                // reading exception. Other list kinds keep external spacing.
-                let display_gap =
-                    usize::from(list != "-column X" && (list != "-item" || predecessor));
-                assert_eq!(gap.0, Some(u16::try_from(display_gap).unwrap()), "{source}");
+                let document = content.document.as_ref().unwrap();
+                let display_gap = u16::from(list != "-item" || predecessor);
+                if list == "-column X" {
+                    let rows = document.sections[0]
+                        .blocks
+                        .iter()
+                        .find_map(|block| match block {
+                            Block::Table { rows, .. } => Some(rows),
+                            _ => None,
+                        })
+                        .expect("column table");
+                    // The exact CVS column inputs have one completed layout
+                    // row from Bd pre, independently of the Bl pre and the
+                    // column BODY post. The literal starts with author text.
+                    let [
+                        Block::VerticalSpace { lines, .. },
+                        Block::Preformatted {
+                            children, layout, ..
+                        },
+                        ..,
+                    ] = rows[0].cells[0].blocks.as_slice()
+                    else {
+                        panic!("expected a layout gap followed by the display: {source}");
+                    };
+                    assert_eq!(*lines, display_gap, "{source}");
+                    assert_eq!(
+                        represented_display_gap(children, layout.spacing_before_lines),
+                        Some(0),
+                        "{source}"
+                    );
+                } else {
+                    let mut gap = Gap(None);
+                    gap.visit_document(document);
+                    assert_eq!(gap.0, Some(display_gap), "{source}");
+                }
                 let text = render_query_text(&content);
                 let inner = text.find("INNER").unwrap();
                 let line_boundaries = text[..inner]
@@ -433,7 +459,7 @@ fn first_item_display_boundaries_follow_the_native_list_kind() {
                     usize::from(predecessor && !compact && matches!(list, "-item" | "-column X"));
                 assert_eq!(
                     line_boundaries,
-                    1 + display_gap + outer_gap,
+                    1 + usize::from(display_gap) + outer_gap,
                     "{source}\n{text}"
                 );
             }
@@ -497,10 +523,9 @@ fn column_body_post_preserves_completed_empty_rows_after_json() {
     for (body, expected) in [
         (
             ".Bl -column X -compact\n.It\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n",
-            // The exact source was re-probed before changing this assertion:
-            // native has one initial row in this complete code owner. Reading
-            // omits that row, leaving its completed post row intact.
-            "DESCRIPTION\nINNER\n\nAFTER",
+            // Bd pre's vertical request and the column BODY's final
+            // endline are separate, independently verified native rows.
+            "DESCRIPTION\n\nINNER\n\nAFTER",
         ),
         (
             ".Bl -column X -compact\n.It\n.Bd -literal -compact\nINNER\n.Ed\n.El\nAFTER\n",
@@ -508,9 +533,7 @@ fn column_body_post_preserves_completed_empty_rows_after_json() {
         ),
         (
             ".Bl -column X -compact\n.It\n.Bd -filled\nINNER\n.Ed\n.El\nAFTER\n",
-            // Column execution retains this filled display in a literal
-            // owner too; the reading rule follows that complete IR owner.
-            "DESCRIPTION\nINNER\n\nAFTER",
+            "DESCRIPTION\n\nINNER\n\nAFTER",
         ),
         (
             ".Bl -column X -compact\n.It A\n.Bd -literal\nINNER\n.Ed\n.El\nAFTER\n",
