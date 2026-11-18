@@ -8,6 +8,7 @@ use crate::definitions::{
 use mant_ir::{DefinitionItem, EntryKind, inline_plain_text};
 use std::ops::Range;
 
+mod annotations;
 mod declaration_parts;
 mod symbols;
 

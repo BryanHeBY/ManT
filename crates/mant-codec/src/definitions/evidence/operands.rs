@@ -57,6 +57,12 @@ pub(crate) enum NativeOperandRole {
     ClippedEnclosure,
     #[cfg(feature = "roff")]
     EnclosureContent(u32),
+    /// A standalone, executed mdoc parenthesis or bracket from a TEXT node.
+    #[cfg(feature = "roff")]
+    LiteralDelimiter {
+        glyph: char,
+        enclosure: Option<u32>,
+    },
     ExplicitOption,
 }
 
@@ -177,6 +183,7 @@ impl CapturedHeadOperands {
                         operand.role,
                         NativeOperandRole::EnclosureStart(_)
                             | NativeOperandRole::EnclosureEnd(_)
+                            | NativeOperandRole::LiteralDelimiter { .. }
                             | NativeOperandRole::Description
                     )
                 })

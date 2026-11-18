@@ -98,6 +98,41 @@ fn bsd_ioctl_constants_keep_types_out_of_names_and_parallel_subjects_in() {
     }
 }
 
+#[test]
+fn parenthesized_bsd_constant_notes_keep_their_original_names_and_owners() {
+    // Pinned CVS mdoc_macro.c::in_line distinguishes the Dv subject
+    // from the following Pq/Ic alias and from literal delimiters around Sy.
+    let netgraph = fixture("freebsd-ng_deflate.4.gz");
+    check_queries(
+        &netgraph,
+        83,
+        "NGM_DEFLATE_CONFIG (config)",
+        &["NGM_DEFLATE_CONFIG"],
+        "This command resets and configures the node",
+    );
+    let acl = fixture("freebsd-archive_entry_acl.3.gz");
+    check_queries(
+        &acl,
+        124,
+        "ARCHIVE_ENTRY_ACL_READ (r)",
+        &["ARCHIVE_ENTRY_ACL_READ"],
+        "ARCHIVE_ENTRY_ACL_READ (r)",
+    );
+    check_queries(
+        &acl,
+        214,
+        "ARCHIVE_ENTRY_ACL_READ_DATA (r)",
+        &["ARCHIVE_ENTRY_ACL_READ_DATA"],
+        "Read data (file).",
+    );
+    let items = super::definitions(acl.document.as_ref().unwrap());
+    let read = items
+        .iter()
+        .find(|item| item.source.is_some_and(|source| source.line == 124))
+        .unwrap();
+    assert_eq!(read.description.len(), 0);
+}
+
 fn check_queries(content: &ResolvedContent, line: u32, form: &str, names: &[&str], body: &str) {
     let items = super::definitions(content.document.as_ref().unwrap());
     let item = items

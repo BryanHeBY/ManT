@@ -242,6 +242,126 @@
           "status": "CapturedWithDiagnostics"
         }
       }
+    },
+    {
+      "file": "freebsd-ng_deflate.4.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man4/ng_deflate.4.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man4/ng_deflate.4.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "f5411777277bcce27c334ee414c3c3f15152ad1742696585399530a5544450d3",
+      "fixtureSha256": "f5411777277bcce27c334ee414c3c3f15152ad1742696585399530a5544450d3",
+      "decompressedSha256": "5759e5ef9d0447fae840c6fc8c7f75f335d6ef2fabd9cbd41aad407c9ba851a5",
+      "sourceBytes": 2234,
+      "fixtureBytes": 2234,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-2-Clause",
+      "licenseFile": "freebsd-ng_deflate.4.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "A parenthesized Ic command alias does not revoke the main Dv binding.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "8a6fa6bc8ed17ce4e8c3e791140b566ef0d75020e836a6e4373fb856c30229d4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 4692,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "ea6946103584c8d4bbcd12f9067b05099e31f5bf8135e6880dbb3163100428c6",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 4694,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "86b0185e0b705173eb22f0873daf1225351acf3961b00ae6977947942a20a19e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 9374,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "e82131c2f010b57b760cbbdcfa62916497723e996dcbd6976fb7d56ce414cdf2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 12867,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "5206f1d33c177f11696505fe038254aca8b18b141b3eb68c24ace1d09ee122dd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 380,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-archive_entry_acl.3.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man3/archive_entry_acl.3.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man3/archive_entry_acl.3.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "7df9369994a5445d75043b7a3f93be202d3ba46b0f6100845fdba0bab1215701",
+      "fixtureSha256": "7df9369994a5445d75043b7a3f93be202d3ba46b0f6100845fdba0bab1215701",
+      "decompressedSha256": "d026ed9ee2e74278c795b596e48d52cee706dc6f9159f8faf72f889b24d70f8b",
+      "sourceBytes": 4232,
+      "fixtureBytes": 4232,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "BSD-2-Clause",
+      "licenseFile": "freebsd-archive_entry_acl.3.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "A literal delimiter pair wraps permission shorthand without changing its constant owner.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "23ba5c3ca81387b6d951e07a77a0f4169a9e7ac571191e956173aa65d38f249d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 17816,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "e48150a0c40ee0f07d9f420f6e807f44588f3d11be82f53355b0c15b7c2f678c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 17838,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "adcdbec2fbfcdb853713f8c65e074424e58907baeb5107e09cae75b27982c517",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 31331,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "3ebf3da4bfa041938264f79d1ce853967bcd70bab67b5c574a4adc89f2c2e8c4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 48529,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 0,
+          "stderrBytes": 0,
+          "status": "Captured"
+        }
+      }
     }
   ]
 }

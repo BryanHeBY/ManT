@@ -650,7 +650,10 @@ form. A `Dv` definition similarly binds its subject while retaining attached
 type and argument operands. Additional names require independent declaration
 evidence such as the separate native invocations produced by comma-delimited
 symbols. A parameter or description word within one invocation does not
-become another name.
+become another name. A complete parenthetical note can contain command
+aliases or styled permission shorthand and still preserve the subject's
+name. Name boundaries follow the accepted visible text even when several
+native operands or styles contribute to a single word.
 
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand

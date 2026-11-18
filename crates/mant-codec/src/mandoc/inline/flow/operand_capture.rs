@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
 use crate::mandoc::declaration_groups::search::SearchHead;
 use crate::mandoc::roff_escape::{DecodedText, RoffInlineEvent};
+use libmandoc_rs::Node;
 use mant_ir::Inline;
 
 #[derive(Clone, Default)]
@@ -198,7 +199,7 @@ impl super::InlineBuilder {
     /// Register an actual word before parsing or accepted-output drains.
     pub(in crate::mandoc) fn record_current_native_operand(
         &mut self,
-        text: Option<(u32, &DecodedText)>,
+        text: Option<(&Node, &DecodedText)>,
     ) {
         if let Some(capture) = &self.head_operand_capture {
             let mut capture = capture.borrow_mut();
@@ -213,7 +214,14 @@ impl super::InlineBuilder {
             let role = capture
                 .operand_role
                 .filter(|role| *role != NativeOperandRole::Description)
-                .or_else(|| capture.search_head.as_ref()?.role(text?.0))
+                .or_else(|| capture.search_head.as_ref()?.role(text?.0.id))
+                .or_else(|| {
+                    let glyph = literal_delimiter(text?.0)?;
+                    Some(NativeOperandRole::LiteralDelimiter {
+                        glyph,
+                        enclosure: enclosure(),
+                    })
+                })
                 .or(capture.operand_role)
                 .or_else(|| enclosure().map(NativeOperandRole::EnclosureContent))
                 .or_else(|| {
@@ -307,6 +315,18 @@ impl super::InlineBuilder {
         if let Some(capture) = capture {
             capture.borrow_mut().enclosures.pop();
         }
+    }
+}
+
+fn literal_delimiter(node: &Node) -> Option<char> {
+    // mdoc_macro.c::dword sets NODE_DELIMO/C for bare delimiters.
+    // A glyph within a styled word is not such a native boundary.
+    match node.decoder_text()? {
+        "(" if node.flags.delimiter_open => Some('('),
+        "[" if node.flags.delimiter_open => Some('['),
+        ")" if node.flags.delimiter_close => Some(')'),
+        "]" if node.flags.delimiter_close => Some(']'),
+        _ => None,
     }
 }
 

@@ -52,6 +52,9 @@ that crate was not published for that change.
 - Bind numbered BSD error names and annotated constants at their exact
   ranges. Keep types, descriptions and unproved enclosed arguments out
   of direct definition results.
+- Keep the subject of a BSD constant declaration when a complete
+  parenthetical note follows it. Preserve parameter scope across ordinary
+  annotations and require a visible word boundary around each bound name.
 - Preserve the exact fragment of an argument-less mdoc `Tg` when a user
   macro emits it and its target at the same source position.
 - Preserve literal Markdown heading tails through export and readback.

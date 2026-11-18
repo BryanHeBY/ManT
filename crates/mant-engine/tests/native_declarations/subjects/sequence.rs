@@ -2,6 +2,7 @@ use super::super::support::{check_occurrences, explain, load, roundtrip};
 use mant_ir::{EntryKind, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceClass, OutlineNode};
 
+mod annotations;
 mod receipts;
 mod symbols;
 

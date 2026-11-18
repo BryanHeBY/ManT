@@ -1,5 +1,7 @@
 //! Recognize independent names in a native HEAD with protected operands.
-use super::{Recognition, following_function, offset, operand_at, recognize_part, unwrapped};
+use super::{
+    Recognition, annotations, following_function, offset, operand_at, recognize_part, unwrapped,
+};
 use crate::definitions::syntax::{
     DeclarationLimit,
     eligibility::{NameSource, OperandUses},
@@ -253,20 +255,25 @@ fn group_subject(
     let lead = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&span.start));
-    let Some(receipt) = lead.and_then(|operand| operand.role.subject()) else {
-        return Ok(None);
+    let Some(lead) = lead else { return Ok(None) };
+    let Some(receipt) = lead.role.subject() else {
+        // Authored parentheses do not introduce an AST BODY like Pq.
+        // Their complete range can still prove a group of arguments.
+        return Ok(
+            (matches!(lead.role, NativeOperandRole::LiteralDelimiter { .. })
+                && annotations::argument_group(text, span, operands, enclosure))
+            .then_some(NativeSubject::Field),
+        );
     };
     // A group can consist of multiple Fa nodes. Each must come from the
     // same proven enclosure, including the case of a direct It HEAD. A
     // missing delimiter can expose the text from a different scope.
-    if receipt.kind == NativeSubject::Field
-        && !OperandUses::new(operands).covers(span, |role| {
-            role.subject().is_some_and(|field| {
-                field.kind == NativeSubject::Field && field.enclosure == enclosure
-            })
-        })
-    {
-        return Err(RejectedPart::Unproved);
+    if receipt.kind == NativeSubject::Field {
+        return if annotations::argument_group(text, span, operands, enclosure) {
+            Ok(Some(receipt.kind))
+        } else {
+            Err(RejectedPart::Unproved)
+        };
     }
     if receipt.enclosure != enclosure {
         return Ok(None);
@@ -305,6 +312,9 @@ fn independent_groups<'a>(
                         | NativeOperandRole::EnclosureStart(_)
                         | NativeOperandRole::EnclosureEnd(_) => true,
                         NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
+                        NativeOperandRole::LiteralDelimiter {
+                            enclosure: owner, ..
+                        } => enclosure != owner,
                         _ => false,
                     })
         })
