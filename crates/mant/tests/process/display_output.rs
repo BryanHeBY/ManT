@@ -96,6 +96,55 @@ fn inline_roff_continuations_retain_indent_and_explicit_blank_lines() {
     assert!(text.lines().any(|line| line == "--next-option"));
 }
 
+#[cfg(feature = "roff")]
+#[test]
+fn aligned_option_padding_preserves_name_style_in_every_cli_view() {
+    for selection in [&[][..], &["--node", "2/e1"], &["--explain=--foo"]] {
+        let mut unpadded = String::new();
+        for padding in [0, 1, 8] {
+            // Fixed CVS man_term.c::post_IP() flushes the HEAD field without
+            // assigning its trailing breakable padding to the BODY.
+            let source = format!(
+                ".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- test\n.SH OPTIONS\n.IP \"--foo{}\" 24\nBODYWORD\n",
+                " ".repeat(padding)
+            );
+            let mut args = vec![
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--display",
+                "direct",
+                "--format",
+                "text",
+                "--color",
+                "always",
+            ];
+            args.extend_from_slice(selection);
+            let output = run_text_input(&args, &source);
+            assert!(output.status.success(), "{selection:?} {output:?}");
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            let row = stdout
+                .lines()
+                .find(|line| line.contains("BODYWORD"))
+                .unwrap();
+            assert_eq!(
+                super::execution_scopes::without_sgr(row),
+                format!("{:<24}BODYWORD", "--foo")
+            );
+            if padding == 0 {
+                let (before, _) = row.split_once("--foo").unwrap();
+                assert!(before.starts_with("\u{1b}["), "{row:?}");
+                if selection == ["--explain=--foo"] {
+                    assert!(before.contains("\u{1b}[4m"), "{row:?}");
+                }
+                unpadded = row.to_owned();
+            }
+            assert_eq!(row, unpadded, "{selection:?}, {padding} spaces");
+        }
+    }
+}
+
 #[test]
 fn source_rows_survive_plain_and_ansi_process_facades() {
     fn unstyle(text: &str) -> String {

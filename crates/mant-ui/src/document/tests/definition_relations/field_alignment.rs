@@ -8,6 +8,138 @@ const HEADER: &str = concat!(
 );
 
 #[test]
+fn aligned_option_padding_preserves_terminal_cell_style() {
+    let expected = theme::style(theme::StyleRole::Parameter).fg;
+    for padding in [0, 1, 8] {
+        // CVS keep the HEAD and BODY together for a fitting .IP label.
+        let source = format!(
+            ".TH PROBE 1\n.SH OPTIONS\n.IP \"--foo{}\" 24\nBODYWORD\n",
+            " ".repeat(padding)
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let view = DocumentView::new(&query);
+        for width in [16, 78] {
+            let rendered = view.render(width);
+            let hit = &rendered.search("--foo")[0];
+            let area = Rect::new(0, 0, width, rendered.row_count.try_into().unwrap());
+            let mut buffer = Buffer::empty(area);
+            Paragraph::new(rendered.text.clone()).render(area, &mut buffer);
+            for (column, glyph) in (hit.start_column..hit.end_column).zip(["-", "-", "f", "o", "o"])
+            {
+                let cell = &buffer[(column.try_into().unwrap(), hit.row.try_into().unwrap())];
+                assert_eq!(cell.symbol(), glyph);
+                assert_eq!(
+                    cell.style().fg,
+                    expected,
+                    "{padding} spaces at width {width}"
+                );
+            }
+            assert_eq!(hit.end_column - hit.start_column, 5);
+        }
+    }
+}
+
+#[test]
+fn repeated_reference_occurrences_survive_replaced_field_padding() {
+    const PREFIX: &str = concat!(
+        ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n",
+        ".Nd probe page\n.Sh DESCRIPTION\n",
+    );
+    for tail in [
+        "",
+        " Ns No \" \"",
+        " Ns No \"        \"",
+        r" Ns No \~",
+        "\n.br",
+    ] {
+        // CVS termp_xr_pre writes printf(3) before the tag's trailing padding.
+        // HTML keeps two Xr occurrences. NBSP stays in the label, and .br
+        // closes its row before either BODY.
+        let mut source = PREFIX.to_owned();
+        for body in ["FIRSTBODY", "SECONDBODY"] {
+            use std::fmt::Write as _;
+            writeln!(
+                source,
+                ".Bl -tag -width 24n\n.It Xo\n.Xr printf 3{tail}\n.Xc\n{body}\n.El"
+            )
+            .unwrap();
+        }
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let wire = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+        let restored: ResolvedContent = serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
+            .unwrap()
+            .into();
+        assert_eq!(query.document, restored.document);
+        let view = DocumentView::new(&restored);
+        let references = view
+            .references
+            .iter()
+            .filter(|r| r.label == "printf(3)")
+            .collect::<Vec<_>>();
+        let [first, second] = references.as_slice() else {
+            panic!("two independent reference occurrences");
+        };
+        assert_ne!(first.id, second.id);
+        let navigation = view.navigation();
+        for reference in &references {
+            assert!(navigation.iter().any(|node| {
+                node.target_id.as_str() == reference.id.as_ref()
+                    || view
+                        .associated_reference_choices(&node.id)
+                        .iter()
+                        .any(|(id, _)| id.as_str() == reference.id.as_ref())
+            }));
+        }
+        for width in [16, 78] {
+            let rendered = view.render(width);
+            let hits = rendered.search("printf(3)");
+            assert_eq!(hits.len(), 2);
+            for (hit, reference) in hits.iter().zip(&references) {
+                assert_eq!(
+                    rendered.anchor_row(&reference.id),
+                    Some(hit.row),
+                    "{source}"
+                );
+                assert_eq!(
+                    rendered.link_target_at(hit.row, hit.start_column),
+                    Some(&LinkTarget::Manual {
+                        name: "printf".into(),
+                        manual_section: Some("3".into())
+                    })
+                );
+                assert_eq!(rendered.link_target_at(hit.row, hit.end_column), None);
+            }
+            if width == 78 {
+                let body = &rendered.search("FIRSTBODY")[0];
+                if tail == "\n.br" {
+                    assert_eq!(body.row, hits[0].row + 1);
+                } else {
+                    assert_eq!(body.row, hits[0].row);
+                    // termp_it_pre adds two columns to the requested width.
+                    assert_eq!(body.start_column - hits[0].start_column, 26);
+                    let copied = rendered.selected_text(RenderedSelection {
+                        anchor: TextPosition {
+                            row: hits[0].row,
+                            column: hits[0].start_column,
+                        },
+                        focus: TextPosition {
+                            row: body.row,
+                            column: body.end_column - 1,
+                        },
+                    });
+                    let prefix = if tail.ends_with(r"\~") {
+                        "printf(3)\u{a0}"
+                    } else {
+                        "printf(3)"
+                    };
+                    assert_eq!(copied, format!("{prefix:<26}FIRSTBODY"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn ip_end_padding_preserves_painted_columns_and_copy() {
     // Fixed CVS term_flushln() keeps the fitting IP HEAD active without
     // writing its final ASCII padding into the BODY field.

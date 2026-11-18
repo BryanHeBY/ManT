@@ -1,13 +1,11 @@
 //! List labels and definition bodies compose into the caller's content flow.
-use std::borrow::Cow;
-
 use super::{
     Block, BlockRenderer, DefinitionItem, Flow, LayoutText, ListItem, ListKind, ParagraphTail,
     TextRole, compose_origin, coordinate, padding,
 };
 use mant_ir::geometry::{
-    aligned_definition_term, list_item_spacing, list_marker, list_marker_width,
-    marker_paragraph_gap, omit_term_end_padding,
+    aligned_definition_term, definition_term_end_padding, list_item_spacing, list_marker,
+    list_marker_width, marker_paragraph_gap,
 };
 
 impl BlockRenderer<'_> {
@@ -107,13 +105,19 @@ impl BlockRenderer<'_> {
             .iter()
             .enumerate()
             .filter_map(|(index, term)| {
-                let mut inline = term.inline_content();
-                let mut reading = Cow::Borrowed(inline.content);
-                if aligned_term == Some(index) {
-                    omit_term_end_padding(&mut reading);
-                }
-                inline.content = &reading;
-                let rows = self.inline_rows(inline, TextRole::DefinitionTerm);
+                let inline = term.inline_content();
+                let padding = if aligned_term == Some(index) {
+                    definition_term_end_padding(inline.content)
+                } else {
+                    0
+                };
+                let rows = if padding == 0 {
+                    self.inline_rows(inline, TextRole::DefinitionTerm)
+                } else {
+                    let mut bytes = 0;
+                    mant_ir::visit_inline_plain_text(inline.content, |text| bytes += text.len());
+                    self.inline_rows_through(inline, TextRole::DefinitionTerm, bytes - padding)
+                };
                 // A term that only breaks rows still owns those rows (an
                 // empty `.It` operand's field owns its blank lines).
                 (rows.len() > 1 || rows.iter().any(|(row, _)| !row.is_empty())).then_some(rows)

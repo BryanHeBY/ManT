@@ -31,7 +31,10 @@ mod gaps;
 pub use gaps::has_bounded_gap;
 
 mod terms;
-pub use terms::{aligned_definition_term, definition_run_in_width, omit_term_end_padding};
+pub use terms::{
+    aligned_definition_term, definition_run_in_width, definition_term_end_padding,
+    omit_term_end_padding,
+};
 
 mod blocks;
 pub use blocks::{block_layout, block_layout_mut, block_source, rebase_roots};

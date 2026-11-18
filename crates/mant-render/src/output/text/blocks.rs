@@ -47,6 +47,17 @@ impl BlockRenderer<'_> {
         content: InlineContentRef<'_>,
         role: TextRole,
     ) -> Vec<(LayoutText, RowLayoutHint)> {
+        self.inline_rows_through(content, role, usize::MAX)
+    }
+
+    /// Apply a visible byte limit after resolving decorations against the
+    /// original root. A layout suffix must never replace that root's identity.
+    fn inline_rows_through(
+        &self,
+        content: InlineContentRef<'_>,
+        role: TextRole,
+        mut remaining: usize,
+    ) -> Vec<(LayoutText, RowLayoutHint)> {
         let children = content.content;
         let mut rows = vec![(LayoutText::default(), content.layout.row_layout(0))];
         let names = self
@@ -54,6 +65,11 @@ impl BlockRenderer<'_> {
             .as_ref()
             .map_or(&[][..], |map| map.ranges(children));
         let mut append = |presentation: TextPresentation, value: &str| {
+            if remaining == 0 {
+                return;
+            }
+            let value = &value[..value.len().min(remaining)];
+            remaining -= value.len();
             #[cfg(test)]
             visits::inline();
             let decorated = LayoutText::decorated(value, (self.decorate)(presentation, value));

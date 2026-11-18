@@ -359,6 +359,31 @@ pub(super) fn spans_scalars(spans: &[Span<'_>]) -> usize {
     spans.iter().map(|span| scalar_count(&span.content)).sum()
 }
 
+impl StyledInlineLine {
+    /// Replace an already measured ASCII-space suffix at a field seam.
+    /// Preserve original link occurrences and keep the new gap outside clicks.
+    pub(super) fn omit_end_padding(&mut self, mut padding: usize) {
+        while padding > 0 {
+            let span = self.spans.last_mut().expect("measured field padding");
+            let length = span.content.len();
+            if length > padding {
+                span.content.to_mut().truncate(length - padding);
+                break;
+            }
+            self.spans.pop();
+            padding -= length;
+        }
+        let end = spans_scalars(&self.spans);
+        self.links.retain_mut(|link| {
+            link.end_scalar = link.end_scalar.min(end);
+            link.start_scalar < link.end_scalar
+        });
+        for mark in &mut self.reference_marks {
+            mark.scalar_offset = mark.scalar_offset.min(end);
+        }
+    }
+}
+
 fn scalar_count(value: &str) -> usize {
     #[cfg(test)]
     SCALAR_WORK.with(|work| work.set(work.get() + value.len()));

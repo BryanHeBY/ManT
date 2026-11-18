@@ -8,8 +8,9 @@ use super::super::{
 };
 use super::DocumentBuilder;
 use mant_ir::geometry::{
-    aligned_definition_term, compose_origin, coordinate, list_item_spacing, list_marker,
-    list_marker_width, marker_paragraph_gap, marker_run_in_gap, omit_term_end_padding, padding,
+    aligned_definition_term, compose_origin, coordinate, definition_term_end_padding,
+    list_item_spacing, list_marker, list_marker_width, marker_paragraph_gap, marker_run_in_gap,
+    padding,
 };
 use mant_ir::{DefinitionItem, ListItem};
 
@@ -196,13 +197,18 @@ impl DocumentBuilder<'_> {
             for (id, row) in inline_anchor_rows(term) {
                 head_targets.push((id, head_lines.len() + row));
             }
-            let mut inline = term.inline_content();
-            let mut reading = Cow::Borrowed(inline.content);
+            let inline = term.inline_content();
+            let mut lines =
+                self.styled_inlines(inline, theme::style(theme::StyleRole::Text), false);
             if aligned_term == Some(index) {
-                omit_term_end_padding(&mut reading);
+                let padding = definition_term_end_padding(inline.content);
+                if padding > 0 {
+                    lines
+                        .last_mut()
+                        .expect("open term row")
+                        .omit_end_padding(padding);
+                }
             }
-            inline.content = &reading;
-            let lines = self.styled_inlines(inline, theme::style(theme::StyleRole::Text), false);
             if lines.len() != 1 || !lines[0].spans.is_empty() {
                 head_lines.extend(lines);
             } else {

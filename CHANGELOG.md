@@ -222,6 +222,8 @@ that crate was not published for that change.
   destination. Targets omitted from the page retain readable labels.
 - Retain nested entry ancestors in search results and omit descendants already
   included by a selected parent in an excerpt.
+- Preserve option styling and each reference's outline location when aligning
+  the body of a definition with a padded label.
 - The 0.15 `mant-render` Markdown option APIs accept the option types from
   `mant-codec` 0.15.
 

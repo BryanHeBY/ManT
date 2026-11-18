@@ -19,11 +19,10 @@ pub fn aligned_definition_term(item: &DefinitionItem) -> Option<usize> {
         .rposition(|term| crate::last_visible_character(term).is_some())
 }
 
-/// Project the end of one aligned term as a field boundary. Breakable spaces
-/// after its final nonempty row are replaceable by the resolved alignment gap.
-/// The original term still owns the complete spelling. Fixed blanks, preceding
-/// hard rows, and zero-width destinations are retained in this reading view.
-pub fn omit_term_end_padding(nodes: &mut Cow<'_, [Inline]>) {
+/// Number of final ASCII spaces that an aligned field's gap can replace.
+/// Fixed blanks and complete or whitespace-only rows are not padding.
+#[must_use]
+pub fn definition_term_end_padding(nodes: &[Inline]) -> usize {
     fn end(nodes: &[Inline], spaces: &mut usize) -> Option<char> {
         nodes.iter().rev().find_map(|node| match node {
             Inline::Text { value } | Inline::Code { value } => {
@@ -40,6 +39,17 @@ pub fn omit_term_end_padding(nodes: &mut Cow<'_, [Inline]>) {
         })
     }
 
+    let mut spaces = 0;
+    if end(nodes, &mut spaces).is_some_and(|ch| ch != '\n') {
+        spaces
+    } else {
+        0
+    }
+}
+
+/// Project an aligned term without its replaceable field padding.
+/// The original term still owns its spelling and zero-width destinations.
+pub fn omit_term_end_padding(nodes: &mut Cow<'_, [Inline]>) {
     fn omit(nodes: &mut [Inline], spaces: &mut usize) {
         for node in nodes.iter_mut().rev() {
             if *spaces == 0 {
@@ -65,8 +75,8 @@ pub fn omit_term_end_padding(nodes: &mut Cow<'_, [Inline]>) {
         }
     }
 
-    let mut spaces = 0;
-    if end(nodes, &mut spaces).is_some_and(|ch| ch != '\n') && spaces > 0 {
+    let mut spaces = definition_term_end_padding(nodes);
+    if spaces > 0 {
         omit(nodes.to_mut(), &mut spaces);
     }
 }
