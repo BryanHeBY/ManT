@@ -110,10 +110,9 @@ fn collect_ast_structure(
         match node
             .equation
             .as_ref()
-            .map(libmandoc_rs::EquationBox::readable_text)
+            .filter(|equation| equation_has_payload(equation))
         {
             None => profile.equation_configurations += 1,
-            Some(value) if value.trim().is_empty() => profile.equation_configurations += 1,
             Some(_) if inside_table => profile.table_equations += 1,
             Some(_) if equation_is_display(node, head_payloads) => profile.display_equations += 1,
             Some(_) => profile.inline_equations += 1,
@@ -390,6 +389,12 @@ fn has_visible_flow_text(node: &Node) -> bool {
 }
 
 pub(super) fn equation_visible_text(source: &str) -> String {
+    let word = mant_codec::RoffWordEvidence::read(source);
+    if !word.has(mant_codec::RoffWordEffect::Unclassified) {
+        // Glyphless native words (including ASCII_NBRZW) stay part of the
+        // authored expression's owner while adding no reading scalar.
+        return word.text;
+    }
     let mut output = String::with_capacity(source.len());
     let mut rest = source;
     while let Some(index) = rest.find('\\') {
@@ -470,6 +475,12 @@ pub(super) fn equation_visible_text(source: &str) -> String {
     }
     output.push_str(rest);
     output
+}
+
+pub(super) fn equation_has_payload(equation: &libmandoc_rs::EquationBox) -> bool {
+    // A configuration leaves the native root empty. Empty authored atoms or
+    // pile rows still own an expression and must not disappear from the census.
+    equation.text.is_some() || !equation.children.is_empty()
 }
 
 pub(super) fn strip_tag_font_escapes(source: &str) -> String {

@@ -221,3 +221,46 @@ class AuditProfileWireTests(unittest.TestCase):
                              {'layout-rule': {'cells': ['horizontal', 'double-horizontal']}}):
                 current['tableRows'][0]['kind'] = row_kind
                 self.assertEqual(self.finding(structure, response).status, 'clean')
+
+    def test_uncertain_source_owner_findings_preserve_their_actual_review_evidence(self):
+        # The genuine F5 HEAD-nested list is at 10:2. Its native source is
+        # uncertain and its IR has no independent nested list owner.
+        response = semantic_page()
+        response['ordinalCasesForReview'] = [[10, 2]]
+        issue = 'missing ordinal owner at 10:2 (disposition needs source review)'
+        response['ordinalConversionViolations'] = [issue]
+        response['violations'] = [issue]
+        found = self.finding(semantic, response)
+        self.assertEqual(found.status, 'review')
+        self.assertEqual(found.violations, [issue])
+        self.assertEqual([[r.line, r.column] for r in found.source_review], [[10, 2]])
+
+        for field, value in (
+            ('ordinalCasesForReview', []),
+            ('ordinalCasesForReview', [[10, 3]]),
+            ('ordinalCasesForReview', None),
+            ('ordinalConversionViolations', [issue, issue]),
+            ('ordinalConversionViolations', ['unbound source owner']),
+            ('violations', []),
+        ):
+            with self.subTest(field=field, value=value):
+                broken = deepcopy(response)
+                broken[field] = value
+                self.assertEqual(self.finding(semantic, broken).status, 'hard-failure')
+
+        # Same-coordinate macro invocations remain separate occurrences.
+        response['ordinalCasesForReview'] *= 2
+        response['ordinalConversionViolations'] *= 2
+        response['violations'] *= 2
+        self.assertEqual(self.finding(semantic, response).status, 'review')
+        response['ordinalConversions'] = [ordinal_conversion()]
+        response['ordinalConversions'][0]['observedDispositions'] = ['other-list']
+        confirmed = ('mdoc -tag ordinal candidate at line 8 expected recovered-ordered-list '
+                     'but observed ["other-list"]')
+        response['ordinalConversionViolations'].insert(0, confirmed)
+        response['violations'].insert(0, confirmed)
+        self.assertEqual(self.finding(semantic, response).status, 'review')
+        # Rust emits the conclusive conversion mismatches before source-bound
+        # owner findings. Reordering or dropping either stream is invalid.
+        response['ordinalConversionViolations'].reverse()
+        self.assertEqual(self.finding(semantic, response).status, 'hard-failure')

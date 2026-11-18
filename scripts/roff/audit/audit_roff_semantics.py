@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v8"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v9"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v1",
     "mant.roff-semantic-profile/v2",
@@ -48,6 +48,7 @@ SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v5",
     "mant.roff-semantic-profile/v6",
     "mant.roff-semantic-profile/v7",
+    "mant.roff-semantic-profile/v8",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -280,6 +281,23 @@ def expected_conversion_violations(conversions: list[dict[str, object]]) -> list
     ]
 
 
+def valid_ordinal_violations(
+    conversions: list[dict[str, object]], reviews: list[SourceReview], violations: list[str],
+) -> bool:
+    """Validate conclusive conversions and source-bound missing-owner findings."""
+    expected = expected_conversion_violations(conversions)
+    # OrdinalAudit::violations emits conversions first, then uncertain owner
+    # findings. Each source occurrence can account for at most one such finding.
+    if violations[:len(expected)] != expected:
+        return False
+    allowed = Counter(
+        f'missing ordinal owner at {item.line}:{item.column} '
+        '(disposition needs source review)'
+        for item in reviews
+    )
+    return not (Counter(violations[len(expected):]) - allowed)
+
+
 def profile_findings(
     pages: Sequence[Path], roots: Sequence[Path], profiler: Path, timeout: int,
     *, exact_roots=None, batch_runner=None,
@@ -355,14 +373,14 @@ def profile_findings(
                 and all(valid_ordinal_conversion(item) for item in ordinal_conversions)
                 and isinstance(ordinal_conversion_violations, list)
                 and all(isinstance(item, str) for item in ordinal_conversion_violations)
-                and ordinal_conversion_violations == expected_conversion_violations(ordinal_conversions)
+                and source_review is not None
+                and valid_ordinal_violations(ordinal_conversions, source_review, ordinal_conversion_violations)
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
                 and not (Counter(ordinal_conversion_violations) - Counter(violations))
                 and valid_violation_summary(response)
                 and isinstance(response.get("declarationGroups"), dict)
                 and isinstance(response.get("declarationGroupViolations"), list)
-                and source_review is not None
             )
             if not valid:
                 yield Finding(label, "hard-failure", [], "invalid profiler response")

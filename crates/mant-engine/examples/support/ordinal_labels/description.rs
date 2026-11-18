@@ -47,6 +47,11 @@ impl DescriptionProbe {
                 // even when that first word has no visible glyph.
                 return Description::Visible;
             }
+            (_, Some("ce" | "rj")) => {
+                // roff_term_pre_ce starts at n->child->next. The first TEXT
+                // is the count, and is never passed to term_word().
+                return self.visit_children(node.children.iter().skip(1));
+            }
             (NodeKind::Body, Some("En")) => {
                 // termp_quote_pre/post use parser-normalized Es operands,
                 // whose presence alone does not prove printable glyphs.
@@ -84,8 +89,12 @@ impl DescriptionProbe {
             ) => return Description::Absent,
             _ => {}
         }
+        self.visit_children(node.children.iter())
+    }
+
+    fn visit_children<'a>(&mut self, children: impl Iterator<Item = &'a Node>) -> Description {
         let mut result = Description::Absent;
-        for child in &node.children {
+        for child in children {
             result = result.max(self.visit(child));
             if result == Description::Visible {
                 break;
@@ -171,6 +180,16 @@ fn equation_description(equation: &libmandoc_rs::EquationBox) -> Description {
             // eqn_box() bypasses the matrix's outer column-list fences.
             for column in &child.children {
                 result = result.max(equation_description(column));
+            }
+        } else if equation.kind == EquationKind::Pile
+            && child.kind == EquationKind::List
+            && child.expected_args > 1
+            && child.actual_args == 1
+        {
+            // eqn_box() passes only the row's first child in this exact
+            // shape. Empty rows with no child still execute their fences.
+            if let Some(first) = child.children.first() {
+                result = result.max(equation_description(first));
             }
         } else {
             result = result.max(equation_description(child));

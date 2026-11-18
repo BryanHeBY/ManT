@@ -10,7 +10,7 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v8`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v9`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
@@ -32,6 +32,12 @@ path. A missing or different owner requires the explicit conversion violation
 and its inclusion in the overall violations. `other-list` is a valid observed
 product difference, recorded for Review. Malformed records and JSON booleans in
 numeric coordinates or counts are rejected.
+
+The violation stream also carries missing owners for uncertain source
+occurrences. Those findings follow the conclusive conversion mismatches and
+must match a reviewed source coordinate, including its occurrence count. A
+genuine HEAD-nested list can therefore remain Review with its original reason.
+Unknown coordinates, excess duplicates and invented findings fail validation.
 
 ## Oracle and scope
 

@@ -221,6 +221,47 @@ fn punctuated_mdoc_definition_ordinals_compare_as_recovered_ordered_lists() {
 }
 
 #[test]
+fn nested_ordinal_source_findings_keep_their_original_owner() {
+    use super::ordinal_labels::{OrdinalDisposition, cases::execution::source};
+    use serde_json::json;
+    let root = std::env::temp_dir();
+    let path = root.join(format!(
+        "mant-nested-ordinal-structure-{}.1",
+        std::process::id()
+    ));
+    for case in source::nested() {
+        std::fs::write(&path, &case.source).unwrap();
+        let profile =
+            super::profile_request(&json!({"id":case.name,"path":path,"root":root}).to_string());
+        std::fs::remove_file(&path).unwrap();
+        let profile = profile.unwrap();
+        let uncertain = case.disposition == OrdinalDisposition::Uncertain;
+        let positions = if uncertain {
+            json!([[case.source_line, 2]])
+        } else {
+            json!([])
+        };
+        assert_eq!(profile["ordinalCasesForReview"], positions, "{}", case.name);
+        if case.name.starts_with("head-") {
+            // A parent HEAD's flattened output cannot satisfy its native
+            // nested list owner's separate occurrence, even at the same text.
+            let prefix = format!("list-topology at line {}:2:", case.source_line);
+            assert!(
+                profile["violations"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|issue| { issue.as_str().unwrap().starts_with(&prefix) }),
+                "{}\n{profile}",
+                case.name
+            );
+        } else {
+            assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
+        }
+    }
+}
+
+#[test]
 fn equation_payload_evidence_preserves_source_review_and_independent_census() {
     use super::ordinal_labels::{OrdinalDisposition, cases::execution};
     use serde_json::json;
@@ -263,17 +304,9 @@ fn equation_payload_evidence_preserves_source_review_and_independent_census() {
             "{}\n{issues:?}",
             case.name
         );
-        // Source uncertainty does not waive the pre-existing independent
-        // equation census. Removing the owner must retain those findings.
-        if case.name.starts_with("equation-atom") {
-            assert!(
-                profile["violations"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|issue| { issue.as_str().unwrap().contains("display-equations") })
-            );
-        }
+        // Populated glyphless expressions are still counted with their
+        // source owner and exact empty value, independently of ordinal doubt.
+        assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
     }
 }
 
@@ -286,7 +319,7 @@ fn source_execution_crossings_keep_evidence_and_owner_obligations() {
         "mant-structure-source-execution-{}.1",
         std::process::id()
     ));
-    for case in execution::cases() {
+    for case in execution::cases().chain(execution::source::cases()) {
         std::fs::write(&path, &case.source).unwrap();
         let profile =
             super::profile_request(&json!({"id":case.name,"path":path,"root":root}).to_string());

@@ -2,6 +2,9 @@
 
 use super::super::OrdinalDisposition;
 
+#[path = "ordinal_source_cases.rs"]
+pub(crate) mod source;
+
 pub(crate) struct Case {
     pub(crate) name: String,
     pub(crate) source: String,

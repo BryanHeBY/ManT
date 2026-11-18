@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v8";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v9";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -582,6 +582,69 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 #[cfg(test)]
 mod tests {
     #[test]
+    fn nested_ordinal_sources_emit_valid_conclusive_and_review_findings() {
+        use crate::ordinal_labels::{OrdinalDisposition, cases::execution::source};
+        use serde_json::json;
+        let path = std::env::temp_dir().join(format!(
+            "mant-nested-ordinal-findings-{}.1",
+            std::process::id()
+        ));
+        for case in source::nested() {
+            std::fs::write(&path, &case.source).unwrap();
+            let profile = super::profile_request(&json!({"id":case.name,"path":path}).to_string());
+            std::fs::remove_file(&path).unwrap();
+            let profile = profile.unwrap();
+            let review = case.disposition == OrdinalDisposition::Uncertain;
+            let positions = if review {
+                json!([[case.source_line, 2]])
+            } else {
+                json!([])
+            };
+            assert_eq!(
+                profile["ordinalCasesForReview"], positions,
+                "{}\n{profile}",
+                case.name
+            );
+            if review {
+                assert_eq!(profile["ordinalConversions"], json!([]));
+                let issues = if case.name.starts_with("head-") {
+                    json!([format!(
+                        "missing ordinal owner at {}:2 (disposition needs source review)",
+                        case.source_line
+                    )])
+                } else {
+                    json!([])
+                };
+                assert_eq!(
+                    profile["ordinalConversionViolations"], issues,
+                    "{}",
+                    case.name
+                );
+                assert_eq!(profile["violations"], issues, "{}", case.name);
+            } else {
+                let conversions = profile["ordinalConversions"].as_array().unwrap();
+                assert_eq!(conversions.len(), 1, "{}", case.name);
+                assert_eq!(conversions[0]["sourceLine"], case.source_line);
+                assert_eq!(
+                    conversions[0]["expectedDisposition"],
+                    "recovered-ordered-list"
+                );
+                assert_eq!(
+                    conversions[0]["observedDispositions"]
+                        .as_array()
+                        .unwrap()
+                        .len(),
+                    usize::from(!case.name.starts_with("head-"))
+                );
+                assert_eq!(
+                    profile["violations"],
+                    profile["ordinalConversionViolations"]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_wrong_list_owner_emits_the_supported_other_list_observation() {
         use crate::ordinal_labels::cases::execution;
         use serde_json::json;
@@ -625,7 +688,10 @@ mod tests {
             "mant-ordinal-source-execution-{}.1",
             std::process::id()
         ));
-        for case in execution::cases().chain(execution::equation_edges()) {
+        for case in execution::cases()
+            .chain(execution::equation_edges())
+            .chain(execution::source::cases())
+        {
             std::fs::write(&path, &case.source).unwrap();
             let profile = super::profile_request(&json!({"id":case.name,"path":path}).to_string());
             std::fs::remove_file(&path).unwrap();

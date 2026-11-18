@@ -38,6 +38,7 @@ enum Advance {
     Ordinary,
     Armed,
     Buffered(usize),
+    BufferedAndArmed(usize),
 }
 
 impl RoffWordEvidence {
@@ -88,13 +89,14 @@ impl RoffWordEvidence {
                 RoffInlineEvent::NoSpace => {
                     // CVS clears an armed BACKAFTER instead of applying
                     // a continuation. A held glyph has BACKBEFORE set.
-                    if matches!(self.advance, Advance::Armed) {
-                        self.advance = Advance::Ordinary;
-                    } else if events.peek().is_none() {
-                        self.set(Continues);
+                    match self.advance {
+                        Advance::Armed => self.advance = Advance::Ordinary,
+                        Advance::BufferedAndArmed(start) => self.advance = Advance::Buffered(start),
+                        _ if events.peek().is_none() => self.set(Continues),
+                        _ => {}
                     }
                 }
-                RoffInlineEvent::ZeroAdvance => self.advance = Advance::Armed,
+                RoffInlineEvent::ZeroAdvance => self.arm_zero_advance(),
                 RoffInlineEvent::Overstrike {
                     terminal, buffered, ..
                 } => {
@@ -121,9 +123,20 @@ impl RoffWordEvidence {
                 | RoffInlineEvent::Presentation { .. } => {}
             }
         }
-        if matches!(self.advance, Advance::Armed) {
+        if matches!(self.advance, Advance::Armed | Advance::BufferedAndArmed(_)) {
             self.set(ZeroAdvance);
         }
+    }
+
+    fn arm_zero_advance(&mut self) {
+        // ESCAPE_SKIPCHAR sets BACKAFTER without clearing a held BACKBEFORE
+        // cell. The next glyph both overwrites and becomes the next held cell.
+        self.advance = match self.advance {
+            Advance::Buffered(start) | Advance::BufferedAndArmed(start) => {
+                Advance::BufferedAndArmed(start)
+            }
+            _ => Advance::Armed,
+        };
     }
 
     fn set(&mut self, effect: RoffWordEffect) {
@@ -162,6 +175,12 @@ impl RoffWordEvidence {
                 self.set(Unclassified);
                 self.text.truncate(start);
                 self.text.push_str(text);
+            }
+            Advance::BufferedAndArmed(start) => {
+                self.set(Unclassified);
+                self.text.truncate(start);
+                self.advance = Advance::Armed;
+                self.append(text);
             }
         }
     }

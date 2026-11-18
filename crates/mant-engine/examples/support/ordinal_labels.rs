@@ -255,13 +255,18 @@ impl NativeLabel {
                 self.word(close, true, node.flags.delimiter_open);
                 return;
             }
+            (NodeKind::Block, Some("En")) => {
+                self.custom_enclosure(node);
+                return;
+            }
+
             // Paired enclosure parts carry positions but their delimiters
             // are already emitted around the corresponding block body.
             (
                 _,
                 Some(
-                    "It" | "Xo" | "Bf" | "Bk" | "Sy" | "Em" | "Li" | "No" | "Pq" | "Po" | "Pc"
-                    | "Bq" | "Bo" | "Bc",
+                    "It" | "Xo" | "Bf" | "Bk" | "Sy" | "Em" | "Li" | "No" | "En" | "Pq" | "Po"
+                    | "Pc" | "Bq" | "Bo" | "Bc",
                 ),
             ) => {}
             // A native link or real boundary remains meaningful even
@@ -274,6 +279,25 @@ impl NativeLabel {
             _ => self.effect = self.effect.max(LabelEffect::Uncertain),
         }
         self.walk_children(node);
+    }
+
+    fn custom_enclosure(&mut self, node: &Node) {
+        // termp_quote_pre/post execute normalized Es words in the same
+        // stream as the enclosed BODY, including numeric glyphs.
+        if let Some(enclosure) = &node.enclosure {
+            self.word(&enclosure.opening, node.flags.delimiter_close, true);
+            if let Some(body) = part(node, NodeKind::Body) {
+                self.walk(body, None);
+            }
+            if let Some(closing) = &enclosure.closing {
+                self.word(closing, true, node.flags.delimiter_open);
+            } else {
+                self.join_next = self.no_space_mode;
+            }
+        } else {
+            self.effect = self.effect.max(LabelEffect::Uncertain);
+            self.walk_children(node);
+        }
     }
 
     fn walk_children(&mut self, node: &Node) {

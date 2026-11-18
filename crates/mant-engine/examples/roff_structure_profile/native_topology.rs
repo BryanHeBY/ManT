@@ -3,8 +3,10 @@ use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
 
 use super::{
     AstEquationTopology, AstListTopology, AstTableCellTopology, AstTableRowTopology, AstTopology,
-    EquationContext, ListTopologyKind, equation_context_order, head_payloads::HeadPayloads,
-    native::equation_visible_text, ordinal_labels,
+    EquationContext, ListTopologyKind, equation_context_order,
+    head_payloads::HeadPayloads,
+    native::{equation_has_payload, equation_visible_text},
+    ordinal_labels,
 };
 use ordinal_labels::OrdinalDisposition;
 
@@ -103,11 +105,10 @@ fn collect_ast_topology(
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
     // cell. Only an owned Equation node establishes an obligation.
     if node.kind == NodeKind::Equation
-        && let Some(value) = node
+        && let Some(equation) = node
             .equation
             .as_ref()
-            .map(libmandoc_rs::EquationBox::readable_text)
-        && !value.is_empty()
+            .filter(|equation| equation_has_payload(equation))
     {
         topology.equations.push(AstEquationTopology {
             source_line: node.line,
@@ -118,7 +119,7 @@ fn collect_ast_topology(
             } else {
                 EquationContext::Inline
             },
-            value: equation_visible_text(&value),
+            value: equation_visible_text(&equation.readable_text()),
         });
     }
     if node.kind == NodeKind::Block
