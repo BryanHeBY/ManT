@@ -677,6 +677,13 @@ between two independently executed `Ev` operands can bind both names to the
 same definition. Text inside an annotation or assignment does not prove an
 alternative.
 
+Inside an environment declaration, a separate, valid literal name can precede
+an `Ev` name at a top-level comma or pipe. An unfinished later group keeps its
+text visible and prevents a complete-form match. Earlier proved names keep
+their bindings. A table inside a declaration annotation stays inside that
+annotation, so a styled name only inside the annotation cannot be promoted by
+splitting at a cell boundary.
+
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand
 remains an argument across font changes. Each `TQ` term retains its own name
@@ -727,7 +734,7 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Nm`, `Nd` | Strong document name and NAME description dash |
 | `Pp` | Explicit vertical paragraph separation |
 | `Tg` | Zero-width navigation anchor when validated by libmandoc; no visible placeholder text |
-| `Sx` | Resolved same-document section link. A unique validated native target takes precedence, first by exact spelling and then by a key that maps word separators to underscores while retaining authored punctuation. Exact titles and uniquely eligible parenthetically qualified headings are fallbacks. A qualifier may follow ASCII space or tab. Unresolved references keep their original text. A control-only label produces no visible link range. |
+| `Sx` | Resolved same-document section link. A unique validated native target takes precedence, first by exact spelling and then by a key that maps word separators to underscores while retaining authored punctuation. A validated authored target at the same key on a non-heading owner prevents the section link. Exact titles and uniquely eligible parenthetically qualified headings are fallbacks. A qualifier may follow ASCII space or tab. Unresolved references keep their original text. A control-only label produces no visible link range. |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
 | `Bx` | Accepted native children retain the authored lifecycle operand plus `BSD`; version forms retain canonical `versionBSD` names with an optional `-release` suffix |
@@ -1489,8 +1496,12 @@ When a table is inside a phrasing owner such as an extended definition label,
 its readable cell content and fonts stay in that owner in row order, with
 portable cell separation. The formatter's actual entry flush determines
 whether preceding text stays on the same row. The first visible cell's
-resolved alignment can supply a word separator, and empty data rows retain
-their own line boundaries. The phrasing form omits grid geometry and shares
+resolved alignment can supply a word separator. The occupied width of that
+cell excludes ordinary trailing fill blanks and retains fixed blanks. A tbl
+opening rule or device spacing request can close the live row before the first
+cell. A cell's pending word-end break and the native row end close an occupied
+row only once. Empty data rows retain their own line boundaries. The phrasing
+form omits grid geometry and shares
 the page's source recovery and work allowance with block tables. An implicit
 `Nm` in a recovered text block uses the enclosing page's executed name.
 Cell text is searchable and retains its links. Name and complete-form

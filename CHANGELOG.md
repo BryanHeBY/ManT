@@ -32,6 +32,8 @@ that crate was not published for that change.
 - Expose `Node::inline_invocation` for executed `Dv`, `Er`, `Ev`, and `Va`
   nodes reopened at punctuation. The identity is parse-local. Older
   serialized nodes default the field to `None`.
+- Expose `NodeFlags::table_leading_space` for a tbl start that requests
+  leading device spacing. Older serialized ASTs default it to `false`.
 
 ### mant-codec
 
@@ -114,6 +116,18 @@ that crate was not published for that change.
   semantic declarations only for list forms the reader can reconstruct.
 - Resolve punctuated multiword section references to unique authored targets.
   Report uncertain source labels separately from structural audit violations.
+- Preserve independent paragraph, term and section destinations when they
+  share an authored tag. An ambiguous `Sx` keeps its rendered label and
+  reports an unresolved destination.
+- Report incomplete option-list inference for leading code terms in manual
+  and document links, using the same grammar as bare code terms.
+- Preserve tbl row breaks and the first cell's word boundary beside an
+  occupied definition label. Keep declarations inside table-bearing
+  annotations out of the name index.
+- Preserve proved environment names on either side of a top-level delimiter
+  and keep native punctuation flags before an independent typed operand.
+- Retain quoted leading blanks in authored ordinal labels when replacing the
+  label with an ordered marker would change the layout.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.
