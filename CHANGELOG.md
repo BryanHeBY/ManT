@@ -83,6 +83,19 @@ that crate was not published for that change.
   independent destinations when parent and child structures use the same tag.
 - Keep native column display row closures with or without zero-width targets.
   Markdown table fences reuse already completed gaps between data rows.
+- Keep native tbl cell text and formatter effects inside extended definition
+  labels. Visible searches respect the boundary between a tight list label
+  and a following Markdown code fence.
+- Read environment aliases from executed operands. Balanced templates,
+  assignment values and unrelated operands cannot publish their inner words
+  as names. Internal font changes preserve the complete proved name.
+- Project native column display origins once and retain separately executed
+  spacing even when a display starts in the first field.
+- Resolve `Sx` through validated heading destinations and authored phrases,
+  including headings whose macros generate different display text.
+- Use pinned HTML escape validation for link destinations. Invalid escapes
+  preserve pending destination skips, and terminal-only glyph recovery does
+  not add characters to an address.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.

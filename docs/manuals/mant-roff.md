@@ -60,8 +60,10 @@ can expand a multi-document scope; link-looking text is not a graph edge. This
 keeps native and Markdown queries aligned even though their producer syntax is
 different. The complete shared model is defined by [mant-ir(7)](mant-ir.md).
 
-An `Sx` destination is resolved from its authored section phrase, while its
-label is rendered through the active formatter state. Consequently `Sm off`
+An `Sx` destination uses the authored section phrase and validated native
+heading targets, while its label is rendered through the active formatter
+state. For example, `Sx printf 3` can reach `Sh Xr printf 3`, whose displayed
+heading is `printf(3)`. Consequently `Sm off`
 may display `NEXTSECTION` for `Sx NEXT SECTION`, and a preceding bare `\z` may
 remove the first displayed glyph, without changing the typed destination.
 Display text is never reverse-mapped into navigation identity.
@@ -720,7 +722,7 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Nm`, `Nd` | Strong document name and NAME description dash |
 | `Pp` | Explicit vertical paragraph separation |
 | `Tg` | Zero-width navigation anchor when validated by libmandoc; no visible placeholder text |
-| `Sx` | Resolved same-document section link. An exact nonblank title takes precedence. Fallback allows ASCII space or tab before one complete parenthetical qualifier and requires exactly one eligible heading. Unresolved references keep their original text. |
+| `Sx` | Resolved same-document section link. A unique validated native target with the same authored spelling takes precedence, followed by an exact title. Fallback allows ASCII space or tab before one complete parenthetical qualifier and requires exactly one eligible heading. Unresolved references keep their original text. A control-only label produces no visible link range. |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
 | `Bx` | Accepted native children retain the authored lifecycle operand plus `BSD`; version forms retain canonical `versionBSD` names with an optional `-release` suffix |
@@ -769,6 +771,15 @@ reset, font changes nor suppressed line breaks prove shared ownership. An
 explicit `TQ` adds a tag only to the immediately preceding empty definition;
 several such tags retain their source order under one owner. Multiple names or
 forms do not imply an explicit alias relationship.
+
+In an mdoc `Ev` declaration, accepted native operands delimit names, values
+and supplements. Commas and pipes within balanced templates or within the
+same assignment value do not introduce aliases. A balanced parenthesis that
+is part of the name, such as `BASH_FUNC_home()`, can precede an independent
+alias. Internal font changes retain the complete proved spelling. An explicit
+literal continuation can form part of a name. A path, reference label or
+other independent operand remains readable in the authored form without
+providing name evidence, even when source spacing glues it to a name.
 
 An executed man `HP` can provide a semantic head for its directly following
 headless `IP` when the complete declaration passes inferred-head admission and
@@ -1032,7 +1043,9 @@ Link identity extraction is pure and does not execute font or zero-advance effec
 
 For link identities, named Unicode and numbered escapes use the same CVS
 attribute rule. Decoded C0 and C1 controls and DEL become U+FFFD, with ASCII
-tab retained for validation. Visible text follows the terminal projection.
+tab retained for validation. An invalid escape does not consume a pending
+`\z`. A supported terminal approximation of an unknown glyph supplies no
+character to a link address. Visible text follows the terminal projection.
 
 Markdown export retains its explicit angle-URI autolink policy. A native `UR` suffix such as `<https://example.org/utf8>` can therefore parse as an additional Markdown autolink beside the BODY label's typed destination, even when that destination ends in `html`. This is export syntax over existing visible text; it does not add a typed IR occurrence, native execution, or TUI activation range. Angle email text is escaped as literal Markdown text.
 
@@ -1442,6 +1455,9 @@ A display can close a column field even when its body has no visible glyphs.
 Adding a `Tg` to that display changes navigation only. A completed row before
 literal content retains its layout role, and the Markdown table fence reuses
 an already completed boundary when it advances to the next data row.
+Column display line origins are relative to the containing cell. The prior
+field's ending and the display's own paragraph spacing are independent,
+including when the display is the first content in a data row.
 
 Nested lists, displays and tables retain their block identities. Their
 responsive reading layout can differ from mandoc's device column geometry;
@@ -1458,6 +1474,12 @@ Separate native tables remain separate IR blocks even when adjacent. A `T&` layo
 Rule cells retain their column positions but no printable body. Both layout rules and data rules suppress their payload; source recovery never resurrects that intentionally hidden text. Escaped literal underscores remain ordinary text.
 
 [mandoc tbl(7)](https://mandoc.bsd.lv/man/tbl.7.html) rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right cell alignment, column spans, row spans, and parsed per-cell bold, italic, and code fonts supplied by libmandoc. Table `center`/`centre` becomes whole-table alignment, independently of a caption's `.ce` and header-cell `c`. The final declared logical column count includes unoccupied trailing columns and layout changes within `T&`; it does not fabricate empty cell owners. Width-aware readers center their chosen content-sized table region, and rules share its endpoints and responsive fallback.
+
+When a table is inside a phrasing owner such as an extended definition label,
+its readable cell content and fonts stay in that owner in row order, with
+portable cell separation. Native column visits and buffer writes still apply
+to the surrounding formatter. The phrasing form omits grid geometry, and cell
+words do not become new declaration names.
 
 `box`/`frame`, `doublebox`/`doubleframe`, `allbox`, and the single/double
 vertical boundaries declared with `|` are retained as author edge preferences.
