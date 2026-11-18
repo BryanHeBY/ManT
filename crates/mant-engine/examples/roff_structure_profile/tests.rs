@@ -18,7 +18,7 @@ fn parsed_structure(source: &str) -> (super::AstStructure, super::AstTopology, s
     })
     .parse_bytes("audit.1", source.as_bytes())
     .unwrap();
-    let (expected, topology) = super::ast_profile(&report.document);
+    let (expected, topology) = super::ast_profile(&report);
     let document =
         mant_codec::parse_roff_bytes(std::path::Path::new("audit.1"), source.as_bytes()).unwrap();
     (expected, topology, document)
@@ -285,7 +285,7 @@ fn ip_list_obligations_require_complete_authored_named_bullets() {
     })
     .parse_bytes("audit.1", source.as_bytes())
     .unwrap();
-    let (expected, _) = super::ast_profile(&parsed.document);
+    let (expected, _) = super::ast_profile(&parsed);
     assert_eq!(expected.generic_list_items, 4);
     let mut violations = Vec::new();
     super::underflow(

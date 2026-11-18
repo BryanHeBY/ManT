@@ -90,8 +90,11 @@ the known or unclassified status of the name and optional section.
 
 The audit records every executed `Sx` occurrence. An empty or control-only
 label still executes, but contributes no link or unresolved diagnostic
-obligation. Authored fixed spaces contribute label glyphs. Section references
-use recursively collected authored words and the validated native heading
+obligation. Authored fixed spaces contribute label glyphs. When a label has
+only recovered glyphs and the parser reported an error on that operand, the
+audit reports the occurrence under `sectionLabelsForReview`. Independently
+visible labels on the same source line keep their own obligations.
+Section references use recursively collected authored words and the validated native heading
 target. The audit pairs native headings with emitted section owners at matching
 source coordinates, retaining occurrence order through macro expansion. With
 complete heading-owner evidence the observed resolved links must contain the

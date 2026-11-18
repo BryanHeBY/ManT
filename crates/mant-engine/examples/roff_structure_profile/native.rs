@@ -9,8 +9,8 @@ use super::{
     special_character,
 };
 
-pub(super) fn ast_profile(document: &libmandoc_rs::Document) -> (AstStructure, AstTopology) {
-    let root = &document.root;
+pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, AstTopology) {
+    let root = &report.document.root;
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
     let head_tables = super::head_tables::HeadTables::collect(root);
@@ -24,7 +24,7 @@ pub(super) fn ast_profile(document: &libmandoc_rs::Document) -> (AstStructure, A
         &head_tables.row_ids,
     );
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
-    super::links::native_link_obligations(root, &mut profile);
+    super::links::native_link_obligations(report, &mut profile);
     let mut topology = super::native_topology::collect(root, &head_tables.row_ids);
     topology.head_tables = head_tables;
     (profile, topology)

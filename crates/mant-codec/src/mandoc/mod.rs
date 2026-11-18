@@ -47,7 +47,9 @@ use self::{roff_escape::visible_text, source_lines::SourceLineIndex};
 use crate::text_safety::mask_terminal_control_bytes;
 
 pub use section_identity::{
-    RoffSectionHeading, RoffSectionTargets, authored_section_phrase as observe_roff_section_phrase,
+    RoffSectionHeading, RoffSectionTargets, SectionLabelEvidence,
+    authored_section_phrase as observe_roff_section_phrase,
+    section_label_evidence as observe_roff_section_label_evidence,
     section_label_has_glyphs as observe_roff_section_label_glyphs,
 };
 mod section_identity;

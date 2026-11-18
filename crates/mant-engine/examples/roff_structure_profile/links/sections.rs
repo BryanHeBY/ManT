@@ -1,9 +1,9 @@
 //! Section-reference proof from authored titles, heading owners, and IR outcomes.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use libmandoc_rs::Node;
-use mant_codec::{RoffSectionHeading, RoffSectionTargets};
+use mant_codec::{RoffSectionHeading, RoffSectionTargets, SectionLabelEvidence};
 use mant_ir::{Diagnostic, Section};
 
 type Origin = (u32, u32);
@@ -12,6 +12,7 @@ type Origin = (u32, u32);
 pub(crate) struct NativeSectionLinks {
     headings: Vec<(Origin, RoffSectionHeading)>,
     references: Vec<(Origin, Option<String>)>,
+    uncertain_labels: Vec<Origin>,
 }
 
 #[derive(Default)]
@@ -29,13 +30,31 @@ impl NativeSectionLinks {
         ));
     }
 
-    pub(crate) fn record_reference(&mut self, node: &Node) -> bool {
-        let has_label = mant_codec::observe_roff_section_label_glyphs(&node.children);
+    pub(crate) fn record_reference(&mut self, node: &Node, errors: &BTreeSet<Origin>) -> bool {
+        let origin = (node.line, node.column);
+        let evidence = mant_codec::observe_roff_section_label_evidence(&node.children);
+        let uncertain = evidence == SectionLabelEvidence::RecoveryOnly
+            && node.children.iter().any(|child| {
+                let start = (child.line, child.column);
+                let width = child.text.as_ref().map_or(0, String::len);
+                let end = start
+                    .1
+                    .saturating_add(u32::try_from(width).unwrap_or(u32::MAX));
+                errors.range(start..(child.line, end)).next().is_some()
+            });
+        if uncertain {
+            self.uncertain_labels.push(origin);
+        }
+        let has_label = !uncertain && evidence != SectionLabelEvidence::Invisible;
         let title = has_label.then(|| mant_codec::observe_roff_section_phrase(&node.children));
         // A control-only Sx still has a source occurrence. It owes no
         // link or diagnostic because there is no label to activate.
-        self.references.push(((node.line, node.column), title));
+        self.references.push((origin, title));
         has_label
+    }
+
+    pub(crate) fn uncertain_labels(&self) -> &[Origin] {
+        &self.uncertain_labels
     }
 
     #[cfg(test)]
@@ -45,7 +64,10 @@ impl NativeSectionLinks {
             .iter()
             .filter(|(_, title)| title.is_none())
             .count();
-        (self.references.len(), glyphless)
+        (
+            self.references.len(),
+            glyphless - self.uncertain_labels.len(),
+        )
     }
 
     pub(crate) fn compare(&self, observed: &ObservedSectionLinks, violations: &mut Vec<String>) {

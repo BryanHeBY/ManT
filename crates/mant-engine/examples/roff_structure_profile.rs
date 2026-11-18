@@ -278,7 +278,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
-    let (expected, expected_topology) = ast_profile(&report.document);
+    let (expected, expected_topology) = ast_profile(&report);
     let document = parse_manual_page(&ManualPage {
         name: "audit".to_owned(),
         section: "1".to_owned(),
@@ -327,6 +327,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
             "emailMdoc": semantic_link_origins(&report.document.root, "Mt", NodeKind::Element),
             "emailMan": semantic_link_origins(&report.document.root, "MT", NodeKind::Block),
             "section": semantic_link_origins(&report.document.root, "Sx", NodeKind::Element),
+            "sectionLabelsForReview": expected.section_outcomes.uncertain_labels(),
         },
         "alias": is_alias,
         "violations": violations,

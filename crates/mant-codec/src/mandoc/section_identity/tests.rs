@@ -34,7 +34,7 @@ fn resolves_only_a_uniquely_qualified_section_title() {
         targets.register(
             RoffSectionHeading {
                 title: title.to_owned(),
-                native_fragment: None,
+                native_tag: None,
             },
             id.to_owned(),
         );

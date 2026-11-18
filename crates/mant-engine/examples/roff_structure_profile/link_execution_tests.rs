@@ -12,6 +12,81 @@ const HEADER: &str =
 const SECTIONS: &str = ".Sh ONE\nBODY-A.\n.Sh TWO\nBODY-B.\n";
 
 #[test]
+fn a_recovered_only_section_label_with_an_error_does_not_hide_valid_links() {
+    // term.c::term_word() emits no glyph for the unknown special character.
+    // The pinned Html still emits its empty href label. A product recovery
+    // spelling may vanish under the existing zero-advance operation.
+    for (commands, unverified, proven) in [
+        (".No \\z\n.Sx \\[foo]\n.No Y\n.Sx ONE\n", 1, 1),
+        (".Sx \\[foo]\n.No Y\n.Sx ONE\n", 1, 1),
+        (".No \\z\n.Sx \\[foo]X\n.No Y\n.Sx ONE\n", 0, 2),
+        (
+            ".de QQ\n.No \\z\n.Sx \\[foo]\n.No Y\n.Sx ONE\n..\n.QQ\n",
+            1,
+            1,
+        ),
+    ] {
+        let source = format!("{HEADER}{commands}.Sh ONE\nBODY-A.\n");
+        let (expected, native, document) = parsed_structure(&source);
+        assert_eq!(
+            expected.section_outcomes.uncertain_labels().len(),
+            unverified,
+            "{source}"
+        );
+        assert_eq!(expected.section_links, proven, "{source}");
+        assert!(
+            document
+                .diagnostics
+                .iter()
+                .any(|d| d.level == mant_ir::DiagnosticLevel::Error)
+        );
+        let compare = |document: &Document| {
+            let (observed, topology) = ir_profile(document);
+            compare_structure(&expected, &observed, &native, &topology)
+        };
+        assert!(
+            compare(&document).is_empty(),
+            "{source}: {:?}",
+            compare(&document)
+        );
+        let mut missing = document;
+        mutate_section_links(&mut missing, |_| Some(None));
+        assert_finding(&compare(&missing), "expected \"ONE\"", "source order");
+    }
+}
+
+#[test]
+fn lossy_fragment_collisions_and_address_errors_are_observed_per_occurrence() {
+    // The exact fixed HTML has both spellings mapped to W_X, heading IDs
+    // W_X/W_X~2, and an entity-escaped angle-bracket external destination.
+    let source = format!(
+        "{HEADER}.Sx W^X\n.No \\z\n.Sx \\[foo]\n.No Y\n.Sx W>X\n.Lk https://e/\\%<>Y LABEL\n.Sh W^X\nBODY-A.\n.Sh W>X\nBODY-B.\n"
+    );
+    let (expected, native, mut document) = parsed_structure(&source);
+    assert_eq!(expected.section_outcomes.uncertain_labels().len(), 1);
+    assert_eq!(expected.section_links, 2);
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_deref() == Some("ir.invalid-external-uri"))
+    );
+    let compare = |document: &Document| {
+        let (observed, topology) = ir_profile(document);
+        compare_structure(&expected, &observed, &native, &topology)
+    };
+    assert!(compare(&document).is_empty(), "{:?}", compare(&document));
+    let targets = [
+        document.sections[3].id.to_string(),
+        document.sections[2].id.to_string(),
+    ];
+    mutate_section_links(&mut document, |index| {
+        targets.get(index).map(|id| Some(id.as_str()))
+    });
+    assert_finding(&compare(&document), "expected \"W>X\"", "source order");
+}
+
+#[test]
 fn section_references_need_their_own_targets_in_execution_order() {
     // CVS mdoc_sx_pre emits one anchor per Sx invocation. The -Ttree
     // coordinates can be equal after QQ expands the two distinct macros.
@@ -412,16 +487,16 @@ fn assert_finding(violations: &[String], property: &str, reason: &str) {
     );
 }
 
-fn mutate_section_links<F>(document: &mut Document, mutation: F)
+fn mutate_section_links<'target, F>(document: &mut Document, mutation: F)
 where
-    F: FnMut(usize) -> Option<Option<&'static str>>,
+    F: FnMut(usize) -> Option<Option<&'target str>>,
 {
     struct Mutation<M> {
         run: M,
         index: usize,
         changed: bool,
     }
-    impl<M: FnMut(usize) -> Option<Option<&'static str>>> VisitMut for Mutation<M> {
+    impl<'target, M: FnMut(usize) -> Option<Option<&'target str>>> VisitMut for Mutation<M> {
         fn visit_inline_mut(&mut self, inline: &mut Inline) {
             if let Inline::Link {
                 target: LinkTarget::Section { id },

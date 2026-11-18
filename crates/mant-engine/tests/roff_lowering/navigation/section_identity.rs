@@ -203,6 +203,89 @@ fn lossy_html_fragment_projection_does_not_alias_unrelated_titles() {
     }
 }
 
+#[test]
+fn exact_validated_heading_tags_keep_punctuation_and_their_original_owners() {
+    // The fixed HTML emits the projected fragment, but the validator-
+    // approved tag preserves the author's spelling (mdoc_validate.c).
+    for (title, fragment) in [
+        ("PLAIN", "PLAIN"),
+        ("W^X", "W_X"),
+        ("Other<", "Other_"),
+        ("A~B", "A_B"),
+        ("Custom%", "Custom_"),
+        ("Hello#id", "Hello_id"),
+    ] {
+        for (headings, native_ids) in [
+            (
+                format!(".Tg {title}\n.Sh OTHER\nBODY-B.\n"),
+                vec![Some(fragment)],
+            ),
+            (
+                format!(".Sh {title}\nBODY-B.\n.Sh Em {title}\nBODY-A.\n"),
+                vec![Some(fragment), None],
+            ),
+            (
+                format!(".Sh Em {title}\nBODY-A.\n.Sh {title}\nBODY-B.\n"),
+                vec![None, Some(fragment)],
+            ),
+        ] {
+            let reference = format!(".Sx {title}\n");
+            for source in [
+                format!("{HEADER}{reference}{headings}"),
+                format!("{HEADER}{headings}{reference}"),
+            ] {
+                assert_native_destinations(&source, &[fragment], &native_ids);
+                let query = decoded(&source);
+                let ids = document_destinations(&query);
+                let [id] = ids.as_slice() else {
+                    panic!("wanted one published link, found {ids:?}: {source}");
+                };
+                assert!(
+                    section_body(&excerpt(&query, id)).starts_with("BODY-B."),
+                    "{source}"
+                );
+                let markdown = mant_codec::encode::render_addressable_markdown(&query);
+                let reread = mant_loader::load_markdown_text(markdown.text(), None).unwrap();
+                assert_eq!(document_destinations(&reread), ids, "{source}");
+            }
+        }
+    }
+}
+
+#[test]
+fn validated_punctuation_exactness_does_not_erase_ambiguity() {
+    // html_make_id maps both distinct spellings to W_X. ManT keeps exact
+    // spelling identity and declines a genuinely duplicated authored tag.
+    let duplicate =
+        format!("{HEADER}.Sx W^X\n.Tg W^X\n.Sh FIRST\nBODY-A.\n.Tg W^X\n.Sh SECOND\nBODY-B.\n");
+    assert_native_destinations(&duplicate, &["W_X"], &[Some("W_X"), Some("W_X~2")]);
+    assert_destinations(&decoded(&duplicate), &[]);
+    let collision = format!("{HEADER}.Sx W^X\n.Sx W>X\n.Sh W^X\nBODY-A.\n.Sh W>X\nBODY-B.\n");
+    assert_native_destinations(&collision, &["W_X", "W_X"], &[Some("W_X"), Some("W_X~2")]);
+    assert_destinations(&decoded(&collision), &["BODY-A.", "BODY-B."]);
+    for (headings, body) in [
+        (".Sh W^X (shell)\nBODY-A.\n", &["BODY-A."][..]),
+        (
+            ".Sh W^X (shell)\nBODY-A.\n.Sh W^X (other)\nBODY-B.\n",
+            &[][..],
+        ),
+    ] {
+        let source = format!("{HEADER}.Sx W^X\n{headings}");
+        assert_destinations(&decoded(&source), body);
+    }
+}
+
+fn document_destinations(query: &ResolvedContent) -> Vec<String> {
+    query
+        .document
+        .as_ref()
+        .unwrap()
+        .sections
+        .iter()
+        .flat_map(destinations)
+        .collect()
+}
+
 fn assert_native_destinations(source: &str, hrefs: &[&str], headings: &[Option<&str>]) {
     // These are fixed CVS HTML href and heading-ID pairs, independent of
     // the codec and profiler's shared identity computation.

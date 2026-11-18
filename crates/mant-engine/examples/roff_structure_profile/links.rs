@@ -1,6 +1,6 @@
 //! Native link occurrences and the destinations their operands prove.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
 use mant_ir::{LinkTarget, email_address_from_mailto_uri};
@@ -56,11 +56,25 @@ impl LinkOccurrences {
 
 /// The owned AST visits a link once at its canonical structural view. Equal
 /// addresses and equal source coordinates can each belong to separate links.
-pub(super) fn native_link_obligations(root: &Node, profile: &mut AstStructure) {
-    collect_links(root, None, profile);
+pub(super) fn native_link_obligations(
+    report: &libmandoc_rs::ParseReport,
+    profile: &mut AstStructure,
+) {
+    let error_origins = report
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.level == libmandoc_rs::DiagnosticLevel::Error)
+        .filter_map(|diagnostic| diagnostic.location.map(|at| (at.line, at.column)))
+        .collect();
+    collect_links(&report.document.root, None, &error_origins, profile);
 }
 
-fn collect_links(node: &Node, list: Option<NormalizedListKind>, profile: &mut AstStructure) {
+fn collect_links(
+    node: &Node,
+    list: Option<NormalizedListKind>,
+    error_origins: &BTreeSet<(u32, u32)>,
+    profile: &mut AstStructure,
+) {
     let token = node.macro_token.as_deref();
     if node.line > 0 && !node.flags.generated && !node.flags.no_print {
         match (node.kind, token) {
@@ -91,8 +105,11 @@ fn collect_links(node: &Node, list: Option<NormalizedListKind>, profile: &mut As
             }
             (NodeKind::Element, Some("%R")) => rfc_link(node, profile),
             (NodeKind::Element, Some("Sx")) => {
-                profile.section_links +=
-                    usize::from(profile.section_outcomes.record_reference(node));
+                profile.section_links += usize::from(
+                    profile
+                        .section_outcomes
+                        .record_reference(node, error_origins),
+                );
             }
             (NodeKind::Block, Some("Sh" | "Ss")) => {
                 profile.section_outcomes.record_heading(node);
@@ -121,7 +138,7 @@ fn collect_links(node: &Node, list: Option<NormalizedListKind>, profile: &mut As
         );
     for child in &node.children {
         if !skip_head || child.kind != NodeKind::Head {
-            collect_links(child, list, profile);
+            collect_links(child, list, error_origins, profile);
         }
     }
 }
