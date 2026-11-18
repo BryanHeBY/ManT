@@ -671,6 +671,11 @@ name across a visible word boundary. The description and the link's accepted
 address retain their own punctuation, including when the whole reference
 appears inside a proved annotation. A display join leaves the complete form
 available for inspection without publishing a name made from attached text.
+When the join cannot prove a declaration over the complete range, direct
+queries match only names with their own source evidence. A standalone `No or`
+between two independently executed `Ev` operands can bind both names to the
+same definition. Text inside an annotation or assignment does not prove an
+alternative.
 
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand
@@ -886,9 +891,11 @@ Some deployed mdoc pages use `Bl -tag` for numbered procedures instead of the
 standard `Bl -enum`. ManT recovers ordered-list semantics only when the entire
 tag list contains at least two described, consecutively increasing integers
 with one explicit punctuation style such as `1.`/`2.`. A singleton, a gap, a
-style change, a bare integer, or a decimal remains a definition term. This
-keeps procedures out of the semantic-entry index without reclassifying numeric
-configuration values.
+style change, a bare integer, or a decimal remains a definition term. So do
+groups whose labels contain a formula, link, hard break, sign, or leading
+zeroes. The generated list marker cannot retain those parts of the label.
+This keeps procedures out of the semantic-entry index without reclassifying
+numeric configuration values.
 
 Displays lower as follows:
 
@@ -1046,6 +1053,9 @@ attribute rule. Decoded C0 and C1 controls and DEL become U+FFFD, with ASCII
 tab retained for validation. An invalid escape does not consume a pending
 `\z`. A supported terminal approximation of an unknown glyph supplies no
 character to a link address. Visible text follows the terminal projection.
+Inside an explicit destination, `\%<>` retains both authored angle brackets.
+The destination follows the usual URI or mailbox validation, including when
+it is invalid and its raw spelling remains in the document.
 
 Markdown export retains its explicit angle-URI autolink policy. A native `UR` suffix such as `<https://example.org/utf8>` can therefore parse as an additional Markdown autolink beside the BODY label's typed destination, even when that destination ends in `html`. This is export syntax over existing visible text; it does not add a typed IR occurrence, native execution, or TUI activation range. Angle email text is escaped as literal Markdown text.
 
@@ -1477,9 +1487,12 @@ Rule cells retain their column positions but no printable body. Both layout rule
 
 When a table is inside a phrasing owner such as an extended definition label,
 its readable cell content and fonts stay in that owner in row order, with
-portable cell separation. Native column visits and buffer writes still apply
-to the surrounding formatter. The phrasing form omits grid geometry, and cell
-words do not become new declaration names.
+portable cell separation. The formatter's actual entry flush determines
+whether preceding text stays on the same row. Empty data rows retain their
+own line boundaries. The phrasing form omits grid geometry and shares the
+page's source recovery and work allowance with block tables. Cell text is
+searchable and retains its links, while name and complete-form matches use
+independently proved declaration ranges.
 
 `box`/`frame`, `doublebox`/`doubleframe`, `allbox`, and the single/double
 vertical boundaries declared with `|` are retained as author edge preferences.

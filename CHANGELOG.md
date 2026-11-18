@@ -96,6 +96,15 @@ that crate was not published for that change.
 - Use pinned HTML escape validation for link destinations. Invalid escapes
   preserve pending destination skips, and terminal-only glyph recovery does
   not add characters to an address.
+- Preserve row boundaries and source-backed cell content in extended
+  definition labels. Cell text remains visible without publishing aliases.
+- Bind independent environment operands joined by an authored `No or`.
+  Restrict exact form matches when another operand is glued to the subject.
+- Preserve formulas, links and original label spelling in ordinal-shaped
+  definitions. Export wide ordered lists with portable continuation markers
+  or explicit number labels when the opening marker exceeds nine digits.
+- Retain literal angle brackets in native link addresses and recognize exact
+  validator-approved section tags containing punctuation.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.
