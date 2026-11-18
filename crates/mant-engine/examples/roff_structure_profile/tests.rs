@@ -11,7 +11,9 @@ mod link_execution_tests;
 #[path = "link_tests.rs"]
 mod link_tests;
 
-fn parsed_structure(source: &str) -> (super::AstStructure, super::AstTopology, super::Document) {
+pub(super) fn parsed_structure(
+    source: &str,
+) -> (super::AstStructure, super::AstTopology, super::Document) {
     let report = super::Parser::new(super::ParseOptions {
         includes: super::IncludePolicy::Deny,
         compression: super::Compression::Plain,
@@ -216,6 +218,71 @@ fn punctuated_mdoc_definition_ordinals_compare_as_recovered_ordered_lists() {
     assert!(
         super::compare_structure(&expected, &observed, &topology, &observed_topology).is_empty()
     );
+}
+
+#[test]
+fn independent_ordinal_truth_rejects_same_count_owner_corruption() {
+    use super::ListTopologyKind::{Definition, Generic};
+    for (source, recovered) in super::ordinal_labels::cases::inputs() {
+        let (expected, topology, document) = parsed_structure(&source);
+        let (observed, mut observed_topology) = super::ir_profile(&document);
+        let (correct, wrong) = if recovered {
+            (Generic, Definition)
+        } else {
+            (Definition, Generic)
+        };
+        assert_eq!(topology.lists[0].kind, correct, "{source}");
+        let compare = |observed_topology: &super::IrTopology| {
+            super::compare_structure(&expected, &observed, &topology, observed_topology)
+        };
+        let good = compare(&observed_topology);
+        assert!(good.is_empty(), "{source}: {good:?}");
+        observed_topology.lists[0].kind = wrong;
+        let violations = compare(&observed_topology);
+        assert!(
+            violations
+                .iter()
+                .any(|violation| violation.contains("list-topology")),
+            "{source}: {violations:?}"
+        );
+    }
+}
+
+#[test]
+fn same_origin_ordinal_topology_requires_the_original_occurrence_order() {
+    let (expected, topology, document) =
+        parsed_structure(super::ordinal_labels::cases::SAME_ORIGIN);
+    let compare = |document: &super::Document| {
+        let (observed, ir) = super::ir_profile(document);
+        super::compare_structure(&expected, &observed, &topology, &ir)
+    };
+    assert_eq!(topology.lists.len(), 3);
+    assert!(
+        topology
+            .lists
+            .iter()
+            .all(|list| (list.source_line, list.source_column) == (26, 2))
+    );
+    assert!(compare(&document).is_empty());
+
+    let mut swapped = document.clone();
+    swapped.sections[1].blocks.swap(1, 2);
+    assert_eq!(
+        compare(&swapped)
+            .iter()
+            .filter(|error| error.contains("list-topology"))
+            .count(),
+        2
+    );
+    for removed in 0..=2 {
+        let mut missing = document.clone();
+        missing.sections[1].blocks.remove(removed);
+        assert!(
+            compare(&missing)
+                .iter()
+                .any(|error| error.contains("list-topology"))
+        );
+    }
 }
 
 #[test]

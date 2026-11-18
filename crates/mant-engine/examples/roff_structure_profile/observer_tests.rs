@@ -1,6 +1,39 @@
 //! Exact pristine-derived spans; mutations change observations, never gold.
 use super::*;
 
+#[test]
+fn a_definition_head_equation_cannot_be_relocated_to_another_ordinal_item() {
+    let (source, _) = super::ordinal_labels::cases::inputs()
+        .find(|(source, _)| source.contains(".EQ\n(2)\n.EN"))
+        .unwrap();
+    let (expected, native, mut document) = super::tests::parsed_structure(&source);
+    let (observed, ir) = super::ir_profile(&document);
+    assert_eq!(expected.inline_equations, 1);
+    assert_eq!(expected.display_equations, 0);
+    assert!(super::compare_structure(&expected, &observed, &native, &ir).is_empty());
+    let mut violations = Vec::new();
+    native.head_payloads.compare(&document, &mut violations);
+    assert!(violations.is_empty(), "{violations:?}");
+
+    let Block::DefinitionList { items, .. } = &mut document.sections[1].blocks[0] else {
+        panic!("math term must keep its definition owner");
+    };
+    let term = &mut items[1].terms[0].content;
+    let equation = term
+        .iter()
+        .position(|node| matches!(node, Inline::Equation { .. }))
+        .unwrap();
+    let equation = term.remove(equation);
+    items[0].terms[0].content.push(equation);
+    native.head_payloads.compare(&document, &mut violations);
+    assert!(
+        violations
+            .iter()
+            .any(|message| message.contains("definition-head-equation")),
+        "{violations:?}"
+    );
+}
+
 fn cases() -> Vec<serde_json::Value> {
     serde_json::from_str::<serde_json::Value>(include_str!("observer_cases.json")).unwrap()["cases"]
         .as_array()
@@ -34,7 +67,7 @@ fn missing_table_cell_in_a_head_cannot_be_replaced_by_the_same_word_in_body() {
     assert_eq!(expected.table_rows, 0);
     assert!(native.table_rows.is_empty());
     let mut violations = Vec::new();
-    native.head_tables.compare(&document, &mut violations);
+    native.head_payloads.compare(&document, &mut violations);
     assert!(violations.is_empty(), "{violations:?}");
     let [mant_ir::Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_mut_slice()
     else {
@@ -48,7 +81,7 @@ fn missing_table_cell_in_a_head_cannot_be_replaced_by_the_same_word_in_body() {
             *value = value.replace("SECOND", "");
         }
     }
-    native.head_tables.compare(&document, &mut violations);
+    native.head_payloads.compare(&document, &mut violations);
     assert_eq!(
         violations,
         ["definition-head-table at 9:2, occurrence 1: missing cell word \"SECOND\" in term"]

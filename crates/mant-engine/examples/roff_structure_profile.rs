@@ -24,6 +24,8 @@ use mant_loader::{ManualPage, parse_manual_page};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+#[path = "support/ordinal_labels.rs"]
+mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 #[path = "roff_structure_profile/items.rs"]
@@ -31,8 +33,8 @@ mod structure_items;
 
 #[path = "roff_structure_profile/comparison.rs"]
 mod comparison;
-#[path = "roff_structure_profile/head_tables.rs"]
-mod head_tables;
+#[path = "roff_structure_profile/head_payloads.rs"]
+mod head_payloads;
 #[path = "roff_structure_profile/ir.rs"]
 mod ir;
 #[path = "roff_structure_profile/links.rs"]
@@ -139,7 +141,7 @@ struct AstTopology {
     table_rows: Vec<AstTableRowTopology>,
     equations: Vec<AstEquationTopology>,
     #[serde(skip)]
-    head_tables: head_tables::HeadTables,
+    head_payloads: head_payloads::HeadPayloads,
 }
 
 #[derive(Default, Serialize)]
@@ -204,6 +206,8 @@ impl ListTopologyKind {
 #[serde(rename_all = "camelCase")]
 struct AstListTopology {
     source_line: u32,
+    #[serde(skip)]
+    source_column: u32,
     kind: ListTopologyKind,
     items: usize,
 }
@@ -212,6 +216,8 @@ struct AstListTopology {
 #[serde(rename_all = "camelCase")]
 struct IrListTopology {
     source_line: u32,
+    #[serde(skip)]
+    source_column: u32,
     kind: ListTopologyKind,
     items: usize,
 }
@@ -297,7 +303,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
         let mut violations =
             compare_structure(&expected, &observed, &expected_topology, &observed_topology);
         expected_topology
-            .head_tables
+            .head_payloads
             .compare(&document, &mut violations);
         violations
     };

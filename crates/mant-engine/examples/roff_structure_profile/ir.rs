@@ -305,6 +305,7 @@ fn record_list_layout(
     if let Some(source) = source {
         topology.lists.push(IrListTopology {
             source_line: source.line,
+            source_column: source.column,
             kind,
             items,
         });

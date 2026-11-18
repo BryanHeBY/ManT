@@ -2,6 +2,7 @@
 use super::{
     AstStructure, AstTopology, BTreeMap, BTreeSet, DisplayKind, NoFillSourceLine, Node, NodeKind,
     SpecialCharacter,
+    head_payloads::HeadPayloads,
     native_topology::{
         MdocContainerKind, column_data_items, equation_is_display, mdoc_list_items,
         mdoc_list_topology_kind,
@@ -13,7 +14,7 @@ pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, 
     let root = &report.document.root;
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
-    let head_tables = super::head_tables::HeadTables::collect(root);
+    let head_payloads = HeadPayloads::collect(root);
     collect_ast_structure(
         root,
         false,
@@ -21,12 +22,12 @@ pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, 
         0,
         &mut profile,
         &mut no_fill_lines,
-        &head_tables.row_ids,
+        &head_payloads,
     );
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
     super::links::native_link_obligations(report, &mut profile);
-    let mut topology = super::native_topology::collect(root, &head_tables.row_ids);
-    topology.head_tables = head_tables;
+    let mut topology = super::native_topology::collect(root, &head_payloads);
+    topology.head_payloads = head_payloads;
     (profile, topology)
 }
 
@@ -37,7 +38,7 @@ fn collect_ast_structure(
     relative_indent_depth: usize,
     profile: &mut AstStructure,
     no_fill_lines: &mut BTreeMap<u32, NoFillSourceLine>,
-    inline_table_rows: &std::collections::HashSet<u32>,
+    head_payloads: &HeadPayloads,
 ) {
     let nonprinting = inherited_nonprinting || node.flags.no_print || is_stateful_request(node);
     if node.flags.no_fill
@@ -96,7 +97,7 @@ fn collect_ast_structure(
     }
     if node.kind == NodeKind::Table
         && node.table_row_kind.is_some()
-        && !inline_table_rows.contains(&node.id)
+        && !head_payloads.row_ids.contains(&node.id)
     {
         profile.table_rows += 1;
         profile.table_spanning_cells += node
@@ -114,7 +115,7 @@ fn collect_ast_structure(
             None => profile.equation_configurations += 1,
             Some(value) if value.trim().is_empty() => profile.equation_configurations += 1,
             Some(_) if inside_table => profile.table_equations += 1,
-            Some(_) if equation_is_display(node) => profile.display_equations += 1,
+            Some(_) if equation_is_display(node, head_payloads) => profile.display_equations += 1,
             Some(_) => profile.inline_equations += 1,
         }
     }
@@ -137,7 +138,7 @@ fn collect_ast_structure(
             child_indent_depth,
             profile,
             no_fill_lines,
-            inline_table_rows,
+            head_payloads,
         );
     }
 }

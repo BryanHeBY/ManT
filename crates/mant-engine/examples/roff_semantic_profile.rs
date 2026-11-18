@@ -24,6 +24,8 @@ mod queries;
 
 use conversions::{conversion_violations, ordinal_conversions};
 
+#[path = "support/ordinal_labels.rs"]
+mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 

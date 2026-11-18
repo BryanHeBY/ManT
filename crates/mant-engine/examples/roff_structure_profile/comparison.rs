@@ -1,4 +1,6 @@
 //! Conservative structural obligations and topology comparison.
+use std::collections::{HashMap, VecDeque};
+
 use super::{
     AstEquationTopology, AstListTopology, AstStructure, AstTableRowTopology, AstTopology, BTreeMap,
     EquationContext, IrEquationTopology, IrListTopology, IrStructure, IrTableRowTopology,
@@ -180,23 +182,37 @@ fn compare_list_topology(
     expected: &[AstListTopology],
     observed: &[IrListTopology],
 ) {
+    let mut observed_by_source = HashMap::<_, VecDeque<_>>::new();
+    for list in observed {
+        observed_by_source
+            .entry((list.source_line, list.source_column))
+            .or_default()
+            .push_back(list);
+    }
     for expected_list in expected {
-        let observed_list = observed.iter().find(|candidate| {
-            candidate.source_line == expected_list.source_line
-                && candidate.kind == expected_list.kind
-        });
+        // A macro can emit several list owners at precisely the same
+        // position. Consume their occurrences in traversal order, rather
+        // than letting a later same-kind owner satisfy an earlier one.
+        let observed_list = observed_by_source
+            .get_mut(&(expected_list.source_line, expected_list.source_column))
+            .and_then(VecDeque::pop_front);
         match observed_list {
-            Some(observed_list) if observed_list.items == expected_list.items => {}
+            Some(observed_list)
+                if observed_list.kind == expected_list.kind
+                    && observed_list.items == expected_list.items => {}
             Some(observed_list) => violations.push(format!(
-                "list-topology at line {}: expected {} {} items, observed {}",
+                "list-topology at line {}:{}: expected {} {} items, observed {} {} items",
                 expected_list.source_line,
+                expected_list.source_column,
                 expected_list.items,
                 expected_list.kind.as_str(),
                 observed_list.items,
+                observed_list.kind.as_str(),
             )),
             None => violations.push(format!(
-                "list-topology at line {}: expected {} list with {} items, observed none",
+                "list-topology at line {}:{}: expected {} list with {} items, observed none",
                 expected_list.source_line,
+                expected_list.source_column,
                 expected_list.kind.as_str(),
                 expected_list.items,
             )),

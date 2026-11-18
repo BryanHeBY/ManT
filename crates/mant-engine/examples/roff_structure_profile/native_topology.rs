@@ -1,20 +1,15 @@
 //! Collect normalized shapes from the owned native execution tree.
-use std::collections::HashSet;
-
 use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
 
 use super::{
     AstEquationTopology, AstListTopology, AstTableCellTopology, AstTableRowTopology, AstTopology,
-    EquationContext, ListTopologyKind, equation_context_order,
-    native::{
-        equation_visible_text, is_printable_no_fill_text, is_stateful_request, node_part_children,
-        strip_tag_font_escapes,
-    },
+    EquationContext, ListTopologyKind, equation_context_order, head_payloads::HeadPayloads,
+    native::equation_visible_text, ordinal_labels,
 };
 
-pub(super) fn collect(root: &Node, inline_table_rows: &HashSet<u32>) -> AstTopology {
+pub(super) fn collect(root: &Node, head_payloads: &HeadPayloads) -> AstTopology {
     let mut topology = AstTopology::default();
-    collect_ast_topology(root, false, &mut topology, inline_table_rows);
+    collect_ast_topology(root, false, &mut topology, head_payloads);
     topology.lists.sort_by_key(|list| list.source_line);
     topology.equations.sort_by_key(|equation| {
         (
@@ -100,7 +95,7 @@ fn collect_ast_topology(
     node: &Node,
     inside_table: bool,
     topology: &mut AstTopology,
-    inline_table_rows: &HashSet<u32>,
+    head_payloads: &HeadPayloads,
 ) {
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
     // cell. Only an owned Equation node establishes an obligation.
@@ -115,7 +110,7 @@ fn collect_ast_topology(
             source_line: node.line,
             context: if inside_table {
                 EquationContext::TableCell
-            } else if equation_is_display(node) {
+            } else if equation_is_display(node, head_payloads) {
                 EquationContext::Display
             } else {
                 EquationContext::Inline
@@ -148,6 +143,7 @@ fn collect_ast_topology(
         };
         topology.lists.push(AstListTopology {
             source_line: node.line,
+            source_column: node.column,
             kind,
             items: mdoc_list_items(node).count(),
         });
@@ -157,7 +153,7 @@ fn collect_ast_topology(
     let mut row_index = 0;
     for child in &node.children {
         if child.kind == NodeKind::Table
-            && !inline_table_rows.contains(&child.id)
+            && !head_payloads.row_ids.contains(&child.id)
             && let Some(kind) = native_table_kind(child)
         {
             if child.flags.table_start || table_origin.is_none() {
@@ -181,104 +177,31 @@ fn collect_ast_topology(
                     .collect(),
             });
             row_index += 1;
-            collect_ast_topology(child, true, topology, inline_table_rows);
+            collect_ast_topology(child, true, topology, head_payloads);
             continue;
         }
         collect_ast_topology(
             child,
             inside_table || node.kind == NodeKind::Table,
             topology,
-            inline_table_rows,
+            head_payloads,
         );
     }
 }
 
 fn mdoc_definition_is_recoverable_ordinal_list(node: &Node) -> bool {
-    if node.definition_list_style != Some(libmandoc_rs::DefinitionListStyle::Tag) {
-        return false;
-    }
-    let mut previous: Option<(u64, OrdinalPunctuation)> = None;
-    let mut count = 0usize;
-    for item in mdoc_list_items(node) {
-        if !node_part_children(item, NodeKind::Body)
-            .iter()
-            .any(has_ordinal_description)
-        {
-            return false;
-        }
-        let mut label = String::new();
-        if !collect_ordinal_label(node_part_children(item, NodeKind::Head), &mut label) {
-            return false;
-        }
-        let Some((number, punctuation)) = explicit_ordinal(&label) else {
-            return false;
-        };
-        if previous.is_some_and(|(prior, mark)| {
-            prior.checked_add(1) != Some(number) || mark != punctuation
-        }) {
-            return false;
-        }
-        previous = Some((number, punctuation));
-        count += 1;
-    }
-    count > 1
+    node.definition_list_style == Some(libmandoc_rs::DefinitionListStyle::Tag)
+        && ordinal_labels::observe(mdoc_list_items(node)).is_some_and(|labels| labels.recoverable())
 }
 
-fn has_ordinal_description(node: &Node) -> bool {
-    if node.flags.no_print || node.kind == NodeKind::Comment || is_stateful_request(node) {
-        return false;
-    }
-    // A spacing request may supply a layout-only description. Font and
-    // spacing controls themselves, and a stray `\&`, supply no such owner.
-    matches!(node.macro_token.as_deref(), Some("sp"))
-        || matches!(node.kind, NodeKind::Equation | NodeKind::Table)
-        || node.text.as_deref().is_some_and(is_printable_no_fill_text)
-        || node.children.iter().any(has_ordinal_description)
-}
-
-fn collect_ordinal_label(nodes: &[Node], label: &mut String) -> bool {
-    nodes.iter().all(|node| {
-        if node.flags.no_print || node.kind == NodeKind::Comment {
-            return true;
-        }
-        if node.kind == NodeKind::Text {
-            label.push_str(&strip_tag_font_escapes(
-                node.text.as_deref().unwrap_or_default(),
-            ));
-            return true;
-        }
-        // These pre-handlers apply presentation to their authored words.
-        matches!(node.macro_token.as_deref(), Some("Sy" | "Em" | "Li" | "No"))
-            && collect_ordinal_label(&node.children, label)
-    })
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum OrdinalPunctuation {
-    Period,
-    Close,
-    Paired,
-}
-
-fn explicit_ordinal(text: &str) -> Option<(u64, OrdinalPunctuation)> {
-    let text = text.trim();
-    let (number, punctuation) = if let Some(number) = text.strip_suffix('.') {
-        (number, OrdinalPunctuation::Period)
-    } else {
-        let number = text.strip_suffix(')')?;
-        number
-            .strip_prefix('(')
-            .map_or((number, OrdinalPunctuation::Close), |number| {
-                (number, OrdinalPunctuation::Paired)
-            })
-    };
-    Some((number.parse().ok()?, punctuation))
-}
-
-pub(super) fn equation_is_display(node: &Node) -> bool {
+pub(super) fn equation_is_display(node: &Node, head_payloads: &HeadPayloads) -> bool {
     // roff_eqndelim's executed origin is independent from roff_EQ's NODE_LINE.
-    node.equation_inline
-        .map_or(node.flags.line_start, |inline| !inline)
+    // Irrespective of the eqn delimiter mode, an executed definition HEAD
+    // stores its value in the term and cannot own a stand-alone block.
+    !head_payloads.contains_equation(node)
+        && node
+            .equation_inline
+            .map_or(node.flags.line_start, |inline| !inline)
 }
 
 fn native_table_kind(node: &Node) -> Option<mant_ir::TableRowKind> {

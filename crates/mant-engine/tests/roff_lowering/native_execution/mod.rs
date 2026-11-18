@@ -19,6 +19,7 @@ mod native_acceptance_rows;
 mod native_control_rows;
 mod native_execution_matrices;
 mod node_body_rows;
+mod ordinal_labels;
 mod output_owner_rows;
 mod plain_field_rows;
 mod section_edge_rows;

@@ -1,9 +1,8 @@
 //! Reconstructs source-proven lists expressed with man(7) tagged paragraphs.
 
-use mant_ir::{Block, DefinitionItem, ListItem, ListKind, SourceSpan};
+use mant_ir::{Block, DefinitionItem, Inline, ListItem, ListKind, SourceSpan};
 
 use crate::mandoc::{
-    inline::plain_text,
     layout::{layout, layout_with_spacing},
     targets,
 };
@@ -106,7 +105,10 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
     let [term] = item.terms.as_slice() else {
         return None;
     };
-    let text = plain_text(term);
+    let mut text = String::new();
+    if !collect_marker_text(term, &mut text) {
+        return None;
+    }
     let text = text.trim();
     let (digits, style) = if let Some(digits) = text.strip_suffix('.') {
         (digits, IpOrdinalStyle::Period)
@@ -121,8 +123,32 @@ pub(in crate::mandoc::blocks) fn ordinal_marker(
     } else {
         return None;
     };
+    // Replacing an authored sign or leading zeroes with a generated number
+    // would change the label. Only canonical decimal spellings are safe.
+    if !digits.bytes().all(|byte| byte.is_ascii_digit())
+        || digits.len() > 1 && digits.starts_with('0')
+    {
+        return None;
+    }
     let value = digits.parse().ok()?;
     Some(ManOrdinalMarker { value, style })
+}
+
+fn collect_marker_text(nodes: &[Inline], text: &mut String) -> bool {
+    nodes.iter().all(|node| match node {
+        Inline::Text { value } | Inline::Code { value } => {
+            text.push_str(value);
+            true
+        }
+        Inline::Strong { children } | Inline::Emphasis { children } => {
+            collect_marker_text(children, text)
+        }
+        // Conversion transfers these zero-width destinations to the item.
+        Inline::Anchor { .. } => true,
+        // A generated numeral cannot represent an equation, link, or
+        // authored hard row, even if flattening happens to look numeric.
+        Inline::Equation { .. } | Inline::Link { .. } | Inline::LineBreak { .. } => false,
+    })
 }
 
 /// Recognize an entire mdoc tag list as one explicit ordinal sequence.
