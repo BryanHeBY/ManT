@@ -18,8 +18,8 @@ use mant_ir::Inline;
 pub(in crate::mandoc) struct HeadOperandCapture {
     search_head: Option<SearchHead>,
     roles: HashMap<u64, NativeOperandRole>,
-    name_receipts: Vec<(usize, u64)>,
-    key_receipts: HashMap<u64, usize>,
+    spelling_receipts: Vec<(usize, u64)>,
+    unsplit_receipts: HashMap<u64, usize>,
     fl_assignment_prefixes: HashMap<u64, String>,
     captured: CapturedHeadOperands,
     last_owner: Option<u64>,
@@ -41,7 +41,7 @@ impl HeadOperandCapture {
         self.roles.insert(serial, role);
     }
 
-    pub(super) fn mark_clipped_names(&mut self, owners: impl Iterator<Item = u64>) {
+    fn mark_clipped_operands(&mut self, owners: impl Iterator<Item = u64>, writer: Option<u64>) {
         for owner in owners {
             if let Some(role) = self.roles.get_mut(&owner) {
                 *role = match *role {
@@ -52,7 +52,11 @@ impl HeadOperandCapture {
                     {
                         NativeOperandRole::Argument
                     }
-                    role => role,
+                    // CVS term_word() can intentionally write the displayed
+                    // subject spelling through an internal overstrike. A
+                    // different word overwriting its glyph clips its operand.
+                    NativeOperandRole::Subject(..) if writer == Some(owner) => *role,
+                    role => role.without_complete_spelling(),
                 };
             }
         }
@@ -60,7 +64,7 @@ impl HeadOperandCapture {
 
     pub(in crate::mandoc) fn take(&mut self) -> CapturedHeadOperands {
         let mut captured = std::mem::take(&mut self.captured);
-        for (index, serial) in self.name_receipts.drain(..) {
+        for (index, serial) in self.spelling_receipts.drain(..) {
             let operand = &mut captured.operands[index];
             let role = self.roles[&serial];
             // A native overstrike in an attached value need not invalidate
@@ -80,7 +84,7 @@ impl HeadOperandCapture {
                 role
             };
         }
-        self.key_receipts.clear();
+        self.unsplit_receipts.clear();
         captured.qualify_optional_keys();
         captured.qualify_fl_keys(self.search_head.is_some());
         captured
@@ -138,22 +142,32 @@ impl HeadOperandCapture {
                 NativeOperandRole::Placeholder
                     | NativeOperandRole::FlDash(_)
                     | NativeOperandRole::FlWord(_)
+                    | NativeOperandRole::Subject(..)
+                    | NativeOperandRole::EnclosureStart(_)
+                    | NativeOperandRole::EnclosureEnd(_)
             ) {
-                self.name_receipts
+                self.spelling_receipts
                     .push((self.captured.operands.len(), serial));
             }
-            // A single option word can split at a formatter boundary. Its
-            // surviving fragments cannot each introduce an independent key.
+            // A split projected word cannot prove a complete option key or
+            // enclosure delimiter, even when all its glyphs survived.
             if matches!(
                 role,
                 NativeOperandRole::OptionalKey
                     | NativeOperandRole::FlDash(_)
                     | NativeOperandRole::FlWord(_)
+                    | NativeOperandRole::EnclosureStart(_)
+                    | NativeOperandRole::EnclosureEnd(_)
             ) && let Some(previous) = self
-                .key_receipts
+                .unsplit_receipts
                 .insert(serial, self.captured.operands.len())
             {
-                role = NativeOperandRole::Argument;
+                role = match role {
+                    NativeOperandRole::EnclosureStart(_) | NativeOperandRole::EnclosureEnd(_) => {
+                        role.without_complete_spelling()
+                    }
+                    _ => NativeOperandRole::Argument,
+                };
                 self.captured.operands[previous].role = role;
                 self.roles.insert(serial, role);
             }
@@ -188,17 +202,18 @@ impl super::InlineBuilder {
     ) {
         if let Some(capture) = &self.head_operand_capture {
             let mut capture = capture.borrow_mut();
+            let enclosure = || {
+                capture
+                    .enclosures
+                    .iter()
+                    .rev()
+                    .find(|&&scope| !self.scope_posts.ended(scope))
+                    .copied()
+            };
             let role = capture
                 .operand_role
                 .or_else(|| capture.search_head.as_ref()?.role(text?.0))
-                .or_else(|| {
-                    capture
-                        .enclosures
-                        .iter()
-                        .rev()
-                        .find(|&&scope| !self.scope_posts.ended(scope))
-                        .map(|&scope| NativeOperandRole::EnclosureContent(scope))
-                })
+                .or_else(|| enclosure().map(NativeOperandRole::EnclosureContent))
                 .or_else(|| {
                     text?
                         .1
@@ -208,7 +223,7 @@ impl super::InlineBuilder {
                         .then_some(NativeOperandRole::Literal)
                 });
             if let Some(role) = role {
-                let role = match role {
+                let role = match role.record_enclosure(enclosure) {
                     NativeOperandRole::FlDash(_) | NativeOperandRole::FlWord(_)
                         if !capture.has_operand_label && capture.search_head.is_none() =>
                     {
@@ -222,7 +237,7 @@ impl super::InlineBuilder {
                         NativeOperandRole::SearchArgument(_) | NativeOperandRole::FlWord(_) => {
                             NativeOperandRole::Argument
                         }
-                        _ => role,
+                        _ => role.without_complete_spelling(),
                     }
                 } else {
                     role
@@ -240,10 +255,13 @@ impl super::InlineBuilder {
     }
 
     pub(super) fn record_clipped_operands(&mut self) {
+        let writer = self.execution.native_owner_serial;
         if let Some(capture) = &self.head_operand_capture
             && let Some(owners) = self.execution.zero_advance.take_overwritten_word_owners()
         {
-            capture.borrow_mut().mark_clipped_names(owners);
+            capture
+                .borrow_mut()
+                .mark_clipped_operands(owners, Some(writer));
         }
     }
 
@@ -255,7 +273,7 @@ impl super::InlineBuilder {
             // HEAD's accepted residue cannot certify the complete label.
             capture
                 .borrow_mut()
-                .mark_clipped_names(std::iter::once(owner));
+                .mark_clipped_operands(std::iter::once(owner), None);
         }
     }
 

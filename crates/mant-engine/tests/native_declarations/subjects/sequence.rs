@@ -2,6 +2,8 @@ use super::super::support::{check_occurrences, explain, load, roundtrip};
 use mant_ir::{EntryKind, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceClass, OutlineNode};
 
+mod receipts;
+
 fn fixture(head: &str, space_off: bool) -> ResolvedContent {
     let spacing = if space_off { ".Sm off\n" } else { "" };
     load(&format!(
@@ -42,6 +44,18 @@ fn check(
     };
     assert_eq!(indexed, names, "{head}");
     assert_eq!(forms.as_slice(), [form], "{head}");
+    let excerpt = roundtrip(
+        &mant_query::select_excerpt(&query, &[ContentSelector::path(entry.path())]).unwrap(),
+    );
+    assert_eq!(
+        excerpt.selections[0].outline().path(),
+        entry.path(),
+        "{head}"
+    );
+    assert!(
+        mant_render::render_excerpt_text(&excerpt).contains("OWNERBODY."),
+        "{head}"
+    );
     for name in names {
         let result = roundtrip(&explain(&query, name));
         assert_eq!(result.counts.direct_entry.total, 1, "{name}: {head}");
@@ -57,15 +71,7 @@ fn check(
         let range = start..start + name.chars().count();
         check_occurrences(hit, name, std::slice::from_ref(&range));
 
-        let excerpt = roundtrip(
-            &mant_query::select_excerpt(&query, &[ContentSelector::path(hit.outline.path())])
-                .unwrap(),
-        );
         assert_eq!(excerpt.selections[0].outline(), &hit.outline, "{head}");
-        assert!(
-            mant_render::render_excerpt_text(&excerpt).contains("OWNERBODY."),
-            "{head}"
-        );
     }
     for argument in arguments {
         assert_eq!(

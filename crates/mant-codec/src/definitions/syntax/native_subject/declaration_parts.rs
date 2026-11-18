@@ -1,5 +1,5 @@
 //! Recognize independent names in a native HEAD with protected operands.
-use super::{Recognition, offset, operand_at, recognize_part, unwrapped};
+use super::{Recognition, following_function, offset, operand_at, recognize_part, unwrapped};
 use crate::definitions::syntax::{
     DeclarationLimit,
     eligibility::{NameSource, OperandUses},
@@ -27,7 +27,20 @@ enum SubjectSequence {
     #[default]
     Subjects,
     Constant(Option<u32>),
+    Function(Option<u32>),
     ArgumentTail(Option<u32>),
+}
+
+impl SubjectSequence {
+    fn from_subject(subject: Option<NativeSubject>, enclosure: Option<u32>) -> Option<Self> {
+        match subject {
+            Some(NativeSubject::Constant) => Some(Self::Constant(enclosure)),
+            // Fo's generated arguments already carry the Argument role;
+            // a following Fa outside its BODY can be independent.
+            Some(NativeSubject::Function) => Some(Self::Function(enclosure)),
+            _ => None,
+        }
+    }
 }
 
 struct Candidate {
@@ -79,11 +92,35 @@ impl Candidates {
             SubjectSequence::Constant(Some(owner)) if owner == enclosure => {
                 SubjectSequence::Constant(parent)
             }
-            SubjectSequence::ArgumentTail(Some(owner)) if owner == enclosure => {
+            SubjectSequence::Function(Some(owner)) | SubjectSequence::ArgumentTail(Some(owner))
+                if owner == enclosure =>
+            {
                 SubjectSequence::Subjects
             }
             sequence => sequence,
         };
+    }
+
+    fn admit_subject(&mut self, subject: Option<NativeSubject>, enclosure: Option<u32>) -> bool {
+        // A retained Dv role controls Fa even if the Dv spelling cannot
+        // name an entry. CVS termp_fa_pre distinguishes fields from the
+        // arguments inside Fo; a comma-delimited Fa after a function lead
+        // likewise does not establish a new declaration here.
+        if let Some(sequence) = SubjectSequence::from_subject(subject, enclosure) {
+            self.sequence = sequence;
+        }
+        if subject != Some(NativeSubject::Field) {
+            return true;
+        }
+        match self.sequence {
+            SubjectSequence::Subjects => true,
+            SubjectSequence::Constant(owner) => {
+                self.sequence = SubjectSequence::ArgumentTail(owner);
+                self.unproved_part = true;
+                false
+            }
+            SubjectSequence::Function(_) | SubjectSequence::ArgumentTail(_) => false,
+        }
     }
 
     fn resolve(self, result: Result<(), RejectedPart>) -> (EntryKind, Recognition) {
@@ -167,17 +204,28 @@ fn collect(
             continue;
         }
         let lead = operand_at(operands, start);
-        let subject = lead
-            .and_then(|operand| operand.role.subject())
-            .map(|(subject, _)| subject);
-        if subject == Some(NativeSubject::Field) {
-            // A separately delimited Fa starts the argument tail of the
-            // preceding constant. Matching native enclosures are transparent
-            // to the role, but a tail started inside one ends with that scope.
-            if let SubjectSequence::Constant(owner) = candidates.sequence {
-                candidates.sequence = SubjectSequence::ArgumentTail(owner);
-                candidates.unproved_part = true;
-            }
+        let leading_role = lead.and_then(|operand| operand.role.subject());
+        let same_scope = leading_role.is_none_or(|receipt| receipt.enclosure == enclosure);
+        if let Some(receipt) = leading_role
+            && receipt.kind == NativeSubject::Field
+            && (!same_scope || !uses.covers(&span, |role| role.subject() == leading_role))
+        {
+            // Fa must occupy the complete group in this proven scope. A
+            // missing delimiter can expose the Field's text without making
+            // it a direct operand of this head.
+            candidates.unproved_part = true;
+            continue;
+        }
+        let subject = leading_role
+            .filter(|_| same_scope)
+            .map(|receipt| receipt.kind);
+        let subject = if subject == Some(NativeSubject::ReturnType) {
+            let first = operands.partition_point(|operand| operand.bytes.end <= start);
+            following_function(text, &operands[first..], span.clone()).map(|(_, function)| function)
+        } else {
+            subject
+        };
+        if !candidates.admit_subject(subject, enclosure) {
             continue;
         }
         let explicit = lead.is_some_and(|operand| {
@@ -195,9 +243,10 @@ fn collect(
         }
         if result.names.is_empty() {
             candidates.unproved_part = true;
-        } else if subject == Some(NativeSubject::Constant) {
-            candidates.sequence = SubjectSequence::Constant(enclosure);
-        } else if explicit {
+        } else if explicit
+            && same_scope
+            && SubjectSequence::from_subject(subject, enclosure).is_none()
+        {
             candidates.sequence = SubjectSequence::Subjects;
         }
         candidates

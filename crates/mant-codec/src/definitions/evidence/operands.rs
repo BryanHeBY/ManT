@@ -40,15 +40,18 @@ pub(crate) enum NativeOperandRole {
     #[cfg(feature = "roff")]
     OptionalKey,
     #[cfg(feature = "roff")]
-    Subject(NativeSubject, u32),
+    Subject(SubjectReceipt),
     /// Publication retained the native subject's role within the form,
     /// while clipping the evidence for its own exact name.
     #[cfg(feature = "roff")]
-    ClippedSubject(NativeSubject, u32),
+    ClippedSubject(SubjectReceipt),
     #[cfg(feature = "roff")]
     EnclosureStart(u32),
     #[cfg(feature = "roff")]
     EnclosureEnd(u32),
+    /// Accepted residue of a delimiter that cannot prove a paired boundary.
+    #[cfg(feature = "roff")]
+    ClippedEnclosure,
     #[cfg(feature = "roff")]
     EnclosureContent(u32),
     ExplicitOption,
@@ -67,6 +70,14 @@ pub(crate) enum NativeSubject {
     FunctionBlock,
 }
 
+#[cfg(feature = "roff")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SubjectReceipt {
+    pub(crate) kind: NativeSubject,
+    pub(crate) node: u32,
+    pub(crate) enclosure: Option<u32>,
+}
+
 impl NativeOperandRole {
     pub(in crate::definitions) fn is_parameter(self) -> bool {
         match self {
@@ -78,7 +89,8 @@ impl NativeOperandRole {
             | Self::SearchArgument(_)
             | Self::OptionalKey
             | Self::Subject(..)
-            | Self::ClippedSubject(..) => true,
+            | Self::ClippedSubject(..)
+            | Self::ClippedEnclosure => true,
             _ => false,
         }
     }
@@ -100,12 +112,39 @@ impl NativeOperandRole {
     }
 
     #[cfg(feature = "roff")]
-    pub(in crate::definitions) fn subject(self) -> Option<(NativeSubject, u32)> {
+    pub(crate) fn subject_word(kind: NativeSubject, node: u32) -> Self {
+        Self::Subject(SubjectReceipt {
+            kind,
+            node,
+            enclosure: None,
+        })
+    }
+
+    #[cfg(feature = "roff")]
+    pub(crate) fn record_enclosure(self, enclosure: impl FnOnce() -> Option<u32>) -> Self {
         match self {
-            Self::Subject(subject, scope) | Self::ClippedSubject(subject, scope) => {
-                Some((subject, scope))
+            Self::Subject(mut subject) => {
+                subject.enclosure = enclosure();
+                Self::Subject(subject)
             }
+            role => role,
+        }
+    }
+
+    #[cfg(feature = "roff")]
+    pub(in crate::definitions) fn subject(self) -> Option<SubjectReceipt> {
+        match self {
+            Self::Subject(subject) | Self::ClippedSubject(subject) => Some(subject),
             _ => None,
+        }
+    }
+
+    #[cfg(feature = "roff")]
+    pub(crate) fn without_complete_spelling(self) -> Self {
+        match self {
+            Self::Subject(subject) => Self::ClippedSubject(subject),
+            Self::EnclosureStart(_) | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
+            role => role,
         }
     }
 }

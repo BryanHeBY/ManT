@@ -32,7 +32,7 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
     };
     let append_name = |builder: &mut InlineBuilder| {
         builder.with_native_operand_role(
-            NativeOperandRole::Subject(NativeSubject::Function, node.id),
+            NativeOperandRole::subject_word(NativeSubject::Function, node.id),
             |builder| {
                 builder.with_font_scope(Font::Strong, |builder| {
                     builder.with_direct_word_operands(|builder| {

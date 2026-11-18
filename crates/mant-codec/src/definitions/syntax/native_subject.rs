@@ -1,6 +1,6 @@
 //! Name only the accepted operands of a typed mdoc definition head.
 use super::eligibility::{NameSource, OperandUses};
-use super::scan::{MAX_NAMES, MAX_NESTING, closing, quote_closer};
+use super::scan::{MAX_NAMES, MAX_NESTING};
 use super::{DeclarationLimit, named, occurrences::HeadNames};
 use crate::definitions::{
     NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, evidence::HeadOperands,
@@ -61,7 +61,10 @@ fn recognize(text: &str, operands: &[NativeOperand]) -> Option<(EntryKind, Recog
     let typed = leading.is_some_and(|operand| {
         operand.role.subject().is_some()
             || !protected
-                && matches!(operand.role, NativeOperandRole::EnclosureStart(_))
+                && matches!(
+                    operand.role,
+                    NativeOperandRole::EnclosureStart(_) | NativeOperandRole::ClippedEnclosure
+                )
                 && operands[first..]
                     .iter()
                     .any(|operand| operand.role.subject().is_some())
@@ -120,7 +123,7 @@ fn recognize_part(
             .collect();
         return Some((EntryKind::Term, Recognition { names, limit: None }));
     }
-    let (mut subject, _) = lead.role.subject()?;
+    let mut subject = lead.role.subject()?.kind;
     if subject == NativeSubject::ReturnType {
         // Ft supplies a type before the following function's own name.
         // Keep an isolated or unsupported descriptor as an unnamed term.
@@ -153,9 +156,9 @@ fn recognize_part(
                     .skip_while(|operand| operand.bytes.start < span.end)
                     .take_while(|operand| operand.bytes.start < end)
                     .any(|operand| {
-                        operand.role.subject().is_some_and(|(role, _)| {
+                        operand.role.subject().is_some_and(|receipt| {
                             matches!(
-                                role,
+                                receipt.kind,
                                 NativeSubject::Function
                                     | NativeSubject::FunctionBlock
                                     | NativeSubject::ReturnType
@@ -200,13 +203,16 @@ fn following_function(
     let descriptor = matching_subject_span(text, operands, head)?;
     let index = operands.partition_point(|operand| operand.bytes.end <= descriptor.end);
     let next = operands.get(index)?;
-    let NativeOperandRole::Subject(
-        subject @ (NativeSubject::Function | NativeSubject::FunctionBlock),
-        _,
-    ) = next.role
-    else {
+    let NativeOperandRole::Subject(receipt) = next.role else {
         return None;
     };
+    let subject = receipt.kind;
+    if !matches!(
+        subject,
+        NativeSubject::Function | NativeSubject::FunctionBlock
+    ) {
+        return None;
+    }
     text.get(descriptor.end..next.bytes.start)?
         .trim()
         .is_empty()
@@ -256,20 +262,23 @@ fn symbol_group(
 ) -> Recognition {
     let mut names = Vec::new();
     let mut cursor = head.start;
-    let mut previous_scope = None;
+    let mut previous_node = None;
     let mut limit = None;
     for operand in operands
         .iter()
         .take_while(|operand| operand.bytes.end <= head.end)
     {
-        let Some((role, scope)) = operand.role.subject() else {
+        let Some(receipt) = operand.role.subject() else {
             continue;
         };
         let start = operand.bytes.start.max(head.start);
         let Some(gap) = text.get(cursor..start).map(str::trim) else {
             return Recognition::default();
         };
-        if role == NativeSubject::Field && subject == NativeSubject::Constant && !names.is_empty() {
+        if receipt.kind == NativeSubject::Field
+            && subject == NativeSubject::Constant
+            && !names.is_empty()
+        {
             if gap.is_empty() {
                 cursor = operand.bytes.end;
                 continue;
@@ -280,7 +289,7 @@ fn symbol_group(
             }
             return Recognition::default();
         }
-        if role != subject || !matches!(operand.role, NativeOperandRole::Subject(..)) {
+        if receipt.kind != subject || !matches!(operand.role, NativeOperandRole::Subject(..)) {
             continue;
         }
         let Some(name) = text
@@ -289,7 +298,7 @@ fn symbol_group(
         else {
             continue;
         };
-        if !gap.is_empty() || !names.is_empty() && previous_scope != Some(scope) {
+        if !gap.is_empty() || !names.is_empty() && previous_node != Some(receipt.node) {
             return Recognition::default();
         }
         let name = RecognizedName::contiguous(name, offset(text, name));
@@ -302,7 +311,7 @@ fn symbol_group(
             names.push(name);
         }
         cursor = operand.bytes.end;
-        previous_scope = Some(scope);
+        previous_node = Some(receipt.node);
     }
     if text
         .get(cursor..head.end)
@@ -322,8 +331,9 @@ fn enclosed_field_suffix(text: &str, suffix: &str, operands: &[NativeOperand]) -
     let start = offset(text, inner);
     enclosure.is_some()
         && OperandUses::new(operands).covers(&(start..start + inner.len()), |role| {
-            role.subject()
-                .is_some_and(|(subject, _)| subject == NativeSubject::Field)
+            role.subject().is_some_and(|receipt| {
+                receipt.kind == NativeSubject::Field && receipt.enclosure == enclosure
+            })
         })
 }
 
@@ -335,39 +345,43 @@ fn unwrapped<'a>(
     let mut head = part.trim();
     let mut enclosure = None;
     for _ in 0..MAX_NESTING {
-        let Some(front) = head.chars().next() else {
+        let Some((inner, scope)) = enclosure_inner(text, head, operands) else {
             break;
         };
-        let Some(pair) = closing(front)
-            .or_else(|| quote_closer(front))
-            .or_else(|| (front == '⟨').then_some('⟩'))
-        else {
-            break;
-        };
-        let start = offset(text, head);
-        let Some(inner) = head[front.len_utf8()..].strip_suffix(pair) else {
-            break;
-        };
-        // Both glyphs must survive from the same enclosure's native
-        // pre/post. Sibling scopes can emit the same paired punctuation.
-        let Some(opening) = operand_at(operands, start)
-            .filter(|operand| text[operand.bytes.clone()].trim().len() == front.len_utf8())
-        else {
-            break;
-        };
-        let NativeOperandRole::EnclosureStart(scope) = opening.role else {
-            break;
-        };
-        if !operand_at(operands, start + head.len() - pair.len_utf8()).is_some_and(|operand| {
-            operand.role == NativeOperandRole::EnclosureEnd(scope)
-                && text[operand.bytes.clone()].trim().len() == pair.len_utf8()
-        }) {
-            break;
-        }
         head = inner.trim();
         enclosure = Some(scope);
     }
     (head, enclosure)
+}
+
+fn enclosure_inner<'a>(
+    text: &'a str,
+    head: &str,
+    operands: &[NativeOperand],
+) -> Option<(&'a str, u32)> {
+    let start = offset(text, head);
+    let end = start + head.len();
+    let opening = operand_at(operands, start)?;
+    let closing = operand_at(operands, end.checked_sub(1)?)?;
+    let NativeOperandRole::EnclosureStart(scope) = opening.role else {
+        return None;
+    };
+    if closing.role != NativeOperandRole::EnclosureEnd(scope) {
+        return None;
+    }
+    // Eo/Ec print their authored HEAD/TAIL operands. Match their full
+    // accepted ranges and native BODY identity, including delimiters with
+    // multiple glyphs, without interpreting their spelling as punctuation.
+    let left = text.get(opening.bytes.clone())?;
+    let right = text.get(closing.bytes.clone())?;
+    if left.contains('\n')
+        || right.contains('\n')
+        || offset(text, left.trim_start()) != start
+        || closing.bytes.start + right.trim_end().len() != end
+    {
+        return None;
+    }
+    Some((text.get(opening.bytes.end..closing.bytes.start)?, scope))
 }
 
 fn operand_at(operands: &[NativeOperand], offset: usize) -> Option<&NativeOperand> {

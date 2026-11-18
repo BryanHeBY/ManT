@@ -632,11 +632,12 @@ An existing mdoc definition head can bind the executed error code in
 identifier in a supported `Va`, `Fn`, or `Fo` declaration. The complete
 form retains brackets, types, and arguments. Independently separated
 subjects bind to their own ranges in source order, including mixed
-`Va`, `Dv`, and `Er` subjects in one definition. A separately delimited
-`Fa` after a constant starts an argument tail even when the argument is
-enclosed by native macros or the HEAD starts with another subject. The
-tail stays readable without supplying selectors. A tail started within a
-complete native enclosure ends at its closing boundary. An attached
+`Va`, `Dv`, `Er`, and simple `Fa` field subjects in one definition.
+A separately delimited `Fa` after a constant starts an argument tail even
+when the preceding `Dv` spelling cannot bind a name. Complete native
+enclosures, including paired custom `Eo` and `Ec` delimiters, can enclose
+that argument. The tail stays readable without supplying selectors. A
+tail started within an enclosure ends at its closing boundary. An attached
 `Fa` annotation leaves later independent declarations eligible. Simple
 `Va` declarations use the variable category. Function signatures, errors, constants, and standalone
 types or argument labels use term entries. Arrays, C function-pointer

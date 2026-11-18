@@ -15,6 +15,8 @@ mod hanging;
 mod operands;
 #[path = "native_declarations/publication.rs"]
 mod publication;
+#[path = "native_declarations/real_subjects.rs"]
+mod real_subjects;
 #[path = "native_declarations/roles.rs"]
 mod roles;
 #[path = "native_declarations/search_invocation_scope.rs"]

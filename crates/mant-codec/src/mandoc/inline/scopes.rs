@@ -238,13 +238,17 @@ fn append_native_subject(
         Some(Mdoc(MdocMacro::Er)) => (NativeSubject::Error, None),
         _ => unreachable!("typed mdoc subject"),
     };
-    builder.with_native_operand_role(NativeOperandRole::Subject(subject, node.id), |builder| {
-        if let Some(font) = font {
-            builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
-        } else {
-            append_inline_nodes(builder, children, name);
-        }
-    });
+    builder.with_native_operand_role(
+        NativeOperandRole::subject_word(subject, node.id),
+        |builder| {
+            if let Some(font) = font {
+                builder
+                    .with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
+            } else {
+                append_inline_nodes(builder, children, name);
+            }
+        },
+    );
 }
 
 fn append_option(builder: &mut InlineBuilder, scope: u32, children: &[Node], name: Option<&str>) {
@@ -469,7 +473,7 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 super::append_function_children(self.builder, nodes, self.name);
             }
             Event::FunctionHead(node) => self.builder.with_native_operand_role(
-                NativeOperandRole::Subject(NativeSubject::FunctionBlock, node.id),
+                NativeOperandRole::subject_word(NativeSubject::FunctionBlock, node.id),
                 |builder| append_inline_nodes(builder, &node.children, self.name),
             ),
             Event::FunctionBodyBegin(pretty) => self.builder.begin_function_body(pretty),
