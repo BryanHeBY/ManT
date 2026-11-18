@@ -66,6 +66,14 @@ pub(super) fn compare_structure(
         expected.email_links,
         observed.email_links,
     );
+    if expected.unclassified_address_links > 0 {
+        underflow(
+            &mut violations,
+            "address-links",
+            expected.external_links + expected.email_links + expected.unclassified_address_links,
+            observed.external_links + observed.email_links,
+        );
+    }
     underflow(
         &mut violations,
         "section-links-or-diagnostics",

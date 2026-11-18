@@ -12,10 +12,36 @@ pub(super) fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
     collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
     profile.manual_links = semantic_link_origins(root, "Xr", NodeKind::Element).len();
-    profile.external_links = semantic_link_origins(root, "Lk", NodeKind::Element).len()
-        + semantic_link_origins(root, "UR", NodeKind::Block).len();
     profile.email_links = semantic_link_origins(root, "Mt", NodeKind::Element).len()
         + semantic_link_origins(root, "MT", NodeKind::Block).len();
+    for (name, kind) in [("Lk", NodeKind::Element), ("UR", NodeKind::Block)] {
+        let mut targets = BTreeSet::new();
+        visit_semantic_link_nodes(root, name, kind, &mut |node| {
+            // CVS man_UR_pre and mdoc_lk_pre take the first target operand.
+            let operands = if kind == NodeKind::Block {
+                node_part_children(node, NodeKind::Head)
+            } else {
+                &node.children
+            };
+            let target = operands.first().and_then(|operand| operand.text.as_deref());
+            // Distinct targets emitted by one user macro can share a source
+            // coordinate. Keep those obligations while deduplicating views.
+            targets.insert((node.line, node.column, target));
+        });
+        for (_, _, target) in targets {
+            // An escaped operand can require roff execution to classify it.
+            match target {
+                Some(target) if !target.contains('\\') => {
+                    if mant_ir::email_address_from_mailto_uri(target).is_some() {
+                        profile.email_links += 1;
+                    } else {
+                        profile.external_links += 1;
+                    }
+                }
+                _ => profile.unclassified_address_links += 1,
+            }
+        }
+    }
     profile.section_links = semantic_link_origins(root, "Sx", NodeKind::Element).len();
     let mut topology = AstTopology::default();
     collect_ast_topology(root, false, &mut topology);
@@ -175,15 +201,17 @@ pub(super) fn semantic_link_origins(
     kind: NodeKind,
 ) -> BTreeSet<(u32, u32)> {
     let mut origins = BTreeSet::new();
-    collect_semantic_link_origins(node, macro_name, kind, &mut origins);
+    visit_semantic_link_nodes(node, macro_name, kind, &mut |node| {
+        origins.insert((node.line, node.column));
+    });
     origins
 }
 
-fn collect_semantic_link_origins(
-    node: &Node,
+fn visit_semantic_link_nodes<'a>(
+    node: &'a Node,
     macro_name: &str,
     kind: NodeKind,
-    origins: &mut BTreeSet<(u32, u32)>,
+    visit: &mut impl FnMut(&'a Node),
 ) {
     let has_target = if kind == NodeKind::Block {
         node_part_children(node, NodeKind::Head)
@@ -198,10 +226,10 @@ fn collect_semantic_link_origins(
         && !node.flags.generated
         && has_target
     {
-        origins.insert((node.line, node.column));
+        visit(node);
     }
     for child in &node.children {
-        collect_semantic_link_origins(child, macro_name, kind, origins);
+        visit_semantic_link_nodes(child, macro_name, kind, visit);
     }
 }
 

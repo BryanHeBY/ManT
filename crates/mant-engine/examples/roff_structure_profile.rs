@@ -69,6 +69,8 @@ struct AstStructure {
     manual_links: usize,
     external_links: usize,
     email_links: usize,
+    #[serde(skip)]
+    unclassified_address_links: usize,
     section_links: usize,
     equation_configurations: usize,
     display_equations: usize,

@@ -67,7 +67,12 @@ legitimately have no
 independent output block. Typed manual, external, email, and section links are
 checked independently by unique printable source occurrence, so duplicated
 AST views and empty closing macros cannot manufacture an obligation while a
-surviving link still cannot mask degradation to a different target class. An
+surviving link still cannot mask loss in a known target class. A
+literal single-mailbox `mailto:` operand in `UR` or `Lk` counts as an email.
+One macro expansion can create distinct address targets at the same source
+coordinate. Each distinct address still contributes an obligation.
+An escaped address operand whose type requires roff execution still counts
+toward the total number of external and email links. An
 unresolvable `.Sx` is allowed to degrade to visible text only when the normal
 lowering path also emits its structured
 `unresolved-section-reference` diagnostic; the audit therefore detects silent

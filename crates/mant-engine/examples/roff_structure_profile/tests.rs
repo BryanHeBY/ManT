@@ -20,6 +20,89 @@ fn parsed_structure(source: &str) -> (super::AstStructure, super::AstTopology, s
 }
 
 #[test]
+fn address_obligations_follow_the_target_operand() {
+    // Pinned CVS man_UR_pre and mdoc_lk_pre preserve each first operand as
+    // its own href, including mailto schemes, header fields and roff escapes.
+    let man = concat!(
+        ".TH VALIDATE 1 \"November 18, 2026\"\n.SH DESCRIPTION\n",
+        ".UR mailto:team@example.test\nmail\n.UE\n",
+        ".UR https://example.test\nweb\n.UE\n",
+        ".MT other@example.test\ncontact\n.ME\n",
+        ".UR mailto\\&:escaped@example.test\nescaped\n.UE\n",
+        ".UR mailto:list@example.test?subject=Hello\nform\n.UE\n",
+    );
+    let mdoc = concat!(
+        ".Dd November 18, 2026\n.Dt VALIDATE 1\n.Os\n",
+        ".Sh NAME\n.Nm validate\n.Nd address audit\n.Sh DESCRIPTION\n",
+        ".Lk mailto:team@example.test mail\n.Lk https://example.test web\n",
+        ".Mt other@example.test\n.Lk mailto\\&:escaped@example.test escaped\n",
+        ".Lk mailto:list@example.test?subject=Hello form\n",
+    );
+    for source in [man, mdoc] {
+        let (expected, expected_topology, document) = parsed_structure(source);
+        let (mut observed, topology) = super::ir_profile(&document);
+        assert_eq!(expected.external_links, 2);
+        assert_eq!(expected.email_links, 2);
+        assert_eq!(expected.unclassified_address_links, 1);
+        assert_eq!(observed.external_links, 2);
+        assert_eq!(observed.email_links, 3);
+        let compare = |observed: &super::IrStructure| {
+            super::compare_structure(&expected, observed, &expected_topology, &topology)
+        };
+        assert!(compare(&observed).is_empty());
+
+        observed.email_links = 2;
+        assert_eq!(
+            compare(&observed),
+            ["address-links: expected at least 5, observed 4"]
+        );
+        observed.email_links = 1;
+        assert!(
+            compare(&observed)
+                .iter()
+                .any(|item| item.starts_with("email-links:"))
+        );
+        observed.email_links = 3;
+        observed.external_links = 1;
+        assert!(
+            compare(&observed)
+                .iter()
+                .any(|item| item.starts_with("external-links:"))
+        );
+    }
+}
+
+#[test]
+fn expanded_address_links_at_one_coordinate_keep_both_obligations() {
+    // The two link nodes share one coordinate in pinned CVS -Ttree, while
+    // -Thtml emits their separate mailto and HTTPS destinations.
+    let man = concat!(
+        ".TH VALIDATE 1 \"November 18, 2026\"\n.SH DESCRIPTION\n.de LX\n",
+        ".UR mailto:team@example.test\nmail\n.UE\n",
+        ".UR https://example.test\nweb\n.UE\n..\n.LX\n",
+    );
+    let mdoc = concat!(
+        ".Dd November 18, 2026\n.Dt VALIDATE 1\n.Os\n",
+        ".Sh NAME\n.Nm validate\n.Nd address audit\n.Sh DESCRIPTION\n.de LX\n",
+        ".Lk mailto:team@example.test mail\n.Lk https://example.test web\n..\n.LX\n",
+    );
+    for source in [man, mdoc] {
+        let (expected, expected_topology, document) = parsed_structure(source);
+        let (mut observed, topology) = super::ir_profile(&document);
+        assert_eq!((expected.email_links, expected.external_links), (1, 1));
+        assert!(
+            super::compare_structure(&expected, &observed, &expected_topology, &topology)
+                .is_empty()
+        );
+        observed.external_links = 0;
+        assert_eq!(
+            super::compare_structure(&expected, &observed, &expected_topology, &topology),
+            ["external-links: expected at least 1, observed 0"]
+        );
+    }
+}
+
+#[test]
 fn opaque_table_words_and_code_styles_are_not_equation_obligations() {
     // The exact source ran pristine ASCII/UTF8/HTML/tree/lint first.
     // roff_parseln excludes tbl from roff_eqndelim; code font is style.
