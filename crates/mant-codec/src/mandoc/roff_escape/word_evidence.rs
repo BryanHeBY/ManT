@@ -108,8 +108,17 @@ impl RoffWordEvidence {
                         self.append(&text);
                     }
                 }
-                RoffInlineEvent::HorizontalMotion { .. }
-                | RoffInlineEvent::Link(_)
+                RoffInlineEvent::HorizontalMotion { .. } => {
+                    // term_word() handles BACKAFTER before reading HORIZ's
+                    // argument. Consuming the control must not eat a digit
+                    // in the next TEXT or source word.
+                    match self.advance {
+                        Advance::Armed => self.advance = Advance::Ordinary,
+                        Advance::BufferedAndArmed(start) => self.advance = Advance::Buffered(start),
+                        _ => self.set(Unclassified),
+                    }
+                }
+                RoffInlineEvent::Link(_)
                 | RoffInlineEvent::FallbackGlyph(_)
                 | RoffInlineEvent::Presentation {
                     kind: PresentationKind::HorizontalLine,

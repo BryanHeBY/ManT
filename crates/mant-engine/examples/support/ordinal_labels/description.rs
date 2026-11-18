@@ -30,6 +30,9 @@ impl DescriptionProbe {
         if node.flags.no_print || node.kind == NodeKind::Comment {
             return Description::Absent;
         }
+        if generated_body_glyph(node) {
+            return Description::Visible;
+        }
         let token = node.macro_token.as_deref();
         match (node.kind, token) {
             (NodeKind::Text, _) => return self.visit_text(node),
@@ -150,6 +153,10 @@ fn word_description(word: &NativeWord) -> Description {
 }
 
 fn equation_description(equation: &libmandoc_rs::EquationBox) -> Description {
+    equation_context(equation, false)
+}
+
+fn equation_context(equation: &libmandoc_rs::EquationBox, has_siblings: bool) -> Description {
     use libmandoc_rs::{EquationKind, EquationPosition};
     let mut result = equation
         .text
@@ -157,7 +164,9 @@ fn equation_description(equation: &libmandoc_rs::EquationBox) -> Description {
         .map_or(Description::Absent, |text| {
             word_description(&NativeWord::read(text))
         });
-    if equation.kind == EquationKind::List && equation.expected_args > 1 {
+    if equation.kind == EquationKind::List && equation.expected_args > 1
+        || equation.kind == EquationKind::Pile && has_siblings
+    {
         for fence in [
             equation.left.as_deref().unwrap_or("("),
             equation.right.as_deref().unwrap_or(")"),
@@ -179,7 +188,7 @@ fn equation_description(equation: &libmandoc_rs::EquationBox) -> Description {
         {
             // eqn_box() bypasses the matrix's outer column-list fences.
             for column in &child.children {
-                result = result.max(equation_description(column));
+                result = result.max(equation_context(column, child.children.len() > 1));
             }
         } else if equation.kind == EquationKind::Pile
             && child.kind == EquationKind::List
@@ -189,10 +198,10 @@ fn equation_description(equation: &libmandoc_rs::EquationBox) -> Description {
             // eqn_box() passes only the row's first child in this exact
             // shape. Empty rows with no child still execute their fences.
             if let Some(first) = child.children.first() {
-                result = result.max(equation_description(first));
+                result = result.max(equation_context(first, false));
             }
         } else {
-            result = result.max(equation_description(child));
+            result = result.max(equation_context(child, equation.children.len() > 1));
         }
     }
     if result == Description::Absent && (equation.text.is_some() || !equation.children.is_empty()) {
@@ -201,5 +210,66 @@ fn equation_description(equation: &libmandoc_rs::EquationBox) -> Description {
         Description::Uncertain
     } else {
         result
+    }
+}
+
+fn generated_body_glyph(node: &Node) -> bool {
+    match (node.kind, node.macro_token.as_deref()) {
+        // termp_in_pre/post write both angle delimiters independently of
+        // the include operand's printable scalar content.
+        (NodeKind::Element, Some("In")) => true,
+        // termp_lk_pre writes ':' when a description precedes the suffix
+        // punctuation, including a description made only of zero-width cells.
+        (NodeKind::Element, Some("Lk")) => node
+            .children
+            .iter()
+            .skip(1)
+            .any(|child| !child.flags.delimiter_close && !child.flags.no_print),
+        // termp____post writes a period/comma for the executed reference
+        // fields under Rs. Merely entering an empty reference prints none.
+        (NodeKind::Body, Some("Rs")) => node.children.iter().any(|child| {
+            !child.flags.no_print
+                && matches!(
+                    child.macro_token.as_deref(),
+                    Some(
+                        "%A" | "%B"
+                            | "%C"
+                            | "%D"
+                            | "%I"
+                            | "%J"
+                            | "%N"
+                            | "%O"
+                            | "%P"
+                            | "%Q"
+                            | "%R"
+                            | "%T"
+                            | "%U"
+                            | "%V"
+                    )
+                )
+        }),
+        // termp_it_pre prints a marker at each actual HEAD for these kinds.
+        // An empty list has no It and therefore no generated marker.
+        (NodeKind::Block, Some("Bl"))
+            if matches!(
+                node.list_kind,
+                Some(
+                    libmandoc_rs::NormalizedListKind::Bullet
+                        | libmandoc_rs::NormalizedListKind::Dash
+                        | libmandoc_rs::NormalizedListKind::Ordered
+                )
+            ) =>
+        {
+            node.children
+                .iter()
+                .filter(|part| part.kind == NodeKind::Body)
+                .flat_map(|body| &body.children)
+                .any(|item| {
+                    item.kind == NodeKind::Block
+                        && item.macro_token.as_deref() == Some("It")
+                        && !item.flags.no_print
+                })
+        }
+        _ => false,
     }
 }

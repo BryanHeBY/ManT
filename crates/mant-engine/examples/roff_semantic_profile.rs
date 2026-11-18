@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v9";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v10";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -582,6 +582,46 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 #[cfg(test)]
 mod tests {
     #[test]
+    fn ordinal_admission_controls_publish_consistent_source_style_and_term_count() {
+        use serde_json::json;
+        let header = concat!(
+            ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n",
+            ".Nd test page\n.Sh DESCRIPTION\n"
+        );
+        let path =
+            std::env::temp_dir().join(format!("mant-ordinal-admission-{}.1", std::process::id()));
+        // Fixed CVS keeps all three source lists and their complete It
+        // owners. NativeOrdinalLabels only recovers two-or-more tag labels.
+        for (style, count) in [("tag", 1), ("tag", 2), ("hang", 2)] {
+            let mut source = format!("{header}.Bl -{style} -width 6n\n");
+            for number in 1..=count {
+                source.push_str(&format!(".It {number}.\nBODY{number}\n"));
+            }
+            source.push_str(".El\n");
+            std::fs::write(&path, &source).unwrap();
+            let profile =
+                super::profile_request(&json!({"id":"admission","path":path}).to_string());
+            std::fs::remove_file(&path).unwrap();
+            let profile = profile.unwrap();
+            let conversions = profile["ordinalConversions"].as_array().unwrap();
+            let [conversion] = conversions.as_slice() else {
+                panic!("one native ordinal candidate");
+            };
+            let expected = if style == "tag" && count == 2 {
+                "recovered-ordered-list"
+            } else {
+                "retained-definition-list"
+            };
+            assert_eq!(conversion["listStyle"], style);
+            assert_eq!(conversion["terms"].as_array().unwrap().len(), count);
+            assert_eq!(conversion["expectedDisposition"], expected);
+            assert_eq!(conversion["observedDispositions"], json!([expected]));
+            assert_eq!(profile["ordinalCasesForReview"], json!([]));
+            assert_eq!(profile["violations"], json!([]));
+        }
+    }
+
+    #[test]
     fn nested_ordinal_sources_emit_valid_conclusive_and_review_findings() {
         use crate::ordinal_labels::{OrdinalDisposition, cases::execution::source};
         use serde_json::json;
@@ -691,6 +731,7 @@ mod tests {
         for case in execution::cases()
             .chain(execution::equation_edges())
             .chain(execution::source::cases())
+            .chain(execution::source::generated())
         {
             std::fs::write(&path, &case.source).unwrap();
             let profile = super::profile_request(&json!({"id":case.name,"path":path}).to_string());

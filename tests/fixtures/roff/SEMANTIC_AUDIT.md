@@ -10,7 +10,7 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v9`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v10`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
@@ -38,6 +38,13 @@ occurrences. Those findings follow the conclusive conversion mismatches and
 must match a reviewed source coordinate, including its occurrence count. A
 genuine HEAD-nested list can therefore remain Review with its original reason.
 Unknown coordinates, excess duplicates and invented findings fail validation.
+
+Conclusive recovery requires a tag list with at least two source terms. A
+single-term candidate or another native definition style can be conclusively
+retained, while a wrong observed ordered owner remains explicit review evidence.
+Generated include/link/reference/list words and native equation sibling fences
+participate in the independent BODY witness. Protected horizontal motion consumes
+the native zero-advance control before later source glyphs are considered.
 
 ## Oracle and scope
 

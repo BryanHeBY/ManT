@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v8` successful page response requires both
+The `mant.roff-structure-profile/v9` successful page response requires both
 `ordinalCasesForReview` and `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
 evidence. Incomplete observations fail validation. A pure alias retains its

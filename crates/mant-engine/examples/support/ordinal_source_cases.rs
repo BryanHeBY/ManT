@@ -95,9 +95,94 @@ const TEMPLATES: [Template; 22] = [
 ];
 
 pub(crate) fn cases() -> impl Iterator<Item = Case> {
-    TEMPLATES
-        .into_iter()
-        .flat_map(|(name, head, body, disposition, before)| {
+    source_matrix(&TEMPLATES, "BODYNUM")
+}
+
+const GENERATED: [Template; 22] = [
+    ("plain", "NUM.", "BODY", Recovered, ""),
+    ("blank", "NUM.", r".No \&", Retained, ""),
+    ("include", "NUM.", ".In header.h", Recovered, ""),
+    ("include-zero", "NUM.", r".In \&", Recovered, ""),
+    ("link-zero", "NUM.", r".Lk \& \&", Recovered, ""),
+    ("reference", "NUM.", ".Rs\n.%A \\&\n.Re", Recovered, ""),
+    ("zero-word", r"NUM\z\&.", "BODY", Recovered, ""),
+    ("zero-motion", r"\z\h'0n'NUM.", "BODY", Recovered, ""),
+    ("positive-motion", r"\z\h'2n'NUM.", "BODY", Recovered, ""),
+    ("negative-motion", r"\z\h'-2n'NUM.", "BODY", Recovered, ""),
+    ("absolute-motion", r"\z\h'|2n'NUM.", "BODY", Recovered, ""),
+    (
+        "split-motion",
+        r"No \z Ns No \h'2n'NUM .",
+        "BODY",
+        Recovered,
+        "",
+    ),
+    ("empty-atom", "NUM.", ".EQ\n\"\"\n.EN", Uncertain, ""),
+    (
+        "solo-pile",
+        "NUM.",
+        ".EQ\npile { \"\" }\n.EN",
+        Uncertain,
+        "",
+    ),
+    (
+        "suffix-pile",
+        "NUM.",
+        ".EQ\n\"\" pile { \"\" }\n.EN",
+        Recovered,
+        "",
+    ),
+    (
+        "prefix-pile",
+        "NUM.",
+        ".EQ\npile { \"\" } \"\"\n.EN",
+        Recovered,
+        "",
+    ),
+    (
+        "sandwiched-pile",
+        "NUM.",
+        ".EQ\n\"\" pile { \"\" } \"\"\n.EN",
+        Recovered,
+        "",
+    ),
+    (
+        "columns",
+        "NUM.",
+        ".EQ\nmatrix { lcol { \"\" } rcol { \"\" } }\n.EN",
+        Recovered,
+        "",
+    ),
+    (
+        "bullet",
+        "NUM.",
+        ".Bl -bullet\n.It\n\\&\n.El",
+        Recovered,
+        "",
+    ),
+    ("enum", "NUM.", ".Bl -enum\n.It\n\\&\n.El", Recovered, ""),
+    ("dash", "NUM.", ".Bl -dash\n.It\n\\&\n.El", Recovered, ""),
+    (
+        "hyphen",
+        "NUM.",
+        ".Bl -hyphen\n.It\n\\&\n.El",
+        Recovered,
+        "",
+    ),
+];
+
+pub(crate) fn generated() -> impl Iterator<Item = Case> {
+    source_matrix(&GENERATED, "BODY")
+}
+
+fn source_matrix(
+    templates: &'static [Template],
+    ordinary_body: &'static str,
+) -> impl Iterator<Item = Case> {
+    templates
+        .iter()
+        .copied()
+        .flat_map(move |(name, head, body, disposition, before)| {
             [1_u8, 2, 3].map(move |mask| {
                 let mut source = header().to_owned();
                 source.push_str(before);
@@ -107,7 +192,7 @@ pub(crate) fn cases() -> impl Iterator<Item = Case> {
                     let (head, body) = if mask & bit != 0 {
                         (head, body)
                     } else {
-                        ("NUM.", "BODYNUM")
+                        ("NUM.", ordinary_body)
                     };
                     source.push_str(&format!(
                         ".It {}\n{}\n",

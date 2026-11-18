@@ -319,15 +319,26 @@ fn source_execution_crossings_keep_evidence_and_owner_obligations() {
         "mant-structure-source-execution-{}.1",
         std::process::id()
     ));
-    for case in execution::cases().chain(execution::source::cases()) {
+    for case in execution::cases()
+        .chain(execution::source::cases())
+        .chain(execution::source::generated())
+    {
         std::fs::write(&path, &case.source).unwrap();
         let profile =
             super::profile_request(&json!({"id":case.name,"path":path,"root":root}).to_string());
         std::fs::remove_file(&path).unwrap();
         let profile = profile.unwrap();
         assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
-        let expected = &profile["topology"]["expected"]["lists"];
-        let observed = &profile["topology"]["observed"]["lists"];
+        let lists_at_source = |side: &str| {
+            profile["topology"][side]["lists"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|list| list["sourceLine"] == case.source_line)
+                .collect::<Vec<_>>()
+        };
+        let expected = lists_at_source("expected");
+        let observed = lists_at_source("observed");
         let kind = if case.disposition == OrdinalDisposition::Retained {
             "definition"
         } else {
@@ -335,7 +346,7 @@ fn source_execution_crossings_keep_evidence_and_owner_obligations() {
         };
         assert_eq!(
             observed,
-            &json!([{"sourceLine":case.source_line,"kind":kind,"items":2}]),
+            vec![&json!({"sourceLine":case.source_line,"kind":kind,"items":2})],
             "{}",
             case.name
         );

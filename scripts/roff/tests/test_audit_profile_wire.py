@@ -75,6 +75,31 @@ def ordinal_conversion():
 
 
 class AuditProfileWireTests(unittest.TestCase):
+    def test_ordinal_recovery_requires_a_complete_native_tag_sequence(self):
+        response = successful_page(semantic)
+        response['ordinalConversions'] = [ordinal_conversion()]
+        for style in ('tag', 'diag', 'hang', 'inset', 'ohang'):
+            for terms in ([], ['1.'], ['1.', '2.']):
+                for disposition in ('recovered-ordered-list', 'retained-definition-list'):
+                    with self.subTest(style=style, terms=terms, disposition=disposition):
+                        current = deepcopy(response)
+                        record = current['ordinalConversions'][0]
+                        record.update(listStyle=style, terms=terms, expectedDisposition=disposition,
+                                      observedDispositions=[disposition])
+                        admissible = bool(terms) and (disposition == 'retained-definition-list'
+                                                     or style == 'tag' and len(terms) >= 2)
+                        self.assertEqual(self.finding(semantic, current).status,
+                                         'clean' if admissible else 'hard-failure')
+        # A native non-tag list which wrongly became ordered is a valid
+        # product finding. It must survive as Review with explicit evidence.
+        record = response['ordinalConversions'][0]
+        record.update(listStyle='hang', expectedDisposition='retained-definition-list')
+        violation = ('mdoc -hang ordinal candidate at line 8 expected retained-definition-list '
+                     'but observed ["recovered-ordered-list"]')
+        response['ordinalConversionViolations'] = [violation]
+        response['violations'] = [violation]
+        self.assertEqual(self.finding(semantic, response).status, 'review')
+
     def finding(self, audit, response):
         root = Path('/fixture')
         page = root / 'man1/probe.1'

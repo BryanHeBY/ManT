@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v9"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v10"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v1",
     "mant.roff-semantic-profile/v2",
@@ -49,6 +49,7 @@ SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v6",
     "mant.roff-semantic-profile/v7",
     "mant.roff-semantic-profile/v8",
+    "mant.roff-semantic-profile/v9",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -258,9 +259,14 @@ def valid_ordinal_conversion(value: object) -> bool:
         and isinstance(value.get("listStyle"), str)
         and value["listStyle"] in {"tag", "diag", "hang", "inset", "ohang"}
         and isinstance(value.get("terms"), list)
+        and bool(value["terms"])
         and all(isinstance(term, str) for term in value["terms"])
         and isinstance(value.get("expectedDisposition"), str)
         and value["expectedDisposition"] in expected
+        # Native candidate collection only recovers complete multi-item tag
+        # lists. An observed ordered list can still be a legitimate mismatch.
+        and (value["expectedDisposition"] != "recovered-ordered-list"
+             or value["listStyle"] == "tag" and len(value["terms"]) >= 2)
         and isinstance(value.get("observedDispositions"), list)
         and all(isinstance(item, str) and item in observed for item in value["observedDispositions"])
         and isinstance(value.get("observedIrPaths"), list)
