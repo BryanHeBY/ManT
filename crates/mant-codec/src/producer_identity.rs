@@ -71,13 +71,9 @@ pub(crate) struct FullHeadingId {
 }
 
 impl HeadingIds {
+    #[cfg(feature = "roff")]
     pub(crate) fn reserve(&mut self, ids: &HashSet<String>) {
         self.assigned.extend(ids.iter().cloned());
-    }
-
-    pub(crate) fn allocate(&mut self, base: &str) -> (String, Option<FragmentAlias>) {
-        let full = self.claim_full(base);
-        self.complete(base, full)
     }
 
     pub(crate) fn claim_full(&mut self, base: &str) -> FullHeadingId {

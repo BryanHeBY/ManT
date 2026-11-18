@@ -71,6 +71,8 @@ that crate was not published for that change.
   when a long form cannot publish names. The full form remains readable.
 - Fit roff and Markdown section IDs within the selector byte budget after
   disambiguation. Preserve full headings and their original fragments.
+- Reserve all full roff section spellings before shortening IDs, so a
+  generated abbreviation cannot take a later heading's exact fragment.
 - Apply the selector byte limit to authored Markdown entry IDs and aliases.
   Keep rejected entries readable under their generated IDs and prevent
   rejected author claims from redirecting a relation to another entry.

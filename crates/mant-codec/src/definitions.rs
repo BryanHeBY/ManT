@@ -28,6 +28,7 @@ pub(crate) use groups::{
     is_internal_definition_owner_marker, remove_native_definition_owner_markers,
     remove_native_definition_owner_markers_from_items,
 };
+#[cfg(feature = "roff")]
 pub(crate) use identity::document_id_slug;
 use identity::{document_anchor_ids, identify_item, identify_list_item};
 use mant_ir::{Block, Section};

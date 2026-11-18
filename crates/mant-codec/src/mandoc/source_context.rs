@@ -29,6 +29,7 @@ pub(super) struct LoweringContext<'a> {
     pub(super) table_recovery_budget: RefCell<super::table_recovery_budget::TableRecoveryBudget>,
     pub(super) table_layout_budget: RefCell<super::table_layout_budget::TableLayoutBudget>,
     pub(super) section_ids: crate::producer_identity::HeadingIds,
+    pub(super) pending_section_ids: Vec<super::navigation::PendingSectionIdentity>,
     pub(super) authored_section_targets: HashMap<String, Option<String>>,
     /// Immutable authored namespace reserved for normalized identities.
     pub(super) explicit_targets: HashSet<String>,
@@ -71,6 +72,7 @@ impl<'a> LoweringContext<'a> {
             table_recovery_budget: RefCell::default(),
             table_layout_budget: RefCell::default(),
             section_ids: crate::producer_identity::HeadingIds::default(),
+            pending_section_ids: Vec::new(),
             authored_section_targets: HashMap::new(),
             explicit_targets: HashSet::new(),
             native_target_owners: HashSet::new(),

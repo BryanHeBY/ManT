@@ -255,6 +255,112 @@ fn generated_native_anchors_cannot_take_the_sections_long_fragment() {
 
 #[cfg(feature = "roff")]
 #[test]
+fn native_heading_ids_reserve_later_literal_spellings_before_shortening() {
+    // CVS man_validate.c::post_SH and mdoc_html.c::mdoc_sh_pre/mdoc_ss_pre
+    // retain the literal heading target in both orders; Sx resolves separately.
+    let long = "a".repeat(513);
+    let literal = format!("{}-02425c0f5b0d", "a".repeat(499));
+    for mdoc in [false, true] {
+        for nested in [false, true] {
+            native_heading_collision(&long, &literal, mdoc, nested, false);
+        }
+    }
+
+    // An Em wrapper keeps the Unicode authored phrase; a bare native text
+    // operand has CVS's escaped spelling and does not exercise this cut.
+    let long = "界".repeat(171);
+    let literal = format!("{}-9aca22c6f9ce", "界".repeat(166));
+    for nested in [false, true] {
+        native_heading_collision(&long, &literal, true, nested, true);
+    }
+}
+
+#[cfg(feature = "roff")]
+fn native_heading_collision(long: &str, literal: &str, mdoc: bool, nested: bool, styled: bool) {
+    let (prefix, macro_name) = if mdoc {
+        (
+            ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test\n.Sh DESCRIPTION\n",
+            if nested { "Ss" } else { "Sh" },
+        )
+    } else {
+        (
+            ".TH PROBE 1 \"2026-11-18\"\n.SH DESCRIPTION\n",
+            if nested { "SS" } else { "SH" },
+        )
+    };
+    let references = mdoc && !styled;
+    for reverse in [false, true] {
+        let mut source = prefix.to_owned();
+        if references {
+            writeln!(source, ".Sx {long}\n.Sx {literal}").unwrap();
+        }
+        let mut headings = [(long, "BODY-A"), (literal, "BODY-B")];
+        if reverse {
+            headings.reverse();
+        }
+        let style = if styled { "Em " } else { "" };
+        for (title, body) in headings {
+            writeln!(source, ".{macro_name} {style}{title}\n{body}").unwrap();
+        }
+
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let content = json_string_roundtrip(&query);
+        let document = content.document.as_ref().unwrap();
+        let description_index = usize::from(mdoc);
+        let description = &document.sections[description_index];
+        let siblings = if nested {
+            &description.children[..]
+        } else {
+            &document.sections[description_index + 1..]
+        };
+        let long_section = &siblings[usize::from(reverse)];
+        let literal_section = &siblings[usize::from(!reverse)];
+        assert_eq!(long_section.heading.plain_text(), long);
+        assert_eq!(literal_section.heading.plain_text(), literal);
+        assert_eq!(literal_section.id.as_str(), literal);
+        assert_ne!(long_section.id, literal_section.id);
+        let index = DocumentIndex::build(document);
+        assert_eq!(index.fragment_target(long), Some(&long_section.id));
+        assert_eq!(index.fragment_target(literal), Some(&literal_section.id));
+        if references {
+            let Block::Paragraph { children, .. } = &description.blocks[0] else {
+                panic!("Sx references belong to DESCRIPTION");
+            };
+            let targets = children
+                .iter()
+                .filter_map(|child| match child {
+                    Inline::Link {
+                        target: LinkTarget::Section { id },
+                        ..
+                    } => Some(id),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(targets, [&long_section.id, &literal_section.id]);
+        }
+        assert_literal_heading_owner(&content, literal);
+    }
+}
+
+#[cfg(feature = "roff")]
+fn assert_literal_heading_owner(content: &ResolvedContent, literal: &str) {
+    let excerpt = select_excerpt(content, &[ContentSelector::id(literal)]).unwrap();
+    let text = mant_render::render_excerpt_text(&excerpt);
+    assert!(text.contains("BODY-B"));
+    assert!(!text.contains("BODY-A"));
+    assert_readable_outline(content);
+    let exported = render_markdown_with_options(content, MarkdownOptions::ADDRESSABLE);
+    let anchor = format!("<a id=\"{literal}\"></a>");
+    assert_eq!(exported.matches(&anchor).count(), 1);
+    let (_, destination) = exported.split_once(&anchor).unwrap();
+    assert_eq!(
+        destination.lines().find(|line| line.starts_with("BODY-")),
+        Some("BODY-B")
+    );
+}
+
+#[cfg(feature = "roff")]
+#[test]
 fn libstdcxx_manual_keeps_the_complete_long_subsections_selectable() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real/section-navigation/archlinux-gp_hash_table.3.gz");

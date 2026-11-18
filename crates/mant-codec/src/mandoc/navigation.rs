@@ -272,53 +272,91 @@ fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool 
 
 use super::{LoweringContext, Node, targets};
 
+pub(super) struct PendingSectionIdentity {
+    title: String,
+    base: String,
+    full: crate::producer_identity::FullHeadingId,
+}
+
 impl LoweringContext<'_> {
     pub(super) fn reserve_section_ids(&mut self, ids: &HashSet<String>) {
         self.explicit_targets.clone_from(ids);
         self.section_ids.reserve(ids);
     }
-    pub(super) fn section_identity_for(
+
+    pub(super) fn record_section_identity(
         &mut self,
-        title: &str,
+        title: String,
         node: &Node,
-    ) -> (String, Vec<mant_ir::FragmentAlias>) {
-        let (id, long_fragment) = self.section_id(title);
-        self.authored_section_targets
-            .entry(title.to_owned())
-            .and_modify(|target| *target = None)
-            .or_insert_with(|| Some(id.clone()));
-        let fragment_aliases = targets::section_target(node)
+    ) -> Vec<mant_ir::FragmentAlias> {
+        let base = section_id_base(&title);
+        let full = self.section_ids.claim_full(&base);
+        self.pending_section_ids
+            .push(PendingSectionIdentity { title, base, full });
+        targets::section_target(node)
             .filter(|target| self.explicit_targets.contains(target))
             .map(mant_ir::FragmentAlias::from)
             .into_iter()
-            .chain(long_fragment)
-            .collect();
-        (id, fragment_aliases)
+            .collect()
     }
-    pub(super) fn section_id(&mut self, title: &str) -> (String, Option<mant_ir::FragmentAlias>) {
-        let slug: String = title
-            .chars()
-            .flat_map(char::to_lowercase)
-            .map(|character| {
-                if character.is_alphanumeric() {
-                    character
-                } else {
-                    '-'
+
+    pub(super) fn complete_section_identities(&mut self, sections: &mut [Section]) {
+        fn complete(
+            sections: &mut [Section],
+            ids: &mut crate::producer_identity::HeadingIds,
+            plans: &mut impl Iterator<Item = PendingSectionIdentity>,
+            targets: &mut SectionTargets,
+        ) {
+            for section in sections {
+                let plan = plans.next().expect("one identity per lowered heading");
+                let (id, long_fragment) = ids.complete(&plan.base, plan.full);
+                if let Some(fragment) = long_fragment
+                    && !section.fragment_aliases.contains(&fragment)
+                {
+                    section.fragment_aliases.push(fragment);
                 }
-            })
-            .collect::<String>()
-            .split('-')
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join("-");
-        let base = if slug.is_empty() {
-            "section".to_owned()
-        } else if crate::producer_identity::is_reserved_selector(&slug) {
-            format!("{slug}-section")
+                targets
+                    .entry(plan.title)
+                    .and_modify(|target| *target = None)
+                    .or_insert_with(|| Some(id.clone()));
+                section.id = id.into();
+                complete(&mut section.children, ids, plans, targets);
+            }
+        }
+
+        // The lowering walk has claimed every full spelling in pre-order.
+        // A shortened ID must not occupy a later section's full spelling.
+        let mut plans = std::mem::take(&mut self.pending_section_ids).into_iter();
+        complete(
+            sections,
+            &mut self.section_ids,
+            &mut plans,
+            &mut self.authored_section_targets,
+        );
+        debug_assert!(plans.next().is_none());
+    }
+}
+
+pub(super) fn section_id_base(title: &str) -> String {
+    let mut slug = String::new();
+    let mut separator = false;
+    for character in title.chars().flat_map(char::to_lowercase) {
+        if character.is_alphanumeric() {
+            if separator && !slug.is_empty() {
+                slug.push('-');
+            }
+            separator = false;
+            slug.push(character);
         } else {
-            slug
-        };
-        self.section_ids.allocate(&base)
+            separator = true;
+        }
+    }
+    if slug.is_empty() {
+        "section".to_owned()
+    } else if crate::producer_identity::is_reserved_selector(&slug) {
+        format!("{slug}-section")
+    } else {
+        slug
     }
 }
 

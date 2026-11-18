@@ -116,21 +116,32 @@ Description.\n";
 
 #[test]
 fn native_section_ids_ignore_unrelated_section_insertions() {
-    let mut original = LoweringContext::new(None, None);
-    let original_name = original.section_id("NAME");
-    let original_options = original.section_id("OPTIONS");
-
-    let mut edited = LoweringContext::new(None, None);
-    assert_eq!(edited.section_id("NOTES").0, "notes");
-    assert_eq!(edited.section_id("NAME"), original_name);
-    assert_eq!(edited.section_id("OPTIONS"), original_options);
-    assert_eq!(edited.section_id("OPTIONS").0, "options-2");
+    let original = native_section_ids(&["NAME", "OPTIONS"]);
+    let edited = native_section_ids(&["NOTES", "NAME", "OPTIONS", "OPTIONS"]);
+    assert_eq!(&edited[1..3], &original);
+    assert_eq!(edited, ["notes", "name", "options", "options-2"]);
 }
 
 #[test]
 fn native_section_ids_disambiguate_final_slug_collisions() {
-    let mut context = LoweringContext::new(None, None);
-    assert_eq!(context.section_id("FOO").0, "foo");
-    assert_eq!(context.section_id("FOO").0, "foo-2");
-    assert_eq!(context.section_id("FOO 2").0, "foo-2-2");
+    assert_eq!(
+        native_section_ids(&["FOO", "FOO", "FOO 2"]),
+        ["foo", "foo-2", "foo-2-2"]
+    );
+}
+
+fn native_section_ids(titles: &[&str]) -> Vec<String> {
+    let mut ids = crate::producer_identity::HeadingIds::default();
+    let claims = titles
+        .iter()
+        .map(|title| {
+            let base = crate::mandoc::navigation::section_id_base(title);
+            let full = ids.claim_full(&base);
+            (base, full)
+        })
+        .collect::<Vec<_>>();
+    claims
+        .into_iter()
+        .map(|(base, full)| ids.complete(&base, full).0)
+        .collect()
 }

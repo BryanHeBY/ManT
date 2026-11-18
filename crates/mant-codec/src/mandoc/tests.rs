@@ -6,7 +6,7 @@ use mant_ir::{
 };
 
 use super::parse_plain_manual as parse_manual_bytes;
-use super::{LoweringContext, Parser, lower_mandoc_document};
+use super::{Parser, lower_mandoc_document};
 
 // Lowering tests acquire their own plain-text fixtures, then exercise only the
 // byte codec. Product IO, compression and redirect policy tests live under

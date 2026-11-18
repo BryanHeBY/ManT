@@ -91,6 +91,7 @@ pub(in crate::mandoc) fn lower_document_structure(
         ),
     ));
     report_presentation_reductions(context, &formatter);
+    context.complete_section_identities(&mut sections);
     (root_blocks, sections)
 }
 
@@ -212,9 +213,7 @@ fn lower_section(
             false,
         )
     });
-    // Allocate IDs in visible document order. Besides being deterministic for
-    // consumers, this makes `.Sx` resolution independent of tree recursion.
-    let (id, fragment_aliases) = context.section_identity_for(&authored_title, node);
+    let fragment_aliases = context.record_section_identity(authored_title, node);
     let body = first_part_children(node, NodeKind::Body);
     formatter.row_presentation.offset_shift = 0;
     formatter.row_presentation.parent = 5 * 24;
@@ -267,7 +266,7 @@ fn lower_section(
     );
     context.replace_mdoc_section(previous_section);
     Section {
-        id: id.into(),
+        id: "".into(),
         fragment_aliases,
         heading: mant_ir::Heading {
             inline_layout: crate::mandoc::inline::take_inline_layout(&mut heading),

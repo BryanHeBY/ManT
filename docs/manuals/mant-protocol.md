@@ -493,9 +493,10 @@ of 512 UTF-8 bytes; explanation input uses its separate 512-scalar bound.
 The selector schema describes the string fields. The runtime enforces the
 UTF-8 byte limit, which differs from the character count measured by JSON
 Schema's `maxLength`.
-Generated roff and Markdown section IDs use this byte budget after duplicate
-suffixes are assigned. Full titles and source fragment aliases stay available
-for display and local navigation.
+Generated roff and Markdown section IDs reserve complete section spellings
+before applying the byte budget to the disambiguated IDs. A shortened ID
+cannot take another section's full spelling. Full titles and source fragment
+aliases stay available for display and local navigation.
 The former v0.9 `detail` field and
 `--outline=entries` syntax are rejected by v0.14.
 
