@@ -96,12 +96,14 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         WordSource::NormalizedOperand => !builder.execution.no_fill_word_active,
         WordSource::EquationOperand => false,
     };
+    let line_width_units = builder.execution.horizontal_line_width_units(source);
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {
             font: &mut builder.execution.font,
             zero_advance: &mut builder.execution.zero_advance,
             defer_leading_blanks,
+            line_width_units,
             policy: font::TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: true,
@@ -114,7 +116,6 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     builder.escape_coverage.record(execution.escape_scan);
     if let Some(cell) = &mut builder.table_cell {
         cell.buffered |= execution.table_device_buffer_written;
-        cell.needs_width |= execution.table_line_needs_width;
     }
     builder.native_word_writes = Some(execution.native_writes);
     // A visited empty source TEXT takes the vertical path before reaching
@@ -159,6 +160,19 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     }
     builder.continue_source_line(continues_line);
     !execution.definitive_reject && !builder.execution.wipe_remainder
+}
+
+impl super::InlineExecutionState {
+    pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {
+        if !source.contains("\\l") {
+            return 0;
+        }
+        if let Some(width) = self.table_cell.and_then(|cell| cell.line_width_units) {
+            return width;
+        }
+        let (offset, margin) = self.table_source_bounds(0);
+        margin.saturating_sub(offset)
+    }
 }
 
 /// Whether a leading motion or marker needs the live BACKBEFORE glyph.

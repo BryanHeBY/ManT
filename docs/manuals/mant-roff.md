@@ -1516,6 +1516,13 @@ The same opening spacing request applies to block tables and can be offset
 by an earlier negative `.sp`. Cell execution supplies completed empty rows
 independently of the table's final row boundary.
 
+The reading projection can omit `\l` strokes while native acceptance still
+accounts for the cells they wrote. A printable stroke can commit a pass before
+a pending `\p`. An ordinary drawn space instead acts as a break candidate.
+Neither adds author text to a search result. When a table cell overstrikes and
+then moves, its alignment uses the native write cursor and the reading text
+retains the surviving glyph.
+
 Phrasing tables share the page's source recovery and work allowance with
 block tables. An implicit
 `Nm` in a recovered text block uses the enclosing page's executed name.

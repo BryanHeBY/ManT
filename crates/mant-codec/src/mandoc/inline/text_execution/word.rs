@@ -14,8 +14,8 @@ impl WordExecution {
             source_continuation: None,
             text_state: TextEventState::new(context.defer_leading_blanks),
             native_writes: Vec::new(),
+            drawing_probe: None,
             table_device_buffer_written: false,
-            table_line_needs_width: false,
         }
     }
 
@@ -120,6 +120,10 @@ impl WordExecution {
             } => {
                 self.append_horizontal_motion(*reading_blank, argument.as_deref(), context);
             }
+            RoffInlineEvent::Presentation {
+                kind: crate::mandoc::roff_escape::PresentationKind::HorizontalLine,
+                argument: Some(argument),
+            } => self.append_horizontal_line(argument, context),
             RoffInlineEvent::Presentation { .. }
             | RoffInlineEvent::Overstrike { terminal: None, .. } => {}
         }
@@ -177,6 +181,29 @@ impl WordExecution {
         context: &mut TextExecutionContext<'_>,
     ) {
         use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+        if matches!(self.native_writes.last(), Some(FieldWrite::DrawSpaces(_)))
+            && let Some(argument) = argument
+        {
+            let absolute = argument.starts_with('|');
+            let argument = argument.strip_prefix('|').unwrap_or(argument);
+            if let Some((units, _)) = libmandoc_rs::TableColumnMetrics::motion_argument(argument)
+                && (absolute || units < 0)
+            {
+                self.native_writes
+                    .push(FieldWrite::MoveInDrawing { absolute, units });
+                context.zero_advance.take_armed();
+                if !context.policy.field_authoritative
+                    && self
+                        .drawing_probe
+                        .get_or_insert_with(Box::default)
+                        .observes_fixed_advance(&self.native_writes)
+                {
+                    self.text_state.note_graph();
+                    self.text_state.saw_source_cell = true;
+                }
+                return;
+            }
+        }
         let armed = context.zero_advance.take_armed();
         let pending = context.zero_advance.has_pending_glyph();
         let preserves_advance = reading_blank
@@ -227,6 +254,82 @@ impl WordExecution {
             {
                 self.content_prefix = super::ContentPrefix::Motion;
             }
+        }
+    }
+
+    fn append_horizontal_line(&mut self, argument: &str, context: &mut TextExecutionContext<'_>) {
+        use crate::mandoc::inline::flow::field_buffer::FieldWrite;
+        use crate::mandoc::roff_escape::horizontal_line_stroke;
+
+        let Some(stroke) = horizontal_line_stroke(argument, context.line_width_units) else {
+            return;
+        };
+        self.table_device_buffer_written = true;
+        if self.text_state.wiped {
+            return;
+        }
+        if stroke.glyph == ' ' {
+            context.zero_advance.append_hidden_spaces(
+                stroke.count,
+                &mut self.output,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+            );
+            // term.c:294-306: a drawn ordinary space is a break cell even
+            // when its decoration is absent from the reading projection.
+            if self.text_state.pending_word_end_break {
+                append_text_event(
+                    " ",
+                    WordOutput {
+                        output: &mut self.output,
+                        buffer: &mut self.buffer,
+                        font: self.font,
+                        link: self.link.as_deref(),
+                        zero_advance: context.zero_advance,
+                    },
+                    &mut self.text_state,
+                    context.policy.field_authoritative,
+                    None,
+                );
+            } else {
+                self.text_state.note_text_character(' ');
+            }
+            if context.policy.record_native_cells {
+                self.native_writes
+                    .push(FieldWrite::DrawSpaces(stroke.count));
+            }
+            return;
+        }
+
+        // term.c:720-774 calls encode/encode1 for the stroke. The scan
+        // observes a graph before the marker, whether or not we draw it.
+        self.text_state.note_graph();
+        self.text_state.saw_source_cell = true;
+        self.text_state.suppress_break_whitespace = false;
+        let separate = context.zero_advance.is_armed() && stroke.count > 1;
+        for _ in 0..=usize::from(separate) {
+            context.zero_advance.append_hidden_glyph(
+                stroke.glyph,
+                &mut self.output,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+            );
+        }
+        if context.policy.record_native_cells {
+            if separate {
+                self.native_writes.push(FieldWrite::UnprojectedGraph {
+                    text: stroke.glyph,
+                    width: stroke.width,
+                });
+            }
+            self.native_writes.push(FieldWrite::UnprojectedGraph {
+                text: stroke.glyph,
+                width: stroke
+                    .width
+                    .saturating_mul(stroke.count - usize::from(separate)),
+            });
         }
     }
 

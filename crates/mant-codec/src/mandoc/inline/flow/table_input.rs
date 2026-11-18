@@ -3,8 +3,8 @@ use super::{InlineBuilder, InlineExecutionState};
 use crate::{definitions::NativeOperandRole, mandoc::blocks::InlineTablePrefix};
 use mant_ir::Inline;
 
-pub(in crate::mandoc) fn table_word_uses_motion(text: &str) -> bool {
-    text.contains("\\h") || text.contains("\\l")
+pub(in crate::mandoc) fn table_word_needs_native_slots(text: &str) -> bool {
+    text.contains("\\h") || text.contains("\\l") || text.contains("\\o")
 }
 
 /// Effects of the selected tbl column transaction. A source fragment can
@@ -12,8 +12,8 @@ pub(in crate::mandoc) fn table_word_uses_motion(text: &str) -> bool {
 #[derive(Clone, Copy, Default)]
 pub(in crate::mandoc) struct TableCellExecution {
     pub(in crate::mandoc) buffered: bool,
-    pub(in crate::mandoc) needs_width: bool,
     pub(in crate::mandoc) trailing_rows: usize,
+    pub(in crate::mandoc) line_width_units: Option<usize>,
 }
 
 impl InlineBuilder {
@@ -149,17 +149,10 @@ impl InlineExecutionState {
         font: Option<crate::mandoc::roff_escape::RoffFont>,
         entry_font: Option<super::FontState>,
     ) -> usize {
-        if let Some(mut active_font) = entry_font {
-            if let Some(font) = font {
-                active_font.push_scope(font);
-            }
-            return super::table_pass::first_pass_width(
-                text,
-                target,
-                cell_width,
-                &self.tab_stops,
-                &mut active_font,
-            );
+        if let Some(active_font) = entry_font {
+            return self
+                .measure_table_first_pass(text, target, cell_width, font, active_font)
+                .units;
         }
         let mut font = super::FontState::new();
         let mut zero_advance = crate::mandoc::inline::ZeroAdvanceState::default();
@@ -170,6 +163,7 @@ impl InlineExecutionState {
                 font: &mut font,
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
+                line_width_units: cell_width,
                 policy: crate::mandoc::inline::TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: true,
@@ -182,6 +176,32 @@ impl InlineExecutionState {
         field.configure_tabs(&self.tab_stops);
         field.apply_writes(&word.native_writes);
         field.fill_pass_units(target).map_or(0, |pass| pass.units)
+    }
+
+    pub(in crate::mandoc) fn table_first_pass_prints_ink(
+        &self,
+        text: &str,
+        target: usize,
+        cell_width: usize,
+        font: Option<crate::mandoc::roff_escape::RoffFont>,
+        entry_font: crate::mandoc::inline::FontState,
+    ) -> bool {
+        self.measure_table_first_pass(text, target, cell_width, font, entry_font)
+            .prints_ink
+    }
+
+    fn measure_table_first_pass(
+        &self,
+        text: &str,
+        target: usize,
+        cell_width: usize,
+        font: Option<crate::mandoc::roff_escape::RoffFont>,
+        mut active_font: crate::mandoc::inline::FontState,
+    ) -> super::field_buffer::CompactPass {
+        if let Some(font) = font {
+            active_font.push_scope(font);
+        }
+        super::table_pass::first_pass(text, target, cell_width, &self.tab_stops, &mut active_font)
     }
 
     pub(in crate::mandoc) fn observe_table_word_writes(

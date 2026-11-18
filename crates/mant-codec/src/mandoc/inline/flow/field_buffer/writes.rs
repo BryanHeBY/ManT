@@ -28,15 +28,15 @@ std::thread_local! {
 }
 
 impl FieldBuffer {
-    fn push_cell(&mut self, cell: FieldCell) {
+    pub(super) fn push_cell(&mut self, cell: FieldCell) {
         if self.word_first_content.is_none() {
             self.word_first_content = Some(self.cells.len());
         }
         match &cell {
-            FieldCell::BreakableBlank => {
+            FieldCell::BreakableBlank | FieldCell::DrawnSpaces(_) => {
                 self.blank_positions.insert(self.cells.len());
             }
-            FieldCell::NonBreakingBlank => {
+            FieldCell::NonBreakingBlank | FieldCell::FixedDrawingAdvance(_) => {
                 self.nonbreaking_positions.insert(self.cells.len());
             }
             FieldCell::BreakMarker
@@ -251,17 +251,19 @@ impl FieldBuffer {
         self.word_first_content = None;
         let mut first_graph = true;
         let mut leading_retreat = None;
+        let mut drawing_start = self.cells.len();
         for write in writes {
             match write {
                 FieldWrite::Cell(FieldCell::Graph { text, width })
                 | FieldWrite::DecoratedGraph {
                     cell: FieldCell::Graph { text, width },
                     ..
-                } => {
+                }
+                | FieldWrite::UnprojectedGraph { text, width } => {
                     leading_retreat = leading_retreat.or(self.encode_graph(
                         *text,
                         *width,
-                        true,
+                        !matches!(write, FieldWrite::UnprojectedGraph { .. }),
                         &mut first_graph,
                     ));
                 }
@@ -294,15 +296,15 @@ impl FieldBuffer {
                     self.push_cell(FieldCell::ZeroWidthGraph);
                     *self.projection_prefix.last_mut().expect("recovery cell") += projected_scalars;
                 }
-                FieldWrite::UnprojectedBlank => {
-                    self.push_cell(FieldCell::BreakableBlank);
-                    *self.projection_prefix.last_mut().expect("buffered blank") -= 1;
+                FieldWrite::DrawSpaces(count) => drawing_start = self.draw_spaces(*count),
+                FieldWrite::MoveInDrawing { absolute, units } => {
+                    self.move_in_drawing(drawing_start, *absolute, *units);
                 }
+                FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
                 FieldWrite::DeferredBlanks { source, count } => {
                     let start = self.cells.len();
                     for _ in 0..*count {
-                        self.push_cell(FieldCell::BreakableBlank);
-                        *self.projection_prefix.last_mut().expect("buffered blank") -= 1;
+                        self.push_unprojected_blank();
                     }
                     self.deferred_blanks.push(super::cells::DeferredBlankRun {
                         start,
@@ -331,6 +333,13 @@ impl FieldBuffer {
                 }
             }
         }
+        self.finish_word_writes(leading_retreat)
+    }
+
+    fn finish_word_writes(
+        &mut self,
+        leading_retreat: Option<LeadingBlankRetreat>,
+    ) -> WordWriteReceipt {
         let end_cell = self.cells.len();
         let mut first_content_cell = self.word_first_content.take().unwrap_or(end_cell);
         if matches!(
@@ -395,6 +404,11 @@ impl FieldBuffer {
             self.backline_projection_target = self.backbefore_graph;
         }
         leading_retreat
+    }
+
+    fn push_unprojected_blank(&mut self) {
+        self.push_cell(FieldCell::BreakableBlank);
+        *self.projection_prefix.last_mut().expect("buffered blank") -= 1;
     }
 
     fn leading_blank_retreat(&self) -> Option<LeadingBlankRetreat> {
@@ -484,6 +498,19 @@ impl FieldBuffer {
             self.backbefore_graph = None;
             let target = self.backline_projection_target.take();
             match self.cells.last() {
+                Some(FieldCell::DrawnSpaces(_)) => {
+                    let position = self.cells.len() - 1;
+                    self.invalidate_projection_scan(position);
+                    if let Some(FieldCell::DrawnSpaces(count)) = self.cells.last_mut() {
+                        *count -= 1;
+                        if *count == 0 {
+                            self.cells.pop();
+                            self.blank_positions.pop_last();
+                            self.projection_prefix.pop();
+                            self.normalized_until = self.normalized_until.min(position);
+                        }
+                    }
+                }
                 // A literal tab occupies a buffer byte exactly like a
                 // blank (term.c:944-964) and the retreat pops it the same
                 // way (`buf[col-1] == '\t'`, term.c:901-904). It never

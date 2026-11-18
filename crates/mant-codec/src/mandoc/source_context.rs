@@ -379,12 +379,14 @@ impl<'a> LoweringContext<'a> {
         zero_advance.annotations = Some(self.annotations.clone());
         zero_advance.inherit_armed(formatter.take_zero_advance_armed());
         let record_native_cells = formatter.execution.table_cell.is_some();
+        let line_width_units = formatter.execution.horizontal_line_width_units(source);
         let execution = inline::parse_roff_text_with_zero_advance(
             source,
             inline::TextExecutionContext {
                 font: &mut formatter.font,
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
+                line_width_units,
                 policy: inline::TextExecutionPolicy {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
                     record_native_cells,
@@ -402,7 +404,6 @@ impl<'a> LoweringContext<'a> {
             .observe_table_word_writes(&execution.native_writes, false);
         if let Some(cell) = &mut formatter.execution.table_cell {
             cell.buffered |= execution.table_device_buffer_written;
-            cell.needs_width |= execution.table_line_needs_width;
         }
         let mut output = execution.output;
         // Even a control-only tbl word enters term_word(): it clears

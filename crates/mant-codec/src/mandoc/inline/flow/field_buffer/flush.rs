@@ -329,7 +329,10 @@ impl FieldBuffer {
     }
 
     pub(in crate::mandoc::inline::flow) fn after_break_blanks(&self, mut cell: usize) -> usize {
-        while matches!(self.cells.get(cell), Some(FieldCell::BreakableBlank)) {
+        while matches!(
+            self.cells.get(cell),
+            Some(FieldCell::BreakableBlank | FieldCell::DrawnSpaces(_))
+        ) {
             cell += 1;
         }
         cell
@@ -355,10 +358,14 @@ impl FieldBuffer {
             #[cfg(test)]
             PRINT_CELLS_VISITED.with(|work| work.set(work.get().saturating_add(1)));
             match self.cells[index] {
-                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => {
-                    column += EN;
-                    pending_units += EN;
-                    non_tab_units += EN;
+                FieldCell::BreakableBlank
+                | FieldCell::DrawnSpaces(_)
+                | FieldCell::FixedDrawingAdvance(_)
+                | FieldCell::NonBreakingBlank => {
+                    let units = cell_units(&self.cells[index]);
+                    column += units;
+                    pending_units += units;
+                    non_tab_units += units;
                 }
                 FieldCell::Graph { .. } | FieldCell::Hyphen => {
                     let width = match self.cells[index] {
@@ -491,6 +498,11 @@ impl FieldBuffer {
                 nonbreaking.remove(&index);
                 blanks.insert(index);
             }
+            FieldCell::FixedDrawingAdvance(count) => {
+                *cell = FieldCell::DrawnSpaces(*count);
+                nonbreaking.remove(&index);
+                blanks.insert(index);
+            }
             _ => {}
         }
     }
@@ -528,7 +540,10 @@ impl FieldBuffer {
     /// the automatic line break itself.
     pub(in crate::mandoc::inline::flow) fn consume_break_blanks(&mut self) {
         while self.resume < self.cells.len()
-            && matches!(self.cells[self.resume], FieldCell::BreakableBlank)
+            && matches!(
+                self.cells[self.resume],
+                FieldCell::BreakableBlank | FieldCell::DrawnSpaces(_)
+            )
         {
             self.resume += 1;
         }
@@ -570,9 +585,9 @@ impl FieldBuffer {
         let mut vbr = vbr;
         for cell in native_cells.iter().skip(from.min(native_cells.len())) {
             match cell {
-                FieldCell::BreakableBlank => {
+                FieldCell::BreakableBlank | FieldCell::DrawnSpaces(_) => {
                     if brtrsp {
-                        vbr += EN;
+                        vbr += cell_units(cell);
                     }
                 }
                 FieldCell::Tab => {
@@ -587,6 +602,7 @@ impl FieldBuffer {
                 FieldCell::Graph { .. }
                 | FieldCell::Hyphen
                 | FieldCell::NonBreakingBlank
+                | FieldCell::FixedDrawingAdvance(_)
                 | FieldCell::Backline => {
                     break;
                 }

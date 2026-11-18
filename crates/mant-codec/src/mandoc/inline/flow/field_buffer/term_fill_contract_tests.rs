@@ -308,7 +308,7 @@ fn tail_summary_agrees_with_native_cells_after_normalization_and_retreat() {
         for start in 0..=buffer.cells().len() {
             for trailing_blanks in [false, true] {
                 let native_tail = buffer.cells()[start..].iter().any(|cell| match cell {
-                    FieldCell::BreakableBlank => trailing_blanks,
+                    FieldCell::BreakableBlank | FieldCell::DrawnSpaces(_) => trailing_blanks,
                     FieldCell::BreakMarker
                     | FieldCell::Tab
                     | FieldCell::TabReference
@@ -317,6 +317,7 @@ fn tail_summary_agrees_with_native_cells_after_normalization_and_retreat() {
                     FieldCell::Graph { .. }
                     | FieldCell::Hyphen
                     | FieldCell::NonBreakingBlank
+                    | FieldCell::FixedDrawingAdvance(_)
                     | FieldCell::Backline => true,
                 });
                 assert_eq!(

@@ -7,6 +7,7 @@ mod column_margin_rows;
 mod container_word_rows;
 mod definition_head_tables;
 mod definition_spacing_gaps;
+mod drawing_word_rows;
 mod field_spacing_rows;
 mod generated_body_rows;
 mod generated_word_rows;

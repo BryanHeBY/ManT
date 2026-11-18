@@ -35,6 +35,8 @@ pub(in crate::mandoc) struct TextExecutionContext<'state> {
     pub(in crate::mandoc) font: &'state mut FontState,
     pub(in crate::mandoc) zero_advance: &'state mut ZeroAdvanceState,
     pub(in crate::mandoc) defer_leading_blanks: bool,
+    /// Native right margin minus offset, for lengthless drawing operands.
+    pub(in crate::mandoc) line_width_units: usize,
     pub(in crate::mandoc) policy: TextExecutionPolicy,
 }
 
@@ -71,6 +73,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
             font: state,
             zero_advance: &mut zero_advance,
             defer_leading_blanks: false,
+            line_width_units: 78 * 24,
             policy: TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: false,
@@ -99,7 +102,6 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) native_writes: Vec<crate::mandoc::inline::flow::field_buffer::FieldWrite>,
     /// Device motion, lines and blank overstrikes can buffer without text.
     pub(in crate::mandoc) table_device_buffer_written: bool,
-    pub(in crate::mandoc) table_line_needs_width: bool,
     pub(in crate::mandoc) joins_preceding_node: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
@@ -172,8 +174,8 @@ struct WordExecution {
     source_continuation: Option<bool>,
     text_state: TextEventState,
     native_writes: Vec<crate::mandoc::inline::flow::field_buffer::FieldWrite>,
+    drawing_probe: Option<Box<crate::mandoc::inline::flow::field_buffer::DrawingProbe>>,
     table_device_buffer_written: bool,
-    table_line_needs_width: bool,
 }
 
 // Record each decoded native write before its presentation action, in the
@@ -190,20 +192,6 @@ fn execute_formatter_word_events(
         // separate from FieldBuffer's graph/width model. Once any column has
         // buffered input its later flush retires BACKAFTER for the whole row.
         word.table_device_buffer_written |= match event {
-            RoffInlineEvent::Presentation {
-                kind: crate::mandoc::roff_escape::PresentationKind::HorizontalLine,
-                argument: Some(argument),
-            } => {
-                match libmandoc_rs::TableColumnMetrics::horizontal_line_needs_column_width(argument)
-                {
-                    Some(false) => true,
-                    Some(true) => {
-                        word.table_line_needs_width = true;
-                        false
-                    }
-                    None => false,
-                }
-            }
             RoffInlineEvent::HorizontalMotion {
                 argument: Some(argument),
                 ..
@@ -243,7 +231,6 @@ fn finish_text_execution(
         output,
         native_writes,
         table_device_buffer_written,
-        table_line_needs_width,
         source_continuation,
         text_state,
         ..
@@ -266,7 +253,6 @@ fn finish_text_execution(
         output,
         native_writes,
         table_device_buffer_written,
-        table_line_needs_width,
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
         pending_word_end_break: text_state.pending_word_end_break,

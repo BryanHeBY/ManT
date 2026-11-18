@@ -26,6 +26,10 @@ pub(in crate::mandoc) enum FieldCell {
     /// An ordinary breakable blank (`bufferc(' ')`, term.c:576 and 574-576
     /// for empty operands).
     BreakableBlank,
+    /// Consecutive generated ASCII spaces with no projected scalars.
+    DrawnSpaces(usize),
+    /// A compact run of the `ASCII_NBRSP` writes from motion over a drawing.
+    FixedDrawingAdvance(usize),
     /// A non-breaking blank (`ASCII_NBRSP`: `\~`, `\0`, KEPT separators).
     /// Its first scan counts its width and normalizes `ASCII_NBRSP` to an
     /// ordinary blank (term.c:340-347); a later pass can break on that byte.
@@ -74,6 +78,17 @@ pub(in crate::mandoc) enum FieldWrite {
     /// belong to the detached HEAD. It always executes encode1(U+00A0).
     OwnedBlank {
         projected: bool,
+    },
+    /// A drawn stroke occupies terminal cells without adding author text.
+    /// Adjacent identical strokes with no intervening break are one run.
+    UnprojectedGraph {
+        text: char,
+        width: usize,
+    },
+    DrawSpaces(usize),
+    MoveInDrawing {
+        absolute: bool,
+        units: i32,
     },
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or

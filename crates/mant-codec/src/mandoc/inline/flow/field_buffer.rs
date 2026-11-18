@@ -32,12 +32,14 @@
 /// 374-444; `encode1()` BACKBEFORE retreat 901-908 (blank: `col--`,
 /// otherwise buffer `'\b'`); `term_word()` separator blanks 573-576.
 mod cells;
+mod drawing;
 mod flush;
 mod rewind;
 mod scan;
 mod writes;
+pub(in crate::mandoc::inline) use drawing::DrawingProbe;
 pub(in crate::mandoc::inline::flow) use rewind::{EntryRewind, RewoundGlyph};
-pub(super) use scan::compact_first_width;
+pub(super) use scan::{CompactPass, compact_first_pass};
 
 pub(in crate::mandoc::inline) use cells::DeferredSourceBlank;
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};
@@ -336,6 +338,9 @@ fn finish_pass(registers: FillRegisters, target: usize) -> Option<FillPass> {
 }
 
 fn cell_units(cell: &FieldCell) -> usize {
+    if let FieldCell::DrawnSpaces(count) | FieldCell::FixedDrawingAdvance(count) = cell {
+        return count.saturating_mul(EN);
+    }
     match cell {
         FieldCell::Graph { width, .. } => width.saturating_mul(EN),
         FieldCell::Hyphen | FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => EN,

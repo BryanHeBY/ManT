@@ -5,7 +5,7 @@ use super::scanner::{ArgumentCompletion, QuotedOutcome, scan_argument, scan_quot
 use super::{
     ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, ASCII_NBRZW, ASCII_TABREF, DecodedText,
     EscapeDecodeStatus, PresentationKind, Projection, RoffInlineEvent, WordSpace, font, grammar,
-    scanner,
+    overstrike_operands, scanner,
 };
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
@@ -31,10 +31,7 @@ fn escaped_codepoint(character: char) -> char {
 /// behavior rather than applying the ordinary roff decoder in this context.
 fn overstrike_terminal_glyph(source: &str) -> Option<String> {
     let mut cell = None;
-    for character in source.chars() {
-        if character == '\\' {
-            continue;
-        }
+    for (character, _) in overstrike_operands(source) {
         let character = match character {
             ASCII_BREAK => continue,
             ASCII_HYPH => '-',
@@ -431,7 +428,7 @@ impl Decoder {
         // itself (not the byte after it), so only reverse-solidus bytes are
         // skipped. Match the existing terminal projection without recursively
         // decoding nested operands; blanks still reach encode1().
-        let buffered = source.chars().any(|character| character != '\\');
+        let buffered = overstrike_operands(&source).next().is_some();
         self.emit(RoffInlineEvent::Overstrike {
             source,
             terminal,

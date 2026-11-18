@@ -371,6 +371,22 @@ fn native_cell_motion_preserves_the_prefix_seam_in_paint_and_copy() {
         (".br", "r", "XYZ\\h'|5n'\nWWWWWWWWW", "LONGPREFIXXYZ"),
         (".br", "c", "XYZ\\l'3n'\nWWWWWWWWWW", "LONGPREFIXXYZ"),
         (".sp -1", "l0 l", "  \tXYZ\n1\tQ", "LONGPREFIXXYZ"),
+        (
+            ".br",
+            "c",
+            r"XYZ\o'ab'\h'|6n'
+WWWWWWWWWW",
+            "LONGPREFIX XYZb",
+        ),
+        (
+            ".br",
+            "c",
+            r"XYZ\o'ab'\h'|6n'
+WWWWWWWWW",
+            "LONGPREFIXXYZb",
+        ),
+        (".sp -1", "l0 l", "\\l'2n.'\tXYZ\n1\tQ", "LONGPREFIX XYZ"),
+        (".sp -1", "l0 l", "\\l'2n '\tXYZ\n1\tQ", "LONGPREFIXXYZ"),
     ] {
         let source = format!(
             "{HEADER}.Bl -hang -width 4n\n.It Xo\n.No LONGPREFIX\n{request}\n.TS\n{layout}.\n{data}\n.TE\n.Xc\nENDING\n.El\n"

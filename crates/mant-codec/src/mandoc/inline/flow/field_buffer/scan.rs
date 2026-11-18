@@ -147,23 +147,45 @@ impl FieldBuffer {
     }
 }
 
+/// The accepted first pass of a tbl column. A fixed blank can take up
+/// native width without being printed by `term_field()`.
+#[derive(Default)]
+pub(in crate::mandoc::inline::flow) struct CompactPass {
+    pub(in crate::mandoc::inline::flow) units: usize,
+    pub(in crate::mandoc::inline::flow) prints_ink: bool,
+}
+
 /// The same first-pass decision for weighted tbl scratch cells. Motions
 /// can write a long repeated run without materializing each native slot.
-pub(in crate::mandoc::inline::flow) fn compact_first_width(
+pub(in crate::mandoc::inline::flow) fn compact_first_pass(
     cells: impl IntoIterator<Item = (FieldCell, usize)>,
     target: usize,
     tabs: &super::TabStops,
-) -> usize {
+) -> CompactPass {
     let target = target.saturating_add(EN / 2);
     let mut registers = FillRegisters::default();
     let mut previous_units = 0;
+    let mut first_ink = usize::MAX;
+    let mut stopped = None;
     for (cell, count) in cells {
+        if first_ink == usize::MAX
+            && (matches!(cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
+                || matches!(cell, FieldCell::Hyphen | FieldCell::Backline))
+        {
+            first_ink = registers.index;
+        }
         if let Some(stop) = registers.consume_cell(&cell, count, previous_units, target, tabs) {
-            return stop.accepted().map_or(0, |pass| pass.units);
+            stopped = Some(stop);
+            break;
         }
         previous_units = cell_units(&cell);
     }
-    finish_pass(registers, target).map_or(0, |pass| pass.units)
+    stopped
+        .map_or_else(|| finish_pass(registers, target), PassStop::accepted)
+        .map_or_else(CompactPass::default, |pass| CompactPass {
+            units: pass.units,
+            prints_ink: first_ink < pass.end,
+        })
 }
 
 impl FillRegisters {
@@ -177,9 +199,10 @@ impl FillRegisters {
     ) -> Option<PassStop> {
         match cell {
             FieldCell::Backline => self.vis = self.vis.saturating_sub(previous_units),
-            FieldCell::BreakableBlank | FieldCell::Breakpoint => {
+            FieldCell::BreakableBlank | FieldCell::DrawnSpaces(_) | FieldCell::Breakpoint => {
                 let units = cell_units(cell);
-                if self.breakline || self.vis.saturating_add(units) > target {
+                let first = units.min(EN);
+                if self.breakline || self.vis.saturating_add(first) > target {
                     let boundary = if self.breakline {
                         FillBoundary::WordEndBreak
                     } else {
@@ -209,7 +232,9 @@ impl FillRegisters {
                 }
             }
             FieldCell::ZeroWidthGraph => self.graph = true,
-            FieldCell::NonBreakingBlank | FieldCell::Graph { .. } => {
+            FieldCell::NonBreakingBlank
+            | FieldCell::FixedDrawingAdvance(_)
+            | FieldCell::Graph { .. } => {
                 self.vis = self
                     .vis
                     .saturating_add(cell_units(cell).saturating_mul(count));
@@ -228,7 +253,10 @@ impl FillRegisters {
             && self.nbr > 0
             && matches!(
                 cell,
-                FieldCell::NonBreakingBlank | FieldCell::Graph { .. } | FieldCell::Tab
+                FieldCell::NonBreakingBlank
+                    | FieldCell::FixedDrawingAdvance(_)
+                    | FieldCell::Graph { .. }
+                    | FieldCell::Tab
             )
         {
             return Some(PassStop::Accepted(

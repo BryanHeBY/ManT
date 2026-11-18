@@ -259,3 +259,41 @@ fn assert_first_named_visual(rendered: &RenderedDocument, width: u16, owner_id: 
         );
     }
 }
+#[test]
+fn text_after_a_drawn_stroke_keeps_its_native_link_and_copy_range() {
+    // Fixed CVS term_word() writes the dotted stroke before \p. The exact
+    // source has NEEDLE and TAILWORD in the same UR body on the next row.
+    let source = b".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- fixture\n.SH DESCRIPTION\n.UR https://example.test/r\n\\l'2n.'\\p NEEDLE\nTAILWORD\n.UE\n.PP\nENDTEXT\n";
+    let query = mant_loader::load_roff_bytes(source).unwrap();
+    let view = DocumentView::new(&query);
+    for width in [16, 78] {
+        let rendered = view.render(width);
+        let hits = rendered.search("NEEDLE");
+        let [hit] = hits.as_slice() else {
+            panic!("one visible NEEDLE after the drawn stroke");
+        };
+        assert!(matches!(
+            rendered.link_target_at(hit.row, hit.start_column),
+            Some(LinkTarget::External(uri)) if uri.as_str() == "https://example.test/r"
+        ));
+        assert_eq!(
+            rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: hit.row,
+                    column: hit.start_column
+                },
+                focus: TextPosition {
+                    row: hit.row,
+                    column: hit.end_column - 1
+                },
+            }),
+            "NEEDLE"
+        );
+        assert_eq!(rendered.search("TAILWORD").len(), 1);
+        let ending = &rendered.search("ENDTEXT")[0];
+        assert_eq!(
+            rendered.link_target_at(ending.row, ending.start_column),
+            None
+        );
+    }
+}

@@ -82,9 +82,10 @@ impl<'a> InlineTableSequence<'a> {
         finish_table_span(formatter);
         let mut output = Vec::new();
         let mut first = None;
+        let mut earlier_cells = Vec::new();
         let mut native_height = 1;
         let mut projected_height = 1;
-        for (index, cell) in cells.into_iter().enumerate() {
+        for (index, mut cell) in cells.into_iter().enumerate() {
             for block in cell.cell.blocks {
                 if let Block::Paragraph { mut children, .. } = block
                     && !children.is_empty()
@@ -101,7 +102,7 @@ impl<'a> InlineTableSequence<'a> {
                         if first.is_some() {
                             output.push(Inline::Text { value: " ".into() });
                         }
-                        first.get_or_insert_with(|| (index, cell.entry_font.clone()));
+                        first.get_or_insert_with(|| (index, cell.entry_font.take()));
                         projected_height += interior;
                     } else {
                         // term_field defers SP/TAB until a real glyph.
@@ -111,6 +112,11 @@ impl<'a> InlineTableSequence<'a> {
                     }
                     output.extend(children);
                 }
+            }
+            if first.is_none()
+                && let Some(font) = cell.entry_font
+            {
+                earlier_cells.push((node.table_cells[index].column as usize, font));
             }
         }
         // A subsequent cell can print on an empty follow-up pass. Keep only
@@ -134,6 +140,7 @@ impl<'a> InlineTableSequence<'a> {
                                 prefix,
                                 &formatter.execution,
                                 entry_font,
+                                &earlier_cells,
                             )
                         },
                     )

@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use tab_stops::TabStops;
-pub(in crate::mandoc) use table_input::{TableCellExecution, table_word_uses_motion};
+pub(in crate::mandoc) use table_input::{TableCellExecution, table_word_needs_native_slots};
 mod no_fill;
 pub(in crate::mandoc) use native_field::{FieldFlag, FieldFlags};
 mod operand_capture;

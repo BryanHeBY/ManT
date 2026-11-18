@@ -81,7 +81,6 @@ pub(super) fn lower_cells(
     let text_blocks = text_blocks(node, &source_blocks);
     let mut cells = cell_owners(node);
     let mut buffered = false;
-    let mut width_dependent_lines = Vec::new();
     if active {
         for column in &columns {
             // tbl_term.c::term_tbl: every non-hspan EXECUTION column enters,
@@ -99,19 +98,23 @@ pub(super) fn lower_cells(
                 && node.table_cells[index].kind == TableCellKind::Text
             {
                 let cell = &node.table_cells[index];
+                let text = cell.decoder_text();
                 if measure_prefix
-                    && matches!(
-                        column.kind,
-                        libmandoc_rs::TableLayoutKind::Center
-                            | libmandoc_rs::TableLayoutKind::Right
-                    )
-                    && cell
-                        .decoder_text()
-                        .is_some_and(crate::mandoc::inline::table_word_uses_motion)
+                    && text.is_some_and(crate::mandoc::inline::table_word_needs_native_slots)
                 {
                     // term_tbl feeds each word before any tcol prints.
                     // Later column font changes cannot remeasure this word.
                     cells[index].entry_font = Some(formatter.font.clone());
+                }
+                if let Some(cell_execution) = &mut formatter.execution.table_cell {
+                    cell_execution.line_width_units = cell_drawing_width(
+                        text,
+                        execution.filter(|_| proved_columns),
+                        column.logical,
+                        cell.column_span as usize,
+                        node,
+                        context,
+                    );
                 }
                 let blocks =
                     project_text_cell(cell, index, node, context, text_blocks[index], formatter);
@@ -124,16 +127,13 @@ pub(super) fn lower_cells(
                 }
             }
             let executed = formatter.execution.table_cell.take().unwrap_or_default();
-            if executed.needs_width {
-                width_dependent_lines.push(column.logical);
-            }
             buffered |= executed.buffered;
         }
         if !buffered
             && proved_columns
             && let Some(execution) = execution
         {
-            match execution::buffered_padding(node, &columns, &width_dependent_lines, execution) {
+            match execution::buffered_padding(node, &columns, execution) {
                 Ok(written) => buffered = written,
                 Err(message) => {
                     execution.report_failure(node, context, &message);
@@ -154,6 +154,39 @@ pub(super) fn lower_cells(
         }
     }
     cells
+}
+
+fn cell_drawing_width(
+    text: Option<&str>,
+    execution: Option<&execution::TableExecution<'_>>,
+    column: usize,
+    span: usize,
+    node: &Node,
+    context: &LoweringContext<'_>,
+) -> Option<usize> {
+    use crate::mandoc::roff_escape::{PresentationKind, RoffInlineEvent, decode};
+    let execution = execution?;
+    let text = text.filter(|text| text.contains("\\l"))?;
+    let needs_width = decode(text).iter().any(|event| match event {
+        RoffInlineEvent::Presentation {
+            kind: PresentationKind::HorizontalLine,
+            argument: Some(argument),
+        } => {
+            libmandoc_rs::TableColumnMetrics::horizontal_line_needs_column_width(argument)
+                == Some(true)
+        }
+        _ => false,
+    });
+    if !needs_width {
+        return None;
+    }
+    match execution.cell_width(column, span) {
+        Ok(width) => Some(width),
+        Err(message) => {
+            execution.report_failure(node, context, &message);
+            None
+        }
+    }
 }
 
 fn text_blocks<'a>(

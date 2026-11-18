@@ -62,6 +62,15 @@ impl<'a> TableExecution<'a> {
         }
     }
 
+    pub(super) fn cell_width(&self, column: usize, span: usize) -> Result<usize, String> {
+        self.with_metrics(|metrics| {
+            metrics
+                .get(column..column.saturating_add(span))
+                .map(|columns| leading_gap::column_extent(columns, false))
+        })?
+        .ok_or_else(|| "invalid table cell width".into())
+    }
+
     fn with_metrics<T>(
         &self,
         use_metrics: impl FnOnce(&[TableColumnMetrics]) -> T,
@@ -158,22 +167,19 @@ pub(super) fn data_columns(node: &Node) -> Vec<Column> {
 pub(super) fn buffered_padding(
     node: &Node,
     columns: &[Column],
-    width_dependent_lines: &[usize],
     execution: &TableExecution<'_>,
 ) -> Result<bool, String> {
-    if width_dependent_lines.is_empty()
-        && !columns.iter().any(|column| {
-            matches!(
-                column.kind,
-                Kind::Number | Kind::HorizontalRule | Kind::DoubleHorizontalRule
-            ) || column.cell.is_some_and(|index| {
-                !matches!(
-                    node.table_cells[index].kind,
-                    TableCellKind::Text | TableCellKind::Empty
-                )
-            })
+    if !columns.iter().any(|column| {
+        matches!(
+            column.kind,
+            Kind::Number | Kind::HorizontalRule | Kind::DoubleHorizontalRule
+        ) || column.cell.is_some_and(|index| {
+            !matches!(
+                node.table_cells[index].kind,
+                TableCellKind::Text | TableCellKind::Empty
+            )
         })
-    {
+    }) {
         return Ok(false);
     }
     execution
@@ -193,20 +199,6 @@ pub(super) fn buffered_padding(
                 let metric = metrics.get(column.logical)?;
                 let offset = *offsets.get(column.logical)?;
                 let cell = column.cell.map(|index| &node.table_cells[index]);
-                if width_dependent_lines.binary_search(&column.logical).is_ok() {
-                    let end = column
-                        .logical
-                        .checked_add(cell.map_or(1, |cell| cell.column_span as usize))?;
-                    if (column.logical..end).any(|logical| {
-                        metrics.get(logical).is_some_and(|metric| {
-                            metric.width_basic_units > 0
-                                || logical + 1 < end && metric.spacing_columns > 0
-                        })
-                    }) {
-                        return Some(true);
-                    }
-                }
-
                 let rule = matches!(
                     column.kind,
                     Kind::HorizontalRule | Kind::DoubleHorizontalRule

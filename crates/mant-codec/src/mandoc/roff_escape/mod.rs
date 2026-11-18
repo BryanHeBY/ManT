@@ -9,6 +9,7 @@ mod decoder;
 mod glyphs;
 mod grammar;
 mod measurement;
+mod native_marks;
 mod projection;
 mod scanner;
 mod word_evidence;
@@ -16,6 +17,7 @@ mod zero_advance;
 
 use decoder::Decoder;
 pub(super) use measurement::width_sample;
+pub(super) use native_marks::{horizontal_line_stroke, overstrike_operands};
 pub(super) use projection::visible_text;
 pub use word_evidence::{RoffWordEffect, RoffWordEvidence};
 pub(super) use zero_advance::ZeroAdvanceMachine;

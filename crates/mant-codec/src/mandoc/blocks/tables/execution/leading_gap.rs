@@ -1,7 +1,10 @@
 //! Read the first visible tbl cell's physical gap at an occupied HEAD row.
 
 use super::{Kind, Node, TableColumnMetrics, TableExecution, measure};
-use crate::mandoc::blocks::InlineTablePrefix;
+use crate::mandoc::{
+    blocks::InlineTablePrefix,
+    inline::{FontState, InlineExecutionState},
+};
 use libmandoc_rs::{TableAlignment, TableCell, TableCellKind};
 
 const EN: usize = 24;
@@ -12,8 +15,9 @@ impl TableExecution<'_> {
         node: &Node,
         cell: &TableCell,
         prefix: InlineTablePrefix,
-        execution: &crate::mandoc::inline::InlineExecutionState,
-        entry_font: Option<crate::mandoc::inline::FontState>,
+        execution: &InlineExecutionState,
+        entry_font: Option<FontState>,
+        earlier_cells: &[(usize, FontState)],
     ) -> bool {
         let column = cell.column as usize;
         let kind = node
@@ -59,7 +63,16 @@ impl TableExecution<'_> {
             let Some(metric) = span.first() else {
                 return false;
             };
-            let Some(fill_cursor) = self.prior_columns(node, prior) else {
+            let Some(fill_cursor) = self.prior_columns(
+                node,
+                prior,
+                InlineTablePrefix {
+                    offset: prefix.offset.saturating_add(frame),
+                    ..prefix
+                },
+                execution,
+                earlier_cells,
+            ) else {
                 return true;
             };
             let before = frame.saturating_add(column_extent(prior, true));
@@ -139,7 +152,14 @@ impl TableExecution<'_> {
 impl TableExecution<'_> {
     /// The prior fill cursor, or `None` if an emitted rule already separates
     /// the two reading words.
-    fn prior_columns(&self, node: &Node, prior: &[TableColumnMetrics]) -> Option<usize> {
+    fn prior_columns(
+        &self,
+        node: &Node,
+        prior: &[TableColumnMetrics],
+        prefix: InlineTablePrefix,
+        execution: &InlineExecutionState,
+        earlier_cells: &[(usize, FontState)],
+    ) -> Option<usize> {
         let Some(layout) = node.table_layout.as_ref() else {
             return Some(0);
         };
@@ -148,6 +168,7 @@ impl TableExecution<'_> {
         let mut cursor = 0_usize;
         let mut column = 0;
         let mut actual = node.table_cells.iter().peekable();
+        let mut earlier = earlier_cells.iter().peekable();
         while let Some(metric) = prior.get(column) {
             let Some(slot) = layout.cells.get(column).or_else(|| layout.cells.last()) else {
                 return Some(cursor);
@@ -180,6 +201,26 @@ impl TableExecution<'_> {
             }
             if !horizontal && let Some(cell) = cell.filter(|cell| cell.kind == TableCellKind::Text)
             {
+                let width = column_extent(slots, false);
+                if let Some((_, font)) = earlier.next_if(|(index, _)| *index == column) {
+                    let target = prefix
+                        .offset
+                        .saturating_add(offset)
+                        .saturating_add(width)
+                        .saturating_sub(prefix.printed.saturating_add(prefix.left_pad(offset)));
+                    // term_field postpones spaces and tabs until a real
+                    // stroke is accepted. A preceding projected-empty
+                    // cell can still have printed a word boundary.
+                    if execution.table_first_pass_prints_ink(
+                        cell.decoder_text().unwrap_or_default(),
+                        target,
+                        width,
+                        super::super::table_cell_font(cell.font),
+                        font.clone(),
+                    ) {
+                        return None;
+                    }
+                }
                 cursor = match slot.kind {
                     Kind::Number => cursor
                         .saturating_add(number_padding_writes(
@@ -191,7 +232,7 @@ impl TableExecution<'_> {
                         ))
                         .saturating_add(metric.width_basic_units),
                     Kind::Left | Kind::Right | Kind::Center | Kind::Long => {
-                        cursor.saturating_add(column_extent(slots, false))
+                        cursor.saturating_add(width)
                     }
                     _ => cursor,
                 };
@@ -232,7 +273,7 @@ fn row_has_left_border(row: &Node) -> bool {
         .is_some_and(|layout| layout.left_border.is_some())
 }
 
-fn column_extent(metrics: &[TableColumnMetrics], include_final_spacing: bool) -> usize {
+pub(super) fn column_extent(metrics: &[TableColumnMetrics], include_final_spacing: bool) -> usize {
     metrics
         .iter()
         .enumerate()

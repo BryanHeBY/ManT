@@ -93,6 +93,11 @@ impl FieldWrite {
                 scalars: usize::from(*projected),
                 native_cells: 1,
             },
+            Self::UnprojectedGraph { .. } => EntryWrite::Overwrite {
+                encode: true,
+                scalars: 0,
+                native_cells: 1,
+            },
             Self::Cell(FieldCell::Tab) => EntryWrite::Overwrite {
                 encode: false,
                 scalars: 1,
@@ -101,6 +106,8 @@ impl FieldWrite {
             Self::Cell(
                 FieldCell::BreakMarker
                 | FieldCell::TabReference
+                | FieldCell::DrawnSpaces(_)
+                | FieldCell::FixedDrawingAdvance(_)
                 | FieldCell::ZeroWidthGraph
                 | FieldCell::Breakpoint
                 | FieldCell::Backline,
@@ -122,7 +129,9 @@ impl FieldWrite {
             Self::ArmBackafter => EntryWrite::ArmBackafter,
             Self::CancelBackafter => EntryWrite::CancelBackafter,
             Self::CancelBackbefore => EntryWrite::CancelBackbefore,
-            Self::RewindWordEntry(_) => EntryWrite::Rewind,
+            Self::RewindWordEntry(_) | Self::DrawSpaces(_) | Self::MoveInDrawing { .. } => {
+                EntryWrite::Rewind
+            }
         }
     }
 }

@@ -747,6 +747,54 @@ impl ZeroAdvanceState {
         }
     }
 
+    /// Drawing participates in encode1's retreat like an authored graph,
+    /// but its decoration has no scalar in the reading projection.
+    pub(super) fn append_hidden_glyph(
+        &mut self,
+        glyph: char,
+        output: &mut Vec<Inline>,
+        buffer: &mut String,
+        font: Font,
+        link: Option<&str>,
+    ) {
+        let armed = self.machine.is_armed();
+        if !armed && !self.machine.has_pending() {
+            return;
+        }
+        let mut bytes = [0; 4];
+        let value = glyph.encode_utf8(&mut bytes);
+        self.append_glyph(value, output, buffer, font, link);
+        if armed {
+            let (_, recoveries) = self.machine.commit_pending_projection();
+            if !recoveries.is_empty() {
+                flush_segment(output, buffer, font, link);
+                output.extend(self.project_owned(recoveries));
+            }
+        } else {
+            buffer.truncate(buffer.len() - value.len());
+        }
+    }
+
+    pub(super) fn append_hidden_spaces(
+        &mut self,
+        count: usize,
+        output: &mut Vec<Inline>,
+        buffer: &mut String,
+        font: Font,
+        link: Option<&str>,
+    ) {
+        // encode1(' ') never overwrites an earlier stored graph. Resolve
+        // that graph separately before the generated run consumes BACK.
+        if self.machine.has_pending() {
+            self.flush_with_held(output, buffer, font, link);
+        }
+        if count > 1 {
+            self.take_armed();
+        } else if self.machine.is_armed() {
+            self.append_hidden_glyph(' ', output, buffer, font, link);
+        }
+    }
+
     pub(super) const fn fallback_is_projected(&self) -> bool {
         !self.machine.is_armed()
     }

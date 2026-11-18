@@ -1,21 +1,24 @@
 //! Private tbl first-pass measurements over compact native writes.
 
-use super::field_buffer::{FieldCell, FieldWrite, compact_first_width};
+use super::field_buffer::{CompactPass, FieldCell, FieldWrite, compact_first_pass};
 use super::{FontState, TabStops};
 use crate::mandoc::inline::text_execution::record_native_event;
-use crate::mandoc::roff_escape::{PresentationKind, RoffFont, RoffInlineEvent, decode};
+use crate::mandoc::roff_escape::{
+    PresentationKind, RoffFont, RoffInlineEvent, decode, horizontal_line_stroke,
+    overstrike_operands,
+};
 use libmandoc_rs::TableColumnMetrics;
 use std::{collections::BTreeMap, sync::Arc};
 
 const EN: usize = 24;
 
-pub(super) fn first_pass_width(
+pub(super) fn first_pass(
     text: &str,
     target: usize,
     cell_width: usize,
     tabs: &Arc<TabStops>,
     font: &mut FontState,
-) -> usize {
+) -> CompactPass {
     let events = decode(text);
     let mut scratch = CellBuffer::default();
     let mut writes = Vec::new();
@@ -28,6 +31,7 @@ pub(super) fn first_pass_width(
                 kind: PresentationKind::HorizontalLine,
                 argument: Some(argument),
             } => scratch.line(argument, cell_width, font.current),
+            RoffInlineEvent::Overstrike { source, .. } => scratch.overstrike(source, font.current),
             RoffInlineEvent::Font(selection) => font.select(*selection),
             RoffInlineEvent::PreviousFont => font.restore(),
             _ => {
@@ -38,7 +42,7 @@ pub(super) fn first_pass_width(
             }
         }
     }
-    compact_first_width(scratch.into_fill_cells(), target, tabs)
+    compact_first_pass(scratch.into_fill_cells(), target, tabs)
 }
 
 #[derive(Clone)]
@@ -54,7 +58,9 @@ impl Pattern {
     fn cell(&self, offset: usize) -> &FieldCell {
         match self {
             Self::Plain(cell) => cell,
-            Self::Overstrike { cells, phase } => &cells[(phase + offset) % cells.len()],
+            Self::Overstrike { cells, phase } => {
+                &cells[(phase + offset % cells.len()) % cells.len()]
+            }
         }
     }
 
@@ -63,7 +69,7 @@ impl Pattern {
             Self::Plain(_) => self.clone(),
             Self::Overstrike { cells, phase } => Self::Overstrike {
                 cells: Arc::clone(cells),
-                phase: (phase + offset) % cells.len(),
+                phase: (phase + offset % cells.len()) % cells.len(),
             },
         }
     }
@@ -151,22 +157,16 @@ impl CellBuffer {
     }
 
     fn line(&mut self, argument: &str, cell_width: usize, font: RoffFont) {
-        let Some((units, suffix)) = TableColumnMetrics::motion_argument(argument) else {
+        let Some(stroke) = horizontal_line_stroke(argument, cell_width) else {
             return;
         };
-        let glyph = line_glyph(suffix);
-        let width = glyph_width(glyph);
-        if width == 0 {
-            return;
-        }
-        let length = usize::try_from(units)
-            .ok()
-            .filter(|units| *units > 0)
-            .unwrap_or(cell_width);
-        let count = length.div_ceil(width * EN);
-        let cell = match glyph {
+        let count = stroke.count;
+        let cell = match stroke.glyph {
             ' ' => FieldCell::BreakableBlank,
-            _ => FieldCell::Graph { text: glyph, width },
+            text => FieldCell::Graph {
+                text,
+                width: stroke.width,
+            },
         };
         // encode1() applies the active font to printable strokes. The BACK
         // registers can change at most their first two writes.
@@ -196,6 +196,49 @@ impl CellBuffer {
         }
     }
 
+    fn overstrike(&mut self, source: &str, font: RoffFont) {
+        // term_word() calls encode1 for each operand and arms a retreat
+        // between consecutive writes. It keeps all physical byte slots
+        // even though reading text retains one final visible glyph.
+        for (glyph, more_raw) in overstrike_operands(source) {
+            let cell = match glyph {
+                ' ' => FieldCell::BreakableBlank,
+                '\t' => FieldCell::Tab,
+                '\u{1c}' => FieldCell::Hyphen,
+                '\u{1d}' => FieldCell::Breakpoint,
+                '\u{1e}' => FieldCell::ZeroWidthGraph,
+                '\u{1f}' => FieldCell::NonBreakingBlank,
+                _ => FieldCell::Graph {
+                    text: glyph,
+                    width: glyph_width(glyph),
+                },
+            };
+            self.glyph(cell, font);
+            if more_raw {
+                if self.backbefore {
+                    self.backafter = true;
+                } else {
+                    self.backbefore = true;
+                }
+            }
+        }
+
+        if self.extent > 2
+            && matches!(
+                self.previous_cell(self.extent),
+                Some(FieldCell::BreakableBlank | FieldCell::Tab)
+            )
+        {
+            // The final blank after a retreat removes the generated
+            // backspace/blank pair, not the preceding original graph.
+            let end = self.extent - 2;
+            self.split_at(end);
+            drop(self.runs.split_off(&end));
+            self.extent = end;
+            self.cursor = self.cursor.min(end);
+        }
+    }
+
     fn native_write(&mut self, write: FieldWrite, font: RoffFont) {
         match write {
             FieldWrite::Cell(blank @ (FieldCell::BreakableBlank | FieldCell::NonBreakingBlank)) => {
@@ -214,12 +257,10 @@ impl CellBuffer {
 
     fn glyph(&mut self, cell: FieldCell, font: RoffFont) {
         if std::mem::take(&mut self.backbefore) && self.cursor > 0 {
-            let previous = self
-                .runs
-                .range(..self.cursor)
-                .next_back()
-                .map(|(&start, run)| run.pattern.cell(self.cursor - start - 1));
-            if matches!(previous, Some(FieldCell::BreakableBlank | FieldCell::Tab)) {
+            if matches!(
+                self.previous_cell(self.cursor),
+                Some(FieldCell::BreakableBlank | FieldCell::Tab)
+            ) {
                 self.cursor -= 1;
             } else {
                 self.write_run(FieldCell::Backline, 1);
@@ -228,12 +269,22 @@ impl CellBuffer {
         for prefix in decoration_prefix(&cell, font) {
             self.write_run(prefix, 1);
         }
-        if cell == FieldCell::BreakableBlank {
+        if matches!(
+            cell,
+            FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+        ) {
             self.advance(1, cell);
         } else {
             self.write_run(cell, 1);
         }
         self.backbefore = std::mem::take(&mut self.backafter);
+    }
+
+    fn previous_cell(&self, cursor: usize) -> Option<&FieldCell> {
+        self.runs
+            .range(..cursor)
+            .next_back()
+            .map(|(&start, run)| run.pattern.cell(cursor - start - 1))
     }
 
     /// Split only boundary runs. Every removed middle run was previously
@@ -284,7 +335,7 @@ fn decoration_prefix(
     cell: &FieldCell,
     font: RoffFont,
 ) -> impl Iterator<Item = FieldCell> + Clone + use<> {
-    let visible = *cell != FieldCell::BreakableBlank;
+    let visible = matches!(cell, FieldCell::Graph { .. } | FieldCell::Hyphen);
     let underline = visible
         && matches!(
             font,
@@ -318,18 +369,6 @@ fn decoration_prefix(
 
 fn glyph_width(glyph: char) -> usize {
     mant_ir::geometry::text_width(glyph.encode_utf8(&mut [0; 4]))
-}
-
-fn line_glyph(suffix: &str) -> char {
-    let glyph = if suffix.starts_with('\\') {
-        decode(suffix).first().and_then(|event| match event {
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => value.chars().next(),
-            _ => None,
-        })
-    } else {
-        suffix.chars().next().filter(char::is_ascii)
-    };
-    glyph.filter(|glyph| !glyph.is_control()).unwrap_or('_')
 }
 
 #[cfg(test)]
