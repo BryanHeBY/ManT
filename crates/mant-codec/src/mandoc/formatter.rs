@@ -18,7 +18,7 @@ pub(super) struct FinishedInlineLine {
 struct DefinitionHeadRows {
     occupied: bool,
     completed_empty_rows: u16,
-    table_data_rows: u16,
+    carried_hard_rows: u16,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -195,7 +195,7 @@ impl FormatterState {
 
     pub(super) const fn definition_head_completed_empty_rows(&self) -> (u16, u16) {
         let rows = self.definition_head_rows;
-        (rows.completed_empty_rows, rows.table_data_rows)
+        (rows.completed_empty_rows, rows.carried_hard_rows)
     }
 
     pub(super) fn enter_man_definition_body(&mut self) {
@@ -434,8 +434,12 @@ impl FormatterState {
         }
         let definition_body_gap_consumed = builder.definition_body_gap_consumed(boundary.native());
         let completed_empty_rows = builder.completed_empty_rows();
-        let table_data_rows = if completed_empty_rows > 0 {
-            builder.trailing_table_data_rows()
+        let carried_hard_rows = if completed_empty_rows > 0 {
+            // The final native HEAD post can consume a table-following
+            // NBRZW-only field, independently of tbl endlines and .sp.
+            builder
+                .trailing_table_data_rows()
+                .saturating_add(u16::from(boundary.closes_invisible_row()))
         } else {
             0
         };
@@ -445,7 +449,7 @@ impl FormatterState {
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,
-            table_data_rows,
+            carried_hard_rows,
         };
         self.return_inline_session(execution, retirement);
         FinishedInlineLine {
@@ -468,7 +472,7 @@ impl FormatterState {
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,
-            table_data_rows: 0,
+            carried_hard_rows: 0,
         };
         // These exact completed tails have already executed. Transfer their
         // physical rows to the HEAD owner before its structural representation
@@ -509,7 +513,7 @@ impl FormatterState {
         self.definition_head_rows = DefinitionHeadRows {
             occupied,
             completed_empty_rows,
-            table_data_rows: if completed_empty_rows > 0 {
+            carried_hard_rows: if completed_empty_rows > 0 {
                 builder.trailing_table_data_rows()
             } else {
                 0

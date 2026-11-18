@@ -4,6 +4,7 @@ use mant_ir::{Block, DocumentIndex, ResolvedContent, inline_plain_text};
 use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax, default_search_limit};
 
 mod row_boundaries;
+mod row_seams;
 mod source_recovery;
 
 const REVIEW_HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n";

@@ -16,11 +16,14 @@ fn placed(table: &str, place: &str) -> String {
 }
 
 fn cell_inlines<'a>(doc: &'a Document, place: &str) -> &'a [Inline] {
-    let blocks = &doc.sections[1].blocks;
+    cell_inlines_in(&doc.sections[1].blocks, place)
+}
+
+fn cell_inlines_in<'a>(blocks: &'a [Block], place: &str) -> &'a [Inline] {
     let body = if place == "plain" {
         blocks
     } else {
-        let [Block::DefinitionList { items, .. }] = blocks.as_slice() else {
+        let [Block::DefinitionList { items, .. }] = blocks else {
             panic!("expected one definition list: {blocks:?}");
         };
         let [item] = items.as_slice() else {
@@ -42,6 +45,46 @@ fn cell_inlines<'a>(doc: &'a Document, place: &str) -> &'a [Inline] {
         panic!("expected one recovered text cell");
     };
     children
+}
+
+#[test]
+fn implicit_table_names_execute_the_page_spelling_and_leave_explicit_names_unchanged() {
+    // deroff() preserves these escape spellings in meta.name. post_nm()
+    // inserts them as generated TEXT. All 30 fixed profiles witness the
+    // ordinary Nm next to the table, whose own raw language is UNSUPP.
+    for (name, visible) in [
+        (r"foo\-bar", "foo-bar"),
+        (r"foo\(dqbar", "foo\"bar"),
+        (r"\fBfoo\fP", "foo"),
+        (r"\[u03B1]foo", "αfoo"),
+        (r"\efoo", r"\foo"),
+    ] {
+        let header = REVIEW_HEADER.replace(".Nm probe\n", &format!(".Nm {name}\n"));
+        for place in ["head", "body"] {
+            for (fragment, expected) in [
+                (".Nm", visible.to_owned()),
+                (".Pq Nm", format!("({visible})")),
+                (".Nm EXPLICIT", "EXPLICIT".into()),
+            ] {
+                let table = format!(".TS\nl.\nT{{\n{fragment}\nT}}\n.TE\n");
+                let part = placed(&table, place).replace("OWNER\n", "ENDING\n");
+                let source = format!("{header}.Nm\n{part}.Sh EXAMPLES\nTAIL\n");
+                let query = lower(&source);
+                let document = query.document.as_ref().unwrap();
+                let (ordinary_name, table_owner) =
+                    document.sections[1].blocks.split_first().unwrap();
+                let Block::Paragraph { children, .. } = ordinary_name else {
+                    panic!("wanted the ordinary name control: {source}");
+                };
+                assert_eq!(inline_plain_text(children), visible, "{source}");
+                assert_eq!(
+                    inline_plain_text(cell_inlines_in(table_owner, place)),
+                    expected,
+                    "{source}"
+                );
+            }
+        }
+    }
 }
 
 struct Targets(Vec<LinkTarget>);
@@ -155,5 +198,80 @@ fn redefined_table_macros_never_recover_as_builtin_links() {
             false,
             &source,
         );
+    }
+}
+
+#[test]
+fn table_name_recovery_uses_only_the_real_page_default() {
+    // post_nm() inserts meta.name as NODE_NOSRC for an implicit Nm, even
+    // under Pq. The pinned tbl parser emits only the raw operands, with
+    // the expected UNSUPP diagnostic. Same-source owner comparisons
+    // verify the bounded ManT enhancement, not a native extension.
+    let alternative_page = REVIEW_HEADER.replace(".Nm probe\n", ".Nm actual-tool\n");
+    let no_name = REVIEW_HEADER.replace(".Sh NAME\n.Nm probe\n.Nd exercise descriptors\n", "");
+    for (header, name) in [
+        (REVIEW_HEADER, Some("probe")),
+        (alternative_page.as_str(), Some("actual-tool")),
+        (no_name.as_str(), None),
+    ] {
+        for place in PLACEMENTS {
+            for (fragment, native, enhanced, link) in [
+                (".Nm", "", name.unwrap_or(""), false),
+                (".Nm EXPLICIT", "EXPLICIT", "EXPLICIT", false),
+                (".Pq Nm", "Nm", name.unwrap_or("Nm"), false),
+                (".Pq Nm EXPLICIT", "Nm EXPLICIT", "EXPLICIT", false),
+                (
+                    ".Nm\n.Lk https://example.test LINK",
+                    "https://example.test LINK",
+                    name.unwrap_or(""),
+                    true,
+                ),
+            ] {
+                let table = format!(".TS\nl.\nT{{\n{fragment}\nT}}\n.TE\n");
+                let source = format!(
+                    "{header}{}",
+                    placed(&table, place).replace("OWNER\n", "ENDING\n")
+                ) + ".Sh EXAMPLES\nTAIL\n";
+                let query = lower(&source);
+                let body = mant_render::render_query_text(&query);
+                assert!(!body.contains("table-fragment"), "{source}\n{body}");
+                assert_eq!(body.matches("ENDING").count(), 1, "{source}");
+                if name.is_none() {
+                    if fragment.contains("EXPLICIT") {
+                        assert!(body.contains("EXPLICIT"), "{source}");
+                    }
+                    continue;
+                }
+                let document = query.document.as_ref().unwrap();
+                let nodes = cell_inlines(document, place);
+                let projected = inline_plain_text(nodes);
+                if link {
+                    assert!(projected.starts_with(enhanced), "{source}\n{projected}");
+                    let mut links = Targets(Vec::new());
+                    links.visit_document(document);
+                    assert_eq!(
+                        links.0,
+                        [LinkTarget::External {
+                            uri: "https://example.test".into()
+                        }],
+                        "{source}"
+                    );
+                } else if fragment.starts_with(".Pq") {
+                    assert_eq!(projected, format!("({enhanced})"), "{source}");
+                } else {
+                    assert_eq!(projected, enhanced, "{source}");
+                }
+                let report = libmandoc_rs::Parser::default()
+                    .parse_bytes("fallback.1", source.as_bytes())
+                    .unwrap();
+                let raw =
+                    mant_codec::lower_mandoc_document(std::path::Path::new("fallback.1"), &report);
+                if !native.is_empty() {
+                    let raw_text = inline_plain_text(cell_inlines(&raw, place));
+                    let words = raw_text.split_whitespace().collect::<Vec<_>>().join(" ");
+                    assert_eq!(words, native, "{source}\n{raw_text}");
+                }
+            }
+        }
     }
 }

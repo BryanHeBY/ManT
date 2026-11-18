@@ -126,18 +126,12 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         return fallback();
     }
     clear_synthetic_targets(&mut report.document.root);
-    let section = report.document.root.children.iter().rev().find(|node| {
-        matches!(
-            node.macro_token.as_ref(),
-            Some(Mdoc(MdocMacro::Sh) | Man(ManMacro::Sh))
-        ) && node.kind == NodeKind::Block
-    })?;
-    let body = section
-        .children
-        .iter()
-        .find(|node| node.kind == NodeKind::Body)?;
+    let body = fragment_body_nodes(&mut report.document.root)?;
+    if !restore_generated_names(body, default_name, budget) {
+        return fallback();
+    }
     let mut formatter = formatter;
-    let inlines = lower_body(&body.children, dialect, default_name, &mut formatter);
+    let inlines = lower_body(body, dialect, default_name, &mut formatter);
     admit_recovered_fragment(
         RecoveredFragment {
             inlines,
@@ -147,6 +141,55 @@ pub(in crate::mandoc) fn lower_source_fragment_with_formatter_state(
         },
         budget,
     )
+}
+
+fn fragment_body_nodes(root: &mut libmandoc_rs::Node) -> Option<&mut [libmandoc_rs::Node]> {
+    let section = root.children.iter_mut().rev().find(|node| {
+        matches!(
+            node.macro_token.as_ref(),
+            Some(Mdoc(MdocMacro::Sh) | Man(ManMacro::Sh))
+        ) && node.kind == NodeKind::Block
+    })?;
+    let body = section
+        .children
+        .iter_mut()
+        .find(|node| node.kind == NodeKind::Body)?;
+    Some(&mut body.children)
+}
+
+const FRAGMENT_NAME: &str = "table-fragment";
+
+fn restore_generated_names(
+    nodes: &mut [libmandoc_rs::Node],
+    default_name: Option<&str>,
+    budget: Option<&RefCell<TableRecoveryBudget>>,
+) -> bool {
+    for node in nodes {
+        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Nm)) {
+            for child in &mut node.children {
+                if child.flags.generated
+                    && child.kind == NodeKind::Text
+                    && child.decoder_text() == Some(FRAGMENT_NAME)
+                {
+                    // post_nm() inserts meta.name as an executed TEXT word
+                    // (NODE_NOSRC). Preserve the real roff escapes without
+                    // ever passing the page's spelling through a source line.
+                    let Some(name) = default_name else {
+                        return false;
+                    };
+                    if !charge_fragment_input(budget, name.len()) {
+                        return false;
+                    }
+                    child.text = Some(name.to_owned());
+                    child.native_text = None;
+                }
+            }
+        }
+        if !restore_generated_names(&mut node.children, default_name, budget) {
+            return false;
+        }
+    }
+    true
 }
 
 fn admit_recovered_fragment(
@@ -192,43 +235,15 @@ fn fragment_input(
     let section = if synopsis { "SYNOPSIS" } else { "DESCRIPTION" };
     let (prefix, format) = match dialect {
         MacroSet::Mdoc => {
-            let name = default_name.unwrap_or("table-fragment");
-            let before = ".Dd January 1, 2000\n.Dt MANT-TABLE 1\n.Os\n.Sh NAME\n.Nm \"";
-            let after = "\"\n.Nd table fragment\n.Sh ";
-            let minimum_bytes = before
-                .len()
-                .saturating_add(name.len())
-                .saturating_add(after.len())
-                .saturating_add(section.len())
-                .saturating_add(1);
-            // Metadata can be much larger than a cell. Establish the byte
-            // bound before walking its scalars or escaping/copying its name.
-            if !charge_fragment_input(budget, minimum_bytes) {
+            // Retain the existing local metadata bound independently from
+            // the per-copy charge when an implicit name is actually lowered.
+            if !charge_fragment_input(budget, default_name.map_or(0, str::len)) {
                 return None;
             }
-            let escaped_bytes = name.chars().fold(0usize, |bytes, character| {
-                bytes.saturating_add(match character {
-                    '\\' => 2,
-                    '"' => 4,
-                    '\n' | '\r' => 1,
-                    character => character.len_utf8(),
-                })
-            });
-            let bytes = before
-                .len()
-                .saturating_add(escaped_bytes)
-                .saturating_add(after.len())
-                .saturating_add(section.len())
-                .saturating_add(1);
-            if !charge_fragment_input(budget, bytes) {
-                return None;
-            }
-            let name = name
-                .replace('\\', "\\e")
-                .replace('"', "\\(dq")
-                .replace(['\n', '\r'], " ");
             (
-                format!("{before}{name}{after}{section}\n"),
+                format!(
+                    ".Dd January 1, 2000\n.Dt MANT-TABLE 1\n.Os\n.Sh NAME\n.Nm {FRAGMENT_NAME}\n.Nd table fragment\n.Sh {section}\n"
+                ),
                 InputFormat::Mdoc,
             )
         }

@@ -8,6 +8,8 @@ use crate::mandoc::formatter::FormatterState;
 use libmandoc_rs::{Node, TableCellKind, TableColumnMetrics, TableLayoutKind as Kind};
 use std::cell::{Cell, RefCell};
 
+mod leading_gap;
+
 pub(super) struct TableExecution<'a> {
     rows: Vec<&'a Node>,
     bounds: Cell<Option<(usize, usize)>>,

@@ -190,11 +190,12 @@ pub(super) fn lower_table_cell(
         let semantic_annotations = context.annotations.transaction();
         if source_recovery_allowed
             && let Some(source_operands) = source_operands.as_deref()
+            && let Ok(default_name) = context.table_fragment_name()
             && let Some(recovered) = lower_source_fragment_with_formatter_state(
                 &source,
                 text_block.escape,
                 context.macro_set,
-                context.default_name,
+                default_name,
                 node.flags.synopsis_pretty,
                 initial_state.clone(),
                 Some(&context.table_recovery.budget),

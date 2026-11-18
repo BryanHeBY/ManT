@@ -1,6 +1,6 @@
 //! Table input observations borrow the shared word and source registers.
 use super::{InlineBuilder, InlineExecutionState};
-use crate::definitions::NativeOperandRole;
+use crate::{definitions::NativeOperandRole, mandoc::blocks::InlineTablePrefix};
 use mant_ir::Inline;
 
 impl InlineBuilder {
@@ -19,36 +19,45 @@ impl InlineBuilder {
             self.execute_native_newline_with_tail();
         }
         let open = self.execution.has_open_native_device_row();
-        let has_gap = self
-            .execution
-            .definition
-            .as_ref()
-            .is_some_and(|field| field.hang_row.padding_units(field.field_offset_units) >= 24);
-        let needs_gap = open
-            && has_gap
-            && self
-                .execution
-                .last_visible_character
-                .is_some_and(|c| !c.is_whitespace());
+        let prefix = self.table_prefix(open);
         let mut formatter = crate::mandoc::formatter::FormatterState::default();
         formatter.execution = std::mem::take(&mut self.execution);
-        let row = table.lower_row(node, index, &mut formatter);
+        let row = table.lower_row(node, index, &mut formatter, prefix);
         self.execution = formatter.execution;
         if let Some(row) = row {
-            self.project_table_row(row, open, needs_gap);
+            self.project_table_row(row, open);
         }
         self.finish_executed_node(node);
         self.restore_definition_geometry(geometry);
     }
 
-    fn project_table_row(
-        &mut self,
-        row: crate::mandoc::blocks::InlineTableRow,
-        open: bool,
-        needs_gap: bool,
-    ) {
+    fn table_prefix(&self, open: bool) -> Option<InlineTablePrefix> {
+        let field = self.execution.definition.as_ref()?;
+        if open
+            && self
+                .execution
+                .last_visible_character
+                .is_some_and(|c| !c.is_whitespace())
+        {
+            let presentation = self.execution.row_presentation;
+            Some(InlineTablePrefix {
+                offset: self.execution.table_source_bounds(0).0,
+                printed: usize::try_from(
+                    presentation
+                        .device_column(field.hang_row.viscol)
+                        .saturating_add(i64::from(presentation.parent)),
+                )
+                .unwrap_or_default(),
+                min_padding: field.hang_row.minbl.saturating_mul(24),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn project_table_row(&mut self, row: crate::mandoc::blocks::InlineTableRow, open: bool) {
         let content = row.content;
-        if needs_gap && !content.is_empty() {
+        if row.separates_prefix {
             self.append_projected(vec![Inline::Text { value: " ".into() }]);
         }
         if !content.is_empty() && self.head_operand_capture.is_some() {
@@ -116,6 +125,9 @@ impl InlineExecutionState {
         let margin = self
             .definition
             .as_ref()
+            // pre_br clears BRIND and restores maxrmargin. The saved
+            // field margin still carries its BODY origin, not this bound.
+            .filter(|field| field.margin_override.is_none())
             .and_then(|field| field.native_margin_units)
             .and_then(|margin| {
                 usize::try_from(margin.saturating_add(i64::from(self.row_presentation.parent))).ok()

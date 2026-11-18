@@ -25,6 +25,10 @@ impl FormatterLineBoundary {
     pub(in crate::mandoc) fn native(&self) -> Option<&NativeFieldDevice> {
         self.native.as_ref()
     }
+
+    pub(in crate::mandoc) fn closes_invisible_row(&self) -> bool {
+        self.invisible_native_row_end
+    }
 }
 
 impl InlineBuilder {

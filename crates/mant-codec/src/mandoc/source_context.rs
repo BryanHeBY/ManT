@@ -56,7 +56,10 @@ pub(super) struct HeadNodes<'a> {
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
-        Self::with_table_recovery(default_name, Rc::new(TableRecoverySource::new(source)))
+        Self::with_table_recovery(
+            default_name,
+            Rc::new(TableRecoverySource::new(default_name, source)),
+        )
     }
 
     pub(super) fn with_table_recovery(

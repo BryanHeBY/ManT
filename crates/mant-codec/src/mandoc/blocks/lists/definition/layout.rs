@@ -222,7 +222,7 @@ pub(super) fn carry_completed_head_rows(
     terms: &[Vec<Inline>],
     closed_head_row: bool,
     completed_empty_rows: u16,
-    table_data_rows: u16,
+    carried_hard_rows: u16,
     description: &mut Vec<Block>,
 ) {
     if completed_empty_rows > 0 {
@@ -236,8 +236,8 @@ pub(super) fn carry_completed_head_rows(
     }
     let hard_rows = if completed_empty_rows > 0 {
         // The wholly empty HEAD's accepted delimiters were moved above.
-        // term_tbl's endlines are independent of term_vspace's layout gaps.
-        table_data_rows
+        // Data-span and HEAD-post endlines are independent of layout gaps.
+        carried_hard_rows
     } else {
         u16::from(closed_head_row && invisible_closed_head_row(terms))
     };
@@ -270,10 +270,17 @@ pub(in crate::mandoc::blocks::lists) fn split_definition_terms(
     let mut terms = Vec::new();
     let mut current = Vec::new();
     let mut alternatives = alternative_breaks.iter().copied().peekable();
+    let last_label = term
+        .iter()
+        .rposition(|node| mant_ir::has_printable_character(std::slice::from_ref(node)));
     for (index, node) in term.into_iter().enumerate() {
         if node == Inline::line_break() && alternatives.peek() == Some(&index) {
             alternatives.next();
-            if mant_ir::has_printable_character(&current) {
+            // A real .Pp always performs term_vspace(). Only a break
+            // between labels is also the IR's alternative separator.
+            if last_label.is_some_and(|end| index < end)
+                && mant_ir::has_printable_character(&current)
+            {
                 let origin = crate::mandoc::inline::split_row_origin(&mut current);
                 terms.push(std::mem::take(&mut current));
                 current.extend(origin);

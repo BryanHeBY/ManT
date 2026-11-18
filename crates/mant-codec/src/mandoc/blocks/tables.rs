@@ -21,6 +21,24 @@ pub(in crate::mandoc) struct InlineTableSequence<'a> {
 pub(in crate::mandoc) struct InlineTableRow {
     pub(in crate::mandoc) content: Vec<Inline>,
     pub(in crate::mandoc) data: bool,
+    pub(in crate::mandoc) separates_prefix: bool,
+}
+
+/// The accepted device prefix, in basic units, before the first table cell.
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) struct InlineTablePrefix {
+    pub(in crate::mandoc) offset: usize,
+    pub(in crate::mandoc) printed: usize,
+    pub(in crate::mandoc) min_padding: usize,
+}
+
+impl InlineTablePrefix {
+    fn left_pad(self, col_offset: usize) -> usize {
+        self.offset
+            .saturating_add(col_offset)
+            .saturating_sub(self.printed)
+            .max(self.min_padding)
+    }
 }
 
 impl<'a> InlineTableSequence<'a> {
@@ -45,14 +63,16 @@ impl<'a> InlineTableSequence<'a> {
         node: &Node,
         index: usize,
         formatter: &mut crate::mandoc::formatter::FormatterState,
+        prefix: Option<InlineTablePrefix>,
     ) -> Option<InlineTableRow> {
         let kind = table_row_kind(node)?;
+        let embedding = self.plan.embedding(index);
         let cells = cells::lower_cells(
             node,
             &kind,
             &self.context,
             crate::mandoc::layout::SourceIndent::default(),
-            self.plan.embedding(index),
+            embedding,
             formatter,
         );
         self.context
@@ -60,13 +80,20 @@ impl<'a> InlineTableSequence<'a> {
             .record_diagnostics(self.context.diagnostics.take());
         finish_table_span(formatter);
         let mut output = Vec::new();
-        for cell in cells {
+        let mut first = None;
+        for (index, cell) in cells.into_iter().enumerate() {
             for block in cell.blocks {
                 if let Block::Paragraph { children, .. } = block
                     && !children.is_empty()
                 {
                     if !output.is_empty() {
                         output.push(Inline::Text { value: " ".into() });
+                    }
+                    if prefix.is_some()
+                        && first.is_none()
+                        && crate::mandoc::inline::has_rendered_formatter_glyph(&children)
+                    {
+                        first = Some(index);
                     }
                     output.extend(children);
                 }
@@ -75,6 +102,17 @@ impl<'a> InlineTableSequence<'a> {
         Some(InlineTableRow {
             content: output,
             data: kind == mant_ir::TableRowKind::Data,
+            separates_prefix: prefix.is_some_and(|prefix| {
+                first.is_some_and(|index| {
+                    embedding.map_or_else(
+                        || prefix.left_pad(0) > 12,
+                        |plan| {
+                            plan.execution
+                                .separates_prefix(node, &node.table_cells[index], prefix)
+                        },
+                    )
+                })
+            }),
         })
     }
 }

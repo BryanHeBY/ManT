@@ -9,20 +9,45 @@ use std::{cell::RefCell, collections::HashMap};
 #[derive(Debug, Default)]
 pub(in crate::mandoc) struct TableRecoverySource {
     source_lines: Option<SourceLineIndex>,
+    default_name: Option<Box<str>>,
+    oversized_name: bool,
     native_requests: RefCell<HashMap<String, bool>>,
     pub(in crate::mandoc) budget: RefCell<TableRecoveryBudget>,
 }
 
+pub(in crate::mandoc) struct OversizedTableName;
+
 impl TableRecoverySource {
-    pub(super) fn new(source: Option<&str>) -> Self {
+    pub(super) fn new(default_name: Option<&str>, source: Option<&str>) -> Self {
+        let source = source.filter(|source| source.contains("T{"));
+        let default_name = source.and(default_name);
+        let oversized_name = default_name.is_some_and(|name| {
+            name.len() > crate::mandoc::table_recovery_budget::MAX_FRAGMENT_BYTES
+        });
         Self {
             // The scanner needs an authored T{ delimiter. Ordinary
             // pages need neither a source copy nor a line index.
-            source_lines: source
-                .filter(|source| source.contains("T{"))
-                .map(SourceLineIndex::new),
+            source_lines: source.map(SourceLineIndex::new),
+            default_name: default_name.filter(|_| !oversized_name).map(Into::into),
+            oversized_name,
             ..Self::default()
         }
+    }
+}
+
+impl LoweringContext<'_> {
+    /// Supply the page's actual default name even from a detached HEAD.
+    /// Refusal of oversized metadata must remain a local size decision.
+    pub(in crate::mandoc) fn table_fragment_name(
+        &self,
+    ) -> Result<Option<&str>, OversizedTableName> {
+        if self.table_recovery.oversized_name {
+            self.table_recovery.budget.borrow_mut().reject_fragment();
+            return Err(OversizedTableName);
+        }
+        Ok(self
+            .default_name
+            .or(self.table_recovery.default_name.as_deref()))
     }
 }
 

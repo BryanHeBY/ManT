@@ -4,7 +4,7 @@ use super::{Block, REVIEW_HEADER, ResolvedContent, inline_plain_text, lower, who
 
 const FOOTER: &str = ".Sh EXAMPLES\nTAIL\n";
 
-fn reading_rows(text: &str) -> Vec<String> {
+pub(super) fn reading_rows(text: &str) -> Vec<String> {
     let body = text
         .split_once("\nDESCRIPTION\n")
         .unwrap()
@@ -26,7 +26,7 @@ fn reading_rows(text: &str) -> Vec<String> {
         .collect()
 }
 
-fn assert_rows(query: &ResolvedContent, expected: &[&str], source: &str) {
+pub(super) fn assert_rows(query: &ResolvedContent, expected: &[&str], source: &str) {
     let markdown = mant_codec::encode::render_markdown(query);
     let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
     for content in [query, &readback] {

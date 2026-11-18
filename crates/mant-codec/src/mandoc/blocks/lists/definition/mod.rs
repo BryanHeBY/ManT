@@ -153,7 +153,7 @@ pub(super) fn definition_item(
         formatter,
     )
     .into_parts();
-    let (completed_head_rows, table_head_rows) = formatter.definition_head_completed_empty_rows();
+    let (completed_head_rows, carried_head_rows) = formatter.definition_head_completed_empty_rows();
     session.restore_head(formatter);
     // TERMP_NONEWLINE survives the HEAD output drain. It is the execution
     // evidence that the first no-fill BODY row still belongs on that line.
@@ -214,7 +214,7 @@ pub(super) fn definition_item(
         &terms,
         closed_head_row,
         empty_head_rows,
-        table_head_rows,
+        carried_head_rows,
         &mut description,
     );
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip)) {

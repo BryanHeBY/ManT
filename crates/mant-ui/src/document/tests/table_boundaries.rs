@@ -126,6 +126,61 @@ fn head_table_rows_and_prefix_words_survive_narrow_and_wide_paint() {
 }
 
 #[test]
+fn visible_cell_alignment_places_the_same_word_boundary_in_paint_and_copy() {
+    // The exact native engine matrix checks l/c/r with one or both slots
+    // and a HANG prefix at less than, equal to, or beyond its field width.
+    for (options, kind, field, second, expected) in [
+        ("", "l", "4n", false, "LONGPREFIXXYZ"),
+        ("", "c", "4n", false, "LONGPREFIX XYZ"),
+        ("", "r", "4n", false, "LONGPREFIX XYZ"),
+        ("", "l", "8n", true, "LONGPREFIX XYZ"),
+        ("center;\n", "l", "4n", false, "LONGPREFIX XYZ"),
+        ("", "a", "8n", false, "LONGPREFIXXYZ"),
+    ] {
+        let layout = if second {
+            format!("l {kind}")
+        } else {
+            kind.to_owned()
+        };
+        let words = if second {
+            "\\&\tXYZ\nA\tWIDESTCELL"
+        } else {
+            "XYZ\nWIDESTCELL"
+        };
+        let source = format!(
+            "{REVIEW_HEADER}.Bl -hang -width {field}\n.It Xo\n.No LONGPREFIX\n.br\n.TS\n{options}{layout}.\n{words}\n.TE\n.Xc\nENDING\n.El\n.Sh EXAMPLES\nTAIL\n"
+        );
+        let query = restored(&source);
+        let view = DocumentView::new(&query);
+        for width in [24, 78, 24] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let matches = rendered.search(expected);
+            let [hit] = matches.as_slice() else {
+                panic!("{source}: {width}");
+            };
+            assert_eq!(
+                painted(&buffer, hit.row, hit.start_column, hit.end_column),
+                expected
+            );
+            assert_eq!(
+                rendered.selected_text(RenderedSelection {
+                    anchor: TextPosition {
+                        row: hit.row,
+                        column: hit.start_column
+                    },
+                    focus: TextPosition {
+                        row: hit.row,
+                        column: hit.end_column - 1
+                    },
+                }),
+                expected
+            );
+        }
+    }
+}
+
+#[test]
 fn source_backed_head_cell_keeps_its_exact_click_and_copy_parts() {
     // Fixed tbl_cdata witnesses the same raw operand in either form. Only
     // the source-backed T{} cell recovers the Mt semantic link.
