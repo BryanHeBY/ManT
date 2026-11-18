@@ -22,6 +22,22 @@ pub(super) struct DefinitionBody<'a> {
 }
 
 impl<'a> DefinitionBody<'a> {
+    fn push_prose(
+        &mut self,
+        block: &'a Block,
+        rendered: MappedText,
+        destinations: &mut Vec<InlineRoot<'a>>,
+    ) {
+        if self.blocks.is_empty() {
+            self.first_prose = Some(std::mem::take(destinations));
+            self.first_block = Some(block);
+            self.blocks.push(rendered);
+        } else if let Some(rendered) = rendered.nonempty() {
+            self.blocks.push(rendered);
+            destinations.clear();
+        }
+    }
+
     fn finish_navigation(
         &mut self,
         destinations: Vec<InlineRoot<'a>>,
@@ -110,15 +126,16 @@ pub(super) fn definition_body<'a>(
                 .tail_grammar(BlockSyntax::Phrasing, open_row)
                 .hard_rows(hard_rows);
             rendered.contribution.before = std::mem::take(&mut body.pending_space);
-            if body.blocks.is_empty() {
-                body.first_prose = Some(std::mem::take(&mut destinations));
-                body.first_block = Some(block);
-                body.blocks.push(rendered);
-            } else if let Some(rendered) = rendered.nonempty() {
-                body.blocks.push(rendered);
-                destinations.clear();
-            }
-        } else if let Some(mut rendered) = render_block(block, options, locations, track) {
+            body.push_prose(block, rendered, &mut destinations);
+        } else if let Some(mut rendered) = render_block(
+            block,
+            options,
+            locations,
+            track,
+            body.blocks
+                .last()
+                .map_or_else(BlockSyntax::default, |block| block.syntax),
+        ) {
             if !rendered.contribution.rows {
                 body.pending_space |= rendered.contribution.spacing();
                 if body.blocks.is_empty() {

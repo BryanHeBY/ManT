@@ -21,7 +21,14 @@ pub(super) fn append(left: &mut MappedText, mut right: MappedText) {
     let phrasing = left.tail.grammar == BlockSyntax::Phrasing;
     let list = left.tail.columns > 0;
     let paragraph = positive
-        || (phrasing && matches!(right.syntax, BlockSyntax::List { needs_blank: true }))
+        || (phrasing
+            && matches!(
+                right.syntax,
+                BlockSyntax::List {
+                    needs_blank: true,
+                    ..
+                }
+            ))
         || (right.syntax == BlockSyntax::Phrasing
             && !right.hard_rows
             && (list || (phrasing && !left.tail.hard_rows)));
@@ -117,7 +124,13 @@ pub(super) fn finish_boundaries(mut blocks: Vec<MappedText>) -> Vec<MappedText> 
         if !first.contribution.rows && first.contribution.spacing() {
             first.text.push_str("<br />");
         } else if first.contribution.before {
-            let row = if matches!(first.syntax, BlockSyntax::List { needs_blank: true }) {
+            let row = if matches!(
+                first.syntax,
+                BlockSyntax::List {
+                    needs_blank: true,
+                    ..
+                }
+            ) {
                 "&#10;\n\n"
             } else {
                 // The entity is the requested newline itself, not a sentinel
@@ -161,7 +174,13 @@ pub(super) fn list_body(blocks: Vec<MappedText>) -> Vec<MappedText> {
         && first.contribution.before
     {
         first.contribution.before = false;
-        let marker = if matches!(first.syntax, BlockSyntax::List { needs_blank: true }) {
+        let marker = if matches!(
+            first.syntax,
+            BlockSyntax::List {
+                needs_blank: true,
+                ..
+            }
+        ) {
             // A non-1 marker needs a blank source line after phrasing. That
             // syntax separator supplies the requested gap after the marker
             // row, instead of adding it to another explicit hard blank.

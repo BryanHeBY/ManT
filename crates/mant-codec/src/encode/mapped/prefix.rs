@@ -62,16 +62,21 @@ impl MappedText {
                 (range.start < range.end).then_some((owner, range))
             })
             .collect();
+        let marker = marker.trim_end();
+        let marker_character = marker.chars().last().expect("a nonempty list marker");
         Some(Self {
             text: output,
             owners,
             navigation,
             contribution: self.contribution,
             syntax: BlockSyntax::List {
-                needs_blank: marker.ends_with(". ") && marker != "1. ",
+                needs_blank: matches!(marker_character, '.' | ')')
+                    && marker.len() > 1
+                    && &marker[..marker.len() - 1] != "1",
+                marker: marker_character,
             },
             tail: TailSyntax {
-                columns: self.tail.columns.saturating_add(marker.chars().count()),
+                columns: self.tail.columns.saturating_add(continuation.len()),
                 ..self.tail
             },
             hard_rows: false,

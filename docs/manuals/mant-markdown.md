@@ -762,7 +762,14 @@ boundary without a neighboring receiver. Fences, rules and ordinary lists can
 interrupt that empty phrasing row. A first retained ordered marker other than one
 also requires a blank syntax separator, following CommonMark's interruption
 rule; source distance simplifies to this minimum framing. Skipped items never
-renumber the retained markers. A preformatted root with no authored children contributes
+renumber the retained markers. Ordered lists retain a representable opening
+ordinal and use a short continuation marker when a later ordinal exceeds
+CommonMark's nine-digit limit. When the opening ordinal itself is too wide,
+portable export uses bullet items with explicit number labels and preserves
+each original item's body. Adjacent lists use distinct marker spellings when
+needed to keep their items separate on readback. JSON retains the exact
+ordered start.
+A preformatted root with no authored children contributes
 no code block; an empty `Text("")` child or a hard break owns a literal row and
 retains its fence. Navigation relocation leaves the original IR addresses,
 names and link identities unchanged; artifact ranges follow the actual exported

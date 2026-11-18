@@ -20,7 +20,9 @@ pub(super) fn render_definition_list(
     options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
+    previous: BlockSyntax,
 ) -> Option<MappedText> {
+    let marker = format!("{} ", previous.following_list_marker('-', '+'));
     let mut rendered = Vec::new();
     for (index, item) in items.iter().enumerate() {
         let DefinitionContent {
@@ -46,7 +48,7 @@ pub(super) fn render_definition_list(
         }
         if let Some(content) = content
             .with_owner(EntryOwner::Definition(item), track)
-            .prefix("- ")
+            .prefix(&marker)
         {
             rendered.push((content, item.layout.spacing_before_lines));
         }

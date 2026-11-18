@@ -71,8 +71,20 @@ pub(super) enum BlockSyntax {
     Fence,
     List {
         needs_blank: bool,
+        marker: char,
     },
     Rule,
+}
+
+impl BlockSyntax {
+    pub(super) fn following_list_marker(self, primary: char, alternate: char) -> char {
+        // CommonMark groups adjacent items with the same marker, even
+        // across a blank source line. Switch spelling at the owner boundary.
+        match self {
+            Self::List { marker, .. } if marker == primary => alternate,
+            _ => primary,
+        }
+    }
 }
 
 /// The first accepted block's syntax receiver, before its body scalars.

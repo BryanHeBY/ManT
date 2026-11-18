@@ -1,4 +1,6 @@
 //! Entry projections must borrow ordinary content, not reconstruct definitions.
+#[path = "list_entry_consumers/portable_ordinals.rs"]
+mod portable_ordinals;
 #[path = "support/semantic_read.rs"]
 mod semantic_read;
 use mant_codec::encode::render_markdown;
@@ -175,7 +177,18 @@ fn excerpt_ordinals_preserve_unknown_zero_and_saturated_source_starts() {
         }
         let expected = start.unwrap_or(1).saturating_add(1);
         assert!(render_excerpt_text(&excerpt).contains(&format!("{expected}. run")));
-        assert!(render_excerpt_markdown(&excerpt).contains(&format!("{expected}. `run`")));
+        let markdown = render_excerpt_markdown(&excerpt);
+        if expected > 999_999_999 {
+            assert!(
+                markdown.contains(&format!("- {expected}\\. `run`")),
+                "{markdown}"
+            );
+        } else {
+            assert!(
+                markdown.contains(&format!("{expected}. `run`")),
+                "{markdown}"
+            );
+        }
         assert_eq!(query.document.as_ref().unwrap(), &original);
     }
 }

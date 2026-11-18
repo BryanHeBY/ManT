@@ -109,11 +109,14 @@ fn mapped_sequence(
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
 ) -> Vec<MappedText> {
-    assembly::coalesce(
-        blocks
-            .iter()
-            .filter_map(|block| render_block(block, options, locations, track)),
-    )
+    let mut previous = BlockSyntax::default();
+    assembly::coalesce(blocks.iter().filter_map(|block| {
+        let rendered = render_block(block, options, locations, track, previous)?;
+        if rendered.contribution.rows {
+            previous = rendered.syntax;
+        }
+        Some(rendered)
+    }))
 }
 
 fn render_block(
@@ -121,6 +124,7 @@ fn render_block(
     options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
+    previous: BlockSyntax,
 ) -> Option<MappedText> {
     if options
         .math
@@ -160,9 +164,9 @@ fn render_block(
             compact,
             items,
             ..
-        } => render_list(*kind, *compact, items, options, locations, track),
+        } => render_list(*kind, *compact, items, options, locations, track, previous),
         Block::DefinitionList { items, compact, .. } => {
-            render_definition_list(items, *compact, options, locations, track)
+            render_definition_list(items, *compact, options, locations, track, previous)
         }
         Block::Table { rows, .. } => {
             if let Some(context) = options.math {

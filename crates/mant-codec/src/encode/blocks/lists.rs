@@ -7,6 +7,9 @@ use crate::encode::{
 };
 use mant_ir::{Block, EntryOwner, ListItem, ListKind};
 
+// CommonMark admits at most nine decimal digits in an ordered marker.
+const MAX_MARKDOWN_ORDINAL: u64 = 999_999_999;
+
 pub(super) fn render_list(
     kind: ListKind,
     compact: bool,
@@ -14,17 +17,15 @@ pub(super) fn render_list(
     options: RenderOptions<'_>,
     locations: Option<&dyn MarkdownInlineProjection>,
     track: bool,
+    previous: BlockSyntax,
 ) -> Option<MappedText> {
+    let bullet = format!("{} ", previous.following_list_marker('-', '+'));
+    let period = previous.following_list_marker('.', ')');
+    let mut explicit_ordinals = None;
     let rendered = items
         .iter()
         .enumerate()
         .filter_map(|(index, item)| {
-            let marker = match kind {
-                ListKind::Ordered { .. } => {
-                    format!("{}. ", kind.ordinal(index).expect("ordered list ordinal"))
-                }
-                ListKind::Bullet | ListKind::Dash | ListKind::Plain => "- ".to_owned(),
-            };
             let mut blocks = list_item_blocks(&item.blocks, options, locations, track);
             if options.preserve_semantics
                 && let Some(facts) = &item.entry
@@ -51,6 +52,20 @@ pub(super) fn render_list(
                 }
             }
             let mut content = assembly::join(blocks);
+            let marker =
+                if let Some(ordinal) = kind.ordinal(index).filter(|_| content.contribution.rows) {
+                    if *explicit_ordinals.get_or_insert(ordinal > MAX_MARKDOWN_ORDINAL) {
+                        content = with_explicit_ordinal(content, ordinal);
+                        bullet.clone()
+                    } else if ordinal <= MAX_MARKDOWN_ORDINAL {
+                        format!("{ordinal}{period} ")
+                    } else {
+                        // Only the opening marker determines the list start.
+                        format!("1{period} ")
+                    }
+                } else {
+                    bullet.clone()
+                };
             content.contribution.before |= mant_ir::geometry::list_item_spacing(
                 item.layout.spacing_before_lines,
                 index,
@@ -90,6 +105,19 @@ pub(super) fn render_list(
         );
     }
     Some(content)
+}
+
+fn with_explicit_ordinal(mut content: MappedText, ordinal: u64) -> MappedText {
+    let label = format!("{ordinal}\\.");
+    if content.syntax == BlockSyntax::Phrasing && !content.hard_rows {
+        content.insert(0, &format!("{label} "));
+        content
+    } else {
+        // Wide numbers are visible labels. Keep a child's actual grammar
+        // and indentation independent of the size of that label.
+        let label = MappedText::from(label).syntax_site(BlockSyntax::Phrasing);
+        assembly::join([label, content])
+    }
 }
 
 fn list_item_blocks(
