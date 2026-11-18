@@ -27,6 +27,10 @@ impl BlockState {
             .with_inline_builder(&mut self.formatter, |builder| {
                 builder.begin_column_body(width, origin, last);
                 builder.set_column_reading_parent(parent_units);
+                // termp_it_pre sets this BODY's offset before any graph
+                // reaches term_field(). The output owner was created
+                // while the preceding column's origin was still active.
+                builder.execution.set_output_owner_origin(parent_units);
             });
     }
 

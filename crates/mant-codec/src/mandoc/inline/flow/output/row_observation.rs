@@ -79,21 +79,26 @@ pub(super) fn trailing_device_row_end_receipt(nodes: &[Inline]) -> OutputRowEnd 
     .unwrap_or(OutputRowEnd::Open)
 }
 
-/// Transfer an earlier field's device end before column display content.
-/// Completed empty rows still belong to this literal and its reading
-/// policy. Only `DeviceEnd` closes the preceding cell's existing row.
-pub(in crate::mandoc) fn take_leading_column_device_end(
+/// A completed gap belongs to this column even when no earlier field
+/// needs a device end. Author literal rows remain in the literal itself.
+#[derive(Default)]
+pub(in crate::mandoc) struct ColumnLeadingRows {
+    pub(in crate::mandoc) closes_previous_field: bool,
+    pub(in crate::mandoc) spacing: u16,
+}
+
+pub(in crate::mandoc) fn take_leading_column_rows(
     nodes: &mut Vec<Inline>,
     has_later_completed_rows: bool,
-) -> bool {
+) -> ColumnLeadingRows {
     let Some(first) = nodes.iter().position(|node| {
         !matches!(node, Inline::Anchor { .. })
             && !matches!(node, Inline::Text { value } if value.is_empty())
     }) else {
-        return false;
+        return ColumnLeadingRows::default();
     };
     if !matches!(nodes[first], Inline::LineBreak { .. }) {
-        return false;
+        return ColumnLeadingRows::default();
     }
     let following = &nodes[first + 1..];
     let has_device_end = nodes[..first]
@@ -104,17 +109,47 @@ pub(in crate::mandoc) fn take_leading_column_device_end(
                 .take_while(|node| matches!(node, Inline::Anchor { .. })),
         )
         .any(|node| matches!(RowReceipt::of(node), Some(RowReceipt::DeviceEnd)));
-    if !has_device_end
-        || !(has_later_completed_rows || mant_ir::geometry::has_literal_rows(following))
-    {
-        return false;
+    let closes_previous_field = has_device_end
+        && (has_later_completed_rows || mant_ir::geometry::has_literal_rows(following));
+
+    // term_vspace() independently writes an empty row whether or not
+    // term_newln() had a preceding field to close. Its delimiter and
+    // receipt must move together. If the tail drain already claimed the
+    // row, its delimiter is gone and a receipt cannot claim it again.
+    let start = first + usize::from(closes_previous_field);
+    let mut prefix_end = start;
+    let mut completed = 0_u16;
+    let mut accepted = 0_u16;
+    let mut delimiters = 0_u16;
+    for (offset, inline) in nodes[start..].iter().enumerate() {
+        match RowReceipt::of(inline) {
+            Some(RowReceipt::Completed(CompletedRowOrigin::Layout)) if delimiters > 0 => {
+                completed = completed.saturating_add(1);
+                delimiters -= 1;
+                if delimiters == 0 {
+                    accepted = completed;
+                    prefix_end = start + 1 + offset;
+                }
+            }
+            Some(RowReceipt::Completed(_)) => break,
+            _ if matches!(inline, Inline::Anchor { .. }) => {}
+            _ if matches!(inline, Inline::LineBreak { .. }) => {
+                delimiters = delimiters.saturating_add(1);
+            }
+            _ => break,
+        }
     }
-    let identities = nodes
-        .drain(..=first)
-        .filter(|node| matches!(node, Inline::Anchor { .. }))
-        .collect::<Vec<_>>();
-    nodes.splice(..0, identities);
-    true
+    if prefix_end > first {
+        let identities = nodes
+            .drain(..prefix_end)
+            .filter(|node| matches!(node, Inline::Anchor { .. }))
+            .collect::<Vec<_>>();
+        nodes.splice(..0, identities);
+    }
+    ColumnLeadingRows {
+        closes_previous_field,
+        spacing: accepted,
+    }
 }
 
 /// Receipts are read only after native acceptance has removed rejected

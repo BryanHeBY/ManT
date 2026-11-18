@@ -1,6 +1,6 @@
 {
   "header": {
-    "count": 228,
+    "count": 226,
     "expectationsFromProduct": false,
     "oracleSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
     "rule": "Approved reading exception only: remove one empty initial row from each complete literal owner followed by nonblank body. Native execution rows and source fixtures stay sealed; no shared HEAD/BODY fragment or nonliteral row is filtered."
@@ -7855,75 +7855,6 @@
         "tree": {
           "status": 0,
           "stdoutSha256": "aa394249862b1f3803e879baa929eba8c1bfed2dcc3eaa71e7b23a3d3ee17927",
-          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        }
-      }
-    },
-    {
-      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No \"\\p D\"\n.Bd -literal\nMarker\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.Sh NEXT\n.No END\n",
-      "sourceSha256": "896e2645c87dee342abf42508f6c1eb7d8f35c4eafbe9593796cab362afe6e92",
-      "owner": "Complete literal in first mdoc column cell; NODE_LINE/Bd pre produced its one initial empty row. The separate table spacingBeforeLines remains outside the omitted row. Codec pre-reading IR regression independently pins this owner.",
-      "windows": [
-        {
-          "nativeRows": [
-            "",
-            "Marker AFTER",
-            "RightWord"
-          ],
-          "omittedRows": [
-            0
-          ]
-        }
-      ],
-      "profiles": {
-        "ascii": {
-          "status": 0,
-          "stdoutSha256": "f0e5c1785afe41991a5c4f81e250dd8fc63748782b6ba450796ef7e4a8b639cb",
-          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        "utf8": {
-          "status": 0,
-          "stdoutSha256": "081d9b5e3c7d9d7f4aed1b57a8b9ee4be1253f017e436ba2ce76c2f1309236b0",
-          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        "tree": {
-          "status": 0,
-          "stdoutSha256": "0eb29a733156814cbf3aa05e2238398a81193ec37b9331690e5f8ec8c14236e3",
-          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        }
-      }
-    },
-    {
-      "source": ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n.nf\n.Bl -column \"xxxxxxxx\" \"xxxx\"\n.It Xo\n.No \"\\p D\"\n.Bd -literal\nMarker\n.Ed\n.No AFTER\n.Xc Ta RightWord\n.El\n.fi\n.Sh NEXT\n.No END\n",
-      "sourceSha256": "9c673cac0406ffda88196db58988183e28453038a6c7e6aec160613d09dde295",
-      "owner": "Complete literal in first mdoc column cell; NODE_LINE/Bd pre produced its one initial empty row. The separate table spacingBeforeLines remains outside the omitted row. Codec pre-reading IR regression independently pins this owner.",
-      "windows": [
-        {
-          "nativeRows": [
-            "",
-            "",
-            "Marker AFTER",
-            "RightWord"
-          ],
-          "omittedRows": [
-            1
-          ]
-        }
-      ],
-      "profiles": {
-        "ascii": {
-          "status": 0,
-          "stdoutSha256": "f78cc1a123964b6142cf7f96d9564b81eba8f01d9ab434c07ac717b56586ff6e",
-          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        "utf8": {
-          "status": 0,
-          "stdoutSha256": "baa398d3a14784cfad2c65fe641d1823ed81a843c0e315b09f82d13d5b1377e8",
-          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        },
-        "tree": {
-          "status": 0,
-          "stdoutSha256": "2ce1fc3b7bcc801f864b02b05035813dd860d6a9199fc23199d9fa4d01023d16",
           "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         }
       }

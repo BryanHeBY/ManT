@@ -92,8 +92,8 @@ pub(in crate::mandoc) use projection::{
 pub(super) use row_observation::ProjectedTail;
 use row_observation::RowReceipt;
 pub(in crate::mandoc) use row_observation::ends_with_executed_line_break;
-pub(in crate::mandoc) use row_observation::take_leading_column_device_end;
 pub(in crate::mandoc) use row_observation::trailing_completed_row_origins;
+pub(in crate::mandoc) use row_observation::{ColumnLeadingRows, take_leading_column_rows};
 pub(in crate::mandoc::inline::flow) mod native_passes;
 mod record;
 pub(in crate::mandoc::inline::flow) mod row_origins;

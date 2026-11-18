@@ -274,7 +274,7 @@ fn only_complete_literal_roots_are_normalized_in_nested_containers() {
 }
 
 #[test]
-fn column_gap_and_single_initial_literal_row_have_separate_owners() {
+fn column_gap_and_table_spacing_have_separate_owners() {
     // Exact source ran pristine ASCII/UTF-8/tree/lint first. Bd pre executes
     // print_bvspace; its independent row and the enclosing Bl leading distance
     // are separate. Reading must never erase the table's external distance.
@@ -293,19 +293,17 @@ fn column_gap_and_single_initial_literal_row_have_separate_owners() {
         source.as_bytes(),
     )
     .unwrap();
-    let mut expected = native;
-    let Block::Table { rows, layout, .. } = &mut expected.sections[1].blocks[0] else {
+    let Block::Table { rows, layout, .. } = &native.sections[1].blocks[0] else {
         panic!("column owner")
     };
     assert_eq!(layout.spacing_before_lines, 1, "external table row remains");
-    let Block::Preformatted { children, .. } = &mut rows[0].cells[0].blocks[0] else {
-        panic!("complete literal owner")
+    let [
+        Block::VerticalSpace { lines: 1, .. },
+        Block::Preformatted { children, .. },
+    ] = rows[0].cells[0].blocks.as_slice()
+    else {
+        panic!("the executed gap and the following text have separate owners")
     };
-    assert_eq!(mant_ir::inline_plain_text(children), "\nMarker AFTER");
-    assert!(matches!(children.first(), Some(Inline::LineBreak {})));
-    children.remove(0);
-    assert_eq!(
-        reading, expected,
-        "only the independent code row is omitted"
-    );
+    assert_eq!(mant_ir::inline_plain_text(children), "Marker AFTER");
+    assert_eq!(reading, native, "layout spacing is outside the code policy");
 }

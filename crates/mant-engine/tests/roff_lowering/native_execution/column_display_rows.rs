@@ -3,6 +3,8 @@
 use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 use mant_ir::{Block, DocumentIndex, NodeId, ResolvedContent, TableRow};
 
+mod geometry;
+
 const HEADER: &str =
     ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
 const FINISH: &str = ".El\n.Sh NEXT\n.No SKIP\n";

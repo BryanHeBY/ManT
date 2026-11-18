@@ -388,11 +388,14 @@ impl LiteralFlow {
         // The typed receipts retain their original order across this owner.
         // Empty TEXT content must not enter the bounded spacing-request plan.
         retire_completed_tail(&mut previous.nodes, origins.len());
-        let closes_previous_field = begins_column_output
-            && crate::mandoc::inline::take_leading_column_device_end(
+        let leading_rows = if begins_column_output {
+            crate::mandoc::inline::take_leading_column_rows(
                 &mut previous.nodes,
                 !origins.is_empty(),
-            );
+            )
+        } else {
+            crate::mandoc::inline::ColumnLeadingRows::default()
+        };
         // An already closed formatter row is joined to the next block once.
         // This decision belongs to the producer's actual row receipt:
         // public literal LineBreak remains content for every consumer.
@@ -411,7 +414,18 @@ impl LiteralFlow {
         let layout = previous.adopted_layout.unwrap_or_else(|| layout(indent));
         let mut blocks = origins::literal_blocks(previous.nodes, layout, previous.source);
         append_completed_rows(&mut blocks, &origins, layout, previous.source);
-        (blocks, closes_previous_field)
+        if leading_rows.spacing > 0 {
+            // mdoc_term.c::print_bvspace asserts a gap on its own, even
+            // when there is no previous field to close.
+            blocks.insert(
+                0,
+                Block::VerticalSpace {
+                    lines: leading_rows.spacing,
+                    source: None,
+                },
+            );
+        }
+        (blocks, leading_rows.closes_previous_field)
     }
 }
 

@@ -48,7 +48,7 @@ struct Fixture {
 
 static CARDS: LazyLock<Fixture> = LazyLock::new(|| {
     let cards: Fixture = serde_json::from_str(include_str!("literal_reading.json")).unwrap();
-    assert_eq!(cards.header.count, 228);
+    assert_eq!(cards.header.count, 226);
     assert_eq!(cards.cases.len(), cards.header.count);
     assert!(!cards.header.expectations_from_product);
     assert!(cards.header.rule.contains("complete literal owner"));

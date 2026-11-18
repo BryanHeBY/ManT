@@ -7,6 +7,8 @@ use ratatui::{
     widgets::{Paragraph, Widget},
 };
 
+mod geometry;
+
 #[test]
 fn empty_column_display_anchors_do_not_change_terminal_pixels_or_hard_rows() {
     let header = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
