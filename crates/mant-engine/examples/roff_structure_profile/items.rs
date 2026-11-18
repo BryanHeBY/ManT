@@ -107,8 +107,8 @@ fn walk_native(
 ) -> bool {
     census.native_node_visits += 1;
     let column_list = if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("Bl") {
-        super::native::mdoc_list_topology_kind(node)
-            == Some(super::native::MdocContainerKind::Table)
+        super::native_topology::mdoc_list_topology_kind(node)
+            == Some(super::native_topology::MdocContainerKind::Table)
     } else {
         inherited_column_list
     };

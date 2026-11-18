@@ -39,9 +39,9 @@ impl HeadTables {
             return;
         }
         let definitions = if node.kind == NodeKind::Block
-            && let Some(kind) = super::native::mdoc_list_topology_kind(node)
+            && let Some(kind) = super::native_topology::mdoc_list_topology_kind(node)
         {
-            kind == super::native::MdocContainerKind::Definition
+            kind == super::native_topology::MdocContainerKind::Definition
         } else {
             definitions
         };

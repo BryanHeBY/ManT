@@ -16,8 +16,8 @@ use std::{
 };
 
 use libmandoc_rs::{
-    Compression, DisplayKind, IncludePolicy, Node, NodeKind, NormalizedListKind, ParseOptions,
-    Parser, SpecialCharacter, special_character,
+    Compression, DisplayKind, IncludePolicy, Node, NodeKind, ParseOptions, Parser,
+    SpecialCharacter, special_character,
 };
 use mant_ir::{Block, Document, Inline, LinkTarget, Section};
 use mant_loader::{ManualPage, parse_manual_page};
@@ -39,6 +39,8 @@ mod ir;
 mod links;
 #[path = "roff_structure_profile/native.rs"]
 mod native;
+#[path = "roff_structure_profile/native_topology.rs"]
+mod native_topology;
 use comparison::compare_structure;
 #[cfg(test)]
 use comparison::{compare_table_topology, underflow};
@@ -276,16 +278,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
-    let (expected, mut expected_topology) = ast_profile(&report.document);
-    // Only actual owned Equation nodes establish an obligation. CVS
-    // roff_parseln bypasses equation delimiters while tbl consumes a cell;
-    // a root-source scan cannot invent an executed eqn environment here.
-    expected_topology.equations.sort_by_key(|equation| {
-        (
-            equation.source_line,
-            equation_context_order(equation.context),
-        )
-    });
+    let (expected, expected_topology) = ast_profile(&report.document);
     let document = parse_manual_page(&ManualPage {
         name: "audit".to_owned(),
         section: "1".to_owned(),
