@@ -94,7 +94,7 @@ pub(crate) fn observe<'a>(
             label.no_space_mode = spacing.0.contains(&head.id);
             label.walk(head, None);
         }
-        let text = label.text.as_str();
+        let text = label.evidence.text.as_str();
         let marker = split_ordinal(text.trim()).and_then(|(digits, punctuation)| {
             let mut words = digits.split_whitespace().peekable();
             has_candidate |= words.peek().is_some()
@@ -113,7 +113,7 @@ pub(crate) fn observe<'a>(
             })
         });
         let body = part(item, NodeKind::Body).map_or(Description::Absent, |body| {
-            description(body, label.tail.continues)
+            description(body, label.continues)
         });
         if (!follows && label.effect != LabelEffect::Uncertain)
             || label.effect == LabelEffect::Retained
@@ -159,17 +159,11 @@ fn part(node: &Node, kind: NodeKind) -> Option<&Node> {
 
 #[derive(Default)]
 struct NativeLabel {
-    text: String,
+    evidence: NativeWord,
     join_next: bool,
     no_space_mode: bool,
     effect: LabelEffect,
-    tail: WordTail,
-}
-
-#[derive(Default)]
-struct WordTail {
     continues: bool,
-    pending_break: bool,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -190,25 +184,16 @@ impl NativeLabel {
             // term_word(). Styling wrappers alone do not suppress spaces.
             if node.flags.no_fill
                 && node.flags.line_start
-                && !self.tail.continues
-                && !self.text.is_empty()
+                && !self.continues
+                && !self.evidence.text.is_empty()
             {
-                self.text.push('\n');
+                self.evidence.text.push('\n');
             }
-            let word = NativeWord::read(node.text.as_deref().unwrap_or_default());
             self.word(
-                &word.text,
+                node.text.as_deref().unwrap_or_default(),
                 node.flags.delimiter_close,
                 node.flags.delimiter_open,
             );
-            if word.has(WordEffect::EmittedBreak) {
-                self.effect = LabelEffect::Retained;
-            } else if word.has(WordEffect::Unclassified) {
-                self.effect = self.effect.max(LabelEffect::Uncertain);
-            }
-            self.tail.pending_break |= word.has(WordEffect::WordEndBreak);
-            self.tail.continues = word.has(WordEffect::Continues);
-            self.join_next |= self.tail.continues;
             return;
         }
         if node.kind == NodeKind::Equation {
@@ -229,7 +214,7 @@ impl NativeLabel {
                     && !cell.vertical_continuation
                     && let Some(text) = cell.text.as_deref()
                 {
-                    self.word(&NativeWord::read(text).text, false, false);
+                    self.word(text, false, false);
                 }
             }
             self.no_space_mode = false;
@@ -245,7 +230,7 @@ impl NativeLabel {
             }
             (_, Some("Sm")) => {
                 self.no_space_mode = spacing_mode(node, self.no_space_mode);
-                if !self.no_space_mode && !self.text.is_empty() {
+                if !self.no_space_mode && !self.evidence.text.is_empty() {
                     self.join_next = false;
                 }
                 return;
@@ -298,15 +283,20 @@ impl NativeLabel {
     }
 
     fn word(&mut self, word: &str, closes: bool, opens: bool) {
-        if !self.text.is_empty() && !self.join_next && !closes {
-            if self.tail.pending_break {
-                self.effect = LabelEffect::Retained;
-            }
-            self.tail.pending_break = false;
-            self.text.push(' ');
+        if !self.evidence.text.is_empty() && !self.join_next && !closes {
+            self.observe_word(" ");
         }
-        self.text.push_str(word);
-        self.join_next = self.no_space_mode || opens;
-        self.tail.continues = false;
+        self.observe_word(word);
+        self.join_next = self.no_space_mode || opens || self.continues;
+    }
+
+    fn observe_word(&mut self, source: &str) {
+        self.evidence.extend(source);
+        if self.evidence.has(WordEffect::EmittedBreak) {
+            self.effect = LabelEffect::Retained;
+        } else if self.evidence.has(WordEffect::Unclassified) {
+            self.effect = self.effect.max(LabelEffect::Uncertain);
+        }
+        self.continues = self.evidence.has(WordEffect::Continues);
     }
 }

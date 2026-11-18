@@ -34,7 +34,7 @@ from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
-    SourceReview, discover_pages, manual_section, ordinal_source_reviews,
+    SourceReview, discover_pages, is_nonnegative_integer, manual_section, ordinal_source_reviews,
     run_jsonl_profile_batch, source_reviews,
 )
 
@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v6"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v7"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -498,7 +498,7 @@ def structure_source_reviews(response: dict[str, object]) -> list[SourceReview] 
 
 def valid_structure_counts(value: object) -> bool:
     return isinstance(value, dict) and all(
-        isinstance(key, str) and isinstance(count, int) and count >= 0
+        isinstance(key, str) and is_nonnegative_integer(count)
         for key, count in value.items()
     )
 
@@ -510,12 +510,61 @@ def valid_structure_topology(value: object) -> bool:
         topology = value.get(side)
         if not isinstance(topology, dict):
             return False
-        if not all(
-            isinstance(topology.get(field), list)
-            for field in ("lists", "tableRows", "equations")
-        ):
-            return False
+        for field, validate in (("lists", valid_list_topology),
+                                ("tableRows", lambda row: valid_table_topology(row, side)),
+                                ("equations", valid_equation_topology)):
+            records = topology.get(field)
+            if not isinstance(records, list) or not all(validate(record) for record in records):
+                return False
     return True
+
+
+def valid_list_topology(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and is_nonnegative_integer(value.get("sourceLine"))
+        and is_nonnegative_integer(value.get("items"))
+        and isinstance(value.get("kind"), str)
+        and value["kind"] in {"generic", "definition"}
+    )
+
+
+def valid_equation_topology(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and is_nonnegative_integer(value.get("sourceLine"))
+        and isinstance(value.get("context"), str)
+        and value["context"] in {"display", "inline", "table-cell"}
+        and isinstance(value.get("value"), str)
+    )
+
+
+def valid_table_topology(value: object, side: str) -> bool:
+    if not isinstance(value, dict) or not all(
+        is_nonnegative_integer(value.get(field))
+        for field in ("tableSourceLine", "tableSourceColumn", "rowIndex")
+    ):
+        return False
+    kind = value.get("kind")
+    if isinstance(kind, dict) and list(kind) == ["layout-rule"]:
+        layout = kind["layout-rule"]
+        valid_kind = (isinstance(layout, dict) and isinstance(layout.get("cells"), list)
+                      and all(isinstance(cell, str) and cell in {"horizontal", "double-horizontal"}
+                              for cell in layout["cells"]))
+    else:
+        valid_kind = isinstance(kind, str) and kind in {"data", "horizontal-rule", "double-horizontal-rule"}
+    cells = value.get("cells")
+    return (valid_kind and isinstance(cells, list)
+            and all(valid_table_cell(cell, side) for cell in cells))
+
+
+def valid_table_cell(value: object, side: str) -> bool:
+    return (
+        isinstance(value, dict)
+        and all(is_nonnegative_integer(value.get(field)) and value[field] > 0
+                for field in ("columnSpan", "rowSpan"))
+        and isinstance(value.get("verticalContinuation" if side == "expected" else "empty"), bool)
+    )
 
 
 def self_check() -> None:

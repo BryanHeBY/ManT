@@ -2,6 +2,9 @@
 //! style boundaries below. The product's documented recovery policy supplies
 //! the independent yes/no disposition.
 
+#[path = "ordinal_execution_cases.rs"]
+pub(crate) mod execution;
+
 const HEADER: &str = concat!(
     ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n",
     ".Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n",

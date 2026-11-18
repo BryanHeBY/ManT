@@ -221,6 +221,114 @@ fn punctuated_mdoc_definition_ordinals_compare_as_recovered_ordered_lists() {
 }
 
 #[test]
+fn equation_payload_evidence_preserves_source_review_and_independent_census() {
+    use super::ordinal_labels::{OrdinalDisposition, cases::execution};
+    use serde_json::json;
+    let root = std::env::temp_dir();
+    let path = root.join(format!(
+        "mant-ordinal-equation-evidence-{}.1",
+        std::process::id()
+    ));
+    for case in execution::equation_edges() {
+        std::fs::write(&path, &case.source).unwrap();
+        let profile =
+            super::profile_request(&json!({"id":case.name,"path":path,"root":root}).to_string());
+        std::fs::remove_file(&path).unwrap();
+        let profile = profile.unwrap();
+        if case.disposition == OrdinalDisposition::Uncertain {
+            assert_eq!(
+                profile["ordinalCasesForReview"],
+                json!([[8, 2]]),
+                "{}",
+                case.name
+            );
+        } else {
+            assert_eq!(profile["ordinalCasesForReview"], json!([]), "{}", case.name);
+        }
+        assert!(
+            !profile["violations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|issue| { issue.as_str().unwrap().contains("list-topology") }),
+            "{}\n{profile}",
+            case.name
+        );
+        let (expected, topology, mut document) = parsed_structure(&case.source);
+        document.sections[1].blocks.clear();
+        let (observed, actual) = super::ir_profile(&document);
+        let issues = super::compare_structure(&expected, &observed, &topology, &actual);
+        assert!(
+            issues.iter().any(|issue| issue.contains("list-topology")),
+            "{}\n{issues:?}",
+            case.name
+        );
+        // Source uncertainty does not waive the pre-existing independent
+        // equation census. Removing the owner must retain those findings.
+        if case.name.starts_with("equation-atom") {
+            assert!(
+                profile["violations"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|issue| { issue.as_str().unwrap().contains("display-equations") })
+            );
+        }
+    }
+}
+
+#[test]
+fn source_execution_crossings_keep_evidence_and_owner_obligations() {
+    use super::ordinal_labels::{OrdinalDisposition, cases::execution};
+    use serde_json::json;
+    let root = std::env::temp_dir();
+    let path = root.join(format!(
+        "mant-structure-source-execution-{}.1",
+        std::process::id()
+    ));
+    for case in execution::cases() {
+        std::fs::write(&path, &case.source).unwrap();
+        let profile =
+            super::profile_request(&json!({"id":case.name,"path":path,"root":root}).to_string());
+        std::fs::remove_file(&path).unwrap();
+        let profile = profile.unwrap();
+        assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
+        let expected = &profile["topology"]["expected"]["lists"];
+        let observed = &profile["topology"]["observed"]["lists"];
+        let kind = if case.disposition == OrdinalDisposition::Retained {
+            "definition"
+        } else {
+            "generic"
+        };
+        assert_eq!(
+            observed,
+            &json!([{"sourceLine":case.source_line,"kind":kind,"items":2}]),
+            "{}",
+            case.name
+        );
+        if case.disposition == OrdinalDisposition::Uncertain {
+            assert_eq!(
+                profile["ordinalCasesForReview"],
+                json!([[case.source_line, 2]])
+            );
+        } else {
+            assert_eq!(profile["ordinalCasesForReview"], json!([]));
+            assert_eq!(expected, observed, "{}", case.name);
+        }
+
+        let (expected, topology, mut document) = parsed_structure(&case.source);
+        document.sections[1].blocks.clear();
+        let (observed, actual) = super::ir_profile(&document);
+        let violations = super::compare_structure(&expected, &observed, &topology, &actual);
+        assert!(
+            violations.iter().any(|line| line.contains("list-topology")),
+            "{}\n{violations:?}",
+            case.name
+        );
+    }
+}
+
+#[test]
 fn independent_ordinal_truth_rejects_same_count_owner_corruption() {
     use super::ListTopologyKind::{Definition, Generic};
     for (source, recovered) in super::ordinal_labels::cases::inputs() {

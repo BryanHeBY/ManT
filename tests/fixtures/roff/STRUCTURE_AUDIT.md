@@ -121,11 +121,18 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v6` successful page response requires both
+The `mant.roff-structure-profile/v7` successful page response requires both
 `ordinalCasesForReview` and `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
 evidence. Incomplete observations fail validation. A pure alias retains its
 own redirect identity.
+
+List, equation and table topology records are validated on both sides. Native
+coordinates, item counts, row indexes and spans require nonboolean integers.
+Known enum values and table-cell flags retain the distinct AST and IR shapes.
+The source ordinal observer retains overwrite evidence across node boundaries,
+including styled pieces and source continuations, and records an uncertain
+owner with its original coordinates instead of inventing a definite shape.
 
 Equation topology is source-addressed by line and context. Native
 `Node::equation_inline` mode determines inline/display ownership independently

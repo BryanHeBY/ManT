@@ -1,6 +1,7 @@
 """Mutate successful profiler observations across the audit-driver boundary."""
 
 from copy import deepcopy
+import json
 from pathlib import Path
 import unittest
 
@@ -61,6 +62,16 @@ def successful_page(audit):
     if audit is structure:
         page['sourceLinkOrigins']['sectionLabelsForReview'].clear()
     return page
+
+
+def ordinal_conversion():
+    # Actual public profiler record for two ordinary native tag ordinals.
+    return {
+        'sourceLine': 8, 'listStyle': 'tag', 'terms': ['1.', '2.'],
+        'expectedDisposition': 'recovered-ordered-list',
+        'observedDispositions': ['recovered-ordered-list'],
+        'observedIrPaths': ['section[1]/block[0]'],
+    }
 
 
 class AuditProfileWireTests(unittest.TestCase):
@@ -130,3 +141,83 @@ class AuditProfileWireTests(unittest.TestCase):
             error = self.finding(audit, {'schema': audit.PROFILE_SCHEMA, 'error': 'missing target'})
             self.assertEqual(error.status, 'hard-failure')
             self.assertEqual(error.detail, 'missing target')
+
+    def test_ordinal_owner_pairs_and_explicit_mismatch_evidence(self):
+        for disposition in ([], ['retained-definition-list'], ['other-list']):
+            response = successful_page(semantic)
+            conversion = ordinal_conversion()
+            conversion['observedDispositions'] = disposition
+            conversion['observedIrPaths'] = ['section[1]/block[0]'] if disposition else []
+            response['ordinalConversions'] = [conversion]
+            # Missing or wrong observed owners may be legitimate product
+            # differences. A successful payload must include that finding.
+            with self.subTest(disposition=disposition):
+                self.assertEqual(self.finding(semantic, response).status, 'hard-failure')
+                issue = ('mdoc -tag ordinal candidate at line 8 expected recovered-ordered-list '
+                         f'but observed {json.dumps(disposition)}')
+                response['ordinalConversionViolations'] = [issue]
+                response['violations'] = [issue]
+                result = self.finding(semantic, response)
+                self.assertEqual(result.status, 'review')
+                self.assertEqual(result.ordinal_conversions, [conversion])
+                self.assertEqual(result.violations, [issue])
+                response['violations'] = ['unrelated finding']
+                self.assertEqual(self.finding(semantic, response).status, 'hard-failure')
+
+        response = successful_page(semantic)
+        response['ordinalConversions'] = [ordinal_conversion()]
+        self.assertEqual(self.finding(semantic, response).status, 'clean')
+        for field, values in {
+            'sourceLine': [False, True, -1, None, 8.0, []],
+            'listStyle': [None, [], 'unknown'],
+            'terms': [None, [False], [{}]],
+            'expectedDisposition': [None, [], 'other-list'],
+            'observedDispositions': [None, [None], [[]], ['unknown']],
+            'observedIrPaths': [None, [], [''], [False], ['one', 'two']],
+        }.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    malformed = deepcopy(response)
+                    malformed['ordinalConversions'][0][field] = value
+                    self.assertEqual(self.finding(semantic, malformed).status, 'hard-failure')
+
+    def test_structure_validates_each_record_in_both_observation_streams(self):
+        for side in ('expected', 'observed'):
+            response = successful_page(structure)
+            current = response['topology'][side]
+            current['tableRows'] = [{
+                'tableSourceLine': 9, 'tableSourceColumn': 1, 'rowIndex': 0, 'kind': 'data',
+                'cells': [{'columnSpan': 1, 'rowSpan': 1,
+                           'verticalContinuation' if side == 'expected' else 'empty': False}],
+            }]
+            current['equations'] = [{'sourceLine': 10, 'context': 'inline', 'value': 'x'}]
+            self.assertEqual(self.finding(structure, response).status, 'clean')
+            for field in ('lists', 'tableRows', 'equations'):
+                for record in (None, False, [], {}):
+                    with self.subTest(side=side, field=field, record=record):
+                        bad = deepcopy(response)
+                        bad['topology'][side][field][0] = record
+                        self.assertEqual(self.finding(structure, bad).status, 'hard-failure')
+            for collection, field, values in (
+                ('lists', 'items', [True, -1, 2.0]),
+                ('lists', 'kind', ['unclassifiable', []]),
+                ('lists', 'sourceLine', [False, None, -1]),
+                ('equations', 'sourceLine', [True, -1]),
+                ('equations', 'context', ['unknown', []]),
+                ('equations', 'value', [None, False]),
+                ('tableRows', 'tableSourceLine', [True, -1]),
+                ('tableRows', 'tableSourceColumn', [True, -1]),
+                ('tableRows', 'rowIndex', [False, -1]),
+                ('tableRows', 'kind', ['unknown', {}, {'layout-rule': {'cells': ['unknown']}}]),
+                ('tableRows', 'cells', [None, [False], [{'columnSpan': True, 'rowSpan': 1}]]),
+            ):
+                for value in values:
+                    with self.subTest(side=side, collection=collection, field=field, value=value):
+                        bad = deepcopy(response)
+                        bad['topology'][side][collection][0][field] = value
+                        self.assertEqual(self.finding(structure, bad).status, 'hard-failure')
+
+            for row_kind in ('horizontal-rule', 'double-horizontal-rule',
+                             {'layout-rule': {'cells': ['horizontal', 'double-horizontal']}}):
+                current['tableRows'][0]['kind'] = row_kind
+                self.assertEqual(self.finding(structure, response).status, 'clean')

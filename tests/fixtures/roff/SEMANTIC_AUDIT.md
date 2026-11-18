@@ -10,7 +10,7 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v7`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v8`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
@@ -18,6 +18,20 @@ An ordinal-shaped list with unproved HEAD or BODY execution is recorded with
 its source coordinates and reason. The audit still checks that its owner is
 present. The successful page response always carries `ordinalCasesForReview`,
 including an empty array when every case has conclusive evidence.
+
+HEAD evidence shares one lexical execution scope across adjacent native text,
+styles and generated separators. Overwrite effects requiring field placement
+remain source-bound Review cases. BODY evidence includes generated function and
+custom-enclosure delimiters, and distinguishes an empty equation root from an
+equation with printable content. Authored equation objects with unproved
+glyphless payload remain source-bound Review cases. The source census remains
+independent of IR, and its independent equation observations are retained.
+
+Each conversion pairs at most one observed disposition with its nonempty IR
+path. A missing or different owner requires the explicit conversion violation
+and its inclusion in the overall violations. `other-list` is a valid observed
+product difference, recorded for Review. Malformed records and JSON booleans in
+numeric coordinates or counts are rejected.
 
 ## Oracle and scope
 

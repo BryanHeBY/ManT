@@ -25,6 +25,7 @@ from scripts.roff.lib.roff_audit_common import (
     filter_pages_by_source,
     manual_hierarchy_root,
     manual_section,
+    is_nonnegative_integer,
     non_negative_integer,
     ordinal_source_reviews,
     relative_label,
@@ -38,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v7"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v8"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v1",
     "mant.roff-semantic-profile/v2",
@@ -46,6 +47,7 @@ SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v4",
     "mant.roff-semantic-profile/v5",
     "mant.roff-semantic-profile/v6",
+    "mant.roff-semantic-profile/v7",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -205,7 +207,8 @@ def valid_entry(value: object) -> bool:
         return False
     return (
         isinstance(value.get("id"), str)
-        and value.get("kind") in ENTRY_KINDS
+        and isinstance(value.get("kind"), str)
+        and value["kind"] in ENTRY_KINDS
         and all(
             isinstance(value.get(field), list)
             and all(isinstance(item, str) for item in value[field])
@@ -216,13 +219,11 @@ def valid_entry(value: object) -> bool:
             value.get("containingSectionTitle") is None
             or isinstance(value.get("containingSectionTitle"), str)
         )
-        and isinstance(value.get("containingSectionSourceLine"), int)
-        and value["containingSectionSourceLine"] >= 0
-        and isinstance(value.get("nestedDepth"), int)
-        and value["nestedDepth"] >= 0
+        and is_nonnegative_integer(value.get("containingSectionSourceLine"))
+        and is_nonnegative_integer(value.get("nestedDepth"))
         and (
             value.get("valueDomainOrigin") is None
-            or value.get("valueDomainOrigin")
+            or isinstance(value.get("valueDomainOrigin"), str) and value["valueDomainOrigin"]
             in {"child-choices", "external-entry-set", "union"}
         )
     )
@@ -233,7 +234,7 @@ def valid_definition_candidate(value: object) -> bool:
         isinstance(value, dict)
         and isinstance(value.get("form"), str)
         and (value.get("identity") is None or isinstance(value.get("identity"), str))
-        and (value.get("role") is None or value.get("role") in ENTRY_KINDS)
+        and (value.get("role") is None or isinstance(value.get("role"), str) and value["role"] in ENTRY_KINDS)
         and (
             value.get("containingSection") is None
             or isinstance(value.get("containingSection"), str)
@@ -242,26 +243,41 @@ def valid_definition_candidate(value: object) -> bool:
             value.get("containingSectionTitle") is None
             or isinstance(value.get("containingSectionTitle"), str)
         )
-        and isinstance(value.get("containingSectionSourceLine"), int)
+        and is_nonnegative_integer(value.get("containingSectionSourceLine"))
         and isinstance(value.get("irPath"), str)
     )
 
 
 def valid_ordinal_conversion(value: object) -> bool:
-    dispositions = {"recovered-ordered-list", "retained-definition-list"}
+    expected = {"recovered-ordered-list", "retained-definition-list"}
+    observed = expected | {"other-list"}
     return (
         isinstance(value, dict)
-        and isinstance(value.get("sourceLine"), int)
-        and value["sourceLine"] >= 0
-        and value.get("listStyle") in {"tag", "diag", "hang", "inset", "ohang"}
+        and is_nonnegative_integer(value.get("sourceLine"))
+        and isinstance(value.get("listStyle"), str)
+        and value["listStyle"] in {"tag", "diag", "hang", "inset", "ohang"}
         and isinstance(value.get("terms"), list)
         and all(isinstance(term, str) for term in value["terms"])
-        and value.get("expectedDisposition") in dispositions
+        and isinstance(value.get("expectedDisposition"), str)
+        and value["expectedDisposition"] in expected
         and isinstance(value.get("observedDispositions"), list)
-        and all(item in dispositions for item in value["observedDispositions"])
+        and all(isinstance(item, str) and item in observed for item in value["observedDispositions"])
         and isinstance(value.get("observedIrPaths"), list)
-        and all(isinstance(path, str) for path in value["observedIrPaths"])
+        and all(isinstance(path, str) and bool(path) for path in value["observedIrPaths"])
+        # audit_ordinals pairs each source occurrence with at most one IR owner.
+        and len(value["observedDispositions"]) == len(value["observedIrPaths"]) <= 1
     )
+
+
+def expected_conversion_violations(conversions: list[dict[str, object]]) -> list[str]:
+    """Check the Rust source-occurrence audit's explicit mismatch summary."""
+    return [
+        f'mdoc -{item["listStyle"]} ordinal candidate at line {item["sourceLine"]} '
+        f'expected {item["expectedDisposition"]} but observed '
+        f'{json.dumps(item["observedDispositions"])}'
+        for item in conversions
+        if item["expectedDisposition"] not in item["observedDispositions"]
+    ]
 
 
 def profile_findings(
@@ -315,7 +331,7 @@ def profile_findings(
                 isinstance(entries, list)
                 and all(valid_entry(entry) for entry in entries)
                 and isinstance(entry_counts, dict)
-                and all(kind in ENTRY_KINDS and isinstance(count, int) and count >= 0 for kind, count in entry_counts.items())
+                and all(kind in ENTRY_KINDS and is_nonnegative_integer(count) for kind, count in entry_counts.items())
                 and sum(entry_counts.values()) == len(entries)
                 and isinstance(ordinal_entries, list)
                 and all(valid_entry(entry) for entry in ordinal_entries)
@@ -325,13 +341,11 @@ def profile_findings(
                 and all(valid_definition_candidate(item) for item in retained_presentation_ordinals)
                 and isinstance(empty_entries, list)
                 and all(valid_entry(entry) for entry in empty_entries)
-                and isinstance(aliasless_count, int)
-                and aliasless_count >= 0
+                and is_nonnegative_integer(aliasless_count)
                 and isinstance(aliasless_samples, list)
                 and all(valid_entry(entry) for entry in aliasless_samples)
                 and len(aliasless_samples) <= min(aliasless_count, 32)
-                and isinstance(note_count, int)
-                and note_count >= 0
+                and is_nonnegative_integer(note_count)
                 and isinstance(note_samples, list)
                 and all(valid_entry(entry) for entry in note_samples)
                 and len(note_samples) <= min(note_count, 32)
@@ -341,8 +355,10 @@ def profile_findings(
                 and all(valid_ordinal_conversion(item) for item in ordinal_conversions)
                 and isinstance(ordinal_conversion_violations, list)
                 and all(isinstance(item, str) for item in ordinal_conversion_violations)
+                and ordinal_conversion_violations == expected_conversion_violations(ordinal_conversions)
                 and isinstance(violations, list)
                 and all(isinstance(item, str) for item in violations)
+                and not (Counter(ordinal_conversion_violations) - Counter(violations))
                 and valid_violation_summary(response)
                 and isinstance(response.get("declarationGroups"), dict)
                 and isinstance(response.get("declarationGroupViolations"), list)

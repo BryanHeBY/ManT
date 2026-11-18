@@ -50,6 +50,11 @@ class SourceReview:
     reason: str
 
 
+def is_nonnegative_integer(value: object) -> bool:
+    """Wire counts and coordinates exclude JSON booleans."""
+    return type(value) is int and value >= 0
+
+
 def source_reviews(positions: object, reason: str) -> list[SourceReview] | None:
     """Validate the source's coordinates and retain every occurrence."""
     if not isinstance(positions, list):

@@ -50,52 +50,60 @@ impl RoffWordEvidence {
     /// Decode one owned terminal source word using the shared roff grammar.
     #[must_use]
     pub fn read(source: &str) -> Self {
-        let decoded = decode_with_status(source);
         let mut word = Self::default();
+        word.extend(source);
+        word
+    }
+
+    /// Observe the next source word or generated separator in the same
+    /// execution scope. Held cells and unproved effects survive node splits.
+    pub fn extend(&mut self, source: &str) {
+        self.effects &= !(Continues as u8 | EmittedBreak as u8 | ZeroAdvance as u8);
+        let decoded = decode_with_status(source);
         if !decoded.proves_native_glyphs() {
-            word.set(Unclassified);
+            self.set(Unclassified);
         }
         let mut events = decoded.events.into_iter().peekable();
         while let Some(event) = events.next() {
             match event {
                 RoffInlineEvent::Text(text) => {
                     if text.contains(' ') {
-                        word.resolve_break();
+                        self.resolve_break();
                     }
-                    word.append(&text);
+                    self.append(&text);
                 }
-                RoffInlineEvent::Glyph(text) => word.append(&text),
-                RoffInlineEvent::BreakableHyphen => word.append("-"),
-                RoffInlineEvent::NonBreakingWordBlank => word.append("\u{a0}"),
-                RoffInlineEvent::DeviceName => word.append("utf8"),
-                RoffInlineEvent::ZeroWidthGlyph => word.set(Buffered),
+                RoffInlineEvent::Glyph(text) => self.append(&text),
+                RoffInlineEvent::BreakableHyphen => self.append("-"),
+                RoffInlineEvent::NonBreakingWordBlank => self.append("\u{a0}"),
+                RoffInlineEvent::DeviceName => self.append("utf8"),
+                RoffInlineEvent::ZeroWidthGlyph => self.set(Buffered),
                 RoffInlineEvent::Breakpoint => {
-                    word.set(Buffered);
-                    word.resolve_break();
+                    self.set(Buffered);
+                    self.resolve_break();
                 }
                 RoffInlineEvent::LineBreak => {
-                    word.set(Buffered);
-                    word.set(WordEndBreak);
+                    self.set(Buffered);
+                    self.set(WordEndBreak);
                 }
                 RoffInlineEvent::NoSpace => {
                     // CVS clears an armed BACKAFTER instead of applying
                     // a continuation. A held glyph has BACKBEFORE set.
-                    if matches!(word.advance, Advance::Armed) {
-                        word.advance = Advance::Ordinary;
+                    if matches!(self.advance, Advance::Armed) {
+                        self.advance = Advance::Ordinary;
                     } else if events.peek().is_none() {
-                        word.set(Continues);
+                        self.set(Continues);
                     }
                 }
-                RoffInlineEvent::ZeroAdvance => word.advance = Advance::Armed,
+                RoffInlineEvent::ZeroAdvance => self.advance = Advance::Armed,
                 RoffInlineEvent::Overstrike {
                     terminal, buffered, ..
                 } => {
-                    word.set(Unclassified);
+                    self.set(Unclassified);
                     if buffered {
-                        word.set(Buffered);
+                        self.set(Buffered);
                     }
                     if let Some(text) = terminal {
-                        word.append(&text);
+                        self.append(&text);
                     }
                 }
                 RoffInlineEvent::HorizontalMotion { .. }
@@ -105,18 +113,17 @@ impl RoffWordEvidence {
                     kind: PresentationKind::HorizontalLine,
                     ..
                 } => {
-                    word.set(Unclassified);
+                    self.set(Unclassified);
                 }
-                RoffInlineEvent::EmptyDestination => word.append("<>"),
+                RoffInlineEvent::EmptyDestination => self.append("<>"),
                 RoffInlineEvent::Font(_)
                 | RoffInlineEvent::PreviousFont
                 | RoffInlineEvent::Presentation { .. } => {}
             }
         }
-        if matches!(word.advance, Advance::Armed) {
-            word.set(ZeroAdvance);
+        if matches!(self.advance, Advance::Armed) {
+            self.set(ZeroAdvance);
         }
-        word
     }
 
     fn set(&mut self, effect: RoffWordEffect) {

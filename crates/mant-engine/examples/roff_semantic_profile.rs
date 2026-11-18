@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v7";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v8";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -581,6 +581,107 @@ fn check_value_domains(entries: &[SemanticEntry], scope: &str, violations: &mut 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_wrong_list_owner_emits_the_supported_other_list_observation() {
+        use crate::ordinal_labels::cases::execution;
+        use serde_json::json;
+        // The exact plain-both input has two native tag ordinals with real
+        // BODY words. Mutate only the final IR kind, after source execution.
+        let case = execution::cases()
+            .find(|case| case.name == "plain-both")
+            .unwrap();
+        let report = libmandoc_rs::Parser::default()
+            .parse_bytes("probe.1", case.source.as_bytes())
+            .unwrap();
+        let mut document =
+            mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &report);
+        let mant_ir::Block::List { kind, .. } = &mut document.sections[1].blocks[0] else {
+            panic!("the complete pure ordinal owner must be recovered");
+        };
+        *kind = mant_ir::ListKind::Bullet;
+        let profile = super::profile_document("other-list", &report.document.root, &document, 0);
+        assert_eq!(
+            profile["ordinalConversions"],
+            json!([{
+                "sourceLine":8,"listStyle":"tag","terms":["1.","2."],
+                "expectedDisposition":"recovered-ordered-list",
+                "observedDispositions":["other-list"],"observedIrPaths":["section[1]/block[0]"]
+            }])
+        );
+        let violation = concat!(
+            "mdoc -tag ordinal candidate at line 8 expected recovered-ordered-list ",
+            "but observed [\"other-list\"]"
+        );
+        assert_eq!(profile["ordinalConversionViolations"], json!([violation]));
+        assert_eq!(profile["violations"], json!([violation]));
+        assert_eq!(profile["ordinalCasesForReview"], json!([]));
+    }
+
+    #[test]
+    fn source_execution_crossings_keep_evidence_and_owner_obligations() {
+        use crate::ordinal_labels::{OrdinalDisposition, cases::execution};
+        use serde_json::json;
+        let path = std::env::temp_dir().join(format!(
+            "mant-ordinal-source-execution-{}.1",
+            std::process::id()
+        ));
+        for case in execution::cases().chain(execution::equation_edges()) {
+            std::fs::write(&path, &case.source).unwrap();
+            let profile = super::profile_request(&json!({"id":case.name,"path":path}).to_string());
+            std::fs::remove_file(&path).unwrap();
+            let profile = profile.unwrap();
+            assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
+            if case.disposition == OrdinalDisposition::Uncertain {
+                assert_eq!(profile["ordinalConversions"], json!([]), "{}", case.name);
+                assert_eq!(
+                    profile["ordinalCasesForReview"],
+                    json!([[case.source_line, 2]])
+                );
+            } else {
+                let disposition = if case.disposition == OrdinalDisposition::Recovered {
+                    "recovered-ordered-list"
+                } else {
+                    "retained-definition-list"
+                };
+                assert_eq!(profile["ordinalCasesForReview"], json!([]), "{}", case.name);
+                assert_eq!(
+                    profile["ordinalConversions"],
+                    json!([{
+                        "sourceLine":case.source_line,"listStyle":"tag","terms":["1.","2."],
+                        "expectedDisposition":disposition,"observedDispositions":[disposition],
+                        "observedIrPaths":["section[1]/block[0]"]
+                    }]),
+                    "{}",
+                    case.name
+                );
+            }
+            let report = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", case.source.as_bytes())
+                .unwrap();
+            let mut document =
+                mant_codec::lower_mandoc_document(std::path::Path::new("probe.1"), &report);
+            document.sections[1].blocks.clear();
+            let lost = super::profile_document("missing", &report.document.root, &document, 0);
+            assert!(
+                !lost["violations"].as_array().unwrap().is_empty(),
+                "{}",
+                case.name
+            );
+            if case.disposition == OrdinalDisposition::Uncertain {
+                assert_eq!(
+                    lost["ordinalCasesForReview"],
+                    json!([[case.source_line, 2]])
+                );
+            } else {
+                assert_eq!(
+                    lost["ordinalConversions"][0]["observedDispositions"],
+                    json!([])
+                );
+                assert_eq!(lost["ordinalConversions"][0]["observedIrPaths"], json!([]));
+            }
+        }
+    }
+
     #[test]
     fn jsonl_ordinal_findings_follow_the_native_owner_observation() {
         use crate::ordinal_labels::cases::{
