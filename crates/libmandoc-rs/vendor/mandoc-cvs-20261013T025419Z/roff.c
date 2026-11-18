@@ -893,6 +893,7 @@ roff_man_alloc1(struct roff_man *man)
 {
 	memset(&man->meta, 0, sizeof(man->meta));
 	man->flow_epoch = 0;
+	man->inline_invocation = 0;
 	man->meta.first = mandoc_calloc(1, sizeof(*man->meta.first));
 	man->meta.first->type = ROFFT_ROOT;
 	man->meta.macroset = MACROSET_NONE;

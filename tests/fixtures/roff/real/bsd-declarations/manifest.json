@@ -362,6 +362,66 @@
           "status": "Captured"
         }
       }
+    },
+    {
+      "file": "netbsd-bpf.4",
+      "sourceIdentity": "netbsd-10.1-amd64:man/man4/bpf.4",
+      "originUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-10.1/amd64/binary/sets/man.tar.xz",
+      "archive": "man.tar.xz",
+      "archiveMember": "usr/share/man/man4/bpf.4",
+      "archiveSha256": "2a45a655e5f37e2e73b9867c67409646b8e1bcf89a3383698d14ca8fe0358440",
+      "sourceSha256": "9d1d8f609326909f31e387e62dde194d504873a61c09f7ae727be175e097223b",
+      "fixtureSha256": "9d1d8f609326909f31e387e62dde194d504873a61c09f7ae727be175e097223b",
+      "decompressedSha256": "9d1d8f609326909f31e387e62dde194d504873a61c09f7ae727be175e097223b",
+      "sourceBytes": 26454,
+      "fixtureBytes": 26454,
+      "retrievedFromRetainedCorpusOn": "2026-11-18",
+      "license": "Custom Berkeley/Lawrence Berkeley Laboratory notice with advertising acknowledgement",
+      "licenseFile": "netbsd-bpf.4",
+      "transformation": "None; exact complete uncompressed release member, with a portable fixture basename.",
+      "selectionReason": "All 28 ioctl symbols across 21 definition heads bind through punctuation that reopens the native Dv invocation.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "7c4285a9abd38464cfe85fd0cb19553758dd22bf29852f961d8c0f68ec0d08fd",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 33651,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "10045a591bdc96a4128412e2d29a7da288b44f6c70ec1f04cbec9999a0c18801",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 33703,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "4bd43955b6bab091c08b687ac9994919bfb76f4c47d66929e1a5cdb2577f854c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 47627,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "418cc4f71964da2d028a4a42dee8cecf01303a5318d4f7efb7b4a2d337fb54ef",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 84490,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "6e55eda0c1e697dbce5ca4735578745153e21cf59ab94d96d98e9e28183628e1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 423,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
     }
   ]
 }

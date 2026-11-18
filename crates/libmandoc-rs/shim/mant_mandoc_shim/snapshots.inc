@@ -30,6 +30,10 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 	view->line = source->line;
 	view->column = source->pos + 1;
 	view->flow_epoch = source->flow_epoch;
+	if (source->type == ROFFT_ELEM && source->aux > 0 &&
+	    (source->tok == MDOC_Dv || source->tok == MDOC_Er ||
+	    source->tok == MDOC_Ev || source->tok == MDOC_Va))
+		view->inline_invocation = (unsigned int)source->aux;
 	view->table_escape = source->type == ROFFT_TBL ? source->tbl_escape : -1;
 	if (source->type == ROFFT_TBL && source->span != NULL) {
 		const struct tbl_dat *dat;

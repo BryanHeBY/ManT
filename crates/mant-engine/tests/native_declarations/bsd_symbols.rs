@@ -5,6 +5,9 @@ use mant_protocol::{ContentSelector, EvidenceClass};
 
 use super::support::{check_head, check_occurrences, explain, json_roundtrip};
 
+#[path = "bsd_symbols/netbsd_bpf.rs"]
+mod netbsd_bpf;
+
 fn fixture(name: &str) -> ResolvedContent {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real/bsd-declarations")

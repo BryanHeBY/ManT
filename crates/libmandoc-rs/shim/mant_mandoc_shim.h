@@ -44,6 +44,7 @@ struct mant_mandoc_node_view {
 	int			 line;
 	int			 column;
 	size_t			 flow_epoch;
+	unsigned int		 inline_invocation;
 	int			 table_escape;
 	int			 table_source_recovery_safe;
 	int			 table_row_kind;

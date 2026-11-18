@@ -3,6 +3,7 @@ use mant_ir::{EntryKind, EntryOwner, ResolvedContent, inline_plain_text};
 use mant_protocol::{ContentSelector, EntryProjection, EvidenceClass, OutlineNode};
 
 mod annotations;
+mod invocations;
 mod receipts;
 mod symbols;
 
@@ -22,6 +23,17 @@ fn check(
     arguments: &[&str],
 ) {
     let query = fixture(head, space_off);
+    check_query(&query, head, kind, names, form, arguments);
+}
+
+fn check_query(
+    query: &ResolvedContent,
+    head: &str,
+    kind: EntryKind,
+    names: &[&str],
+    form: &str,
+    arguments: &[&str],
+) {
     let items = super::super::definitions(query.document.as_ref().unwrap());
     let [item] = items.as_slice() else {
         panic!("{head}");
@@ -32,7 +44,7 @@ fn check(
     assert_eq!(inline_plain_text(&item.terms[0]), form, "{head}");
 
     let outline = roundtrip(
-        &mant_query::build_outline_projection(&query, EntryProjection::All, None).unwrap(),
+        &mant_query::build_outline_projection(query, EntryProjection::All, None).unwrap(),
     );
     let [
         entry @ OutlineNode::DocumentEntry {
@@ -47,7 +59,12 @@ fn check(
     assert_eq!(indexed, names, "{head}");
     assert_eq!(forms.as_slice(), [form], "{head}");
     let excerpt = roundtrip(
-        &mant_query::select_excerpt(&query, &[ContentSelector::path(entry.path())]).unwrap(),
+        &mant_query::select_excerpt(query, &[ContentSelector::path(entry.path())]).unwrap(),
+    );
+    assert_eq!(
+        excerpt,
+        mant_query::select_excerpt(query, &[ContentSelector::id(entry.id())]).unwrap(),
+        "{head}"
     );
     assert_eq!(
         excerpt.selections[0].outline().path(),
@@ -59,7 +76,7 @@ fn check(
         "{head}"
     );
     for name in names {
-        let result = roundtrip(&explain(&query, name));
+        let result = roundtrip(&explain(query, name));
         assert_eq!(result.counts.direct_entry.total, 1, "{name}: {head}");
         let hit = result
             .evidence
@@ -77,7 +94,7 @@ fn check(
     }
     for argument in arguments {
         assert_eq!(
-            explain(&query, argument).counts.direct_entry.total,
+            explain(query, argument).counts.direct_entry.total,
             0,
             "{argument}: {head}"
         );

@@ -25,6 +25,7 @@ mant_mandoc_node_view_offsets(size_t *count)
 		offsetof(struct mant_mandoc_node_view, line),
 		offsetof(struct mant_mandoc_node_view, column),
 		offsetof(struct mant_mandoc_node_view, flow_epoch),
+		offsetof(struct mant_mandoc_node_view, inline_invocation),
 		offsetof(struct mant_mandoc_node_view, table_escape),
 		offsetof(struct mant_mandoc_node_view, table_source_recovery_safe),
 		offsetof(struct mant_mandoc_node_view, table_row_kind),

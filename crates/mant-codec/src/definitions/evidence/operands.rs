@@ -84,6 +84,7 @@ pub(crate) enum NativeSubject {
 pub(crate) struct SubjectReceipt {
     pub(crate) kind: NativeSubject,
     pub(crate) node: u32,
+    pub(crate) invocation: Option<u32>,
     pub(crate) enclosure: Option<u32>,
 }
 
@@ -121,10 +122,11 @@ impl NativeOperandRole {
     }
 
     #[cfg(feature = "roff")]
-    pub(crate) fn subject_word(kind: NativeSubject, node: u32) -> Self {
+    pub(crate) fn subject_word(kind: NativeSubject, node: u32, invocation: Option<u32>) -> Self {
         Self::Subject(SubjectReceipt {
             kind,
             node,
+            invocation,
             enclosure: None,
         })
     }

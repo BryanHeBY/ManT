@@ -294,6 +294,7 @@ unsafe fn copy_node_shallow(
         line: view.line.try_into().unwrap_or_default(),
         column: view.column.try_into().unwrap_or_default(),
         flow_epoch: view.flow_epoch,
+        inline_invocation: (view.inline_invocation != 0).then_some(view.inline_invocation),
         table_escape: u8::try_from(view.table_escape).ok(),
         table_source_recovery_safe: view.table_source_recovery_safe != 0,
         table_row_kind: table_row_kind(view.table_row_kind, unsafe {

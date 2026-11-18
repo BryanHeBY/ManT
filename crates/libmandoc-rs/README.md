@@ -565,7 +565,7 @@ or changing the patch stack.
 ### Local vendor patches
 
 The checked-in vendor tree is the pinned pristine source subset plus the
-41 ordered patches in `patches/series`. The stack follows build prerequisites,
+42 ordered patches in `patches/series`. The stack follows build prerequisites,
 parser safety, embedding, execution evidence, compatibility, rendering,
 allocation performance, and HTML scope lifetime. Patch numbers identify the
 patch stack. Cargo features select compiled capabilities.
@@ -577,6 +577,10 @@ they never refer to a patch number in the current series.
 target, including owners selected by relocation. The spelling comes from the
 node's `tag`. Older serialized flags default to `false`, and serialization
 only writes `authored_tag` when it is set.
+
+`Node::inline_invocation` groups the elements that one mdoc `Dv`, `Er`, `Ev`,
+or `Va` invocation can reopen after punctuation. The identity is local to
+one parse report. Older serialized nodes omit the field and decode as `None`.
 
 #### Build and platform configuration
 

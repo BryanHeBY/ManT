@@ -26,6 +26,7 @@ fixtures,real/bsd-declarations/freebsd-errno.2.gz,2,23d7c9b627df7cbdd06933e24323
 fixtures,real/bsd-declarations/freebsd-ioctl.2.gz,2,f212b8a9a87cd36afae58a0a866baadc5d39e94684db4b68d8010da6d0fc7e1b,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/bsd-declarations/freebsd-ng_deflate.4.gz,4,5759e5ef9d0447fae840c6fc8c7f75f335d6ef2fabd9cbd41aad407c9ba851a5,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/bsd-declarations/freebsd-ppi.4.gz,4,83b7675f7fcf47400adca1294a0cd13d80f5437bb1a0c688ac6abc8f09b923e0,mant.roff-projection-profile/v3,clean,not-required,
+fixtures,real/bsd-declarations/netbsd-bpf.4,4,9d1d8f609326909f31e387e62dde194d504873a61c09f7ae727be175e097223b,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/cross-platform-releases/cargo.1.zst,1,c483b800c9aceb307fb15ea4138783838cb379b6f4e306a8dabe84af8fd4b01d,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/cross-platform-releases/cmake-toolchains.7.zst,7,4f5e1946154896899d6471c4e5b0bf902394429641231074dcacc71bbc5dd20b,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/cross-platform-releases/rustc.1.zst,1,03a056a5b5041454e837f12027e3002ceee1e452530d17a5c55edf14183b9afb,mant.roff-projection-profile/v3,clean,not-required,

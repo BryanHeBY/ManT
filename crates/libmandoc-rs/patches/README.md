@@ -16,6 +16,11 @@ so formal replay needs neither fuzz nor backup files.
 - Safety, session isolation, input budgets and owned execution evidence remain
   baseline requirements; disabling native rendering does not remove them.
 
+Patch `0042` retains the parse-local identity of `Dv`, `Er`, `Ev`, and
+`Va` invocations across punctuation that reopens their inline elements.
+The owned view distinguishes separate expanded invocations even at the
+same source coordinates. Native rendering remains unchanged.
+
 Patch categories describe responsibility. They do not claim upstream submission
 or acceptance and do not turn a no-feature build into the pristine oracle.
 

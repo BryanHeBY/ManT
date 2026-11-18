@@ -423,6 +423,14 @@ pub struct Node {
     /// flow boundary. This is not a source line or a persistent identity;
     /// generations are only comparable within the same parse report.
     pub flow_epoch: usize,
+    /// Parse-local `Dv`, `Er`, `Ev`, or `Va` invocation identity, shared by
+    /// elements the native parser reopens after punctuation. Distinct calls
+    /// can have the same source coordinates after macro expansion.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub inline_invocation: Option<u32>,
     /// Escape character active when the native parser read this tbl(7) row.
     ///
     /// `Some(0)` means `.eo` had disabled escapes. `None` means the node is

@@ -319,16 +319,28 @@ pub(super) fn environment_occurrences_with_uses(
     } else {
         named_groups(text, uses)?
     };
+    environment_occurrences_in_groups(text, uses, parts, environment_atom)
+}
+
+pub(super) fn environment_atom(part: &str) -> Option<String> {
+    environment_variable_alias(part).or_else(|| {
+        let (name, suffix) = part.split_once(char::is_whitespace)?;
+        annotations(suffix)
+            .then(|| environment_variable_alias(name))
+            .flatten()
+    })
+}
+
+pub(super) fn environment_occurrences_in_groups(
+    text: &str,
+    uses: OperandUses<'_>,
+    parts: Vec<&str>,
+    name_for_part: impl Fn(&str) -> Option<String>,
+) -> Option<Vec<RecognizedName>> {
     let mut names = Vec::new();
     for part in parts {
         let offset = part.as_ptr() as usize - text.as_ptr() as usize;
-        let name = environment_variable_alias(part).or_else(|| {
-            let (name, suffix) = part.trim().split_once(char::is_whitespace)?;
-            annotations(suffix)
-                .then(|| environment_variable_alias(name))
-                .flatten()
-        });
-        let Some(name) = name else {
+        let Some(name) = name_for_part(part.trim()) else {
             // A native placeholder can make this whole atom a template.
             // The next authored separator can still start a distinct name.
             if environment_template(part.trim()) || uses.protects(&(offset..offset + part.len())) {

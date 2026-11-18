@@ -45,6 +45,7 @@ pub(super) struct CNodeView {
     pub(super) line: i32,
     pub(super) column: i32,
     pub(super) flow_epoch: usize,
+    pub(super) inline_invocation: u32,
     pub(super) table_escape: i32,
     pub(super) table_source_recovery_safe: i32,
     pub(super) table_row_kind: i32,

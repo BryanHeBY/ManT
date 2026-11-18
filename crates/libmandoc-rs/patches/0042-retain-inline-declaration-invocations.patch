@@ -1,0 +1,76 @@
+Subject: retain native inline declaration invocations
+Upstream-Status: Local shim contract
+
+Preserve one parse-local ID for each Dv, Er, Ev and Va invocation across
+the elements allocated by in_line(). Macro-expanded calls have separate
+identities even when their source coordinates coincide. The unused aux
+payload on these four macros does not change tree or renderer decisions.
+
+--- a/roff_int.h
++++ b/roff_int.h
+@@ -42,6 +42,7 @@
+ 	struct roff_node *append_node;
+ 	size_t append_used, append_capacity;
+ 	size_t		  flow_epoch; /* Per-document executed flow generation. */
++	int		  inline_invocation; /* Parse-local mdoc inline macro identity. */
+ 	int		  quick;   /* Abort parse early. */
+ 	int		  flags;   /* Parse flags. */
+ 	int		  macro_depth; /* Nested mdoc macro calls. */
+--- a/roff.c
++++ b/roff.c
+@@ -893,6 +893,7 @@
+ {
+ 	memset(&man->meta, 0, sizeof(man->meta));
+ 	man->flow_epoch = 0;
++	man->inline_invocation = 0;
+ 	man->meta.first = mandoc_calloc(1, sizeof(*man->meta.first));
+ 	man->meta.first->type = ROFFT_ROOT;
+ 	man->meta.macroset = MACROSET_NONE;
+--- a/mdoc_macro.c
++++ b/mdoc_macro.c
+@@ -21,6 +21,7 @@
+ 
+ #include <assert.h>
+ #include <ctype.h>
++#include <limits.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <string.h>
+@@ -814,7 +815,7 @@
+ static void
+ in_line(MACRO_PROT_ARGS)
+ {
+-	int		 la, scope, cnt, firstarg, mayopen, nc, nl;
++	int		 la, scope, cnt, firstarg, mayopen, nc, nl, invocation;
+ 	enum roff_tok	 ntok;
+ 	enum margserr	 ac;
+ 	enum mdelim	 d;
+@@ -822,6 +823,18 @@
+ 	char		*p;
+ 
+ 	nl = MDOC_NEWLINE & mdoc->flags;
++	invocation = 0;
++	switch (tok) {
++	case MDOC_Dv:
++	case MDOC_Er:
++	case MDOC_Ev:
++	case MDOC_Va:
++		if (mdoc->inline_invocation < INT_MAX)
++			invocation = ++mdoc->inline_invocation;
++		break;
++	default:
++		break;
++	}
+ 
+ 	/*
+ 	 * Whether we allow ignored elements (those without content,
+@@ -938,6 +951,9 @@
+ 			}
+ 		} else if (mayopen && !scope) {
+ 			mdoc_elem_alloc(mdoc, line, ppos, tok, arg);
++			/* Reopening after punctuation keeps the same invocation. */
++			if (invocation != 0)
++				mdoc->last->aux = invocation;
+ 			scope = 1;
+ 			cnt++;
+ 		}

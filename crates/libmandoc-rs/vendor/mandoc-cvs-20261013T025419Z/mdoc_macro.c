@@ -21,6 +21,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -814,7 +815,7 @@ blk_exp_close(MACRO_PROT_ARGS)
 static void
 in_line(MACRO_PROT_ARGS)
 {
-	int		 la, scope, cnt, firstarg, mayopen, nc, nl;
+	int		 la, scope, cnt, firstarg, mayopen, nc, nl, invocation;
 	enum roff_tok	 ntok;
 	enum margserr	 ac;
 	enum mdelim	 d;
@@ -822,6 +823,18 @@ in_line(MACRO_PROT_ARGS)
 	char		*p;
 
 	nl = MDOC_NEWLINE & mdoc->flags;
+	invocation = 0;
+	switch (tok) {
+	case MDOC_Dv:
+	case MDOC_Er:
+	case MDOC_Ev:
+	case MDOC_Va:
+		if (mdoc->inline_invocation < INT_MAX)
+			invocation = ++mdoc->inline_invocation;
+		break;
+	default:
+		break;
+	}
 
 	/*
 	 * Whether we allow ignored elements (those without content,
@@ -938,6 +951,9 @@ in_line(MACRO_PROT_ARGS)
 			}
 		} else if (mayopen && !scope) {
 			mdoc_elem_alloc(mdoc, line, ppos, tok, arg);
+			/* Reopening after punctuation keeps the same invocation. */
+			if (invocation != 0)
+				mdoc->last->aux = invocation;
 			scope = 1;
 			cnt++;
 		}

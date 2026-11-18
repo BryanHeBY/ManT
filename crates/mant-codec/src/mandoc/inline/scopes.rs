@@ -244,7 +244,7 @@ fn append_native_subject(
         _ => unreachable!("typed mdoc subject"),
     };
     builder.with_native_operand_role(
-        NativeOperandRole::subject_word(subject, node.id),
+        NativeOperandRole::subject_word(subject, node.id, node.inline_invocation),
         |builder| {
             if let Some(font) = font {
                 builder
@@ -488,7 +488,7 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 super::append_function_children(self.builder, nodes, self.name);
             }
             Event::FunctionHead(node) => self.builder.with_native_operand_role(
-                NativeOperandRole::subject_word(NativeSubject::FunctionBlock, node.id),
+                NativeOperandRole::subject_word(NativeSubject::FunctionBlock, node.id, None),
                 |builder| append_inline_nodes(builder, &node.children, self.name),
             ),
             Event::FunctionBodyBegin(pretty) => self.builder.begin_function_body(pretty),

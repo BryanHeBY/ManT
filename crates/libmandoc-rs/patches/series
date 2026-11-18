@@ -68,3 +68,6 @@
 
 # Native mdoc tag provenance
 0041-retain-authored-tag-owners.patch
+
+# Native mdoc declaration operand provenance
+0042-retain-inline-declaration-invocations.patch

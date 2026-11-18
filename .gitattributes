@@ -42,6 +42,7 @@ tests/fixtures/roff/real/mathematical-export/*.3p text eol=lf -whitespace
 tests/fixtures/roff/real/mathematical-export/*.3 text eol=lf -whitespace
 tests/fixtures/roff/real/ordered-continuation/*.1 text eol=lf
 tests/fixtures/roff/real/mdoc-subjects/*.3kstat text eol=lf
+tests/fixtures/roff/real/bsd-declarations/*.4 text eol=lf
 tests/fixtures/roff/real/mathematical-export/*.1 text eol=lf -whitespace
 # These complete authored notices include their upstream final blank line.
 tests/fixtures/roff/real/LICENSES/** text eol=lf

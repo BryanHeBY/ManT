@@ -553,6 +553,68 @@ fn parser_preserves_mdoc_delimiter_spacing_roles() {
 }
 
 #[test]
+fn parser_preserves_reopened_inline_declaration_invocations() {
+    // mdoc_macro.c::in_line() reopens an element after an opening
+    // delimiter, without recursing into another macro invocation.
+    let report = Parser::default()
+        .parse_bytes(
+            "declarations.1",
+            b".Dd November 18, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd checker\n\
+              .Sh DESCRIPTION\n.de ZZ\n.Dv FIRST ( type )\n.Dv SECOND ( type )\n\
+              .Er EINVAL ( invalid input )\n.Ev HOME ( path )\n.Va local ( type )\n.No sentinel\n\
+              ..\n.Bl -tag -width Ds\n.It Xo\n.ZZ\n.Xc\nOWNERBODY.\n.El\n",
+        )
+        .expect("parsed macro expansion");
+    let root = &report.document.root;
+    let xo = find_node(root, &|node| {
+        node.kind == NodeKind::Body && node.macro_token.as_deref() == Some("Xo")
+    })
+    .expect("extended definition head");
+    let calls = xo
+        .children
+        .iter()
+        .filter(|node| matches!(node.macro_token.as_deref(), Some("Dv" | "Er" | "Ev" | "Va")))
+        .collect::<Vec<_>>();
+    assert_eq!(calls.len(), 10);
+    let mut witnesses = std::collections::BTreeSet::new();
+    let position = (calls[0].line, calls[0].column);
+    for ([first, second], macro_name) in calls
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .zip(["Dv", "Dv", "Er", "Ev", "Va"])
+    {
+        assert_eq!(first.macro_token.as_deref(), Some(macro_name));
+        assert_eq!(second.macro_token.as_deref(), Some(macro_name));
+        assert_eq!((first.line, first.column), position);
+        assert_eq!((second.line, second.column), position);
+        assert_ne!(first.id, second.id);
+        let invocation = first.inline_invocation.expect("invocation ID");
+        assert_eq!(second.inline_invocation, Some(invocation));
+        assert!(witnesses.insert(invocation));
+    }
+    let sentinel = find_macro(xo, "No").expect("unrelated macro");
+    assert_eq!(sentinel.inline_invocation, None);
+    #[cfg(feature = "serde")]
+    {
+        assert!(
+            serde_json::to_value(sentinel)
+                .unwrap()
+                .get("inline_invocation")
+                .is_none()
+        );
+        let mut encoded = serde_json::to_value(calls[0]).unwrap();
+        assert_eq!(
+            encoded["inline_invocation"],
+            calls[0].inline_invocation.unwrap()
+        );
+        encoded.as_object_mut().unwrap().remove("inline_invocation");
+        let decoded = serde_json::from_value::<Node>(encoded).unwrap();
+        assert_eq!(decoded.inline_invocation, None);
+    }
+}
+
+#[test]
 fn parser_preserves_mdoc_synopsis_presentation_roles() {
     let path = source_path("synopsis-role-mandoc-session");
     fs::write(

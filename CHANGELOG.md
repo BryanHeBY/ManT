@@ -29,6 +29,9 @@ that crate was not published for that change.
 - Expose `NodeFlags::authored_tag` for a validated mdoc `Tg` target. The flag
   follows the native ID when validation moves it to its final owner. Existing
   serialized ASTs default the flag to `false`.
+- Expose `Node::inline_invocation` for executed `Dv`, `Er`, `Ev`, and `Va`
+  nodes reopened at punctuation. The identity is parse-local. Older
+  serialized nodes default the field to `None`.
 
 ### mant-codec
 
@@ -58,6 +61,10 @@ that crate was not published for that change.
 - Keep the subject of a BSD constant declaration when a complete
   parenthetical note follows it. Preserve parameter scope across ordinary
   annotations and require a visible word boundary around each bound name.
+- Keep BSD declaration names when native punctuation splits an invocation
+  across multiple AST nodes. Preserve variable names before complete
+  parenthetical notes and use the executed glyphs to distinguish a visible
+  enclosure from text glued to the name.
 - Preserve the exact fragment of an argument-less mdoc `Tg` when a user
   macro emits it and its target at the same source position.
 - Preserve author fragments through native validation rewrites and retain

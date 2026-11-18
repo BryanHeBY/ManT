@@ -9,6 +9,7 @@ use mant_ir::{DefinitionItem, EntryKind, inline_plain_text};
 use std::ops::Range;
 
 mod annotations;
+pub(super) use annotations::trailing_parenthesis;
 mod declaration_parts;
 mod symbols;
 
@@ -156,8 +157,7 @@ fn recognize_part(
             subject_span(text, &operands[first..], start..end)
                 .and_then(|span| simple_binding(text, span, plain_identifier))
         }
-        NativeSubject::Variable => subject_span(text, &operands[first..], start..end)
-            .and_then(|span| simple_binding(text, span, declaration_name)),
+        NativeSubject::Variable => recognize_variable(text, operands, first, start..end),
         NativeSubject::Function | NativeSubject::FunctionBlock => {
             let span = matching_subject_span(text, &operands[first..], start..end);
             span.and_then(|span| {
@@ -203,6 +203,29 @@ fn recognize_part(
         kind,
         Recognition::one(name.filter(|name| uses.permits(name, scope))),
     ))
+}
+
+fn recognize_variable(
+    text: &str,
+    operands: &[NativeOperand],
+    first: usize,
+    head: Range<usize>,
+) -> Option<RecognizedName> {
+    let end = head.end;
+    let span = matching_subject_span(text, &operands[first..], head)?;
+    let role = operands[first].role;
+    if !text[span.end..end].trim().is_empty()
+        && !annotations::trailing_parenthesis(
+            text,
+            span.end..end,
+            operands,
+            role.subject()?.enclosure,
+            Some(role),
+        )
+    {
+        return None;
+    }
+    simple_binding(text, span, declaration_name)
 }
 
 fn recognize_operand_label(head: &str, start: usize, operands: &[NativeOperand]) -> Recognition {

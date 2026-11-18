@@ -551,6 +551,7 @@ Escape.
             line,
             column: 1,
             flow_epoch: 0,
+            inline_invocation: None,
             table_escape: None,
             table_source_recovery_safe: false,
             table_row_kind: None,

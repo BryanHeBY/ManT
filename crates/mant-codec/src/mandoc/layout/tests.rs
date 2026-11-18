@@ -20,6 +20,7 @@ fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         line: 0,
         column: 0,
         flow_epoch: 0,
+        inline_invocation: None,
         table_escape: None,
         table_source_recovery_safe: false,
         table_row_kind: None,

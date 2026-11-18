@@ -648,12 +648,17 @@ In a numbered `Er` definition, the surviving error symbol is the name.
 The number and an independently styled description remain in the complete
 form. A `Dv` definition similarly binds its subject while retaining attached
 type and argument operands. Additional names require independent declaration
-evidence such as the separate native invocations produced by comma-delimited
-symbols. A parameter or description word within one invocation does not
-become another name. A complete parenthetical note can contain command
-aliases or styled permission shorthand and still preserve the subject's
-name. Name boundaries follow the accepted visible text even when several
-native operands or styles contribute to a single word.
+evidence such as complete comma-delimited symbols. A native invocation can
+reopen after punctuation. Its continuation inside a complete parenthetical
+note remains part of the original form, alongside command aliases, type text
+or styled permission shorthand. A separately invoked declaration inside the
+note does not prove another name. Name boundaries follow the accepted visible
+text even when several native operands or styles contribute to a single word.
+
+Environment and variable definitions keep their names before one complete
+trailing parenthetical note, including styled descriptions. The enclosing
+marks and note remain in the form. A custom enclosure only separates a name
+when its executed opening glyph supplies a visible word boundary.
 
 In an executed man `TP` or `TQ` head, `OP` can bind a complete flag from its
 first operand independently of the section heading. The second operand

@@ -102,6 +102,7 @@ mod tests {
                 line,
                 column,
                 flow_epoch,
+                inline_invocation,
                 table_escape,
                 table_source_recovery_safe,
                 table_row_kind,

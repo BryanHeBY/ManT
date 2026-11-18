@@ -34,7 +34,7 @@ fn symbol(text: &str, head: &Range<usize>, operands: &[NativeOperand]) -> Option
     };
     let name = plain_identifier(name)?;
     let name_end = offset(text, name) + name.len();
-    if !annotations::has_word_boundary(text, name_end..head.end, operands, declaration.enclosure) {
+    if !annotations::has_word_boundary(text, name_end..head.end, operands) {
         // termp_ns_pre and Sm off can join authored operands into one
         // visible word. A typed suffix does not certify a name prefix.
         return None;

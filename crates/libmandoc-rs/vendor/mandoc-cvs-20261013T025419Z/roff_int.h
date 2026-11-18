@@ -42,6 +42,7 @@ struct	roff_man {
 	struct roff_node *append_node;
 	size_t append_used, append_capacity;
 	size_t		  flow_epoch; /* Per-document executed flow generation. */
+	int		  inline_invocation; /* Parse-local mdoc inline macro identity. */
 	int		  quick;   /* Abort parse early. */
 	int		  flags;   /* Parse flags. */
 	int		  macro_depth; /* Nested mdoc macro calls. */
