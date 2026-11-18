@@ -275,6 +275,66 @@ fn validated_punctuation_exactness_does_not_erase_ambiguity() {
     }
 }
 
+#[test]
+fn validated_multiword_targets_preserve_punctuation_and_destination_owners() {
+    // CVS post_section() and html_make_id() agree on the word separator.
+    // ManT retains each other authored character before selecting an owner.
+    for (label, tag, fragment) in [
+        ("Foo Bar", "Foo_Bar", "Foo_Bar"),
+        ("W^X Test", "W^X_Test", "W_X_Test"),
+        ("W^X_Test", "W^X_Test", "W_X_Test"),
+        ("A~B and C", "A~B_and_C", "A_B_and_C"),
+        ("Other< Test", "Other<_Test", "Other__Test"),
+        ("Hello#id Test", "Hello#id_Test", "Hello_id_Test"),
+        ("Custom% Name", "Custom%_Name", "Custom__Name"),
+    ] {
+        let reference = format!(".Sx {label}\n");
+        let destination = format!(".Tg {tag}\n.Sh DESTINATION\nBODY-A.\n");
+        for source in [
+            format!("{HEADER}{reference}{destination}"),
+            format!("{HEADER}{destination}{reference}"),
+        ] {
+            assert_native_destinations(&source, &[fragment], &[Some(fragment)]);
+            let query = decoded(&source);
+            let ids = document_destinations(&query);
+            let [id] = ids.as_slice() else {
+                panic!("expected only the proven target: {source}");
+            };
+            assert!(section_body(&excerpt(&query, id)).starts_with("BODY-A."));
+            let markdown = mant_codec::encode::render_addressable_markdown(&query);
+            let reread = mant_loader::load_markdown_text(markdown.text(), None).unwrap();
+            assert_eq!(document_destinations(&reread), ids, "{source}");
+        }
+    }
+}
+
+#[test]
+fn multiword_section_lookup_rejects_lost_punctuation_and_duplicate_owners() {
+    let duplicate = format!(
+        "{HEADER}.Sx W^X Test\n.Tg W^X_Test\n.Sh FIRST\nBODY-A.\n.Tg W^X_Test\n.Sh SECOND\nBODY-B.\n"
+    );
+    assert_native_destinations(
+        &duplicate,
+        &["W_X_Test"],
+        &[Some("W_X_Test"), Some("W_X_Test~2")],
+    );
+    assert_destinations(&decoded(&duplicate), &[]);
+
+    let distinct = format!(
+        "{HEADER}.Sx W^X Test\n.Sx W>X Test\n.Tg W^X_Test\n.Sh FIRST\nBODY-A.\n.Tg W>X_Test\n.Sh SECOND\nBODY-B.\n"
+    );
+    assert_native_destinations(
+        &distinct,
+        &["W_X_Test", "W_X_Test"],
+        &[Some("W_X_Test"), Some("W_X_Test~2")],
+    );
+    assert_destinations(&decoded(&distinct), &["BODY-A.", "BODY-B."]);
+
+    let mismatch = format!("{HEADER}.Sx Other< Test\n.Tg Other>_Test\n.Sh OTHER\nBODY-A.\n");
+    assert_native_destinations(&mismatch, &["Other__Test"], &[Some("Other__Test")]);
+    assert_destinations(&decoded(&mismatch), &[]);
+}
+
 fn document_destinations(query: &ResolvedContent) -> Vec<String> {
     query
         .document

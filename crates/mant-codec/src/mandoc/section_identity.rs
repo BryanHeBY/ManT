@@ -45,16 +45,18 @@ impl RoffSectionHeading {
 pub struct RoffSectionTargets {
     authored: HashMap<String, Option<String>>,
     exact_native: HashMap<String, Option<String>>,
-    native: HashMap<String, Option<String>>,
+    native_word_keys: HashMap<String, Option<String>>,
 }
 
 impl RoffSectionTargets {
     /// Associate one source heading with its canonical `ManT` ID.
     pub fn register(&mut self, heading: RoffSectionHeading, id: String) {
         if let Some(tag) = heading.native_tag {
-            if let Some(fragment) = native_fragment(&tag) {
-                register_name(&mut self.native, fragment.into_owned(), id.clone());
-            }
+            register_name(
+                &mut self.native_word_keys,
+                native_word_key(&tag).into_owned(),
+                id.clone(),
+            );
             register_name(&mut self.exact_native, tag, id.clone());
         }
         if !heading.title.trim().is_empty() {
@@ -75,11 +77,12 @@ impl RoffSectionTargets {
         if let Some(exact) = self.exact_native.get(reference) {
             return exact.as_deref();
         }
-        if !self.native.is_empty()
-            && let Some(fragment) = native_fragment(reference)
-            && let Some(Some(id)) = self.native.get(fragment.as_ref())
+        if !self.native_word_keys.is_empty()
+            && let Some(target) = self
+                .native_word_keys
+                .get(native_word_key(reference).as_ref())
         {
-            return Some(id);
+            return target.as_deref();
         }
         if let Some(exact) = self.authored.get(reference) {
             return exact.as_deref();
@@ -104,30 +107,23 @@ fn register_name(targets: &mut HashMap<String, Option<String>>, name: String, id
         .or_insert(Some(id));
 }
 
-fn native_fragment(source: &str) -> Option<Cow<'_, str>> {
-    let allowed = |byte: u8| byte.is_ascii_alphanumeric() || b"!$&'()*+,-./:;=?@_".contains(&byte);
-    if source.bytes().all(allowed) {
-        return Some(Cow::Borrowed(source));
+fn native_word_key(source: &str) -> Cow<'_, str> {
+    if !source.bytes().any(|byte| matches!(byte, b' ' | 28)) {
+        return Cow::Borrowed(source);
     }
-    // html_make_id() also replaces unrepresentable punctuation and escapes
-    // with underscores. That can alias unrelated authored headings (for
-    // example Other< and Other>), so only use native precedence where the
-    // original spelling survives, apart from the authored word separator.
-    source
-        .bytes()
-        .all(|byte| allowed(byte) || matches!(byte, b' ' | 28))
-        .then(|| {
-            Cow::Owned(
-                source
-                    .bytes()
-                    .map(|byte| match byte {
-                        b' ' => '_',
-                        28 => '-', // mandoc.h's ASCII_HYPH
-                        other => char::from(other),
-                    })
-                    .collect(),
-            )
-        })
+    // post_section() substitutes '_' for authored word separators even when
+    // the same tag contains punctuation. Keep that punctuation as evidence
+    // rather than folding different spellings to html_make_id()'s fragment.
+    Cow::Owned(
+        source
+            .chars()
+            .map(|ch| match ch {
+                ' ' => '_',
+                '\u{1c}' => '-', // mandoc.h's ASCII_HYPH
+                other => other,
+            })
+            .collect(),
+    )
 }
 
 fn is_parenthetical_qualification(reference: &str, title: &str) -> bool {

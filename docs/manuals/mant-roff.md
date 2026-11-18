@@ -727,7 +727,7 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Nm`, `Nd` | Strong document name and NAME description dash |
 | `Pp` | Explicit vertical paragraph separation |
 | `Tg` | Zero-width navigation anchor when validated by libmandoc; no visible placeholder text |
-| `Sx` | Resolved same-document section link. A unique validated native target with the same authored spelling takes precedence, followed by an exact title. Fallback allows ASCII space or tab before one complete parenthetical qualifier and requires exactly one eligible heading. Unresolved references keep their original text. A control-only label produces no visible link range. |
+| `Sx` | Resolved same-document section link. A unique validated native target takes precedence, first by exact spelling and then by a key that maps word separators to underscores while retaining authored punctuation. Exact titles and uniquely eligible parenthetically qualified headings are fallbacks. A qualifier may follow ASCII space or tab. Unresolved references keep their original text. A control-only label produces no visible link range. |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
 | `Bx` | Accepted native children retain the authored lifecycle operand plus `BSD`; version forms retain canonical `versionBSD` names with an optional `-release` suffix |

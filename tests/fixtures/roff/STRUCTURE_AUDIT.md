@@ -92,8 +92,12 @@ The audit records every executed `Sx` occurrence. An empty or control-only
 label still executes, but contributes no link or unresolved diagnostic
 obligation. Authored fixed spaces contribute label glyphs. When a label has
 only recovered glyphs and the parser reported an error on that operand, the
-audit reports the occurrence under `sectionLabelsForReview`. Independently
-visible labels on the same source line keep their own obligations.
+profiler records it under `sectionLabelsForReview`. The audit reports the
+source coordinates and reason in `source_review` and marks the ledger row
+`review`. The separate `source_review_occurrences` count excludes definite
+structural violations. Independently visible labels on the same source line
+keep their own obligations. A followed alias leaves this review with the
+actual target's source identity.
 Section references use recursively collected authored words and the validated native heading
 target. The audit pairs native headings with emitted section owners at matching
 source coordinates, retaining occurrence order through macro expansion. With

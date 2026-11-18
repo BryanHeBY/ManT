@@ -28,7 +28,7 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -84,6 +84,14 @@ class Finding:
     detail: str | None = None
     expected: dict[str, int] | None = None
     observed: dict[str, int] | None = None
+    source_review: list[SourceReview] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SourceReview:
+    line: int
+    column: int
+    reason: str
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -454,22 +462,49 @@ def profile_findings(
                 expected = response.get("expected")
                 observed = response.get("observed")
                 topology = response.get("topology")
+                source_review = section_label_reviews(response)
                 if (
                     not isinstance(violations, list)
                     or not all(isinstance(item, str) for item in violations)
                     or not valid_structure_counts(expected)
                     or not valid_structure_counts(observed)
                     or not valid_structure_topology(topology)
+                    or source_review is None
                 ):
-                    yield Finding(label, "hard-failure", [], "profiler returned invalid violations")
+                    yield Finding(label, "hard-failure", [], "profiler returned invalid structure observations")
                 else:
                     yield Finding(
                         label,
-                        "review" if violations else "clean",
+                        "review" if violations or source_review else "clean",
                         violations,
                         expected=expected,
                         observed=observed,
+                        source_review=source_review,
                     )
+
+
+def section_label_reviews(response: dict[str, object]) -> list[SourceReview] | None:
+    if response.get("alias") is True:
+        # The followed target has its own source identity and review row.
+        return []
+    origins = response.get("sourceLinkOrigins", {})
+    if not isinstance(origins, dict):
+        return None
+    positions = origins.get("sectionLabelsForReview", [])
+    if not isinstance(positions, list):
+        return None
+    reviews = []
+    for position in positions:
+        if (
+            not isinstance(position, list)
+            or len(position) != 2
+            or any(type(value) is not int or value < 0 for value in position)
+        ):
+            return None
+        reviews.append(SourceReview(
+            *position, reason="section label depends on recovery of an invalid roff escape",
+        ))
+    return reviews
 
 
 def valid_structure_counts(value: object) -> bool:
@@ -585,14 +620,19 @@ def main(argv: Sequence[str]) -> int:
         print(f"audit-roff-structure: {error}", file=sys.stderr)
         return 2
     summary = Counter(finding.status for finding in findings)
+    source_review_count = sum(len(finding.source_review) for finding in findings)
     by_label = {finding.path: finding for finding in findings}
     for path in pages:
         label, digest = records[path]
         finding = by_label[label]
         if not arguments.findings_only or finding.status != "clean":
             detail = f" — {finding.detail}" if finding.detail else ""
-            violations = "; ".join(finding.violations)
-            print(f"{finding.status.upper():12} {label}{detail}{': ' + violations if violations else ''}")
+            observations = "; ".join([
+                *finding.violations,
+                *(f"source {review.line}:{review.column}: {review.reason}"
+                  for review in finding.source_review),
+            ])
+            print(f"{finding.status.upper():12} {label}{detail}{': ' + observations if observations else ''}")
         if digest is not None:
             key = (corpus, label, digest)
             previous = database.get(key)
@@ -610,7 +650,7 @@ def main(argv: Sequence[str]) -> int:
     print(
         "summary: "
         f"examined={len(findings)}, clean={summary['clean']}, review={summary['review']}, "
-        f"hard={summary['hard-failure']}"
+        f"hard={summary['hard-failure']}, source_review={source_review_count}"
     )
     print("REVIEW is an AST-to-IR candidate, not a regression until source and IR are inspected.")
     write_structure_database(arguments.audit_db, database.values())
@@ -624,6 +664,7 @@ def main(argv: Sequence[str]) -> int:
                     "corpus": corpus,
                     "roots": [str(root) for root in roots],
                     "summary": dict(summary),
+                    "source_review_occurrences": source_review_count,
                     "findings": [asdict(finding) for finding in findings],
                 },
                 ensure_ascii=False,
