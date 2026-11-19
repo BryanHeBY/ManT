@@ -251,8 +251,9 @@ appears in the accepted order and keeps its original style and link, even
 if it was pending under `\z`. Native copies of a bold glyph refer to one
 author glyph. Successive writes keep each earlier glyph's position within
 its original source word, including when it moves into a separate run.
-A queued blank can cover
-it when a later device write on the same pass makes the blank print. A
+A queued blank can cover it when a later device write on the same pass
+makes the blank print. That gap can move or disappear with its native
+slot while the field stays live. A
 generated `Fl` dash follows the same device writes and can survive when
 either bold copy remains. An empty overstrike can leave a pending retreat
 active across words. A surviving blank still separates the next accepted
@@ -777,6 +778,7 @@ Complete named heads can retain bounded trailing parenthesized annotations or an
 Complete command, configuration-key and variable heads can use the same paragraph-plus-indented-description shape as options. Command/variable recovery requires a complete head in a matching context; an inferred command paragraph additionally needs explicit invocation syntax or a typed manual reference whose visible label names the command. Bold prose alone does not establish a command owner. Explicit definition labels can still name a bare command. Variable recovery requires literal styling; configuration/variable contexts also accept complete unstyled dotted keys. A mixed-case assignment label such as `WorkingDirectory=` can establish a configuration head under a topical section, including when styled in italics. Spacing-only runs between a validated head and its deeper body are preserved, not treated as new owners. Recovery stops at outer content, another same-level head, a table boundary or the end of the container. A complete local dash declaration takes precedence over inherited value/configuration hints without changing its place in the document tree.
 
 Adjacent literal native runs may form one multiword command name, such as `Nm zfs Cm get`; the first argument ends that name. Native literal heads with explicit option-group syntax can establish a command under a topical heading; other ambiguous `Ic`/`Cm` heads remain named Terms. Parameter alternations and later argument fragments never create extra names, and multiple names do not imply aliases.
+Command-name evidence respects both authored parentheses or brackets and executed enclosure macros. At the outer level, a native pipe that joins two program invocations keeps their complete form without registering either side as an independent command name. A comma may still introduce an independent alias. The bare pipe and the native Roman-font spelling have the same meaning.
 
 A complete option group can expose up to 256 explicitly spelled names, including
 `-c --stdout --to-stdout`, `-a or --ascii`, and an authored numeric enumeration
@@ -1639,6 +1641,9 @@ cell also contains an explicit `\p`. A marker at the start of a word
 requests a break at that word's end. The reading projection keeps a device
 boundary when crossing it would change which glyph survives or hide an
 accepted device-only row.
+When a positive motion writes several nonbreaking cells, each native pass
+can normalize only its visited prefix. The rest stays fixed for the next
+pass, even when ManT stores the motion as a single run.
 
 Phrasing tables share the page's source recovery and work allowance with
 block tables. An implicit
