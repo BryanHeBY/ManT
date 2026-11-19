@@ -1,6 +1,6 @@
 use std::{io::Read, path::Path};
 
-use mant_ir::{EntryOwner, ResolvedContent};
+use mant_ir::{Block, EntryKind, EntryOwner, ResolvedContent};
 use mant_protocol::{ContentSelector, EvidenceClass};
 
 use super::support::{check_head, check_occurrences, explain, json_roundtrip};
@@ -31,6 +31,130 @@ fn dragonfly_hack_environment_alternatives_share_the_original_definition() {
                 .iter()
                 .any(|basis| matches!(basis, mant_protocol::EvidenceBasis::Form { .. }))
     }));
+}
+
+#[test]
+fn netstat_address_family_aliases_keep_their_value_owner() {
+    // mdoc_macro.c::in_line reopens Cm after the delimiter and starts
+    // Pq's own enclosure. The original option owner supplies the value
+    // context of the enclosed definition list.
+    for (file, line, inet, annotation) in [
+        ("freebsd-netstat.1.gz", 890, 884, "AF_NETGRAPH"),
+        (
+            "dragonflybsd-netstat.1.gz",
+            294,
+            290,
+            "AF_NETGRAPH PF_NETGRAPH",
+        ),
+    ] {
+        let content = fixture(file);
+        check_queries(
+            &content,
+            line,
+            &format!("netgraph, ng ({annotation})"),
+            &["netgraph", "ng"],
+            "ctrl, data",
+        );
+        for (name, owner) in [("netgraph", line), ("ng", line), ("inet", inet)] {
+            let explanation = explain(&content, name);
+            let direct = explanation
+                .evidence
+                .iter()
+                .find(|hit| {
+                    hit.class == EvidenceClass::DirectEntry
+                        && hit.source.is_some_and(|span| span.line == owner)
+                })
+                .unwrap();
+            assert_eq!(direct.entry.as_ref().unwrap().kind, EntryKind::Value);
+            assert!(direct.outline.node.id().starts_with("value-"));
+        }
+        for name in annotation.split_whitespace() {
+            assert!(!explain(&content, name).evidence.iter().any(|hit| {
+                hit.class == EvidenceClass::DirectEntry
+                    && hit.source.is_some_and(|span| span.line == line)
+            }));
+        }
+    }
+}
+
+#[test]
+fn awk_pipe_arguments_stay_in_their_invocation_form() {
+    // In the pinned awk tree the TEXT pipe follows Ar cmd and precedes
+    // Ic getline. Op's Va is enclosed syntax in the same It.
+    let content = fixture("freebsd-awk.1.gz");
+    let doc = content.document.as_ref().unwrap();
+    let items = super::definitions(doc);
+    let item = items
+        .iter()
+        .find(|item| item.source.is_some_and(|span| span.line == 635))
+        .unwrap();
+    check_head(item, "cmd | getline [var]", &[]);
+    assert_eq!(
+        EntryOwner::Definition(item).facts().unwrap().kind,
+        EntryKind::Term
+    );
+    for operand in ["cmd", "var"] {
+        assert!(
+            !explain(&content, operand).evidence.iter().any(|hit| {
+                hit.class == EvidenceClass::DirectEntry && hit.source == item.source
+            })
+        );
+    }
+    let getline = explain(&content, "getline");
+    for line in [663, 676, 689] {
+        assert!(
+            getline.evidence.iter().any(|hit| {
+                hit.class == EvidenceClass::DirectEntry
+                    && hit.source.is_some_and(|span| span.line == line)
+            }),
+            "original getline line {line}"
+        );
+    }
+}
+
+#[test]
+fn awk_literal_examples_preserve_exact_hard_rows() {
+    // The pinned mdoc_term.c Bd/Ed execution preserves the authored rows
+    // and relative indentation in both -Tascii and -Tutf8.
+    let content = fixture("freebsd-awk.1.gz");
+    let examples = content
+        .document
+        .as_ref()
+        .unwrap()
+        .sections
+        .iter()
+        .find(|section| section.id == "examples")
+        .unwrap();
+    for (line, expected) in [
+        (
+            800,
+            concat!(
+                "BEGIN { FS = \",[ \\t]*|[ \\t]+\" }\n",
+                "      { print $2, $1 }"
+            ),
+        ),
+        (
+            816,
+            concat!(
+                "BEGIN { # Simulate echo(1)\n",
+                "        for (i = 1; i < ARGC; i++) printf \"%s \", ARGV[i]\n",
+                "        printf \"\\n\"\n",
+                "        exit }"
+            ),
+        ),
+    ] {
+        let children = examples
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Preformatted {
+                    children, source, ..
+                } if source.is_some_and(|span| span.line == line) => Some(children),
+                _ => None,
+            })
+            .expect("original literal example");
+        assert_eq!(mant_ir::inline_plain_text(children), expected);
+    }
 }
 
 fn fixture(name: &str) -> ResolvedContent {

@@ -1,27 +1,28 @@
 //! Recognize independent names in a native HEAD with protected operands.
 use super::{
-    Recognition, annotations, environment, following_function, offset, operand_at, operand_cursor,
-    recognize_part, unwrapped,
+    Recognition, annotations, following_function,
+    intervals::{local_operands, scoped_operands, split_inline_intervals},
+    offset, operand_at, operand_cursor, recognize_part, unwrapped,
 };
 use crate::definitions::syntax::{
     DeclarationLimit, commands,
     eligibility::{NameSource, OperandUses, intersecting_operands},
-    named, options,
-    scan::{HeadView, MAX_NAMES, MAX_NESTING},
+    inference::infer_lexical_terms,
+    named,
+    scan::{MAX_NAMES, MAX_NESTING},
 };
-use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject, RecognizedName};
-use mant_ir::{EntryKind, Inline, ParameterKind};
-use std::{cell::OnceCell, ops::Range};
-
-const OPTION: EntryKind = EntryKind::Parameter {
-    parameter_kind: ParameterKind::Option,
+use crate::definitions::{
+    NativeHeadRole, NativeOperand, NativeOperandRole, NativeSubject, RecognizedName,
+    context::DefinitionContext, evidence::HeadOperands,
 };
+use mant_ir::{DefinitionTerm, EntryKind, Inline, NameCase};
+use std::ops::Range;
 
 #[derive(Default)]
 struct Candidates {
     names: Vec<Candidate>,
     unproved_part: bool,
-    separated: bool,
+    unproved_form: bool,
     sequence: SubjectSequence,
 }
 
@@ -49,6 +50,7 @@ impl SubjectSequence {
 struct Candidate {
     name: RecognizedName,
     kind: EntryKind,
+    case: NameCase,
     explicit: bool,
 }
 
@@ -65,52 +67,135 @@ pub(super) enum Admission {
 }
 
 struct Head<'a> {
-    nodes: &'a [Inline],
     text: &'a str,
     operands: &'a [NativeOperand],
-    view: OnceCell<HeadView<'a>>,
+    context: DefinitionContext,
+    ranges: Vec<Range<usize>>,
+    terms: Vec<DefinitionTerm>,
 }
 
-impl<'a> Head<'a> {
-    fn view(&self) -> &HeadView<'a> {
-        self.view
-            .get_or_init(|| HeadView::new(self.nodes, self.operands))
-    }
+enum Group {
+    Part(usize),
+    Enclosed {
+        scope: Option<u32>,
+        groups: Vec<Group>,
+    },
+    Unproved,
+}
+
+#[derive(Default)]
+struct Partition {
+    ranges: Vec<Range<usize>>,
+    separated: bool,
 }
 
 pub(super) fn recognize(
     nodes: &[Inline],
     text: &str,
     operands: &[NativeOperand],
+    context: DefinitionContext,
     admission: Admission,
 ) -> Option<(EntryKind, Recognition)> {
     if !text.contains([',', '|']) {
         return None;
     }
+    let mut partition = Partition::default();
+    let (head, enclosure) = unwrap_search(text, text, operands);
+    let groups = partition.groups(text, head, operands, enclosure, 0, admission)?;
+    if !partition.separated
+        || admission == Admission::AfterSeparator
+            && !operands
+                .iter()
+                .any(|operand| operand.role.subject().is_some())
+            && !partition.has_mixed_roles(operands)
+    {
+        return None;
+    }
+    let terms = split_inline_intervals(nodes, partition.ranges.iter().cloned())
+        .into_iter()
+        .map(DefinitionTerm::from)
+        .collect();
     let source = Head {
-        nodes,
         text,
         operands,
-        view: OnceCell::new(),
+        context,
+        ranges: partition.ranges,
+        terms,
     };
     let mut candidates = Candidates::default();
-    let collected = collect(
-        &source,
-        unwrap_search(text, text, operands),
-        0,
-        admission,
-        &mut candidates,
-    );
-    // A flag or search sign in the arguments of a single invocation does
-    // not establish a separately declared name. Its existing grammar still
-    // owns the invocation (for example read [-n n | -N n] [vname?prompt]).
-    if !candidates.separated
-        || admission == Admission::AfterSeparator
-            && !candidates.names.iter().any(|name| name.explicit)
+    let collected = collect(&source, &groups, enclosure, admission, &mut candidates);
+    // A weak declaration cannot publish a partial lexical alias without
+    // a proved native sibling. An observed coverage limit is still a result.
+    if admission == Admission::AfterSeparator
+        && !matches!(collected, Err(RejectedPart::NameLimit))
+        && !candidates.names.iter().any(|name| name.explicit)
     {
         return None;
     }
     Some(candidates.resolve(collected))
+}
+
+impl Partition {
+    fn has_mixed_roles(&self, operands: &[NativeOperand]) -> bool {
+        let mut families =
+            self.ranges
+                .iter()
+                .filter_map(|range| match operand_at(operands, range.start)?.role {
+                    NativeOperandRole::ExplicitOption => Some(NativeHeadRole::Option),
+                    NativeOperandRole::Environment { .. } => Some(NativeHeadRole::Environment),
+                    NativeOperandRole::Command => Some(NativeHeadRole::Literal),
+                    _ => None,
+                });
+        families
+            .next()
+            .is_some_and(|first| families.any(|next| next != first))
+    }
+
+    fn groups(
+        &mut self,
+        text: &str,
+        head: &str,
+        operands: &[NativeOperand],
+        enclosure: Option<u32>,
+        depth: usize,
+        admission: Admission,
+    ) -> Option<Vec<Group>> {
+        if depth == MAX_NESTING {
+            return None;
+        }
+        let parts = independent_groups(text, head, enclosure, operands, admission)?;
+        self.separated |= parts.len() > 1;
+        Some(
+            parts
+                .into_iter()
+                .map(|part| {
+                    let part = part.trim();
+                    let (inner, nested) = unwrap_search(text, part, operands);
+                    if inner.len() == part.len() {
+                        let index = self.ranges.len();
+                        let start = offset(text, part);
+                        self.ranges.push(start..start + part.len());
+                        Group::Part(index)
+                    } else {
+                        self.groups(
+                            text,
+                            inner,
+                            operands,
+                            nested.or(enclosure),
+                            depth + 1,
+                            admission,
+                        )
+                        .map_or(Group::Unproved, |groups| {
+                            Group::Enclosed {
+                                scope: nested,
+                                groups,
+                            }
+                        })
+                    }
+                })
+                .collect(),
+        )
+    }
 }
 
 impl Candidates {
@@ -156,17 +241,23 @@ impl Candidates {
                 .into_iter()
                 .filter(|candidate| candidate.explicit || !self.unproved_part)
                 .map(|candidate| {
+                    let category = (candidate.kind, candidate.case);
                     kind = Some(match kind {
-                        Some(previous) if previous != candidate.kind => EntryKind::Term,
-                        _ => candidate.kind,
+                        Some(previous) if previous != category => {
+                            (EntryKind::Term, NameCase::Sensitive)
+                        }
+                        _ => category,
                     });
                     candidate.name
                 })
                 .collect();
+            let (kind, case) = kind.unwrap_or((EntryKind::Term, NameCase::Sensitive));
             return (
-                kind.unwrap_or(EntryKind::Term),
+                kind,
                 Recognition {
                     names,
+                    case: Some(case),
+                    unproved_form: self.unproved_form,
                     ..Recognition::default()
                 },
             );
@@ -187,85 +278,78 @@ impl Candidates {
 
 fn collect(
     source: &Head<'_>,
-    (head, enclosure): (&str, Option<u32>),
-    depth: usize,
+    groups: &[Group],
+    enclosure: Option<u32>,
     admission: Admission,
     candidates: &mut Candidates,
 ) -> Result<(), RejectedPart> {
-    if depth == MAX_NESTING {
-        return Err(RejectedPart::Unproved);
-    }
-    let (text, operands) = (source.text, source.operands);
-    let start = offset(text, head);
-    let uses = OperandUses::new(operands);
-    let groups = independent_groups(head, start, enclosure, operands, admission)
-        .ok_or(RejectedPart::Unproved)?;
-    candidates.separated |= groups.len() > 1;
     for group in groups {
         if matches!(candidates.sequence, SubjectSequence::ArgumentTail(_)) {
             break;
         }
-        let group = group.trim();
-        let (part, nested) = unwrap_search(text, group, operands);
-        if part.len() != group.len() {
-            let result = collect(
-                source,
-                (part, nested.or(enclosure)),
-                depth + 1,
-                admission,
-                candidates,
-            );
-            if let Some(nested) = nested {
-                candidates.leave_enclosure(nested, enclosure);
+        match group {
+            Group::Part(index) => collect_group(source, *index, enclosure, admission, candidates)?,
+            Group::Enclosed { scope, groups } => {
+                collect(source, groups, scope.or(enclosure), admission, candidates)?;
+                if let Some(nested) = scope {
+                    candidates.leave_enclosure(*nested, enclosure);
+                }
             }
-            match result {
-                Ok(()) => {}
-                Err(RejectedPart::Unproved) => candidates.unproved_part = true,
-                Err(err) => return Err(err),
-            }
-            continue;
+            Group::Unproved => candidates.unproved_part = true,
         }
-        let start = offset(text, part);
-        let span = start..start + part.len();
-        if uses.covers(&span, search_argument) {
-            continue;
-        }
-        let Ok(subject) = group_subject(text, &span, operands, enclosure) else {
-            candidates.unproved_part = true;
-            continue;
-        };
-        if !candidates.admit_subject(subject, enclosure) {
-            continue;
-        }
-        let lead = operand_at(operands, start);
-        let operand_label = lead.is_some_and(|operand| {
-            operand.role == NativeOperandRole::ExplicitOption
-                || operand.role == NativeOperandRole::Placeholder
-        });
-        let explicit = lead.is_some_and(|operand| {
-            admission != Admission::ProtectedSyntax && independent_role(operand.role)
-                || operand.role.subject().is_some()
-        }) || operand_label;
-        let Ok((kind, result)) = recognize_group(source, span, admission, enclosure) else {
-            candidates.unproved_part = true;
-            continue;
-        };
-        if result.limit.is_some() || candidates.names.len() + result.names.len() > MAX_NAMES {
-            return Err(RejectedPart::NameLimit);
-        }
-        if result.names.is_empty() {
-            candidates.unproved_part = true;
-        } else if subject.is_none() && explicit {
-            candidates.sequence = SubjectSequence::Subjects;
-        }
-        candidates
-            .names
-            .extend(result.names.into_iter().map(|name| Candidate {
-                name,
-                kind,
-                explicit,
-            }));
     }
+    Ok(())
+}
+
+fn collect_group(
+    source: &Head<'_>,
+    index: usize,
+    enclosure: Option<u32>,
+    admission: Admission,
+    candidates: &mut Candidates,
+) -> Result<(), RejectedPart> {
+    let (text, operands) = (source.text, source.operands);
+    let span = &source.ranges[index];
+    if OperandUses::new(operands).covers(span, search_argument) {
+        return Ok(());
+    }
+    let Ok(subject) = group_subject(text, span, operands, enclosure) else {
+        candidates.unproved_part = true;
+        return Ok(());
+    };
+    if !candidates.admit_subject(subject, enclosure) {
+        return Ok(());
+    }
+    let lead = operand_at(operands, span.start);
+    let operand_label = lead.is_some_and(|operand| {
+        operand.role == NativeOperandRole::ExplicitOption
+            || operand.role == NativeOperandRole::Placeholder
+    });
+    let hint = group_hint(source, index, lead, admission, enclosure);
+    let explicit = hint.is_some()
+        || operand_label
+        || lead.is_some_and(|operand| operand.role.subject().is_some());
+    let Ok((kind, result)) = recognize_group(source, index, hint, admission, enclosure) else {
+        candidates.unproved_part = true;
+        return Ok(());
+    };
+    if result.limit.is_some() || candidates.names.len() + result.names.len() > MAX_NAMES {
+        return Err(RejectedPart::NameLimit);
+    }
+    candidates.unproved_form |= result.unproved_form;
+    if result.names.is_empty() {
+        candidates.unproved_part = true;
+    } else if subject.is_none() && explicit {
+        candidates.sequence = SubjectSequence::Subjects;
+    }
+    candidates
+        .names
+        .extend(result.names.into_iter().map(|name| Candidate {
+            name,
+            kind,
+            case: result.case.unwrap_or(NameCase::Sensitive),
+            explicit,
+        }));
     Ok(())
 }
 
@@ -311,8 +395,8 @@ fn group_subject(
 }
 
 fn independent_groups<'a>(
+    text: &str,
     head: &'a str,
-    start: usize,
     enclosure: Option<u32>,
     operands: &[NativeOperand],
     admission: Admission,
@@ -320,6 +404,7 @@ fn independent_groups<'a>(
     // Protect accepted words in a nested enclosure even if its opening or
     // closing glyph was overwritten. Only the unwrapped BODY/ELEM supplies
     // separators at this level.
+    let start = offset(text, head);
     let first = operand_cursor(operands, start);
     let mut receipts = operands[first..].iter().peekable();
     let mut last = None;
@@ -329,12 +414,16 @@ fn independent_groups<'a>(
             last = Some(operand);
         }
         let current = last.filter(|operand| operand.bytes.contains(&offset));
+        if head.as_bytes()[index] == b'|' && is_command_pipe(text, offset, operands) {
+            return true;
+        }
         if matches!(head.as_bytes()[index], b',' | b'|') && admission != Admission::ProtectedSyntax
         {
             // In a weak prefix, punctuation embedded in a prose operand
             // cannot authorize a later native subject as its own declaration.
             return current.is_none_or(|operand| {
                 !(operand.role == NativeOperandRole::LiteralContinuation(enclosure)
+                    || operand.role == NativeOperandRole::PipeDelimiter(enclosure)
                     || enclosure.is_some_and(|body| {
                         operand.role == NativeOperandRole::EnclosureContent(body)
                     }))
@@ -355,6 +444,7 @@ fn independent_groups<'a>(
                     | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_) => true,
                     NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
+                    NativeOperandRole::PipeDelimiter(scope) => enclosure != scope,
                     NativeOperandRole::LiteralDelimiter {
                         enclosure: owner, ..
                     } => enclosure != owner,
@@ -364,32 +454,81 @@ fn independent_groups<'a>(
     })
 }
 
+pub(super) fn is_command_pipe(text: &str, at: usize, operands: &[NativeOperand]) -> bool {
+    let pipe = text[at..].trim_start();
+    let Some(suffix) = pipe.strip_prefix('|') else {
+        return false;
+    };
+    let at = offset(text, pipe);
+    let index = operand_cursor(operands, at);
+    if !operand_at(operands, at)
+        .is_some_and(|operand| matches!(operand.role, NativeOperandRole::PipeDelimiter(_)))
+    {
+        return false;
+    }
+    let Some(operand) = index.checked_sub(1).and_then(|index| operands.get(index)) else {
+        return false;
+    };
+    // mdoc_macro.c::in_line rewinds the Ar element before the middle
+    // delimiter, then executes Ic as a separate macro. An operand before
+    // that unowned pipe is invocation syntax. A standalone No separator
+    // or two actual operand labels can still form independent alternatives.
+    let after = offset(text, suffix.trim_start());
+    operand.role.is_operand_label()
+        && text[operand.bytes.end..at].trim().is_empty()
+        && operand_at(operands, after).is_some_and(|next| {
+            next.role == NativeOperandRole::Command
+                && text[next.bytes.start..after].trim().is_empty()
+        })
+}
+
+fn group_hint(
+    source: &Head<'_>,
+    index: usize,
+    lead: Option<&NativeOperand>,
+    admission: Admission,
+    enclosure: Option<u32>,
+) -> Option<NativeHeadRole> {
+    match lead.map(|operand| operand.role) {
+        Some(NativeOperandRole::ExplicitOption) => Some(NativeHeadRole::Option),
+        Some(NativeOperandRole::Environment {
+            enclosure: scope, ..
+        }) if admission != Admission::ProtectedSyntax && scope == enclosure => {
+            Some(NativeHeadRole::Environment)
+        }
+        Some(NativeOperandRole::Command) if admission != Admission::ProtectedSyntax => {
+            Some(NativeHeadRole::Literal)
+        }
+        // A styled Nm followed by Cm can prove one compound command.
+        // An Ar operand or typed subject preceding Ic still supplies its
+        // own role even when the whole HEAD appears under COMMANDS.
+        _ if admission != Admission::ProtectedSyntax
+            && source.context == DefinitionContext::Commands
+            && lead.is_none_or(|operand| {
+                operand.role.subject().is_none() && !operand.role.is_operand_label()
+            })
+            && commands::leading_styled_command_name(&source.terms[index]).is_some()
+            && intersecting_operands(source.operands, source.ranges[index].clone())
+                .any(|operand| operand.role == NativeOperandRole::Command) =>
+        {
+            Some(NativeHeadRole::Literal)
+        }
+        _ => None,
+    }
+}
+
 fn recognize_group(
     source: &Head<'_>,
-    span: Range<usize>,
+    index: usize,
+    hint: Option<NativeHeadRole>,
     admission: Admission,
     enclosure: Option<u32>,
 ) -> Result<(EntryKind, Recognition), RejectedPart> {
     let (text, operands) = (source.text, source.operands);
+    let span = &source.ranges[index];
     let part = &text[span.clone()];
-    let uses = OperandUses::new(operands);
-    if let Some(lead) = operand_at(operands, span.start) {
-        match lead.role {
-            NativeOperandRole::ExplicitOption => {
-                return option_group(text, span, lead, operands, uses);
-            }
-            NativeOperandRole::Environment {
-                enclosure: scope, ..
-            } if admission != Admission::ProtectedSyntax && scope == enclosure => {
-                let name = environment::native_atom(source.view(), &span, operands, lead.role);
-                return Ok((EntryKind::EnvironmentVariable, Recognition::one(name)));
-            }
-            NativeOperandRole::Command if admission != Admission::ProtectedSyntax => {
-                let name = command_group(text, span, lead, uses);
-                return Ok((EntryKind::Command, Recognition::one(name)));
-            }
-            _ => {}
-        }
+    if let Some(hint) = hint {
+        return recognize_lexical_group(source, index, hint, admission);
     }
     if intersecting_operands(operands, span.clone())
         .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
@@ -398,18 +537,13 @@ fn recognize_group(
         // nor a new lexical spelling containing both operands.
         return Err(RejectedPart::Unproved);
     }
-    if admission == Admission::TypedSubjects
-        && operand_at(operands, span.start).is_none_or(|operand| operand.role.subject().is_none())
-    {
-        return Err(RejectedPart::Unproved);
-    }
     if let Some(result) = recognize_part(text, part, operands, enclosure) {
         return Ok(result);
     }
     if admission == Admission::TypedSubjects {
         return Err(RejectedPart::Unproved);
     }
-    let uses = uses.shifted(span.start);
+    let uses = OperandUses::new(operands).shifted(span.start);
     let names = named::term_occurrences(part, uses)
         .ok_or(RejectedPart::Unproved)?
         .into_iter()
@@ -425,70 +559,133 @@ fn recognize_group(
     ))
 }
 
-fn independent_role(role: NativeOperandRole) -> bool {
-    matches!(
-        role,
-        NativeOperandRole::Environment { .. } | NativeOperandRole::Command
-    )
+fn recognize_lexical_group(
+    source: &Head<'_>,
+    index: usize,
+    hint: NativeHeadRole,
+    admission: Admission,
+) -> Result<(EntryKind, Recognition), RejectedPart> {
+    let original = &source.ranges[index];
+    let term = &source.terms[index];
+    let protected = hint == NativeHeadRole::Option && admission == Admission::ProtectedSyntax;
+    let (range, narrowed) = if protected {
+        let range = protected_option_span(source, original)?;
+        let content = split_inline_intervals(term, std::iter::once(0..range.len()))
+            .pop()
+            .expect("one interval");
+        (range, Some(DefinitionTerm::from(content)))
+    } else {
+        (original.clone(), None)
+    };
+    let scoped = [local_operands(scoped_operands(
+        source.operands,
+        range.clone(),
+    ))];
+    let found = infer_lexical_terms(
+        std::slice::from_ref(narrowed.as_ref().unwrap_or(term)),
+        &source.text[range.clone()],
+        source.context,
+        Some(hint),
+        HeadOperands::Accepted(&scoped),
+    );
+    let mut unproved_form = !protected && !found.excluded_forms.is_empty();
+    let names = found
+        .occurrences
+        .into_iter()
+        .flatten()
+        .map(|name| rebase(name, range.start))
+        .filter(|name| {
+            let proved = hint != NativeHeadRole::Option
+                || name
+                    .parts
+                    .iter()
+                    .all(|span| option_key_is_contiguous(source, span));
+            unproved_form |= !protected && !proved;
+            proved
+        })
+        .collect();
+    Ok((
+        found.kind,
+        Recognition {
+            names,
+            case: Some(found.case),
+            limit: found.limit,
+            unproved_form,
+            ..Recognition::default()
+        },
+    ))
 }
 
-fn option_group(
-    text: &str,
-    span: Range<usize>,
-    option: &NativeOperand,
-    operands: &[NativeOperand],
-    uses: OperandUses<'_>,
-) -> Result<(EntryKind, Recognition), RejectedPart> {
-    if !text[option.bytes.start..span.start].trim().is_empty() {
-        return Err(RejectedPart::Unproved);
-    }
-    // termp_fl_pre writes a separate dash followed by the accepted Fl word.
-    // Both receipts must cover the contiguous key; a later operand starts
-    // only after the ordinary word boundary.
+fn option_key_is_contiguous(source: &Head<'_>, span: &Range<usize>) -> bool {
+    let mut operands = intersecting_operands(source.operands, span.clone())
+        .filter(|operand| operand.role == NativeOperandRole::ExplicitOption);
+    let Some(first) = operands.next() else {
+        return true;
+    };
+    // A separator in the same Fl word cannot name another flag; Ns
+    // cannot glue two flags into one key. Nested Fl may supply the leading
+    // dashes before the operand containing the actual name.
+    let text = source.text;
+    text[first.bytes.start..span.start.max(first.bytes.start)]
+        .trim()
+        .is_empty()
+        && std::iter::once(first)
+            .chain(operands)
+            .take_while(|operand| operand.bytes.end < span.end)
+            .all(|operand| {
+                text[operand.bytes.clone()]
+                    .trim()
+                    .bytes()
+                    .all(|byte| byte == b'-')
+            })
+}
+
+fn protected_option_span(
+    source: &Head<'_>,
+    span: &Range<usize>,
+) -> Result<Range<usize>, RejectedPart> {
+    let text = source.text;
+    let operands = source.operands;
+    let mut receipts = intersecting_operands(operands, span.clone());
+    let option = receipts.next().ok_or(RejectedPart::Unproved)?;
     let mut end = option.bytes.end;
-    let mut saw_operand = !text[option.bytes.clone()].trim().bytes().all(|b| b == b'-');
-    for next in intersecting_operands(operands, span.clone()).skip(1) {
-        if saw_operand || next.role != NativeOperandRole::ExplicitOption || next.bytes.start != end
-        {
+    let mut has_key = !text[option.bytes.clone()]
+        .trim()
+        .bytes()
+        .all(|byte| byte == b'-');
+    for next in receipts {
+        if has_key || next.role != NativeOperandRole::ExplicitOption || next.bytes.start != end {
             break;
         }
         end = next.bytes.end;
-        saw_operand = !text[next.bytes.clone()].trim().bytes().all(|b| b == b'-');
+        has_key = !text[next.bytes.clone()]
+            .trim()
+            .bytes()
+            .all(|byte| byte == b'-');
     }
     if !text[span.end.min(end)..end].trim().is_empty() {
         return Err(RejectedPart::Unproved);
     }
     let end = end.min(span.end);
     let (suffix, _) = unwrapped(text, &text[end..span.end], operands);
-    let suffix_start = offset(text, suffix);
+    let at = offset(text, suffix);
     if !suffix.is_empty()
-        && !uses.covers(&(suffix_start..suffix_start + suffix.len()), |role| {
+        && !OperandUses::new(operands).covers(&(at..at + suffix.len()), |role| {
             role.is_parameter() || role.is_search()
         })
     {
         return Err(RejectedPart::Unproved);
     }
-    let name =
-        options::native_option_key(&text[span.start..end]).map(|name| rebase(name, span.start));
-    Ok((OPTION, Recognition::one(name)))
+    Ok(span.start..end)
 }
 
-fn command_group(
-    text: &str,
-    span: Range<usize>,
-    lead: &NativeOperand,
-    uses: OperandUses<'_>,
-) -> Option<RecognizedName> {
-    let name = text
-        .get(span.start..lead.bytes.end.min(span.end))?
-        .trim_end();
-    let tail = text.get(span.start + name.len()..span.end)?;
-    if commands::is_command_name(name) && (tail.is_empty() || tail.starts_with(char::is_whitespace))
-    {
-        commands::command_binding(&text[span.clone()], name, span.start, uses)
-    } else {
-        None
-    }
+pub(super) fn independent_role(role: NativeOperandRole) -> bool {
+    matches!(
+        role,
+        NativeOperandRole::Environment { .. }
+            | NativeOperandRole::Command
+            | NativeOperandRole::ExplicitOption
+    )
 }
 
 fn unwrap_search<'a>(

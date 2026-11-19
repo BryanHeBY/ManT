@@ -12,12 +12,17 @@ otherwise identical to the upstream release members.
 | `freebsd-ppi.4.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man4/ppi.4.gz` | The two comma-delimited constants resolve to one description. |
 | `dragonflybsd-sc.4.gz` | DragonFly BSD 6.4.2 x86-64 release ISO, `usr/share/man/man4/sc.4.gz` | The `GIO_COLOR` binding survives its pointer argument. |
 | `dragonflybsd-hack.6.gz` | DragonFly BSD 6.4.2 x86-64 release ISO, `usr/share/man/man6/hack.6.gz` | `USER` and `LOGNAME` bind independently to the same login-name description. |
+| `freebsd-netstat.1.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man1/netstat.1.gz` | The `netgraph` and `ng` address-family names are values of `-f`. |
+| `dragonflybsd-netstat.1.gz` | DragonFly BSD 6.4.2 x86-64 release ISO, `usr/share/man/man1/netstat.1.gz` | Both address-family aliases stay values when their parenthetical annotation contains two constants. |
+| `freebsd-awk.1.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man1/awk.1.gz` | Pipe operands stay in the `getline` form, with independent definitions for the three input forms. |
 | `freebsd-ng_deflate.4.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man4/ng_deflate.4.gz` | `NGM_DEFLATE_CONFIG` retains its original description alongside the parenthesized command alias. |
 | `freebsd-archive_entry_acl.3.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man3/archive_entry_acl.3.gz` | Styled permission shorthand in literal parentheses preserves both bodyless and described constant owners. |
 | `netbsd-bpf.4` | NetBSD 10.1 amd64 `man.tar.xz`, `usr/share/man/man4/bpf.4` | The 28 ioctl names in 21 original definition heads bind through punctuation that reopens the native invocation. |
 | `openbsd-bsd.port.mk.5` | OpenBSD 7.9 amd64 `man79.tgz`, `./usr/share/man/man5/bsd.port.mk.5` | Install templates keep their full forms and descriptions. The independently listed architecture names remain selectable. |
 
-Each member retains its complete BSD redistribution notice. The
-[manifest](manifest.json) records the licenses, artifact and member hashes,
+Each BSD-licensed member retains its complete redistribution notice. The
+`awk` member includes its Lucent documentation license, also provided in
+[supporting documentation](../LICENSES/LUCENT-AWK-1997.txt). The
+[manifest](manifest.json) records the licenses, release archive and member hashes,
 and results for all five pinned CVS profiles. Native profile output hashes
 use the fixture basename from this directory under `LC_ALL=C` and `TZ=UTC`.

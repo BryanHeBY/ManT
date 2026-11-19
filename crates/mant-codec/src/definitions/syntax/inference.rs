@@ -50,14 +50,26 @@ pub(super) fn infer_terms(
         .first()
         .map_or_else(String::new, |term| plain_text(term));
     #[cfg(feature = "roff")]
-    if let Some((kind, recognized)) = native_subject::recognize_head(terms, &first, operands) {
-        return InferredIdentity::classify(recognized, kind, NameCase::Sensitive, false);
+    if let Some((kind, case, recognized)) =
+        native_subject::recognize_head(terms, &first, context, operands)
+    {
+        return InferredIdentity::classify(recognized, kind, case, false);
     }
+    infer_lexical_terms(terms, &first, context, hint, operands)
+}
+
+pub(super) fn infer_lexical_terms(
+    terms: &[DefinitionTerm],
+    first: &str,
+    context: DefinitionContext,
+    hint: Option<NativeHeadRole>,
+    operands: HeadOperands<'_>,
+) -> InferredIdentity {
     let trimmed = first.trim();
     let leading_option = hint.is_none()
         && operands
             .for_term(0)
-            .is_some_and(|ranges| scan::has_leading_explicit_option(&first, ranges));
+            .is_some_and(|ranges| scan::has_leading_explicit_option(first, ranges));
     let hint = hint.or(leading_option.then_some(NativeHeadRole::Option));
     #[cfg(feature = "roff")]
     if hint.is_none()
@@ -123,7 +135,7 @@ pub(super) fn infer_terms(
         && terms.len() > 1
         && operands.proves_option()
         && let Some(mixed_kind) =
-            continued_occurrences(terms, &first, operands, leading_option, &mut recognized)
+            continued_occurrences(terms, first, operands, leading_option, &mut recognized)
     {
         kind = mixed_kind;
         case = NameCase::Sensitive;

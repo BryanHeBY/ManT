@@ -27,18 +27,6 @@ pub(in crate::definitions::syntax) struct EnvironmentNames {
     pub(in crate::definitions::syntax) unproved_exact_form: bool,
 }
 
-pub(super) fn native_atom(
-    view: &HeadView<'_>,
-    range: &Range<usize>,
-    operands: &[NativeOperand],
-    lead: NativeOperandRole,
-) -> Option<RecognizedName> {
-    let uses = OperandUses::new(operands);
-    let name = name_in_atom(view, range, operands, Some(lead), uses)?;
-    proven_spelling(uses, &(range.start..range.start + name.len()), Some(lead))
-        .then(|| RecognizedName::contiguous(&name, range.start))
-}
-
 fn recognize(
     view: &HeadView<'_>,
     operands: &[NativeOperand],

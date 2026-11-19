@@ -3,9 +3,10 @@ use super::eligibility::{NameSource, OperandUses, operand_at, operand_cursor};
 use super::scan::MAX_NESTING;
 use super::{DeclarationLimit, named, occurrences::HeadNames};
 use crate::definitions::{
-    NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, evidence::HeadOperands,
+    NativeOperand, NativeOperandRole, NativeSubject, RecognizedName, context::DefinitionContext,
+    evidence::HeadOperands,
 };
-use mant_ir::{DefinitionTerm, EntryKind, Inline, inline_plain_text};
+use mant_ir::{DefinitionTerm, EntryKind, Inline, NameCase, inline_plain_text};
 use std::ops::Range;
 
 mod annotations;
@@ -14,25 +15,35 @@ mod display;
 pub(super) use display::infer_display_head;
 mod environment;
 pub(super) use environment::environment_names;
+mod intervals;
 mod symbols;
 
 pub(super) fn recognize_head(
     terms: &[DefinitionTerm],
     first: &str,
+    context: DefinitionContext,
     operands: HeadOperands<'_>,
-) -> Option<(EntryKind, HeadNames)> {
-    let (kind, first) = recognize(terms.first()?, first, operands.for_term(0)?)?;
+) -> Option<(EntryKind, NameCase, HeadNames)> {
+    let (kind, first) = recognize(terms.first()?, first, operands.for_term(0)?, context)?;
+    let case = first.case.unwrap_or(NameCase::Sensitive);
     let mut limit = first.limit;
     let mut semantic = !first.unproved_field;
     let mut occurrences = vec![first.names];
+    let mut excluded_forms = Vec::new();
+    if first.unproved_form {
+        excluded_forms.push(0);
+    }
     for (index, term) in terms.iter().enumerate().skip(1) {
         let mut names = Vec::new();
         if let Some(ranges) = operands.for_term(index)
-            && let Some((_, term)) = recognize(term, &inline_plain_text(term), ranges)
+            && let Some((_, term)) = recognize(term, &inline_plain_text(term), ranges, context)
         {
             names = term.names;
             limit = limit.or(term.limit);
             semantic |= !term.unproved_field;
+            if term.unproved_form {
+                excluded_forms.push(index);
+            }
         } else {
             semantic = true;
         }
@@ -40,9 +51,10 @@ pub(super) fn recognize_head(
     }
     Some((
         kind,
+        case,
         HeadNames {
             occurrences,
-            excluded_forms: Vec::new(),
+            excluded_forms,
             limit,
             semantic,
         },
@@ -52,8 +64,10 @@ pub(super) fn recognize_head(
 #[derive(Default)]
 struct Recognition {
     names: Vec<RecognizedName>,
+    case: Option<NameCase>,
     limit: Option<DeclarationLimit>,
     unproved_field: bool,
+    unproved_form: bool,
 }
 
 impl Recognition {
@@ -69,6 +83,7 @@ fn recognize(
     nodes: &[Inline],
     text: &str,
     operands: &[NativeOperand],
+    context: DefinitionContext,
 ) -> Option<(EntryKind, Recognition)> {
     let (head, enclosure) = unwrapped(text, text, operands);
     let start = offset(text, head);
@@ -96,18 +111,16 @@ fn recognize(
         Some(declaration_parts::Admission::TypedSubjects)
     } else if protected {
         Some(declaration_parts::Admission::ProtectedSyntax)
-    } else if operands
-        .iter()
-        .any(|operand| operand.role.subject().is_some())
-    {
+    } else if operands.iter().any(|operand| {
+        operand.role.subject().is_some() || declaration_parts::independent_role(operand.role)
+    }) {
         Some(declaration_parts::Admission::AfterSeparator)
     } else {
         None
     };
     if let Some(admission) = admission
-        && let Some(identity) = declaration_parts::recognize(nodes, text, operands, admission)
-        && (admission != declaration_parts::Admission::AfterSeparator
-            || !identity.1.names.is_empty())
+        && let Some(identity) =
+            declaration_parts::recognize(nodes, text, operands, context, admission)
     {
         return Some(identity);
     }
@@ -130,6 +143,12 @@ fn recognize_part(
         || matches!(lead.role, NativeOperandRole::SearchArgument(_))
             && head.len() < text.trim().len()
     {
+        if head
+            .match_indices('|')
+            .any(|(at, _)| declaration_parts::is_command_pipe(text, start + at, operands))
+        {
+            return Some((EntryKind::Term, Recognition::default()));
+        }
         return Some((
             EntryKind::Term,
             recognize_operand_label(head, start, operands),

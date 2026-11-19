@@ -6,12 +6,13 @@ use crate::definitions::syntax::{
     scan::{DeclarationLimit, MAX_NAMES},
 };
 use crate::definitions::{
-    NativeHeadRole, NativeOperand, NativeOperandRole,
-    context::DefinitionContext,
-    evidence::{AcceptedOperands, HeadOperands, TermOperands},
+    NativeHeadRole, NativeOperand, NativeOperandRole, context::DefinitionContext,
+    evidence::HeadOperands,
 };
 use mant_ir::{DefinitionTerm, EntryKind, Inline, NameCase};
-use std::{ops::Range, rc::Rc};
+use std::ops::Range;
+
+use super::intervals::{local_operands, split_inline_intervals};
 
 mod plans;
 mod scopes;
@@ -127,13 +128,6 @@ struct Projection {
     bytes: usize,
 }
 
-fn local_operands(operands: Vec<NativeOperand>) -> TermOperands {
-    TermOperands::Accepted(Rc::new(AcceptedOperands {
-        operands,
-        bodies: Vec::new(),
-    }))
-}
-
 impl Projection {
     fn push(&mut self, segment: Segment<'_>) {
         if self.bytes > 0 {
@@ -216,7 +210,13 @@ impl Projection {
             .iter()
             .zip(self.operands.iter().skip(1))
             .any(|(separator, command)| {
-                separator.role == NativeOperandRole::LiteralContinuation(None)
+                (separator.role == NativeOperandRole::LiteralContinuation(None)
+                    || separator.role == NativeOperandRole::PipeDelimiter(None)
+                        && !super::declaration_parts::is_command_pipe(
+                            text,
+                            separator.bytes.start,
+                            &self.operands,
+                        ))
                     && command.role == NativeOperandRole::Command
                     && matches!(text[separator.bytes.clone()].trim(), "," | "|")
                     && text[separator.bytes.end..command.bytes.start]
@@ -247,91 +247,9 @@ fn segments<'a>(
             content: Vec::new(),
         });
     }
-    if !segments.is_empty() {
-        collect_inline_intervals(term, &mut segments, &mut 0, &mut 0);
+    let slices = split_inline_intervals(term, segments.iter().map(|segment| segment.bytes.clone()));
+    for (segment, content) in segments.iter_mut().zip(slices) {
+        segment.content = content;
     }
     segments
-}
-
-fn collect_inline_intervals(
-    nodes: &[Inline],
-    segments: &mut [Segment<'_>],
-    segment_index: &mut usize,
-    offset: &mut usize,
-) {
-    for node in nodes {
-        if let Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } = node
-        {
-            let first = *segment_index;
-            let Some(initial) = segments.get(first).map(|segment| segment.content.len()) else {
-                return;
-            };
-            collect_inline_intervals(children, segments, segment_index, offset);
-            for (index, segment) in segments
-                .iter_mut()
-                .enumerate()
-                .take(*segment_index + 1)
-                .skip(first)
-            {
-                let start = if index == first { initial } else { 0 };
-                if start < segment.content.len() {
-                    let children = segment.content.split_off(start);
-                    segment.content.push(wrap_interval(node, children));
-                }
-            }
-            continue;
-        }
-        let text = match node {
-            Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                value
-            }
-            Inline::LineBreak { .. } => "\n",
-            Inline::Anchor { .. } => continue,
-            _ => unreachable!("the wrappers have already been traversed"),
-        };
-        let start = *offset;
-        let end = start + text.len();
-        while let Some(segment) = segments.get_mut(*segment_index) {
-            if segment.bytes.start >= end {
-                break;
-            }
-            let clip_start = segment.bytes.start.max(start);
-            let clip_end = segment.bytes.end.min(end);
-            if clip_start < clip_end
-                && let Some(slice) = text.get(clip_start - start..clip_end - start)
-            {
-                segment.content.push(if slice.len() == text.len() {
-                    node.clone()
-                } else if matches!(node, Inline::Code { .. }) {
-                    Inline::Code {
-                        value: slice.into(),
-                    }
-                } else {
-                    Inline::Text {
-                        value: slice.into(),
-                    }
-                });
-            }
-            if segment.bytes.end > end {
-                break;
-            }
-            *segment_index += 1;
-        }
-        *offset = end;
-    }
-}
-
-fn wrap_interval(wrapper: &Inline, children: Vec<Inline>) -> Inline {
-    match wrapper {
-        Inline::Strong { .. } => Inline::Strong { children },
-        Inline::Emphasis { .. } => Inline::Emphasis { children },
-        Inline::Link { target, title, .. } => Inline::Link {
-            target: target.clone(),
-            title: title.clone(),
-            children,
-        },
-        _ => unreachable!("only wrappers own child intervals"),
-    }
 }

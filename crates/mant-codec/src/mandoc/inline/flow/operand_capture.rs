@@ -270,12 +270,11 @@ impl super::InlineBuilder {
                     }
                     Some(role)
                 })
-                .or_else(|| enclosure().map(NativeOperandRole::EnclosureContent))
                 .or_else(|| {
-                    // append_delims() can execute a bare comma or pipe as a
-                    // sibling TEXT, outside the macro that parsed it.
-                    matches!(text?.0.decoder_text(), Some("," | "|"))
-                        .then_some(NativeOperandRole::LiteralContinuation(None))
+                    captured_bare_delimiter(
+                        text.and_then(|(node, _)| node.decoder_text()),
+                        enclosure(),
+                    )
                 })
                 .or_else(|| {
                     text?
@@ -437,6 +436,21 @@ fn declaration_separator(decoded: &DecodedText) -> bool {
         _ => false,
     };
     separator && chars.all(char::is_whitespace)
+}
+
+fn captured_bare_delimiter(
+    text: Option<&str>,
+    enclosure: Option<u32>,
+) -> Option<NativeOperandRole> {
+    // in_line() rewinds its element at a middle delimiter and emits a
+    // sibling TEXT. In particular that pipe was not an explicit No operand.
+    if text == Some("|") {
+        Some(NativeOperandRole::PipeDelimiter(enclosure))
+    } else {
+        enclosure
+            .map(NativeOperandRole::EnclosureContent)
+            .or((text == Some(",")).then_some(NativeOperandRole::LiteralContinuation(None)))
+    }
 }
 
 fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOperandRole> {

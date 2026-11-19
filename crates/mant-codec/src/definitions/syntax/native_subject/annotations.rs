@@ -277,6 +277,7 @@ pub(super) fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
         NativeOperandRole::EnclosureContent(owner) => Some(owner),
         NativeOperandRole::Environment { enclosure, .. }
         | NativeOperandRole::ReferenceText(enclosure)
+        | NativeOperandRole::PipeDelimiter(enclosure)
         | NativeOperandRole::LiteralContinuation(enclosure) => enclosure,
         _ => {
             role.subject()
@@ -361,6 +362,7 @@ fn is_supplement(
             && match role {
                 NativeOperandRole::EnclosureContent(owner) => enclosure == Some(owner),
                 NativeOperandRole::ReferenceText(owner)
+                | NativeOperandRole::PipeDelimiter(owner)
                 | NativeOperandRole::LiteralContinuation(owner) => {
                     enclosure == owner && (owner.is_some() || bounded)
                 }

@@ -10,6 +10,9 @@ pub(crate) enum NativeOperandRole {
     /// A visible No operand that can intentionally continue an Ev spelling.
     #[cfg(feature = "roff")]
     LiteralContinuation(Option<u32>),
+    /// The mdoc parser emitted a bare middle delimiter between macro scopes.
+    #[cfg(feature = "roff")]
+    PipeDelimiter(Option<u32>),
     /// A comma or pipe belongs to the complete text of a No operand.
     #[cfg(feature = "roff")]
     LiteralPunctuation,
@@ -196,6 +199,7 @@ impl NativeOperandRole {
             },
             Self::ReferenceText(_) => Self::ReferenceText(enclosure()),
             Self::LiteralContinuation(_) => Self::LiteralContinuation(enclosure()),
+            Self::PipeDelimiter(_) => Self::PipeDelimiter(enclosure()),
             role => role,
         }
     }
@@ -219,7 +223,9 @@ impl NativeOperandRole {
                 invocation,
                 enclosure,
             },
-            Self::LiteralContinuation(_) | Self::FunctionSignature { .. } => Self::Argument,
+            Self::LiteralContinuation(_)
+            | Self::PipeDelimiter(_)
+            | Self::FunctionSignature { .. } => Self::Argument,
             Self::Command => Self::Description,
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,

@@ -7,6 +7,8 @@ use std::fmt::Write;
 mod continuations;
 #[path = "scoped_intervals/environment.rs"]
 mod environment;
+#[path = "scoped_intervals/grouped_grammar.rs"]
+mod grouped_grammar;
 #[path = "scoped_intervals/mixed_groups.rs"]
 mod mixed_groups;
 #[path = "scoped_intervals/primary.rs"]

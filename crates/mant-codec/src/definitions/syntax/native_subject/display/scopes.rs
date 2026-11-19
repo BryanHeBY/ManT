@@ -67,7 +67,13 @@ pub(super) fn display_boundaries(
             }
         }
         scan.literal_marks(gap..operand.bytes.start);
-        scan.operand(operand, active_body.is_some());
+        let alternative_pipe = matches!(operand.role, NativeOperandRole::PipeDelimiter(None))
+            && !super::super::declaration_parts::is_command_pipe(
+                text,
+                operand.bytes.start,
+                operands,
+            );
+        scan.operand(operand, active_body.is_some(), alternative_pipe);
         end = operand.bytes.end;
     }
     scan.literal_marks(active_body.map_or(end, |body| end.max(body.end))..text.len());
@@ -135,7 +141,12 @@ impl<'a> ScopeScan<'a> {
         self.separators.push(Separator { bytes, alternative });
     }
 
-    fn operand(&mut self, operand: &NativeOperand, within_native_body: bool) {
+    fn operand(
+        &mut self,
+        operand: &NativeOperand,
+        within_native_body: bool,
+        alternative_pipe: bool,
+    ) {
         let role = operand.role;
         let bytes = operand.bytes.clone();
         if role.display_only() {
@@ -159,7 +170,7 @@ impl<'a> ScopeScan<'a> {
             if role == NativeOperandRole::ExplicitOption && !self.opaque {
                 self.slot = SlotPrefix::Option;
             }
-            self.accept_non_display(operand, bytes, within_native_body);
+            self.accept_non_display(operand, bytes, within_native_body, alternative_pipe);
         }
     }
 
@@ -168,6 +179,7 @@ impl<'a> ScopeScan<'a> {
         operand: &NativeOperand,
         bytes: Range<usize>,
         within_native_body: bool,
+        alternative_pipe: bool,
     ) {
         let role = operand.role;
         let mark_start = bytes.end - self.text[bytes.clone()].trim_start().len();
@@ -178,7 +190,7 @@ impl<'a> ScopeScan<'a> {
         let word = self.text[mark_start..bytes.end].trim_end();
         if !within_native_body
             && self.scopes.is_empty()
-            && role == NativeOperandRole::LiteralContinuation(None)
+            && (alternative_pipe || role == NativeOperandRole::LiteralContinuation(None))
             && matches!(word, "," | "|" | "or")
         {
             self.separator(mark_start..mark_start + word.len(), word == "or");
@@ -194,6 +206,7 @@ impl<'a> ScopeScan<'a> {
                 role,
                 NativeOperandRole::Literal
                     | NativeOperandRole::LiteralContinuation(_)
+                    | NativeOperandRole::PipeDelimiter(_)
                     | NativeOperandRole::LiteralPunctuation
                     | NativeOperandRole::EnclosureContent(_)
             )

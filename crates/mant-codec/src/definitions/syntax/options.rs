@@ -98,18 +98,6 @@ fn retain_native_short_option(token: &str, start: usize, names: &mut Vec<Recogni
     }
 }
 
-/// Run the option grammar on exactly one accepted Fl scope. The complete
-/// scope may contain a key, an attached value or explicit legacy markers.
-#[cfg(feature = "roff")]
-pub(super) fn native_option_key(word: &str) -> Option<RecognizedName> {
-    super::scan::native_option_key(word).or_else(|| {
-        let mut names = Vec::new();
-        let token = word.split_whitespace().next()?;
-        retain_native_short_option(token, word.len() - word.trim_start().len(), &mut names);
-        names.pop()
-    })
-}
-
 /// A TQ term's accepted native key is independent of the original HEAD's
 /// role. Its exact ranges survive alongside an independent lexical term.
 pub(super) fn retain_continued_option_names(

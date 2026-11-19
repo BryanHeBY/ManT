@@ -542,6 +542,186 @@
           "status": "CapturedWithDiagnostics"
         }
       }
+    },
+    {
+      "file": "freebsd-awk.1.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man1/awk.1.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man1/awk.1.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "a7ac2dea2f91ee1405b7431620ea91ccae82e43650c635dcd5646275259dbdd6",
+      "fixtureSha256": "a7ac2dea2f91ee1405b7431620ea91ccae82e43650c635dcd5646275259dbdd6",
+      "decompressedSha256": "6098bda2ee6ca078a41f29cd521ddac67dd06bce8b02e517204e387db842c866",
+      "sourceBytes": 8217,
+      "fixtureBytes": 8217,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "Lucent 1997 awk documentation",
+      "licenseFile": "../LICENSES/LUCENT-AWK-1997.txt",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "Pipe arguments remain operands of getline; three independent getline definitions remain queryable.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "4a68457c9a650e745583c402e46c7febadd2c2cd02add36a4817663d05005a82",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 26207,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "dddaf89d1f46382e3850c30f55cae589569ad26d6089181e67b155838837df66",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 26348,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "9bdd4777a83b980186efe7279138d5e5e854216fe9ba3c38d0fe7cde99a46fd1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 42817,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "84fa7f37fc5755b28644f7c24393f2ee3dc97f4a1edfe5f98b52c928d1667c78",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 91802,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "e6f91a142c0b1c3f2ddf4e61d020f78f3f2002d1e2d4af5c0028d2485e5e7b09",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 195,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-netstat.1.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man1/netstat.1.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man1/netstat.1.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "cab1011e382a8038b83e593c335269e92624ac6fa06dde0acc9c829870a43e2a",
+      "fixtureSha256": "cab1011e382a8038b83e593c335269e92624ac6fa06dde0acc9c829870a43e2a",
+      "decompressedSha256": "130bc124646b2d15fe305d48d308c0d2abcc7afe3597788a993121b0e4211a6a",
+      "sourceBytes": 6321,
+      "fixtureBytes": 6321,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "BSD-3-Clause",
+      "licenseFile": "freebsd-netstat.1.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "Address-family aliases retain Value identity under the -f option.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "575a569d88a44d8a6c7d2dfeb4ff8279bcb71be5ebe37aebc4dd8d35c4c6367a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 29913,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "8bed837fb6901b6b85a2b1fc9c1523ca613f0f8d30e3d810b0902c8987ffd67e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 29947,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "72b44f7b137438f668121d7e2933ccb9ed892c91766701f748ef8e9c6734e41a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 57321,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "35fedc60613c42efbcc5f2618187d54b1bac1eb8e496c1fceed59d359e347b54",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 152295,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "2ab62853bd01e0cba8eeb9165f9e946c3545f796ca7456bf7c30a5271cb1bd5d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1316,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "dragonflybsd-netstat.1.gz",
+      "sourceIdentity": "dragonflybsd-6.4.2-x86_64:man/man1/netstat.1.gz",
+      "originUrl": "https://avalon.dragonflybsd.org/iso-images/dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archive": "dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archiveMember": "usr/share/man/man1/netstat.1.gz",
+      "archiveSha256": "373150a21eeb7ce0f20c7faf1b8129145bf3bf0463a45d0dc18aad274f7ed661",
+      "sourceSha256": "534af1a93385953833b9123b5c74787040ca9b52698f460ff3c0748fd9a51248",
+      "fixtureSha256": "534af1a93385953833b9123b5c74787040ca9b52698f460ff3c0748fd9a51248",
+      "decompressedSha256": "9b4614b062642cad169c52b4f088379bff548242d6bb588979cd08e1fa877608",
+      "sourceBytes": 4568,
+      "fixtureBytes": 4568,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "BSD-3-Clause",
+      "licenseFile": "dragonflybsd-netstat.1.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "Address-family aliases and two annotated constants retain their original scope.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "147f79c25b1b45c65af9ee83eaa00da36fca7c917be32785216821e01bae2a1c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 13045,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "1526db0c0d575f2a67641157605475cf6e18d5cc557179f0b278d6efcbafdbf0",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 13079,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "c74362343eb729a295d0680b8ccb035b8c13aeb3c4c748d173b196d0ea8b6326",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 25255,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "2823b60c1098402b5b09e343f669baa6d02fcd99c6655210b49d664450366219",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 57909,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "508f2d965dd6bcabadaf04ca249edb5b37403e0297ec67c45173c9d04f14804f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1137,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
     }
   ]
 }
