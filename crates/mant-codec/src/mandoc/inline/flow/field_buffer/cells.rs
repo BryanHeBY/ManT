@@ -112,15 +112,25 @@ pub(in crate::mandoc) enum FieldWrite {
         first_incoming: Option<usize>,
     },
     RetainDeviceTail(Box<crate::mandoc::inline::flow::native_slots::DeviceTail>),
+    /// The current raw cursor is at lastcol and this suffix is one cell
+    /// per encoded slot, including any surviving backspace and decoration.
+    ProveAppendSlots {
+        count: usize,
+        backbefore: bool,
+        duplicate: Option<(usize, usize)>,
+    },
     /// Earlier cell to new cell indices. Empty entries were overwritten.
     ReplaceLivePrefix {
+        start: usize,
         positions: Vec<Option<usize>>,
         first_incoming: usize,
         entry_blanks: usize,
         unpublished: Option<usize>,
     },
     /// These compact writes do not prove individual native byte slots.
-    OpaqueRawSlots,
+    OpaqueRawSlots {
+        last_font: Option<crate::mandoc::roff_escape::RoffFont>,
+    },
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or
     /// an encode1 glyph (term.c:610-638).

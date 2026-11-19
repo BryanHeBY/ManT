@@ -132,9 +132,12 @@ pub(in crate::mandoc) struct SlotEntry {
 /// Earlier characters remain owned by the existing projection until replay
 /// returns their surviving cell positions.
 pub(in crate::mandoc::inline) struct FieldPrefix {
+    pub(in crate::mandoc::inline) start: usize,
     pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
     pub(in crate::mandoc::inline) automatic: usize,
     pub(in crate::mandoc::inline) kept: bool,
+    pub(in crate::mandoc::inline) tail_font: Option<(usize, RoffFont)>,
+    pub(in crate::mandoc::inline) duplicate: Option<(usize, usize)>,
     pub(in crate::mandoc::inline) backbefore: bool,
     pub(in crate::mandoc::inline) backafter: bool,
     pub(in crate::mandoc::inline) pending_cell: Option<usize>,
@@ -146,7 +149,24 @@ impl DeviceTail {
     }
 
     pub(in crate::mandoc::inline) fn has_retreated(&self) -> bool {
-        self.slots.cursor < self.slots.extent || self.slots.backbefore
+        self.slots.cursor < self.slots.extent
+            || self.slots.backbefore
+            || self
+                .slots
+                .runs
+                .iter()
+                .rev()
+                .map(|(&start, run)| run.pattern.cell(run.end - start - 1))
+                .find(|cell| {
+                    !matches!(
+                        cell,
+                        FieldCell::TabReference
+                            | FieldCell::ZeroWidthGraph
+                            | FieldCell::Breakpoint
+                            | FieldCell::BreakMarker
+                    )
+                })
+                == Some(&FieldCell::Backline)
     }
 
     pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) -> bool {
@@ -229,9 +249,25 @@ impl NativeSlots {
     }
 
     pub(in crate::mandoc::inline) fn with_field_prefix(prefix: &FieldPrefix) -> Self {
-        let mut slots = Self::after_entry(false);
+        let mut slots = Self::after_entry(prefix.start != 0);
         for (index, (cell, _)) in prefix.cells.iter().enumerate() {
-            slots.write_run(cell.clone(), 1, Some(index));
+            if let Some((at, font)) = prefix.tail_font
+                && at == index
+            {
+                // encode1 writes the decoration before the final glyph.
+                // Bold's earlier copy can still be the author's glyph
+                // when a subsequent overstrike trims the final copy.
+                let decoration = decoration_prefix(cell, font);
+                let duplicate = decoration.clone().count().checked_sub(2);
+                for (part, value) in decoration.enumerate() {
+                    slots.write_run(value, 1, (Some(part) == duplicate).then_some(index));
+                }
+            }
+            let owner = prefix
+                .duplicate
+                .filter(|&(copy, _)| copy == index)
+                .map_or(index, |(_, owner)| owner);
+            slots.write_run(cell.clone(), 1, Some(owner));
         }
         if prefix.automatic > 0 {
             let blank = if prefix.kept {
@@ -245,7 +281,14 @@ impl NativeSlots {
         }
         slots.backbefore = prefix.backbefore;
         slots.backafter = prefix.backafter;
-        slots.backbefore_slot = prefix.pending_cell;
+        slots.backbefore_slot = prefix.pending_cell.map(|at| {
+            at + prefix
+                .tail_font
+                .filter(|(owner, _)| *owner <= at)
+                .map_or(0, |(owner, font)| {
+                    decoration_prefix(&prefix.cells[owner].0, font).count()
+                })
+        });
         slots
     }
 
@@ -272,6 +315,10 @@ impl NativeSlots {
 
     pub(in crate::mandoc::inline) fn backafter(&self) -> bool {
         self.backafter
+    }
+
+    pub(in crate::mandoc::inline) fn backbefore(&self) -> bool {
+        self.backbefore
     }
 
     pub(in crate::mandoc::inline) fn pending_owner(&self) -> Option<usize> {
@@ -390,12 +437,11 @@ impl NativeSlots {
         &mut self,
         source: &str,
         font: RoffFont,
-        owner: Option<usize>,
+        mut author: impl FnMut(char) -> Option<usize>,
     ) {
-        let mut last_glyph = None;
         // term_word() calls encode1 for each operand and arms a retreat
-        // between consecutive writes. It keeps all physical byte slots
-        // even though reading text retains one final visible glyph.
+        // between consecutive writes. A later edit can retire a covering
+        // graph; retain the source of each graph still in the field.
         for (glyph, more_raw) in overstrike_operands(source) {
             let cell = match glyph {
                 ' ' => FieldCell::BreakableBlank,
@@ -409,12 +455,12 @@ impl NativeSlots {
                     width: glyph_width(glyph),
                 },
             };
-            let projected =
-                owner.is_some() && matches!(cell, FieldCell::Graph { .. } | FieldCell::Hyphen);
-            self.glyph(cell, font, None);
-            if projected {
-                last_glyph = self.cursor.checked_sub(1);
-            }
+            let owner = match cell {
+                FieldCell::Graph { text, .. } => author(text),
+                FieldCell::Hyphen => author('-'),
+                _ => None,
+            };
+            self.glyph(cell, font, owner);
             if more_raw {
                 if self.backbefore {
                     self.backafter = true;
@@ -440,9 +486,6 @@ impl NativeSlots {
             drop(self.runs.split_off(&end));
             self.extent = end;
             self.cursor = self.cursor.min(end);
-        }
-        if let Some(run) = last_glyph.and_then(|slot| self.runs.get_mut(&slot)) {
-            run.owner = owner;
         }
     }
 
@@ -556,6 +599,10 @@ impl NativeSlots {
                 .append_fill_slots(&mut cells, run.end - start, run.owner);
         }
         cells
+    }
+
+    pub(in crate::mandoc::inline) fn append_extent(&self) -> Option<usize> {
+        (self.cursor == self.extent).then_some(self.extent)
     }
 }
 

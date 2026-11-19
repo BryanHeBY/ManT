@@ -890,3 +890,121 @@ STOP
         assert_eq!(document_links(&markdown, "markdown"), []);
     }
 }
+
+#[test]
+fn trimming_the_native_field_can_reveal_an_earlier_overstrike_glyph() {
+    // term.c::term_word trims raw slots. term_field writes the earlier
+    // graph and its backspace even when the graph that covered it is gone.
+    let header = ".TH CHECK 1 \"November 19, 2026\"\n.SH NAME\ncheck \\- test\n.SH DESCRIPTION\n";
+    for (word, text, label) in [
+        (r"HEAD\o'AB'\o' '", "HEADA", None),
+        (
+            r"HEAD\X'tty: link https://x.io'\o'AB'\o' '\X'tty: link'",
+            "HEADA",
+            Some("A"),
+        ),
+        (
+            r"HEAD\X'tty: link https://x.io'\o'AB'\X'tty: link'\o' '",
+            "HEADB",
+            Some("B"),
+        ),
+        (
+            r"HEAD\X'tty: link https://x.io'\o'AB'\o' 'C\X'tty: link'",
+            "HEADC",
+            Some("C"),
+        ),
+        (concat!(r"HEAD\o'AB'\o' '\c", "\nZ"), "HEADZ", None),
+        (
+            concat!(
+                r"HEAD\X'tty: link https://x.io'\o'AB'\o' '\X'tty: link'\c",
+                "\nZ",
+            ),
+            "HEADZ",
+            None,
+        ),
+    ] {
+        let source = format!("{header}{word}\n.br\nENDTEXT\n");
+        assert_readbacks(&source, &format!("{text}\nENDTEXT"), label);
+        if label.is_none() {
+            assert_eq!(document_links(&source, "roff"), []);
+        }
+    }
+}
+
+#[test]
+fn later_operands_can_expose_or_trim_author_slots_from_the_active_field() {
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n.ll 140n\n";
+    // In the first case the final operand rewinds over the drawing and
+    // leaves PREX followed by a terminal backspace at the end of the pass.
+    // In the second case each blank overstrike trims an earlier letter.
+    for (head, first) in [
+        (
+            r#".No "PRE\zX" Ns No "\l'1n.'" Ns No "\h'-1n'\p NEEDLE""#,
+            "PREX",
+        ),
+        (r#".No "PRE" Ns No "\o' '" Ns No "\o' '\p NEEDLE""#, "P"),
+    ] {
+        let source = format!("{header}{head}\nTAILWORD\n.Pp\nENDTEXT\n");
+        assert_readbacks(
+            &source,
+            &format!("{first}\nNEEDLE TAILWORD\n\nENDTEXT"),
+            None,
+        );
+        let result = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--format",
+                "json",
+                "--display",
+                "direct",
+                "--word",
+                "--search",
+                first,
+            ],
+            &source,
+        );
+        assert!(result.status.success(), "{head}: {result:?}");
+        let response: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(response["total"], 1, "{head}");
+    }
+}
+
+#[test]
+fn bold_device_copies_keep_one_author_until_the_accepted_pass_covers_it() {
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n.ll 140n\n";
+    // Fixed ASCII and UTF-8 exercise term.c::encode1()'s earlier bold
+    // copy and term_field()'s delayed blank. A blank is only printed
+    // over the earlier copy when another device write follows on that pass.
+    for font in ["B", "[BI]"] {
+        for (after_head, tail, expected) in [
+            (
+                r#"Ns No "\o' '" No "\l'1n.'\p NEEDLE""#,
+                "\nTAILWORD",
+                "PR \nNEEDLE TAILWORD\n\nENDTEXT",
+            ),
+            (
+                r#"No "\o' '" No "\l'1n.'\p NEEDLE""#,
+                "\nTAILWORD",
+                "PRE \nNEEDLE TAILWORD\n\nENDTEXT",
+            ),
+            (
+                r#"No "\o' '" Ns No "\h'-1n'\p NEEDLE""#,
+                "\nTAILWORD",
+                "PRE\nNEEDLE TAILWORD\n\nENDTEXT",
+            ),
+            (
+                r#"No "\o' '" Ns No "\o' '\p NEEDLE""#,
+                "\nTAILWORD",
+                "PRE\nNEEDLE TAILWORD\n\nENDTEXT",
+            ),
+            (r#"Ns No "\o' '" No "\p""#, "", "PRE\n\nENDTEXT"),
+        ] {
+            let source =
+                format!("{header}.No \"\\f{font}PRE\\fR\" {after_head}{tail}\n.Pp\nENDTEXT\n");
+            assert_readbacks(&source, expected, None);
+        }
+    }
+}

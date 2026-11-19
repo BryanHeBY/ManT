@@ -22,9 +22,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
         // blank. Leave that receipt with the live word executor.
         || context.slot_entry.prior_input && context.zero_advance.is_armed()
             && context.zero_advance.has_buffered_glyph()
-        || context.zero_advance.has_pending_glyph()
-            && !(context.zero_advance.can_project_prior_slot()
-                && context.slot_entry.prefix.as_ref().is_some_and(|prefix| prefix.pending_cell.is_some()))
+        || context.zero_advance.has_pending_glyph() && !can_place_pending(context)
     {
         return false;
     }
@@ -39,6 +37,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     let mut armed_empty_overstrike = false;
     let mut has_zero_advance = false;
     let mut isolated_needs_accepted_retreat = false;
+    let mut has_overstrike = false;
     let mut armed = context.zero_advance.is_armed();
     for event in events {
         match event {
@@ -58,12 +57,14 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
             RoffInlineEvent::Overstrike {
                 buffered, terminal, ..
             } => {
+                // Even an empty overstrike can trim the preceding native
+                // slots. Raw tbl cells have a complete local word buffer.
+                has_overstrike = true;
                 edits |= *buffered || authored_blank;
-                overstrike_edit |= armed && *buffered
+                overstrike_edit |= *buffered
                     || terminal.is_none()
-                        && (*buffered
-                            || context.slot_entry.trailing_tab_reference
-                                && context.slot_entry.automatic_blanks > 0);
+                        && context.slot_entry.trailing_tab_reference
+                        && context.slot_entry.automatic_blanks > 0;
                 armed_overstrike |= armed && *buffered && terminal.is_none();
                 armed_empty_overstrike |= armed && !buffered;
             }
@@ -109,7 +110,8 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
         return false;
     }
     edits |= moves_toward_prefix;
-    !context.policy.field_authoritative && has_zero_advance && isolated_needs_accepted_retreat
+    !context.policy.field_authoritative
+        && (has_overstrike || has_zero_advance && isolated_needs_accepted_retreat)
         || marker && (edits || context.table_leading_blanks != 0)
         || context.policy.field_authoritative
             && (draws
@@ -117,11 +119,42 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || absolute_edit
                 || armed_overstrike
                 || replay_empty_overstrike
+                || tight_word_can_carry_glyph(events, context)
                 || context
                     .slot_entry
                     .device_tail
                     .as_ref()
                     .is_some_and(|tail| edits || tail.has_retreated() && !events.is_empty()))
+}
+
+fn can_place_pending(context: &TextExecutionContext<'_>) -> bool {
+    context.zero_advance.can_project_prior_slot()
+        && context
+            .slot_entry
+            .prefix
+            .as_ref()
+            .is_some_and(|prefix| prefix.pending_cell.is_some())
+}
+
+fn tight_word_can_carry_glyph(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    // This handoff extends the ordinary tight word path. Font decoration,
+    // source delimiters and invisible cells keep their existing execution
+    // receipts unless the arriving operand actually needs a raw-slot edit.
+    context.slot_entry.automatic_blanks == 0
+        && context.zero_advance.has_pending_glyph()
+        && !context.zero_advance.is_armed()
+        && !events.is_empty()
+        && context.font.current == RoffFont::Regular
+        && context.slot_entry.prefix.as_ref().is_some_and(|prefix| {
+            prefix.pending_cell == prefix.cells.len().checked_sub(1)
+                && matches!(prefix.cells.last(), Some((FieldCell::Graph { width: 1, .. }, 1)))
+        })
+        && events.iter().all(|event| {
+            matches!(event, RoffInlineEvent::Text(value) if value.chars().all(|ch| ch.is_ascii_alphanumeric()))
+        })
 }
 
 #[derive(Clone, Copy)]
@@ -187,11 +220,20 @@ impl<'a> Placement<'a> {
     }
 
     fn mark(&mut self, glyph: ReadingGlyph<'a>, font: Font) -> usize {
-        let owner = self.reading.len();
-        self.reading.push(ReadingCell {
+        Self::push_reading(&mut self.reading, glyph, font, self.active_link)
+    }
+
+    fn push_reading(
+        reading: &mut Vec<ReadingCell<'a>>,
+        glyph: ReadingGlyph<'a>,
+        font: Font,
+        link: Option<usize>,
+    ) -> usize {
+        let owner = reading.len();
+        reading.push(ReadingCell {
             glyph,
             font,
-            link: self.active_link,
+            link,
             sphinx_marker: false,
             authored_separator: false,
             preserve_separator: false,
@@ -247,13 +289,14 @@ impl<'a> Placement<'a> {
             RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
                 self.text(value, display, font);
             }
-            RoffInlineEvent::Overstrike {
-                source, terminal, ..
-            } => {
-                let owner = terminal
-                    .as_deref()
-                    .map(|glyph| self.mark(ReadingGlyph::Spelling(glyph), display));
-                self.slots.overstrike(source, font, owner);
+            RoffInlineEvent::Overstrike { source, .. } => {
+                let reading = &mut self.reading;
+                let link = self.active_link;
+                self.slots.overstrike(source, font, |character| {
+                    crate::text_safety::is_safe_source_character(character).then(|| {
+                        Self::push_reading(reading, ReadingGlyph::Scalar(character), display, link)
+                    })
+                });
             }
             RoffInlineEvent::HorizontalMotion { argument, .. } => {
                 self.slots.motion(argument.as_deref());
@@ -347,18 +390,15 @@ struct GeometrySeed<'a> {
     placement: Placement<'a>,
     replace_tail: usize,
     replayed_entry: bool,
+    prefix_start: usize,
     earlier: usize,
+    repeated_prior: Option<usize>,
     unpublished: Option<usize>,
 }
 
 impl GeometrySeed<'_> {
     fn begin(context: &mut TextExecutionContext<'_>, events: &[RoffInlineEvent]) -> Self {
-        let mut seed = if let Some(prefix) = context
-            .slot_entry
-            .prefix
-            .take()
-            .filter(|_| context.slot_entry.device_tail.is_none())
-        {
+        let mut seed = if let Some(prefix) = context.slot_entry.prefix.take() {
             let mut placement = Placement::empty(NativeSlots::with_field_prefix(&prefix));
             let earlier = prefix.cells.len();
             for (_, scalars) in prefix.cells {
@@ -369,7 +409,12 @@ impl GeometrySeed<'_> {
             }
             Self {
                 placement,
+                prefix_start: prefix.start,
                 earlier,
+                repeated_prior: prefix
+                    .tail_font
+                    .map(|(index, _)| index)
+                    .or(prefix.duplicate.map(|(_, owner)| owner)),
                 unpublished: context
                     .zero_advance
                     .has_pending_glyph()
@@ -387,7 +432,9 @@ impl GeometrySeed<'_> {
                 placement,
                 replace_tail,
                 replayed_entry: automatic > 0,
+                prefix_start: 0,
                 earlier: 0,
+                repeated_prior: None,
                 unpublished: None,
             }
         } else {
@@ -425,7 +472,9 @@ impl GeometrySeed<'_> {
                 placement,
                 replace_tail,
                 replayed_entry,
+                prefix_start: 0,
                 earlier: 0,
+                repeated_prior: None,
                 unpublished: None,
             }
         };

@@ -205,7 +205,11 @@ enum WordScanPolicy {
 pub(in crate::mandoc::inline) struct FieldBuffer {
     cells: Vec<FieldCell>,
     device_tail: Option<Box<super::native_slots::DeviceTail>>,
-    opaque_raw_slots: bool,
+    // Earlier cells can stand for layout-equivalent rather than byte-exact
+    // native input. Only the proved append suffix can be used for slot edits.
+    raw_slot_fence: usize,
+    raw_tail_font: Option<(usize, crate::mandoc::roff_escape::RoffFont)>,
+    raw_copy_alias: Option<(usize, usize)>,
     tabs: Arc<TabStops>,
     /// Persistent tcol->taboff; each pass starts with this reference.
     tab_offset: i64,

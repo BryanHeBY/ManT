@@ -27,7 +27,9 @@ impl<'a> PlacedWord<'a> {
     ) -> Result<Self, PriorSlotEdit> {
         let GeometrySeed {
             placement,
+            prefix_start,
             earlier,
+            repeated_prior,
             unpublished,
             replace_tail,
             replayed_entry,
@@ -39,14 +41,23 @@ impl<'a> PlacedWord<'a> {
             ..
         } = placement;
         let armed = slots.backafter();
+        let backbefore = slots.backbefore();
         let pending = slots.pending_owner().filter(|&owner| owner >= earlier);
+        let append_extent = slots.append_extent();
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
-        let zero_width_retreats = resolve_backlines(&mut slots);
+        let duplicate = keep_last_prior_copy(&mut slots, repeated_prior);
+        let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix);
         preserve_author_separators(&slots, &mut reading);
         let mut writes = Vec::new();
         if earlier != 0 {
-            writes.push(replay_prefix(&slots, &reading, earlier, unpublished)?);
+            writes.push(replay_prefix(
+                &slots,
+                &reading,
+                prefix_start,
+                earlier,
+                unpublished,
+            )?);
         } else if replace_tail > 0 {
             let entry_blanks = replayed_entry.then(|| {
                 slots
@@ -75,6 +86,13 @@ impl<'a> PlacedWord<'a> {
         let prior = unpublished.map(|id| slots.iter().any(|slot| slot.owner == Some(id)));
         writes.extend(slots.iter().map(|slot| slot_write(slot, &reading)));
         let end = slots.len();
+        if retain_suffix && append_extent == Some(end) {
+            writes.push(FieldWrite::ProveAppendSlots {
+                count: end,
+                backbefore,
+                duplicate,
+            });
+        }
         writes.extend(zero_width_retreats.into_iter().map(|(target, mark)| {
             FieldWrite::PlacedZeroWidthRetreat {
                 target_from_end: end - target,
@@ -172,9 +190,22 @@ impl<'a> PlacedWord<'a> {
     }
 }
 
+fn keep_last_prior_copy(slots: &mut [FillSlot], repeated: Option<usize>) -> Option<(usize, usize)> {
+    let owner = repeated?;
+    let last = slots.iter().rposition(|slot| slot.owner == Some(owner))?;
+    let copy = slots[..last]
+        .iter()
+        .position(|slot| slot.owner == Some(owner))?;
+    // Keep one provisional scalar quota, but register where the earlier
+    // device copy can still supply that owner after the next operand.
+    slots[copy].owner = None;
+    Some((copy, last))
+}
+
 fn replay_prefix(
     slots: &[FillSlot],
     reading: &[ReadingCell<'_>],
+    start: usize,
     earlier: usize,
     unpublished: Option<usize>,
 ) -> Result<FieldWrite, PriorSlotEdit> {
@@ -189,7 +220,7 @@ fn replay_prefix(
                 // Do not silently reorder interleaved author projections.
                 return Err(PriorSlotEdit::Unresolved);
             }
-            positions[owner] = Some(position);
+            positions[owner] = Some(start + position);
         } else if matches!(reading[owner].glyph, ReadingGlyph::EntryBlank) {
             if position < first_incoming {
                 entry_blanks += 1;
@@ -199,14 +230,15 @@ fn replay_prefix(
         }
     }
     Ok(FieldWrite::ReplaceLivePrefix {
+        start,
         positions,
-        first_incoming,
+        first_incoming: start + first_incoming,
         entry_blanks,
-        unpublished,
+        unpublished: unpublished.map(|index| start + index),
     })
 }
 
-fn resolve_backlines(slots: &mut [FillSlot]) -> Vec<(usize, usize)> {
+fn resolve_backlines(slots: &mut [FillSlot], editable: bool) -> Vec<(usize, usize)> {
     // term_field() skips controls, including NBRZW written by tty
     // annotation and ASCII_BREAK. A backspace still reaches the last
     // emitted graph. A break opportunity or zero-width mark defers
@@ -223,9 +255,18 @@ fn resolve_backlines(slots: &mut [FillSlot]) -> Vec<(usize, usize)> {
             FieldCell::Backline => {
                 retreat = previous.take().map(|target| (target, index));
             }
+            FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => {
+                if let Some((target, _)) = retreat.take() {
+                    // term_field() advances over a buffered blank only
+                    // if a later device write prints on the same pass.
+                    covers.push((target, index));
+                }
+                previous = None;
+            }
             FieldCell::Graph { .. } | FieldCell::Hyphen => {
                 if let Some((target, backline)) = retreat.take() {
-                    if matches!(slots[index].cell, FieldCell::Graph { width: 0, .. })
+                    if editable
+                        || matches!(slots[index].cell, FieldCell::Graph { width: 0, .. })
                         || target + 1 != backline
                         || backline + 1 != index
                         || slots[target].cell == FieldCell::Hyphen
@@ -251,7 +292,11 @@ fn resolve_backlines(slots: &mut [FillSlot]) -> Vec<(usize, usize)> {
 fn slot_write(slot: &FillSlot, reading: &[ReadingCell<'_>]) -> FieldWrite {
     let count = slot.count;
     let scalars = slot.owner.map_or(0, |id| {
-        reading[id].glyph.scalars() + usize::from(reading[id].preserve_separator)
+        let read = reading[id];
+        read.glyph.scalars()
+            + usize::from(
+                read.preserve_separator && !matches!(read.glyph, ReadingGlyph::Earlier(_)),
+            )
     });
     let cell = match slot.cell {
         FieldCell::BreakableBlank if scalars == 0 => FieldCell::DrawnSpaces(count),

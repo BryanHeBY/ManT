@@ -584,6 +584,10 @@ impl super::InlineExecutionState {
         let kept_blanks = boundary == super::PendingBoundary::Kept;
         let automatic_blanks =
             usize::from(!tight) * (1 + usize::from(!kept_blanks && self.native_word_sentence));
+        let device_tail = input.device_tail();
+        let live_edit = device_tail
+            .as_ref()
+            .is_some_and(super::native_slots::DeviceTail::has_retreated);
         super::native_slots::SlotEntry {
             prior_input: !input.is_empty(),
             automatic_blanks,
@@ -594,8 +598,8 @@ impl super::InlineExecutionState {
             } else {
                 0
             },
-            device_tail: input.device_tail(),
-            prefix: (capture_prefix || leading_retreat && !input.has_entry_retreat())
+            device_tail,
+            prefix: (capture_prefix || live_edit || leading_retreat && !input.has_entry_retreat())
                 .then(|| input.field_prefix(automatic_blanks, kept_blanks))
                 .flatten(),
         }

@@ -143,7 +143,9 @@ impl FieldBuffer {
         Self {
             cells: self.cells.clone(),
             device_tail: None,
-            opaque_raw_slots: false,
+            raw_slot_fence: 0,
+            raw_tail_font: None,
+            raw_copy_alias: None,
             tabs: self.tabs.clone(),
             tab_offset: self.tab_offset,
             pass_tab_offset: self.pass_tab_offset,
@@ -251,6 +253,8 @@ impl FieldBuffer {
                                 | FieldCell::Hyphen
                                 | FieldCell::BreakableBlank
                                 | FieldCell::NonBreakingBlank
+                                | FieldCell::DrawnSpaces(_)
+                                | FieldCell::FixedDrawingAdvance(_)
                                 | FieldCell::Tab
                         )
                     })

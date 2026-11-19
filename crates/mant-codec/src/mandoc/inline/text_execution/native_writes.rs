@@ -1,5 +1,27 @@
 use super::RoffInlineEvent;
 
+pub(super) fn proved_decorated_tail(
+    events: &[RoffInlineEvent],
+    writes: &[crate::mandoc::inline::flow::field_buffer::FieldWrite],
+    font: super::Font,
+) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+    // A styled append can prove its final duplicate even when the earlier
+    // field is opaque. Cursor edits and BACK registers need the full path.
+    matches!(
+        font,
+        super::Font::Strong | super::Font::CodeStrong | super::Font::StrongEmphasis
+    ) && matches!(
+        writes.last(),
+        Some(FieldWrite::Cell(FieldCell::Graph { text, width: 1 })) if text.is_ascii_graphic()
+    ) && events.iter().all(|event| {
+        matches!(
+            event,
+            RoffInlineEvent::Text(_) | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+        )
+    })
+}
+
 /// A native `encode1()` writes actual decoration bytes into the input
 /// buffer (term.c:894–926). Their extent matters only while a leading
 /// negative HORIZ can still overlap a prior buffered entry.

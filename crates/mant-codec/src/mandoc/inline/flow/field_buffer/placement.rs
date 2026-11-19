@@ -11,8 +11,21 @@ impl FieldBuffer {
             FieldWrite::KeepPlacedRetreat { from_end } => self.keep_placed_retreat(*from_end),
             FieldWrite::ReplacePlacedTail { cells, .. } => self.replace_placed_tail(*cells),
             FieldWrite::RetainDeviceTail(tail) => self.device_tail = Some(tail.clone()),
-            FieldWrite::OpaqueRawSlots => self.opaque_raw_slots = true,
-            FieldWrite::ReplaceLivePrefix { .. } => self.clear(),
+            FieldWrite::ProveAppendSlots {
+                count,
+                backbefore,
+                duplicate,
+            } => {
+                self.raw_slot_fence = self.cells.len() - count;
+                self.backbefore_armed = *backbefore;
+                self.raw_copy_alias = duplicate
+                    .map(|(copy, owner)| (self.raw_slot_fence + copy, self.raw_slot_fence + owner));
+            }
+            FieldWrite::OpaqueRawSlots { last_font } => self.record_raw_tail_font(*last_font),
+            FieldWrite::ReplaceLivePrefix { start: 0, .. } => self.clear(),
+            FieldWrite::ReplaceLivePrefix { start, .. } => {
+                self.replace_placed_tail(self.cells.len() - start);
+            }
             FieldWrite::PlacedZeroWidthRetreat {
                 target_from_end,
                 mark_from_end,
@@ -25,27 +38,55 @@ impl FieldBuffer {
         }
     }
 
+    fn record_raw_tail_font(&mut self, last_font: Option<crate::mandoc::roff_escape::RoffFont>) {
+        let end = self.cells.len();
+        self.raw_tail_font = last_font
+            .zip(end.checked_sub(1))
+            .filter(|&(_, index)| self.projection_length(index, end) == 1)
+            .map(|(font, index)| (index, font));
+        self.raw_slot_fence = self.raw_tail_font.map_or(end, |(index, _)| index);
+        self.raw_copy_alias = None;
+    }
+
     pub(in crate::mandoc::inline::flow) fn field_prefix(
         &self,
         automatic: usize,
         kept: bool,
     ) -> Option<super::super::native_slots::FieldPrefix> {
         const MAX_REPLAY_PREFIX_CELLS: usize = 64;
-        if self.cells.is_empty()
-            || self.cells.len() > MAX_REPLAY_PREFIX_CELLS
-            || self.opaque_raw_slots
-            || self.resume != 0
+        if self.resume != 0
+            || matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
             || !self.projected_pass_ends.is_empty()
             || !self.deferred_blanks.is_empty()
-            || self.has_zero_width_retreats()
         {
             return None;
         }
-        let mut cells = Vec::with_capacity(self.cells.len());
-        for (index, cell) in self.cells.iter().enumerate() {
+        let start = self
+            .raw_slot_fence
+            .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
+        // A covered glyph outside this suffix still needs the later
+        // overstrike on the same accepted pass. Do not cut through it.
+        let first_retreat = self
+            .zero_width_retreats
+            .partition_point(|&(_, mark)| mark < start);
+        if *self.cells.get(start)? == FieldCell::Backline
+            || start != 0 && self.projection_length(start, self.cells.len()) == 0
+            || self
+                .raw_copy_alias
+                .is_some_and(|(copy, owner)| copy < start && owner >= start)
+            || self
+                .zero_width_retreats
+                .get(first_retreat)
+                .is_some_and(|&(old, _)| old < start)
+        {
+            return None;
+        }
+        let mut cells = Vec::with_capacity(self.cells.len() - start);
+        for (offset, cell) in self.cells[start..].iter().enumerate() {
+            let index = start + offset;
             if matches!(
                 cell,
-                FieldCell::DrawnSpaces(_) | FieldCell::FixedDrawingAdvance(_) | FieldCell::Backline
+                FieldCell::DrawnSpaces(2..) | FieldCell::FixedDrawingAdvance(2..)
             ) {
                 return None;
             }
@@ -63,15 +104,29 @@ impl FieldBuffer {
             {
                 return None;
             }
-            cells.push((cell.clone(), length));
+            let raw = match cell {
+                FieldCell::DrawnSpaces(1) => FieldCell::BreakableBlank,
+                FieldCell::FixedDrawingAdvance(1) => FieldCell::NonBreakingBlank,
+                _ => cell.clone(),
+            };
+            cells.push((raw, length));
         }
         Some(super::super::native_slots::FieldPrefix {
+            start,
             cells,
             automatic,
             kept,
+            tail_font: self
+                .raw_tail_font
+                .and_then(|(index, font)| Some((index.checked_sub(start)?, font))),
+            duplicate: self
+                .raw_copy_alias
+                .and_then(|(copy, owner)| Some((copy.checked_sub(start)?, owner - start))),
             backbefore: self.backbefore_armed,
             backafter: self.backafter_armed,
-            pending_cell: self.backbefore_graph,
+            pending_cell: self
+                .backbefore_graph
+                .and_then(|index| index.checked_sub(start)),
         })
     }
 
@@ -122,7 +177,14 @@ impl FieldBuffer {
         debug_assert!(start >= self.resume);
         self.invalidate_projection_scan(start);
         self.cells.truncate(start);
+        self.raw_slot_fence = self.raw_slot_fence.min(start);
+        self.raw_tail_font = self.raw_tail_font.filter(|&(position, _)| position < start);
+        self.raw_copy_alias = self.raw_copy_alias.filter(|&(_, owner)| owner < start);
         self.projection_prefix.truncate(start + 1);
+        self.zero_width_retreats.truncate(
+            self.zero_width_retreats
+                .partition_point(|&(_, mark)| mark < start),
+        );
         self.normalized_until = self.normalized_until.min(start);
         self.blank_positions.split_off(&start);
         self.nonbreaking_positions.split_off(&start);
@@ -137,7 +199,7 @@ impl FieldBuffer {
     }
 
     pub(super) fn push_placed(&mut self, cell: &FieldCell, scalars: usize) {
-        self.opaque_raw_slots = true;
+        self.raw_slot_fence = self.cells.len() + 1;
         self.clear_backtracking();
         self.backafter_armed = false;
         if *cell == FieldCell::BreakMarker {

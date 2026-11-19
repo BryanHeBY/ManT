@@ -132,6 +132,10 @@ impl ExecutedWordEntry {
     pub(super) fn rewound(&self) -> bool {
         matches!(self.rewind, EntryRewind::Executed { .. })
     }
+
+    pub(super) fn word_start(&self, original: usize) -> usize {
+        self.prefix.word_start.unwrap_or(original)
+    }
 }
 
 fn earlier_word_after_cell(

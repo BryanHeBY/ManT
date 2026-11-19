@@ -147,3 +147,32 @@ fn absolute_motion_around_a_local_overstrike_keeps_unproved_author_words() {
         }
     }
 }
+
+#[test]
+fn a_bounded_slot_replay_cannot_split_an_unresolved_overstrike() {
+    // Fixed ASCII and UTF-8 both write A, backspace, B, C, backspace,
+    // and D. The later trim must keep the older coverage observation even
+    // when the complete C/D pair lies within the retained suffix.
+    for length in [56, 57, 58, 59] {
+        let letters = "q".repeat(length);
+        for second in ["", ".No \"\\o' 'END\"\n"] {
+            let source = format!(
+                "{HEADER}.Bl -hang -width 75n\n.It Xo\n.No \"\\zA\\:B\\o'CD'{letters}\"\n{second}.Xc\n.No BODY\n.El\n"
+            );
+            let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let content = crate::json_roundtrip::json_string_roundtrip(&loaded);
+            let [Block::DefinitionList { items, .. }] = content.document.as_ref().unwrap().sections
+                [1]
+            .blocks
+            .as_slice() else {
+                panic!("{source}");
+            };
+            let ending = if second.is_empty() { "" } else { "END" };
+            assert_eq!(
+                inline_plain_text(&items[0].terms[0]),
+                format!("BD{letters}{ending}"),
+                "{source}"
+            );
+        }
+    }
+}

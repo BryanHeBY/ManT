@@ -204,7 +204,9 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn clear(&mut self) {
         self.cells.clear();
         self.device_tail = None;
-        self.opaque_raw_slots = false;
+        self.raw_slot_fence = 0;
+        self.raw_tail_font = None;
+        self.raw_copy_alias = None;
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
         self.zero_width_retreats.clear();
@@ -317,7 +319,8 @@ impl FieldBuffer {
                 | FieldWrite::KeepPlacedRetreat { .. }
                 | FieldWrite::ReplacePlacedTail { .. }
                 | FieldWrite::RetainDeviceTail(_)
-                | FieldWrite::OpaqueRawSlots
+                | FieldWrite::ProveAppendSlots { .. }
+                | FieldWrite::OpaqueRawSlots { .. }
                 | FieldWrite::ReplaceLivePrefix { .. }
                 | FieldWrite::PlacedZeroWidthRetreat { .. } => self.apply_slot_placement(write),
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),

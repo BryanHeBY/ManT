@@ -2,6 +2,101 @@
 
 use super::{Block, assert_prefix, between, first_table, input, lower, projections, whole_word};
 
+const RAW_TABLE_HEADER: &str =
+    ".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- example probe\n.SH DESCRIPTION\n";
+
+#[test]
+fn tbl_word_replays_blank_overstrikes_without_a_hard_break_marker() {
+    // term_word() sends each operand to encode1() and can trim the last
+    // two bytes before term_fill() sees the raw cell. Both devices agree:
+    // one blank survives only when the lastcol threshold is not reached.
+    for (word, expected) in [
+        (r"A\o' 'D", "A D"),
+        (r"AX\o' 'D", "AD"),
+        (r"A\zX\o' 'D", "AXD"),
+        (r"AX \o''D", "AD"),
+        (r"A\o''D", "AD"),
+    ] {
+        let source = format!("{RAW_TABLE_HEADER}.TS\nl.\n{word}\n.TE\nENDTEXT\n");
+        let query = lower(&source);
+        let blocks = &query.document.as_ref().unwrap().sections[1].blocks;
+        let Some(Block::Table { rows, .. }) = first_table(blocks) else {
+            panic!("expected a native table: {source}");
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+            panic!("expected one cell paragraph: {source}");
+        };
+        assert_eq!(mant_ir::inline_plain_text(children), expected, "{source}");
+        for text in projections(&query) {
+            assert_eq!(
+                text.lines().filter(|line| line.trim() == expected).count(),
+                1,
+                "{source}\n{text}"
+            );
+            assert_eq!(text.matches("ENDTEXT").count(), 1, "{source}\n{text}");
+        }
+        for word in ["A", "D", "AD", "AXD"] {
+            assert_eq!(
+                whole_word(&query, word).matches.len(),
+                usize::from(expected.split(' ').any(|piece| piece == word)),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn tbl_measures_the_source_escape_before_deciding_whether_a_retreat_crosses_a_row() {
+    // On both fixed devices, term_strlen() consumes the skipped glyph
+    // at source \: but not in ESCAPE_OVERSTRIKE itself. The native box
+    // witnesses the narrow word's 9 columns and the overstrike's 10.
+    for (word, always_prints_b, joins_without_witness) in [
+        ("LEFTYTAIL", false, true),
+        ("LEFTbYTAIL", true, true),
+        (r"LEFT\zb\:YTAIL", false, false),
+        (r"LEFT\z\o'ab'\:YTAIL", false, true),
+        (r"LEFT\z\o'ab'\&YTAIL", false, true),
+    ] {
+        for columns in [0, 9, 10] {
+            let witness = if columns == 0 {
+                String::new()
+            } else {
+                format!("{}\n", "W".repeat(columns))
+            };
+            let source = format!("{RAW_TABLE_HEADER}.TS\nbox;\nl.\n{word}\n{witness}.TE\n");
+            let expected = if always_prints_b {
+                "LEFTbYTAIL"
+            } else if joins_without_witness || columns == 10 {
+                "LEFTYTAIL"
+            } else {
+                "LEFTb\nYTAIL"
+            };
+            let query = lower(&source);
+            let blocks = &query.document.as_ref().unwrap().sections[1].blocks;
+            let Some(Block::Table { rows, .. }) = first_table(blocks) else {
+                panic!("expected a native table: {source}");
+            };
+            let [Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice() else {
+                panic!("expected one cell paragraph: {source}");
+            };
+            assert_eq!(mant_ir::inline_plain_text(children), expected, "{source}");
+            assert_eq!(rows.len(), 1 + usize::from(columns != 0), "{source}");
+            for reading in projections(&query) {
+                let printed: Vec<_> = reading
+                    .lines()
+                    .map(|line| line.trim_matches(['│', '|', ' ']))
+                    .filter(|line| line.contains("LEFT") || line.contains("YTAIL"))
+                    .collect();
+                assert_eq!(
+                    printed,
+                    expected.lines().collect::<Vec<_>>(),
+                    "{source}\n{reading}"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn overstrike_then_motion_preserves_the_native_first_pass_word_boundary() {
     // Exact pinned ASCII and UTF-8 agree on these three adjacent widths.

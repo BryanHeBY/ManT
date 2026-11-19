@@ -168,26 +168,22 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
 
 impl super::InlineExecutionState {
     fn native_slot_entry_for_word(&self, events: &[RoffInlineEvent]) -> super::SlotEntry {
-        let armed = self.zero_advance.is_armed();
         let pending = self.zero_advance.has_pending_glyph();
         let capture_prefix = events.iter().any(|event| match event {
             RoffInlineEvent::HorizontalMotion {
                 argument: Some(argument),
                 ..
             } => argument.starts_with('|'),
-            RoffInlineEvent::Overstrike { terminal, .. } => terminal.is_none() || armed,
-            RoffInlineEvent::Presentation {
+            RoffInlineEvent::Overstrike { .. }
+            | RoffInlineEvent::Presentation {
                 kind: crate::mandoc::roff_escape::PresentationKind::HorizontalLine,
                 ..
-            } => armed || pending,
+            } => true,
             _ => false,
         });
         let leading_retreat = matches!(events.first(), Some(RoffInlineEvent::HorizontalMotion { argument, .. })
             if negative_entry_columns(argument.as_deref()).is_some());
-        self.native_slot_entry(
-            capture_prefix || leading_retreat && pending,
-            leading_retreat,
-        )
+        self.native_slot_entry(capture_prefix || pending, leading_retreat)
     }
 
     pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {

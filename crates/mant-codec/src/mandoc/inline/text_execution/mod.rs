@@ -211,6 +211,9 @@ fn execute_formatter_word_events(
     let mut opaque_slots = !matches!(context.font.current, Font::Regular | Font::Code);
     let retained_previous_glyph =
         context.slot_entry.retreat_blanks > 0 || context.zero_advance.has_pending_glyph();
+    let can_record_last_font =
+        !retained_previous_glyph && !context.zero_advance.is_armed() && prior_edit.is_none();
+    let mut last_font = None;
     let mut unproved_motion = false;
     for (index, event) in events.iter().enumerate() {
         unproved_motion |= context.policy.field_authoritative
@@ -253,6 +256,9 @@ fn execute_formatter_word_events(
             write_start,
             context.font.current,
         );
+        if word.native_writes.len() > write_start {
+            last_font = Some(context.font.current);
+        }
     }
     if unproved_motion
         || prior_edit.is_some_and(|edit| {
@@ -266,7 +272,12 @@ fn execute_formatter_word_events(
         word.native_writes.push(FieldWrite::UnprovedMotion);
     }
     if opaque_slots && context.policy.record_native_cells && context.policy.field_authoritative {
-        word.native_writes.push(FieldWrite::OpaqueRawSlots);
+        let last_font = last_font.filter(|&font| {
+            can_record_last_font
+                && native_writes::proved_decorated_tail(events, &word.native_writes, font)
+        });
+        word.native_writes
+            .push(FieldWrite::OpaqueRawSlots { last_font });
     }
     word.finish_content_prefix();
     word.flush_segment();

@@ -27,7 +27,7 @@ pub(super) fn first_pass(
                 argument: Some(argument),
             } => scratch.line(argument, cell_width, font.current),
             RoffInlineEvent::Overstrike { source, .. } => {
-                scratch.overstrike(source, font.current, None);
+                scratch.overstrike(source, font.current, |_| None);
             }
             RoffInlineEvent::Font(selection) => font.select(*selection),
             RoffInlineEvent::PreviousFont => font.restore(),

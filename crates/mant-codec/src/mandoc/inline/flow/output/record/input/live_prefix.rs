@@ -6,6 +6,7 @@ use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_afte
 #[derive(Default)]
 pub(super) struct PrefixEdits {
     first_incoming: Option<usize>,
+    pub(super) word_start: Option<usize>,
     pub(super) entry_blanks: usize,
     removed: Vec<(usize, RewoundGlyph)>,
 }
@@ -17,6 +18,7 @@ impl PrefixEdits {
         earlier: &mut [NativeWordAnchor],
     ) -> Self {
         let Some(FieldWrite::ReplaceLivePrefix {
+            start,
             positions,
             first_incoming,
             entry_blanks,
@@ -26,7 +28,8 @@ impl PrefixEdits {
             return Self::default();
         };
         let mut removed = Vec::new();
-        for (cell, position) in positions.iter().enumerate() {
+        for (offset, position) in positions.iter().enumerate() {
+            let cell = start + offset;
             if position.is_some()
                 || *unpublished == Some(cell)
                 || buffer.projection_length(cell, cell + 1) == 0
@@ -39,7 +42,9 @@ impl PrefixEdits {
             };
             let end = earlier
                 .get(following_owner)
-                .map_or(positions.len(), |anchor| anchor.start.min(anchor.content));
+                .map_or(start + positions.len(), |anchor| {
+                    anchor.start.min(anchor.content)
+                });
             let scalar = match buffer.cells()[cell] {
                 FieldCell::Graph { text, .. } => text,
                 FieldCell::Hyphen => '-',
@@ -54,16 +59,20 @@ impl PrefixEdits {
                     scalar,
                     following_scalars: buffer.projection_length(cell + 1, end).saturating_sub(
                         usize::from(unpublished.is_some_and(|old| {
-                            old > cell && old < end && positions[old].is_none()
+                            old > cell && old < end && positions[old - start].is_none()
                         })),
                     ),
                 },
             ));
         }
-        for owner in earlier {
+        let first_touched = earlier.partition_point(|owner| owner.content < *start);
+        for owner in &mut earlier[first_touched..] {
             let remap = |index: usize| {
+                let Some(offset) = index.checked_sub(*start) else {
+                    return index;
+                };
                 positions
-                    .get(index..)
+                    .get(offset..)
                     .and_then(|suffix| suffix.iter().find_map(|cell| *cell))
                     .unwrap_or(*first_incoming)
                     .min(*first_incoming)
@@ -73,6 +82,18 @@ impl PrefixEdits {
         }
         Self {
             first_incoming: Some(*first_incoming),
+            // Replay can change the number of slots owned by earlier
+            // words (e.g. encode1's duplicate bold glyph). Do not cut
+            // their accepted ranges at the old incoming word start.
+            word_start: Some(
+                positions
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .filter(|&position| position < *first_incoming)
+                    .max()
+                    .map_or(*start, |position| position + 1),
+            ),
             entry_blanks: *entry_blanks,
             removed,
         }

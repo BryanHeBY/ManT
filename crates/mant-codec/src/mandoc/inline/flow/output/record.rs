@@ -169,6 +169,7 @@ impl InlineBuilder {
             &anchor_ir_start,
             &definition.field_word_anchors,
         );
+        let native_word_start = entry.word_start(native_word_start);
         let receipt = &entry.receipt;
         let native_separator = entry.surviving_separator;
         let authored_separator =
@@ -264,6 +265,7 @@ impl InlineBuilder {
             &anchor_ir_start,
             &self.execution.plain_input.anchors,
         );
+        let native_word_start = entry.word_start(native_word_start);
         let receipt = &entry.receipt;
         let native_separator = entry.surviving_separator;
         let authored_separator =

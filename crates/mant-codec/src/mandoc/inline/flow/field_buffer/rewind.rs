@@ -137,8 +137,9 @@ impl FieldWrite {
             | Self::PlacedZeroWidthRetreat { .. }
             | Self::ReplacePlacedTail { .. }
             | Self::RetainDeviceTail(_)
+            | Self::ProveAppendSlots { .. }
             | Self::ReplaceLivePrefix { .. }
-            | Self::OpaqueRawSlots
+            | Self::OpaqueRawSlots { .. }
             | Self::Placed { .. } => EntryWrite::Rewind,
         }
     }
@@ -191,6 +192,9 @@ impl FieldBuffer {
             self.retire_deferred_blank_at(index);
         }
         self.cells.truncate(start);
+        self.raw_slot_fence = self.raw_slot_fence.min(start);
+        self.raw_tail_font = self.raw_tail_font.filter(|&(position, _)| position < start);
+        self.raw_copy_alias = self.raw_copy_alias.filter(|&(_, owner)| owner < start);
         self.projection_prefix.truncate(start + 1);
         self.zero_width_retreats.truncate(
             self.zero_width_retreats
