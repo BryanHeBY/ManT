@@ -167,3 +167,121 @@ fn an_unrelated_tbl_cell_cannot_keep_a_section_display_obligation() {
         assert_eq!(missing(&native, &topology, &document), 1);
     }
 }
+
+const MATRIX_HEAD: &str =
+    ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
+
+fn display(kind: &str, argument: &str) -> String {
+    if matches!(kind, "D1" | "Dl") {
+        return format!(".{kind} {argument}\n");
+    }
+    let mac = argument.split(' ').next().unwrap_or_default();
+    let control = if matches!(
+        mac,
+        "Em" | "Sy" | "Ev" | "Dv" | "Er" | "Bq" | "Pa" | "Op" | "Lk" | "Xr" | "Fl"
+    ) {
+        "."
+    } else {
+        ""
+    };
+    format!(".Bd -{kind} -compact\n{control}{argument}\n.Ed\n")
+}
+
+#[test]
+fn native_display_row_spellings_keep_their_cell_and_complete_field() {
+    // Fixed ASCII/UTF-8 terminal rows prove the lexical output. Fixed HTML
+    // identifies the owning td independently. In particular, Lk emits its
+    // description and target, while the Dl post delimiters follow its BODY.
+    for kind in ["Dl", "D1", "literal", "unfilled"] {
+        for arg in [
+            "SENTRY",
+            "SENTRY AND MORE",
+            "SENTRY .",
+            "Em SENTRY",
+            "Em SENTRY ,",
+            "Em SENTRY .",
+            "Pa /SENTRY",
+            "Ev SENTRY",
+            "Dv SENTRY",
+            "Er SENTRY",
+            "Em SENTRY Sy LAST",
+            "Bq SENTRY",
+            "Sy SENTRY Ar FILE",
+            "caféSENTRY",
+            r"SENTRY\-M",
+            r"SENTRY\&",
+            "Lk https://example.test SENTRY",
+            "Xr SENTRY 3",
+            "Fl SENTRY",
+            "Op Fl SENTRY",
+            "SENTRY , COMMA",
+            "SENTRY . )",
+        ] {
+            for prefix in [None, Some(""), Some(" B"), Some(" Sy B")] {
+                let body = display(kind, arg);
+                let source = if let Some(prefix) = prefix {
+                    format!("{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta{prefix}\n{body}.El\n")
+                } else {
+                    format!("{MATRIX_HEAD}{body}")
+                };
+                let (native, topology, doc) = parsed_structure(&source);
+                assert_eq!(native.literal_displays, 1, "{source}");
+                assert!(native.literal_display_reviews.is_empty(), "{source}");
+                assert!(compare(&native, &topology, &doc).is_empty(), "{source}");
+            }
+        }
+    }
+}
+
+#[test]
+fn an_ordinary_cell_row_cannot_replace_missing_display_ink() {
+    // The pristine termp_it_pre and termp_d1_pre/termp_bd_pre put ordinary
+    // and display rows in the same cell. Preserve the non-display ink and
+    // mutate only the target row so equal neighboring glyphs are adversarial.
+    for kind in ["Dl", "D1", "literal", "unfilled"] {
+        for (before, after, wanted, count) in [
+            ("B", "", 1, 1),
+            ("SAME", "", 1, 2),
+            ("Sy SAME", "", 1, 2),
+            ("Pa SAME", "", 1, 2),
+            ("B\n.br\nSAME", "", 2, 2),
+            ("B", "SAME\n", 1, 2),
+            ("B\n.br\n.Em SAME", "", 2, 2),
+            ("B", ".Em SAME\n", 1, 2),
+        ] {
+            let display = display(kind, "SAME");
+            let source = format!(
+                "{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta {before}\n{display}{after}.El\n"
+            );
+            let (native, topology, intact) = parsed_structure(&source);
+            assert!(native.literal_display_reviews.is_empty(), "{source}");
+            assert_eq!(missing(&native, &topology, &intact), 0, "{source}");
+            for replacement in [" ", "WRONG"] {
+                let mut doc = intact.clone();
+                let Block::Table { rows, .. } = &mut doc.sections[1].blocks[0] else {
+                    panic!("missing cell")
+                };
+                let Block::Preformatted { children, .. } = &mut rows[0].cells[1].blocks[0] else {
+                    panic!("missing display")
+                };
+                assert_eq!(inline_plain_text(children).matches("SAME").count(), count);
+                let mut row = 0;
+                let mut changes = 0;
+                for node in children.iter_mut() {
+                    if matches!(node, Inline::LineBreak {}) {
+                        row += 1;
+                    } else if row == wanted
+                        && inline_plain_text(std::slice::from_ref(node)) == "SAME"
+                    {
+                        *node = Inline::Text {
+                            value: replacement.to_owned(),
+                        };
+                        changes += 1;
+                    }
+                }
+                assert_eq!(changes, 1, "{source}");
+                assert_eq!(missing(&native, &topology, &doc), 1, "{source}");
+            }
+        }
+    }
+}

@@ -10,13 +10,16 @@ use super::{
     native_topology::column_data_items,
     ordinal_labels::{
         SourceContext,
-        description::{description, source_evidence, word_payload},
+        description::{description, source_evidence},
         skips_source_children,
     },
 };
 
 #[path = "literal_owners/matching.rs"]
 mod matching;
+#[path = "literal_owners/rows.rs"]
+mod rows;
+use rows::{CellRow, cell_plan, display_rows};
 
 pub(super) use matching::compare;
 
@@ -55,6 +58,7 @@ struct LiteralOrigin {
 }
 
 struct SourceDisplay {
+    id: u32,
     opening: Point,
     origins: BTreeSet<LiteralOrigin>,
     path: Vec<ScopeOccurrence>,
@@ -67,7 +71,7 @@ pub(super) struct SourceDisplays {
     owners: Vec<SourceDisplay>,
     scopes: BTreeSet<Scope>,
     counts: ScopeCounts,
-    cell_prefixes: BTreeMap<Vec<ScopeOccurrence>, (Point, String)>,
+    cells: BTreeMap<Vec<ScopeOccurrence>, Option<Vec<CellRow>>>,
     source_rows: Vec<(usize, String)>,
 }
 
@@ -130,9 +134,10 @@ fn visit_native(
         {
             let payload = description(node, false, &profile.source_context);
             if payload.has_text() {
-                let pending_rows = plain_display_rows(node, &profile.source_context);
+                let pending_rows = display_rows(node, &profile.source_context).unwrap_or_default();
                 display = Some(profile.literal_owners.owners.len());
                 profile.literal_owners.owners.push(SourceDisplay {
+                    id: node.id,
                     opening: point,
                     origins: BTreeSet::new(),
                     path: path.clone(),
@@ -203,109 +208,24 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
                     kind: ScopeKind::ColumnCell { row, cell },
                 },
             );
-            if let Some(first) = body.children.first()
-                && let Some(prefix) = plain_source_row(first)
-            {
-                profile
-                    .literal_owners
-                    .cell_prefixes
-                    .insert(path.clone(), ((first.line, first.column), prefix));
-            }
+            let first_owner = profile.literal_owners.owners.len();
             visit_native(body, path, None, profile);
+            let owners = &profile.literal_owners.owners[first_owner..];
+            if owners.iter().any(|owner| &owner.path == path) {
+                let plan = cell_plan(body, &profile.source_context, owners, first_owner, path);
+                if plan.is_none() {
+                    for owner in owners.iter().filter(|owner| &owner.path == path) {
+                        profile
+                            .literal_display_reviews
+                            .push([owner.opening.0, owner.opening.1]);
+                    }
+                }
+                profile.literal_owners.cells.insert(path.clone(), plan);
+            }
             path.pop();
         }
     }
     path.pop();
-}
-
-fn plain_display_rows(node: &Node, source: &SourceContext) -> BTreeMap<u32, String> {
-    // A literal row of plain authored bytes has an independent reading
-    // witness. Keep field rewrites and generated macro words under the
-    // separate source execution proof. Do not guess their IR spelling.
-    let mut rows = BTreeMap::new();
-    for child in node
-        .children
-        .iter()
-        .filter(|part| part.kind == NodeKind::Body)
-        .flat_map(|body| &body.children)
-    {
-        if let Some(row) = plain_source_row(child).or_else(|| inline_source_row(child, source)) {
-            if !rows.is_empty() && !child.flags.line_start {
-                return BTreeMap::new();
-            }
-            rows.insert(child.id, row);
-        } else if child.kind == NodeKind::Block
-            && matches!(
-                child.macro_token.as_deref(),
-                Some("D1" | "Dl" | "Bd" | "Bl")
-            )
-            || matches!(child.macro_token.as_deref(), Some("br" | "Pp"))
-        {
-            // These scopes or requests terminate the active text field.
-        } else {
-            return BTreeMap::new();
-        }
-    }
-    // mdoc_macro.c puts trailing delimiters after the short display BODY,
-    // and print_mdoc_node() glues them to the preceding word before post.
-    if matches!(node.macro_token.as_deref(), Some("D1" | "Dl"))
-        && let Some(mut row) = rows.last_entry()
-    {
-        let tail = node
-            .children
-            .iter()
-            .skip_while(|part| part.kind != NodeKind::Body)
-            .skip(1);
-        for child in tail {
-            if !child.flags.delimiter_close {
-                return BTreeMap::new();
-            }
-            let Some(word) = plain_source_row(child) else {
-                return BTreeMap::new();
-            };
-            row.get_mut().push_str(&word);
-        }
-    }
-    rows
-}
-
-fn inline_source_row(node: &Node, source: &SourceContext) -> Option<String> {
-    use mant_codec::RoffWordEffect::{EmittedBreak, Unclassified, WordEndBreak};
-    // These pre handlers either select a font or generate known words.
-    // Device-specific glyphs, inline geometry, and pretty synopsis
-    // formatting stay on the source-position proof path.
-    if node.kind != NodeKind::Element
-        || node.flags.synopsis_pretty
-        || !matches!(
-            node.macro_token.as_deref(),
-            Some("Em" | "Sy" | "Li" | "Ar" | "Cm" | "Ic" | "Fl" | "Fn" | "Xr")
-        )
-        || !node.children.iter().all(|child| {
-            !child.flags.line_start
-                && (plain_source_row(child).is_some()
-                    || child.kind == NodeKind::Text && child.text.as_deref() == Some(r"\&"))
-        })
-    {
-        return None;
-    }
-    let (prefix, word) = source_evidence(node, false, source, true);
-    let word = word?;
-    (prefix.absent()
-        && !word.has(Unclassified)
-        && !word.has(WordEndBreak)
-        && !word.has(EmittedBreak)
-        && word_payload(&word, true).has_text())
-    .then(|| normalized_row(&word.text))
-}
-
-fn plain_source_row(node: &Node) -> Option<String> {
-    let text = node.text.as_deref()?;
-    (node.kind == NodeKind::Text
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_graphic() && byte != b'\\' || byte == b' ' || byte == b'\t')
-        && has_glyph(text))
-    .then(|| normalized_row(text))
 }
 
 fn has_glyph(text: &str) -> bool {
@@ -322,7 +242,14 @@ pub(super) struct ObservedDisplays {
     // Parents are registered before descendants. An empty item still
     // occupies its scope occurrence, even if it no longer contains a block.
     scopes: Vec<(Option<usize>, Scope)>,
-    blocks: Vec<(Option<usize>, Option<Point>, Vec<String>)>,
+    blocks: Vec<ProjectedBlock>,
+}
+
+struct ProjectedBlock {
+    parent: Option<usize>,
+    point: Option<Point>,
+    literal: bool,
+    rows: Vec<String>,
 }
 
 impl ObservedDisplays {
@@ -361,10 +288,11 @@ impl ObservedDisplays {
         }
         self.blocks
             .iter()
-            .map(|(parent, point, rows)| ObservedBlock {
-                path: path(&paths, *parent),
-                point: *point,
-                rows,
+            .map(|block| ObservedBlock {
+                path: path(&paths, block.parent),
+                point: block.point,
+                literal: block.literal,
+                rows: &block.rows,
             })
             .collect()
     }
@@ -373,6 +301,7 @@ impl ObservedDisplays {
 struct ObservedBlock<'a> {
     path: Vec<ScopeOccurrence>,
     point: Option<Point>,
+    literal: bool,
     rows: &'a [String],
 }
 
@@ -402,11 +331,26 @@ fn visit_blocks(blocks: &[Block], parent: Option<usize>, observations: &mut Obse
         match block {
             Block::Preformatted {
                 children, source, ..
+            }
+            | Block::Paragraph {
+                children, source, ..
             } => {
+                let literal = matches!(block, Block::Preformatted { .. });
+                if !literal
+                    && !parent.is_some_and(|p| {
+                        matches!(observations.scopes[p].1.kind, ScopeKind::ColumnCell { .. })
+                    })
+                {
+                    continue;
+                }
                 let text = mant_ir::inline_plain_text(children);
                 if has_glyph(&text) {
-                    let rows = text.split('\n').map(normalized_row).collect();
-                    observations.blocks.push((parent, source.map(point), rows));
+                    observations.blocks.push(ProjectedBlock {
+                        parent,
+                        point: source.map(point),
+                        literal,
+                        rows: text.split('\n').map(normalized_row).collect(),
+                    });
                 }
             }
             Block::List { items, .. } => {

@@ -99,10 +99,11 @@ impl Payload {
 }
 
 pub(crate) fn description(node: &Node, continues: bool, context: &SourceContext) -> Payload {
-    source_evidence(node, continues, context, false).0
+    source_evidence(std::slice::from_ref(node), node, continues, context, false).0
 }
 
 pub(crate) fn source_evidence(
+    nodes: &[Node],
     node: &Node,
     continues: bool,
     source: &SourceContext,
@@ -118,7 +119,7 @@ pub(crate) fn source_evidence(
         source,
         space_debt: 0,
     };
-    let payload = probe.visit(node);
+    let payload = probe.visit_children(nodes.iter());
     (payload, probe.display.map(|field| field.word))
 }
 

@@ -13,15 +13,17 @@ pub(crate) fn compare(
     violations: &mut Vec<String>,
 ) {
     let observations = observed.matching_blocks(&expected.scopes);
-    let mut witnesses = RowWitnesses::collect(&observations, &expected.cell_prefixes);
+    let mut witnesses = RowWitnesses::collect(&observations);
     let mut matched = vec![0; expected.owners.len()];
     let mut claimed_blocks = BTreeSet::new();
+    claim_cells(expected, &observations, &mut matched);
     let exact = row_witness_obligations(&expected.owners);
     // Resolve literal rows before claiming unsplit blocks. Two displays
     // in one column can claim different rows of the same block; no source
     // occurrence may claim a range already used by another occurrence.
     for (index, text) in &expected.source_rows {
         if exact[*index]
+            && !in_column_cell(&expected.owners[*index])
             && let Some(block) = witnesses.claim(&expected.owners[*index], text)
         {
             matched[*index] += 1;
@@ -30,7 +32,8 @@ pub(crate) fn compare(
     }
     let mut blocks = BTreeMap::<_, Blocks>::new();
     for (index, block) in observations.iter().enumerate() {
-        if let Some(point) = block.point
+        if block.literal
+            && let Some(point) = block.point
             && !claimed_blocks.contains(&index)
         {
             let origin = LiteralOrigin {
@@ -40,13 +43,16 @@ pub(crate) fn compare(
             blocks.entry(origin).or_default().available += 1;
         }
     }
+    let cells = &expected.cells;
     let expected = &expected.owners;
     let mut claims = vec![None; expected.len()];
     let mut occurrences = BTreeMap::<Point, usize>::new();
     for (index, owner) in expected.iter().enumerate() {
         let occurrence = occurrences.entry(owner.opening).or_default();
         *occurrence += 1;
-        let covered = if exact[index] && owner.rows > 0 {
+        let covered = if cells.get(&owner.path).is_some_and(Option::is_none) {
+            matched[index] > 0
+        } else if exact[index] && owner.rows > 0 {
             matched[index] == owner.rows
         } else {
             match_block(index, expected, &mut blocks, &mut claims)
@@ -56,6 +62,90 @@ pub(crate) fn compare(
             violations.push(format!(
                 "literal-displays: missing sourced block for {line}:{column} occurrence {occurrence}"
             ));
+        }
+    }
+}
+
+fn claim_cells(
+    expected: &SourceDisplays,
+    observations: &[ObservedBlock<'_>],
+    matched: &mut [usize],
+) {
+    // Each native It BODY is an independent cell. Ordinary text on either
+    // side can share the IR Preformatted block and even the exact spelling
+    // of the display. Reserve those rows before admitting any display ink.
+    let mut cells = BTreeMap::<_, Vec<_>>::new();
+    for block in observations {
+        if expected.cells.contains_key(&block.path) {
+            cells.entry(&block.path).or_default().extend(
+                block
+                    .rows
+                    .iter()
+                    .filter(|text| has_glyph(text))
+                    .map(|text| (text.as_str(), block.literal)),
+            );
+        }
+    }
+    for (path, plan) in &expected.cells {
+        let rows = cells.get(path).map_or(&[][..], Vec::as_slice);
+        let Some(plan) = plan else {
+            continue;
+        };
+        if rows.len() == plan.len() {
+            for (want, &(text, literal)) in plan.iter().zip(rows) {
+                if literal
+                    && text == want.text
+                    && let Some(id) = want.owner
+                {
+                    matched[id] += 1;
+                }
+            }
+            continue;
+        }
+        let mut positions = BTreeMap::<_, Vec<_>>::new();
+        for (i, &(text, _)) in rows.iter().enumerate() {
+            positions.entry(text).or_default().push(i);
+        }
+        let mut bounds = vec![rows.len(); plan.len()];
+        let mut end = rows.len();
+        for (i, want) in plan.iter().enumerate().rev() {
+            bounds[i] = end;
+            if want.owner.is_none()
+                && let Some(xs) = positions.get(want.text.as_str())
+            {
+                let stop = xs.partition_point(|&x| x < end);
+                if let Some(last) = xs[..stop].last() {
+                    end = *last;
+                }
+            }
+        }
+        let mut start = 0;
+        for (want, bound) in plan.iter().zip(bounds) {
+            let Some(xs) = positions.get(want.text.as_str()) else {
+                continue;
+            };
+            let from = xs.partition_point(|&x| x < start);
+            if let Some(&i) = xs[from..]
+                .iter()
+                .take_while(|&&x| x < bound)
+                .find(|&&x| want.owner.is_none() || rows[x].1)
+            {
+                start = i + 1;
+                if let Some(id) = want.owner {
+                    matched[id] += 1;
+                }
+            }
+        }
+    }
+    // An unknown range is reported as source Review. An empty cell or a
+    // projection to ordinary paragraphs still proves the literal is absent.
+    for (i, owner) in expected.owners.iter().enumerate() {
+        if expected.cells.get(&owner.path).is_some_and(Option::is_none)
+            && cells
+                .get(&owner.path)
+                .is_some_and(|rows| rows.iter().any(|(_, literal)| *literal))
+        {
+            matched[i] = 1;
         }
     }
 }
@@ -93,26 +183,14 @@ struct RowWitnesses<'a> {
 }
 
 impl<'a> RowWitnesses<'a> {
-    fn collect(
-        observations: &'a [ObservedBlock<'a>],
-        prefixes: &BTreeMap<Vec<ScopeOccurrence>, (Point, String)>,
-    ) -> Self {
+    fn collect(observations: &'a [ObservedBlock<'a>]) -> Self {
         let mut by_text = BTreeMap::<_, Vec<_>>::new();
-        let mut considered_paths = BTreeSet::new();
-        for (block_index, block) in observations.iter().enumerate() {
-            // Column lowering can retain the text before the first display
-            // in its preformatted block. Its first row is not display ink.
-            let skip_initial_row = considered_paths.insert(block.path.as_slice())
-                && prefixes.get(&block.path).is_some_and(|(point, prefix)| {
-                    block.point.is_none_or(|start| start == *point)
-                        && block.rows.first() == Some(prefix)
-                });
-            for (row_index, row) in block
-                .rows
-                .iter()
-                .enumerate()
-                .skip(usize::from(skip_initial_row))
-            {
+        for (block_index, block) in observations
+            .iter()
+            .enumerate()
+            .filter(|(_, block)| block.literal)
+        {
+            for (row_index, row) in block.rows.iter().enumerate() {
                 if has_glyph(row) {
                     by_text
                         .entry((block.path.as_slice(), row.as_str()))

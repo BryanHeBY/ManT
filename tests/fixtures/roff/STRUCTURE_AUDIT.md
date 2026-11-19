@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v14` successful page response requires
+The `mant.roff-structure-profile/v15` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -162,9 +162,13 @@ item, with the table, row and field also identified for an mdoc column list.
 Native child positions identify possible block origins. For source rows of
 known spelling, the audit consumes the matching glyph range in execution
 order. A column can merge several displays into one block, so separate
-ranges can prove separate occurrences. A block with an unproved reading
-spelling supplies only one source-position witness. Blank output, a field
-prefix or a multiline neighbor cannot cover a missing display.
+ranges can prove separate occurrences. The field witness spans adjacent inline macros, Unicode text, generated
+delimiters and link words. Within each cell, ordinary rows on both sides
+reserve their own positions even when they spell the display identically.
+Only preformatted rows can discharge a display obligation. A cell whose
+source ranges cannot be reconstructed is recorded for source Review. An
+empty observed cell can still prove a display missing. Outside cells, a
+distinct sourced block can independently witness the native display.
 
 Repeated zero-advance effects and normalized custom enclosures retain their
 source execution order. BODY evidence follows the native selected equation

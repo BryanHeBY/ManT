@@ -90,6 +90,7 @@ mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/n
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/native-invocations/freebsd-zfs-send.8.gz,8,d4fedf1190c471de6eccb6b003fc59df545d671c79f8edc26d9090041f878c30,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/native-invocations/illumos-zfs.8,8,4196bf0af923ae345f03f4b379d7e277da1754a6f4cdf025ac38981ada5957e7,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/ordered-continuation/illumos-getopts.1,1,546dff38cbfb44bba62bd06ccfe0ccb8a4131b166964e800931ce154039bfc83,clean,not-required,
+mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/program-declarations/dragonflybsd-hammer.8.gz,8,f9d8f596e6565650490a8825d3c569b3807082ea3eee66d34dabe1068f31d94f,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/program-declarations/dragonflybsd-limits.1.gz,1,99ea245ba8ecdd5763c7559d6c2d5b07fe5e107617760649f563befa2552caa8,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/program-declarations/freebsd-limits.1.gz,1,05042abd7f0f2b40e9e2acbf797ed6907a912328145233fa2ee799c19504b56a,clean,not-required,
 mandoc,cvs-20261013T025419Z-linux-x86_64-gcc-16.2.1-reproducible,fixtures,real/program-declarations/freebsd-pkg.7.gz,7,d28e39e64fdeb51f0a77734ba71aa2a4c7483264bb313a1cece717ba19622b1a,clean,not-required,

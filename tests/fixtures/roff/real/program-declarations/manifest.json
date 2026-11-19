@@ -2,7 +2,72 @@
   "schema": "mant.real-source-fixtures/v1",
   "scope": "BSD program forms and contiguous compound command names.",
   "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "oracleInvocation": {
+    "workingDirectory": "fixture directory",
+    "arguments": ["-T<profile>", "<fixture basename>"],
+    "environment": {"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "TZ": "UTC"}
+  },
   "cases": [
+    {
+      "file": "dragonflybsd-hammer.8.gz",
+      "sourceIdentity": "dragonflybsd-6.4.2-x86_64:man/man8/hammer.8.gz",
+      "originUrl": "https://avalon.dragonflybsd.org/iso-images/dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archive": "dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archiveMember": "usr/share/man/man8/hammer.8.gz",
+      "archiveSha256": "373150a21eeb7ce0f20c7faf1b8129145bf3bf0463a45d0dc18aad274f7ed661",
+      "sourceSha256": "0f1f3e8f0e164761113e005357d0bbf142f5019c3d60d333fcb6d99816a23333",
+      "fixtureSha256": "0f1f3e8f0e164761113e005357d0bbf142f5019c3d60d333fcb6d99816a23333",
+      "decompressedSha256": "f9d8f596e6565650490a8825d3c569b3807082ea3eee66d34dabe1068f31d94f",
+      "sourceBytes": 19100,
+      "fixtureBytes": 19100,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "BSD-3-Clause, The DragonFly Project",
+      "licenseFile": "dragonflybsd-hammer.8.gz",
+      "transformation": "None. Complete compressed release member with a portable fixture basename.",
+      "selectionReason": "Four version headings reuse the manual name before plain descriptive text.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "7cb98e21c61bfabf256d217b817696b05e44595d547d6e03206e34e7fb2bdc7b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 77705,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "cda5f0843c6f97fe3e2265667aa18682f88bd7c175c3c07563af8b5317098795",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 77769,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "0df86303bfb19a3d1e435b8e0bc467e0f82878056b03ea72709f305f683b676c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 97190,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "bf902b752e79bd2afbe3d3c71cd9f5d97b854ce72d6a372655d70148acb91a9e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 191667,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "ea25b951c761fe6323231b4172e8303e5b303973b352186da65fa9ae85f305ad",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2303,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
     {
       "file": "dragonflybsd-limits.1.gz",
       "sourceIdentity": "dragonflybsd-6.4.2-x86_64:man/man1/limits.1.gz",
