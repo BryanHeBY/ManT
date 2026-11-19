@@ -64,15 +64,12 @@ fn simple_inline(node: &Node) -> bool {
                 | "Op"
                 | "No"
                 | "Ns"
+                | "Sm"
         )
     ) && node.children.iter().all(simple_inline)
 }
 
-fn lexical_rows(
-    nodes: &[Node],
-    origin: &Node,
-    source: &SourceContext,
-) -> Option<Vec<(u32, String)>> {
+fn lexical_rows(nodes: &[Node], source: &SourceContext) -> Option<Vec<(u32, String)>> {
     let mut rows = Vec::new();
     let mut start = 0;
     for end in 0..=nodes.len() {
@@ -81,8 +78,6 @@ fn lexical_rows(
             matches!(n.macro_token.as_deref(), Some("br" | "Pp" | "sp"))
                 || n.kind == NodeKind::Block
                     && matches!(n.macro_token.as_deref(), Some("D1" | "Dl" | "Bd" | "Bl"))
-                // termp_sm_pre changes the next word's spacing only.
-                || end + 1 == nodes.len() && n.macro_token.as_deref() == Some("Sm")
         });
         if closes || next.is_some_and(starts_source_row) {
             if start < end {
@@ -90,10 +85,24 @@ fn lexical_rows(
                 if !field.iter().all(simple_inline) {
                     return None;
                 }
-                let text = lexical_row(field, origin, source)?;
+                // termp_sm_pre changes NONOSPACE at its execution
+                // point, including inside a preceding display. Start
+                // with the state at this field's first node.
+                let text = lexical_row(field, &field[0], source)?;
                 if !text.is_empty() {
                     rows.push((field[0].id, text));
                 }
+            }
+            if let Some(space) = next.filter(|node| node.macro_token.as_deref() == Some("sp")) {
+                // roff_term_pre_sp() closes the current input before
+                // positive term_vspace() requests. Record those slots
+                // between the neighboring literal and ordinary rows.
+                let argument = space.children.first().and_then(Node::decoder_text);
+                let count = mant_codec::roff_vertical_space_lines(argument);
+                if !(0..=64).contains(&count) {
+                    return None;
+                }
+                rows.extend((0..count).map(|_| (space.id, String::new())));
             }
             start = end + usize::from(closes);
         }
@@ -125,6 +134,15 @@ fn lexical_row(nodes: &[Node], origin: &Node, source: &SourceContext) -> Option<
 }
 
 pub(super) fn display_rows(node: &Node, source: &SourceContext) -> Option<BTreeMap<u32, String>> {
+    Some(
+        display_row_slots(node, source)?
+            .into_iter()
+            .filter(|(_, text)| !text.is_empty())
+            .collect(),
+    )
+}
+
+fn display_row_slots(node: &Node, source: &SourceContext) -> Option<Vec<(u32, String)>> {
     if matches!(node.macro_token.as_deref(), Some("D1" | "Dl")) {
         // Keep one lexical state across the complete short-display field,
         // including sibling delimiter TEXT and invisible BODY words.
@@ -143,11 +161,7 @@ pub(super) fn display_rows(node: &Node, source: &SourceContext) -> Option<BTreeM
         );
     }
     let body = node.children.iter().find(|n| n.kind == NodeKind::Body)?;
-    Some(
-        lexical_rows(&body.children, node, source)?
-            .into_iter()
-            .collect(),
-    )
+    lexical_rows(&body.children, source)
 }
 
 pub(super) fn cell_plan(
@@ -178,16 +192,16 @@ fn extend_cell_plan(
     for (i, child) in body.children.iter().enumerate() {
         if let Some(&owner) = direct.get(&child.id) {
             plan.rows.extend(
-                lexical_rows(&body.children[start..i], body, source)?
+                lexical_rows(&body.children[start..i], source)?
                     .into_iter()
                     .map(|(_, text)| CellRow { owner: None, text }),
             );
-            let rows = display_rows(child, source)?;
-            if rows.is_empty() {
+            let rows = display_row_slots(child, source)?;
+            if rows.iter().all(|(_, text)| text.is_empty()) {
                 return None;
             }
-            plan.rows.extend(rows.into_values().map(|text| CellRow {
-                owner: Some(owner),
+            plan.rows.extend(rows.into_iter().map(|(_, text)| CellRow {
+                owner: (!text.is_empty()).then_some(owner),
                 text,
             }));
             plan.verified.insert(owner);
@@ -199,7 +213,7 @@ fn extend_cell_plan(
         }
     }
     plan.rows.extend(
-        lexical_rows(&body.children[start..], body, source)?
+        lexical_rows(&body.children[start..], source)?
             .into_iter()
             .map(|(_, text)| CellRow { owner: None, text }),
     );

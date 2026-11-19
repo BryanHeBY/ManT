@@ -357,6 +357,142 @@ fn ordinary_cell_rows_are_reserved_across_filled_boundaries_and_trailing_request
 }
 
 #[test]
+fn column_display_proof_uses_the_spacing_mode_at_each_ordinary_row() {
+    // mdoc_term.c::termp_sm_pre changes the persistent spacing mode
+    // at execution time, including while processing a previous display.
+    for kind in ["Dl", "D1", "literal", "unfilled"] {
+        for (mode, ordinary) in [
+            (".Sm off\n", "LEFTRIGHT"),
+            (".Sm\n", "LEFTRIGHT"),
+            (".Sm off\n.Sm on\n", "LEFT RIGHT"),
+        ] {
+            for first in [
+                format!("{mode}.Dl OTHER\n"),
+                format!(".Dl OTHER\n{mode}"),
+                format!(".Bd -literal -compact\nOTHER\n{mode}.Ed\n"),
+            ] {
+                let last = display(kind, ordinary);
+                let source = format!(
+                    "{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta B\n{first}.No LEFT No RIGHT\n{last}.El\n{TAIL}"
+                );
+                let (native, topology, intact) = parsed_structure(&source);
+                assert!(native.literal_display_reviews.is_empty(), "{source}");
+                assert!(compare(&native, &topology, &intact).is_empty(), "{source}");
+                let last_line = last.lines().next().unwrap();
+                let last_opening = source
+                    .lines()
+                    .enumerate()
+                    .filter(|(_, row)| *row == last_line)
+                    .last()
+                    .unwrap()
+                    .0
+                    + 1;
+                for replacement in ["WRONG", " "] {
+                    let mut document = intact.clone();
+                    replace_column_payload_at(&mut document, 3, ordinary, replacement);
+                    let errors = compare(&native, &topology, &document);
+                    assert_eq!(errors.len(), 1, "{source}: {errors:?}");
+                    assert!(
+                        errors[0].contains(&format!("for {last_opening}:2 ")),
+                        "{source}: {errors:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn missing_equal_column_rows_use_the_physical_slot_or_report_all_candidates() {
+    // termp_d1_pre/termp_bd_pre close each display field. The optional
+    // roff_term_pre_sp row remains in the buffer between the two owners.
+    for first in ["Dl", "literal"] {
+        for second in ["D1", "unfilled"] {
+            for second_word in ["SENTRY", "DIFFERENT"] {
+                for gap in ["", ".sp 1\n"] {
+                    let prefix = format!("{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta B\n");
+                    let before = display(first, "SENTRY");
+                    let after = display(second, second_word);
+                    let starts = [
+                        prefix.lines().count() + 1,
+                        (prefix.clone() + &before + gap).lines().count() + 1,
+                    ];
+                    let source = format!("{prefix}{before}{gap}{after}.El\n{TAIL}");
+                    let (native, topology, intact) = parsed_structure(&source);
+                    assert!(compare(&native, &topology, &intact).is_empty(), "{source}");
+                    for (at, word, line) in [
+                        (1, "SENTRY", starts[0]),
+                        (2 + usize::from(!gap.is_empty()), second_word, starts[1]),
+                    ] {
+                        for replacement in ["WRONG", " "] {
+                            let mut document = intact.clone();
+                            replace_column_payload_at(&mut document, at, word, replacement);
+                            let errors = compare(&native, &topology, &document);
+                            assert_eq!(errors.len(), 1, "{source}: {errors:?}");
+                            assert!(
+                                errors[0].contains(&format!("for {line}:2 ")),
+                                "{source}: {errors:?}"
+                            );
+                        }
+                    }
+                    if second_word == "SENTRY" {
+                        let mut document = intact;
+                        replace_column_payload_at(&mut document, 1, "SENTRY", "");
+                        let errors = compare(&native, &topology, &document);
+                        assert_eq!(errors.len(), 1, "{source}: {errors:?}");
+                        assert!(
+                            errors[0].contains(&format!(
+                                "1 missing row(s) among column display candidates {}:2, {}:2",
+                                starts[0], starts[1]
+                            )),
+                            "{source}: {errors:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn replace_column_payload_at(
+    document: &mut Document,
+    at: usize,
+    expected: &str,
+    replacement: &str,
+) {
+    let Block::Table { rows, .. } = &mut document.sections[1].blocks[0] else {
+        panic!()
+    };
+    let Block::Preformatted { children, .. } = &mut rows[0].cells[1].blocks[0] else {
+        panic!()
+    };
+    let start = children
+        .iter()
+        .enumerate()
+        .filter(|(_, node)| matches!(node, Inline::LineBreak {}))
+        .nth(at - 1)
+        .unwrap()
+        .0
+        + 1;
+    let end = start
+        + children[start..]
+            .iter()
+            .take_while(|node| !matches!(node, Inline::LineBreak {}))
+            .count();
+    assert_eq!(inline_plain_text(&children[start..end]), expected);
+    if replacement.is_empty() {
+        children.drain(start - 1..end);
+    } else {
+        children.splice(
+            start..end,
+            [Inline::Text {
+                value: replacement.into(),
+            }],
+        );
+    }
+}
+
+#[test]
 fn an_unproved_cell_tail_cannot_certify_a_display_with_the_same_ink() {
     // roff_term_pre_ta() affects tab evaluation without emitting a word.
     // The literal auditor has not proved the following raw-cell range.

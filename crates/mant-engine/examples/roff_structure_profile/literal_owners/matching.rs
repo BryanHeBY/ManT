@@ -16,7 +16,7 @@ pub(crate) fn compare(
     let mut witnesses = RowWitnesses::collect(&observations);
     let mut matched = vec![0; expected.owners.len()];
     let mut claimed_blocks = BTreeSet::new();
-    claim_cells(expected, &observations, &mut matched);
+    let uncertain = claim_cells(expected, &observations, &mut matched, violations);
     let exact = row_witness_obligations(&expected.owners);
     // Resolve literal rows before claiming unsplit blocks. Two displays
     // in one column can claim different rows of the same block; no source
@@ -60,7 +60,7 @@ pub(crate) fn compare(
         } else {
             match_block(index, expected, &mut blocks, &mut claims)
         };
-        if !covered {
+        if !covered && !uncertain.contains(&index) {
             let (line, column) = owner.opening;
             violations.push(format!(
                 "literal-displays: missing sourced block for {line}:{column} occurrence {occurrence}"
@@ -73,28 +73,34 @@ fn claim_cells(
     expected: &SourceDisplays,
     observations: &[ObservedBlock<'_>],
     matched: &mut [usize],
-) {
+    violations: &mut Vec<String>,
+) -> BTreeSet<usize> {
     // Each native It BODY is an independent cell. Ordinary text on either
     // side can share the IR Preformatted block and even the exact spelling
     // of the display. Reserve those rows before admitting any display ink.
     let mut cells = BTreeMap::<_, Vec<_>>::new();
     for block in observations {
         if expected.cells.contains_key(&block.path) {
-            cells.entry(&block.path).or_default().extend(
-                block
-                    .rows
-                    .iter()
-                    .filter(|text| has_glyph(text))
-                    .map(|text| (text.as_str(), block.literal)),
-            );
+            cells
+                .entry(&block.path)
+                .or_default()
+                .extend(block.rows.iter().map(|text| (text.as_str(), block.literal)));
         }
     }
+    let mut uncertain = BTreeSet::new();
     for (path, plan) in &expected.cells {
-        let rows = cells.get(path).map_or(&[][..], Vec::as_slice);
-        if !plan.complete || rows.len() == plan.rows.len() {
+        let physical = cells.get(path).map_or(&[][..], Vec::as_slice);
+        if !plan.complete || physical.len() == plan.rows.len() {
             // When later source is unproved, only the exact initial rows
             // can be claimed. Later equal ink cannot replace that prefix.
-            for (want, &(text, literal)) in plan.rows.iter().zip(rows) {
+            let observed = physical
+                .iter()
+                .filter(|(text, _)| plan.complete || has_glyph(text));
+            let expected_rows = plan
+                .rows
+                .iter()
+                .filter(|row| plan.complete || has_glyph(&row.text));
+            for (want, &(text, literal)) in expected_rows.zip(observed) {
                 if want.owner.is_none() && text != want.text {
                     break;
                 }
@@ -107,6 +113,11 @@ fn claim_cells(
             }
             continue;
         }
+        let rows = physical
+            .iter()
+            .copied()
+            .filter(|(text, _)| has_glyph(text))
+            .collect::<Vec<_>>();
         let mut positions = BTreeMap::<_, Vec<_>>::new();
         for (i, &(text, _)) in rows.iter().enumerate() {
             positions.entry(text).or_default().push(i);
@@ -141,6 +152,7 @@ fn claim_cells(
                 }
             }
         }
+        report_ambiguous_rows(plan, &expected.owners, matched, &mut uncertain, violations);
     }
     // An unknown range is reported as source Review. An empty cell or a
     // projection to ordinary paragraphs still proves the literal is absent.
@@ -155,6 +167,43 @@ fn claim_cells(
         {
             matched[i] = 1;
         }
+    }
+    uncertain
+}
+
+fn report_ambiguous_rows(
+    plan: &super::rows::CellPlan,
+    owners: &[SourceDisplay],
+    matched: &[usize],
+    uncertain: &mut BTreeSet<usize>,
+    violations: &mut Vec<String>,
+) {
+    // A missing physical slot destroys correspondence between equal
+    // display rows. Report the count and candidate intervals; the
+    // order of equal strings cannot identify a damaged owner.
+    let mut by_text = BTreeMap::<_, Vec<_>>::new();
+    for row in &plan.rows {
+        if let Some(id) = row.owner.filter(|&id| owners[id].rows == 1) {
+            by_text.entry(row.text.as_str()).or_default().push(id);
+        }
+    }
+    for candidates in by_text.values() {
+        let missing = candidates.iter().filter(|&&id| matched[id] == 0).count();
+        if missing == 0 || missing == candidates.len() {
+            continue;
+        }
+        uncertain.extend(candidates);
+        let locations = candidates
+            .iter()
+            .map(|&id| {
+                let (line, column) = owners[id].opening;
+                format!("{line}:{column}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        violations.push(format!(
+            "literal-displays: {missing} missing row(s) among column display candidates {locations}"
+        ));
     }
 }
 

@@ -55,7 +55,7 @@ pub(crate) enum FontEvidence {
 
 #[derive(Default)]
 pub(crate) struct SourceContext {
-    no_space_owners: HashSet<u32>,
+    no_space_nodes: HashSet<u32>,
     unproved_font_owners: HashSet<u32>,
     joined_flag_dashes: HashSet<u32>,
 }
@@ -74,7 +74,7 @@ impl SourceContext {
     }
 
     pub(crate) fn no_space_at(&self, node: &Node) -> bool {
-        self.no_space_owners.contains(&node.id)
+        self.no_space_nodes.contains(&node.id)
     }
 
     pub(crate) fn font_at(&self, node: &Node) -> FontEvidence {
@@ -93,6 +93,9 @@ impl SourceContext {
         if skips_source_children(node) {
             return;
         }
+        if state.no_space {
+            self.no_space_nodes.insert(node.id);
+        }
         match (node.kind, node.macro_token.as_deref()) {
             (NodeKind::Element, Some("Sm")) => {
                 state.no_space = spacing_mode(node, state.no_space);
@@ -104,9 +107,6 @@ impl SourceContext {
             }
             (NodeKind::Head | NodeKind::Body, Some("It"))
             | (NodeKind::Block, Some("D1" | "Dl" | "Bd")) => {
-                if state.no_space {
-                    self.no_space_owners.insert(node.id);
-                }
                 if state.font == FontEvidence::Unproved {
                     self.unproved_font_owners.insert(node.id);
                 }

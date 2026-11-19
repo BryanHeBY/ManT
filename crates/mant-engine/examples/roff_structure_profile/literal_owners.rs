@@ -349,7 +349,14 @@ fn visit_blocks(blocks: &[Block], parent: Option<usize>, observations: &mut Obse
                     continue;
                 }
                 let text = mant_ir::inline_plain_text(children);
-                if has_glyph(&text) {
+                let in_cell = parent.is_some_and(|p| {
+                    matches!(observations.scopes[p].1.kind, ScopeKind::ColumnCell { .. })
+                });
+                if has_glyph(&text)
+                    || in_cell
+                        && (text.contains('\n')
+                            || literal && mant_ir::geometry::has_literal_rows(children))
+                {
                     observations.blocks.push(ProjectedBlock {
                         parent,
                         point: source.map(point),
