@@ -111,16 +111,8 @@ fn edited_table_prose_keeps_soft_width_and_hard_markers_distinct() {
                     panic!("{source}");
                 };
                 let projected = mant_ir::inline_plain_text(children);
-                if marker.is_empty() {
-                    assert_eq!(projected, format!("PT {words}"), "{source}");
-                } else {
-                    assert_eq!(projected.lines().next(), Some("PT"), "{source}");
-                    assert_eq!(
-                        projected.split_whitespace().skip(1).collect::<Vec<_>>(),
-                        words.split_whitespace().collect::<Vec<_>>(),
-                        "{source}"
-                    );
-                }
+                let separator = if marker.is_empty() { ' ' } else { '\n' };
+                assert_eq!(projected, format!("PT{separator}{words}"), "{source}");
             }
         }
     }

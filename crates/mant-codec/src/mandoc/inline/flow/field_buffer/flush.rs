@@ -144,6 +144,7 @@ impl FieldBuffer {
             cells: self.cells.clone(),
             device_tail: None,
             raw_slot_fence: 0,
+            cursor_retreat: 0,
             raw_tail_font: None,
             raw_copy_aliases: Vec::new(),
             tabs: self.tabs.clone(),

@@ -29,6 +29,9 @@ mod no_fill;
 pub(in crate::mandoc) use native_field::{FieldFlag, FieldFlags};
 mod operand_capture;
 mod output;
+
+/// Temporary insertion point for a surviving earlier byte after a `term_word` edit.
+pub(in crate::mandoc::inline) const RELOCATED_GLYPH: &str = "\0mant:output-scope:relocated-glyph:";
 pub(in crate::mandoc) use operand_capture::HeadOperandCapture;
 pub(in crate::mandoc::inline) use output::{INTERNAL_FIELD_WORD, INTERNAL_LINK_SPLIT};
 

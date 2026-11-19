@@ -128,17 +128,17 @@ impl InlineBuilder {
         opening: bool,
         pretty: bool,
     ) {
-        let value = if opening {
-            "("
-        } else if pretty {
-            ");"
-        } else {
-            ")"
-        };
         self.with_native_operand_role(
             crate::definitions::NativeOperandRole::FunctionSignature { opening },
             |builder| {
-                builder.append_text(value);
+                crate::mandoc::inline::append_normalized_word(
+                    builder,
+                    if opening { "(" } else { ")" },
+                );
+                if !opening && pretty {
+                    builder.tighten_next_boundary();
+                    crate::mandoc::inline::append_normalized_word(builder, ";");
+                }
             },
         );
     }

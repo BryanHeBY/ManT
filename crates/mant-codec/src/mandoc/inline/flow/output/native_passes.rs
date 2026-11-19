@@ -102,7 +102,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             // An empty word can be followed by BACKBEFORE replacing its
             // trailing native blank. Its zero-length projection interval
             // cannot consume a pass needed by that replacement's owner.
-            lengths.insert(owner.clone(), OwnerAcceptance::default());
+            lengths.entry(owner.clone()).or_default();
             continue;
         }
         while passes
@@ -113,7 +113,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
             pass_index += 1;
         }
-        let mut acceptance = OwnerAcceptance::default();
+        let acceptance: &mut OwnerAcceptance = lengths.entry(owner.clone()).or_default();
         while let Some(pass) = passes.get(pass_index) {
             #[cfg(test)]
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
@@ -167,7 +167,6 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             }
             pass_index += 1;
         }
-        lengths.insert(owner.clone(), acceptance);
     }
     lengths
 }

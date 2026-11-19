@@ -116,6 +116,8 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) native_writes: Vec<crate::mandoc::inline::flow::field_buffer::FieldWrite>,
     /// Device motion, lines and blank overstrikes can buffer without text.
     pub(in crate::mandoc) table_device_buffer_written: bool,
+    /// Hard rows already resolved from the accepted tbl device passes.
+    pub(in crate::mandoc) table_reading_breaks: Option<usize>,
     pub(in crate::mandoc) joins_preceding_node: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
@@ -190,6 +192,7 @@ struct WordExecution {
     native_writes: Vec<crate::mandoc::inline::flow::field_buffer::FieldWrite>,
     drawing_probe: Option<Box<crate::mandoc::inline::flow::field_buffer::DrawingProbe>>,
     table_device_buffer_written: bool,
+    table_reading_breaks: Option<usize>,
 }
 
 // Record each decoded native write before its presentation action, in the
@@ -258,7 +261,7 @@ fn execute_formatter_word_events(
             context.font.current,
         );
         if word.native_writes.len() > write_start {
-            last_font = Some(context.font.current);
+            last_font = Some((context.font.current, write_start));
             if can_record_last_font && decorated_writes < 2 {
                 decorated_writes += native_writes::decorated_write_count(
                     &word.native_writes[write_start..],
@@ -279,12 +282,15 @@ fn execute_formatter_word_events(
         word.native_writes.push(FieldWrite::UnprovedMotion);
     }
     if opaque_slots && context.policy.record_native_cells && context.policy.field_authoritative {
-        let last_font = last_font.filter(|&font| {
+        let styled_suffix = last_font.and_then(|(font, start)| {
             can_record_last_font
-                && native_writes::proved_decorated_tail(events, &word.native_writes, font)
+                .then(|| {
+                    native_writes::proved_decorated_tail(events, &word.native_writes[start..], font)
+                })
+                .flatten()
         });
         word.native_writes.push(FieldWrite::OpaqueRawSlots {
-            last_font,
+            styled_suffix,
             keeps_prior_slots: decorated_writes == 1,
         });
     }
@@ -302,6 +308,7 @@ fn finish_text_execution(
         output,
         native_writes,
         table_device_buffer_written,
+        table_reading_breaks,
         source_continuation,
         text_state,
         ..
@@ -324,6 +331,7 @@ fn finish_text_execution(
         output,
         native_writes,
         table_device_buffer_written,
+        table_reading_breaks,
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
         pending_word_end_break: text_state.pending_word_end_break,

@@ -135,8 +135,9 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) start: usize,
     pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
     pub(in crate::mandoc::inline) automatic: usize,
+    pub(in crate::mandoc::inline) cursor_retreat: usize,
     pub(in crate::mandoc::inline) kept: bool,
-    pub(in crate::mandoc::inline) tail_font: Option<(usize, RoffFont)>,
+    pub(in crate::mandoc::inline) tail_font: Option<(std::ops::Range<usize>, RoffFont)>,
     pub(in crate::mandoc::inline) duplicates: Vec<(usize, usize)>,
     pub(in crate::mandoc::inline) backbefore: bool,
     pub(in crate::mandoc::inline) backafter: bool,
@@ -251,14 +252,18 @@ impl NativeSlots {
     pub(in crate::mandoc::inline) fn with_field_prefix(prefix: &FieldPrefix) -> Self {
         let mut slots = Self::after_entry(prefix.start != 0);
         let mut aliases = prefix.duplicates.iter().peekable();
+        let mut pending_slot = None;
         for (index, (cell, _)) in prefix.cells.iter().enumerate() {
-            if let Some((at, font)) = prefix.tail_font
-                && at == index
+            if let Some((range, font)) = &prefix.tail_font
+                && range.contains(&index)
             {
                 // encode1 writes the decoration before the final glyph.
                 // Bold's earlier copy can still be the author's glyph
                 // when a subsequent overstrike trims the final copy.
-                slots.write_decoration(cell, font, Some(index));
+                slots.write_decoration(cell, *font, Some(index));
+            }
+            if prefix.pending_cell == Some(index) {
+                pending_slot = Some(slots.cursor);
             }
             let owner = if aliases.peek().is_some_and(|&&(copy, _)| copy == index) {
                 aliases.next().expect("matching alias").1
@@ -267,6 +272,7 @@ impl NativeSlots {
             };
             slots.write_run(cell.clone(), 1, Some(owner));
         }
+        slots.cursor -= prefix.cursor_retreat;
         if prefix.automatic > 0 {
             let blank = if prefix.kept {
                 FieldCell::NonBreakingBlank
@@ -274,19 +280,12 @@ impl NativeSlots {
                 FieldCell::BreakableBlank
             };
             for offset in 0..prefix.automatic {
-                slots.write_run(blank.clone(), 1, Some(prefix.cells.len() + offset));
+                slots.advance(1, blank.clone(), Some(prefix.cells.len() + offset));
             }
         }
         slots.backbefore = prefix.backbefore;
         slots.backafter = prefix.backafter;
-        slots.backbefore_slot = prefix.pending_cell.map(|at| {
-            at + prefix
-                .tail_font
-                .filter(|(owner, _)| *owner <= at)
-                .map_or(0, |(owner, font)| {
-                    decoration_prefix(&prefix.cells[owner].0, font).count()
-                })
-        });
+        slots.backbefore_slot = pending_slot;
         slots
     }
 
@@ -514,6 +513,35 @@ impl NativeSlots {
         }
     }
 
+    /// Raw SP advances without replacing an existing byte. When it crosses
+    /// the automatic separator, that same cell supplies the source blank.
+    pub(in crate::mandoc::inline) fn claim_entry_blank(
+        &mut self,
+        owner: usize,
+        is_entry: impl FnOnce(usize) -> bool,
+        from_current_word: impl Fn(usize) -> bool,
+    ) -> bool {
+        let Some(slot) = self.runs.get(&self.cursor) else {
+            return false;
+        };
+        if slot.end != self.cursor + 1
+            || !slot.owner.is_some_and(is_entry)
+            || !self
+                .runs
+                .range(..self.cursor)
+                .rev()
+                .any(|(_, previous)| previous.owner.is_some_and(&from_current_word))
+        {
+            return false;
+        }
+        self.runs
+            .get_mut(&self.cursor)
+            .expect("matching blank")
+            .owner = Some(owner);
+        self.cursor += 1;
+        true
+    }
+
     fn glyph(&mut self, cell: FieldCell, font: RoffFont, owner: Option<usize>) {
         if self.backbefore && self.cursor == 0 && self.prior_input {
             self.prior_edit = Some(PriorSlotEdit::Unresolved);
@@ -614,8 +642,8 @@ impl NativeSlots {
         cells
     }
 
-    pub(in crate::mandoc::inline) fn append_extent(&self) -> Option<usize> {
-        (self.cursor == self.extent).then_some(self.extent)
+    pub(in crate::mandoc::inline) fn extent_and_retreat(&self) -> (usize, usize) {
+        (self.extent, self.extent - self.cursor)
     }
 }
 

@@ -66,7 +66,7 @@ pub(super) fn function(builder: &mut InlineBuilder, node: &Node, name: Option<&s
         });
         if index + 1 < arguments.len() {
             builder.tighten_next_boundary();
-            builder.append_text(",");
+            super::append_normalized_word(builder, ",");
         }
     }
     builder.tighten_next_boundary();
@@ -107,7 +107,7 @@ pub(in crate::mandoc) fn function_argument(
             || (index + 1 == operands.len() && comma_after);
         if comma {
             builder.tighten_next_boundary();
-            builder.append_text(",");
+            super::append_normalized_word(builder, ",");
         }
     }
     builder.execution.finish_executed_node(argument);
@@ -168,7 +168,7 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
                     if first.is_some() {
                         builder.tighten_next_boundary();
                     }
-                    builder.append_text("(");
+                    super::append_normalized_word(builder, "(");
                     builder.tighten_next_boundary();
                     if let Some(section_node) = children.get(1) {
                         builder.with_direct_word_operands(|builder| {
@@ -176,7 +176,7 @@ pub(super) fn manual_reference(builder: &mut InlineBuilder, node: &Node, name: O
                         });
                     }
                     builder.tighten_next_boundary();
-                    builder.append_text(")");
+                    super::append_normalized_word(builder, ")");
                 }
             });
         },

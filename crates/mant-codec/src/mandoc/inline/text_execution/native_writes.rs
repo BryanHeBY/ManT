@@ -4,21 +4,32 @@ pub(super) fn proved_decorated_tail(
     events: &[RoffInlineEvent],
     writes: &[crate::mandoc::inline::flow::field_buffer::FieldWrite],
     font: super::Font,
-) -> bool {
+) -> Option<(usize, super::Font)> {
     use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
-    // A styled append can prove its final duplicate even when the earlier
-    // field is opaque. Cursor edits and BACK registers need the full path.
-    has_native_decoration(font)
-        && matches!(
-            writes.last(),
-            Some(FieldWrite::Cell(FieldCell::Graph { text, width: 1 })) if text.is_ascii_graphic()
-        )
-        && events.iter().all(|event| {
+    // A plain styled append proves the raw copies in its final ASCII
+    // run. Cursor edits and BACK registers need the full placement path.
+    if !has_native_decoration(font)
+        || !events.iter().all(|event| {
             matches!(
                 event,
                 RoffInlineEvent::Text(_) | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
             )
         })
+    {
+        return None;
+    }
+    let count = writes
+        .iter()
+        .rev()
+        .take(64)
+        .take_while(|write| {
+            matches!(
+                write,
+                FieldWrite::Cell(FieldCell::Graph { text, width: 1 }) if text.is_ascii_graphic()
+            )
+        })
+        .count();
+    (count != 0).then_some((count, font))
 }
 
 pub(super) fn has_native_decoration(font: super::Font) -> bool {

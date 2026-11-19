@@ -126,15 +126,18 @@ impl InlineExecutionState {
         writes: &[super::field_buffer::FieldWrite],
         output: &mut Vec<Inline>,
         table_field_units: Option<usize>,
+        resolved_breaks: Option<usize>,
     ) {
         use super::field_buffer::{FieldBuffer, FieldWrite};
         if !writes.iter().any(FieldWrite::is_break_marker) {
             return;
         }
-        let mut field = FieldBuffer::default();
-        field.configure_tabs(&self.tab_stops);
-        field.apply_writes(writes);
-        let endlines = field.table_word_endlines(table_field_units);
+        let endlines = resolved_breaks.unwrap_or_else(|| {
+            let mut field = FieldBuffer::default();
+            field.configure_tabs(&self.tab_stops);
+            field.apply_writes(writes);
+            field.table_word_endlines(table_field_units)
+        });
         if super::output::line_break_count(output) > 0 {
             // Reconcile the entire empty suffix. A run of ordinary blanks
             // between provisional endlines never prints by itself; a later

@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use super::{FieldBuffer, FieldCell, FieldWrite};
+use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary};
 
 impl FieldBuffer {
     pub(super) fn apply_slot_placement(&mut self, write: &FieldWrite) {
@@ -11,12 +11,14 @@ impl FieldBuffer {
             FieldWrite::KeepPlacedRetreat { from_end } => self.keep_placed_retreat(*from_end),
             FieldWrite::ReplacePlacedTail { cells, .. } => self.replace_placed_tail(*cells),
             FieldWrite::RetainDeviceTail(tail) => self.device_tail = Some(tail.clone()),
-            FieldWrite::ProveAppendSlots {
+            FieldWrite::ProveRawSlots {
                 count,
+                cursor_retreat,
                 backbefore,
                 duplicates,
             } => {
                 self.raw_slot_fence = self.cells.len() - count;
+                self.cursor_retreat = *cursor_retreat;
                 self.backbefore_armed = *backbefore;
                 self.raw_copy_aliases.clear();
                 self.raw_copy_aliases
@@ -25,9 +27,9 @@ impl FieldBuffer {
                     }));
             }
             FieldWrite::OpaqueRawSlots {
-                last_font,
+                styled_suffix,
                 keeps_prior_slots,
-            } => self.record_raw_tail_font(*last_font, *keeps_prior_slots),
+            } => self.record_raw_tail_font(*styled_suffix, *keeps_prior_slots),
             FieldWrite::ReplaceLivePrefix { start: 0, .. } => self.clear(),
             FieldWrite::ReplaceLivePrefix { start, .. } => {
                 self.replace_placed_tail(self.cells.len() - start);
@@ -46,19 +48,18 @@ impl FieldBuffer {
 
     fn record_raw_tail_font(
         &mut self,
-        last_font: Option<crate::mandoc::roff_escape::RoffFont>,
+        styled_suffix: Option<(usize, crate::mandoc::roff_escape::RoffFont)>,
         keeps_prior_slots: bool,
     ) {
         let end = self.cells.len();
-        let tail = last_font
-            .zip(end.checked_sub(1))
-            .filter(|&(_, index)| self.projection_length(index, end) == 1)
-            .map(|(font, index)| (index, font));
-        // One decorated tail on an otherwise exact append leaves the old
-        // prefix usable. Another compressed decoration would require a
-        // second origin receipt; seal that part of the field instead.
+        let tail = styled_suffix.and_then(|(count, font)| {
+            let start = end.checked_sub(count)?;
+            (self.projection_length(start, end) == count).then_some((start..end, font))
+        });
+        // A proved styled suffix on an otherwise exact append leaves the
+        // previous prefix usable. Keep at most one compressed style run.
         if !(keeps_prior_slots && tail.is_some() && self.raw_tail_font.is_none()) {
-            self.raw_slot_fence = tail.map_or(end, |(index, _)| index);
+            self.raw_slot_fence = tail.as_ref().map_or(end, |(range, _)| range.start);
             self.raw_copy_aliases.clear();
         }
         self.raw_tail_font = tail;
@@ -85,14 +86,18 @@ impl FieldBuffer {
         let first_retreat = self
             .zero_width_retreats
             .partition_point(|&(_, mark)| mark < start);
-        // A bold source writes graph, backline, graph. The pairs are
-        // disjoint and ordered, so at most the previous pair spans start.
+        // Both copies of a bold glyph must lie in the replayable suffix.
         let first_alias = self
             .raw_copy_aliases
             .partition_point(|&(copy, _)| copy < start);
-        if *self.cells.get(start)? == FieldCell::Backline
+        if self.cursor_retreat > self.cells.len() - start
+            || *self.cells.get(start)? == FieldCell::Backline
             || start != 0 && self.projection_length(start, self.cells.len()) == 0
             || first_alias != 0 && self.raw_copy_aliases[first_alias - 1].1 >= start
+            || self
+                .raw_copy_aliases
+                .get(first_alias)
+                .is_some_and(|&(_, owner)| owner < start)
             || self
                 .zero_width_retreats
                 .get(first_retreat)
@@ -134,10 +139,13 @@ impl FieldBuffer {
             start,
             cells,
             automatic,
+            cursor_retreat: self.cursor_retreat,
             kept,
             tail_font: self
                 .raw_tail_font
-                .and_then(|(index, font)| Some((index.checked_sub(start)?, font))),
+                .as_ref()
+                .filter(|(range, _)| range.end > start)
+                .map(|(range, font)| (range.start.saturating_sub(start)..range.end - start, *font)),
             duplicates: self.raw_copy_aliases[first_alias..]
                 .iter()
                 .map(|&(copy, owner)| (copy - start, owner - start))
@@ -241,11 +249,14 @@ impl FieldBuffer {
 
     pub(super) fn truncate_raw_slot_proof(&mut self, end: usize) {
         self.raw_slot_fence = self.raw_slot_fence.min(end);
-        self.raw_tail_font = self.raw_tail_font.filter(|&(position, _)| position < end);
-        let aliases = self
-            .raw_copy_aliases
-            .partition_point(|&(_, owner)| owner < end);
-        self.raw_copy_aliases.truncate(aliases);
+        if let Some((range, _)) = &mut self.raw_tail_font {
+            range.end = range.end.min(end);
+            if range.start >= range.end {
+                self.raw_tail_font = None;
+            }
+        }
+        self.raw_copy_aliases
+            .retain(|&(copy, owner)| copy < end && owner < end);
     }
 
     pub(super) fn keep_placed_retreat(&mut self, from_end: usize) {
@@ -270,26 +281,63 @@ pub(in crate::mandoc::inline) fn isolated_passes(
     let mut field = FieldBuffer::default();
     field.apply_writes(writes);
     let mut passes = Vec::new();
-    let mut ranges = Vec::new();
     // Ordinary wrapping belongs to the viewport. Use the native margin
     // when term_fill/term_field can change a marker's acceptance or when
     // a backline covers a glyph only if its replacement prints on that pass.
     let target = table_field_units
         .filter(|_| field.last_break_marker.is_some() || field.has_zero_width_retreats())
         .unwrap_or(usize::MAX / 4);
+    let mut remainder = false;
     while let Some(pass) = field.scan_fill_pass(target, true) {
-        let end = field.printed_content_end(pass.start, pass.end);
-        let closes = field.has_non_ignorable_after(pass.end, false);
-        ranges.push((pass.start..end, closes));
+        remainder = field.has_non_ignorable_after(pass.end, false);
         passes.push(pass);
-        if !closes {
+        if !remainder {
             break;
         }
         field.advance_past(pass.end);
         field.consume_break_blanks();
     }
-    IsolatedPasses {
-        ranges,
-        covered: field.covered_zero_width_retreats(&passes),
+    let covered = field.covered_zero_width_retreats(&passes);
+    let mut covered_iter = covered.iter().copied().peekable();
+    let mut retreats = field.zero_width_retreats.iter().copied().peekable();
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    for (i, pass) in passes.iter().enumerate() {
+        // Keep a device boundary when the next pass must not cover the
+        // previous glyph. Ordinary width folds retain their source spaces
+        // in the same reading range, including their styles and links.
+        let mut split_retreat = false;
+        while let Some((old, _)) = retreats.next_if(|&(old, _)| old < pass.end) {
+            split_retreat |= covered_iter.next_if_eq(&old).is_none() && old >= pass.start;
+        }
+        let last = i + 1 == passes.len();
+        let hard = if last {
+            remainder // A completed row followed by term_fill's rejection.
+        } else {
+            let next = passes[i + 1];
+            // A device-only accepted row ahead of rejection still occupies
+            // a row of the native field, even with no projected glyphs.
+            let before_device_only_row = remainder
+                && next.boundary == FillBoundary::WordEndBreak
+                && field.projection_length(next.start, next.end) == 0;
+            // A word-end marker can sit in the skipped device advance at
+            // the head of the next pass. Its boundary still separates the
+            // two reading runs even though term_fill stopped on width.
+            let leading_marker = (pass.end..next.end)
+                .take_while(|&cell| field.projection_length(next.start, cell.max(next.start)) == 0)
+                .any(|cell| field.cells[cell] == FieldCell::BreakMarker);
+            pass.boundary == FillBoundary::WordEndBreak
+                || split_retreat
+                || before_device_only_row
+                || leading_marker
+        };
+        if hard || last {
+            let end = field.printed_content_end(pass.start, pass.end);
+            ranges.push((start..end, hard));
+            if let Some(next) = passes.get(i + 1) {
+                start = next.start;
+            }
+        }
     }
+    IsolatedPasses { ranges, covered }
 }

@@ -137,7 +137,7 @@ impl FieldWrite {
             | Self::PlacedZeroWidthRetreat { .. }
             | Self::ReplacePlacedTail { .. }
             | Self::RetainDeviceTail(_)
-            | Self::ProveAppendSlots { .. }
+            | Self::ProveRawSlots { .. }
             | Self::ReplaceLivePrefix { .. }
             | Self::OpaqueRawSlots { .. }
             | Self::Placed { .. } => EntryWrite::Rewind,

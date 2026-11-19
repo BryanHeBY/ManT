@@ -8,7 +8,8 @@ pub(super) struct PrefixEdits {
     first_incoming: Option<usize>,
     pub(super) word_start: Option<usize>,
     pub(super) entry_blanks: usize,
-    removed: Vec<(usize, RewoundGlyph)>,
+    moved: Vec<(usize, usize)>,
+    edits: Vec<(usize, RewoundGlyph, Option<usize>)>,
 }
 
 impl PrefixEdits {
@@ -27,11 +28,12 @@ impl PrefixEdits {
         else {
             return Self::default();
         };
-        let mut removed = Vec::new();
+        let mut edits = Vec::new();
+        let mut moved = Vec::new();
         for (offset, position) in positions.iter().enumerate() {
             let cell = start + offset;
-            if position.is_some()
-                || *unpublished == Some(cell)
+            let relocated = position.filter(|pos| pos >= first_incoming).map(|_| offset);
+            if position.is_some() && relocated.is_none()
                 || buffer.projection_length(cell, cell + 1) == 0
             {
                 continue;
@@ -40,6 +42,14 @@ impl PrefixEdits {
             let Some(owner) = following_owner.checked_sub(1) else {
                 continue;
             };
+            if let (Some(position), Some(_)) = (position, relocated) {
+                moved.push((*position, owner));
+            }
+            if *unpublished == Some(cell) {
+                // Its old owner is still held by the zero-advance register.
+                // The word projector releases it at the accepted slot.
+                continue;
+            }
             let end = earlier
                 .get(following_owner)
                 .map_or(start + positions.len(), |anchor| {
@@ -52,7 +62,7 @@ impl PrefixEdits {
                 FieldCell::Tab => '\t',
                 _ => continue,
             };
-            removed.push((
+            edits.push((
                 owner,
                 RewoundGlyph {
                     cell,
@@ -63,8 +73,10 @@ impl PrefixEdits {
                         })),
                     ),
                 },
+                relocated,
             ));
         }
+        moved.sort_unstable_by_key(|&(position, _)| position);
         let first_touched = earlier.partition_point(|owner| owner.content < *start);
         for owner in &mut earlier[first_touched..] {
             let remap = |index: usize| {
@@ -95,7 +107,33 @@ impl PrefixEdits {
                     .map_or(*start, |position| position + 1),
             ),
             entry_blanks: *entry_blanks,
-            removed,
+            moved,
+            edits,
+        }
+    }
+
+    pub(super) fn append_owner_intervals(&self, anchors: &mut Vec<NativeWordAnchor>) {
+        let Some(incoming) = anchors.last().cloned() else {
+            return;
+        };
+        for &(position, owner_index) in &self.moved {
+            let old = anchors[owner_index].clone();
+            if anchors.last().is_some_and(|last| last.start == position) {
+                anchors.pop();
+            }
+            let mut resumed = incoming.clone();
+            resumed.start = position + 1;
+            resumed.content = position + 1;
+            resumed.projected_field_prefix = false;
+            resumed.projected_device_padding = 0;
+            anchors.push(NativeWordAnchor {
+                start: position,
+                content: position,
+                projected_field_prefix: false,
+                projected_device_padding: 0,
+                ..old
+            });
+            anchors.push(resumed);
         }
     }
 
@@ -106,12 +144,49 @@ impl PrefixEdits {
     pub(super) fn project(
         &self,
         nodes: &mut [Inline],
-        incoming: &mut [Inline],
+        incoming: &mut Vec<Inline>,
+        incoming_owner: &str,
         earlier: &[NativeWordAnchor],
     ) {
         // Suffix-relative offsets of later drops survive earlier removals.
-        for (owner, glyph) in &self.removed {
-            super::remove_rewound_glyph(nodes, incoming, &earlier[*owner].owner, glyph);
+        let mut relocated = std::collections::BTreeMap::new();
+        for (owner, glyph, slot) in &self.edits {
+            let owner = &earlier[*owner].owner;
+            let projection = super::super::super::source_blanks::take_rewound_glyph(
+                nodes,
+                incoming,
+                owner,
+                glyph,
+                slot.is_some(),
+            );
+            if let (Some(slot), Some(projection)) = (slot, projection) {
+                relocated.insert(*slot, (owner, projection));
+            }
+        }
+        if self.edits.iter().any(|(_, _, slot)| slot.is_some()) {
+            let payload = std::mem::take(incoming);
+            for node in payload {
+                let Inline::Anchor { id, .. } = &node else {
+                    incoming.push(node);
+                    continue;
+                };
+                let Some(slot) = id
+                    .as_str()
+                    .strip_prefix(crate::mandoc::inline::flow::RELOCATED_GLYPH)
+                else {
+                    incoming.push(node);
+                    continue;
+                };
+                if let Some((owner, glyph)) = slot
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|slot| relocated.remove(&slot))
+                {
+                    incoming.push(Inline::anchor(owner.as_str()));
+                    incoming.push(glyph);
+                    incoming.push(Inline::anchor(incoming_owner));
+                }
+            }
         }
     }
 }

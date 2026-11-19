@@ -421,6 +421,7 @@ impl<'a> LoweringContext<'a> {
             &execution.native_writes,
             &mut output,
             table_field_units,
+            execution.table_reading_breaks,
         );
         output
     }

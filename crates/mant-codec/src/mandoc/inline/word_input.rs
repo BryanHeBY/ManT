@@ -173,7 +173,7 @@ impl super::InlineExecutionState {
             RoffInlineEvent::HorizontalMotion {
                 argument: Some(argument),
                 ..
-            } => argument.starts_with('|'),
+            } => argument.starts_with('|') || negative_entry_columns(Some(argument)).is_some(),
             RoffInlineEvent::Overstrike { .. }
             | RoffInlineEvent::Presentation {
                 kind: crate::mandoc::roff_escape::PresentationKind::HorizontalLine,

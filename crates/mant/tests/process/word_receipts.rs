@@ -328,11 +328,10 @@ fn negative_word_entry_preserves_each_surviving_cell_and_owner() {
 }
 
 #[test]
-fn unmodeled_word_entry_cannot_authorize_a_native_rejection() {
-    // This exact pinned CVS input moves back far enough to replace the
-    // ordinary A, yielding ALPH / BETA / OMEGA. ManT's documented bounded
-    // rewind excludes ordinary authored glyphs; its conservative spelling
-    // preserves both words instead of pruning from mispositioned markers.
+fn a_proved_word_entry_rewinds_ordinary_glyphs_before_accepting_the_break() {
+    // term.c::term_word() rewinds the live field through ordinary A and
+    // writes the marker before term_fill(). Both fixed devices accept
+    // ALPH and BETA on separate rows before the following OMEGA.
     let source = r#".Dd November 10, 2026
 .Dt CHECK 1
 .Os
@@ -346,7 +345,7 @@ fn unmodeled_word_entry_cannot_authorize_a_native_rejection() {
 .br
 .No OMEGA
 "#;
-    assert_readbacks(source, "ALPHAX BETA\nOMEGA", None);
+    assert_readbacks(source, "ALPH\nBETA\nOMEGA", None);
 }
 
 #[test]

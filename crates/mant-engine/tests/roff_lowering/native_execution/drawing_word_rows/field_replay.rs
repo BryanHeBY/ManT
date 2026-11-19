@@ -183,6 +183,34 @@ impl<'ir> Visit<'ir> for OwnedLabels {
 }
 
 #[test]
+fn a_relocated_glyph_keeps_its_link_through_json_and_markdown() {
+    // Fixed CVS ASCII and UTF-8 agree on PT, PTM and TM. The overwrite
+    // only retires the link's label when it covers the buffered M itself.
+    let uri = "https://example.test/r";
+    for (distance, visible, label) in [(2, "PT", ""), (3, "PTM", "M"), (4, "TM", "M")] {
+        let source = format!(
+            "{MDOC}.No \"P\\X'tty: link {uri}'\\zM\\X'tty: link'\" No \"\\h'-{distance}n'T\"\n.Pp\nDONE.\n"
+        );
+        let content = crate::json_roundtrip::json_string_roundtrip(
+            &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+        );
+        let markdown = mant_codec::encode::render_markdown(&content);
+        let restored = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for projection in [&content, &restored] {
+            let text = mant_render::render_query_text(projection);
+            assert!(
+                text.lines().any(|row| row.trim() == visible),
+                "{source}\n{text}"
+            );
+            assert_eq!(word_hits(projection, visible), 1, "{source}");
+            let mut labels = OwnedLabels::default();
+            labels.visit_section(&projection.document.as_ref().unwrap().sections[1]);
+            assert_eq!(labels.0, [(uri.to_owned(), label.to_owned())], "{source}");
+        }
+    }
+}
+
+#[test]
 fn earlier_input_registers_participate_in_definition_head_acceptance() {
     // The earlier .No's NODE_LINE produces ASCII_TABREF. term_word then
     // writes the automatic blank. HORIZ, overstrike trim and BACKBEFORE

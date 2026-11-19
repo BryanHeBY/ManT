@@ -177,7 +177,7 @@ impl FieldBuffer {
 
     pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) {
         // A source row only inserts TABREF after native buffer writes.
-        if !self.cells.is_empty() {
+        if !self.cells.is_empty() && self.cursor_retreat == 0 {
             if let Some(tail) = &mut self.device_tail
                 && !tail.note_tab_reference()
             {
@@ -205,6 +205,7 @@ impl FieldBuffer {
         self.cells.clear();
         self.device_tail = None;
         self.raw_slot_fence = 0;
+        self.cursor_retreat = 0;
         self.raw_tail_font = None;
         self.raw_copy_aliases.clear();
         self.projection_prefix.clear();
@@ -258,6 +259,7 @@ impl FieldBuffer {
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
         self.word_first_content = None;
+        self.cursor_retreat = 0;
         self.device_tail = None;
         let mut first_graph = true;
         let mut leading_retreat = None;
@@ -319,7 +321,7 @@ impl FieldBuffer {
                 | FieldWrite::KeepPlacedRetreat { .. }
                 | FieldWrite::ReplacePlacedTail { .. }
                 | FieldWrite::RetainDeviceTail(_)
-                | FieldWrite::ProveAppendSlots { .. }
+                | FieldWrite::ProveRawSlots { .. }
                 | FieldWrite::OpaqueRawSlots { .. }
                 | FieldWrite::ReplaceLivePrefix { .. }
                 | FieldWrite::PlacedZeroWidthRetreat { .. } => self.apply_slot_placement(write),

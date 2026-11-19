@@ -17,7 +17,7 @@ pub(super) struct PlacedWord<'a> {
     writes: Vec<FieldWrite>,
     pending: Option<usize>,
     armed: bool,
-    prior: Option<bool>,
+    prior: Option<(usize, bool)>,
 }
 
 impl<'a> PlacedWord<'a> {
@@ -43,11 +43,12 @@ impl<'a> PlacedWord<'a> {
         let backbefore = slots.backbefore();
         let pending_owner = slots.pending_owner();
         let pending = pending_owner.filter(|&owner| owner >= earlier);
-        let append_extent = slots.append_extent();
+        let (extent, cursor_retreat) = slots.extent_and_retreat();
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
+        let settled = super::overprint::settle(&mut slots);
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
-        let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix);
+        let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
         preserve_author_separators(&slots, &mut reading);
         let mut writes = Vec::new();
         if earlier != 0 {
@@ -57,46 +58,44 @@ impl<'a> PlacedWord<'a> {
                 prefix_start,
                 earlier,
                 unpublished,
-            )?);
+            ));
         } else if replace_tail > 0 {
-            let entry_blanks = replayed_entry.then(|| {
-                slots
-                    .iter()
-                    .filter(|slot| {
-                        slot.owner
-                            .is_some_and(|id| matches!(reading[id].glyph, ReadingGlyph::EntryBlank))
-                    })
-                    .count()
-            });
-            writes.push(FieldWrite::ReplacePlacedTail {
-                cells: replace_tail,
-                entry_blanks,
-                first_incoming: replayed_entry.then(|| {
-                    slots
-                        .iter()
-                        .position(|slot| {
-                            slot.owner.is_some_and(|id| {
-                                !matches!(reading[id].glyph, ReadingGlyph::EntryBlank)
-                            })
-                        })
-                        .unwrap_or(slots.len())
-                }),
-            });
+            writes.push(replay_device_tail(
+                &slots,
+                &reading,
+                replace_tail,
+                replayed_entry,
+            ));
         }
         let inherited_pending = pending_owner
             .filter(|owner| Some(*owner) == unpublished)
             .and_then(|owner| slots.iter().rposition(|slot| slot.owner == Some(owner)));
         let prior = unpublished
             .filter(|_| inherited_pending.is_none())
-            .map(|id| slots.iter().any(|slot| slot.owner == Some(id)));
+            .map(|id| (id, slots.iter().any(|slot| slot.owner == Some(id))));
+        if let Some(position) = inherited_pending
+            && slots[..position].iter().any(|slot| {
+                slot.owner.is_some_and(|owner| {
+                    owner >= earlier && !matches!(reading[owner].glyph, ReadingGlyph::EntryBlank)
+                })
+            })
+        {
+            // An inherited glyph still under BACKBEFORE cannot be
+            // published at a new position before its replacement is known.
+            return Err(PriorSlotEdit::Unresolved);
+        }
         writes.extend(slots.iter().map(|slot| slot_write(slot, &reading)));
         let end = slots.len();
-        if retain_suffix && append_extent == Some(end) {
-            writes.push(FieldWrite::ProveAppendSlots {
-                count: end,
+        if retain_suffix {
+            record_slot_proof(
+                &mut writes,
+                &settled,
+                extent == end,
+                end,
+                cursor_retreat,
                 backbefore,
                 duplicates,
-            });
+            );
         }
         writes.extend(zero_width_retreats.into_iter().map(|(target, mark)| {
             FieldWrite::PlacedZeroWidthRetreat {
@@ -131,10 +130,10 @@ impl<'a> PlacedWord<'a> {
         context: &mut TextExecutionContext<'_>,
         word: &mut WordExecution,
     ) {
-        if let Some(survives) = self.prior {
-            word.output
-                .extend(context.zero_advance.project_prior_slot(survives));
-        }
+        let prior = self.prior.and_then(|(id, survives)| {
+            let output = context.zero_advance.project_prior_slot(survives);
+            survives.then_some((id, output))
+        });
         let links: Vec<_> = self
             .links
             .iter()
@@ -151,14 +150,23 @@ impl<'a> PlacedWord<'a> {
         word.table_device_buffer_written = !self.slots.is_empty();
         if context.policy.field_authoritative {
             self.buffer_tail_glyph(context, &links);
-            append_range(word, &self.slots, &self.reading, &links, context);
+            append_range(word, &self.slots, &self.reading, &links, context, prior);
         } else {
             let passes = isolated_passes(&self.writes, context.table_field_units);
+            word.table_reading_breaks =
+                Some(passes.ranges.iter().filter(|(_, hard)| *hard).count());
             for covered in passes.covered {
                 self.slots[covered].owner = None;
             }
             for (range, closes) in passes.ranges {
-                append_range(word, &self.slots[range], &self.reading, &links, context);
+                append_range(
+                    word,
+                    &self.slots[range],
+                    &self.reading,
+                    &links,
+                    context,
+                    None,
+                );
                 if closes {
                     word.flush_segment();
                     word.output.push(mant_ir::Inline::line_break());
@@ -203,23 +211,81 @@ impl<'a> PlacedWord<'a> {
     }
 }
 
+fn record_slot_proof(
+    writes: &mut Vec<FieldWrite>,
+    settled: &[std::ops::Range<usize>],
+    complete: bool,
+    count: usize,
+    cursor_retreat: usize,
+    backbefore: bool,
+    duplicates: Vec<(usize, usize)>,
+) {
+    if !settled.is_empty() {
+        // The visible column order cannot prove one owner per raw byte.
+        writes.push(FieldWrite::OpaqueRawSlots {
+            styled_suffix: None,
+            keeps_prior_slots: false,
+        });
+    } else if complete {
+        writes.push(FieldWrite::ProveRawSlots {
+            count,
+            cursor_retreat,
+            backbefore,
+            duplicates,
+        });
+    }
+}
+
 fn keep_one_copy_per_owner(slots: &mut [FillSlot], owners: usize) -> Vec<(usize, usize)> {
-    let mut latest = vec![None; owners];
+    let mut first = vec![None::<usize>; owners];
     let mut duplicates = Vec::new();
-    for (index, slot) in slots.iter_mut().enumerate().rev() {
-        let Some(owner) = slot.owner else { continue };
-        if let Some(last) = latest[owner] {
-            // Both encoded copies retain an author while the field is being
-            // edited. Publish its scalar once and retain the earlier byte's
-            // ownership for any later word that overlaps this suffix.
-            slot.owner = None;
-            duplicates.push((index, last));
+    for index in 0..slots.len() {
+        let Some(owner) = slots[index].owner else {
+            continue;
+        };
+        if let Some(previous) = first[owner] {
+            // Both copies of bold ink have one author. If they still share
+            // a device column, the final copy owns the reading glyph. If a
+            // new write replaced their backspace, retain the original
+            // reading position and keep the second copy as a raw alias.
+            if index == previous + 2 && slots[previous + 1].cell == FieldCell::Backline {
+                slots[previous].owner = None;
+                first[owner] = Some(index);
+                duplicates.push((previous, index));
+            } else {
+                slots[index].owner = None;
+                duplicates.push((index, previous));
+            }
         } else {
-            latest[owner] = Some(index);
+            first[owner] = Some(index);
         }
     }
-    duplicates.reverse();
+    duplicates.sort_unstable_by_key(|&(copy, _)| copy);
     duplicates
+}
+
+fn replay_device_tail(
+    slots: &[FillSlot],
+    reading: &[ReadingCell<'_>],
+    cells: usize,
+    replayed_entry: bool,
+) -> FieldWrite {
+    let is_entry = |id: usize| matches!(reading[id].glyph, ReadingGlyph::EntryBlank);
+    FieldWrite::ReplacePlacedTail {
+        cells,
+        entry_blanks: replayed_entry.then(|| {
+            slots
+                .iter()
+                .filter(|slot| slot.owner.is_some_and(is_entry))
+                .count()
+        }),
+        first_incoming: replayed_entry.then(|| {
+            slots
+                .iter()
+                .position(|slot| slot.owner.is_some_and(|id| !is_entry(id)))
+                .unwrap_or(slots.len())
+        }),
+    }
 }
 
 fn replay_prefix(
@@ -228,18 +294,13 @@ fn replay_prefix(
     start: usize,
     earlier: usize,
     unpublished: Option<usize>,
-) -> Result<FieldWrite, PriorSlotEdit> {
+) -> FieldWrite {
     let mut positions = vec![None; earlier];
     let mut first_incoming = slots.len();
     let mut entry_blanks = 0;
     for (position, slot) in slots.iter().enumerate() {
         let Some(owner) = slot.owner else { continue };
         if owner < earlier {
-            if first_incoming < position && reading[owner].glyph.scalars() > 0 {
-                // IR carries a single earlier owner followed by this word.
-                // Do not silently reorder interleaved author projections.
-                return Err(PriorSlotEdit::Unresolved);
-            }
             positions[owner] = Some(start + position);
         } else if matches!(reading[owner].glyph, ReadingGlyph::EntryBlank) {
             if position < first_incoming {
@@ -249,16 +310,20 @@ fn replay_prefix(
             first_incoming = first_incoming.min(position);
         }
     }
-    Ok(FieldWrite::ReplaceLivePrefix {
+    FieldWrite::ReplaceLivePrefix {
         start,
         positions,
         first_incoming: start + first_incoming,
         entry_blanks,
         unpublished: unpublished.map(|index| start + index),
-    })
+    }
 }
 
-fn resolve_backlines(slots: &mut [FillSlot], editable: bool) -> Vec<(usize, usize)> {
+fn resolve_backlines(
+    slots: &mut [FillSlot],
+    editable: bool,
+    settled: &[std::ops::Range<usize>],
+) -> Vec<(usize, usize)> {
     // term_field() skips controls, including NBRZW written by tty
     // annotation and ASCII_BREAK. A backspace still reaches the last
     // emitted graph. A break opportunity or zero-width mark defers
@@ -266,7 +331,23 @@ fn resolve_backlines(slots: &mut [FillSlot], editable: bool) -> Vec<(usize, usiz
     let mut covers = Vec::new();
     let mut previous: Option<usize> = None;
     let mut retreat = None;
+    let mut spans = settled.iter().peekable();
     for index in 0..slots.len() {
+        if let Some(span) = spans.peek()
+            && span.contains(&index)
+        {
+            if index == span.start {
+                retreat = None;
+                previous = None;
+            }
+            if slots[index].owner.is_some() {
+                previous = Some(index);
+            }
+            if index + 1 == span.end {
+                spans.next();
+            }
+            continue;
+        }
         match slots[index].cell {
             FieldCell::BreakMarker
             | FieldCell::Breakpoint
@@ -378,16 +459,30 @@ fn append_range(
     reading: &[ReadingCell<'_>],
     links: &[String],
     context: &mut TextExecutionContext<'_>,
+    mut prior: Option<(usize, Vec<mant_ir::Inline>)>,
 ) {
     let mut wrote_source = false;
     let mut previous_source = None;
     for slot in slots {
         let Some(id) = slot.owner else { continue };
+        if prior.as_ref().is_some_and(|(owner, _)| *owner == id) {
+            word.flush_segment();
+            word.output
+                .extend(prior.take().expect("matched pending glyph").1);
+            continue;
+        }
         let current = reading[id];
-        if matches!(
-            current.glyph,
-            ReadingGlyph::Earlier(_) | ReadingGlyph::EntryBlank
-        ) {
+        if let ReadingGlyph::Earlier(scalars) = current.glyph {
+            if wrote_source && scalars != 0 {
+                word.flush_segment();
+                word.output.push(mant_ir::Inline::anchor(format!(
+                    "{}{id}",
+                    crate::mandoc::inline::flow::RELOCATED_GLYPH
+                )));
+            }
+            continue;
+        }
+        if matches!(current.glyph, ReadingGlyph::EntryBlank) {
             continue;
         }
         let link = current.link.map(|link| links[link].as_str());

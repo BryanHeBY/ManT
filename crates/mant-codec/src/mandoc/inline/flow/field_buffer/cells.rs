@@ -112,10 +112,11 @@ pub(in crate::mandoc) enum FieldWrite {
         first_incoming: Option<usize>,
     },
     RetainDeviceTail(Box<crate::mandoc::inline::flow::native_slots::DeviceTail>),
-    /// The current raw cursor is at lastcol and this suffix is one cell
-    /// per encoded slot, including any surviving backspace and decoration.
-    ProveAppendSlots {
+    /// One field cell per raw slot, with the independent col/lastcol
+    /// distance retained for the next `term_word()`.
+    ProveRawSlots {
         count: usize,
+        cursor_retreat: usize,
         backbefore: bool,
         duplicates: Vec<(usize, usize)>,
     },
@@ -129,7 +130,7 @@ pub(in crate::mandoc) enum FieldWrite {
     },
     /// These compact writes do not prove individual native byte slots.
     OpaqueRawSlots {
-        last_font: Option<crate::mandoc::roff_escape::RoffFont>,
+        styled_suffix: Option<(usize, crate::mandoc::roff_escape::RoffFont)>,
         keeps_prior_slots: bool,
     },
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.

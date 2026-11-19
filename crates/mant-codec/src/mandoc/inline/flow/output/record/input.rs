@@ -83,11 +83,11 @@ impl ExecutedWordEntry {
     pub(super) fn project_rewind(
         &self,
         nodes: &mut [Inline],
-        incoming: &mut [Inline],
+        incoming: &mut Vec<Inline>,
         owner: &str,
         earlier: &[super::super::super::NativeWordAnchor],
     ) {
-        self.prefix.project(nodes, incoming, earlier);
+        self.prefix.project(nodes, incoming, owner, earlier);
         let EntryRewind::Executed {
             ref traversed_source_blanks,
             ref overwritten_glyph,
@@ -131,6 +131,10 @@ impl ExecutedWordEntry {
 
     pub(super) fn rewound(&self) -> bool {
         matches!(self.rewind, EntryRewind::Executed { .. })
+    }
+
+    pub(super) fn append_owner_intervals(&self, anchors: &mut Vec<NativeWordAnchor>) {
+        self.prefix.append_owner_intervals(anchors);
     }
 
     pub(super) fn word_start(&self, original: usize) -> usize {

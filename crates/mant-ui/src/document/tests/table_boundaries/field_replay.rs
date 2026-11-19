@@ -77,6 +77,13 @@ fn accepted_mdoc_writes_keep_the_same_body_in_paint_copy_and_search() {
         (r#".Sy A No "\&" No "\z\o''T""#, "A T", "AT"),
         (r#".No "P\zQ" No "\&" Ns No "\z\o''T""#, "PQT", "PQ T"),
         (r#".No PM Ns No "\h'-1n'T""#, "PT", "PMT"),
+        (r#".No PM No "\h'-2n'T""#, "PT", "PMT"),
+        (r#".No PM No "\h'-3n'T""#, "TM", "PMT"),
+        (r#".No "P\zM" No "\h'-4n'\zT""#, "TM", "PMT"),
+        (r#".No "P\zM" Ns No "\h'-3n'T""#, "TM", "PMT"),
+        (r#".No "P\fBM\h'-2n'\o' T'""#, "TM", "PMT"),
+        (r#".Sy PM Ns No "\h'-4n'T""#, "TM", "PMT"),
+        (r#".Em PM Ns No "\h'-4n'T""#, "TM", "PMT"),
         (r#".Bq Cm v No "\o''""#, "[]", "[v]"),
         (r".No PRE\z\o'AB'\p T", "PREBT", "PREB T"),
     ] {
@@ -113,6 +120,40 @@ fn accepted_mdoc_writes_keep_the_same_body_in_paint_copy_and_search() {
                         .filter(|hit| hit.row > heading)
                         .count(),
                     count,
+                    "{source} at {width}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_pending_link_label_moves_with_its_accepted_native_slot() {
+    // term.c::bufferc()/encode1(): the second operand can replace M or
+    // move T to its left without transferring M's link to either neighbor.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
+    let target = LinkTarget::External(ExternalUri::parse("https://example.test/r").unwrap());
+    for (distance, visible) in [(2, "PT"), (3, "PTM"), (4, "TM")] {
+        let source = format!(
+            "{header}.No \"P\\X'tty: link https://example.test/r'\\zM\\X'tty: link'\" No \"\\h'-{distance}n'T\"\n.Pp\nDONE.\n"
+        );
+        let view = DocumentView::new(&restored(&source));
+        for width in [24_u16, 78] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let row = (0..rendered.row_count)
+                .find(|&row| painted(&buffer, row, 0, width.into()).trim() == visible)
+                .unwrap_or_else(|| panic!("{source} at {width}"));
+            let hit = rendered
+                .search(visible)
+                .into_iter()
+                .find(|hit| hit.row == row)
+                .unwrap();
+            assert_eq!(hit.end_column - hit.start_column, visible.len());
+            for (offset, character) in visible.bytes().enumerate() {
+                assert_eq!(
+                    rendered.link_target_at(row, hit.start_column + offset),
+                    (character == b'M').then_some(&target),
                     "{source} at {width}"
                 );
             }

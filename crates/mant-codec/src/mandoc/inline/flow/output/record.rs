@@ -113,7 +113,7 @@ impl WordPassProjection {
 impl InlineBuilder {
     pub(super) fn record_hang_word(
         &mut self,
-        incoming: &mut [Inline],
+        incoming: &mut Vec<Inline>,
         boundary: PendingBoundary,
         projection: WordProjectionPolicy,
     ) -> WordPassProjection {
@@ -206,6 +206,7 @@ impl InlineBuilder {
                 projected_field_prefix: false,
                 projection,
             });
+        entry.append_owner_intervals(&mut definition.field_word_anchors);
         observe_definition_word(definition, incoming, separator);
         let mut projection =
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
@@ -231,7 +232,7 @@ impl InlineBuilder {
     /// It has no hang-row geometry; only the marker pass loop can act.
     fn record_plain_unit_word(
         &mut self,
-        incoming: &mut [Inline],
+        incoming: &mut Vec<Inline>,
         input: RecordedWordInput,
     ) -> WordPassProjection {
         let RecordedWordInput {
@@ -297,6 +298,7 @@ impl InlineBuilder {
                 projected_field_prefix: false,
                 projection,
             });
+        entry.append_owner_intervals(&mut self.execution.plain_input.anchors);
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
         // at authored markers and never at a device-width guess.

@@ -7,6 +7,7 @@ use crate::mandoc::inline::flow::{
 };
 use crate::mandoc::roff_escape::{PresentationKind, RoffFont};
 
+mod overprint;
 mod projection;
 
 use projection::PlacedWord;
@@ -107,10 +108,11 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
             || has_zero_advance && isolated_needs_accepted_retreat)
         || marker && (edits || context.table_leading_blanks != 0)
         || context.policy.field_authoritative
-            && (draws
+            && (has_live_raw_cursor(context)
+                || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
-                || relative_retreat && can_replay_relative_operand(context)
+                || relative_retreat && has_proved_overstrike_entry(context)
                 || armed_overstrike
                 || replay_empty_overstrike
                 || tight_word_can_carry_glyph(events, context)
@@ -119,6 +121,14 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                     .device_tail
                     .as_ref()
                     .is_some_and(|tail| edits || tail.has_retreated() && !events.is_empty()))
+}
+
+fn has_live_raw_cursor(context: &TextExecutionContext<'_>) -> bool {
+    context
+        .slot_entry
+        .prefix
+        .as_ref()
+        .is_some_and(|prefix| prefix.cursor_retreat > 0)
 }
 
 fn has_proved_overstrike_entry(context: &TextExecutionContext<'_>) -> bool {
@@ -135,18 +145,6 @@ fn has_unproved_armed_entry(context: &TextExecutionContext<'_>) -> bool {
     context.slot_entry.prior_input
         && context.zero_advance.is_armed()
         && context.slot_entry.prefix.is_none()
-}
-
-fn can_replay_relative_operand(context: &TextExecutionContext<'_>) -> bool {
-    // A local operand proves every touched slot. Across term_word calls,
-    // separately buffered entry blanks and inherited BACKBEFORE retain
-    // the prior entry executor until the later word proves their layout.
-    !context.slot_entry.prior_input
-        || context
-            .slot_entry
-            .prefix
-            .as_ref()
-            .is_some_and(|prefix| prefix.automatic == 0 && !prefix.backbefore && !prefix.backafter)
 }
 
 fn can_place_pending(context: &TextExecutionContext<'_>) -> bool {
@@ -398,6 +396,17 @@ impl<'a> Placement<'a> {
                     && self.slots.cursor_before_end()
                 {
                     self.marker_boundary = MarkerBoundary::AuthoredBlank;
+                }
+                if self.slots.claim_entry_blank(
+                    owner,
+                    |prior| matches!(self.reading[prior].glyph, ReadingGlyph::EntryBlank),
+                    |prior| {
+                        matches!(self.reading[prior].glyph,
+                        ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
+                            || matches!(self.reading[prior].glyph, ReadingGlyph::Spelling(_))
+                    },
+                ) {
+                    continue;
                 }
             } else {
                 self.reading[owner].authored_separator =

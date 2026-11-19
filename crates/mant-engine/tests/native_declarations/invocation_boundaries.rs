@@ -1,7 +1,7 @@
 //! Separate native macro operands can still belong to the same invocation.
 use super::{
     definitions,
-    support::{check_head, explain, explanation_ranges, load},
+    support::{check_head, explain, explanation_ranges, json_roundtrip, load},
 };
 use mant_ir::{DefinitionItem, EntryKind, EntryOwner, ParameterKind, ResolvedContent};
 use mant_protocol::{
@@ -13,6 +13,36 @@ const OWNER_LINE: u32 = 9;
 const OPTION: EntryKind = EntryKind::Parameter {
     parameter_kind: ParameterKind::Option,
 };
+
+#[test]
+fn generated_function_punctuation_only_indexes_the_surviving_name() {
+    // In mdoc_term.c::termp_fn_pre() the generated "(" is a term_word().
+    // On both fixed devices it covers M after a one-slot retreat and
+    // leaves one reading copy of M after the two-slot retreat.
+    for (distance, form, direct) in [(1, "(arg)", 0), (2, "M(arg)", 1)] {
+        let input = format!(
+            "{HEADER}.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Fn \"M\\h'-{distance}n'\" arg\nOwned description.\n.El\n"
+        );
+        let content = json_roundtrip::json_string_roundtrip(&load(&input));
+        let text = mant_render::render_query_text(&content);
+        let has_label_and_body = |line: &str| {
+            line.trim()
+                .trim_start_matches("• ")
+                .strip_prefix(form)
+                .is_some_and(|body| body.trim() == "Owned description.")
+        };
+        assert!(text.lines().any(has_label_and_body), "{input}\n{text}");
+        assert_eq!(
+            explain(&content, "M").counts.direct_entry.total,
+            direct,
+            "{input}"
+        );
+        let markdown = mant_codec::encode::render_markdown(&content);
+        let restored = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        let text = mant_render::render_query_text(&restored);
+        assert!(text.lines().any(has_label_and_body), "{markdown}\n{text}");
+    }
+}
 
 fn page(section: &str, head: &str, body: &str) -> ResolvedContent {
     load(&format!(

@@ -16,6 +16,7 @@ impl WordExecution {
             native_writes: Vec::new(),
             drawing_probe: None,
             table_device_buffer_written: false,
+            table_reading_breaks: None,
         }
     }
 

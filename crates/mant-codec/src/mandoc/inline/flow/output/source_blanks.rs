@@ -13,81 +13,130 @@ pub(super) fn remove_rewound_glyph(
     owner: &str,
     receipt: &super::super::field_buffer::RewoundGlyph,
 ) {
-    struct ReverseOwnerCursor<'a, 'b> {
-        owner: &'a str,
-        remaining: usize,
-        group: usize,
-        candidate: Option<(&'b mut String, usize)>,
+    take_rewound_glyph(nodes, incoming, owner, receipt, false);
+}
+
+struct ReverseOwnerCursor<'a, 'b> {
+    owner: &'a str,
+    remaining: usize,
+    group: usize,
+    candidate: Option<(&'b mut String, usize)>,
+    retain_style: bool,
+    projection: Option<Inline>,
+    generation: usize,
+}
+
+impl<'b> ReverseOwnerCursor<'_, 'b> {
+    fn reset_group(&mut self) {
+        self.group = 0;
+        self.candidate = None;
+        self.projection = None;
     }
 
-    impl<'b> ReverseOwnerCursor<'_, 'b> {
-        fn reset_group(&mut self) {
-            self.group = 0;
-            self.candidate = None;
+    fn wrapped(&mut self, children: &'b mut [Inline], wrap: impl FnOnce(Inline) -> Inline) -> bool {
+        let generation = self.generation;
+        let matched = self.visit(children);
+        if generation != self.generation {
+            self.projection = self.projection.take().map(wrap);
         }
+        matched
+    }
 
-        fn visit(&mut self, nodes: &'b mut [Inline]) -> bool {
-            for node in nodes.iter_mut().rev() {
-                if let Some(marker) = native_word_marker(node) {
-                    if marker == self.owner {
-                        if self.remaining < self.group {
-                            return true;
-                        }
-                        self.remaining -= self.group;
+    fn visit(&mut self, nodes: &'b mut [Inline]) -> bool {
+        for node in nodes.iter_mut().rev() {
+            if let Some(marker) = native_word_marker(node) {
+                if marker == self.owner {
+                    if self.remaining < self.group {
+                        return true;
                     }
-                    self.reset_group();
-                    continue;
+                    self.remaining -= self.group;
                 }
-                match node {
-                    Inline::Strong { children }
-                    | Inline::Emphasis { children }
-                    | Inline::Link { children, .. } => {
-                        if self.visit(children) {
-                            return true;
-                        }
-                    }
-                    Inline::Text { value } | Inline::Code { value } => {
-                        let scalars = value.chars().count();
-                        if let Some(relative) = self.remaining.checked_sub(self.group)
-                            && let Some((byte, _)) = value.char_indices().rev().nth(relative)
-                        {
-                            self.candidate = Some((value, byte));
-                        }
-                        self.group += scalars;
-                    }
-                    Inline::Equation { value, .. } => {
-                        // eqn_term.c's words are still private annotation
-                        // children here. Publication after acceptance
-                        // installs the structured expression and its cache;
-                        // never edit a published cache independently.
-                        self.group += value.chars().count();
-                    }
-                    Inline::Anchor { id, .. }
-                        if id.as_str().starts_with(super::INTERNAL_FIELD_PREFIX) =>
-                    {
-                        // Generated device minbl is not a word's scalar.
-                        self.reset_group();
-                    }
-                    _ => {}
-                }
+                self.reset_group();
+                continue;
             }
-            false
+            let is_code = matches!(node, Inline::Code { .. });
+            match node {
+                Inline::Strong { children } => {
+                    if self.wrapped(children, |glyph| Inline::Strong {
+                        children: vec![glyph],
+                    }) {
+                        return true;
+                    }
+                }
+                Inline::Emphasis { children } => {
+                    if self.wrapped(children, |glyph| Inline::Emphasis {
+                        children: vec![glyph],
+                    }) {
+                        return true;
+                    }
+                }
+                Inline::Link {
+                    target,
+                    title,
+                    children,
+                } => {
+                    if self.wrapped(children, |glyph| Inline::Link {
+                        target: target.clone(),
+                        title: title.clone(),
+                        children: vec![glyph],
+                    }) {
+                        return true;
+                    }
+                }
+                Inline::Text { value } | Inline::Code { value } => {
+                    let scalars = value.chars().count();
+                    if let Some(relative) = self.remaining.checked_sub(self.group)
+                        && let Some((byte, scalar)) = value.char_indices().rev().nth(relative)
+                    {
+                        self.generation += 1;
+                        self.projection = self.retain_style.then(|| {
+                            let value = scalar.to_string();
+                            if is_code {
+                                Inline::Code { value }
+                            } else {
+                                Inline::Text { value }
+                            }
+                        });
+                        self.candidate = Some((value, byte));
+                    }
+                    self.group += scalars;
+                }
+                Inline::Equation { value, .. } => {
+                    // Never change the cache of an already published equation.
+                    self.group += value.chars().count();
+                }
+                Inline::Anchor { id, .. }
+                    if id.as_str().starts_with(super::INTERNAL_FIELD_PREFIX) =>
+                {
+                    self.reset_group();
+                }
+                _ => {}
+            }
         }
+        false
     }
+}
 
+pub(super) fn take_rewound_glyph(
+    nodes: &mut [Inline],
+    incoming: &mut [Inline],
+    owner: &str,
+    receipt: &super::super::field_buffer::RewoundGlyph,
+    retain_style: bool,
+) -> Option<Inline> {
     // A delayed glyph may re-enter the prior word after its earlier output
-    // marker. Count the recorded native owner's scalar suffix backwards
-    // across both fragments; wrapper and visual node boundaries add no cells.
+    // marker. Count the owner's scalar suffix backwards through all wrappers.
     let mut cursor = ReverseOwnerCursor {
         owner,
         remaining: receipt.following_scalars,
         group: 0,
         candidate: None,
+        retain_style,
+        projection: None,
+        generation: 0,
     };
     let found = cursor.visit(incoming) || {
-        // A leading unqualified payload in the incoming word belongs to
-        // that word; its real marker is added by append_word_boundary().
-        // It cannot be assigned to the trailing marker in the old output.
+        // The incoming leading unqualified payload belongs to the new word.
         cursor.reset_group();
         cursor.visit(nodes)
     };
@@ -96,7 +145,9 @@ pub(super) fn remove_rewound_glyph(
         && value[byte..].starts_with(receipt.scalar)
     {
         value.remove(byte);
+        return cursor.projection;
     }
+    None
 }
 
 /// A raw SP can cross an old cell without writing (term.c:948–952).
