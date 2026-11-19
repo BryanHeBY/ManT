@@ -86,6 +86,11 @@ pub(super) fn select_kind(
     {
         return (EntryKind::Term, NameCase::Sensitive);
     }
+    if hint == Some(NativeHeadRole::Literal) && context == DefinitionContext::Parameters {
+        // A native Cm/Ic invocation can document a command in OPTIONS.
+        // Its Fl operands belong to the invocation syntax.
+        return (EntryKind::Term, NameCase::Sensitive);
+    }
     inherited_kind(head, context)
 }
 

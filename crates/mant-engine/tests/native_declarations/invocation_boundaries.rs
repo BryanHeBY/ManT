@@ -132,6 +132,69 @@ fn mdoc_operand_pipe_is_not_a_definition_separator() {
 }
 
 #[test]
+fn a_standalone_flag_keeps_its_selectable_owner_below_a_macro_signature() {
+    // mdoc_macro.c::in_line reopens Fl inside the Ic signature.
+    // The separate It below the signature is the only flag declaration.
+    let content = page(
+        "OPTIONS",
+        r"Ic \&An Fl split | nosplit | Ar first_name ... last_name",
+        "Author name.\n.Bl -tag -width Ds\n.It Fl nosplit\nKeep author names together.\n.El",
+    );
+    let items = definitions(content.document.as_ref().unwrap());
+    assert_eq!(items.len(), 2);
+    check_head(
+        items[0],
+        "An -split | -nosplit | first_name ... last_name",
+        &["An"],
+    );
+    check_head(items[1], "-nosplit", &["-nosplit"]);
+    for (index, key, line, marker) in [
+        (0, "An", 9, "Author name."),
+        (1, "-nosplit", 12, "Keep author names together."),
+    ] {
+        let explanation = explain(&content, key);
+        assert_eq!(explanation.counts.direct_entry.total, 1);
+        assert!(explanation_ranges::assert_ranges(&explanation, key) > 0);
+        let hit = explanation
+            .evidence
+            .iter()
+            .find(|entry| entry.class == EvidenceClass::DirectEntry)
+            .unwrap();
+        assert_eq!(hit.source, items[index].source);
+        assert_eq!(hit.source.unwrap().line, line);
+        let excerpt =
+            mant_query::select_excerpt(&content, &[ContentSelector::path(hit.outline.path())])
+                .unwrap();
+        assert!(mant_render::render_excerpt_text(&excerpt).contains(marker));
+    }
+}
+
+#[test]
+fn independently_proved_aliases_can_share_one_bare_pipe() {
+    for (section, head, form, names) in [
+        ("OPTIONS", "Fl a | Fl b", "-a | -b", &["-a", "-b"][..]),
+        (
+            "OPTIONS",
+            "Fl a | Ic allexport",
+            "-a | allexport",
+            &["-a", "allexport"],
+        ),
+        (
+            "DESCRIPTION",
+            "Ar left | Ar right",
+            "left | right",
+            &["left", "right"],
+        ),
+    ] {
+        let content = page(section, head, "OWNERBODY.");
+        check_head(owner(&content), form, names);
+        for name in names {
+            direct(&content, name, "OWNERBODY.");
+        }
+    }
+}
+
+#[test]
 fn configuration_and_command_arguments_keep_their_leading_owner() {
     // mdoc_macro.c::in_line closes each displayed argument at its own
     // delimiter. In these real pf.conf(5) and zfs(8) forms the leading
