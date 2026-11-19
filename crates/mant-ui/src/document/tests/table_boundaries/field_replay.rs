@@ -68,6 +68,59 @@ fn assert_visible_slots(source: &str, probe: &str, want: usize, target: Option<&
 }
 
 #[test]
+fn accepted_mdoc_writes_keep_the_same_body_in_paint_copy_and_search() {
+    // Fixed terminal profiles agree on the body row after DESCRIPTION.
+    // term_word() applies the retreat and term_fill() consumes the gap
+    // before a word is available for rendering or search.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
+    for (word, expected, absent) in [
+        (r#".Sy A No "\&" No "\z\o''T""#, "A T", "AT"),
+        (r#".No "P\zQ" No "\&" Ns No "\z\o''T""#, "PQT", "PQ T"),
+        (r#".No PM Ns No "\h'-1n'T""#, "PT", "PMT"),
+        (r#".Bq Cm v No "\o''""#, "[]", "[v]"),
+        (r".No PRE\z\o'AB'\p T", "PREBT", "PREB T"),
+    ] {
+        let source = format!("{header}{word}\n.Pp\nDONE.\n");
+        let view = DocumentView::new(&restored(&source));
+        for width in [24_u16, 78] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let row_text = |row| painted(&buffer, row, 0, width.into());
+            let heading = (0..rendered.row_count)
+                .find(|&row| row_text(row).trim() == "DESCRIPTION")
+                .unwrap();
+            let first = (heading + 1..rendered.row_count)
+                .find(|&row| !row_text(row).trim().is_empty())
+                .unwrap();
+            assert_eq!(row_text(first).trim(), expected, "{source}");
+            let copy = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: first,
+                    column: 0,
+                },
+                focus: TextPosition {
+                    row: first,
+                    column: usize::from(width) - 1,
+                },
+            });
+            assert_eq!(copy.trim(), expected, "{source}");
+            // PT also occurs in DESCRIPTION. Count only hits in the body.
+            for (probe, count) in [(expected, 1), (absent, 0)] {
+                assert_eq!(
+                    rendered
+                        .search(probe)
+                        .iter()
+                        .filter(|hit| hit.row > heading)
+                        .count(),
+                    count,
+                    "{source} at {width}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn raw_overstrike_spelling_keeps_the_tbl_word_searchable_at_both_widths() {
     // Fixed CVS term_strlen() sees the raw & in the overstrike on both
     // devices. With a preceding \z, that slot measures but is covered.
