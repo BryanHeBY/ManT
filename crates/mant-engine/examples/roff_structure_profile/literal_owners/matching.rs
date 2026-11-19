@@ -113,6 +113,14 @@ fn claim_cells(
             }
             continue;
         }
+        if let Some(possible) = single_deleted_row(&plan.rows, physical) {
+            claim_after_row_deletion(plan, &possible, matched);
+            if possible.len() > 1 {
+                uncertain.extend(&possible);
+                report_row_candidates(&possible, 1, &expected.owners, violations);
+            }
+            continue;
+        }
         let rows = physical
             .iter()
             .copied()
@@ -171,6 +179,73 @@ fn claim_cells(
     uncertain
 }
 
+fn claim_after_row_deletion(
+    plan: &super::rows::CellPlan,
+    candidates: &BTreeSet<usize>,
+    matched: &mut [usize],
+) {
+    for id in plan.rows.iter().filter_map(|row| row.owner) {
+        matched[id] += 1;
+    }
+    if candidates.len() == 1
+        && let Some(&id) = candidates.first()
+    {
+        matched[id] -= 1;
+    }
+}
+
+/// Find every possible position of one missing physical row. Prefix and
+/// suffix both include retained blanks and ordinary rows, so equal labels
+/// separated by a proved boundary cannot borrow each other's evidence.
+fn single_deleted_row(
+    expected: &[super::rows::CellRow],
+    actual: &[(&str, bool)],
+) -> Option<BTreeSet<usize>> {
+    if expected.len() != actual.len() + 1 {
+        return None;
+    }
+    let matches = |(row, &(text, literal)): (&super::rows::CellRow, &(&str, bool))| {
+        row.text == text && (row.owner.is_none() || literal)
+    };
+    let prefix = expected
+        .iter()
+        .zip(actual)
+        .take_while(|&pair| matches(pair))
+        .count();
+    let suffix = expected
+        .iter()
+        .rev()
+        .zip(actual.iter().rev())
+        .take_while(|&pair| matches(pair))
+        .count();
+    let first = actual.len() - suffix;
+    (first <= prefix).then(|| {
+        expected[first..=prefix]
+            .iter()
+            .filter_map(|row| row.owner)
+            .collect()
+    })
+}
+
+fn report_row_candidates<'a>(
+    candidates: impl IntoIterator<Item = &'a usize>,
+    missing: usize,
+    owners: &[SourceDisplay],
+    violations: &mut Vec<String>,
+) {
+    let locations = candidates
+        .into_iter()
+        .map(|&id| {
+            let (line, column) = owners[id].opening;
+            format!("{line}:{column}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    violations.push(format!(
+        "literal-displays: {missing} missing row(s) among column display candidates {locations}"
+    ));
+}
+
 fn report_ambiguous_rows(
     plan: &super::rows::CellPlan,
     owners: &[SourceDisplay],
@@ -193,17 +268,7 @@ fn report_ambiguous_rows(
             continue;
         }
         uncertain.extend(candidates);
-        let locations = candidates
-            .iter()
-            .map(|&id| {
-                let (line, column) = owners[id].opening;
-                format!("{line}:{column}")
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        violations.push(format!(
-            "literal-displays: {missing} missing row(s) among column display candidates {locations}"
-        ));
+        report_row_candidates(candidates, missing, owners, violations);
     }
 }
 

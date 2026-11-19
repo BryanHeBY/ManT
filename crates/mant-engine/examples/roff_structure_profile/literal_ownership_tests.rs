@@ -440,14 +440,54 @@ fn missing_equal_column_rows_use_the_physical_slot_or_report_all_candidates() {
                         replace_column_payload_at(&mut document, 1, "SENTRY", "");
                         let errors = compare(&native, &topology, &document);
                         assert_eq!(errors.len(), 1, "{source}: {errors:?}");
-                        assert!(
-                            errors[0].contains(&format!(
+                        let expected = if gap.is_empty() {
+                            format!(
                                 "1 missing row(s) among column display candidates {}:2, {}:2",
                                 starts[0], starts[1]
-                            )),
-                            "{source}: {errors:?}"
-                        );
+                            )
+                        } else {
+                            format!("for {}:2 ", starts[0])
+                        };
+                        assert!(errors[0].contains(&expected), "{source}: {errors:?}");
                     }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn multiline_display_slots_constrain_equal_rows_across_native_spacing() {
+    // CVS print_bvspace(), called by termp_bd_pre(), adds one physical
+    // row at non-compact Bd entry. A separate .sp adds another row.
+    for compact in ["", " -compact"] {
+        for gap in ["", ".sp 1\n"] {
+            let prefix = format!("{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta B\n");
+            let first = format!(".Bd -unfilled{compact}\nFIRST\nSAME\n.Ed\n");
+            let second = format!(".Bd -literal{compact}\nSAME\nLAST\n.Ed\n");
+            let source = format!("{prefix}{first}{gap}{second}.El\n{TAIL}");
+            let first_opening = prefix.lines().count() + 1;
+            let second_opening = first_opening + first.lines().count() + gap.lines().count();
+            let (native, topology, intact) = parsed_structure(&source);
+            assert!(native.literal_display_reviews.is_empty(), "{source}");
+            assert!(compare(&native, &topology, &intact).is_empty(), "{source}");
+            let automatic = usize::from(compact.is_empty());
+            let first_same = 2 + automatic;
+            let second_same = first_same + 1 + automatic + gap.lines().count();
+            for (row, opening) in [(first_same, first_opening), (second_same, second_opening)] {
+                for replacement in ["WRONG", " ", ""] {
+                    let mut doc = intact.clone();
+                    replace_column_payload_at(&mut doc, row, "SAME", replacement);
+                    let errors = compare(&native, &topology, &doc);
+                    let expected = if replacement.is_empty() && second_same - first_same == 1 {
+                        format!(
+                            "1 missing row(s) among column display candidates {first_opening}:2, {second_opening}:2"
+                        )
+                    } else {
+                        format!("for {opening}:2 ")
+                    };
+                    assert_eq!(errors.len(), 1, "{source}: {errors:?}");
+                    assert!(errors[0].contains(&expected), "{source}: {errors:?}");
                 }
             }
         }

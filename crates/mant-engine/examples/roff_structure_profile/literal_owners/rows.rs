@@ -93,16 +93,20 @@ fn lexical_rows(nodes: &[Node], source: &SourceContext) -> Option<Vec<(u32, Stri
                     rows.push((field[0].id, text));
                 }
             }
-            if let Some(space) = next.filter(|node| node.macro_token.as_deref() == Some("sp")) {
-                // roff_term_pre_sp() closes the current input before
-                // positive term_vspace() requests. Record those slots
-                // between the neighboring literal and ordinary rows.
-                let argument = space.children.first().and_then(Node::decoder_text);
-                let count = mant_codec::roff_vertical_space_lines(argument);
+            if let Some(node) = next {
+                let count = match node.macro_token.as_deref() {
+                    Some("sp") => {
+                        let argument = node.children.first().and_then(Node::decoder_text);
+                        mant_codec::roff_vertical_space_lines(argument)
+                    }
+                    // mdoc_term.c::termp_pp_pre issues a single term_vspace.
+                    Some("Pp") => 1,
+                    _ => 0,
+                };
                 if !(0..=64).contains(&count) {
                     return None;
                 }
-                rows.extend((0..count).map(|_| (space.id, String::new())));
+                rows.extend((0..count).map(|_| (node.id, String::new())));
             }
             start = end + usize::from(closes);
         }
@@ -196,6 +200,15 @@ fn extend_cell_plan(
                     .into_iter()
                     .map(|(_, text)| CellRow { owner: None, text }),
             );
+            // termp_bd_pre calls print_bvspace on BLOCK entry. In a
+            // column It the enclosing item stops the section-first
+            // exception, so a non-compact Bd owns one preceding row.
+            if child.macro_token.as_deref() == Some("Bd") && !child.compact {
+                plan.rows.push(CellRow {
+                    owner: None,
+                    text: String::new(),
+                });
+            }
             let rows = display_row_slots(child, source)?;
             if rows.iter().all(|(_, text)| text.is_empty()) {
                 return None;
