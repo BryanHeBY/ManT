@@ -18,13 +18,7 @@ pub(super) fn absolute_motion(event: &RoffInlineEvent) -> bool {
 }
 
 pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext<'_>) -> bool {
-    if !context.policy.record_native_cells
-        // The inherited BACK pair may own an earlier operand or its entry
-        // blank. Leave that receipt with the live word executor.
-        || context.slot_entry.prior_input && context.zero_advance.is_armed()
-            && context.zero_advance.has_buffered_glyph()
-        || context.zero_advance.has_pending_glyph() && !can_place_pending(context)
-    {
+    if !can_place_word(context) {
         return false;
     }
     let mut marker = false;
@@ -34,6 +28,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     let mut overstrike_edit = false;
     let mut absolute_edit = false;
     let mut relative_retreat = false;
+    let mut relative_advance = false;
     let mut armed_overstrike = false;
     let mut armed_empty_overstrike = false;
     let mut has_zero_advance = false;
@@ -53,6 +48,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 {
                     absolute_edit |= absolute.is_some();
                     relative_retreat |= absolute.is_none() && units < 0;
+                    relative_advance |= absolute.is_none() && units > 0;
                 }
             }
             RoffInlineEvent::Overstrike {
@@ -105,6 +101,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
         && (relative_retreat
             || absolute_edit
             || has_overstrike
+            || marker && relative_advance
             || has_zero_advance && isolated_needs_accepted_retreat)
         || marker && (edits || context.table_leading_blanks != 0)
         || context.policy.field_authoritative
@@ -121,6 +118,21 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                     .device_tail
                     .as_ref()
                     .is_some_and(|tail| edits || tail.has_retreated() && !events.is_empty()))
+}
+
+fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
+    if !context.policy.record_native_cells {
+        return false;
+    }
+    // The inherited BACK pair may own an earlier operand or its entry
+    // blank. Leave that receipt with the live word executor.
+    if context.slot_entry.prior_input
+        && context.zero_advance.is_armed()
+        && context.zero_advance.has_buffered_glyph()
+    {
+        return false;
+    }
+    !context.zero_advance.has_pending_glyph() || can_place_pending(context)
 }
 
 fn has_live_raw_cursor(context: &TextExecutionContext<'_>) -> bool {

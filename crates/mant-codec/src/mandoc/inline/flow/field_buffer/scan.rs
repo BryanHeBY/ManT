@@ -15,6 +15,8 @@
 
 //! Incremental `term_fill()` scanning over the one live field buffer.
 
+use std::collections::BTreeMap;
+
 use super::{
     EN, FieldBuffer, FieldCell, FillBoundary, FillPass, FillRegisters, FillScanner, PassStop,
     advance_tab, cell_units, finish_pass, signed,
@@ -71,12 +73,26 @@ impl FieldBuffer {
     }
 
     pub(super) fn scan_fill_pass(&mut self, vtarget: usize, native: bool) -> Option<FillPass> {
-        let mut accepted = self.scan_fill_pass_at_cursor(vtarget, native)?;
+        self.scan_fill_pass_with_motion(vtarget, native, None)
+    }
+
+    pub(super) fn scan_fill_pass_with_motion(
+        &mut self,
+        vtarget: usize,
+        native: bool,
+        partial_motion: Option<&mut BTreeMap<usize, usize>>,
+    ) -> Option<FillPass> {
+        let mut accepted = self.scan_fill_pass_at_cursor(vtarget, native, partial_motion)?;
         accepted.start = self.resume;
         Some(accepted)
     }
 
-    fn scan_fill_pass_at_cursor(&mut self, vtarget: usize, native: bool) -> Option<FillPass> {
+    fn scan_fill_pass_at_cursor(
+        &mut self,
+        vtarget: usize,
+        native: bool,
+        mut partial_motion: Option<&mut BTreeMap<usize, usize>>,
+    ) -> Option<FillPass> {
         // term_fill() compares basic units with half an EN of tolerance.
         let vtarget = vtarget.saturating_add(EN / 2);
         self.prepare_fill_scan(vtarget);
@@ -94,7 +110,29 @@ impl FieldBuffer {
             let ic = registers.index;
             scan.scanned_end = scan.scanned_end.max(ic + 1);
             let cell = self.cells[ic].clone();
-            if native {
+            let mut normalize = native;
+            let result = if let FieldCell::FixedDrawingAdvance(count) = cell
+                && let Some(partial) = partial_motion.as_deref_mut()
+            {
+                let previous = partial.remove(&ic).unwrap_or_default();
+                let (stop, visited) =
+                    registers.consume_motion(count, previous, vtarget, &self.tabs);
+                if visited < count {
+                    normalize = false;
+                    partial.insert(ic, visited);
+                }
+                stop
+            } else {
+                let previous_units = if cell == FieldCell::Backline {
+                    ic.checked_sub(1)
+                        .and_then(|previous| self.cells.get(previous))
+                        .map_or(0, cell_units)
+                } else {
+                    0
+                };
+                registers.consume_cell(&cell, 1, previous_units, vtarget, &self.tabs)
+            };
+            if normalize {
                 Self::normalize_scanned_cell(
                     &mut self.cells[ic],
                     ic,
@@ -103,16 +141,7 @@ impl FieldBuffer {
                 );
                 self.normalized_until = self.normalized_until.max(ic + 1);
             }
-            let previous_units = if cell == FieldCell::Backline {
-                ic.checked_sub(1)
-                    .and_then(|previous| self.cells.get(previous))
-                    .map_or(0, cell_units)
-            } else {
-                0
-            };
-            if let Some(stop) =
-                registers.consume_cell(&cell, 1, previous_units, vtarget, &self.tabs)
-            {
+            if let Some(stop) = result {
                 scan.stopped = Some(stop);
                 return stop.accepted();
             }
@@ -194,6 +223,34 @@ pub(in crate::mandoc::inline::flow) fn compact_first_pass(
 }
 
 impl FillRegisters {
+    fn consume_motion(
+        &mut self,
+        count: usize,
+        previous: usize,
+        target: usize,
+        tabs: &super::TabStops,
+    ) -> (Option<PassStop>, usize) {
+        let index = self.index;
+        if previous != 0 {
+            if let Some(stop) =
+                self.consume_cell(&FieldCell::DrawnSpaces(previous), 1, 0, target, tabs)
+            {
+                return (Some(stop), previous);
+            }
+            self.index = index;
+        }
+        // term_fill() normalizes each reached NBRSP before testing the
+        // width guard. An early return leaves the rest of the run intact.
+        let remaining = count - previous;
+        let visited = if self.nbr > 0 {
+            remaining.min(target.saturating_sub(self.vis).saturating_div(EN) + 1)
+        } else {
+            remaining
+        };
+        let stop = self.consume_cell(&FieldCell::FixedDrawingAdvance(visited), 1, 0, target, tabs);
+        (stop, previous + visited)
+    }
+
     fn consume_cell(
         &mut self,
         cell: &FieldCell,

@@ -178,6 +178,79 @@ fn assert_cell_word_end(source: &str) {
 }
 
 #[test]
+fn table_motion_normalizes_only_the_slots_reached_before_the_native_width_stop() {
+    use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
+    // Fixed CVS term_fill() converts each visited ASCII_NBRSP before its
+    // width check. The unvisited suffix can therefore survive to a new
+    // pass; ordinary width folds add no hard rows of their own.
+    let header =
+        ".TH PAIR 1 \"November 19, 2026\"\n.SH NAME\npair \\- table probe\n.SH DESCRIPTION\n";
+    for (width, motion, accepted) in [
+        (8, r"\h'1n'\p", false),
+        (8, r"\h'2n'\p", true),
+        (8, r"\h'1n'\h'1n'\p", true),
+        (8, r"\h'3n'\p", true),
+        (8, r"\h'1n'\h'1n'\h'1n'\p", true),
+        (8, r"\p\h'1n'", true),
+        (12, r"\h'1n'\p", true),
+        (12, r"\p\h'2n'", true),
+        (20, r"\h'2n'\p", true),
+    ] {
+        for alignment in ['l', 'r', 'c'] {
+            for prefix in ["PT", r"PM\h'-1n'T"] {
+                let source = format!(
+                    "{header}.TS\n{alignment}w({width}n).\nT{{\n{prefix} ALPHA{motion} BRAVO CHARLIE DELTA\nT}}\nLAST\n.TE\n.SH AFTER\nEnd.\n"
+                );
+                let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+                let restored = super::json_roundtrip::json_string_roundtrip(&loaded);
+                let plain = mant_render::render_query_man(&restored);
+                let rows: Vec<_> = plain
+                    .split_once("\nDESCRIPTION\n")
+                    .unwrap()
+                    .1
+                    .split_once("\nAFTER")
+                    .unwrap()
+                    .0
+                    .lines()
+                    .map(str::trim)
+                    .collect();
+                let last = rows.iter().position(|row| *row == "LAST").unwrap();
+                if accepted {
+                    assert!(rows[last - 1].ends_with("DELTA"), "{source}\n{plain}");
+                }
+                let markdown = mant_codec::encode::render_markdown(&restored);
+                let decoded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+                for content in [&restored, &decoded] {
+                    for (word, count) in [
+                        ("PT", 1),
+                        ("ALPHA", 1),
+                        ("BRAVO", u32::from(accepted)),
+                        ("DELTA", u32::from(accepted)),
+                        ("LAST", 1),
+                    ] {
+                        let result = mant_query::search_query(
+                            content,
+                            &SearchQuery {
+                                pattern: word.into(),
+                                syntax: SearchSyntax::Literal,
+                                case: SearchCase::Sensitive,
+                                scope: SearchScope::Visible,
+                                word: true,
+                                context_lines: 0,
+                                limit: 10,
+                                offset: 0,
+                            },
+                        )
+                        .unwrap();
+                        assert_eq!(result.total, count, "{word}: {source}\n{markdown}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn a_width_choice_still_controls_whether_tbl_overstrikes_cover_a_glyph() {
     // Fixed ASCII and UTF-8 term_field() retain b when the break point
     // takes Y onto the next pass, and cover b when the two are on one pass.

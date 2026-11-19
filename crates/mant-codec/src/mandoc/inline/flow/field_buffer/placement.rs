@@ -1,6 +1,6 @@
 //! Hand device-resolved writes to the same fill scanner as ordinary words.
 
-use std::ops::Range;
+use std::{collections::BTreeMap, ops::Range};
 
 use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary};
 
@@ -289,7 +289,9 @@ pub(in crate::mandoc::inline) fn isolated_passes(
         .filter(|_| field.last_break_marker.is_some() || field.has_zero_width_retreats())
         .unwrap_or(usize::MAX / 4);
     let mut remainder = false;
-    while let Some(pass) = field.scan_fill_pass(target, true) {
+    let mut partial_motion = BTreeMap::new();
+    while let Some(pass) = field.scan_fill_pass_with_motion(target, true, Some(&mut partial_motion))
+    {
         remainder = field.has_non_ignorable_after(pass.end, false);
         passes.push(pass);
         if !remainder {
@@ -297,6 +299,13 @@ pub(in crate::mandoc::inline) fn isolated_passes(
         }
         field.advance_past(pass.end);
         field.consume_break_blanks();
+        if let Some(visited) = partial_motion.remove(&field.resume)
+            && let FieldCell::FixedDrawingAdvance(count) = &mut field.cells[field.resume]
+        {
+            // The automatic wrap skips the converted prefix only. A
+            // still-nonbreaking suffix keeps its original slot index.
+            *count -= visited;
+        }
     }
     let covered = field.covered_zero_width_retreats(&passes);
     let mut covered_iter = covered.iter().copied().peekable();
