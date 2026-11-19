@@ -27,7 +27,7 @@ struct DescriptionProbe {
 
 impl DescriptionProbe {
     fn visit(&mut self, node: &Node) -> Description {
-        if node.flags.no_print || node.kind == NodeKind::Comment {
+        if super::skips_source_children(node) {
             return Description::Absent;
         }
         if generated_body_glyph(node) {

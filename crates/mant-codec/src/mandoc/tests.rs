@@ -135,6 +135,7 @@ mod annotation_ownership;
 mod basic_inline;
 mod control_boundaries;
 mod declaration_groups;
+mod deprecated_controls;
 mod inline_execution;
 mod link_presentation;
 mod semantic_checkpoints;

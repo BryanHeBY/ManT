@@ -2,12 +2,20 @@
 
 use std::collections::HashSet;
 
-use libmandoc_rs::{Node, NodeKind, TableCellKind};
+use libmandoc_rs::{MacroToken, MdocMacro, Node, NodeKind, TableCellKind};
 
 #[path = "ordinal_labels/description.rs"]
 mod description;
 use description::{Description, description};
 use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
+
+fn skips_source_children(node: &Node) -> bool {
+    // print_mdoc_node() ignores these nodes or never walks their operands.
+    // In particular, obsolete Db retains its operands for diagnostics.
+    node.flags.no_print
+        || node.kind == NodeKind::Comment
+        || node.macro_token.as_ref() == Some(&MacroToken::Mdoc(MdocMacro::Db))
+}
 
 #[cfg(test)]
 #[path = "ordinal_label_cases.rs"]
@@ -45,7 +53,7 @@ impl HeadSpacing {
     }
 
     fn walk(&mut self, node: &Node, no_space_mode: &mut bool) {
-        if node.flags.no_print || node.kind == NodeKind::Comment {
+        if skips_source_children(node) {
             return;
         }
         match (node.kind, node.macro_token.as_deref()) {
@@ -176,7 +184,7 @@ enum LabelEffect {
 
 impl NativeLabel {
     fn walk(&mut self, node: &Node, next: Option<&Node>) {
-        if node.flags.no_print || node.kind == NodeKind::Comment {
+        if skips_source_children(node) {
             return;
         }
         if node.kind == NodeKind::Text {

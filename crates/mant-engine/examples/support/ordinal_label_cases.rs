@@ -151,6 +151,7 @@ pub(crate) fn generated_and_control_inputs() -> impl Iterator<Item = (String, [S
         (r".No \m(re", false),
         (r".No \mR", false),
         (r".No \F[SYM]", false),
+        (".Db GHOSTTOKEN", false),
         (r".No \s12VISIBLE", true),
         (r".No \m[red]VISIBLE", true),
     ]

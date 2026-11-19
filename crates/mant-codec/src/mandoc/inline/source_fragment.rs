@@ -401,6 +401,9 @@ fn inline_request(name: &str, dialect: MacroSet) -> bool {
         Some(OperandControl::Spacing | OperandControl::Delimiters) => {
             return dialect == MacroSet::Mdoc;
         }
+        // roff_req_or_macro() passes the Db operands directly to tbl_read().
+        // The mdoc pre-handler that suppresses them never sees this input.
+        Some(OperandControl::Skipped) => return false,
         _ => {}
     }
     match dialect {

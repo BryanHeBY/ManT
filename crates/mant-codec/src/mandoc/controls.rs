@@ -19,6 +19,8 @@ pub(super) enum OperandControl {
     Delimiters,
     /// Native validation already consumed legacy manual metadata.
     Metadata,
+    /// The native macro's pre-handler does not visit its child operands.
+    Skipped,
     /// Device/page presentation omitted by the source-neutral reader.
     Presentation,
 }
@@ -102,6 +104,9 @@ pub(super) fn operand_control(name: Option<&MacroToken>) -> Option<OperandContro
         Man(ManMacro::Pd) => OperandControl::ParagraphDistance,
         // Native validation has already attached these to later En nodes.
         Mdoc(MdocMacro::Es) => OperandControl::Delimiters,
+        // mdoc_term.c and mdoc_html.c use the skip pre-handler for Db.
+        // The obsolete-macro diagnostic belongs to validation, not rendering.
+        Mdoc(MdocMacro::Db) => OperandControl::Skipped,
         // man_term_acts marks UC/AT MAN_NOTEXT. They set the OS string in
         // man_validate, not a paragraph, even when retained in the root AST.
         Man(ManMacro::Uc | ManMacro::At) => OperandControl::Metadata,
