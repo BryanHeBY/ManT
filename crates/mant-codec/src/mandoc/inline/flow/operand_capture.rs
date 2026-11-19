@@ -23,14 +23,13 @@ pub(in crate::mandoc) struct HeadOperandCapture {
     roles: HashMap<u64, NativeOperandRole>,
     spelling_receipts: Vec<(usize, u64)>,
     unsplit_receipts: HashMap<u64, usize>,
-    fl_assignment_prefixes: HashMap<u64, String>,
+    fl_spellings: HashMap<u64, FlSpelling>,
     captured: CapturedHeadOperands,
     last_owner: Option<u64>,
     option_dash: Option<u64>,
     bodies: body_spans::AcceptedBodies,
     operand_role: Option<NativeOperandRole>,
     enclosures: Vec<u32>,
-    has_operand_label: bool,
     has_environment: bool,
     has_option: bool,
 }
@@ -45,7 +44,6 @@ impl HeadOperandCapture {
     }
 
     pub(super) fn record(&mut self, serial: u64, role: NativeOperandRole) {
-        self.has_operand_label |= role.is_operand_label();
         self.has_environment |= matches!(role, NativeOperandRole::Environment { .. });
         self.has_option |= matches!(
             role,
@@ -63,9 +61,12 @@ impl HeadOperandCapture {
                     NativeOperandRole::Placeholder => NativeOperandRole::IncompletePlaceholder,
                     NativeOperandRole::FlDash(_) => NativeOperandRole::Argument,
                     NativeOperandRole::FlWord(_)
-                        if !self.fl_assignment_prefixes.contains_key(&owner) =>
+                        if !matches!(
+                            self.fl_spellings.get(&owner),
+                            Some(FlSpelling::Assignment(_))
+                        ) =>
                     {
-                        NativeOperandRole::Argument
+                        NativeOperandRole::ClippedOption
                     }
                     // CVS term_word() can intentionally write the displayed
                     // subject spelling through an internal overstrike. A
@@ -86,19 +87,14 @@ impl HeadOperandCapture {
         for (index, serial) in self.spelling_receipts.drain(..) {
             let operand = &mut captured.operands[index];
             let role = self.roles[&serial];
-            // A native overstrike in an attached value need not invalidate
-            // the name. Match the untouched prefix through '=' against the
-            // actual accepted word before retaining the complete Fl receipt.
+            // termp_fl_pre's generated dash is independent of these source
+            // glyphs. Later writes can cover only part of a word during
+            // term_field(), so validate the surviving source owner here.
             operand.role = if matches!(role, NativeOperandRole::FlWord(_))
-                && self
-                    .fl_assignment_prefixes
-                    .get(&serial)
-                    .is_some_and(|prefix| {
-                        !captured.text[operand.bytes.clone()]
-                            .trim_start()
-                            .starts_with(prefix)
-                    }) {
-                NativeOperandRole::Argument
+                && self.fl_spellings.get(&serial).is_some_and(|spelling| {
+                    !spelling.survived(captured.text[operand.bytes.clone()].trim())
+                }) {
+                NativeOperandRole::ClippedOption
             } else {
                 role
             };
@@ -167,6 +163,7 @@ impl HeadOperandCapture {
                     | NativeOperandRole::Environment { .. }
                     | NativeOperandRole::LiteralContinuation(_)
                     | NativeOperandRole::Command
+                    | NativeOperandRole::ProgramName
                     | NativeOperandRole::FunctionSignature { .. }
                     | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_)
@@ -297,14 +294,6 @@ impl super::InlineBuilder {
                 if matches!(role, NativeOperandRole::FlDash(_)) {
                     capture.option_dash = Some(serial);
                 }
-                let role = match role {
-                    NativeOperandRole::FlDash(_) | NativeOperandRole::FlWord(_)
-                        if !capture.has_operand_label && capture.search_head.is_none() =>
-                    {
-                        NativeOperandRole::ExplicitOption
-                    }
-                    role => role,
-                };
                 let role = if text.is_some_and(|(_, decoded)| !decoded.proves_native_glyphs()) {
                     match role {
                         NativeOperandRole::Placeholder => NativeOperandRole::IncompletePlaceholder,
@@ -318,9 +307,9 @@ impl super::InlineBuilder {
                 };
                 if matches!(role, NativeOperandRole::FlWord(_))
                     && let Some((_, decoded)) = text
-                    && let Some(prefix) = assignment_prefix(&decoded.events)
+                    && let Some(spelling) = FlSpelling::from_events(&decoded.events)
                 {
-                    capture.fl_assignment_prefixes.insert(serial, prefix);
+                    capture.fl_spellings.insert(serial, spelling);
                 }
                 capture.record(serial, role);
             }
@@ -460,6 +449,46 @@ fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOperandRole> 
         decoded.events.iter().any(|event| matches!(
             event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) if value.contains([',', '|'])
         )).then_some(NativeOperandRole::LiteralPunctuation)
+    }
+}
+
+#[derive(Clone)]
+enum FlSpelling {
+    KeyBytes(usize),
+    Assignment(String),
+}
+
+impl FlSpelling {
+    fn from_events(events: &[RoffInlineEvent]) -> Option<Self> {
+        if let Some(prefix) = assignment_prefix(events) {
+            return Some(Self::Assignment(prefix));
+        }
+        // Ordinary Fl keys have one projected byte sequence even across
+        // font changes. Accepting fewer bytes from this unique owner
+        // cannot prove the original spelling. Cursor-editing operands use
+        // the execution's existing native clipping receipts instead.
+        let bytes = events.iter().try_fold(0, |bytes, event| match event {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
+                if !value.contains(char::is_whitespace) =>
+            {
+                Some(bytes + value.len())
+            }
+            RoffInlineEvent::BreakableHyphen => Some(bytes + 1),
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::ZeroWidthGlyph => Some(bytes),
+            _ => None,
+        })?;
+        (bytes > 0).then_some(Self::KeyBytes(bytes))
+    }
+
+    fn survived(&self, value: &str) -> bool {
+        match self {
+            Self::KeyBytes(bytes) => value.len() == *bytes,
+            // A native overstrike in an attached value need not invalidate
+            // the untouched key and assignment separator.
+            Self::Assignment(prefix) => value.starts_with(prefix),
+        }
     }
 }
 

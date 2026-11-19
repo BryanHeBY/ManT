@@ -54,6 +54,9 @@ pub(crate) enum NativeOperandRole {
     FlDash(u32),
     #[cfg(feature = "roff")]
     FlWord(u32),
+    /// A later native write replaced part of this Fl word.
+    #[cfg(feature = "roff")]
+    ClippedOption,
     /// A closing TEXT delimiter can be adjacent to an empty Fl's dash.
     #[cfg(feature = "roff")]
     OptionPunctuation,
@@ -72,6 +75,9 @@ pub(crate) enum NativeOperandRole {
     /// An executed Nm names the program at the start of an invocation.
     #[cfg(feature = "roff")]
     ProgramName,
+    /// The surviving part of an invocation word cannot prove its name.
+    #[cfg(feature = "roff")]
+    ClippedInvocation,
     /// The device wrote this Fn/Fo signature delimiter.
     #[cfg(feature = "roff")]
     FunctionSignature {
@@ -146,6 +152,7 @@ impl NativeOperandRole {
             Self::Argument => true,
             #[cfg(feature = "roff")]
             Self::DisplayOnly
+            | Self::ClippedOption
             | Self::Placeholder
             | Self::IncompletePlaceholder
             | Self::SearchArgument(_)
@@ -183,7 +190,11 @@ impl NativeOperandRole {
     pub(crate) fn is_description(self) -> bool {
         matches!(
             self,
-            Self::Description | Self::SymbolicText | Self::Command | Self::ProgramName
+            Self::Description
+                | Self::SymbolicText
+                | Self::Command
+                | Self::ProgramName
+                | Self::ClippedInvocation
         )
     }
 
@@ -270,7 +281,7 @@ impl NativeOperandRole {
             | Self::PipeDelimiter(_)
             | Self::FlReopening { .. }
             | Self::FunctionSignature { .. } => Self::Argument,
-            Self::Command | Self::ProgramName => Self::Description,
+            Self::Command | Self::ProgramName => Self::ClippedInvocation,
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,
         }

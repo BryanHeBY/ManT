@@ -111,6 +111,71 @@ fn check_owned_name(
 }
 
 #[test]
+fn covered_fl_glyphs_do_not_bind_the_foreign_replacement() {
+    // CVS termp_fl_pre supplies its dash separately. term.c::term_word()
+    // rewinds inside the accepted field, so No supplies X in the rendered
+    // label without executing it as part of the preceding Fl's spelling.
+    for section in ["DESCRIPTION", "OPTIONS"] {
+        for (macro_name, open, close) in [
+            ("", "", ""),
+            ("Bq ", "[", "]"),
+            ("Pq ", "(", ")"),
+            ("Op ", "[", "]"),
+            ("Brq ", "{", "}"),
+            ("Qq ", "\"", "\""),
+        ] {
+            for (operand, visible, names, exact_form) in [
+                (r#"Fl a Ns No "\h'-1n'X""#, "-X", &[][..], false),
+                (r#"Fl bc Ns No "\h'-1n'X""#, "-bX", &[][..], false),
+                (
+                    r#"Fl a Ns No "\h'-1n'X" No , Fl j"#,
+                    "-X , -j",
+                    &["-j"][..],
+                    false,
+                ),
+                ("Fl q Ns No FILES", "-qFILES", &["-qFILES"][..], true),
+            ] {
+                let head = format!("{macro_name}{operand}");
+                let visible = format!("{open}{visible}{close}");
+                for head in [head.clone(), format!("Xo\n.{head}\n.Xc")] {
+                    let document = load(&source(&head, section));
+                    let item = definitions(document.document.as_ref().unwrap())[0];
+                    assert_eq!(inline_plain_text(&item.terms[0]), visible, "{head}");
+                    assert_eq!(
+                        item.entry
+                            .as_ref()
+                            .map_or(&[][..], |facts| facts.names.as_slice()),
+                        names,
+                        "{head}"
+                    );
+                    assert_eq!(
+                        explain(&document, &visible).counts.direct_entry.total,
+                        u32::from(exact_form),
+                        "{head}"
+                    );
+                    for counterfeit in ["-X", "-bX", "-a", "-bc"] {
+                        assert_eq!(
+                            explain(&document, counterfeit).counts.direct_entry.total,
+                            0,
+                            "{head}"
+                        );
+                    }
+                    for name in names {
+                        check_owned_name(
+                            &document,
+                            &explain(&document, name),
+                            item,
+                            name,
+                            &visible,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn unproved_environment_clauses_never_discard_a_proved_sibling_or_restore_the_form() {
     // The native tree has three independent clauses in all six orders.
     // A None receipt for the first No must not hide a later independent Ev.

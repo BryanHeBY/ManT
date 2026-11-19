@@ -1,9 +1,6 @@
 //! A name grammar must preserve the uses of executed native operands.
-use crate::definitions::{NativeOperand, RecognizedName};
+use crate::definitions::{NativeOperand, NativeOperandRole, RecognizedName};
 use std::ops::Range;
-
-#[cfg(feature = "roff")]
-use crate::definitions::NativeOperandRole;
 
 /// The first receipt whose end is after this cursor. It can start later
 /// than the cursor when the accepted output has an unowned gap.
@@ -30,6 +27,59 @@ pub(in crate::definitions::syntax) fn intersecting_operands(
     operands[operand_cursor(operands, span.start)..]
         .iter()
         .take_while(move |operand| operand.bytes.start < span.end)
+}
+
+pub(super) fn permits_option_spelling(
+    text: &str,
+    operands: &[NativeOperand],
+    span: Range<usize>,
+    allow_literal_suffix: bool,
+) -> bool {
+    let Some(leading) = operand_at(operands, span.start)
+        .filter(|operand| operand.role == NativeOperandRole::ExplicitOption)
+    else {
+        // Ordinary man and Markdown declarations can use lexical spelling.
+        return true;
+    };
+    if !text[leading.bytes.start..span.start].trim().is_empty() {
+        return false;
+    }
+    let mut end = span.start;
+    for operand in intersecting_operands(operands, span.clone()) {
+        if operand.bytes.start > end {
+            break;
+        }
+        #[cfg(feature = "roff")]
+        if operand.role == NativeOperandRole::OptionPunctuation {
+            // An empty Fl can generate a dash before the parser's closing
+            // punctuation operand (mdoc_macro.c::in_line).
+            return end == span.start + 1 && span.len() == 2;
+        }
+        if operand.role != NativeOperandRole::ExplicitOption {
+            break;
+        }
+        end = operand.bytes.end;
+        if end >= span.end {
+            return true;
+        }
+        // termp_fl_pre issues its dash independently. Nested Fl can supply
+        // several accepted dash prefixes; an operand that already contains
+        // letters cannot join another receipt to manufacture a longer name.
+        if !text[operand.bytes.clone()]
+            .trim()
+            .bytes()
+            .all(|byte| byte == b'-')
+        {
+            // The direct scanner retains legacy literal No continuations
+            // only after an accepted base key. A bare generated dash must
+            // never turn a foreign replacement glyph into a Fl operand.
+            return allow_literal_suffix
+                && operand_at(operands, end).is_none_or(|next| {
+                    !next.role.is_parameter() && next.role != NativeOperandRole::ExplicitOption
+                });
+        }
+    }
+    false
 }
 
 #[derive(Clone, Copy)]

@@ -21,10 +21,14 @@ mod invocation_boundaries;
 mod operands;
 #[path = "native_declarations/option_operand_boundaries.rs"]
 mod option_operand_boundaries;
+#[path = "native_declarations/program_declarations.rs"]
+mod program_declarations;
 #[path = "native_declarations/publication.rs"]
 mod publication;
 #[path = "native_declarations/real_invocations.rs"]
 mod real_invocations;
+#[path = "native_declarations/real_programs.rs"]
+mod real_programs;
 #[path = "native_declarations/real_subjects.rs"]
 mod real_subjects;
 #[path = "native_declarations/roles.rs"]

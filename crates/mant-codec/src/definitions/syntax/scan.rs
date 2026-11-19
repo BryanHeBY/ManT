@@ -366,8 +366,23 @@ impl<'a> Scanner<'a> {
             end = offset + next.len_utf8();
         }
         if let Some(name) = super::options::option_prefix(&self.view.text[start..end]) {
+            if !self
+                .view
+                .permits_option_spelling(start..start + name.len(), true)
+            {
+                self.unproved_form = true;
+                return false;
+            }
             self.accept_name(name, native, start + name.len() < end);
             return true;
+        }
+        #[cfg(feature = "roff")]
+        {
+            self.unproved_form |= native
+                && self
+                    .view
+                    .operand(end)
+                    .is_some_and(|operand| operand.role == NativeOperandRole::ClippedOption);
         }
         let pattern_end = self.view.text[start..]
             .find(|c: char| !matches!(c, '-' | '#'))
@@ -431,8 +446,7 @@ impl<'a> Scanner<'a> {
                                 .last()
                                 .is_some_and(|wrapper| wrapper.closer() == ch)
                     })
-                }) && ((start..end).all(|offset| self.view.explicit_option(offset))
-                    || marker.len() == 2 && self.view.option_punctuation(start + 1))
+                }) && self.view.permits_option_spelling(start..end, false)
             })
     }
 

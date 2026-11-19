@@ -75,12 +75,22 @@ pub(super) fn native_option_occurrences(
     if result.limit.is_some() {
         return result;
     }
-    for (term, names) in terms.iter().zip(&mut result.occurrences) {
+    for (index, (term, names)) in terms.iter().zip(&mut result.occurrences).enumerate() {
         let prefix = forms::literal_prefix(term.as_ref());
         let Some(token) = prefix.split_whitespace().next() else {
             continue;
         };
-        retain_native_short_option(token, prefix.len() - prefix.trim_start().len(), names);
+        let start = prefix.len() - prefix.trim_start().len();
+        if operands.for_term(index).is_none_or(|ranges| {
+            super::eligibility::permits_option_spelling(
+                &prefix,
+                ranges,
+                start..start + token.len(),
+                false,
+            )
+        }) {
+            retain_native_short_option(token, start, names);
+        }
     }
     result
 }

@@ -7,8 +7,13 @@ use mant_protocol::{ContentSelector, EvidenceBasis, EvidenceClass};
 use super::support::{check_head, explain, explanation_ranges, json_roundtrip, roundtrip};
 
 fn fixture(name: &str) -> ResolvedContent {
+    fixture_in("native-invocations", name)
+}
+
+pub(super) fn fixture_in(family: &str, name: &str) -> ResolvedContent {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/roff/real/native-invocations")
+        .join("../../tests/fixtures/roff/real")
+        .join(family)
         .join(name);
     let resolved = ResolvedContent {
         document: Some(mant_loader::parse_manual_source(&path).unwrap()),
@@ -25,7 +30,7 @@ fn fixture(name: &str) -> ResolvedContent {
     content
 }
 
-fn direct_lines(content: &ResolvedContent, name: &str, expected: &[u32]) {
+pub(super) fn direct_lines(content: &ResolvedContent, name: &str, expected: &[u32]) {
     let explanation = roundtrip(&explain(content, name));
     assert_eq!(
         explanation.counts.direct_entry.total,
@@ -47,7 +52,7 @@ fn direct_lines(content: &ResolvedContent, name: &str, expected: &[u32]) {
     }
 }
 
-fn check_owner(
+pub(super) fn check_owner(
     content: &ResolvedContent,
     line: u32,
     name: &str,

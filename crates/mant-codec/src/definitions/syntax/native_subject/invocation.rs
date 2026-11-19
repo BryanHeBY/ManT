@@ -4,12 +4,13 @@ use crate::definitions::syntax::{commands, named};
 use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject, RecognizedName};
 use std::ops::Range;
 
-/// Prove the compound command from the accepted Nm and Cm/Ic operands,
-/// independent of punctuation or the spelling of the arguments that follow.
-pub(super) fn compound_name(
+/// Read the leading Nm and any consecutive Cm/Ic words in one visible
+/// prefix, stopping before arguments or a new physical line.
+pub(super) fn program_name(
     text: &str,
     span: &Range<usize>,
     operands: &[NativeOperand],
+    allow_standalone: bool,
 ) -> Option<RecognizedName> {
     let operands = &operands[operand_cursor(operands, span.start)..];
     let (program, tail) = operands.split_first()?;
@@ -25,7 +26,6 @@ pub(super) fn compound_name(
         return None;
     }
     let mut end = span.start + name.len();
-    let mut command = false;
     for operand in tail {
         if operand.role != NativeOperandRole::Command || operand.bytes.end > span.end {
             break;
@@ -35,23 +35,53 @@ pub(super) fn compound_name(
         let Some(gap) = text.get(end..start).filter(|gap| !gap.is_empty()) else {
             break;
         };
-        let suffix = commands::styled_command_prefix(word);
-        if gap.contains('\n') || !gap.trim().is_empty() || !commands::is_command_name(suffix) {
+        if gap.contains('\n') || !gap.trim().is_empty() || word.contains('\n') {
             break;
         }
-        command = true;
-        end = start + suffix.len();
-        if suffix.len() < word.len() {
-            break;
-        }
+        end = start + word.len();
     }
+    // Cm/Ic can supply several separately executed words even within one
+    // native element. Recognize their argument syntax across all segments.
+    let prefix = commands::styled_command_prefix(&text[span.start..end]);
+    if prefix.len() == name.len()
+        && (!allow_standalone || has_other_invocation_words(tail, span.end))
+    {
+        return None;
+    }
+    let end = span.start + prefix.len();
     // A boundary between source elements can still be a joined visible
-    // word. Only a separately readable command prefix proves a name.
-    (command
+    // word. Only a complete name in the accepted text can bind.
+    (commands::is_command_name(prefix)
         && text[end..span.end].chars().next().is_none_or(|character| {
             character.is_whitespace() || matches!(character, '[' | '<' | '{' | '(')
         }))
-    .then(|| RecognizedName::contiguous(&text[span.start..end], span.start))
+    .then(|| RecognizedName::contiguous(prefix, span.start))
+}
+
+fn has_other_invocation_words(operands: &[NativeOperand], end: usize) -> bool {
+    let mut enclosure = None;
+    for operand in operands
+        .iter()
+        .take_while(|operand| operand.bytes.start < end)
+    {
+        match operand.role {
+            NativeOperandRole::EnclosureStart { body, parent: None } => enclosure = Some(body),
+            NativeOperandRole::EnclosureEnd(body) if enclosure == Some(body) => enclosure = None,
+            // A source form like `Nm Oo Fl d Oc Cm run` contains a real
+            // command with a noncontiguous spelling. Nm alone is not proof
+            // of a separate standalone program here. Commands inside an
+            // executed Brq/Op describe choices and do not have that effect.
+            NativeOperandRole::Command
+            | NativeOperandRole::ProgramName
+            | NativeOperandRole::ClippedInvocation
+                if enclosure.is_none() =>
+            {
+                return true;
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 pub(super) fn assignment_operator(text: &str) -> Option<usize> {

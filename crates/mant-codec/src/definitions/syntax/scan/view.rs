@@ -158,13 +158,17 @@ impl<'a> HeadView<'a> {
             })
     }
 
-    pub(super) fn option_punctuation(&self, offset: usize) -> bool {
-        self.operand(offset)
-            .is_some_and(|operand| match operand.role {
-                #[cfg(feature = "roff")]
-                NativeOperandRole::OptionPunctuation => true,
-                _ => false,
-            })
+    pub(super) fn permits_option_spelling(
+        &self,
+        span: Range<usize>,
+        allow_literal_suffix: bool,
+    ) -> bool {
+        super::super::eligibility::permits_option_spelling(
+            &self.text,
+            self.operands,
+            span,
+            allow_literal_suffix,
+        )
     }
 
     pub(super) fn reference_or_environment(&self, offset: usize) -> bool {

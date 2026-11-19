@@ -6,7 +6,7 @@ use super::{
 };
 use crate::definitions::syntax::{
     DeclarationLimit, commands, decision,
-    eligibility::{NameSource, OperandUses, intersecting_operands},
+    eligibility::{NameSource, OperandUses, intersecting_operands, permits_option_spelling},
     inference::infer_lexical_terms,
     named,
     scan::{MAX_NAMES, MAX_NESTING},
@@ -124,10 +124,10 @@ pub(super) fn recognize(
             .iter()
             .any(|operand| operand.role.subject().is_some())
         && !partition.has_mixed_roles(operands)
-        && !partition
-            .ranges
-            .iter()
-            .any(|span| invocation::compound_name(text, span, operands).is_some())
+        && !partition.ranges.iter().any(|span| {
+            is_assignment(text, span, operands)
+                || invocation::program_name(text, span, operands, false).is_some()
+        })
     {
         return None;
     }
@@ -355,21 +355,18 @@ fn collect_group(
         operand.role == NativeOperandRole::ExplicitOption
             || operand.role == NativeOperandRole::Placeholder
     });
-    let compound = enclosure
+    let program = enclosure
         .is_none()
-        .then(|| invocation::compound_name(text, span, operands))
+        .then(|| invocation::program_name(text, span, operands, index == 0))
         .flatten();
-    let assignment = invocation::assignment_operator(&text[span.clone()]).is_some_and(|equals| {
-        let uses = OperandUses::new(operands).shifted(span.start);
-        !uses.protects(&(0..equals)) && !uses.protects_named_syntax(equals, b'=')
-    });
+    let assignment = is_assignment(text, span, operands);
     let hint = group_hint(source, index, lead, admission, enclosure);
-    let explicit = compound.is_some()
+    let explicit = program.is_some()
         || assignment
         || hint.is_some()
         || operand_label
         || lead.is_some_and(|operand| operand.role.subject().is_some());
-    let recognized = if let Some(name) = compound {
+    let recognized = if let Some(name) = program {
         Ok((EntryKind::Command, Recognition::one(Some(name))))
     } else {
         recognize_group(source, index, hint, admission, enclosure, assignment)
@@ -487,6 +484,7 @@ fn independent_groups<'a>(
                     || match operand.role.declaration_delimiter() {
                         NativeOperandRole::ExplicitOption
                         | NativeOperandRole::Description
+                        | NativeOperandRole::ClippedInvocation
                         | NativeOperandRole::SymbolicText
                         | NativeOperandRole::LiteralPunctuation
                         | NativeOperandRole::ReferenceText(_)
@@ -513,6 +511,13 @@ fn independent_groups<'a>(
     })
 }
 
+fn is_assignment(text: &str, span: &Range<usize>, operands: &[NativeOperand]) -> bool {
+    invocation::assignment_operator(&text[span.clone()]).is_some_and(|equals| {
+        let uses = OperandUses::new(operands).shifted(span.start);
+        !uses.protects(&(0..equals)) && !uses.protects_named_syntax(equals, b'=')
+    })
+}
+
 fn group_hint(
     source: &Head<'_>,
     index: usize,
@@ -533,13 +538,10 @@ fn group_hint(
         {
             Some(NativeHeadRole::Literal)
         }
-        // A standalone Nm still names the program when a protected
-        // argument group contains Cm tokens, e.g. ztar {c | x}.
-        // Actual compound names have already been proved from the prefix.
-        _ if (admission != Admission::ProtectedSyntax
+        // An Ar operand or typed subject preceding Ic still supplies its
+        // own role even when the whole HEAD appears under COMMANDS.
+        _ if admission != Admission::ProtectedSyntax
             && source.context == DefinitionContext::Commands
-            || lead.is_some_and(|operand| operand.role == NativeOperandRole::ProgramName)
-                && !source.argument_separators(&source.ranges[index]).is_empty())
             && lead.is_none_or(|operand| {
                 operand.role.subject().is_none() && !operand.role.is_operand_label()
             })
@@ -578,7 +580,7 @@ fn recognize_group(
     if let Some(result) = recognize_part(text, part, operands, enclosure) {
         return Ok(result);
     }
-    if admission == Admission::TypedSubjects {
+    if admission == Admission::TypedSubjects && !assignment {
         return Err(RejectedPart::Unproved);
     }
     let uses = OperandUses::new(operands).shifted(span.start);
@@ -647,10 +649,9 @@ fn recognize_lexical_group(
         .map(|name| rebase(name, range.start))
         .filter(|name| {
             let proved = hint != NativeHeadRole::Option
-                || name
-                    .parts
-                    .iter()
-                    .all(|span| option_key_is_contiguous(source, span));
+                || name.parts.iter().all(|span| {
+                    permits_option_spelling(source.text, source.operands, span.clone(), false)
+                });
             unproved_form |= !protected && !proved;
             proved
         })
@@ -665,30 +666,6 @@ fn recognize_lexical_group(
             ..Recognition::default()
         },
     ))
-}
-
-fn option_key_is_contiguous(source: &Head<'_>, span: &Range<usize>) -> bool {
-    let mut operands = intersecting_operands(source.operands, span.clone())
-        .filter(|operand| operand.role == NativeOperandRole::ExplicitOption);
-    let Some(first) = operands.next() else {
-        return true;
-    };
-    // A separator in the same Fl word cannot name another flag; Ns
-    // cannot glue two flags into one key. Nested Fl may supply the leading
-    // dashes before the operand containing the actual name.
-    let text = source.text;
-    text[first.bytes.start..span.start.max(first.bytes.start)]
-        .trim()
-        .is_empty()
-        && std::iter::once(first)
-            .chain(operands)
-            .take_while(|operand| operand.bytes.end < span.end)
-            .all(|operand| {
-                text[operand.bytes.clone()]
-                    .trim()
-                    .bytes()
-                    .all(|byte| byte == b'-')
-            })
 }
 
 fn protected_option_span(

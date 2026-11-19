@@ -174,10 +174,11 @@ impl Projection {
         if !(native
             || styled_command
             || hint == Some(NativeHeadRole::Literal)
-            || super::invocation::compound_name(
+            || super::invocation::program_name(
                 &text,
                 &(start..start + visible.len()),
                 &self.operands,
+                true,
             )
             .is_some())
         {
