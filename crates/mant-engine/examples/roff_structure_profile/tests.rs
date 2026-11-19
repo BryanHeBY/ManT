@@ -322,6 +322,7 @@ fn source_execution_crossings_keep_evidence_and_owner_obligations() {
     for case in execution::cases()
         .chain(execution::source::cases())
         .chain(execution::source::generated())
+        .chain(execution::source::buffered_rows_and_drawn_labels())
     {
         std::fs::write(&path, &case.source).unwrap();
         let profile =
@@ -361,6 +362,31 @@ fn source_execution_crossings_keep_evidence_and_owner_obligations() {
         }
 
         let (expected, topology, mut document) = parsed_structure(&case.source);
+        if ["display-row", "literal-row"]
+            .iter()
+            .any(|shape| case.name.starts_with(&format!("source-{shape}-")))
+        {
+            // Fixed CVS closes a buffered glyphless display row. The
+            // reading IR stores that row as spacing on the original item.
+            let [mant_ir::Block::List { items, .. }] = document.sections[1].blocks.as_slice()
+            else {
+                panic!("expected recovered list: {}", case.name);
+            };
+            let mask = case
+                .name
+                .rsplit_once('-')
+                .unwrap()
+                .1
+                .parse::<usize>()
+                .unwrap();
+            for (index, item) in items.iter().enumerate() {
+                let owns_empty_row = item
+                    .blocks
+                    .iter()
+                    .any(|block| matches!(block, mant_ir::Block::VerticalSpace { lines: 1, .. }));
+                assert_eq!(owns_empty_row, mask & (1 << index) != 0, "{}", case.name);
+            }
+        }
         document.sections[1].blocks.clear();
         let (observed, actual) = super::ir_profile(&document);
         let violations = super::compare_structure(&expected, &observed, &topology, &actual);
@@ -369,6 +395,23 @@ fn source_execution_crossings_keep_evidence_and_owner_obligations() {
             "{}\n{violations:?}",
             case.name
         );
+    }
+}
+
+#[test]
+fn native_display_obligations_follow_the_executed_child_payload() {
+    // The fixed tree retains Db's child TEXT. Only No executes its payload
+    // in the literal display (mdoc_term.c::termp_skip_pre for Db).
+    for (macro_name, expected_count) in [("Db", 0), ("No", 1)] {
+        let source = format!(
+            ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n\
+             .Bd -literal -compact\n.{macro_name} GHOSTTOKEN\n.Ed\n.Sh END PROBE\nDone.\n"
+        );
+        let (expected, topology, document) = parsed_structure(&source);
+        assert_eq!(expected.literal_displays, expected_count, "{source}");
+        let (observed, actual) = super::ir_profile(&document);
+        let violations = super::compare_structure(&expected, &observed, &topology, &actual);
+        assert!(violations.is_empty(), "{source}: {violations:?}");
     }
 }
 

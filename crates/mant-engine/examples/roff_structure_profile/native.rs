@@ -7,6 +7,10 @@ use super::{
         MdocContainerKind, column_data_items, equation_is_display, mdoc_list_items,
         mdoc_list_topology_kind,
     },
+    ordinal_labels::{
+        description::{Description, description},
+        skips_source_children,
+    },
     special_character,
 };
 
@@ -40,32 +44,25 @@ fn collect_ast_structure(
     no_fill_lines: &mut BTreeMap<u32, NoFillSourceLine>,
     head_payloads: &HeadPayloads,
 ) {
-    let nonprinting = inherited_nonprinting || node.flags.no_print || is_stateful_request(node);
-    if node.flags.no_fill
-        && !nonprinting
-        && node.kind == NodeKind::Text
-        && node.flags.line_start
-        && node.text.as_deref().is_some_and(is_no_fill_row_text)
-        && node.line > 0
-    {
-        let text = node.text.as_deref().unwrap_or_default();
-        let line = no_fill_lines.entry(node.line).or_default();
-        line.zero_width_blank |= is_zero_width_guard_line(text);
-        line.printable |= is_printable_no_fill_text(text);
-        line.continues_line |= node.flags.line_continuation;
+    let nonprinting =
+        inherited_nonprinting || skips_source_children(node) || is_stateful_request(node);
+    if !nonprinting {
+        record_no_fill_line(node, no_fill_lines);
     }
     if node.kind == NodeKind::Block {
         match node.macro_token.as_deref() {
-            Some("Bd" | "D1" | "Dl")
-                if node.macro_token.as_deref() != Some("Bd")
-                    || matches!(
-                        node.display_kind,
-                        Some(DisplayKind::Literal | DisplayKind::Unfilled)
-                    ) && node
-                        .children
-                        .iter()
-                        .filter(|part| part.kind == NodeKind::Body)
-                        .any(has_visible_text) =>
+            Some("D1" | "Dl") if description(node, false) == Description::Visible => {
+                profile.literal_displays += 1;
+            }
+            Some("Bd")
+                if matches!(
+                    node.display_kind,
+                    Some(DisplayKind::Literal | DisplayKind::Unfilled)
+                ) && node
+                    .children
+                    .iter()
+                    .filter(|part| part.kind == NodeKind::Body)
+                    .any(has_visible_text) =>
             {
                 profile.literal_displays += 1;
             }
@@ -140,6 +137,27 @@ fn collect_ast_structure(
             head_payloads,
         );
     }
+}
+
+fn record_no_fill_line(node: &Node, lines: &mut BTreeMap<u32, NoFillSourceLine>) {
+    if !node.flags.no_fill
+        || node.kind != NodeKind::Text
+        || !node.flags.line_start
+        || node.line == 0
+    {
+        return;
+    }
+    let Some(text) = node
+        .text
+        .as_deref()
+        .filter(|text| is_no_fill_row_text(text))
+    else {
+        return;
+    };
+    let line = lines.entry(node.line).or_default();
+    line.zero_width_blank |= is_zero_width_guard_line(text);
+    line.printable |= is_printable_no_fill_text(text);
+    line.continues_line |= node.flags.line_continuation;
 }
 
 /// A signed RS offset is not necessarily an indentation to the right.
@@ -361,14 +379,13 @@ fn has_visible_definition_description(node: &Node) -> bool {
 }
 
 fn has_visible_text(node: &Node) -> bool {
-    !node.flags.no_print
-        && node.kind != NodeKind::Comment
+    !skips_source_children(node)
         && (node.text.as_deref().is_some_and(|text| !text.is_empty())
             || node.children.iter().any(has_visible_text))
 }
 
 fn ast_visible_text(node: &Node) -> String {
-    if node.flags.no_print || node.kind == NodeKind::Comment {
+    if skips_source_children(node) {
         return String::new();
     }
     let mut text = node.text.clone().unwrap_or_default();
@@ -380,8 +397,7 @@ fn ast_visible_text(node: &Node) -> String {
 
 fn has_visible_flow_text(node: &Node) -> bool {
     node.children.iter().any(|child| {
-        !child.flags.no_print
-            && child.kind != NodeKind::Comment
+        !skips_source_children(child)
             && child.kind != NodeKind::Block
             && (child.text.as_deref().is_some_and(|text| !text.is_empty())
                 || has_visible_flow_text(child))

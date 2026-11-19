@@ -1,6 +1,6 @@
 //! Lexical proof for audits of terminal source words.
 
-use super::{PresentationKind, RoffInlineEvent, decode_with_status};
+use super::{PresentationKind, RoffInlineEvent, decode_with_status, horizontal_line_stroke};
 
 /// Effects of a source word that affect what an independent observer can assert.
 #[repr(u8)]
@@ -106,6 +106,14 @@ impl RoffWordEvidence {
                     }
                     if let Some(text) = terminal {
                         self.append(&text);
+                    } else if buffered {
+                        // ESCAPE_OVERSTRIKE still passes blank operands to
+                        // encode1(). A following graph can replace the held
+                        // blank. An empty operand never consumes BACKAFTER.
+                        if let Advance::BufferedAndArmed(start) = std::mem::take(&mut self.advance)
+                        {
+                            self.text.truncate(start);
+                        }
                     }
                 }
                 RoffInlineEvent::HorizontalMotion { .. } => {
@@ -118,13 +126,34 @@ impl RoffWordEvidence {
                         _ => self.set(Unclassified),
                     }
                 }
-                RoffInlineEvent::Link(_)
-                | RoffInlineEvent::FallbackGlyph(_)
-                | RoffInlineEvent::Presentation {
+                RoffInlineEvent::Link(_) | RoffInlineEvent::FallbackGlyph(_) => {
+                    self.set(Unclassified);
+                }
+                RoffInlineEvent::Presentation {
                     kind: PresentationKind::HorizontalLine,
-                    ..
+                    argument,
                 } => {
                     self.set(Unclassified);
+                    // A nonpositive length draws to the field margin when
+                    // space remains. Check whether a stroke is possible,
+                    // without making the observer assume a field width.
+                    if argument
+                        .as_deref()
+                        .and_then(|argument| horizontal_line_stroke(argument, 1))
+                        .is_some()
+                    {
+                        self.set(Buffered);
+                        // ESCAPE_HLINE on UTF-8 calls encode1() (term.c).
+                        // The first stroke consumes BACKAFTER. The source
+                        // audit omits the stroke to keep the potential
+                        // author spelling available for candidate scans.
+                        // Placement and device differences still need review.
+                        if let Advance::Buffered(start) | Advance::BufferedAndArmed(start) =
+                            std::mem::take(&mut self.advance)
+                        {
+                            self.text.truncate(start);
+                        }
+                    }
                 }
                 RoffInlineEvent::EmptyDestination => self.append("<>"),
                 RoffInlineEvent::Font(_)

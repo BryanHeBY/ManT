@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v10";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v11";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -732,6 +732,7 @@ mod tests {
             .chain(execution::equation_edges())
             .chain(execution::source::cases())
             .chain(execution::source::generated())
+            .chain(execution::source::buffered_rows_and_drawn_labels())
         {
             std::fs::write(&path, &case.source).unwrap();
             let profile = super::profile_request(&json!({"id":case.name,"path":path}).to_string());

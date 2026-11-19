@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v9` successful page response requires both
+The `mant.roff-structure-profile/v10` successful page response requires both
 `ordinalCasesForReview` and `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
 evidence. Incomplete observations fail validation. A pure alias retains its
@@ -133,6 +133,10 @@ Known enum values and table-cell flags retain the distinct AST and IR shapes.
 The source ordinal observer retains overwrite evidence across node boundaries,
 including styled pieces and source continuations, and records an uncertain
 owner with its original coordinates instead of inventing a definite shape.
+Glyphless display rows and nested lists or columns can establish useful BODY
+structure. A stroke that consumes zero-advance state preserves the potential
+ordinal spelling in the source audit, with unresolved placement recorded for
+Review.
 
 Repeated zero-advance effects and normalized custom enclosures retain their
 source execution order. BODY evidence follows the native selected equation

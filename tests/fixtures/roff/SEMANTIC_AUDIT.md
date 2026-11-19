@@ -10,7 +10,7 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v10`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v11`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
@@ -26,12 +26,20 @@ custom-enclosure delimiters, and distinguishes an empty equation root from an
 equation with printable content. Authored equation objects with unproved
 glyphless payload remain source-bound Review cases. The source census remains
 independent of IR, and its independent equation observations are retained.
+An executed display row and a nested list or column can also provide BODY
+evidence when they contribute no visible glyphs. A glyph written by a drawing
+escape can consume zero-advance state before a following ordinal candidate.
+The candidate keeps its source coordinates for Review when placement remains
+unproved.
 
 Each conversion pairs at most one observed disposition with its nonempty IR
 path. A missing or different owner requires the explicit conversion violation
 and its inclusion in the overall violations. `other-list` is a valid observed
 product difference, recorded for Review. Malformed records and JSON booleans in
 numeric coordinates or counts are rejected.
+An expected recovery must supply at least two consecutive canonical unsigned
+64-bit decimal terms with one punctuation style. Retained definitions may keep
+the original spelling, including signs, leading zeroes and mixed punctuation.
 
 The violation stream also carries missing owners for uncertain source
 occurrences. Those findings follow the conclusive conversion mismatches and

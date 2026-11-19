@@ -5,11 +5,11 @@ use std::collections::HashSet;
 use libmandoc_rs::{MacroToken, MdocMacro, Node, NodeKind, TableCellKind};
 
 #[path = "ordinal_labels/description.rs"]
-mod description;
+pub(crate) mod description;
 use description::{Description, description};
 use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
 
-fn skips_source_children(node: &Node) -> bool {
+pub(crate) fn skips_source_children(node: &Node) -> bool {
     // print_mdoc_node() ignores these nodes or never walks their operands.
     // In particular, obsolete Db retains its operands for diagnostics.
     node.flags.no_print

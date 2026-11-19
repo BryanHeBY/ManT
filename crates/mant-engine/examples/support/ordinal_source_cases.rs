@@ -175,6 +175,70 @@ pub(crate) fn generated() -> impl Iterator<Item = Case> {
     source_matrix(&GENERATED, "BODY")
 }
 
+pub(crate) fn buffered_rows_and_drawn_labels() -> impl Iterator<Item = Case> {
+    // Fixed CVS termp_d1_pre/post retain the row written by D1/Dl's \&.
+    // Flattening visible strings would also miss nested list/table owners.
+    // In term_word()/encode1(), the drawable stroke consumes BACKAFTER;
+    // the following digits still expose their source ordinal candidate.
+    // These draw-dependent placements stay in the source review tier.
+    const CASES: [Template; 17] = [
+        ("display-row", "NUM.", r".D1 \&", Recovered, ""),
+        ("literal-row", "NUM.", r".Dl \&", Recovered, ""),
+        (
+            "plain-item",
+            "NUM.",
+            ".Bl -item\n.It\n\\&\n.El",
+            Recovered,
+            "",
+        ),
+        (
+            "compact-item",
+            "NUM.",
+            ".Bl -item -compact\n.It\n\\&\n.El",
+            Recovered,
+            "",
+        ),
+        (
+            "column",
+            "NUM.",
+            ".Bl -column \"x\"\n.It \\&\n.El",
+            Recovered,
+            "",
+        ),
+        ("rule-default", r"\z\l'1n'NUM.", "BODY", Uncertain, ""),
+        ("rule-ascii", r"\z\l'1nX'NUM.", "BODY", Uncertain, ""),
+        ("rule-blank", r"\z\l'1n 'NUM.", "BODY", Uncertain, ""),
+        ("rule-to-margin", r"\z\l'0nX'NUM.", "BODY", Uncertain, ""),
+        (
+            "rule-negative-margin",
+            r"\z\l'-1nX'NUM.",
+            "BODY",
+            Uncertain,
+            "",
+        ),
+        ("rule-blank-margin", r"\z\l'0n 'NUM.", "BODY", Uncertain, ""),
+        ("rule-unicode", r"\z\l'1n\[bu]'NUM.", "BODY", Uncertain, ""),
+        ("rule-decimal", r"\z\l'1n\N'88''NUM.", "BODY", Uncertain, ""),
+        (
+            "rule-split",
+            r"No \z Ns No \l'1nX'NUM .",
+            "BODY",
+            Uncertain,
+            "",
+        ),
+        ("rule-rearmed", r"\zX\z\l'1nX'NUM.", "BODY", Uncertain, ""),
+        ("overstrike-blank", r"\z\o' 'NUM.", "BODY", Uncertain, ""),
+        (
+            "overstrike-blank-rearmed",
+            r"\zX\z\o' 'NUM.",
+            "BODY",
+            Uncertain,
+            "",
+        ),
+    ];
+    source_matrix(&CASES, "BODY")
+}
+
 fn source_matrix(
     templates: &'static [Template],
     ordinary_body: &'static str,

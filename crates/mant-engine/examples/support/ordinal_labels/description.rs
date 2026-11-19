@@ -5,17 +5,18 @@ use libmandoc_rs::{Node, NodeKind};
 use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) enum Description {
+pub(crate) enum Description {
     Absent,
     Uncertain,
     Layout,
     Visible,
 }
 
-pub(super) fn description(node: &Node, continues: bool) -> Description {
+pub(crate) fn description(node: &Node, continues: bool) -> Description {
     DescriptionProbe {
         continues,
         zero_advance: false,
+        display_row: false,
     }
     .visit(node)
 }
@@ -23,6 +24,7 @@ pub(super) fn description(node: &Node, continues: bool) -> Description {
 struct DescriptionProbe {
     continues: bool,
     zero_advance: bool,
+    display_row: bool,
 }
 
 impl DescriptionProbe {
@@ -82,6 +84,27 @@ impl DescriptionProbe {
             (NodeKind::Table, _)
             | (NodeKind::Block, Some("Bd"))
             | (NodeKind::Element, Some("sp" | "Pp")) => return Description::Layout,
+            (NodeKind::Body, Some("D1" | "Dl")) => {
+                // termp_d1_pre() opens a separate row, and termp_bl_post()
+                // closes it at block exit. A buffered zero-width glyph can
+                // own that row even when the source's NODE_NOFILL is unset.
+                let previous = std::mem::replace(&mut self.display_row, true);
+                let result = self.visit_children(node.children.iter());
+                self.display_row = previous;
+                return result;
+            }
+            (NodeKind::Block, Some("Bl")) if node.list_kind.is_some() => {
+                // A native list or column owner remains substantive after
+                // its children project to no glyphs. termp_bl_pre/post()
+                // own the whole structure. An armed \z with no buffer may
+                // survive the post and affect the following ordinal.
+                let result = self.visit_children(node.children.iter());
+                return result.max(if self.zero_advance {
+                    Description::Uncertain
+                } else {
+                    Description::Layout
+                });
+            }
             // State-only macro operands do not go through term_word().
             (
                 _,
@@ -128,7 +151,9 @@ impl DescriptionProbe {
         let result = word_description(&word);
         if result != Description::Absent {
             result
-        } else if node.flags.no_fill && (word.has(WordEffect::Buffered) || !word.text.is_empty()) {
+        } else if (node.flags.no_fill || self.display_row)
+            && (word.has(WordEffect::Buffered) || !word.text.is_empty())
+        {
             // A buffered zero-width cell or line marker can still own a
             // physical no-fill row. A bare control writes no cell.
             Description::Layout

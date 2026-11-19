@@ -75,6 +75,31 @@ def ordinal_conversion():
 
 
 class AuditProfileWireTests(unittest.TestCase):
+    def test_recovered_ordinal_terms_preserve_canonical_consecutive_markers(self):
+        genuine = (
+            ['1.', '2.'], ['13)', '14)'], ['(4)', '(5)'],
+            ['18446744073709551614.', '18446744073709551615.'],
+            ['(0)', '(1)'],
+        )
+        rejected = (
+            ['1.', '1.'], ['2.', '1.'], ['1.', '3.'], ['1.', '2)'],
+            ['[1]', '[2]'], ['01.', '02.'], ['+1.', '+2.'],
+            ['18446744073709551615.', '18446744073709551616.'],
+            ['alpha', 'beta'], ['1. ', '2. '], ['١.', '٢.'],
+            ['1.', '2.', '4.'], ['9' * 5000 + '.', '2.'],
+        )
+        for terms, admissible in [(label, True) for label in genuine] + [(label, False) for label in rejected]:
+            for disposition in ('recovered-ordered-list', 'retained-definition-list'):
+                with self.subTest(terms=terms, disposition=disposition):
+                    response = successful_page(semantic)
+                    record = ordinal_conversion()
+                    record.update(terms=terms, expectedDisposition=disposition,
+                                  observedDispositions=[disposition])
+                    response['ordinalConversions'] = [record]
+                    status = self.finding(semantic, response).status
+                    accepted = admissible or disposition == 'retained-definition-list'
+                    self.assertEqual(status, 'clean' if accepted else 'hard-failure')
+
     def test_ordinal_recovery_requires_a_complete_native_tag_sequence(self):
         response = successful_page(semantic)
         response['ordinalConversions'] = [ordinal_conversion()]

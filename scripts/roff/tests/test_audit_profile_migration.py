@@ -27,9 +27,9 @@ class AuditProfileMigrationTests(unittest.TestCase):
 
     def test_stale_profiles_are_rescanned_once_without_losing_annotations(self):
         for audit, old_schema, read, write in (
-            (structure, 'mant.roff-structure-profile/v8',
+            (structure, 'mant.roff-structure-profile/v9',
              structure.read_structure_database, structure.write_structure_database),
-            (semantic, 'mant.roff-semantic-profile/v9', semantic.read_database, semantic.write_database),
+            (semantic, 'mant.roff-semantic-profile/v10', semantic.read_database, semantic.write_database),
         ):
             with self.subTest(audit=audit.__name__), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)

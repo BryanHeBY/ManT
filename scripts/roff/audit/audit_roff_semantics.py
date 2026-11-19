@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v10"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v11"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v1",
     "mant.roff-semantic-profile/v2",
@@ -50,6 +50,7 @@ SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v7",
     "mant.roff-semantic-profile/v8",
     "mant.roff-semantic-profile/v9",
+    "mant.roff-semantic-profile/v10",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -266,7 +267,7 @@ def valid_ordinal_conversion(value: object) -> bool:
         # Native candidate collection only recovers complete multi-item tag
         # lists. An observed ordered list can still be a legitimate mismatch.
         and (value["expectedDisposition"] != "recovered-ordered-list"
-             or value["listStyle"] == "tag" and len(value["terms"]) >= 2)
+             or value["listStyle"] == "tag" and valid_recovered_terms(value["terms"]))
         and isinstance(value.get("observedDispositions"), list)
         and all(isinstance(item, str) and item in observed for item in value["observedDispositions"])
         and isinstance(value.get("observedIrPaths"), list)
@@ -274,6 +275,37 @@ def valid_ordinal_conversion(value: object) -> bool:
         # audit_ordinals pairs each source occurrence with at most one IR owner.
         and len(value["observedDispositions"]) == len(value["observedIrPaths"]) <= 1
     )
+
+
+def recovered_ordinal(term: str) -> tuple[int, str] | None:
+    style = term[-1:]
+    if style not in (".", ")"):
+        return None
+    digits = term[:-1]
+    if style == ")" and digits.startswith("("):
+        style = "()"
+        digits = digits[1:]
+    # Bound integer conversion before accepting the producer's canonical
+    # decimal u64 spelling. Retained terms preserve arbitrary authored text.
+    if not re.fullmatch(r"0|[1-9][0-9]{0,19}", digits):
+        return None
+    number = int(digits)
+    return (number, style) if number <= (1 << 64) - 1 else None
+
+
+def valid_recovered_terms(terms: list[str]) -> bool:
+    if len(terms) < 2:
+        return False
+    sequence = iter(terms)
+    first = recovered_ordinal(next(sequence))
+    if first is None:
+        return False
+    number, style = first
+    for term in sequence:
+        number += 1
+        if recovered_ordinal(term) != (number, style):
+            return False
+    return True
 
 
 def expected_conversion_violations(conversions: list[dict[str, object]]) -> list[str]:
