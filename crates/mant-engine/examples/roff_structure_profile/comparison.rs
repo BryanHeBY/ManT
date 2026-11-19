@@ -26,11 +26,10 @@ pub(super) fn compare_structure(
         expected.display_equations,
         observed.display_equations,
     );
-    underflow(
+    super::literal_owners::compare(
+        &expected.literal_owners,
+        &observed.literal_origins,
         &mut violations,
-        "literal-displays",
-        expected.literal_displays,
-        observed.preformatted_lines,
     );
     underflow(
         &mut violations,

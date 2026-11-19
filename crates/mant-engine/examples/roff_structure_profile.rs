@@ -16,8 +16,8 @@ use std::{
 };
 
 use libmandoc_rs::{
-    Compression, DisplayKind, IncludePolicy, Node, NodeKind, ParseOptions, Parser,
-    SpecialCharacter, special_character,
+    Compression, IncludePolicy, Node, NodeKind, ParseOptions, Parser, SpecialCharacter,
+    special_character,
 };
 use mant_ir::{Block, Document, Inline, LinkTarget, Section};
 use mant_loader::{ManualPage, parse_manual_page};
@@ -39,6 +39,8 @@ mod head_payloads;
 mod ir;
 #[path = "roff_structure_profile/links.rs"]
 mod links;
+#[path = "roff_structure_profile/literal_owners.rs"]
+mod literal_owners;
 #[path = "roff_structure_profile/native.rs"]
 mod native;
 #[path = "roff_structure_profile/native_topology.rs"]
@@ -57,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v12";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v13";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +68,8 @@ struct AstStructure {
     literal_displays: usize,
     #[serde(skip)]
     literal_display_reviews: Vec<[u32; 2]>,
+    #[serde(skip)]
+    literal_owners: literal_owners::SourceDisplays,
     #[serde(skip)]
     source_context: ordinal_labels::SourceContext,
     paragraph_boundaries: usize,
@@ -101,6 +105,8 @@ struct AstStructure {
 struct IrStructure {
     preformatted_blocks: usize,
     preformatted_lines: usize,
+    #[serde(skip)]
+    literal_origins: literal_owners::ObservedDisplays,
     paragraph_blocks: usize,
     generic_list_items: usize,
     definition_items: usize,

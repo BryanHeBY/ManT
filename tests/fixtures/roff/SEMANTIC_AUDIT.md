@@ -10,7 +10,7 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v13`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v14`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
@@ -35,6 +35,9 @@ Display evidence tracks glyphs, completed blank rows and unknown effects
 independently. Font controls, continuations and skipped operands alone do
 not make a compact display substantive. State and boundary requests in a
 label follow their native handlers, including skipping alignment counts.
+A display inherits font evidence at its own source entry. Generated words
+participate in that display's editable field, including the styled `Fl`
+dash and the parentheses emitted by `Xr` around glyphless arguments.
 A zero or canceled spacing request can preserve a layout boundary without
 completing a physical row.
 The margin-character request can close a live field. Its argument decorates

@@ -56,13 +56,20 @@ pub(crate) enum FontEvidence {
 #[derive(Default)]
 pub(crate) struct SourceContext {
     no_space_owners: HashSet<u32>,
-    pub(crate) font: FontEvidence,
+    unproved_font_owners: HashSet<u32>,
+    joined_flag_dashes: HashSet<u32>,
+}
+
+#[derive(Default)]
+struct SourceState {
+    no_space: bool,
+    font: FontEvidence,
 }
 
 impl SourceContext {
     pub(crate) fn collect(root: &Node) -> Self {
         let mut spacing = Self::default();
-        spacing.walk(root, &mut false);
+        spacing.walk(root, &mut SourceState::default());
         spacing
     }
 
@@ -70,45 +77,131 @@ impl SourceContext {
         self.no_space_owners.contains(&node.id)
     }
 
-    fn walk(&mut self, node: &Node, no_space_mode: &mut bool) {
+    pub(crate) fn font_at(&self, node: &Node) -> FontEvidence {
+        if self.unproved_font_owners.contains(&node.id) {
+            FontEvidence::Unproved
+        } else {
+            FontEvidence::Plain
+        }
+    }
+
+    pub(crate) fn joins_flag_operand(&self, node: &Node) -> bool {
+        self.joined_flag_dashes.contains(&node.id)
+    }
+
+    fn walk(&mut self, node: &Node, state: &mut SourceState) {
         if skips_source_children(node) {
             return;
         }
-        if matches!(node.macro_token.as_deref(), Some("ft" | "Bf"))
-            || node
-                .text
-                .as_deref()
-                .is_some_and(|text| text.contains(r"\f"))
-        {
-            // This bounded audit does not reexecute the font stack across
-            // owners. A stateful font source makes plain slot sizes unproved.
-            self.font = FontEvidence::Unproved;
-        }
         match (node.kind, node.macro_token.as_deref()) {
             (NodeKind::Element, Some("Sm")) => {
-                *no_space_mode = spacing_mode(node, *no_space_mode);
+                state.no_space = spacing_mode(node, state.no_space);
+                return;
+            }
+            (_, Some("ft")) => {
+                state.font = font_request(node, state.font);
                 return;
             }
             (NodeKind::Head | NodeKind::Body, Some("It"))
-            | (NodeKind::Block, Some("D1" | "Dl" | "Bd"))
-                if *no_space_mode =>
-            {
-                self.no_space_owners.insert(node.id);
+            | (NodeKind::Block, Some("D1" | "Dl" | "Bd")) => {
+                if state.no_space {
+                    self.no_space_owners.insert(node.id);
+                }
+                if state.font == FontEvidence::Unproved {
+                    self.unproved_font_owners.insert(node.id);
+                }
             }
             (NodeKind::Table, _) => {
                 // tbl_term.c::term_tbl() clears NONOSPACE after each span.
-                *no_space_mode = false;
+                state.no_space = false;
                 return;
+            }
+            (NodeKind::Text, _)
+                if node
+                    .text
+                    .as_deref()
+                    .is_some_and(|text| text.contains(r"\f")) =>
+            {
+                state.font = FontEvidence::Unproved;
             }
             _ => {}
         }
-        // mdoc_term.c restores the font, offsets and margin at node exit.
-        // TERMP_NONOSPACE survives both HEAD and BODY, so later items see
-        // switches in earlier items and in the list's enclosing content.
+        let previous_font = state.font;
+        let scoped_font = source_font_scope(node);
+        if scoped_font {
+            state.font = FontEvidence::Unproved;
+        }
+        self.observe_flag_spacing(&node.children);
         for child in &node.children {
-            self.walk(child, no_space_mode);
+            self.walk(child, state);
+        }
+        // print_mdoc_node() restores the font stack depth after a macro
+        // push. An ordinary word or roff ft can replace the active slot.
+        if scoped_font {
+            state.font = previous_font;
         }
     }
+
+    fn observe_flag_spacing(&mut self, nodes: &[Node]) {
+        let mut next = None::<&Node>;
+        for node in nodes.iter().rev() {
+            if roff_transparent(node) {
+                continue;
+            }
+            // termp_fl_pre() glues a bare dash before the next macro
+            // on the same execution line, using roff_node_next().
+            if node.kind == NodeKind::Element
+                && node.macro_token.as_deref() == Some("Fl")
+                && (!node.children.is_empty()
+                    || next
+                        .is_some_and(|next| next.kind != NodeKind::Text && !next.flags.line_start))
+            {
+                self.joined_flag_dashes.insert(node.id);
+            }
+            next = Some(node);
+        }
+    }
+}
+
+fn roff_transparent(node: &Node) -> bool {
+    skips_source_children(node)
+        || matches!(
+            node.macro_token.as_deref(),
+            Some(
+                "ft" | "ll"
+                    | "mc"
+                    | "po"
+                    | "ta"
+                    | "Db"
+                    | "Es"
+                    | "Sm"
+                    | "Tg"
+                    | "DT"
+                    | "UC"
+                    | "PD"
+                    | "AT"
+            )
+        )
+}
+
+fn font_request(node: &Node, previous: FontEvidence) -> FontEvidence {
+    match node.children.first().and_then(|arg| arg.text.as_deref()) {
+        Some("1" | "R" | "CR" | "CW") => FontEvidence::Plain,
+        Some("" | "B" | "3" | "I" | "2" | "BI" | "4" | "P" | "CB" | "CI") => FontEvidence::Unproved,
+        _ => previous,
+    }
+}
+
+fn source_font_scope(node: &Node) -> bool {
+    matches!(
+        (node.kind, node.macro_token.as_deref()),
+        (NodeKind::Head, Some("Sh" | "Ss"))
+            | (NodeKind::Body, Some("Bf"))
+            | (
+                NodeKind::Element,
+                Some("Ar" | "Em" | "Sy" | "Cm" | "Ic" | "Li" | "Fl" | "Lk" | "In" | "Fn")
+            )
+    )
 }
 
 fn spacing_mode(node: &Node, previous: bool) -> bool {

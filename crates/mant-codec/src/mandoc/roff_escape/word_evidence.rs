@@ -81,12 +81,13 @@ impl RoffWordEvidence {
     #[must_use]
     pub fn has_leading_graph(&self) -> bool {
         self.leading_graph == LeadingGraph::Proved
+            || matches!(self.plain_slots, PlainSlots::Covering(_))
     }
 
     /// Placement remains unknown despite reading the source operands.
     #[must_use]
     pub fn has_unproved_graphs(&self) -> bool {
-        self.leading_graph == LeadingGraph::Unproved
+        self.leading_graph == LeadingGraph::Unproved && !self.has_leading_graph()
     }
 
     /// An empty initial pass rejected the remainder at a word-end break.
@@ -100,6 +101,18 @@ impl RoffWordEvidence {
     /// slot proof without invalidating an independently proved glyph.
     pub fn leave_plain_slots(&mut self) {
         self.plain_slots = PlainSlots::Unknown;
+    }
+
+    /// Observe the ASCII dash executed by mdoc Fl. `termp_fl_pre()` forces
+    /// bold, so `encode1()` writes dash, backspace and dash to the field.
+    pub fn extend_mdoc_flag_dash(&mut self) {
+        self.effects &= !(Continues as u8 | EmittedBreak as u8 | ZeroAdvance as u8);
+        if let PlainSlots::Prefix(length) = &mut self.plain_slots {
+            *length = length.saturating_add(3);
+        } else {
+            self.leave_plain_slots();
+        }
+        self.append("-");
     }
 
     /// Decode one owned terminal source word using the shared roff grammar.

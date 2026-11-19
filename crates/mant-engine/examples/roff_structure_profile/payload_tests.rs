@@ -149,6 +149,187 @@ fn display_probe(source: &str) -> String {
 }
 
 #[test]
+fn generated_words_are_checked_after_their_native_field_closes() {
+    for mode in ["Dl", "literal"] {
+        for (motion, join) in [(r"\h'|0n'", "Ns "), (r"\h'-12n'", "Ns "), (r"\h'|0n'", "")] {
+            for count in 0..=3 {
+                // termp_fl_pre() pushes bold. The fixed devices retain
+                // - BS -, BS -, -, and no glyph for the four prefixes.
+                let line = format!("Fl {join}No \"{motion}{}\"", r"\p".repeat(count));
+                let source = display_probe(&if mode == "Dl" {
+                    format!(".Dl {line}")
+                } else {
+                    format!(".Bd -literal -compact\n.{line}\n.Ed")
+                });
+                let (expected, topology, document) = parsed_structure(&source);
+                let (observed, actual) = ir_profile(&document);
+                assert_eq!(
+                    expected.literal_displays,
+                    usize::from(count < 3),
+                    "{source}"
+                );
+                assert!(expected.literal_display_reviews.is_empty(), "{source}");
+                let violations = compare_structure(&expected, &observed, &topology, &actual);
+                assert!(violations.is_empty(), "{source}: {violations:?}");
+            }
+        }
+        let examples = [
+            (r"Xr \& \&", false),
+            (r#"Fn x Ns No "\h'|0n'\p\p\p\p\p""#, true),
+            (r#"In x Ns No "\h'|0n'\p\p\p\p\p""#, true),
+            (r#"Lk u t Ns No "\h'|0n'\p\p\p\p\p""#, true),
+        ];
+        for (line, needs_local_review) in examples {
+            let source = display_probe(&if mode == "Dl" {
+                format!(".Dl {line}")
+            } else {
+                format!(".Bd -literal -compact\n.{line}\n.Ed")
+            });
+            let (expected, _, _) = parsed_structure(&source);
+            // termp_xr_pre() emits parentheses for two glyphless arguments.
+            // The other operands' full native field geometry isn't proved.
+            assert_eq!(
+                expected.literal_displays,
+                usize::from(!needs_local_review),
+                "{source}"
+            );
+            assert_eq!(
+                expected.literal_display_reviews.len(),
+                usize::from(needs_local_review),
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_later_font_event_cannot_change_a_closed_display_obligation() {
+    // The Roman cells are erased before the next section enters. The
+    // following font selection belongs to that section's own native scope.
+    for field in [
+        r".D1 PROOF\h'|0n'\p\p\p\p\p".to_string(),
+        r".Dl PROOF\h'|0n'\p\p\p\p\p".to_string(),
+        format!(".Bd -literal -compact\n{}\n.Ed", r"PROOF\h'|0n'\p\p\p\p\p"),
+        format!(".Bd -unfilled -compact\n{}\n.Ed", r"PROOF\h'|0n'\p\p\p\p\p"),
+    ] {
+        for suffix in [
+            ".ft R\nplain",
+            ".ft B\nstrong",
+            ".Bf -emphasis\nitalic\n.Ef",
+            r"then \fIitalic\fR text",
+        ] {
+            let base = display_probe(&field);
+            let source = base.replace("Done.\n", &format!("{suffix}\n"));
+            let (expected, _, _) = parsed_structure(&source);
+            assert_eq!(expected.literal_displays, 0, "{source}");
+            assert!(expected.literal_display_reviews.is_empty(), "{source}");
+        }
+    }
+}
+
+#[test]
+fn literal_obligations_cannot_use_another_display_or_repeat_one_occurrence() {
+    use mant_ir::Block;
+
+    for (body, victim) in [
+        (".Dl ALPHA\n.Bd -literal -compact\nALPHA\nBETA\n.Ed", 0),
+        (".Bd -literal -compact\nALPHA\nBETA\n.Ed\n.Dl ALPHA", 1),
+        (".de EXAMPLE\n.D1 ALPHA\n.Dl ALPHA\n..\n.EXAMPLE", 0),
+        (".de EXAMPLE\n.D1 ALPHA\n.Dl ALPHA\n..\n.EXAMPLE", 1),
+        (".Bd -literal -compact\nALPHA\n.Dl NESTED\nOMEGA\n.Ed", 1),
+    ] {
+        let source = display_probe(body);
+        let (expected, topology, mut document) = parsed_structure(&source);
+        let baseline = |document: &mant_ir::Document| {
+            let (observed, actual) = ir_profile(document);
+            compare_structure(&expected, &observed, &topology, &actual)
+        };
+        assert_eq!(expected.literal_displays, 2, "{source}");
+        let violations = baseline(&document);
+        assert!(violations.is_empty(), "{source}: {violations:?}");
+        let blocks = &mut document.sections[1].blocks;
+        let index = blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, block)| matches!(block, Block::Preformatted { .. }))
+            .nth(victim)
+            .unwrap()
+            .0;
+        blocks.remove(index);
+        let violations = baseline(&document);
+        assert_eq!(
+            violations
+                .iter()
+                .filter(|line| line.starts_with("literal-displays:"))
+                .count(),
+            1,
+            "{source}: {violations:?}"
+        );
+    }
+}
+
+#[test]
+fn literal_origin_must_stay_in_its_own_item_body() {
+    use mant_ir::Block;
+
+    // The fixed tree's macro expansion gives both native items and display
+    // payloads identical coordinates. The fixed devices retain both rows.
+    for body in [
+        ".Bl -tag -width width\n.It FIRST\n.Dl ALPHA\n.It SECOND\n.Dl ALPHA\n.El",
+        ".de EXAMPLE\n.It FIRST\n.Dl ALPHA\n.It SECOND\n.Dl ALPHA\n..\n.Bl -tag -width width\n.EXAMPLE\n.El",
+    ] {
+        let source = display_probe(body);
+        let (expected, topology, mut document) = parsed_structure(&source);
+        let check = |document: &mant_ir::Document| {
+            let (observed, actual) = ir_profile(document);
+            compare_structure(&expected, &observed, &topology, &actual)
+        };
+        assert!(check(&document).is_empty());
+        let Some(Block::DefinitionList { items, .. }) = document.sections[1]
+            .blocks
+            .iter_mut()
+            .find(|block| matches!(block, Block::DefinitionList { .. }))
+        else {
+            panic!("native It must own the literal block");
+        };
+        let relocated = items[0].description.remove(0);
+        items[1].description.push(relocated);
+        let violations = check(&document);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        assert!(violations[0].starts_with("literal-displays:"));
+    }
+}
+
+#[test]
+fn an_inferred_definition_preserves_its_original_literal_ancestry() {
+    use mant_ir::Block;
+
+    // Fixed CVS executes this display directly in the authored It body.
+    // The semantic index can then deduce a more specific owner for "-p1".
+    let source = display_probe(concat!(
+        ".Bl -tag -width width\n.It Fl p Ar strip-count\n.Fl p Ns Ar 1\ngives\n",
+        ".Pp\n.D1 Pa u/howard/src/blurfl/blurfl.c\n.Pp\nwithout the leading slash.\n.El",
+    ));
+    let (expected, topology, document) = parsed_structure(&source);
+    let Some(Block::DefinitionList { items, .. }) = document.sections[1]
+        .blocks
+        .iter()
+        .find(|block| matches!(block, Block::DefinitionList { .. }))
+    else {
+        panic!("expected authored It");
+    };
+    assert!(items[0].description.iter().any(|block| matches!(
+        block,
+        Block::DefinitionList { items, .. }
+            if items[0].description.iter().any(|block| matches!(block, Block::Preformatted { .. }))
+    )));
+    let (observed, actual) = ir_profile(&document);
+    assert_eq!(expected.literal_displays, 1);
+    let violations = compare_structure(&expected, &observed, &topology, &actual);
+    assert!(violations.is_empty(), "{violations:?}");
+}
+
+#[test]
 fn display_field_uses_its_inherited_spacing_mode_and_tbl_resets_it() {
     use crate::ordinal_labels::SourceContext;
     use libmandoc_rs::{Node, NodeKind, Parser};

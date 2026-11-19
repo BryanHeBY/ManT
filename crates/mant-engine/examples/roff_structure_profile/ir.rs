@@ -22,6 +22,7 @@ pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
     for section in &document.sections {
         collect_section(section, &mut profile, &mut topology);
     }
+    profile.literal_origins = super::literal_owners::record_ir_displays(document);
     topology.lists.sort_by_key(|list| list.source_line);
     topology.equations.sort_by_key(|equation| {
         (
@@ -150,7 +151,7 @@ fn collect_blocks(
     }
 }
 
-fn has_visible_inline(inlines: &[Inline]) -> bool {
+pub(super) fn has_visible_inline(inlines: &[Inline]) -> bool {
     inlines.iter().any(|inline| match inline {
         Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
             !value.is_empty()

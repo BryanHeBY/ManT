@@ -45,10 +45,6 @@ impl Payload {
         spacing: Spacing::Row,
         ..Self::ABSENT
     };
-    const GLYPHS: Self = Self {
-        glyphs: Glyphs::Text,
-        ..Self::ABSENT
-    };
     const UNRESOLVED: Self = Self {
         uncertainty: Uncertainty::Field,
         ..Self::ABSENT
@@ -108,18 +104,18 @@ pub(crate) fn description(node: &Node, continues: bool, context: &SourceContext)
         zero_advance: false,
         display: None,
         no_space_mode: context.no_space_at(node),
-        font: context.font,
+        source: context,
         space_debt: 0,
     }
     .visit(node)
 }
 
-struct DescriptionProbe {
+struct DescriptionProbe<'a> {
     continues: bool,
     zero_advance: bool,
     display: Option<DisplayField>,
     no_space_mode: bool,
-    font: FontEvidence,
+    source: &'a SourceContext,
     space_debt: i32,
 }
 
@@ -131,7 +127,7 @@ struct DisplayField {
     font_changed: bool,
 }
 
-impl DescriptionProbe {
+impl DescriptionProbe<'_> {
     fn visit(&mut self, node: &Node) -> Payload {
         // print_mdoc_node() handles the input line before its macro,
         // including ignored operands. A continuation keeps it live.
@@ -146,9 +142,6 @@ impl DescriptionProbe {
     fn visit_node(&mut self, node: &Node) -> Payload {
         if super::skips_source_children(node) {
             return Payload::ABSENT;
-        }
-        if generated_body_glyph(node) {
-            return Payload::GLYPHS;
         }
         if let Some(control) = source_control(node) {
             return self.control(node, control);
@@ -170,23 +163,44 @@ impl DescriptionProbe {
                 }
                 return self.close_field().merge(payload);
             }
-            (NodeKind::Element, Some("Fn")) if !node.children.is_empty() => {
-                // termp_fn_pre() writes both parentheses after the name,
-                // even when that first word has no visible glyph.
-                return Payload::GLYPHS;
+            (NodeKind::Element, Some("Fl")) => return self.flag(node),
+            (NodeKind::Element, Some("Fn")) => return self.function(node),
+            (NodeKind::Element, Some("In")) => return self.include(node),
+            (NodeKind::Element, Some("Lk")) => return self.link(node),
+            (NodeKind::Element, Some("Xr")) => return self.manual_reference(node),
+            (NodeKind::Element, Some("Ap")) => {
+                return self
+                    .word("'", true, true, false)
+                    .merge(self.visit_children(node.children.iter()));
+            }
+            (NodeKind::Body, Some("Rs")) if has_reference_fields(node) => {
+                self.leave_plain_slots();
+                return self
+                    .visit_children(node.children.iter())
+                    .merge(self.word(".", true, false, false));
             }
             (NodeKind::Body, Some("En")) => return self.enclosure(node),
+            (NodeKind::Body, Some("Fo")) => return self.delimiters(node, "(", ")", true),
             // mdoc_term.c :: termp_quote_pre/post write the delimiters even
             // with no BODY children. The macro label itself is not an operand.
-            (NodeKind::Element, Some("Ap" | "Fl"))
-            | (NodeKind::Body, Some("Fo"))
-            | (
+            (
                 NodeKind::Body | NodeKind::Element,
                 Some(
                     "Ao" | "Aq" | "Bo" | "Bq" | "Bro" | "Brq" | "Do" | "Dq" | "Oo" | "Op" | "Po"
                     | "Pq" | "Ql" | "Qo" | "Qq" | "So" | "Sq",
                 ),
-            ) => return Payload::GLYPHS,
+            ) => {
+                let (open, close) = match token {
+                    Some("Ao" | "Aq") => (r"\(la", r"\(ra"),
+                    Some("Bro" | "Brq") => ("{", "}"),
+                    Some("Bo" | "Bq" | "Oo" | "Op") => ("[", "]"),
+                    Some("Do" | "Dq") => (r"\(lq", r"\(rq"),
+                    Some("Po" | "Pq") => ("(", ")"),
+                    Some("Qo" | "Qq") => ("\"", "\""),
+                    _ => (r"\(oq", r"\(cq"),
+                };
+                return self.delimiters(node, open, close, false);
+            }
             (NodeKind::Table, _) => {
                 // tbl_term.c::term_tbl() clears NONOSPACE when it finishes.
                 self.no_space_mode = false;
@@ -269,6 +283,106 @@ impl DescriptionProbe {
         opening.merge(children).merge(closing)
     }
 
+    fn delimiters(&mut self, node: &Node, opening: &str, closing: &str, glued: bool) -> Payload {
+        self.word(opening, glued, true, false)
+            .merge(self.visit_children(node.children.iter()))
+            .merge(self.word(closing, true, false, false))
+    }
+
+    fn flag(&mut self, node: &Node) -> Payload {
+        // termp_fl_pre() always writes a bold dash before its own operands.
+        let dash = if let Some(field) = &mut self.display {
+            if field.saw_word && !field.join_next && !self.no_space_mode {
+                field.word.extend(" ");
+            }
+            field.word.extend_mdoc_flag_dash();
+            field.saw_word = true;
+            field.join_next = self.source.joins_flag_operand(node);
+            self.continues = false;
+            self.zero_advance = field.word.has(WordEffect::ZeroAdvance);
+            self.space_debt = 0;
+            Payload::ABSENT
+        } else {
+            self.word("-", false, false, false)
+        };
+        if !node.children.is_empty() {
+            self.leave_plain_slots();
+        }
+        dash.merge(self.visit_children(node.children.iter()))
+    }
+
+    fn function(&mut self, node: &Node) -> Payload {
+        let Some((name, arguments)) = node.children.split_first() else {
+            return Payload::ABSENT;
+        };
+        // termp_fn_pre(): bold name, left delimiter, underlined arguments,
+        // comma separators, right delimiter. The SYNOPSIS branch can flush
+        // between these writes, so do not infer its exact field geometry.
+        self.leave_plain_slots();
+        let mut result = self
+            .visit_text(name)
+            .merge(self.word("(", true, true, false));
+        for (index, argument) in arguments.iter().enumerate() {
+            if index != 0 {
+                result = result.merge(self.word(",", true, false, false));
+            }
+            result = result.merge(self.visit_text(argument));
+        }
+        result.merge(self.word(")", true, false, false))
+    }
+
+    fn include(&mut self, node: &Node) -> Payload {
+        // termp_in_pre/post() execute angle brackets even for glyphless
+        // operands. The enclosed argument has a separate font selection.
+        self.leave_plain_slots();
+        self.word("<", false, true, false)
+            .merge(self.visit_children(node.children.iter()))
+            .merge(self.word(">", true, false, false))
+    }
+
+    fn link(&mut self, node: &Node) -> Payload {
+        let Some((target, operands)) = node.children.split_first() else {
+            return Payload::ABSENT;
+        };
+        let trailing = operands
+            .iter()
+            .rposition(|child| !child.flags.delimiter_close)
+            .map_or(0, |index| index + 1);
+        let (description, punctuation) = operands.split_at(trailing);
+        // termp_lk_pre() selects the description's font before its colon,
+        // writes the target afterwards, then appends trailing punctuation.
+        self.leave_plain_slots();
+        let mut result = self.visit_children(description.iter());
+        if !description.is_empty() {
+            result = result.merge(self.word(":", true, false, false));
+        }
+        result
+            .merge(self.visit_text(target))
+            .merge(self.visit_children(punctuation.iter()))
+    }
+
+    fn manual_reference(&mut self, node: &Node) -> Payload {
+        let [name, rest @ ..] = node.children.as_slice() else {
+            return Payload::ABSENT;
+        };
+        let result = self.visit_text(name);
+        let [section, ..] = rest else {
+            return result;
+        };
+        // termp_xr_pre() does not test whether operands printed before
+        // writing glued parentheses. A glyphless pair still writes "()".
+        result
+            .merge(self.word("(", true, true, false))
+            .merge(self.visit_text(section))
+            .merge(self.word(")", true, false, false))
+    }
+
+    fn leave_plain_slots(&mut self) {
+        if let Some(field) = &mut self.display {
+            field.word.leave_plain_slots();
+        }
+    }
+
     fn list(&mut self, node: &Node) -> Payload {
         let before = self.close_field();
         let mut result = Payload::ABSENT;
@@ -330,7 +444,7 @@ impl DescriptionProbe {
         // cell or marker. A compact display alone writes no blank.
         let before = self.close_field();
         let mut field = DisplayField::default();
-        if self.font == FontEvidence::Unproved {
+        if self.source.font_at(node) == FontEvidence::Unproved {
             field.font_changed = true;
             field.word.leave_plain_slots();
         }
@@ -517,41 +631,28 @@ fn equation_context(equation: &libmandoc_rs::EquationBox, has_siblings: bool) ->
     }
 }
 
-fn generated_body_glyph(node: &Node) -> bool {
-    match (node.kind, node.macro_token.as_deref()) {
-        // termp_in_pre/post write both angle delimiters independently of
-        // the include operand's printable scalar content.
-        (NodeKind::Element, Some("In")) => true,
-        // termp_lk_pre writes ':' when a description precedes the suffix
-        // punctuation, including a description made only of zero-width cells.
-        (NodeKind::Element, Some("Lk")) => node
-            .children
-            .iter()
-            .skip(1)
-            .any(|child| !child.flags.delimiter_close && !child.flags.no_print),
-        // termp____post writes a period/comma for the executed reference
-        // fields under Rs. Merely entering an empty reference prints none.
-        (NodeKind::Body, Some("Rs")) => node.children.iter().any(|child| {
-            !child.flags.no_print
-                && matches!(
-                    child.macro_token.as_deref(),
-                    Some(
-                        "%A" | "%B"
-                            | "%C"
-                            | "%D"
-                            | "%I"
-                            | "%J"
-                            | "%N"
-                            | "%O"
-                            | "%P"
-                            | "%Q"
-                            | "%R"
-                            | "%T"
-                            | "%U"
-                            | "%V"
-                    )
+fn has_reference_fields(node: &Node) -> bool {
+    // termp____post writes a period/comma for the executed reference
+    // fields under Rs. Merely entering an empty reference prints none.
+    node.children.iter().any(|child| {
+        !child.flags.no_print
+            && matches!(
+                child.macro_token.as_deref(),
+                Some(
+                    "%A" | "%B"
+                        | "%C"
+                        | "%D"
+                        | "%I"
+                        | "%J"
+                        | "%N"
+                        | "%O"
+                        | "%P"
+                        | "%Q"
+                        | "%R"
+                        | "%T"
+                        | "%U"
+                        | "%V"
                 )
-        }),
-        _ => false,
-    }
+            )
+    })
 }

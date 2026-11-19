@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v12` successful page response requires
+The `mant.roff-structure-profile/v13` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -149,8 +149,20 @@ display's source coordinates for Review. A nested column's cells or a
 definition's terms supply their own content. Literal text in an item's
 description still supplies an obligation.
 Each display inherits the spacing mode at its source position. A tbl span
-clears that mode before later words. Whole-prefix replacement is conclusive
-only for proved plain slots; inherited font effects can leave it for Review.
+clears that mode before later words. Each display inherits only the font
+evidence available when it enters. A local or inherited font can leave
+whole-prefix replacement for Review. A later font request in a separate
+owner does not affect a finished display.
+Generated terminal words enter the same source field as authored words.
+The forced bold dash of `Fl` has three known device cells, while a manual
+reference can generate parentheses for two glyphless arguments.
+
+Each proven display needs a sourced literal block in its own section or
+item. Native child positions identify possible block origins; separately
+owned displays and definition terms retain their own roles. Multiple
+occurrences can share coordinates after macro expansion, so a block can
+satisfy at most one display obligation. A multiline neighbor cannot cover a
+missing display.
 
 Repeated zero-advance effects and normalized custom enclosures retain their
 source execution order. BODY evidence follows the native selected equation

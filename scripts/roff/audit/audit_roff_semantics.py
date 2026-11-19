@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v13"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v14"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v1",
     "mant.roff-semantic-profile/v2",
@@ -53,6 +53,7 @@ SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v10",
     "mant.roff-semantic-profile/v11",
     "mant.roff-semantic-profile/v12",
+    "mant.roff-semantic-profile/v13",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [

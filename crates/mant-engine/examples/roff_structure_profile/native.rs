@@ -1,6 +1,6 @@
 //! Owned native observations and source topology.
 use super::{
-    AstStructure, AstTopology, BTreeMap, BTreeSet, DisplayKind, NoFillSourceLine, Node, NodeKind,
+    AstStructure, AstTopology, BTreeMap, BTreeSet, NoFillSourceLine, Node, NodeKind,
     SpecialCharacter,
     head_payloads::HeadPayloads,
     native_topology::{
@@ -10,7 +10,7 @@ use super::{
     ordinal_labels::{
         SourceContext,
         controls::{SourceControl, source_control},
-        description::{description, word_payload},
+        description::word_payload,
         skips_source_children,
     },
     special_character,
@@ -23,6 +23,7 @@ pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, 
         ..AstStructure::default()
     };
     let mut no_fill_lines = BTreeMap::new();
+    super::literal_owners::record_source_displays(root, &mut profile);
     let head_payloads = HeadPayloads::collect(root);
     collect_ast_structure(
         root,
@@ -57,22 +58,6 @@ fn collect_ast_structure(
     }
     if node.kind == NodeKind::Block {
         match node.macro_token.as_deref() {
-            Some("D1" | "Dl" | "Bd")
-                if (node.macro_token.as_deref() != Some("Bd")
-                    || matches!(
-                        node.display_kind,
-                        Some(DisplayKind::Literal | DisplayKind::Unfilled)
-                    )) =>
-            {
-                let payload = description(node, false, &profile.source_context);
-                if payload.has_text() {
-                    profile.literal_displays += 1;
-                } else if payload.unproved_literal() {
-                    profile
-                        .literal_display_reviews
-                        .push([node.line, node.column]);
-                }
-            }
             Some("PP" | "P" | "LP" | "HP") if has_visible_flow_text(node) => {
                 profile.paragraph_boundaries += 1;
             }

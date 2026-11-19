@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v13";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v14";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
