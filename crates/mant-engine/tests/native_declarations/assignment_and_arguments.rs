@@ -5,7 +5,14 @@ use super::support::{check_head, explain, explanation_ranges, load, roundtrip};
 
 const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n";
 
-fn check(source: &str, form: &str, names: &[&str], operands: &[&str], body: &str, head_line: u32) {
+pub(super) fn check(
+    source: &str,
+    form: &str,
+    names: &[&str],
+    operands: &[&str],
+    body: &str,
+    head_line: u32,
+) {
     let content = load(source);
     let items = super::definitions(content.document.as_ref().unwrap());
     let [item] = items.as_slice() else {

@@ -130,6 +130,69 @@
       }
     },
     {
+      "file": "freebsd-zfs-create.8.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man8/zfs-create.8.gz",
+      "sourceSha256": "e7f7b6cb0bfff0c35b4e908b9b17ba136e7ef541452df2538f36340c46459d4c",
+      "fixtureSha256": "e7f7b6cb0bfff0c35b4e908b9b17ba136e7ef541452df2538f36340c46459d4c",
+      "decompressedSha256": "83a9d7cc806877c12feb5440622a5e930c81bf01ced2ec0ac5715163c736aec7",
+      "sourceBytes": 2540,
+      "fixtureBytes": 2540,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originalAuditDate": "2026-11-19",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "sourceRepository": null,
+      "revision": null,
+      "archive": "base.txz",
+      "archiveMember": "./usr/share/man/man8/zfs-create.8.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "license": "CDDL-1.0; original copyright notices retained",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "transformation": "None; exact gzip member from the release archive.",
+      "selectionReason": "Both filesystem and volume commands bind the same Nm/Cm invocation before optional operands.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "81e85b574021a49a69c2da5ea32a9b930c94c4f36012f6da748462bce53e3f87",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8797,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "922e8cc841f5f12b6c253b09bae8164ed900d98040db59c3b097619f5bef203d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8799,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "90d9e7b175f69577d825ec435b35c3e0a9e57d6014d6b94a99c8a1c64eb27935",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 15631,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "04e5e8bfc31c1e668a4f9dccc816863e2410eaf4db4766d4d7c095816f67134d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 33510,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "b868489c6a359a279ddd9d941fe69251c5f33216943e25abc5b189b045370bce",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 363,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
       "file": "freebsd-zfs-mount.8.gz",
       "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man8/zfs-mount.8.gz",
       "sourceSha256": "d82f7b920f021bcca8d2d74dc53af6dcbe39e7acee9db3e1b82cf70dcc14038b",
@@ -187,6 +250,69 @@
           "stdoutSha256": "4a8c7dfb5b323ec03e2ae9fc16aab8b9fa4a30470faa22b1273b1de3b3eace8a",
           "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "stdoutBytes": 88,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-zfs-send.8.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man8/zfs-send.8.gz",
+      "sourceSha256": "adad4afa67a7eedbbac64d116943ec0fdd6f2e70c04441baa49dccebe3af8eb7",
+      "fixtureSha256": "adad4afa67a7eedbbac64d116943ec0fdd6f2e70c04441baa49dccebe3af8eb7",
+      "decompressedSha256": "d4fedf1190c471de6eccb6b003fc59df545d671c79f8edc26d9090041f878c30",
+      "sourceBytes": 7244,
+      "fixtureBytes": 7244,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originalAuditDate": "2026-11-19",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "sourceRepository": null,
+      "revision": null,
+      "archive": "base.txz",
+      "archiveMember": "./usr/share/man/man8/zfs-send.8.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "license": "CDDL-1.0; original copyright notices retained",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "transformation": "None; original gzip bytes of the hard link to ./usr/share/man/man8/zfs-redact.8.gz in base.txz.",
+      "selectionReason": "Send and redact command owners retain their distinct source lines, including resuming a send.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "bdabb4b67a9b0293d4e1e5193dce7bd5da46f5013f2a5db7af4d799d9cf80e6e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 30837,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "28c9172fb688df5fc59483871b5db6775c0cdb264f7c78939d34f8e6acbe1db4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 30839,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "295d4b6f7c8b231a9adb1d62b4c759578bdba409c8f24e3c1cf6ecb69954b7fa",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 41797,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "3d19c3b20df3fcf3c89b5192eea348ea42f3d6948ae5fd0810cb4aaca9fee6ca",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 88767,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "2cf25d345f02b976c5079a4381aa72b927d144424929f33076c950bf752fd001",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 464,
           "stderrBytes": 0,
           "status": "CapturedWithDiagnostics"
         }

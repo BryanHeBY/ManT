@@ -214,7 +214,7 @@ impl Projection {
             .any(|(separator, command)| {
                 let delimiter = text[separator.bytes.clone()].trim();
                 if !matches!(
-                    separator.role,
+                    separator.role.declaration_delimiter(),
                     NativeOperandRole::LiteralContinuation(None)
                         | NativeOperandRole::PipeDelimiter(None)
                 ) || !matches!(delimiter, "," | "|")

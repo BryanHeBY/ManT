@@ -9,6 +9,7 @@ use libmandoc_rs::{
 /// using `roff.c::roff_node_prev/next` and `roff_node_transparent`.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Siblings<'a> {
+    pub(super) raw_previous: Option<&'a Node>,
     pub(super) raw_next: Option<&'a Node>,
     pub(super) previous: Option<&'a Node>,
     pub(super) next: Option<&'a Node>,
@@ -26,6 +27,7 @@ pub(super) fn with_siblings(nodes: &[Node]) -> impl Iterator<Item = (&Node, Sibl
             next_index += 1;
         }
         let siblings = Siblings {
+            raw_previous: index.checked_sub(1).map(|prior| &nodes[prior]),
             raw_next: nodes.get(index + 1),
             previous,
             next: nodes.get(next_index),

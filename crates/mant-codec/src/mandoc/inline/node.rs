@@ -9,6 +9,7 @@ use super::{
     InlineBuilder, append_inline_nodes, font::lower_man_font_scope, lower_inline_nodes, names,
     plain_text, scopes, synopsis, word_input::append_text_node,
 };
+use crate::definitions::NativeOperandRole;
 use crate::mandoc::{adjacency, controls, layout, roff_escape, source_span, targets};
 
 /// Execute one node without an original parent sequence. Native pre-handlers
@@ -33,6 +34,7 @@ pub(in crate::mandoc) fn append_inline_node_with_siblings(
         builder,
         node,
         adjacency::Siblings {
+            raw_previous: None,
             previous,
             raw_next: next,
             next,
@@ -57,7 +59,7 @@ pub(in crate::mandoc) fn append_inline_node_with_source(
         return;
     }
     if node.kind == NodeKind::Text && !node.flags.no_print {
-        append_text_node(builder, node);
+        append_source_text(builder, node, siblings);
         builder.finish_executed_node(node);
         return;
     }
@@ -127,6 +129,43 @@ pub(in crate::mandoc) fn append_inline_node_with_source(
     execute_inline_macro_post(builder, node);
     builder.finish_executed_node(node);
     builder.restore_definition_geometry(geometry);
+}
+
+fn append_source_text(builder: &mut InlineBuilder, node: &Node, siblings: adjacency::Siblings<'_>) {
+    if let Some(role) = reopened_flag_delimiter(node, siblings) {
+        builder.with_native_operand_role(role, |builder| append_text_node(builder, node));
+    } else {
+        append_text_node(builder, node);
+    }
+}
+
+fn reopened_flag_delimiter(
+    node: &Node,
+    siblings: adjacency::Siblings<'_>,
+) -> Option<NativeOperandRole> {
+    let delimiter = node
+        .decoder_text()
+        .filter(|word| matches!(*word, "," | "|"))?;
+    let (before, after) = (siblings.raw_previous?, siblings.raw_next?);
+    let flag = |node: &Node| {
+        !node.flags.no_print
+            && node.kind == NodeKind::Element
+            && node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Fl))
+    };
+    // in_line() reopens Fl at its original ppos. A second request
+    // produced by macro expansion can share that position but starts
+    // a new input line, unlike the reopened element and its delimiter.
+    (flag(before)
+        && flag(after)
+        && before.line == node.line
+        && after.line == node.line
+        && before.column == after.column
+        && !node.flags.line_start
+        && !after.flags.line_start)
+        .then_some(NativeOperandRole::FlReopening {
+            pipe: delimiter == "|",
+            enclosure: None,
+        })
 }
 
 fn append_ordered_declaration_or_display_part(

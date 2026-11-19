@@ -5,7 +5,7 @@ use super::{
     invocation, offset, operand_at, operand_cursor, recognize_part, unwrapped,
 };
 use crate::definitions::syntax::{
-    DeclarationLimit, commands,
+    DeclarationLimit, commands, decision,
     eligibility::{NameSource, OperandUses, intersecting_operands},
     inference::infer_lexical_terms,
     named,
@@ -115,13 +115,19 @@ pub(super) fn recognize(
     let (head, enclosure) = unwrap_search(text, text, operands);
     let groups = partition.groups(text, head, operands, enclosure, 0, admission)?;
     let protected_arguments = !partition.argument_separators.is_empty();
-    if !partition.separated && !protected_arguments
-        || admission == Admission::AfterSeparator
-            && !operands
-                .iter()
-                .any(|operand| operand.role.subject().is_some())
-            && !protected_arguments
-            && !partition.has_mixed_roles(operands)
+    if !partition.separated && !protected_arguments {
+        return None;
+    }
+    if admission == Admission::AfterSeparator
+        && !protected_arguments
+        && !operands
+            .iter()
+            .any(|operand| operand.role.subject().is_some())
+        && !partition.has_mixed_roles(operands)
+        && !partition
+            .ranges
+            .iter()
+            .any(|span| invocation::compound_name(text, span, operands).is_some())
     {
         return None;
     }
@@ -349,11 +355,26 @@ fn collect_group(
         operand.role == NativeOperandRole::ExplicitOption
             || operand.role == NativeOperandRole::Placeholder
     });
+    let compound = enclosure
+        .is_none()
+        .then(|| invocation::compound_name(text, span, operands))
+        .flatten();
+    let assignment = invocation::assignment_operator(&text[span.clone()]).is_some_and(|equals| {
+        let uses = OperandUses::new(operands).shifted(span.start);
+        !uses.protects(&(0..equals)) && !uses.protects_named_syntax(equals, b'=')
+    });
     let hint = group_hint(source, index, lead, admission, enclosure);
-    let explicit = hint.is_some()
+    let explicit = compound.is_some()
+        || assignment
+        || hint.is_some()
         || operand_label
         || lead.is_some_and(|operand| operand.role.subject().is_some());
-    let Ok((kind, result)) = recognize_group(source, index, hint, admission, enclosure) else {
+    let recognized = if let Some(name) = compound {
+        Ok((EntryKind::Command, Recognition::one(Some(name))))
+    } else {
+        recognize_group(source, index, hint, admission, enclosure, assignment)
+    };
+    let Ok((kind, result)) = recognized else {
         candidates.unproved_part = true;
         return Ok(());
     };
@@ -450,11 +471,11 @@ fn independent_groups<'a>(
             // In a weak prefix, punctuation embedded in a prose operand
             // cannot authorize a later native subject as its own declaration.
             current.is_none_or(|operand| {
-                !(operand.role == NativeOperandRole::LiteralContinuation(enclosure)
-                    || operand.role == NativeOperandRole::PipeDelimiter(enclosure)
-                    || enclosure.is_some_and(|body| {
-                        operand.role == NativeOperandRole::EnclosureContent(body)
-                    }))
+                let role = operand.role.declaration_delimiter();
+                !(role == NativeOperandRole::LiteralContinuation(enclosure)
+                    || role == NativeOperandRole::PipeDelimiter(enclosure)
+                    || enclosure
+                        .is_some_and(|body| role == NativeOperandRole::EnclosureContent(body)))
                     || operand.bytes.start < start
                     || head
                         .get(operand.bytes.start - start..operand.bytes.end - start)
@@ -463,7 +484,7 @@ fn independent_groups<'a>(
         } else {
             current.is_some_and(|operand| {
                 operand.role.is_parameter()
-                    || match operand.role {
+                    || match operand.role.declaration_delimiter() {
                         NativeOperandRole::ExplicitOption
                         | NativeOperandRole::Description
                         | NativeOperandRole::SymbolicText
@@ -512,13 +533,10 @@ fn group_hint(
         {
             Some(NativeHeadRole::Literal)
         }
-        // A styled Nm followed by Cm can prove one compound command.
         // An Ar operand or typed subject preceding Ic still supplies its
         // own role even when the whole HEAD appears under COMMANDS.
-        _ if (admission != Admission::ProtectedSyntax
+        _ if admission != Admission::ProtectedSyntax
             && source.context == DefinitionContext::Commands
-            || lead.is_some_and(|operand| operand.role == NativeOperandRole::ProgramName)
-                && !source.argument_separators(&source.ranges[index]).is_empty())
             && lead.is_none_or(|operand| {
                 operand.role.subject().is_none() && !operand.role.is_operand_label()
             })
@@ -538,6 +556,7 @@ fn recognize_group(
     hint: Option<NativeHeadRole>,
     admission: Admission,
     enclosure: Option<u32>,
+    assignment: bool,
 ) -> Result<(EntryKind, Recognition), RejectedPart> {
     let (text, operands) = (source.text, source.operands);
     let span = &source.ranges[index];
@@ -545,8 +564,9 @@ fn recognize_group(
     if let Some(hint) = hint {
         return recognize_lexical_group(source, index, hint, admission);
     }
-    if intersecting_operands(operands, span.clone())
-        .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
+    if !assignment
+        && intersecting_operands(operands, span.clone())
+            .any(|operand| operand.role == NativeOperandRole::ExplicitOption)
     {
         // Joined text from another operand is neither a complete option
         // nor a new lexical spelling containing both operands.
@@ -565,10 +585,22 @@ fn recognize_group(
         .filter(|name| uses.permits(name, NameSource::Lexical))
         .map(|name| rebase(name, span.start))
         .collect();
+    let (kind, case) = if assignment {
+        match decision::select_kind(part, source.context, None) {
+            identity @ (
+                EntryKind::EnvironmentVariable | EntryKind::ConfigurationKey | EntryKind::Variable,
+                _,
+            ) => identity,
+            _ => (EntryKind::Term, NameCase::Sensitive),
+        }
+    } else {
+        (EntryKind::Term, NameCase::Sensitive)
+    };
     Ok((
-        EntryKind::Term,
+        kind,
         Recognition {
             names,
+            case: Some(case),
             ..Recognition::default()
         },
     ))

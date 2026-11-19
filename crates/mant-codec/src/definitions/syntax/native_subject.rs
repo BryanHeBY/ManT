@@ -140,6 +140,11 @@ fn recognize_part(
     let lead = operands
         .get(first)
         .filter(|operand| operand.bytes.contains(&start))?;
+    if enclosure.is_none()
+        && let Some(name) = invocation::compound_name(text, &(start..end), operands)
+    {
+        return Some((EntryKind::Command, Recognition::one(Some(name))));
+    }
     if lead.role.is_operand_label()
         || matches!(lead.role, NativeOperandRole::SearchArgument(_))
             && head.len() < text.trim().len()

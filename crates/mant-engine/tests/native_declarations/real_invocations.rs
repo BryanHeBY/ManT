@@ -67,6 +67,12 @@ fn check_owner(
         .find(|hit| hit.class == EvidenceClass::DirectEntry && hit.source == owner.source)
         .unwrap();
     assert_eq!(named.entry.as_ref().unwrap().kind, kind);
+    assert!(
+        named
+            .bases
+            .iter()
+            .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+    );
     let form_lookup = roundtrip(&explain(content, form));
     let formed = form_lookup
         .evidence
@@ -132,7 +138,15 @@ fn freebsd_zfs_mount_keeps_the_flag_owner_independent_from_the_invocation() {
     // invocation HEAD and the other has its own It HEAD and BODY.
     let content = fixture("freebsd-zfs-mount.8.gz");
     direct_lines(&content, "-R", &[93]);
-    direct_lines(&content, "zfs mount", &[66]);
+    direct_lines(&content, "zfs mount", &[56, 66]);
+    check_owner(
+        &content,
+        56,
+        "zfs mount",
+        "zfs mount [-j]",
+        EntryKind::Command,
+        "Displays all ZFS file systems currently mounted.",
+    );
     check_owner(
         &content,
         66,
@@ -150,6 +164,74 @@ fn freebsd_zfs_mount_keeps_the_flag_owner_independent_from_the_invocation() {
             parameter_kind: ParameterKind::Option,
         },
         "Mount the specified filesystems along with all their children.",
+    );
+}
+
+#[test]
+fn freebsd_zfs_create_binds_both_original_command_forms() {
+    // Fixed tree has separate Nm and Cm children at both extended HEADs.
+    // termp_nm_pre() and termp_bold_pre() print that prefix before Op/Ar.
+    let content = fixture("freebsd-zfs-create.8.gz");
+    direct_lines(&content, "zfs create", &[55, 134]);
+    for (line, form, body) in [
+        (
+            55,
+            "zfs create [-Pnpuv] [-o property=value]… filesystem",
+            "Creates a new ZFS file system.",
+        ),
+        (
+            134,
+            "zfs create [-ps] [-b blocksize] [-o property=value]… -V size volume",
+            "Creates a volume of the given size.",
+        ),
+    ] {
+        check_owner(&content, line, "zfs create", form, EntryKind::Command, body);
+    }
+}
+
+#[test]
+fn freebsd_zfs_send_and_redact_bind_each_original_command_form() {
+    // The pinned HEADs execute the same Nm/Cm prefix before either the
+    // extended option syntax or the standalone resume-token arguments.
+    let content = fixture("freebsd-zfs-send.8.gz");
+    direct_lines(&content, "zfs send", &[75, 319, 462, 557, 572]);
+    direct_lines(&content, "zfs redact", &[590]);
+    for (line, form, body) in [
+        (
+            75,
+            "zfs send [-DLPVbcehnpsvw] [-R [-X dataset[,dataset]…]] [[-I|-i] snapshot] snapshot",
+            "Creates a stream representation of the second snapshot",
+        ),
+        (
+            319,
+            "zfs send [-DLPVcenvw] [-i snapshot|bookmark] filesystem|volume|snapshot",
+            "Generate a send stream, which may be of a filesystem",
+        ),
+        (
+            462,
+            "zfs send --redact redaction_bookmark [-DLPVcenpv] [-i snapshot|bookmark] snapshot",
+            "Generate a redacted send stream.",
+        ),
+        (
+            557,
+            "zfs send [-PVenv] -t receive_resume_token",
+            "Creates a send stream which resumes an interrupted receive.",
+        ),
+        (
+            572,
+            "zfs send [-PVnv] [-i snapshot|bookmark] -S filesystem",
+            "Generate a send stream from a dataset that has been partially received.",
+        ),
+    ] {
+        check_owner(&content, line, "zfs send", form, EntryKind::Command, body);
+    }
+    check_owner(
+        &content,
+        590,
+        "zfs redact",
+        "zfs redact snapshot redaction_bookmark redaction_snapshot…",
+        EntryKind::Command,
+        "Generate a new redaction bookmark.",
     );
 }
 

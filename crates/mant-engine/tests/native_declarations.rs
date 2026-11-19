@@ -43,6 +43,8 @@ mod search_quoted_arguments;
 mod search_template_wrappers;
 #[path = "native_declarations/search_templates.rs"]
 mod search_templates;
+#[path = "native_declarations/source_invocations.rs"]
+mod source_invocations;
 #[path = "native_declarations/subjects.rs"]
 mod subjects;
 #[path = "native_declarations/support.rs"]

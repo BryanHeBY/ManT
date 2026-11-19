@@ -142,7 +142,7 @@ fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
 /// A style run can include an entire invocation. Keep a multiword literal
 /// head, but stop before an explicit option or placeholder token; styling
 /// alone must not turn `launch -p [` into an addressable name.
-fn styled_command_prefix(value: &str) -> &str {
+pub(super) fn styled_command_prefix(value: &str) -> &str {
     let mut after_space = false;
     for (offset, character) in value.char_indices() {
         if after_space && matches!(character, '-' | '+' | '/' | '(' | '[' | '<' | '{') {

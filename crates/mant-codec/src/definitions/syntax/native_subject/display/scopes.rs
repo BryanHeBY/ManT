@@ -187,7 +187,7 @@ impl<'a> ScopeScan<'a> {
         within_native_body: bool,
         syntax: &mut invocation::Syntax<'_>,
     ) {
-        let role = operand.role;
+        let role = operand.role.declaration_delimiter();
         let mark_start = bytes.end - self.text[bytes.clone()].trim_start().len();
         if let Some(mark) = annotations::marker(self.text, mark_start, operand) {
             self.mark(mark, bytes);

@@ -13,6 +13,12 @@ pub(crate) enum NativeOperandRole {
     /// The mdoc parser emitted a bare middle delimiter between macro scopes.
     #[cfg(feature = "roff")]
     PipeDelimiter(Option<u32>),
+    /// Bare punctuation that closes and reopens one executed mdoc Fl.
+    #[cfg(feature = "roff")]
+    FlReopening {
+        pipe: bool,
+        enclosure: Option<u32>,
+    },
     /// A comma or pipe belongs to the complete text of a No operand.
     #[cfg(feature = "roff")]
     LiteralPunctuation,
@@ -187,6 +193,25 @@ impl NativeOperandRole {
     }
 
     #[cfg(feature = "roff")]
+    pub(in crate::definitions) fn declaration_delimiter(self) -> Self {
+        match self {
+            Self::FlReopening {
+                pipe: true,
+                enclosure,
+            } => Self::PipeDelimiter(enclosure),
+            Self::FlReopening {
+                pipe: false,
+                enclosure: Some(scope),
+            } => Self::EnclosureContent(scope),
+            Self::FlReopening {
+                pipe: false,
+                enclosure: None,
+            } => Self::LiteralContinuation(None),
+            role => role,
+        }
+    }
+
+    #[cfg(feature = "roff")]
     pub(crate) fn subject_word(kind: NativeSubject, node: u32, invocation: Option<u32>) -> Self {
         Self::Subject(SubjectReceipt {
             kind,
@@ -214,6 +239,10 @@ impl NativeOperandRole {
             Self::ReferenceText(_) => Self::ReferenceText(enclosure()),
             Self::LiteralContinuation(_) => Self::LiteralContinuation(enclosure()),
             Self::PipeDelimiter(_) => Self::PipeDelimiter(enclosure()),
+            Self::FlReopening { pipe, .. } => Self::FlReopening {
+                pipe,
+                enclosure: enclosure(),
+            },
             role => role,
         }
     }
@@ -239,6 +268,7 @@ impl NativeOperandRole {
             },
             Self::LiteralContinuation(_)
             | Self::PipeDelimiter(_)
+            | Self::FlReopening { .. }
             | Self::FunctionSignature { .. } => Self::Argument,
             Self::Command | Self::ProgramName => Self::Description,
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,

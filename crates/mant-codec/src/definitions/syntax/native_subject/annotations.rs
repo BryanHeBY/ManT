@@ -273,7 +273,7 @@ fn native_delimiters_match(left: &str, right: &str) -> bool {
 }
 
 pub(super) fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
-    match role {
+    match role.declaration_delimiter() {
         NativeOperandRole::EnclosureContent(owner) => Some(owner),
         NativeOperandRole::Environment { enclosure, .. }
         | NativeOperandRole::ReferenceText(enclosure)
@@ -359,7 +359,7 @@ fn is_supplement(
                 && receipt.enclosure == enclosure
         })
         || plain_text
-            && match role {
+            && match role.declaration_delimiter() {
                 NativeOperandRole::EnclosureContent(owner) => enclosure == Some(owner),
                 NativeOperandRole::ReferenceText(owner)
                 | NativeOperandRole::PipeDelimiter(owner)

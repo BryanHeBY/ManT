@@ -1,7 +1,63 @@
 //! Native delimiters close macro scopes without necessarily ending an invocation.
 use super::{offset, operand_at, operand_cursor};
-use crate::definitions::syntax::named;
-use crate::definitions::{NativeOperand, NativeOperandRole};
+use crate::definitions::syntax::{commands, named};
+use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject, RecognizedName};
+use std::ops::Range;
+
+/// Prove the compound command from the accepted Nm and Cm/Ic operands,
+/// independent of punctuation or the spelling of the arguments that follow.
+pub(super) fn compound_name(
+    text: &str,
+    span: &Range<usize>,
+    operands: &[NativeOperand],
+) -> Option<RecognizedName> {
+    let operands = &operands[operand_cursor(operands, span.start)..];
+    let (program, tail) = operands.split_first()?;
+    if program.role != NativeOperandRole::ProgramName
+        || !program.bytes.contains(&span.start)
+        || program.bytes.end > span.end
+        || !text[program.bytes.start..span.start].trim().is_empty()
+    {
+        return None;
+    }
+    let name = text[span.start..program.bytes.end].trim_end();
+    if name.contains(char::is_whitespace) || !commands::is_command_name(name) {
+        return None;
+    }
+    let mut end = span.start + name.len();
+    let mut command = false;
+    for operand in tail {
+        if operand.role != NativeOperandRole::Command || operand.bytes.end > span.end {
+            break;
+        }
+        let word = text[operand.bytes.clone()].trim();
+        let start = offset(text, word);
+        let Some(gap) = text.get(end..start).filter(|gap| !gap.is_empty()) else {
+            break;
+        };
+        let suffix = commands::styled_command_prefix(word);
+        if !gap.trim().is_empty() || !commands::is_command_name(suffix) {
+            break;
+        }
+        command = true;
+        end = start + suffix.len();
+        if suffix.len() < word.len() {
+            break;
+        }
+    }
+    // A boundary between source elements can still be a joined visible
+    // word. Only a separately readable command prefix proves a name.
+    (command
+        && text[end..span.end].chars().next().is_none_or(|character| {
+            character.is_whitespace() || matches!(character, '[' | '<' | '{' | '(')
+        }))
+    .then(|| RecognizedName::contiguous(&text[span.start..end], span.start))
+}
+
+pub(super) fn assignment_operator(text: &str) -> Option<usize> {
+    let (key, _) = text.split_once('=')?;
+    named::is_configuration_key(key.trim()).then_some(key.len())
+}
 
 pub(super) struct Syntax<'a> {
     text: &'a str,
@@ -78,14 +134,20 @@ impl<'a> Syntax<'a> {
         let begins_owner = next.is_some_and(|next| is_new_owner(next.role));
         let separator = text.as_bytes()[at];
         let bare_pipe = separator == b'|'
-            && operand_at(operands, at)
-                .is_some_and(|operand| matches!(operand.role, NativeOperandRole::PipeDelimiter(_)));
+            && operand_at(operands, at).is_some_and(|operand| {
+                matches!(
+                    operand.role.declaration_delimiter(),
+                    NativeOperandRole::PipeDelimiter(_)
+                )
+            });
         let argument_separator = bare_pipe
             || separator == b','
                 && !begins_owner
                 && next.is_none_or(|next| !next.role.is_invocation_name());
         let prefix = self.prefix(start, at);
-        if !begins_owner && prefix.assignment.is_some_and(|equals| equals < at) {
+        if prefix.assignment.is_some_and(|equals| {
+            equals < at && (!begins_owner || same_assignment_rhs(text, operands, equals, at, next))
+        }) {
             return true;
         }
         match &mut prefix.role {
@@ -146,10 +208,8 @@ impl<'a> Syntax<'a> {
             };
             // Validate the entire written key before the assignment.
             // Whitespace and macro boundaries may occur beside '='.
-            let assignment = self.text[first..at]
-                .split_once('=')
-                .filter(|(key, _)| named::is_configuration_key(key.trim_end()))
-                .map(|(key, _)| first + key.len());
+            let assignment =
+                assignment_operator(&self.text[first..at]).map(|equals| first + equals);
             self.prefix = Some(Prefix {
                 start,
                 first,
@@ -178,6 +238,49 @@ impl<'a> Syntax<'a> {
             word = next;
         }
         word.bytes.end
+    }
+}
+
+fn same_assignment_rhs(
+    text: &str,
+    operands: &[NativeOperand],
+    equals: usize,
+    separator: usize,
+    next: Option<&NativeOperand>,
+) -> bool {
+    let Some(previous) = operand_cursor(operands, separator)
+        .checked_sub(1)
+        .and_then(|index| operands.get(index))
+    else {
+        return false;
+    };
+    // mdoc_macro.c::in_line closes and reopens the same source invocation
+    // at a bare delimiter. A separately called macro gets a new receipt.
+    text.get(previous.bytes.start.max(equals + 1)..previous.bytes.end)
+        .is_some_and(|rhs| !rhs.trim().is_empty())
+        && text[previous.bytes.end..separator].trim().is_empty()
+        && next.is_some_and(|next| {
+            let reopened_flag = previous.role == NativeOperandRole::ExplicitOption
+                && next.role == NativeOperandRole::ExplicitOption
+                && operand_at(operands, separator).is_some_and(|operand| {
+                    matches!(operand.role, NativeOperandRole::FlReopening { .. })
+                });
+            reopened_flag
+                || typed_invocation(previous.role)
+                    .is_some_and(|left| typed_invocation(next.role) == Some(left))
+        })
+}
+
+fn typed_invocation(role: NativeOperandRole) -> Option<(Option<NativeSubject>, u32, Option<u32>)> {
+    match role {
+        NativeOperandRole::Environment {
+            invocation: Some(invocation),
+            enclosure,
+        } => Some((None, invocation, enclosure)),
+        NativeOperandRole::Subject(subject) => {
+            Some((Some(subject.kind), subject.invocation?, subject.enclosure))
+        }
+        _ => None,
     }
 }
 
