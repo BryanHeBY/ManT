@@ -121,7 +121,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: bash scripts/ci/install-ci-native-dependencies.sh
+        run: bash scripts/ci/install-ci-native-dependencies.sh --upstream-cvs
 
       - name: Install stable Rust toolchain
         run: |
