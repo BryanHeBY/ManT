@@ -3,11 +3,18 @@
 use libmandoc_rs::{Node, NodeKind};
 
 use super::{ScopeOccurrence, SourceContext, SourceDisplay, normalized_row, source_evidence};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) struct CellRow {
     pub(super) owner: Option<usize>,
     pub(super) text: String,
+}
+
+#[derive(Default)]
+pub(super) struct CellPlan {
+    pub(super) rows: Vec<CellRow>,
+    pub(super) verified: BTreeSet<usize>,
+    pub(super) complete: bool,
 }
 
 fn simple_inline(node: &Node) -> bool {
@@ -66,7 +73,6 @@ fn lexical_rows(
     origin: &Node,
     source: &SourceContext,
 ) -> Option<Vec<(u32, String)>> {
-    use mant_codec::RoffWordEffect::{EmittedBreak, Unclassified, WordEndBreak};
     let mut rows = Vec::new();
     let mut start = 0;
     for end in 0..=nodes.len() {
@@ -82,16 +88,7 @@ fn lexical_rows(
                 if !field.iter().all(simple_inline) {
                     return None;
                 }
-                let (prefix, word) = source_evidence(field, origin, false, source, true);
-                let word = word?;
-                if !prefix.absent()
-                    || word.has(Unclassified)
-                    || word.has(WordEndBreak)
-                    || word.has(EmittedBreak)
-                {
-                    return None;
-                }
-                let text = normalized_row(&word.text);
+                let text = lexical_row(field, origin, source)?;
                 if !text.is_empty() {
                     rows.push((field[0].id, text));
                 }
@@ -102,24 +99,41 @@ fn lexical_rows(
     Some(rows)
 }
 
+fn lexical_row(nodes: &[Node], origin: &Node, source: &SourceContext) -> Option<String> {
+    use mant_codec::RoffWordEffect::{EmittedBreak, Unclassified, WordEndBreak};
+    let (prefix, word) = source_evidence(nodes, origin, false, source, true);
+    let word = word?;
+    (prefix.absent()
+        && !word.has(Unclassified)
+        && !word.has(WordEndBreak)
+        && !word.has(EmittedBreak))
+    .then(|| normalized_row(&word.text))
+}
+
 pub(super) fn display_rows(node: &Node, source: &SourceContext) -> Option<BTreeMap<u32, String>> {
-    let body_index = node
-        .children
-        .iter()
-        .position(|n| n.kind == NodeKind::Body)?;
-    let mut rows = lexical_rows(&node.children[body_index].children, node, source)?;
-    if matches!(node.macro_token.as_deref(), Some("D1" | "Dl"))
-        && let Some((_, text)) = rows.last_mut()
-    {
-        // mdoc_macro.c places trailing delimiters after the short display BODY.
-        for tail in &node.children[body_index + 1..] {
-            if !tail.flags.delimiter_close || !simple_inline(tail) {
-                return None;
-            }
-            text.push_str(&mant_codec::RoffWordEvidence::read(tail.text.as_deref()?).text);
+    if matches!(node.macro_token.as_deref(), Some("D1" | "Dl")) {
+        // Keep one lexical state across the complete short-display field,
+        // including sibling delimiter TEXT and invisible BODY words.
+        if !node.children.iter().all(|part| match part.kind {
+            NodeKind::Head | NodeKind::Body => part.children.iter().all(simple_inline),
+            _ => part.kind == NodeKind::Text && simple_inline(part),
+        }) {
+            return None;
         }
+        let text = lexical_row(&node.children, node, source)?;
+        return Some(
+            (!text.is_empty())
+                .then_some((node.id, text))
+                .into_iter()
+                .collect(),
+        );
     }
-    Some(rows.into_iter().collect())
+    let body = node.children.iter().find(|n| n.kind == NodeKind::Body)?;
+    Some(
+        lexical_rows(&body.children, node, source)?
+            .into_iter()
+            .collect(),
+    )
 }
 
 pub(super) fn cell_plan(
@@ -128,20 +142,28 @@ pub(super) fn cell_plan(
     owners: &[SourceDisplay],
     base: usize,
     path: &[ScopeOccurrence],
-) -> Option<Vec<CellRow>> {
+) -> CellPlan {
     let direct: BTreeMap<_, _> = owners
         .iter()
         .enumerate()
         .filter(|(_, o)| o.path == path)
         .map(|(i, o)| (o.id, base + i))
         .collect();
-    let mut found = 0;
+    let mut plan = CellPlan::default();
+    plan.complete = extend_cell_plan(body, source, &direct, &mut plan).is_some();
+    plan
+}
+
+fn extend_cell_plan(
+    body: &Node,
+    source: &SourceContext,
+    direct: &BTreeMap<u32, usize>,
+    plan: &mut CellPlan,
+) -> Option<()> {
     let mut start = 0;
-    let mut result = Vec::new();
     for (i, child) in body.children.iter().enumerate() {
         if let Some(&owner) = direct.get(&child.id) {
-            found += 1;
-            result.extend(
+            plan.rows.extend(
                 lexical_rows(&body.children[start..i], body, source)?
                     .into_iter()
                     .map(|(_, text)| CellRow { owner: None, text }),
@@ -150,10 +172,11 @@ pub(super) fn cell_plan(
             if rows.is_empty() {
                 return None;
             }
-            result.extend(rows.into_values().map(|text| CellRow {
+            plan.rows.extend(rows.into_values().map(|text| CellRow {
                 owner: Some(owner),
                 text,
             }));
+            plan.verified.insert(owner);
             start = i + 1;
         } else if child.kind == NodeKind::Block && !simple_inline(child) {
             // Nested owners have separate geometry. An unmodelled neighboring
@@ -161,10 +184,10 @@ pub(super) fn cell_plan(
             return None;
         }
     }
-    result.extend(
+    plan.rows.extend(
         lexical_rows(&body.children[start..], body, source)?
             .into_iter()
             .map(|(_, text)| CellRow { owner: None, text }),
     );
-    (found == direct.len()).then_some(result)
+    (plan.verified.len() == direct.len()).then_some(())
 }

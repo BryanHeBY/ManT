@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v15` successful page response requires
+The `mant.roff-structure-profile/v16` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -143,6 +143,10 @@ prefix still requires a preformatted owner when a later edit leaves the
 exact spelling uncertain. A rewind can revoke that proof, and an empty
 initial pass can reject later glyphs. A glyphless completed row can use
 vertical space. A separate display equation supplies its own visible owner.
+Short display witnesses include delimiter words executed beside the native
+BODY, using the same spacing rules as its content. A known prefix of a
+table cell keeps its exact row obligations when a later source range needs
+review.
 Display source evidence follows the active native field across formatter
 words and their actual separators. An unproved edit keeps the owning
 display's source coordinates for Review. A nested column's cells or a

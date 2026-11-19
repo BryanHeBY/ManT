@@ -11,12 +11,14 @@ names distinguish the releases.
 | `dragonflybsd-limits.1.gz` | `usr/share/man/man1/limits.1.gz` from DragonFly BSD 6.4.2 x86-64 | All three usage forms bind `limits` and retain their own descriptions. |
 | `freebsd-limits.1.gz` | `usr/share/man/man1/limits.1.gz` from FreeBSD 15.1 amd64 | Standalone `limits` binds before optional arguments and the documented command operand. |
 | `freebsd-pkg.7.gz` | `usr/share/man/man7/pkg.7.gz` from FreeBSD 15.1 amd64 | Standalone `pkg` and contiguous `pkg add` bind their own forms. The intervening option in the bootstrap form stays within the complete form. |
+| `freebsd-stats.7.gz` | `usr/share/man/man7/stats.7.gz` from FreeBSD 15.1 amd64 | One explicit `Nm` supplies the complete `zpool iostat` command name and its original description. |
 
 The `hammer(8)` source includes The DragonFly Project’s BSD-3-Clause notice.
 Both `limits(1)` fixtures retain the original David Nugent copyright
 and five-condition license immediately at the start of the source. The
-`pkg(7)` fixture contains its original BSD-2-Clause license and Bryan
-Drewery copyright. Run `gzip -dc <fixture>` to read each embedded notice.
+`pkg(7)` and `stats(7)` fixtures contain their original BSD-2-Clause notices
+and the respective Bryan Drewery and Daniel Ebdrup Jensen copyrights.
+Run `gzip -dc <fixture>` to read each embedded notice.
 The original `limits(1)` work was done expressly for inclusion in FreeBSD.
 
 [Manifest](manifest.json) records archive identities, exact gzip and

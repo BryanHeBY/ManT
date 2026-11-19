@@ -25,6 +25,62 @@ fn missing(native: &AstStructure, topology: &AstTopology, document: &Document) -
 }
 
 #[test]
+fn short_display_witnesses_include_delimiters_and_their_native_spacing() {
+    // Fixed CVS mdoc_macro.c::blk_part_imp and mdoc_term.c::print_mdoc_node
+    // keep siblings before/after BODY in the field. Even a \&-only BODY
+    // can produce printed delimiters, with exact spacing from term_word.
+    for kind in ["Dl", "D1"] {
+        for (operand, good, wrong) in [
+            ("( SENTRY )", "(SENTRY)", "SENTRY)"),
+            ("[ SENTRY ]", "[SENTRY]", "SENTRY]"),
+            (r"SENTRY \& .", "SENTRY .", "SENTRY."),
+            (r"( \& )", "()", ""),
+            (r"\& .", ".", ""),
+        ] {
+            for suffix in ["", ".Sm off\n", ".sp 0\n", ".Dl OTHER\\h'-2n'XY\n"] {
+                let header = ".Dd November 19, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd test\n.Sh DESCRIPTION\n.Bl -column aaa bbb\n.It A Ta B\n";
+                let source = format!("{header}.{kind} {operand}\n{suffix}.El\n.Sh ENDPROBE\n");
+                let (native, topology, mut doc) = parsed_structure(&source);
+                assert_eq!(
+                    native.literal_display_reviews.len(),
+                    usize::from(suffix.starts_with(".Dl ")),
+                    "{source}"
+                );
+                assert_eq!(missing(&native, &topology, &doc), 0, "{source}");
+                replace_second_cell_row(&mut doc, good, wrong);
+                assert_eq!(missing(&native, &topology, &doc), 1, "{source}");
+            }
+        }
+    }
+}
+
+fn replace_second_cell_row(document: &mut Document, before: &str, after: &str) {
+    let Block::Table { rows, .. } = &mut document.sections[1].blocks[0] else {
+        panic!()
+    };
+    let Block::Preformatted { children, .. } = &mut rows[0].cells[1].blocks[0] else {
+        panic!()
+    };
+    let start = children
+        .iter()
+        .position(|n| matches!(n, Inline::LineBreak {}))
+        .unwrap()
+        + 1;
+    let end = start
+        + children[start..]
+            .iter()
+            .take_while(|n| !matches!(n, Inline::LineBreak {}))
+            .count();
+    assert_eq!(inline_plain_text(&children[start..end]), before);
+    children.splice(
+        start..end,
+        [Inline::Text {
+            value: after.into(),
+        }],
+    );
+}
+
+#[test]
 fn missing_or_blank_display_cannot_borrow_a_fragment_from_another_occurrence() {
     // Fixed ASCII, UTF-8, HTML and tree each retain ALPHA, BETA and OMEGA.
     // termp_d1_pre() and termp_bl_post() can split the first display; .de

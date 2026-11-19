@@ -462,11 +462,14 @@ impl DescriptionProbe<'_> {
             field.word.leave_plain_slots();
         }
         let previous = self.display.replace(field);
-        let mut result = self.visit_children(
-            node.children
-                .iter()
-                .filter(|part| part.kind == NodeKind::Body),
-        );
+        let short = matches!(node.macro_token.as_deref(), Some("D1" | "Dl"));
+        // mdoc_macro.c::blk_part_imp places leading and trailing delimiters
+        // beside BODY. The short display's one terminal field visits all
+        // of them and handles NODE_DELIMO/NODE_DELIMC in native order.
+        let mut result =
+            self.visit_children(node.children.iter().filter(|part| {
+                part.kind == NodeKind::Body || short && part.kind == NodeKind::Text
+            }));
         result = result.merge(self.close_field());
         self.display = previous;
         if self.display.is_some() {

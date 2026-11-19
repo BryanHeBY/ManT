@@ -50,7 +50,10 @@ pub(crate) fn compare(
     for (index, owner) in expected.iter().enumerate() {
         let occurrence = occurrences.entry(owner.opening).or_default();
         *occurrence += 1;
-        let covered = if cells.get(&owner.path).is_some_and(Option::is_none) {
+        let covered = if cells
+            .get(&owner.path)
+            .is_some_and(|plan| !plan.verified.contains(&index))
+        {
             matched[index] > 0
         } else if exact[index] && owner.rows > 0 {
             matched[index] == owner.rows
@@ -88,11 +91,10 @@ fn claim_cells(
     }
     for (path, plan) in &expected.cells {
         let rows = cells.get(path).map_or(&[][..], Vec::as_slice);
-        let Some(plan) = plan else {
-            continue;
-        };
-        if rows.len() == plan.len() {
-            for (want, &(text, literal)) in plan.iter().zip(rows) {
+        if !plan.complete || rows.len() == plan.rows.len() {
+            // When later source is unproved, only the exact initial rows
+            // can be claimed. Later equal ink cannot replace that prefix.
+            for (want, &(text, literal)) in plan.rows.iter().zip(rows) {
                 if literal
                     && text == want.text
                     && let Some(id) = want.owner
@@ -106,9 +108,9 @@ fn claim_cells(
         for (i, &(text, _)) in rows.iter().enumerate() {
             positions.entry(text).or_default().push(i);
         }
-        let mut bounds = vec![rows.len(); plan.len()];
+        let mut bounds = vec![rows.len(); plan.rows.len()];
         let mut end = rows.len();
-        for (i, want) in plan.iter().enumerate().rev() {
+        for (i, want) in plan.rows.iter().enumerate().rev() {
             bounds[i] = end;
             if want.owner.is_none()
                 && let Some(xs) = positions.get(want.text.as_str())
@@ -120,7 +122,7 @@ fn claim_cells(
             }
         }
         let mut start = 0;
-        for (want, bound) in plan.iter().zip(bounds) {
+        for (want, bound) in plan.rows.iter().zip(bounds) {
             let Some(xs) = positions.get(want.text.as_str()) else {
                 continue;
             };
@@ -140,7 +142,10 @@ fn claim_cells(
     // An unknown range is reported as source Review. An empty cell or a
     // projection to ordinary paragraphs still proves the literal is absent.
     for (i, owner) in expected.owners.iter().enumerate() {
-        if expected.cells.get(&owner.path).is_some_and(Option::is_none)
+        if expected
+            .cells
+            .get(&owner.path)
+            .is_some_and(|plan| !plan.verified.contains(&i))
             && cells
                 .get(&owner.path)
                 .is_some_and(|rows| rows.iter().any(|(_, literal)| *literal))
@@ -154,7 +159,7 @@ fn row_witness_obligations(owners: &[SourceDisplay]) -> Vec<bool> {
     let mut exact = vec![false; owners.len()];
     let mut first = BTreeMap::new();
     for (index, owner) in owners.iter().enumerate() {
-        exact[index] |= in_column_cell(owner);
+        exact[index] |= in_column_cell(owner) || owner.short;
         for origin in &owner.origins {
             if let Some(previous) = first.insert(origin, index) {
                 // At a shared coordinate the emitted fragments of an

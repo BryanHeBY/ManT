@@ -29,7 +29,7 @@ class AuditProfileMigrationTests(unittest.TestCase):
 
     def test_stale_profiles_are_rescanned_once_without_losing_annotations(self):
         for audit, old_schema, read, write in (
-            (structure, 'mant.roff-structure-profile/v14',
+            (structure, 'mant.roff-structure-profile/v15',
              structure.read_structure_database, structure.write_structure_database),
             (semantic, 'mant.roff-semantic-profile/v13', semantic.read_database, semantic.write_database),
         ):

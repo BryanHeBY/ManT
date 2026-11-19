@@ -247,6 +247,66 @@
           "status": "CapturedWithDiagnostics"
         }
       }
+    },
+    {
+      "file": "freebsd-stats.7.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man7/stats.7.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man7/stats.7.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "98290e799c2521871cb099c88c957f252a4578fa7f144b7ffb595ee44c002b37",
+      "fixtureSha256": "98290e799c2521871cb099c88c957f252a4578fa7f144b7ffb595ee44c002b37",
+      "decompressedSha256": "3ba11c845b92e4f7145bab6cfb1a42756c63ddab46a6bf144882d02a9312dfb2",
+      "sourceBytes": 1642,
+      "fixtureBytes": 1642,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "BSD-2-Clause, Daniel Ebdrup Jensen",
+      "licenseFile": "freebsd-stats.7.gz",
+      "transformation": "None. Complete compressed release member with a portable fixture basename.",
+      "selectionReason": "The COMMANDS list uses one explicit Nm to spell the complete subcommand name zpool iostat.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "bc118a22562b87a15c4b4d0d1352e931868d23e25b3488351730e516d1dadfe9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2835,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "ca4acfbed4e7463d2a607bf3a74ae6ebb691074dd882c296037332c240b7be01",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2837,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "4a89e622273365895542386dae5e252978c1a1a16905baa09660f0b49ba12652",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 7835,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "94ef5b19be35bffd8d751888c5aef69d5da429698ff01cb0e3457470c4e63faf",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 11738,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "96a5a1d84f6bd13a06ee68c0f8e7a226af22c723071b86057ac7594c8f9f1417",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1651,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
     }
   ]
 }

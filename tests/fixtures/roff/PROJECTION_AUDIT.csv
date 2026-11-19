@@ -94,6 +94,7 @@ fixtures,real/program-declarations/dragonflybsd-hammer.8.gz,8,f9d8f596e656565049
 fixtures,real/program-declarations/dragonflybsd-limits.1.gz,1,99ea245ba8ecdd5763c7559d6c2d5b07fe5e107617760649f563befa2552caa8,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/program-declarations/freebsd-limits.1.gz,1,05042abd7f0f2b40e9e2acbf797ed6907a912328145233fa2ee799c19504b56a,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/program-declarations/freebsd-pkg.7.gz,7,d28e39e64fdeb51f0a77734ba71aa2a4c7483264bb313a1cece717ba19622b1a,mant.roff-projection-profile/v3,clean,not-required,
+fixtures,real/program-declarations/freebsd-stats.7.gz,7,3ba11c845b92e4f7145bab6cfb1a42756c63ddab46a6bf144882d02a9312dfb2,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/scoped-layout/illumos-bhyve.8,8,041ad1e505852a57be0e36e7105b5c80ea9767d457d92c607362519fe788c341,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/scoped-layout/netbsd-printf.1,1,42b7ffd3e1a67324c78e17deba0771c7c37cef8f083c31ec57927170dd3c8d70,mant.roff-projection-profile/v3,clean,not-required,
 fixtures,real/scoped-layout/openbsd-bpf.4,4,be17bd1768ef2ef074d67b1d8a81ae350b8d58ce4125ddce456b45de5c853998,mant.roff-projection-profile/v3,clean,not-required,

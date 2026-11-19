@@ -19,7 +19,7 @@ use super::{
 mod matching;
 #[path = "literal_owners/rows.rs"]
 mod rows;
-use rows::{CellRow, cell_plan, display_rows};
+use rows::{CellPlan, cell_plan, display_rows};
 
 pub(super) use matching::compare;
 
@@ -63,6 +63,7 @@ struct SourceDisplay {
     origins: BTreeSet<LiteralOrigin>,
     path: Vec<ScopeOccurrence>,
     rows: usize,
+    short: bool,
     pending_rows: BTreeMap<u32, String>,
 }
 
@@ -71,7 +72,7 @@ pub(super) struct SourceDisplays {
     owners: Vec<SourceDisplay>,
     scopes: BTreeSet<Scope>,
     counts: ScopeCounts,
-    cells: BTreeMap<Vec<ScopeOccurrence>, Option<Vec<CellRow>>>,
+    cells: BTreeMap<Vec<ScopeOccurrence>, CellPlan>,
     source_rows: Vec<(usize, String)>,
 }
 
@@ -142,6 +143,7 @@ fn visit_native(
                     origins: BTreeSet::new(),
                     path: path.clone(),
                     rows: pending_rows.len(),
+                    short: node.macro_token.as_deref() != Some("Bd"),
                     pending_rows,
                 });
             } else if payload.unproved_literal() {
@@ -213,8 +215,10 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
             let owners = &profile.literal_owners.owners[first_owner..];
             if owners.iter().any(|owner| &owner.path == path) {
                 let plan = cell_plan(body, &profile.source_context, owners, first_owner, path);
-                if plan.is_none() {
-                    for owner in owners.iter().filter(|owner| &owner.path == path) {
+                if !plan.complete {
+                    for (_, owner) in owners.iter().enumerate().filter(|(index, owner)| {
+                        &owner.path == path && !plan.verified.contains(&(first_owner + index))
+                    }) {
                         profile
                             .literal_display_reviews
                             .push([owner.opening.0, owner.opening.1]);
