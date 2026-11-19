@@ -49,6 +49,7 @@ impl<'a> PlacedWord<'a> {
         let settled = super::overprint::settle(&mut slots);
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
+        retire_trailing_entry_blanks(&mut slots, &reading, earlier);
         preserve_author_separators(&slots, &mut reading);
         let mut writes = Vec::new();
         if earlier != 0 {
@@ -316,6 +317,36 @@ fn replay_prefix(
         first_incoming: start + first_incoming,
         entry_blanks,
         unpublished: unpublished.map(|index| start + index),
+    }
+}
+
+fn retire_trailing_entry_blanks(
+    slots: &mut [FillSlot],
+    reading: &[ReadingCell<'_>],
+    earlier: usize,
+) {
+    let Some(graph) = slots.iter().rposition(|slot| {
+        matches!(slot.cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
+            && slot.owner.is_some_and(|id| reading[id].glyph.scalars() > 0)
+    }) else {
+        return;
+    };
+    if !slots[..=graph].iter().any(|slot| {
+        matches!(slot.cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
+            && slot.owner.is_some_and(|id| id >= earlier)
+    }) {
+        return;
+    }
+    // An entry blank can end up to the right of the incoming glyph.
+    // term_field() defers that advance until another graph prints it.
+    // Keep the byte available for later writes without claiming a scalar.
+    for slot in &mut slots[graph + 1..] {
+        if slot
+            .owner
+            .is_some_and(|id| matches!(reading[id].glyph, ReadingGlyph::EntryBlank))
+        {
+            slot.owner = None;
+        }
     }
 }
 

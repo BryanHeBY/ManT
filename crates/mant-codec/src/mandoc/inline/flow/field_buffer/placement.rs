@@ -202,6 +202,7 @@ impl FieldBuffer {
                 FieldCell::FixedDrawingAdvance(1..) | FieldCell::DrawnSpaces(1..) => fixed = true,
                 FieldCell::BreakableBlank | FieldCell::NonBreakingBlank if replayed => fixed = true,
                 FieldCell::TabReference | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
+                FieldCell::Backline if replayed && fixed => {}
                 FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen => {
                     return fixed && self.projection_length(index, index + 1) > 0;
                 }

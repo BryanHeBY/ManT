@@ -2,6 +2,7 @@
 
 use super::super::super::super::field_buffer::{FieldCell, RewoundGlyph};
 use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_after_cell};
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub(super) struct PrefixEdits {
@@ -28,18 +29,16 @@ impl PrefixEdits {
         else {
             return Self::default();
         };
+        let locations = projection_locations(buffer, earlier, *start, positions, *unpublished);
         let mut edits = Vec::new();
         let mut moved = Vec::new();
-        for (offset, position) in positions.iter().enumerate() {
+        for (offset, (position, location)) in positions.iter().zip(locations).enumerate() {
             let cell = start + offset;
             let relocated = position.filter(|pos| pos >= first_incoming).map(|_| offset);
-            if position.is_some() && relocated.is_none()
-                || buffer.projection_length(cell, cell + 1) == 0
-            {
+            if position.is_some() && relocated.is_none() {
                 continue;
             }
-            let following_owner = earlier_word_after_cell(earlier, cell);
-            let Some(owner) = following_owner.checked_sub(1) else {
+            let Some((owner, following_scalars)) = location else {
                 continue;
             };
             if let (Some(position), Some(_)) = (position, relocated) {
@@ -50,11 +49,6 @@ impl PrefixEdits {
                 // The word projector releases it at the accepted slot.
                 continue;
             }
-            let end = earlier
-                .get(following_owner)
-                .map_or(start + positions.len(), |anchor| {
-                    anchor.start.min(anchor.content)
-                });
             let scalar = match buffer.cells()[cell] {
                 FieldCell::Graph { text, .. } => text,
                 FieldCell::Hyphen => '-',
@@ -67,11 +61,7 @@ impl PrefixEdits {
                 RewoundGlyph {
                     cell,
                     scalar,
-                    following_scalars: buffer.projection_length(cell + 1, end).saturating_sub(
-                        usize::from(unpublished.is_some_and(|old| {
-                            old > cell && old < end && positions[old - start].is_none()
-                        })),
-                    ),
+                    following_scalars,
                 },
                 relocated,
             ));
@@ -189,4 +179,36 @@ impl PrefixEdits {
             }
         }
     }
+}
+
+fn projection_locations(
+    buffer: &FieldBuffer,
+    earlier: &[NativeWordAnchor],
+    start: usize,
+    positions: &[Option<usize>],
+    unpublished: Option<usize>,
+) -> Vec<Option<(usize, usize)>> {
+    // The native overlay is bounded. Walk it backwards in display order
+    // per word marker, including every surviving fragment of that word.
+    // A moved glyph keeps its original marker even when another word now
+    // separates it from the first fragment. A local interval length alone
+    // cannot identify it in the word's projected stream.
+    let mut suffix = HashMap::new();
+    let mut locations = vec![None; positions.len()];
+    for (offset, position) in positions.iter().enumerate().rev() {
+        let cell = start + offset;
+        let count = buffer.projection_length(cell, cell + 1);
+        if count == 0 {
+            continue;
+        }
+        let Some(owner) = earlier_word_after_cell(earlier, cell).checked_sub(1) else {
+            continue;
+        };
+        let remaining = suffix.entry(earlier[owner].owner.as_str()).or_insert(0);
+        locations[offset] = Some((owner, *remaining));
+        if unpublished != Some(cell) || position.is_some() {
+            *remaining += count;
+        }
+    }
+    locations
 }

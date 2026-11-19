@@ -8,6 +8,9 @@ mod operand_edits;
 mod unproved_prefixes;
 mod word_projection;
 
+#[path = "field_replay/related_slots.rs"]
+mod related_slots;
+
 #[derive(serde::Deserialize)]
 struct Case {
     family: String,
