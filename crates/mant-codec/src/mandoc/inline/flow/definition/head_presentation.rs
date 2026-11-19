@@ -1,11 +1,16 @@
 //! Route consumed row and text receipts back to a detached run-in HEAD owner.
 
-use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+};
 
 use mant_ir::{Inline, RowLayoutHint};
 
 use super::super::NativeWordAnchor;
 use super::super::field_buffer::DeferredSourceBlank;
+use super::super::output::native_passes::OwnerAcceptance;
 use super::super::output::tab_projection::{self, TabExpansion};
 use super::super::output::{INTERNAL_FIELD_WORD, deferred_blanks};
 
@@ -16,6 +21,7 @@ struct PendingRows {
     receipts: Vec<RowReceipt>,
     tabs: Vec<TabExpansion>,
     blanks: Vec<(DeferredSourceBlank, usize)>,
+    coverage: BTreeMap<String, OwnerAcceptance>,
     operands: Option<Rc<RefCell<super::super::HeadOperandCapture>>>,
 }
 
@@ -34,6 +40,7 @@ impl Clone for DeferredHeadProjection {
             receipts: source.receipts.clone(),
             tabs: source.tabs.clone(),
             blanks: source.blanks.clone(),
+            coverage: source.coverage.clone(),
             operands: source
                 .operands
                 .as_ref()
@@ -43,6 +50,10 @@ impl Clone for DeferredHeadProjection {
 }
 
 impl DeferredHeadProjection {
+    pub(super) fn operands(&self) -> Option<Rc<RefCell<super::super::HeadOperandCapture>>> {
+        self.0.borrow().operands.clone()
+    }
+
     pub(in crate::mandoc::inline::flow) fn new(
         anchors: &[NativeWordAnchor],
         operands: Option<Rc<RefCell<super::super::HeadOperandCapture>>>,
@@ -52,6 +63,7 @@ impl DeferredHeadProjection {
             receipts: Vec::new(),
             tabs: Vec::new(),
             blanks: Vec::new(),
+            coverage: BTreeMap::new(),
             operands,
         })))
     }
@@ -81,12 +93,14 @@ impl DeferredHeadProjection {
         let receipts = std::mem::take(&mut pending.receipts);
         let tabs = std::mem::take(&mut pending.tabs);
         let blanks = std::mem::take(&mut pending.blanks);
+        let coverage = std::mem::take(&mut pending.coverage);
         let operands = pending.operands.clone();
         drop(pending);
         if let Some(capture) = &operands {
             let _ = capture.borrow_mut().take();
         }
         for term in terms.iter_mut() {
+            super::super::output::split::remove_covered_native_glyphs(term, &coverage);
             // Detached term vectors own no live builder/execution addresses.
             let _ =
                 super::super::output::row_origins::project_row_presentations(term, &receipts, 0);
@@ -121,6 +135,18 @@ impl DeferredHeadProjection {
                 .contains(&format!("{INTERNAL_FIELD_WORD}{}", blank.owner))
             {
                 pending.blanks.push((blank, count));
+            }
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn accept_coverage(
+        &self,
+        accepted: &BTreeMap<String, OwnerAcceptance>,
+    ) {
+        let mut pending = self.0.borrow_mut();
+        for (owner, acceptance) in accepted {
+            if pending.owners.contains(owner) && !acceptance.omitted_scalars.is_empty() {
+                pending.coverage.insert(owner.clone(), acceptance.clone());
             }
         }
     }

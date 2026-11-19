@@ -4,6 +4,8 @@ use std::{collections::BTreeMap, ops::Range};
 
 use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary};
 
+const MAX_REPLAY_PREFIX_CELLS: usize = 64;
+
 impl FieldBuffer {
     pub(super) fn apply_slot_placement(&mut self, write: &FieldWrite) {
         match write {
@@ -70,7 +72,6 @@ impl FieldBuffer {
         automatic: usize,
         kept: bool,
     ) -> Option<super::super::native_slots::FieldPrefix> {
-        const MAX_REPLAY_PREFIX_CELLS: usize = 64;
         if self.resume != 0
             || matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
             || !self.projected_pass_ends.is_empty()
@@ -171,15 +172,26 @@ impl FieldBuffer {
         self.backbefore_armed
     }
 
+    pub(in crate::mandoc::inline::flow) fn ends_with_unresolved_backline(&self) -> bool {
+        // term_field skips NBRZW and the source tab reference. The next
+        // word can supply the advance that actually covers this glyph.
+        self.cells[self.resume..]
+            .iter()
+            .rev()
+            .take(MAX_REPLAY_PREFIX_CELLS)
+            .find(|cell| !matches!(cell, FieldCell::ZeroWidthGraph | FieldCell::TabReference))
+            == Some(&FieldCell::Backline)
+    }
+
     pub(in crate::mandoc::inline::flow) fn has_live_tab_reference(&self) -> bool {
         self.resume < self.cells.len() && self.cells.last() == Some(&FieldCell::TabReference)
     }
 
-    pub(in crate::mandoc::inline::flow) fn has_device_gap_before(
+    pub(in crate::mandoc::inline::flow) fn device_gap_before(
         &self,
         end: usize,
         replayed: bool,
-    ) -> bool {
+    ) -> Option<(usize, usize)> {
         let end = end.min(self.cells.len());
         let gap = self.nonbreaking_positions.range(..end).next_back().max(
             self.blank_positions
@@ -187,11 +199,9 @@ impl FieldBuffer {
                 .next_back()
                 .filter(|&&gap| replayed || matches!(self.cells[gap], FieldCell::DrawnSpaces(1..))),
         );
-        let Some(&gap) = gap else {
-            return false;
-        };
+        let &gap = gap?;
         if gap < self.resume {
-            return false;
+            return None;
         }
         // term_field() defers these cells until the next printed graph.
         // Source-row references and zero-width operands do not end that
@@ -204,12 +214,13 @@ impl FieldBuffer {
                 FieldCell::TabReference | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
                 FieldCell::Backline if replayed && fixed => {}
                 FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen => {
-                    return fixed && self.projection_length(index, index + 1) > 0;
+                    return (fixed && self.projection_length(index, index + 1) > 0)
+                        .then_some((gap, index));
                 }
-                _ => return false,
+                _ => return None,
             }
         }
-        false
+        None
     }
 
     pub(super) fn replace_placed_tail(&mut self, count: usize) {

@@ -504,7 +504,13 @@ fn append_range(
         }
         let current = reading[id];
         if let ReadingGlyph::Earlier(scalars) = current.glyph {
-            if wrote_source && scalars != 0 {
+            if wrote_source
+                && (scalars != 0
+                    || matches!(
+                        slot.cell,
+                        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                    ))
+            {
                 word.flush_segment();
                 word.output.push(mant_ir::Inline::anchor(format!(
                     "{}{id}",

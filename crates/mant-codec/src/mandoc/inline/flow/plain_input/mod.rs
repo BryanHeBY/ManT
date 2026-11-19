@@ -159,6 +159,7 @@ impl InlineBuilder {
             &mut self.nodes,
             boundary,
             self.section_handoff.as_mut(),
+            self.head_operand_capture.as_deref(),
         ) else {
             return PlainFlushOutcome::Ordinary;
         };
@@ -178,8 +179,14 @@ impl InlineBuilder {
         execution: &mut super::InlineExecutionState,
         nodes: &mut Vec<Inline>,
     ) -> bool {
-        Self::consume_plain_flush_unit(execution, nodes, PlainFlushBoundary::LiteralSourceRow, None)
-            .is_some_and(|retired| retired.outcome.rejected())
+        Self::consume_plain_flush_unit(
+            execution,
+            nodes,
+            PlainFlushBoundary::LiteralSourceRow,
+            None,
+            None,
+        )
+        .is_some_and(|retired| retired.outcome.rejected())
     }
 
     fn consume_plain_flush_unit(
@@ -187,6 +194,7 @@ impl InlineBuilder {
         nodes: &mut Vec<Inline>,
         boundary: PlainFlushBoundary,
         mut handoff: Option<&mut SectionHandoff>,
+        operands: Option<&std::cell::RefCell<super::HeadOperandCapture>>,
     ) -> Option<PlainRetirement> {
         use super::field_buffer::{FillTargets, FlushReceipt};
         let inherited_printed_row = plain_unit_inherits_printed_row(execution);
@@ -212,6 +220,11 @@ impl InlineBuilder {
             mut output_start,
         } = unit;
         let passes = accepted.all();
+        if let Some(operands) = operands {
+            operands
+                .borrow_mut()
+                .record_accepted_covers(&buffer, &anchors, passes);
+        }
         let edits =
             retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
         edits.remap(&mut output_start);

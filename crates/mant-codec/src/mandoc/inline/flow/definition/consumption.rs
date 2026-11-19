@@ -122,6 +122,9 @@ impl InlineBuilder {
                 .flush_receipt(targets, false);
             &uncaptured
         };
+        if !owner_boundary && let Some(accepted) = receipt.accepted_passes() {
+            self.record_definition_operand_covers(accepted.all());
+        }
         if matches!(receipt, FlushReceipt::UnmodeledRewind) {
             let state = self.execution.definition.as_mut().expect("native field");
             let receipts = state.field_buffer.conservative_deferred_blanks();
@@ -201,6 +204,9 @@ impl InlineBuilder {
             passes,
             false,
         );
+        if return_to_head && let Some(head) = &definition.deferred_head_projection {
+            head.accept_coverage(&accepted_owners);
+        }
         // The detached HEAD keeps native owner anchors for deferred blanks
         // and layout. Its accepted final pass has its own structural close;
         // the rejecting BODY flush cannot project that endline a second
@@ -246,6 +252,26 @@ impl InlineBuilder {
         }
     }
 
+    fn record_definition_operand_covers(&self, passes: &[super::super::field_buffer::FillPass]) {
+        let field = self.execution.definition.as_ref().expect("native field");
+        if !field.field_buffer.has_zero_width_retreats() {
+            return;
+        }
+        let operands = self.head_operand_capture.clone().or_else(|| {
+            field
+                .deferred_head_projection
+                .as_ref()
+                .and_then(super::head_presentation::DeferredHeadProjection::operands)
+        });
+        if let Some(operands) = operands {
+            operands.borrow_mut().record_accepted_covers(
+                &field.field_buffer,
+                &field.field_word_anchors,
+                passes,
+            );
+        }
+    }
+
     fn project_deferred_field_blanks(
         &mut self,
         passes: &[super::super::field_buffer::FillPass],
@@ -284,6 +310,9 @@ impl InlineBuilder {
             passes,
             true,
         );
+        if let Some(head) = &definition.deferred_head_projection {
+            head.accept_coverage(&accepted);
+        }
         let start = self
             .execution
             .author_execution

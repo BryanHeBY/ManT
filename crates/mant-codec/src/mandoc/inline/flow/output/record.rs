@@ -24,7 +24,7 @@ pub(super) enum SeparatorDisposition {
     Automatic,
     Keep,
     Consumed,
-    DeviceAdvance,
+    DeviceAdvance(usize),
 }
 
 #[derive(Clone, Copy)]
@@ -55,6 +55,13 @@ impl RestartedPadding {
 }
 
 impl WordPassProjection {
+    pub(super) const fn projected_gap(&self, field_padding: bool) -> Option<usize> {
+        match self.separator {
+            SeparatorDisposition::DeviceAdvance(gap) if !field_padding => Some(gap),
+            _ => None,
+        }
+    }
+
     fn record_separator(
         &mut self,
         buffer: &super::super::field_buffer::FieldBuffer,
@@ -83,7 +90,10 @@ impl WordPassProjection {
 
     fn record_separator_effects(
         &mut self,
-        buffer: &super::super::field_buffer::FieldBuffer,
+        (buffer, anchors): (
+            &super::super::field_buffer::FieldBuffer,
+            &[super::super::NativeWordAnchor],
+        ),
         word_start: usize,
         entry: &ExecutedWordEntry,
         keep: bool,
@@ -99,9 +109,14 @@ impl WordPassProjection {
         if self.native_separator == 0
             && entry.receipt.prints_padding
             && entry.receipt.first_content_cell >= word_start
-            && buffer.has_device_gap_before(gap_end, replayed)
+            && let Some((gap, previous)) = buffer.device_gap_before(gap_end, replayed)
+            // A scalar-bearing SP within the earlier ink's word is
+            // already represented. An intervening invisible word's is not.
+            && (buffer.projection_length(gap, gap + 1) == 0
+                || anchors.partition_point(|anchor| anchor.content <= previous)
+                    != anchors.partition_point(|anchor| anchor.content <= gap))
         {
-            self.separator = SeparatorDisposition::DeviceAdvance;
+            self.separator = SeparatorDisposition::DeviceAdvance(gap);
         } else if self.separator != SeparatorDisposition::Consumed
             && (keep || entry.receipt.leading_retreat.is_some())
         {
@@ -204,16 +219,17 @@ impl InlineBuilder {
                 }
                 .max(materialized_field_padding),
                 projected_field_prefix: false,
+                projected_gap_cell: None,
                 projection,
             });
         entry.append_owner_intervals(&mut definition.field_word_anchors);
         observe_definition_word(definition, incoming, separator);
         let mut projection =
             self.record_authored_native_passes(incoming, receipt.first_content_cell);
-        let (buffer, _) = self.execution.word_input();
-        projection.record_separator(buffer, native_word_start, separator, native_separator);
+        let input = self.execution.word_input();
+        projection.record_separator(input.0, native_word_start, separator, native_separator);
         entry.record_projection(&mut projection);
-        projection.record_separator_effects(buffer, native_word_start, &entry, projected_keep);
+        projection.record_separator_effects(input, native_word_start, &entry, projected_keep);
         if let Some(anchor) = self
             .execution
             .definition
@@ -296,6 +312,7 @@ impl InlineBuilder {
                 },
                 projected_device_padding: 0,
                 projected_field_prefix: false,
+                projected_gap_cell: None,
                 projection,
             });
         entry.append_owner_intervals(&mut self.execution.plain_input.anchors);
@@ -322,7 +339,12 @@ impl InlineBuilder {
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
         entry.record_projection(&mut result);
-        result.record_separator_effects(&unit.buffer, native_word_start, &entry, projected_keep);
+        result.record_separator_effects(
+            (&unit.buffer, &unit.anchors),
+            native_word_start,
+            &entry,
+            projected_keep,
+        );
         if let Some(anchor) = unit.anchors.last_mut() {
             result.align_separator_owner(anchor, receipt.first_content_cell);
             if let Some(handoff) = &mut self.section_handoff {

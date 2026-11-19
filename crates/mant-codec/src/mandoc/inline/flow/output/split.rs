@@ -1,7 +1,9 @@
 use super::super::Inline;
 
 mod accepted_owners;
-pub(in crate::mandoc::inline::flow) use accepted_owners::retain_native_field_owners;
+pub(in crate::mandoc::inline::flow) use accepted_owners::{
+    remove_covered_native_glyphs, retain_native_field_owners,
+};
 
 /// Split a formatter word at the row boundaries its field passes decided
 /// (term.c:220 with 205-207): each boundary is a cell offset inside the

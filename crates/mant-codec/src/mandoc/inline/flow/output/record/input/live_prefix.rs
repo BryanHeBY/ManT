@@ -2,7 +2,7 @@
 
 use super::super::super::super::field_buffer::{FieldCell, RewoundGlyph};
 use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_after_cell};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Default)]
 pub(super) struct PrefixEdits {
@@ -11,6 +11,7 @@ pub(super) struct PrefixEdits {
     pub(super) entry_blanks: usize,
     moved: Vec<(usize, usize)>,
     edits: Vec<(usize, RewoundGlyph, Option<usize>)>,
+    gaps: GapEdits,
 }
 
 impl PrefixEdits {
@@ -32,9 +33,20 @@ impl PrefixEdits {
         let locations = projection_locations(buffer, earlier, *start, positions, *unpublished);
         let mut edits = Vec::new();
         let mut moved = Vec::new();
+        let mut earlier_ink = HashMap::<usize, usize>::new();
         for (offset, (position, location)) in positions.iter().zip(locations).enumerate() {
             let cell = start + offset;
             let relocated = position.filter(|pos| pos >= first_incoming).map(|_| offset);
+            if let (Some(position), Some((owner, _))) = (position, location)
+                && relocated.is_none()
+            {
+                // A surviving decoration copy can be written before the
+                // original owner interval. Retain its real landing.
+                earlier_ink
+                    .entry(owner)
+                    .and_modify(|first| *first = (*first).min(*position))
+                    .or_insert(*position);
+            }
             if position.is_some() && relocated.is_none() {
                 continue;
             }
@@ -67,21 +79,7 @@ impl PrefixEdits {
             ));
         }
         moved.sort_unstable_by_key(|&(position, _)| position);
-        let first_touched = earlier.partition_point(|owner| owner.content < *start);
-        for owner in &mut earlier[first_touched..] {
-            let remap = |index: usize| {
-                let Some(offset) = index.checked_sub(*start) else {
-                    return index;
-                };
-                positions
-                    .get(offset..)
-                    .and_then(|suffix| suffix.iter().find_map(|cell| *cell))
-                    .unwrap_or(*first_incoming)
-                    .min(*first_incoming)
-            };
-            owner.start = remap(owner.start);
-            owner.content = remap(owner.content);
-        }
+        let gaps = rebase_earlier_words(earlier, positions, *start, *first_incoming, &earlier_ink);
         Self {
             first_incoming: Some(*first_incoming),
             // Replay can change the number of slots owned by earlier
@@ -99,6 +97,7 @@ impl PrefixEdits {
             entry_blanks: *entry_blanks,
             moved,
             edits,
+            gaps,
         }
     }
 
@@ -115,11 +114,13 @@ impl PrefixEdits {
             resumed.start = position + 1;
             resumed.content = position + 1;
             resumed.projected_field_prefix = false;
+            resumed.projected_gap_cell = None;
             resumed.projected_device_padding = 0;
             anchors.push(NativeWordAnchor {
                 start: position,
                 content: position,
                 projected_field_prefix: false,
+                projected_gap_cell: None,
                 projected_device_padding: 0,
                 ..old
             });
@@ -153,7 +154,12 @@ impl PrefixEdits {
                 relocated.insert(*slot, (owner, projection));
             }
         }
-        if self.edits.iter().any(|(_, _, slot)| slot.is_some()) {
+        if !self.gaps.remove.is_empty() {
+            // Edit the owned gap after using the old scalar coordinates
+            // to detach surviving glyphs from their source words.
+            remove_overwritten_gaps(nodes, &self.gaps.remove, &mut false);
+        }
+        if self.first_incoming.is_some() {
             let payload = std::mem::take(incoming);
             for node in payload {
                 let Inline::Anchor { id, .. } = &node else {
@@ -167,16 +173,93 @@ impl PrefixEdits {
                     incoming.push(node);
                     continue;
                 };
-                if let Some((owner, glyph)) = slot
-                    .parse::<usize>()
-                    .ok()
-                    .and_then(|slot| relocated.remove(&slot))
-                {
+                let Ok(slot) = slot.parse::<usize>() else {
+                    continue;
+                };
+                if let Some(marker) = self.gaps.relocate.get(&slot) {
+                    incoming.push(Inline::anchor(marker.as_str()));
+                    incoming.push(Inline::Text { value: " ".into() });
+                    incoming.push(Inline::anchor(incoming_owner));
+                } else if let Some((owner, glyph)) = relocated.remove(&slot) {
                     incoming.push(Inline::anchor(owner.as_str()));
                     incoming.push(glyph);
                     incoming.push(Inline::anchor(incoming_owner));
                 }
             }
+        }
+    }
+}
+
+#[derive(Default)]
+struct GapEdits {
+    remove: BTreeSet<String>,
+    relocate: BTreeMap<usize, String>,
+}
+
+fn rebase_earlier_words(
+    earlier: &mut [NativeWordAnchor],
+    positions: &[Option<usize>],
+    start: usize,
+    first_incoming: usize,
+    earlier_ink: &HashMap<usize, usize>,
+) -> GapEdits {
+    let first_touched = earlier.partition_point(|owner| owner.content < start);
+    let mut gaps = GapEdits::default();
+    for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
+        if let Some(old) = owner.projected_gap_cell
+            && let Some(position) = old
+                .checked_sub(start)
+                .and_then(|offset| positions.get(offset))
+        {
+            owner.projected_gap_cell = *position;
+            if position.is_none_or(|position| position >= first_incoming) {
+                let serial = owner
+                    .owner
+                    .strip_prefix(super::super::super::INTERNAL_FIELD_WORD)
+                    .expect("native word owner");
+                let marker = format!("{}{serial}", super::super::super::INTERNAL_FIELD_PREFIX);
+                gaps.remove.insert(marker.clone());
+                if position.is_some() {
+                    gaps.relocate.insert(old - start, marker);
+                } else {
+                    owner.projected_field_prefix = false;
+                }
+            }
+        }
+        let remap = |index: usize| {
+            let Some(offset) = index.checked_sub(start) else {
+                return index;
+            };
+            positions
+                .get(offset..)
+                .and_then(|suffix| suffix.iter().find_map(|cell| *cell))
+                .unwrap_or(first_incoming)
+                .min(first_incoming)
+        };
+        owner.start = remap(owner.start);
+        owner.content = remap(owner.content);
+        if let Some(&position) = earlier_ink.get(&index) {
+            owner.start = owner.start.min(position);
+            owner.content = owner.content.min(position);
+        }
+    }
+    gaps
+}
+
+fn remove_overwritten_gaps(nodes: &mut [Inline], owners: &BTreeSet<String>, remove: &mut bool) {
+    for node in nodes {
+        match node {
+            Inline::Anchor { id, .. } => *remove = owners.contains(id.as_str()),
+            Inline::Text { value } if *remove => {
+                if value.starts_with(' ') {
+                    value.remove(0);
+                }
+                *remove = false;
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => remove_overwritten_gaps(children, owners, remove),
+            _ => {}
         }
     }
 }

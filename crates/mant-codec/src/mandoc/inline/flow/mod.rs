@@ -65,6 +65,9 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
     /// The word's generated field prefix was written before its content
     /// marker. This receipt owns positioning, not a native buffer scalar.
     projected_field_prefix: bool,
+    /// Buffered native padding represented by the private prefix marker.
+    /// A subsequent edit can replace that exact slot before the flush.
+    projected_gap_cell: Option<usize>,
     /// Native cells projected before the owner marker during PREKEEP.
     /// They can print with a later graph, even if this word is empty.
     /// A raw no-fill source line retains its authored whitespace even when

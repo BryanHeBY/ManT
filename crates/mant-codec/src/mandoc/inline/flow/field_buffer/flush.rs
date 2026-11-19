@@ -236,8 +236,17 @@ impl FieldBuffer {
         &self,
         passes: &[FillPass],
     ) -> Vec<usize> {
-        let mut retreats = self.zero_width_retreats.iter().peekable();
         let mut covered = Vec::new();
+        self.visit_accepted_covers(passes, |target, _| covered.push(target));
+        covered
+    }
+
+    pub(in crate::mandoc::inline::flow) fn visit_accepted_covers(
+        &self,
+        passes: &[FillPass],
+        mut accept: impl FnMut(usize, usize),
+    ) {
+        let mut retreats = self.zero_width_retreats.iter().peekable();
         for pass in passes {
             let Some(&&(target, _)) = retreats.peek() else {
                 break;
@@ -266,13 +275,12 @@ impl FieldBuffer {
                     // overwrite its cell with an advancing graph while the
                     // preceding backline still owns the retreat.
                     if target >= start && last_advance.is_some_and(|advance| advance >= mark) {
-                        covered.push(target);
+                        accept(target, mark);
                     }
                     retreats.next();
                 }
             }
         }
-        covered
     }
 
     /// Count the projected cells in a padding range that can still print.

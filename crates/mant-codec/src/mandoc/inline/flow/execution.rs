@@ -599,6 +599,7 @@ impl super::InlineExecutionState {
             usize::from(!tight) * (1 + usize::from(!kept_blanks && self.native_word_sentence));
         let device_tail = input.device_tail();
         let live_edit = input.cursor_retreat > 0
+            || input.ends_with_unresolved_backline()
             || device_tail
                 .as_ref()
                 .is_some_and(super::native_slots::DeviceTail::has_retreated);

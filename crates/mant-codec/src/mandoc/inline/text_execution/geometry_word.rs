@@ -34,6 +34,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     let mut has_zero_advance = false;
     let mut isolated_needs_accepted_retreat = false;
     let mut has_overstrike = false;
+    let mut has_link = false;
     let mut armed = context.zero_advance.is_armed();
     for event in events {
         match event {
@@ -70,6 +71,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 armed = true;
                 has_zero_advance = true;
             }
+            RoffInlineEvent::Link(_) => has_link = true,
             RoffInlineEvent::Glyph(value) if !context.policy.field_authoritative => {
                 isolated_needs_accepted_retreat |=
                     !value.is_empty() && mant_ir::geometry::text_width(value) == 0;
@@ -90,9 +92,9 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     }
     let replay_empty_overstrike =
         armed_empty_overstrike && context.slot_entry.trailing_tab_reference;
+    let has_armed_overlap = armed_overstrike || replay_empty_overstrike;
     if has_unproved_armed_entry(context)
-        && !((armed_overstrike || replay_empty_overstrike)
-            && context.slot_entry.automatic_blanks > 0)
+        && !(has_armed_overlap && context.slot_entry.automatic_blanks > 0)
     {
         return false;
     }
@@ -106,6 +108,8 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
         || marker && (edits || context.table_leading_blanks != 0)
         || context.policy.field_authoritative
             && (has_live_raw_cursor(context)
+                || has_zero_advance && contains_local_overwrite(events)
+                || has_link && decorated_word(events, context.font.current)
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
@@ -113,11 +117,27 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || armed_overstrike
                 || replay_empty_overstrike
                 || tight_word_can_carry_glyph(events, context)
-                || context
-                    .slot_entry
-                    .device_tail
-                    .as_ref()
-                    .is_some_and(|tail| edits || tail.has_retreated() && !events.is_empty()))
+                || replayable_device_tail(context, edits, !events.is_empty()))
+}
+
+fn replayable_device_tail(
+    context: &TextExecutionContext<'_>,
+    edits: bool,
+    has_words: bool,
+) -> bool {
+    context
+        .slot_entry
+        .device_tail
+        .as_ref()
+        .is_some_and(|tail| edits || tail.has_retreated() && has_words)
+}
+
+fn decorated_word(events: &[RoffInlineEvent], entry_font: RoffFont) -> bool {
+    use super::native_writes::has_native_decoration;
+    has_native_decoration(entry_font)
+        || events.iter().any(
+            |event| matches!(event, RoffInlineEvent::Font(font) if has_native_decoration(*font)),
+        )
 }
 
 fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
@@ -135,12 +155,43 @@ fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
     !context.zero_advance.has_pending_glyph() || can_place_pending(context)
 }
 
+/// A complete in-word backspace stays editable until the native field
+/// retires. An unfinished escape still uses the delayed glyph owner,
+/// whose recovery and annotation state can span multiple fragments.
+fn contains_local_overwrite(events: &[RoffInlineEvent]) -> bool {
+    let mut after_arm = None;
+    for event in events {
+        match event {
+            RoffInlineEvent::ZeroAdvance if after_arm.is_none() => after_arm = Some(0usize),
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
+                if value.chars().all(|ch| ch.is_ascii_graphic()) =>
+            {
+                if let Some(count) = &mut after_arm {
+                    *count = count.saturating_add(value.len());
+                }
+            }
+            RoffInlineEvent::Link(_)
+            | RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::ZeroWidthGlyph => {}
+            _ => return false,
+        }
+    }
+    after_arm.is_some_and(|count| count >= 2)
+}
+
 fn has_live_raw_cursor(context: &TextExecutionContext<'_>) -> bool {
-    context
-        .slot_entry
-        .prefix
-        .as_ref()
-        .is_some_and(|prefix| prefix.cursor_retreat > 0)
+    context.slot_entry.prefix.as_ref().is_some_and(|prefix| {
+        prefix.cursor_retreat > 0
+            || prefix
+                .cells
+                .iter()
+                .rev()
+                .find(|(cell, _)| {
+                    !matches!(cell, FieldCell::ZeroWidthGraph | FieldCell::TabReference)
+                })
+                .is_some_and(|(cell, _)| *cell == FieldCell::Backline)
+    })
 }
 
 fn has_proved_overstrike_entry(context: &TextExecutionContext<'_>) -> bool {

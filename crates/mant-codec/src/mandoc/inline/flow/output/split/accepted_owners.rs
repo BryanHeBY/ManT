@@ -13,12 +13,30 @@ pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
     nodes: &mut Vec<Inline>,
     limits: &BTreeMap<String, OwnerAcceptance>,
 ) -> bool {
+    project_native_owners(nodes, limits, false)
+}
+
+pub(in crate::mandoc::inline::flow) fn remove_covered_native_glyphs(
+    nodes: &mut Vec<Inline>,
+    limits: &BTreeMap<String, OwnerAcceptance>,
+) {
+    if !limits.is_empty() {
+        project_native_owners(nodes, limits, true);
+    }
+}
+
+fn project_native_owners(
+    nodes: &mut Vec<Inline>,
+    limits: &BTreeMap<String, OwnerAcceptance>,
+    covered_only: bool,
+) -> bool {
     let mut owners = AcceptedOwners {
         limits,
         owner: None,
         prefix_printed: None,
         positions: BTreeMap::new(),
         covered: 0,
+        covered_only,
     };
     owners.retain(nodes);
     owners.owner.is_some()
@@ -30,6 +48,7 @@ struct AcceptedOwners<'a> {
     prefix_printed: Option<bool>,
     positions: BTreeMap<&'a str, (usize, usize)>,
     covered: usize,
+    covered_only: bool,
 }
 
 impl AcceptedOwners<'_> {
@@ -71,7 +90,16 @@ impl AcceptedOwners<'_> {
     }
 
     fn enter_owner(&mut self, id: &str) {
-        if let Some(serial) = id.strip_prefix(INTERNAL_FIELD_PREFIX) {
+        if self.covered_only {
+            if id.starts_with(INTERNAL_FIELD_WORD) {
+                self.owner = self
+                    .limits
+                    .get_key_value(id)
+                    .map(|(owner, _)| owner.as_str());
+            } else if id.starts_with(INTERNAL_FIELD_PREFIX) {
+                self.owner = None;
+            }
+        } else if let Some(serial) = id.strip_prefix(INTERNAL_FIELD_PREFIX) {
             // Generated minbl precedes the word's scalar interval.
             // term_field() prints it only with that word's first graph.
             let word = format!("{INTERNAL_FIELD_WORD}{serial}");
@@ -87,9 +115,11 @@ impl AcceptedOwners<'_> {
     }
 
     fn has_native_cells(&self) -> bool {
-        self.owner
-            .and_then(|owner| self.limits.get(owner))
-            .is_some_and(|limit| limit.native_cells)
+        self.covered_only
+            || self
+                .owner
+                .and_then(|owner| self.limits.get(owner))
+                .is_some_and(|limit| limit.native_cells)
     }
 
     fn retain_text(&mut self, value: &mut String) -> bool {
@@ -111,12 +141,13 @@ impl AcceptedOwners<'_> {
             {
                 *next_omission += 1;
             }
-            if scalar >= accepted.scalars {
+            if !self.covered_only && scalar >= accepted.scalars {
                 return false;
             }
             if let Some(omit) = omissions
                 .get(*next_omission)
                 .filter(|omit| omit.range.contains(&scalar))
+                .filter(|omit| !self.covered_only || omit.covered)
             {
                 self.covered += usize::from(omit.covered);
                 false

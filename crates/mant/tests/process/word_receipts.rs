@@ -140,6 +140,100 @@ fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
 }
 
 #[test]
+fn later_native_writes_resolve_backlines_without_losing_source_owners() {
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    // term_field() skips NBRZW after BS. A following word can print a
+    // blank or glyph in the old column; term_newln() alone cannot.
+    for overprint in [r"P\o'CD'", r"P\zCD"] {
+        for (tail, result) in [
+            (" No Y", "P Y"),
+            (" Ns No Y", "PY"),
+            ("", "PC"),
+            ("\n.br\n.No Y", "PC\nY"),
+        ] {
+            let source = format!("{header}.No \"{overprint}\" Ns No \"\\h'-1n'\\&\"{tail}\n");
+            assert_readbacks(&source, result, None);
+            assert_eq!(
+                search_visible_word(&source, "PC"),
+                u64::from(result.starts_with("PC")),
+                "{source}"
+            );
+            if matches!(result, "P Y" | "PY") {
+                assert_eq!(search_visible_word(&source, result), 1, "{source}");
+            }
+        }
+    }
+    // encode1() writes both author cells and a real BS. Replacing BS
+    // reveals M, while replacing A leaves M's overstrike active.
+    for (word, retreat, result, label) in [
+        (r"\zMA", 2, "T", None),
+        (r"\zMA", 3, "MTA", None),
+        (
+            r"\zM\X'tty: link https://x.io'A\X'tty: link'",
+            4,
+            "MTA",
+            Some("A"),
+        ),
+    ] {
+        let source = format!("{header}.No \"{word}\" No \"\\h'-{retreat}n'T\"\n");
+        assert_readbacks(&source, result, label);
+        assert_eq!(search_visible_word(&source, result), 1, "{source}");
+    }
+    // The two native bold paints are one linked author, even when the
+    // neighboring invisible link cells are included in the raw replay.
+    let source = format!(
+        "{header}.Sy \"\\X'tty: link https://x.io'M\\X'tty: link'\" No \"\\h'-1n'T\" No \"\\h'-2n'Y\"\n"
+    );
+    assert_readbacks(&source, "MY", Some("M"));
+    let ansi = render(&source, "roff", "text", "always", false);
+    assert!(
+        ansi.lines().last().unwrap().starts_with("\u{1b}[1m"),
+        "{ansi:?}"
+    );
+    assert_eq!(search_visible_word(&source, "MY"), 1);
+}
+
+#[test]
+fn replay_retires_or_moves_the_exact_gap_and_retains_surviving_bold_copies() {
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    // term_word() traverses preserved cells, but term_field() prints a
+    // surviving advance where it actually lands, including after a rewind.
+    for (word, expected) in [
+        (r#".No PMAB No "\h'-2n'T" No Y No "\h'-3n'Z""#, "PMATZY"),
+        (r#".No PMAB No "\h'-2n'T" No Y No "\h'-5n'Z""#, "PMZT Y"),
+        (r#".No PMAB No "\h'-2n'T" No Y Ns No "\h'-3n'Z""#, "PMAZ Y"),
+        (r#".No "P MA B" No "\h'-2n'T" No "\h'-3n'Y""#, "P MAYT"),
+    ] {
+        let source = format!("{header}{word}\n");
+        assert_readbacks(&source, expected, None);
+        assert_eq!(search_visible_word(&source, expected), 1, "{source}");
+    }
+    // term.c::encode1() writes both bold copies. When the original
+    // projection cell is replaced, its earlier copy can still own ink.
+    let word = r#".Sy "P\X'tty: link https://x.io'M\X'tty: link'AB""#;
+    for (tail, result, label) in [
+        (r#"No "\h'-9n'T" No "\h'-6n'Y""#, "YTAB", ""),
+        (r#"Ns No "\h'-7n'T" Ns No "\h'-6n'Y""#, "YMTAB", "M"),
+        (r#"Ns No "\h'-9n'T" Ns No "\h'-4n'Y""#, "YMTAB", "M"),
+    ] {
+        let source = format!("{header}{word} {tail}\n");
+        let plain = render(&source, "roff", "text", "never", false);
+        assert_eq!(description(&plain), result, "{source}");
+        assert_link(&source, "roff", label);
+        // Addressable export writes the implicit Sy tag as raw anchor HTML,
+        // which the documented Markdown reimport contract retains as HTML.
+        let markdown = render(&source, "roff", "markdown", "never", false);
+        assert_eq!(
+            description(&render(&markdown, "markdown", "text", "never", false)),
+            result,
+            "{markdown}"
+        );
+        assert_link(&markdown, "markdown", label);
+        assert_eq!(search_visible_word(&source, result), 1, "{source}");
+    }
+}
+
+#[test]
 fn combining_overstrike_uses_the_accepted_field_to_keep_or_cover_its_base() {
     let header = ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd word audit\n.Sh DESCRIPTION\n";
     // Fixed CVS UTF-8 writes the base, a backspace and the non-advancing

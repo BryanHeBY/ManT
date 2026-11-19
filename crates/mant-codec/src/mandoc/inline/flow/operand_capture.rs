@@ -82,6 +82,31 @@ impl HeadOperandCapture {
         }
     }
 
+    pub(super) fn record_accepted_covers(
+        &mut self,
+        buffer: &super::field_buffer::FieldBuffer,
+        anchors: &[super::NativeWordAnchor],
+        passes: &[super::field_buffer::FillPass],
+    ) {
+        let word_at = |cell| {
+            let index = anchors
+                .partition_point(|anchor| anchor.content <= cell)
+                .checked_sub(1)?;
+            anchors[index]
+                .owner
+                .strip_prefix(super::INTERNAL_FIELD_WORD)?
+                .parse()
+                .ok()
+        };
+        // Unlike immediate BACKBEFORE projection, these glyphs remained
+        // available for later writes. Only the accepted pass proves clipping.
+        buffer.visit_accepted_covers(passes, |target, by| {
+            if let Some(owner) = word_at(target) {
+                self.mark_clipped_operands(std::iter::once(owner), word_at(by));
+            }
+        });
+    }
+
     pub(in crate::mandoc) fn take(&mut self) -> CapturedHeadOperands {
         let mut captured = std::mem::take(&mut self.captured);
         for (index, serial) in self.spelling_receipts.drain(..) {

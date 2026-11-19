@@ -475,6 +475,7 @@ mod buffer_handoff_tests {
                 owner: "source-owner".into(),
                 projected_device_padding: 0,
                 projected_field_prefix: false,
+                projected_gap_cell: None,
                 projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
             });
     }

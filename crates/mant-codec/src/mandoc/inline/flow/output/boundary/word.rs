@@ -112,7 +112,7 @@ impl InlineBuilder {
                 && (field_padding || virtual_padding)
                 && let Some(marker) = native_anchor_marker.as_ref()
             {
-                self.mark_native_field_prefix(marker);
+                self.mark_native_field_prefix(marker, projection.projected_gap(field_padding));
             }
             if field_padding {
                 self.append_device_field_padding();
@@ -145,7 +145,7 @@ impl InlineBuilder {
         // Geometry can prove an advance before the glyph it has left in
         // BACKBEFORE. Project that gap before the delayed glyph even
         // while this word's current inline payload is empty.
-        projection.separator == SeparatorDisposition::DeviceAdvance
+        matches!(projection.separator, SeparatorDisposition::DeviceAdvance(_))
             && self
                 .execution
                 .zero_advance
@@ -225,7 +225,7 @@ impl InlineBuilder {
             (boundary, false)
         } else if word
             && !empty_word
-            && projection.separator == SeparatorDisposition::DeviceAdvance
+            && matches!(projection.separator, SeparatorDisposition::DeviceAdvance(_))
             && self
                 .execution
                 .last_visible_character
