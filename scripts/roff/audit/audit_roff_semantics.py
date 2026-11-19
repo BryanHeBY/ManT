@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v12"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v13"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v1",
     "mant.roff-semantic-profile/v2",
@@ -52,6 +52,7 @@ SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v9",
     "mant.roff-semantic-profile/v10",
     "mant.roff-semantic-profile/v11",
+    "mant.roff-semantic-profile/v12",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -252,6 +253,24 @@ def valid_definition_candidate(value: object) -> bool:
     )
 
 
+_PATH_INDEX = r"\[(?:0|[1-9][0-9]{0,19})\]"
+_ORDINAL_OWNER_PATH = re.compile(
+    rf"(?:document|section{_PATH_INDEX}(?:/section{_PATH_INDEX})*)/block{_PATH_INDEX}"
+    rf"(?:/(?:item{_PATH_INDEX}|definition{_PATH_INDEX}/description"
+    rf"|row{_PATH_INDEX}/cell{_PATH_INDEX})/block{_PATH_INDEX})*"
+)
+
+
+def valid_ordinal_owner_path(value: object) -> bool:
+    # conversions.rs writes decimal usize indexes and always records a
+    # list block, including when it is nested under another block's child.
+    return (
+        isinstance(value, str)
+        and _ORDINAL_OWNER_PATH.fullmatch(value) is not None
+        and all(int(index) <= (1 << 64) - 1 for index in re.findall(r"\[([0-9]+)\]", value))
+    )
+
+
 def valid_ordinal_conversion(value: object) -> bool:
     expected = {"recovered-ordered-list", "retained-definition-list"}
     observed = expected | {"other-list"}
@@ -272,7 +291,7 @@ def valid_ordinal_conversion(value: object) -> bool:
         and isinstance(value.get("observedDispositions"), list)
         and all(isinstance(item, str) and item in observed for item in value["observedDispositions"])
         and isinstance(value.get("observedIrPaths"), list)
-        and all(isinstance(path, str) and bool(path) for path in value["observedIrPaths"])
+        and all(valid_ordinal_owner_path(path) for path in value["observedIrPaths"])
         # audit_ordinals pairs each source occurrence with at most one IR owner.
         and len(value["observedDispositions"]) == len(value["observedIrPaths"]) <= 1
     )

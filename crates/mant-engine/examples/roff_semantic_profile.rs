@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v12";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v13";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -799,14 +799,12 @@ mod tests {
         use serde_json::json;
         use std::path::Path;
 
-        let verify = |case: &Case, display: Option<&payloads::DisplayCase>| {
+        let verify = |case: &Case, owner_path: &str, check_display: &dyn Fn(&mant_ir::Document)| {
             let report = libmandoc_rs::Parser::default()
                 .parse_bytes("probe.1", case.source.as_bytes())
                 .unwrap();
             let document = mant_codec::lower_mandoc_document(Path::new("probe.1"), &report);
-            if let Some(display) = display {
-                display.assert_body(&document);
-            }
+            check_display(&document);
             let profile = super::profile_document(&case.name, &report.document.root, &document, 0);
             let disposition = if case.disposition == OrdinalDisposition::Recovered {
                 "recovered-ordered-list"
@@ -820,17 +818,24 @@ mod tests {
                 json!([{
                     "sourceLine":case.source_line,"listStyle":"tag","terms":["1.","2."],
                     "expectedDisposition":disposition,"observedDispositions":[disposition],
-                    "observedIrPaths":["section[1]/block[0]"]
+                    "observedIrPaths":[owner_path]
                 }]),
                 "{}",
                 case.name
             );
         };
         for example in payloads::displays().filter(|example| example.ordinal) {
-            verify(&example.case, Some(&example));
+            verify(&example.case, "section[1]/block[0]", &|document| {
+                example.assert_body(document)
+            });
         }
-        for case in payloads::heads() {
-            verify(&case, None);
+        for example in payloads::display_fields().filter(|example| example.ordinal) {
+            verify(&example.case, "section[1]/block[1]", &|document| {
+                example.assert_literal_count(document)
+            });
+        }
+        for case in payloads::heads().chain(payloads::margin_heads()) {
+            verify(&case, "section[1]/block[0]", &|_| {});
         }
     }
 

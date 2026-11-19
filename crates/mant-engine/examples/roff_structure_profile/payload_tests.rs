@@ -30,7 +30,7 @@ fn literal_displays_count_only_proven_glyphs_without_losing_blank_body_rows() {
 
 #[test]
 fn ordinal_head_controls_do_not_publish_arguments_as_words() {
-    for case in payloads::heads() {
+    for case in payloads::heads().chain(payloads::margin_heads()) {
         let (expected, topology, document) = parsed_structure(&case.source);
         let (observed, actual) = ir_profile(&document);
         let [source] = topology.lists.as_slice() else {
@@ -54,10 +54,156 @@ fn ordinal_head_controls_do_not_publish_arguments_as_words() {
     }
 }
 
+#[test]
+fn display_fields_and_nested_containers_require_only_real_literal_owners() {
+    for example in payloads::display_fields() {
+        let case = &example.case;
+        let (expected, topology, document) = parsed_structure(&case.source);
+        assert_eq!(
+            expected.literal_displays, example.literal_count,
+            "{}",
+            case.name
+        );
+        assert!(expected.literal_display_reviews.is_empty(), "{}", case.name);
+        example.assert_literal_count(&document);
+        if example.ordinal {
+            let expected_kind = if case.disposition == OrdinalDisposition::Recovered {
+                ListTopologyKind::Generic
+            } else {
+                ListTopologyKind::Definition
+            };
+            assert!(
+                topology.lists.iter().any(|list| {
+                    list.source_line == case.source_line && list.kind == expected_kind
+                }),
+                "{}",
+                case.name
+            );
+        }
+        let (observed, actual) = ir_profile(&document);
+        let violations = compare_structure(&expected, &observed, &topology, &actual);
+        assert!(violations.is_empty(), "{}: {violations:?}", case.name);
+    }
+}
+
+#[test]
+fn partially_rewound_source_is_reviewed_only_at_its_display_owner() {
+    // With the fixed term.c input slots, both devices retain PRF. The
+    // source proof covers whole rewinds and intentionally leaves this
+    // partial overwrite as a coordinate-bound source review.
+    let field = r".D1 PROOF\h'|2n'\p\p";
+    for (carrier, line) in [
+        (String::from(field), 10),
+        (format!(".Bd -literal -compact\n{field}\n.Ed"), 11),
+    ] {
+        let source = format!(
+            concat!(
+                ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n",
+                "STARTPROBE\n.br\n{}\n.br\nSTOPPROBE\n.Sh ENDPROBE\nDone.\n"
+            ),
+            carrier,
+        );
+        let (expected, _, _) = parsed_structure(&source);
+        assert_eq!(expected.literal_displays, 0, "{source}");
+        assert_eq!(expected.literal_display_reviews, [[line, 2]], "{source}");
+    }
+}
+
+#[test]
+fn default_slot_coverage_is_withheld_for_an_inherited_native_font() {
+    // In fixed CVS a Roman PROOF has five cells, all replaced here. Bold
+    // and emphasis encode additional cells, so the native devices retain
+    // ROOF in those scopes even though the authored strings match.
+    use std::iter::once;
+    let field = r".D1 PROOF\h'|0n'\p\p\p\p\p";
+    let carriers = once(("", "", None)).chain([
+        (".ft B\n", "\n.ft R", Some([11, 2])),
+        (".Bf -emphasis\n", "\n.Ef", Some([11, 2])),
+    ]);
+    for (before, after, review) in carriers {
+        let source = format!(
+            concat!(
+                ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n",
+                "STARTPROBE\n.br\n{}{}{}\n.br\nSTOPPROBE\n.Sh ENDPROBE\nDone.\n"
+            ),
+            before, field, after,
+        );
+        let (expected, _, _) = parsed_structure(&source);
+        assert_eq!(expected.literal_displays, 0, "{source}");
+        assert_eq!(
+            expected.literal_display_reviews,
+            review.into_iter().collect::<Vec<_>>(),
+            "{source}"
+        );
+    }
+}
+
 fn display_probe(source: &str) -> String {
     format!(
-        ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n+         BEFORE\n.br\n{source}\n.br\nAFTER\n.Sh END PROBE\nDone.\n"
+        concat!(
+            ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\n",
+            "BEFORE\n.br\n{}\n.br\nAFTER\n.Sh END PROBE\nDone.\n"
+        ),
+        source,
     )
+}
+
+#[test]
+fn display_field_uses_its_inherited_spacing_mode_and_tbl_resets_it() {
+    use crate::ordinal_labels::SourceContext;
+    use libmandoc_rs::{Node, NodeKind, Parser};
+
+    fn observed(node: &Node, context: &SourceContext, displays: &mut Vec<bool>) {
+        if node.kind == NodeKind::Block
+            && matches!(node.macro_token.as_deref(), Some("D1" | "Dl" | "Bd"))
+        {
+            displays.push(description(node, false, context).has_text());
+        }
+        for child in &node.children {
+            observed(child, context, displays);
+        }
+    }
+    let witnesses = |source: &str| {
+        let report = Parser::default()
+            .parse_bytes("audit.1", source.as_bytes())
+            .unwrap();
+        let root = &report.document.root;
+        let context = SourceContext::collect(root);
+        let mut displays = Vec::new();
+        observed(root, &context, &mut displays);
+        displays
+    };
+
+    // Two independent owners see the mode at their own source position.
+    // termp_sm_pre() persists the mode, and term_word() adds its separator
+    // only when the mode allows it. That separator decides the leading pass.
+    for mode in ["D1", "Dl", "literal", "unfilled"] {
+        let word = |label: &str| {
+            if matches!(mode, "D1" | "Dl") {
+                format!(r".{mode} No \p No {label}")
+            } else {
+                format!(".Bd -{mode} -compact\n.No \\p No {label}\n.Ed")
+            }
+        };
+        for (first, second) in [("off", "on"), ("on", "off")] {
+            let source = display_probe(&format!(
+                ".Sm {first}\n{}\n.Sm {second}\n{}",
+                word("PROOFFIRST"),
+                word("PROOFSECOND"),
+            ));
+            assert_eq!(
+                witnesses(&source),
+                [first == "off", second == "off"],
+                "{source}"
+            );
+        }
+    }
+    for (table, visible) in [("", true), (".TS\nl.\nCELL\n.TE\n", false)] {
+        let source = display_probe(&format!(
+            ".Bd -literal -compact\n.Sm off\n{table}.No \\p No PROOF\n.Ed"
+        ));
+        assert_eq!(witnesses(&source), [visible], "{source}");
+    }
 }
 
 #[test]
@@ -127,7 +273,8 @@ fn display_space_requests_distinguish_physical_rows_from_control_boundaries() {
         let report = libmandoc_rs::Parser::default()
             .parse_bytes("audit.1", source.as_bytes())
             .unwrap();
-        let observation = description(display(&report.document.root).unwrap(), false);
+        let context = crate::ordinal_labels::SourceContext::collect(&report.document.root);
+        let observation = description(display(&report.document.root).unwrap(), false, &context);
         assert!(!observation.absent(), "{source}");
         assert!(!observation.has_text(), "{source}");
         assert_eq!(observation.has_row(), row, "{source}");

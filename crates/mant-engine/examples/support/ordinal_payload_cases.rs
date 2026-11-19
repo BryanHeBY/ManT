@@ -170,3 +170,173 @@ pub(crate) fn heads() -> impl Iterator<Item = Case> {
         })
     })
 }
+
+pub(crate) fn margin_heads() -> impl Iterator<Item = Case> {
+    // roff_term_pre_mc() flushes an existing nonempty field with NOBREAK.
+    // Its glyph is page margin decoration, independent of the label.
+    [".ft R", ".mc", ".mc X", ".mc X\n.mc", ".mc XYZ"]
+        .into_iter()
+        .flat_map(|control| {
+            [true, false].into_iter().flat_map(move |first| {
+                [1, 2, 3].map(move |mask| {
+                    let mut source = format!("{HEADER}.Bl -tag -width 3n\n");
+                    for index in [1, 2] {
+                        source.push_str(".It Xo\n");
+                        if first && mask & index != 0 {
+                            source.push_str(&format!("{control}\n"));
+                        }
+                        source.push_str(&format!("{index}.\n"));
+                        if !first && mask & index != 0 {
+                            source.push_str(&format!("{control}\n"));
+                        }
+                        source.push_str(&format!(".Xc\nWITNESS{index}\n"));
+                    }
+                    source.push_str(".El\n.mc\n.Sh ENDPROBE\nDone.\n");
+                    Case {
+                        name: format!("margin-{control}-{first}-{mask}"),
+                        source,
+                        source_line: 8,
+                        disposition: Recovered,
+                    }
+                })
+            })
+        })
+}
+
+pub(crate) struct FieldCase {
+    pub(crate) case: Case,
+    pub(crate) ordinal: bool,
+    pub(crate) literal_count: usize,
+}
+
+impl FieldCase {
+    pub(crate) fn assert_literal_count(&self, document: &Document) {
+        use mant_ir::visit::{self, Visit};
+        #[derive(Default)]
+        struct Literals(usize);
+        impl<'ir> Visit<'ir> for Literals {
+            fn visit_block(&mut self, block: &'ir Block) {
+                if let Block::Preformatted { children, .. } = block
+                    && !inline_plain_text(children).trim().is_empty()
+                {
+                    self.0 += 1;
+                }
+                visit::walk_block(self, block);
+            }
+        }
+        let mut literals = Literals::default();
+        literals.visit_section(&document.sections[1]);
+        assert_eq!(literals.0, self.literal_count, "{}", self.case.name);
+    }
+}
+
+pub(crate) fn display_fields() -> impl Iterator<Item = FieldCase> {
+    // Exact fixed ASCII/UTF-8 access to the same active field. term_word()
+    // sees an automatic separator across sibling operands unless Ns joins
+    // them. A rewind and five break writes fully cover the five ASCII slots.
+    let fields = [
+        ("plain", "PROOF", true),
+        ("positive", r"\h'1n'PROOF", true),
+        ("negative", r"\h'-1n'PROOF", true),
+        ("stable", r"PROOF\h'0n'", true),
+        (
+            "linked",
+            r"\X'tty: link https://example.test'PROOF\X'tty: link'",
+            true,
+        ),
+        ("strike", r"\o' 'PROOF", true),
+        ("font", r"\fBPROOF\fR", true),
+        ("marker-same", r"\p PROOF", false),
+        ("marker-siblings", r"No \p No PROOF", false),
+        ("marker-joined", r"No \p Ns No PROOF", true),
+        ("marker-font-siblings", r"No \p Em PROOF", false),
+        ("marker-font-joined", r"No \p Ns Em PROOF", true),
+        ("rewind-same", r"PROOF\h'|0n'\p\p\p\p\p", false),
+        (
+            "rewind-siblings",
+            r#"No PROOF Ns No "\h'|0n'\p\p\p\p\p""#,
+            false,
+        ),
+        (
+            "rewind-relative-siblings",
+            r#"No PROOF Ns No "\h'-5n'\p\p\p\p\p""#,
+            false,
+        ),
+    ];
+    let long_display_bodies = [
+        ("mc-only", ".mc X\n.mc", false, Retained),
+        ("font-only", ".ft R", false, Retained),
+        (
+            "tag-head",
+            ".Bl -tag -width Ds -compact\n.It PROOF\n.El",
+            false,
+            Recovered,
+        ),
+        (
+            "column",
+            ".Bl -column one two\n.It PROOF Ta SECOND\n.El",
+            false,
+            Recovered,
+        ),
+        (
+            "tag-body",
+            ".Bl -tag -width Ds -compact\n.It LABEL\nPROOF\n.El",
+            true,
+            Recovered,
+        ),
+        ("en-inner", ".Es \\h'0n'\n.En PROOF", true, Recovered),
+        ("en-plain", ".Es ( )\n.En PROOF", true, Recovered),
+        ("separate", ".EQ\nx\n.EN\nPROOF", true, Recovered),
+    ];
+    let bodies = ["D1", "Dl", "literal", "unfilled"]
+        .into_iter()
+        .flat_map(move |mode| {
+            let short = matches!(mode, "D1" | "Dl");
+            fields.into_iter().map(move |(name, word, literal)| {
+                let body = if short {
+                    format!(".{mode} {word}")
+                } else if word.starts_with("No ") {
+                    format!(".Bd -{mode} -compact\n.{word}\n.Ed")
+                } else {
+                    format!(".Bd -{mode} -compact\n{word}\n.Ed")
+                };
+                (mode, name, body, literal, Recovered)
+            })
+        });
+    let owners = ["literal", "unfilled"].into_iter().flat_map(move |mode| {
+        long_display_bodies
+            .into_iter()
+            .map(move |(name, contents, literal, disposition)| {
+                (
+                    mode,
+                    name,
+                    format!(".Bd -{mode} -compact\n{contents}\n.Ed"),
+                    literal,
+                    disposition,
+                )
+            })
+    });
+    bodies
+        .chain(owners)
+        .flat_map(|(mode, name, body, literal, disposition)| {
+            [false, true].map(move |ordinal| {
+                let blocks = if ordinal {
+                    format!(".Bl -tag -width 3n\n.It 1.\n{body}\n.It 2.\n{body}\n.El")
+                } else {
+                    format!(".br\n{body}")
+                };
+                FieldCase {
+                    literal_count: usize::from(literal) * (1 + usize::from(ordinal)),
+                    ordinal,
+                    case: Case {
+                        name: format!("{mode}-{name}-{ordinal}"),
+                        source: format!(
+                            "{HEADER}STARTPROBE\n{blocks}\n.br\nSTOPPROBE\n.Sh ENDPROBE\nDone.\n"
+                        ),
+                        source_line: 9,
+                        disposition,
+                    },
+                }
+            })
+        })
+}

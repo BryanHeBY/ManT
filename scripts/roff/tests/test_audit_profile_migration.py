@@ -15,7 +15,9 @@ from scripts.roff.audit import audit_roff_structure as structure
 class AuditProfileMigrationTests(unittest.TestCase):
     def test_ordinal_review_positions_keep_occurrences_and_reject_malformed_data(self):
         for observe, required in (
-            (structure.structure_source_reviews, {'sourceLinkOrigins': {'sectionLabelsForReview': []}}),
+            (structure.structure_source_reviews, {
+                'sourceLinkOrigins': {'sectionLabelsForReview': []}, 'literalDisplaysForReview': [],
+            }),
             (semantic.ordinal_source_reviews, {}),
         ):
             positions = [[8, 2], [8, 2], [9, 2]]
@@ -27,9 +29,9 @@ class AuditProfileMigrationTests(unittest.TestCase):
 
     def test_stale_profiles_are_rescanned_once_without_losing_annotations(self):
         for audit, old_schema, read, write in (
-            (structure, 'mant.roff-structure-profile/v10',
+            (structure, 'mant.roff-structure-profile/v11',
              structure.read_structure_database, structure.write_structure_database),
-            (semantic, 'mant.roff-semantic-profile/v11', semantic.read_database, semantic.write_database),
+            (semantic, 'mant.roff-semantic-profile/v12', semantic.read_database, semantic.write_database),
         ):
             with self.subTest(audit=audit.__name__), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)

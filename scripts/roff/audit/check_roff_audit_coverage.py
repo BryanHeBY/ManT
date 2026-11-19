@@ -77,11 +77,11 @@ DEVIATION_FIELDS = [
     "note",
 ]
 
-CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v11"
+CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v12"
 CURRENT_PROJECTION_SCHEMA = "mant.roff-projection-profile/v3"
 CURRENT_LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
 CURRENT_TARGET_SCHEMA = "mant.roff-target-profile/v4"
-CURRENT_SEMANTIC_SCHEMA = "mant.roff-semantic-profile/v12"
+CURRENT_SEMANTIC_SCHEMA = "mant.roff-semantic-profile/v13"
 SOURCE_DIGEST = re.compile(r"[0-9a-f]{64}")
 PROFILE_SCHEMA = re.compile(
     r"mant\.roff-(?:structure|projection|target|semantic)-profile/v[1-9][0-9]*"

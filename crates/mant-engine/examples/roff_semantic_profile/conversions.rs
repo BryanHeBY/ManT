@@ -40,7 +40,7 @@ impl OrdinalAudit {
 pub(super) fn audit_ordinals(root: &Node, document: &Document) -> OrdinalAudit {
     let mut candidates = Vec::new();
     let mut slots = HashMap::new();
-    let spacing = ordinal_labels::HeadSpacing::collect(root);
+    let spacing = ordinal_labels::SourceContext::collect(root);
     collect_source_candidates(root, &spacing, &mut slots, &mut candidates);
     let mut observed = ObservedLists::new();
     collect_blocks(&document.blocks, "document", &mut observed);
@@ -116,7 +116,7 @@ struct SourceCandidate {
 
 fn collect_source_candidates(
     node: &Node,
-    spacing: &ordinal_labels::HeadSpacing,
+    spacing: &ordinal_labels::SourceContext,
     slots: &mut HashMap<Origin, usize>,
     output: &mut Vec<SourceCandidate>,
 ) {

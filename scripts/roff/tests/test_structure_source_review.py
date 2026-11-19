@@ -44,6 +44,7 @@ class StructureSourceReviewTests(unittest.TestCase):
                     'alias': name == 'alias',
                     'ordinalCasesForReview': [],
                     'sourceLinkOrigins': {'sectionLabelsForReview': [[9, 2]] if uncertain else []},
+                    'literalDisplaysForReview': [],
                     # Simulate a separate lowering mutation in the mixed page.
                     'violations': [lost_link] if name == 'mixed' else [],
                 }
@@ -96,6 +97,7 @@ class StructureSourceReviewTests(unittest.TestCase):
                     'topology': {'expected': topology, 'observed': topology},
                     'ordinalCasesForReview': [],
                     'sourceLinkOrigins': {'sectionLabelsForReview': positions},
+                    'literalDisplaysForReview': [],
                 } for key in requests}
 
             with self.subTest(positions=positions):

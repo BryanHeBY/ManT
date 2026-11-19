@@ -8,6 +8,7 @@ use super::{
         mdoc_list_topology_kind,
     },
     ordinal_labels::{
+        SourceContext,
         controls::{SourceControl, source_control},
         description::{description, word_payload},
         skips_source_children,
@@ -17,7 +18,10 @@ use super::{
 
 pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, AstTopology) {
     let root = &report.document.root;
-    let mut profile = AstStructure::default();
+    let mut profile = AstStructure {
+        source_context: SourceContext::collect(root),
+        ..AstStructure::default()
+    };
     let mut no_fill_lines = BTreeMap::new();
     let head_payloads = HeadPayloads::collect(root);
     collect_ast_structure(
@@ -31,7 +35,8 @@ pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, 
     );
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
     super::links::native_link_obligations(report, &mut profile);
-    let mut topology = super::native_topology::collect(root, &head_payloads);
+    let mut topology =
+        super::native_topology::collect(root, &head_payloads, &profile.source_context);
     topology.head_payloads = head_payloads;
     (profile, topology)
 }
@@ -57,10 +62,16 @@ fn collect_ast_structure(
                     || matches!(
                         node.display_kind,
                         Some(DisplayKind::Literal | DisplayKind::Unfilled)
-                    ))
-                    && description(node, false).has_text() =>
+                    )) =>
             {
-                profile.literal_displays += 1;
+                let payload = description(node, false, &profile.source_context);
+                if payload.has_text() {
+                    profile.literal_displays += 1;
+                } else if payload.unproved_literal() {
+                    profile
+                        .literal_display_reviews
+                        .push([node.line, node.column]);
+                }
             }
             Some("PP" | "P" | "LP" | "HP") if has_visible_flow_text(node) => {
                 profile.paragraph_boundaries += 1;

@@ -1,16 +1,19 @@
 //! BODY evidence uses executable source roles and terminal word effects.
 
-use libmandoc_rs::{Node, NodeKind};
+use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
 
 use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
 
-use super::controls::{SourceControl, source_control};
+use super::{
+    FontEvidence, SourceContext,
+    controls::{SourceControl, source_control},
+};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 enum Glyphs {
     #[default]
     None,
-    Equation,
+    OwnedBlock,
     Text,
 }
 
@@ -22,11 +25,19 @@ enum Spacing {
     Row,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+enum Uncertainty {
+    #[default]
+    None,
+    OwnedBlock,
+    Field,
+}
+
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Payload {
     glyphs: Glyphs,
     spacing: Spacing,
-    unresolved: bool,
+    uncertainty: Uncertainty,
 }
 
 impl Payload {
@@ -39,21 +50,25 @@ impl Payload {
         ..Self::ABSENT
     };
     const UNRESOLVED: Self = Self {
-        unresolved: true,
+        uncertainty: Uncertainty::Field,
         ..Self::ABSENT
     };
     const ABSENT: Self = Self {
         glyphs: Glyphs::None,
         spacing: Spacing::None,
-        unresolved: false,
+        uncertainty: Uncertainty::None,
     };
 
     pub(crate) fn absent(self) -> bool {
-        self.glyphs == Glyphs::None && self.spacing == Spacing::None && !self.unresolved
+        self.glyphs == Glyphs::None
+            && self.spacing == Spacing::None
+            && self.uncertainty == Uncertainty::None
     }
 
     pub(crate) fn needs_review(self) -> bool {
-        self.unresolved && self.glyphs == Glyphs::None && !self.has_row()
+        (self.unproved_literal() || self.uncertainty == Uncertainty::OwnedBlock)
+            && self.glyphs == Glyphs::None
+            && !self.has_row()
     }
 
     pub(crate) fn has_text(self) -> bool {
@@ -64,20 +79,36 @@ impl Payload {
         self.spacing == Spacing::Row
     }
 
+    pub(crate) fn unproved_literal(self) -> bool {
+        self.uncertainty == Uncertainty::Field && !self.has_text()
+    }
+
     fn merge(self, another: Self) -> Self {
         Self {
             glyphs: self.glyphs.max(another.glyphs),
             spacing: self.spacing.max(another.spacing),
-            unresolved: self.unresolved || another.unresolved,
+            uncertainty: self.uncertainty.max(another.uncertainty),
         }
+    }
+
+    fn owned_block(mut self) -> Self {
+        if self.has_text() {
+            self.glyphs = Glyphs::OwnedBlock;
+        }
+        if self.uncertainty == Uncertainty::Field {
+            self.uncertainty = Uncertainty::OwnedBlock;
+        }
+        self
     }
 }
 
-pub(crate) fn description(node: &Node, continues: bool) -> Payload {
+pub(crate) fn description(node: &Node, continues: bool, context: &SourceContext) -> Payload {
     DescriptionProbe {
         continues,
         zero_advance: false,
-        display_row: false,
+        display: None,
+        no_space_mode: context.no_space_at(node),
+        font: context.font,
         space_debt: 0,
     }
     .visit(node)
@@ -86,12 +117,33 @@ pub(crate) fn description(node: &Node, continues: bool) -> Payload {
 struct DescriptionProbe {
     continues: bool,
     zero_advance: bool,
-    display_row: bool,
+    display: Option<DisplayField>,
+    no_space_mode: bool,
+    font: FontEvidence,
     space_debt: i32,
+}
+
+#[derive(Default)]
+struct DisplayField {
+    word: NativeWord,
+    saw_word: bool,
+    join_next: bool,
+    font_changed: bool,
 }
 
 impl DescriptionProbe {
     fn visit(&mut self, node: &Node) -> Payload {
+        // print_mdoc_node() handles the input line before its macro,
+        // including ignored operands. A continuation keeps it live.
+        let prefix = if node.flags.no_fill && node.flags.line_start && !self.continues {
+            self.close_field()
+        } else {
+            Payload::ABSENT
+        };
+        prefix.merge(self.visit_node(node))
+    }
+
+    fn visit_node(&mut self, node: &Node) -> Payload {
         if super::skips_source_children(node) {
             return Payload::ABSENT;
         }
@@ -99,20 +151,7 @@ impl DescriptionProbe {
             return Payload::GLYPHS;
         }
         if let Some(control) = source_control(node) {
-            return match control {
-                SourceControl::VerticalSpace => {
-                    let argument = node
-                        .children
-                        .first()
-                        .and_then(|child| child.text.as_deref());
-                    self.vertical_space(mant_codec::roff_vertical_space_lines(argument))
-                }
-                SourceControl::AlignedRows => self.visit_children(node.children.iter().skip(1)),
-                SourceControl::State
-                | SourceControl::SpacingMode
-                | SourceControl::LineBoundary
-                | SourceControl::Skip => Payload::ABSENT,
-            };
+            return self.control(node, control);
         }
         let token = node.macro_token.as_deref();
         match (node.kind, token) {
@@ -126,30 +165,17 @@ impl DescriptionProbe {
                     .as_ref()
                     .map_or(Payload::ABSENT, equation_description);
                 // A display EQ owns its glyphs in a separate block.
-                if payload.has_text() && !node.equation_inline.unwrap_or(!node.flags.line_start) {
-                    payload.glyphs = Glyphs::Equation;
+                if !node.equation_inline.unwrap_or(!node.flags.line_start) {
+                    payload = payload.owned_block();
                 }
-                return payload;
+                return self.close_field().merge(payload);
             }
             (NodeKind::Element, Some("Fn")) if !node.children.is_empty() => {
                 // termp_fn_pre() writes both parentheses after the name,
                 // even when that first word has no visible glyph.
                 return Payload::GLYPHS;
             }
-            (NodeKind::Body, Some("En")) => {
-                // termp_quote_pre/post use parser-normalized Es operands,
-                // whose presence alone does not prove printable glyphs.
-                if let Some(enclosure) = &node.enclosure {
-                    let delimiters = NativeWord::read(&enclosure.opening);
-                    let closing =
-                        NativeWord::read(enclosure.closing.as_deref().unwrap_or_default());
-                    let generated =
-                        word_payload(&delimiters, false).merge(word_payload(&closing, false));
-                    if !generated.absent() {
-                        return generated;
-                    }
-                }
-            }
+            (NodeKind::Body, Some("En")) => return self.enclosure(node),
             // mdoc_term.c :: termp_quote_pre/post write the delimiters even
             // with no BODY children. The macro label itself is not an operand.
             (NodeKind::Element, Some("Ap" | "Fl"))
@@ -161,55 +187,181 @@ impl DescriptionProbe {
                     | "Pq" | "Ql" | "Qo" | "Qq" | "So" | "Sq",
                 ),
             ) => return Payload::GLYPHS,
-            (NodeKind::Table, _) => return Payload::ROW,
+            (NodeKind::Table, _) => {
+                // tbl_term.c::term_tbl() clears NONOSPACE when it finishes.
+                self.no_space_mode = false;
+                return self.close_field().merge(Payload::ROW);
+            }
             (NodeKind::Block, Some("Bd" | "D1" | "Dl")) => {
                 return self.visit_display(node);
             }
-            (NodeKind::Block, Some("Bl")) if node.list_kind.is_some() => {
-                // A native list or column owner remains substantive after
-                // its children project to no glyphs. termp_bl_pre/post()
-                // own the whole structure. An armed \z with no buffer may
-                // survive the post and affect the following ordinal.
-                let result = self.visit_children(node.children.iter());
-                return result.merge(if self.zero_advance {
-                    Payload::UNRESOLVED
-                } else {
-                    Payload::ROW
-                });
+            (NodeKind::Block, Some("Bl")) if node.list_kind.is_some() => return self.list(node),
+            (_, Some("Ns")) if !node.flags.line_start => {
+                if let Some(field) = &mut self.display {
+                    field.join_next = true;
+                }
+            }
+            (NodeKind::Element, Some(mac)) if !matches!(mac, "No" | "Ns") => {
+                if let Some(field) = &mut self.display {
+                    field.word.leave_plain_slots();
+                }
             }
             _ => {}
         }
         self.visit_children(node.children.iter())
     }
 
+    fn control(&mut self, node: &Node, control: SourceControl) -> Payload {
+        match control {
+            SourceControl::VerticalSpace => {
+                let argument = node
+                    .children
+                    .first()
+                    .and_then(|child| child.text.as_deref());
+                self.close_field()
+                    .merge(self.vertical_space(mant_codec::roff_vertical_space_lines(argument)))
+            }
+            SourceControl::AlignedRows => {
+                // roff_term_pre_ce() closes the existing line, skips the
+                // first count child, and then flushes its generated rows.
+                self.close_field()
+                    .merge(self.visit_children(node.children.iter().skip(1)))
+                    .merge(self.close_field())
+            }
+            SourceControl::SpacingMode => {
+                self.no_space_mode = super::spacing_mode(node, self.no_space_mode);
+                if !self.no_space_mode
+                    && let Some(field) = &mut self.display
+                {
+                    field.join_next = false;
+                }
+                Payload::ABSENT
+            }
+            SourceControl::LineBoundary | SourceControl::Margin => self.close_field(),
+            SourceControl::State | SourceControl::Skip => {
+                if node.macro_token.as_deref() == Some("ft")
+                    && let Some(field) = &mut self.display
+                {
+                    field.font_changed = true;
+                    field.word.leave_plain_slots();
+                }
+                Payload::ABSENT
+            }
+        }
+    }
+
+    fn enclosure(&mut self, node: &Node) -> Payload {
+        // termp_quote_pre/post execute normalized Es words around the
+        // ordinary children. A glyphless delimiter cannot stand in for BODY.
+        let Some(enclosure) = &node.enclosure else {
+            return self.visit_children(node.children.iter());
+        };
+        let opening = self.word(&enclosure.opening, false, true, false);
+        let children = self.visit_children(node.children.iter());
+        let closing = if let Some(operand) = &enclosure.closing {
+            self.word(operand, true, false, false)
+        } else {
+            if let Some(field) = &mut self.display {
+                field.join_next = false;
+            }
+            Payload::ABSENT
+        };
+        opening.merge(children).merge(closing)
+    }
+
+    fn list(&mut self, node: &Node) -> Payload {
+        let before = self.close_field();
+        let mut result = Payload::ABSENT;
+        if self.display.is_none() {
+            result = self.visit_children(node.children.iter());
+        } else if node.list_kind != Some(NormalizedListKind::Column) {
+            // Bl/It close their native fields independently. Column
+            // cells and definition HEADs retain their own content roles.
+            // Ordinary item BODY prose still inherits the display mode.
+            for item in node
+                .children
+                .iter()
+                .filter(|part| part.kind == NodeKind::Body)
+                .flat_map(|part| &part.children)
+                .filter(|item| {
+                    item.kind == NodeKind::Block && item.macro_token.as_deref() == Some("It")
+                })
+            {
+                result = result
+                    .merge(
+                        self.visit_children(
+                            item.children
+                                .iter()
+                                .filter(|part| part.kind == NodeKind::Body),
+                        ),
+                    )
+                    .merge(self.close_field());
+            }
+        }
+        // A nested list can own substantive layout even with no glyphs
+        // in this display. Without any active cell a bare \z may survive.
+        before.merge(result).merge(if self.zero_advance {
+            Payload::UNRESOLVED
+        } else {
+            Payload::ROW
+        })
+    }
+
+    fn close_field(&mut self) -> Payload {
+        let Some(field) = &mut self.display else {
+            return Payload::ABSENT;
+        };
+        let word = std::mem::take(&mut field.word);
+        let result = word_payload(&word, true);
+        if field.font_changed {
+            field.word.leave_plain_slots();
+        }
+        field.saw_word = false;
+        field.join_next = false;
+        if word.has(WordEffect::Buffered) || !word.text.is_empty() {
+            self.zero_advance = false;
+        }
+        result
+    }
+
     fn visit_display(&mut self, node: &Node) -> Payload {
         // termp_d1_pre/termp_bl_post and termp_bd_post close the actual
         // buffer. A word can own an empty row when it writes a zero-width
         // cell or marker. A compact display alone writes no blank.
-        let previous = std::mem::replace(&mut self.display_row, true);
-        let result = self.visit_children(
+        let before = self.close_field();
+        let mut field = DisplayField::default();
+        if self.font == FontEvidence::Unproved {
+            field.font_changed = true;
+            field.word.leave_plain_slots();
+        }
+        let previous = self.display.replace(field);
+        let mut result = self.visit_children(
             node.children
                 .iter()
                 .filter(|part| part.kind == NodeKind::Body),
         );
-        self.display_row = previous;
+        result = result.merge(self.close_field());
+        self.display = previous;
+        if self.display.is_some() {
+            // The nested display has its own literal obligation.
+            result = result.owned_block();
+        }
         if node.macro_token.as_deref() == Some("Bd") && !node.compact {
             // Inside a definition BODY, print_bvspace() can supply a row
             // independently of the display payload.
-            result.merge(Payload {
+            result = result.merge(Payload {
                 spacing: Spacing::Boundary,
                 ..Payload::ABSENT
-            })
-        } else {
-            result
+            });
         }
+        before.merge(result)
     }
 
     fn visit_children<'a>(&mut self, children: impl Iterator<Item = &'a Node>) -> Payload {
         let mut result = Payload::ABSENT;
         for child in children {
             result = result.merge(self.visit(child));
-            if result.has_text() {
+            if self.display.is_none() && result.has_text() {
                 break;
             }
         }
@@ -228,16 +380,36 @@ impl DescriptionProbe {
                 // change the next owner. This case needs source review.
                 Payload::UNRESOLVED
             } else {
-                self.vertical_space(1)
+                self.close_field().merge(self.vertical_space(1))
             };
         }
+        self.word(
+            source,
+            node.flags.delimiter_close,
+            node.flags.delimiter_open,
+            node.flags.no_fill,
+        )
+    }
+
+    fn word(&mut self, source: &str, closes: bool, opens: bool, no_fill: bool) -> Payload {
         // Actual term_word() clears skipvsp even for a nonprinting word.
         self.space_debt = 0;
+        if let Some(field) = &mut self.display {
+            if field.saw_word && !field.join_next && !closes && !self.no_space_mode {
+                field.word.extend(" ");
+            }
+            field.word.extend(source);
+            self.continues = field.word.has(WordEffect::Continues);
+            self.zero_advance = field.word.has(WordEffect::ZeroAdvance);
+            field.saw_word = true;
+            field.join_next = opens || self.continues;
+            return Payload::ABSENT;
+        }
         let word = NativeWord::read(source);
         self.continues = word.has(WordEffect::Continues);
         self.zero_advance =
             word.has(WordEffect::ZeroAdvance) || self.zero_advance && word.text.is_empty();
-        word_payload(&word, node.flags.no_fill || self.display_row)
+        word_payload(&word, no_fill)
     }
 
     fn vertical_space(&mut self, rows: i32) -> Payload {
@@ -261,7 +433,11 @@ pub(crate) fn word_payload(word: &NativeWord, closes_row: bool) -> Payload {
     if closes_row && word.rejects_leading_pass() {
         return Payload::ROW;
     }
-    let unresolved = word.has(WordEffect::Unclassified);
+    let unresolved = if closes_row {
+        word.has_unproved_graphs()
+    } else {
+        word.has(WordEffect::Unclassified)
+    };
     let glyphs = closes_row && word.has_leading_graph()
         || !unresolved
             && word
@@ -275,7 +451,11 @@ pub(crate) fn word_payload(word: &NativeWord, closes_row: bool) -> Payload {
     Payload {
         glyphs: if glyphs { Glyphs::Text } else { Glyphs::None },
         spacing: if row { Spacing::Row } else { Spacing::None },
-        unresolved,
+        uncertainty: if unresolved {
+            Uncertainty::Field
+        } else {
+            Uncertainty::None
+        },
     }
 }
 
@@ -372,28 +552,6 @@ fn generated_body_glyph(node: &Node) -> bool {
                     )
                 )
         }),
-        // termp_it_pre prints a marker at each actual HEAD for these kinds.
-        // An empty list has no It and therefore no generated marker.
-        (NodeKind::Block, Some("Bl"))
-            if matches!(
-                node.list_kind,
-                Some(
-                    libmandoc_rs::NormalizedListKind::Bullet
-                        | libmandoc_rs::NormalizedListKind::Dash
-                        | libmandoc_rs::NormalizedListKind::Ordered
-                )
-            ) =>
-        {
-            node.children
-                .iter()
-                .filter(|part| part.kind == NodeKind::Body)
-                .flat_map(|body| &body.children)
-                .any(|item| {
-                    item.kind == NodeKind::Block
-                        && item.macro_token.as_deref() == Some("It")
-                        && !item.flags.no_print
-                })
-        }
         _ => false,
     }
 }

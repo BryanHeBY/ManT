@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v11"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v12"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -491,9 +491,13 @@ def structure_source_reviews(response: dict[str, object]) -> list[SourceReview] 
         "section label depends on recovery of an invalid roff escape",
     )
     ordinal_reviews = ordinal_source_reviews(response)
-    if section_reviews is None or ordinal_reviews is None:
+    display_reviews = source_reviews(
+        response.get("literalDisplaysForReview"),
+        "display has unproved native glyph placement",
+    )
+    if section_reviews is None or ordinal_reviews is None or display_reviews is None:
         return None
-    return [*section_reviews, *ordinal_reviews]
+    return [*section_reviews, *ordinal_reviews, *display_reviews]
 
 
 def valid_structure_counts(value: object) -> bool:

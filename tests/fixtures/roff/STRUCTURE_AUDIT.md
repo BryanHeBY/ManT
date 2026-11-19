@@ -121,8 +121,9 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v11` successful page response requires both
-`ordinalCasesForReview` and `sourceLinkOrigins.sectionLabelsForReview`. Their
+The `mant.roff-structure-profile/v12` successful page response requires
+`ordinalCasesForReview`, `literalDisplaysForReview`, and
+`sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
 evidence. Incomplete observations fail validation. A pure alias retains its
 own redirect identity.
@@ -142,6 +143,14 @@ prefix still requires a preformatted owner when a later edit leaves the
 exact spelling uncertain. A rewind can revoke that proof, and an empty
 initial pass can reject later glyphs. A glyphless completed row can use
 vertical space. A separate display equation supplies its own visible owner.
+Display source evidence follows the active native field across formatter
+words and their actual separators. An unproved edit keeps the owning
+display's source coordinates for Review. A nested column's cells or a
+definition's terms supply their own content. Literal text in an item's
+description still supplies an obligation.
+Each display inherits the spacing mode at its source position. A tbl span
+clears that mode before later words. Whole-prefix replacement is conclusive
+only for proved plain slots; inherited font effects can leave it for Review.
 
 Repeated zero-advance effects and normalized custom enclosures retain their
 source execution order. BODY evidence follows the native selected equation

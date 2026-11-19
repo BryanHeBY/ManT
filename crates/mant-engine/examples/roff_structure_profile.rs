@@ -57,13 +57,17 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v11";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v12";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AstStructure {
     no_fill_lines: usize,
     literal_displays: usize,
+    #[serde(skip)]
+    literal_display_reviews: Vec<[u32; 2]>,
+    #[serde(skip)]
+    source_context: ordinal_labels::SourceContext,
     paragraph_boundaries: usize,
     generic_list_items: usize,
     definition_items: usize,
@@ -338,6 +342,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
             "sectionLabelsForReview": expected.section_outcomes.uncertain_labels(),
         },
         "alias": is_alias,
+        "literalDisplaysForReview": expected.literal_display_reviews,
         "ordinalCasesForReview": expected_topology.lists.iter()
             .filter(|list| list.ordinal_uncertain)
             .map(|list| [list.source_line, list.source_column])

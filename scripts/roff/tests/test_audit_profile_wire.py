@@ -23,6 +23,7 @@ def structure_page():
         'observed': {'genericListItems': 2},
         'topology': {'expected': topology('definition'), 'observed': topology('generic')},
         'ordinalCasesForReview': [[8, 2]],
+        'literalDisplaysForReview': [],
         'sourceLinkOrigins': {'section': [[15, 2]], 'sectionLabelsForReview': [[15, 2]]},
         'violations': [],
     }
@@ -145,6 +146,7 @@ class AuditProfileWireTests(unittest.TestCase):
     def test_required_source_fields_distinguish_absent_from_empty_and_review(self):
         for audit, path, position in (
             (structure, ['ordinalCasesForReview'], [8, 2]),
+            (structure, ['literalDisplaysForReview'], [17, 2]),
             (semantic, ['ordinalCasesForReview'], [8, 2]),
             (structure, ['sourceLinkOrigins', 'sectionLabelsForReview'], [15, 2]),
         ):
@@ -174,7 +176,7 @@ class AuditProfileWireTests(unittest.TestCase):
         self.assertEqual(result.status, 'review')
         self.assertEqual(result.violations, response['violations'])
         self.assertEqual(len(result.source_review), 2)
-        for field in ('sourceLinkOrigins', 'ordinalCasesForReview'):
+        for field in ('sourceLinkOrigins', 'ordinalCasesForReview', 'literalDisplaysForReview'):
             broken = deepcopy(response)
             del broken[field]
             self.assertEqual(self.finding(structure, broken).status, 'hard-failure')
@@ -182,7 +184,7 @@ class AuditProfileWireTests(unittest.TestCase):
     def test_alias_and_error_payloads_keep_their_contract(self):
         alias = structure_page()
         alias['alias'] = True
-        del alias['sourceLinkOrigins'], alias['ordinalCasesForReview']
+        del alias['sourceLinkOrigins'], alias['ordinalCasesForReview'], alias['literalDisplaysForReview']
         result = self.finding(structure, alias)
         self.assertEqual(result.status, 'clean')
         self.assertEqual(result.source_review, [])
@@ -264,6 +266,32 @@ class AuditProfileWireTests(unittest.TestCase):
                 issues = semantic.expected_conversion_violations(records)
                 response.update(ordinalConversionViolations=issues, violations=issues)
                 self.assertEqual(self.finding(semantic, response).status, 'review')
+
+    def test_ordinal_owner_paths_follow_the_producers_container_grammar(self):
+        valid = (
+            'document/block[0]',
+            'section[1]/section[0]/block[14]',
+            'section[1]/block[2]/item[9]/block[0]',
+            'section[1]/block[2]/definition[1]/description/block[4]',
+            ('section[1]/block[2]/row[7]/cell[2]/block[8]/item[0]/block[1]'
+             '/definition[4]/description/block[0]'),
+        )
+        invalid = (
+            ' ', 'section[1]', 'section[1]/block[00]', 'document/block[0]/bogus[0]',
+            'section[1]/block[0] ', 'section[1]/block[0]\n', 'document/section[0]/block[0]',
+            'section[1]/block[0]/section[2]/block[0]', 'section[1]/item[0]/block[0]',
+            'section[1]/block[0]/definition[1]/block[0]', 'document/block[0]/row[0]/block[0]',
+            'section[1]/block[0]/cell[0]/block[0]', 'section[1]/block[0]/item[0]',
+            'section[-1]/block[0]', 'section[١]/block[0]', 'section[1]/block[18446744073709551616]',
+        )
+        for candidate, allowed in [(path, True) for path in valid] + [(path, False) for path in invalid]:
+            with self.subTest(path=candidate):
+                response = successful_page(semantic)
+                record = ordinal_conversion()
+                record['observedIrPaths'] = [candidate]
+                response['ordinalConversions'] = [record]
+                self.assertEqual(self.finding(semantic, response).status,
+                                 'clean' if allowed else 'hard-failure')
 
     def test_structure_validates_each_record_in_both_observation_streams(self):
         for side in ('expected', 'observed'):

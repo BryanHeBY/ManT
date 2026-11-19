@@ -31,6 +31,22 @@ pub struct RoffWordEvidence {
     effects: u8,
     advance: Advance,
     leading_graph: LeadingGraph,
+    plain_slots: PlainSlots,
+}
+
+/// A bounded shape proof for a default-font, unbroken ASCII prefix. Any
+/// other writer leaves the actual overwritten cells for separate review.
+enum PlainSlots {
+    Prefix(usize),
+    Covering(usize),
+    Covered,
+    Unknown,
+}
+
+impl Default for PlainSlots {
+    fn default() -> Self {
+        Self::Prefix(0)
+    }
 }
 
 #[derive(Default, PartialEq, Eq)]
@@ -67,10 +83,23 @@ impl RoffWordEvidence {
         self.leading_graph == LeadingGraph::Proved
     }
 
+    /// Placement remains unknown despite reading the source operands.
+    #[must_use]
+    pub fn has_unproved_graphs(&self) -> bool {
+        self.leading_graph == LeadingGraph::Unproved
+    }
+
     /// An empty initial pass rejected the remainder at a word-end break.
     #[must_use]
     pub fn rejects_leading_pass(&self) -> bool {
         self.leading_graph == LeadingGraph::Rejected
+            || matches!(self.plain_slots, PlainSlots::Covered)
+    }
+
+    /// Font- or macro-generated device writes prevent the simple ASCII
+    /// slot proof without invalidating an independently proved glyph.
+    pub fn leave_plain_slots(&mut self) {
+        self.plain_slots = PlainSlots::Unknown;
     }
 
     /// Decode one owned terminal source word using the shared roff grammar.
@@ -88,6 +117,7 @@ impl RoffWordEvidence {
         let decoded = decode_with_status(source);
         if !decoded.proves_native_glyphs() {
             self.mark_unclassified();
+            self.leave_plain_slots();
         }
         let mut events = decoded.events.into_iter().peekable();
         while let Some(event) = events.next() {
@@ -97,23 +127,27 @@ impl RoffWordEvidence {
                         self.prove_graph(before);
                         self.resolve_break();
                     }
+                    self.plain_text(&text);
                     self.append(&text);
                 }
-                RoffInlineEvent::Glyph(text) => self.append(&text),
-                RoffInlineEvent::BreakableHyphen => self.append("-"),
-                RoffInlineEvent::NonBreakingWordBlank => self.append("\u{a0}"),
-                RoffInlineEvent::DeviceName => self.append("utf8"),
+                RoffInlineEvent::Glyph(text) => self.other_text(&text),
+                RoffInlineEvent::BreakableHyphen => self.other_text("-"),
+                RoffInlineEvent::NonBreakingWordBlank => self.other_text("\u{a0}"),
+                RoffInlineEvent::DeviceName => self.other_text("utf8"),
                 RoffInlineEvent::ZeroWidthGlyph => {
                     self.set(Buffered);
                     self.invisible_graph();
+                    self.leave_plain_slots();
                 }
                 RoffInlineEvent::Breakpoint => {
                     self.set(Buffered);
                     self.resolve_break();
+                    self.leave_plain_slots();
                 }
                 RoffInlineEvent::LineBreak => {
                     self.set(Buffered);
                     self.set(WordEndBreak);
+                    self.write_break();
                 }
                 RoffInlineEvent::NoSpace => {
                     // CVS clears an armed BACKAFTER instead of applying
@@ -125,42 +159,34 @@ impl RoffWordEvidence {
                         _ => {}
                     }
                 }
-                RoffInlineEvent::ZeroAdvance => self.arm_zero_advance(),
+                RoffInlineEvent::ZeroAdvance => {
+                    self.arm_zero_advance();
+                    self.leave_plain_slots();
+                }
                 RoffInlineEvent::Overstrike {
-                    terminal, buffered, ..
+                    source,
+                    terminal,
+                    buffered,
                 } => {
-                    if let Some(text) = terminal.as_deref()
-                        && matches!(self.advance, Advance::Ordinary)
-                    {
-                        self.prove_graph(text);
-                    }
-                    self.mark_unclassified();
-                    if buffered {
-                        self.set(Buffered);
-                    }
-                    if let Some(text) = terminal {
-                        self.append(&text);
-                    } else if buffered {
-                        // ESCAPE_OVERSTRIKE still passes blank operands to
-                        // encode1(). A following graph can replace the held
-                        // blank. An empty operand never consumes BACKAFTER.
-                        if let Advance::BufferedAndArmed(start) = std::mem::take(&mut self.advance)
-                        {
-                            self.text.truncate(start);
-                        }
-                    }
+                    self.overstrike(&source, terminal.as_deref(), buffered);
                 }
                 RoffInlineEvent::HorizontalMotion { argument, .. } => {
                     self.motion(argument.as_deref());
                 }
-                RoffInlineEvent::Link(_) | RoffInlineEvent::FallbackGlyph(_) => {
+                RoffInlineEvent::Link(_) => {
+                    // The decoder supplies its separate zero-width cell.
+                    self.set(Unclassified);
+                }
+                RoffInlineEvent::FallbackGlyph(_) => {
                     self.mark_unclassified();
+                    self.leave_plain_slots();
                 }
                 RoffInlineEvent::Presentation {
                     kind: PresentationKind::HorizontalLine,
                     argument,
                 } => {
                     self.mark_unclassified();
+                    self.leave_plain_slots();
                     // A nonpositive length draws to the field margin when
                     // space remains. Check whether a stroke is possible,
                     // without making the observer assume a field width.
@@ -182,10 +208,11 @@ impl RoffWordEvidence {
                         }
                     }
                 }
-                RoffInlineEvent::EmptyDestination => self.append("<>"),
-                RoffInlineEvent::Font(_)
-                | RoffInlineEvent::PreviousFont
-                | RoffInlineEvent::Presentation { .. } => {}
+                RoffInlineEvent::EmptyDestination => self.other_text("<>"),
+                RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont => {
+                    self.leave_plain_slots();
+                }
+                RoffInlineEvent::Presentation { .. } => {}
             }
         }
         if matches!(self.advance, Advance::Armed | Advance::BufferedAndArmed(_)) {
@@ -218,6 +245,59 @@ impl RoffWordEvidence {
         }
     }
 
+    fn plain_text(&mut self, text: &str) {
+        if let PlainSlots::Prefix(length) = &mut self.plain_slots
+            && text.bytes().all(|byte| byte.is_ascii_graphic())
+        {
+            *length = length.saturating_add(text.len());
+        } else if !text.is_empty() {
+            self.leave_plain_slots();
+        }
+    }
+
+    fn other_text(&mut self, text: &str) {
+        self.leave_plain_slots();
+        self.append(text);
+    }
+
+    fn write_break(&mut self) {
+        self.plain_slots = match self.plain_slots {
+            PlainSlots::Covering(1) => {
+                self.leading_graph = LeadingGraph::Empty;
+                PlainSlots::Covered
+            }
+            PlainSlots::Covering(left) => PlainSlots::Covering(left - 1),
+            PlainSlots::Covered => PlainSlots::Covered,
+            _ => PlainSlots::Unknown,
+        };
+    }
+
+    fn overstrike(&mut self, source: &str, terminal: Option<&str>, buffered: bool) {
+        self.leave_plain_slots();
+        if let Some(text) = terminal
+            && matches!(self.advance, Advance::Ordinary)
+        {
+            self.prove_graph(text);
+        }
+        if source == " " && !self.has(WordEndBreak) && matches!(self.advance, Advance::Ordinary) {
+            // encode1() writes this blank, and trim can only recede into
+            // another blank. It does not displace a later ordinary glyph.
+            self.set(Unclassified);
+        } else {
+            self.mark_unclassified();
+        }
+        if buffered {
+            self.set(Buffered);
+        }
+        if let Some(text) = terminal {
+            self.append(text);
+        } else if buffered
+            && let Advance::BufferedAndArmed(start) = std::mem::take(&mut self.advance)
+        {
+            self.text.truncate(start);
+        }
+    }
+
     fn motion(&mut self, argument: Option<&str>) {
         use libmandoc_rs::TableColumnMetrics;
         // term_word() consumes an armed BACKAFTER before measuring HORIZ.
@@ -230,18 +310,37 @@ impl RoffWordEvidence {
                     TableColumnMetrics::motion_argument(absolute.unwrap_or(argument))
                         .map(|(units, _)| (units, absolute.is_some()))
                 });
-                // Entering a previous slot can invalidate even earlier ink.
-                if motion.is_some_and(|(units, absolute)| absolute || units < 0) {
-                    self.leading_graph = LeadingGraph::Unproved;
-                }
-                if motion == Some((0, false)) {
-                    // No slots change. Exact ordinal spelling after a
-                    // motion remains a separate lexical decision.
-                    self.set(Unclassified);
-                } else {
-                    self.mark_unclassified();
-                }
+                self.record_motion(motion);
             }
+        }
+    }
+
+    fn record_motion(&mut self, motion: Option<(i32, bool)>) {
+        self.set(Unclassified);
+        let Some((units, absolute)) = motion else {
+            // ESCAPE_HORIZ ignores an invalid operand.
+            return;
+        };
+        if !absolute && units >= 0 {
+            if units > 0 {
+                if matches!(self.advance, Advance::Ordinary) {
+                    self.invisible_graph();
+                }
+                self.leave_plain_slots();
+            }
+            return;
+        }
+        if let PlainSlots::Prefix(length @ 1..) = self.plain_slots
+            && (absolute && units == 0 || !absolute && units.unsigned_abs() as usize / 24 >= length)
+        {
+            self.plain_slots = PlainSlots::Covering(length);
+        } else {
+            self.leave_plain_slots();
+        }
+        // An empty field can change its origin but contains no earlier
+        // glyph to displace. Other rewinds need a checked overwrite.
+        if self.leading_graph != LeadingGraph::Empty || self.has(Buffered) {
+            self.leading_graph = LeadingGraph::Unproved;
         }
     }
 

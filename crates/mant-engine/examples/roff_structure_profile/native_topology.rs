@@ -10,10 +10,13 @@ use super::{
 };
 use ordinal_labels::OrdinalDisposition;
 
-pub(super) fn collect(root: &Node, head_payloads: &HeadPayloads) -> AstTopology {
+pub(super) fn collect(
+    root: &Node,
+    head_payloads: &HeadPayloads,
+    spacing: &ordinal_labels::SourceContext,
+) -> AstTopology {
     let mut topology = AstTopology::default();
-    let spacing = ordinal_labels::HeadSpacing::collect(root);
-    collect_ast_topology(root, false, &mut topology, head_payloads, &spacing);
+    collect_ast_topology(root, false, &mut topology, head_payloads, spacing);
     topology.lists.sort_by_key(|list| list.source_line);
     topology.equations.sort_by_key(|equation| {
         (
@@ -100,7 +103,7 @@ fn collect_ast_topology(
     inside_table: bool,
     topology: &mut AstTopology,
     head_payloads: &HeadPayloads,
-    spacing: &ordinal_labels::HeadSpacing,
+    spacing: &ordinal_labels::SourceContext,
 ) {
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
     // cell. Only an owned Equation node establishes an obligation.

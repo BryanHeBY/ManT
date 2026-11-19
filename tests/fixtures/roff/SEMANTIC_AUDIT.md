@@ -10,7 +10,7 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v12`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v13`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
@@ -37,6 +37,8 @@ not make a compact display substantive. State and boundary requests in a
 label follow their native handlers, including skipping alignment counts.
 A zero or canceled spacing request can preserve a layout boundary without
 completing a physical row.
+The margin-character request can close a live field. Its argument decorates
+the page margin and does not become a definition label or display BODY.
 
 Each conversion pairs at most one observed disposition with its nonempty IR
 path. Only one conversion in a page may claim each observed path. Candidates
@@ -45,6 +47,9 @@ owner requires the explicit conversion violation
 and its inclusion in the overall violations. `other-list` is a valid observed
 product difference, recorded for Review. Malformed records and JSON booleans in
 numeric coordinates or counts are rejected.
+The reader requires canonical producer paths with decimal indexes and a final
+block component. Blocks may descend through a nested section, list item,
+definition description or table cell according to their container grammar.
 An expected recovery must supply at least two consecutive canonical unsigned
 64-bit decimal terms with one punctuation style. Retained definitions may keep
 the original spelling, including signs, leading zeroes and mixed punctuation.

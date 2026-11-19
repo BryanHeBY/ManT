@@ -46,26 +46,54 @@ pub(crate) enum OrdinalDisposition {
     Uncertain,
 }
 
-pub(crate) struct HeadSpacing(HashSet<u32>);
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum FontEvidence {
+    #[default]
+    Plain,
+    Unproved,
+}
 
-impl HeadSpacing {
+#[derive(Default)]
+pub(crate) struct SourceContext {
+    no_space_owners: HashSet<u32>,
+    pub(crate) font: FontEvidence,
+}
+
+impl SourceContext {
     pub(crate) fn collect(root: &Node) -> Self {
-        let mut spacing = Self(HashSet::new());
+        let mut spacing = Self::default();
         spacing.walk(root, &mut false);
         spacing
+    }
+
+    pub(crate) fn no_space_at(&self, node: &Node) -> bool {
+        self.no_space_owners.contains(&node.id)
     }
 
     fn walk(&mut self, node: &Node, no_space_mode: &mut bool) {
         if skips_source_children(node) {
             return;
         }
+        if matches!(node.macro_token.as_deref(), Some("ft" | "Bf"))
+            || node
+                .text
+                .as_deref()
+                .is_some_and(|text| text.contains(r"\f"))
+        {
+            // This bounded audit does not reexecute the font stack across
+            // owners. A stateful font source makes plain slot sizes unproved.
+            self.font = FontEvidence::Unproved;
+        }
         match (node.kind, node.macro_token.as_deref()) {
             (NodeKind::Element, Some("Sm")) => {
                 *no_space_mode = spacing_mode(node, *no_space_mode);
                 return;
             }
-            (NodeKind::Head, Some("It")) if *no_space_mode => {
-                self.0.insert(node.id);
+            (NodeKind::Head | NodeKind::Body, Some("It"))
+            | (NodeKind::Block, Some("D1" | "Dl" | "Bd"))
+                if *no_space_mode =>
+            {
+                self.no_space_owners.insert(node.id);
             }
             (NodeKind::Table, _) => {
                 // tbl_term.c::term_tbl() clears NONOSPACE after each span.
@@ -93,7 +121,7 @@ fn spacing_mode(node: &Node, previous: bool) -> bool {
 
 pub(crate) fn observe<'a>(
     items: impl Iterator<Item = &'a Node>,
-    spacing: &HeadSpacing,
+    spacing: &SourceContext,
 ) -> Option<NativeOrdinalLabels> {
     let mut terms = Vec::new();
     let mut has_candidate = false;
@@ -102,7 +130,7 @@ pub(crate) fn observe<'a>(
     for item in items {
         let mut label = NativeLabel::default();
         if let Some(head) = part(item, NodeKind::Head) {
-            label.no_space_mode = spacing.0.contains(&head.id);
+            label.no_space_mode = spacing.no_space_at(head);
             label.walk(head, None);
         }
         let text = label.evidence.text.as_str();
@@ -123,8 +151,9 @@ pub(crate) fn observe<'a>(
                 prior.checked_add(1) == Some(number) && mark == punctuation
             })
         });
-        let body = part(item, NodeKind::Body)
-            .map_or_else(Payload::default, |body| description(body, label.continues));
+        let body = part(item, NodeKind::Body).map_or_else(Payload::default, |body| {
+            description(body, label.continues, spacing)
+        });
         if (!follows && label.effect != LabelEffect::Uncertain)
             || label.effect == LabelEffect::Retained
             || body.absent()
@@ -302,6 +331,14 @@ impl NativeLabel {
                 self.effect = LabelEffect::Retained;
                 for (index, child) in node.children.iter().enumerate().skip(1) {
                     self.walk(child, node.children.get(index + 1));
+                }
+            }
+            SourceControl::Margin => {
+                // roff_term_pre_mc() flushes a nonempty buffer with
+                // NOBREAK and clears NOSPACE. Its operand belongs to the
+                // margin, so it contributes no label text.
+                if !self.evidence.text.is_empty() || self.evidence.has(WordEffect::Buffered) {
+                    self.join_next = self.no_space_mode;
                 }
             }
             SourceControl::State | SourceControl::Skip => {}
