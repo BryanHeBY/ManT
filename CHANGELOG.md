@@ -52,9 +52,16 @@ that crate was not published for that change.
   a surviving glyph even when another link has the same label.
 - Keep ordinary wrapping in edited tbl cells responsive. Use the native
   field width when it determines a hard break or which glyph survives.
+  An explicit word-end break no longer hardens the rest of a wrapped cell.
 - Bind the complete leading mdoc program or command in definition heads.
   Parenthesized operands stay in the form, and unrelated groups no longer
   determine whether assignments and independent names can be queried.
+- Require invocation evidence for program names followed by descriptive
+  text. Keep independent declarations queryable at their own ranges and
+  reject option spellings glued from multiple native flag invocations.
+- Keep each surviving glyph's style, link, and declaration identity when
+  native writes retreat into a preceding word. Function punctuation takes
+  part in the same write order.
 - Preserve source order and spacing around relative indent continuations
   of numbered man list items.
 - Publish valid single-mailbox `mailto:` links from roff as email references

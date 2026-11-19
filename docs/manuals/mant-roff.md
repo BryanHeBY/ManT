@@ -246,8 +246,10 @@ accepted pass. A tty link loses glyphs covered by a later write. A rejected
 field can still retain its authored destination as an empty link.
 A later edit can expose an earlier overstrike glyph while the relevant
 native slots remain live. The replay uses a bounded suffix with a proved
-write cursor and preserves the glyph's original style and link. Native
-copies of a bold glyph refer to one author glyph. A queued blank can cover
+write cursor, including across automatic word blanks. A surviving glyph
+appears in the accepted order and keeps its original style and link, even
+if it was pending under `\z`. Native copies of a bold glyph refer to one
+author glyph. A queued blank can cover
 it when a later device write on the same pass makes the blank print. A
 generated `Fl` dash follows the same device writes and can survive when
 either bold copy remains. An empty overstrike can leave a pending retreat
@@ -858,8 +860,14 @@ the authored form and body remain unchanged.
 
 In an authored mdoc definition head, a complete leading `Nm` can bind the
 program by itself. Consecutive accepted `Cm` and `Ic` words can extend it to
-a command name. A bracketed or parenthesized argument stays in the readable
-form, and an edited or partial command word cannot prove a different name.
+a command name. A standalone name followed by a tail requires invocation
+evidence such as an option, argument, or argument group. For example,
+`Nm tool Ar file` and `Nm tool Qo file Qc` can bind `tool`, while
+`Nm HAMMER No version 2-` remains a descriptive label. An independently
+executed declaration after a separator uses its own evidence. Implicit
+enclosures can contain that separator, and glued `Fl` invocations cannot
+form one new option spelling. Operands stay in the readable form, and an
+edited or partial command word cannot prove a different name.
 Ordinary `Nm` references in a description or synopsis retain their source role.
 
 Independent `IP`, `TP`, and definition-form `It` items retain separate semantic
@@ -1380,7 +1388,7 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\ `, `\~`, `\0` | Visible space |
 | `\c` at the end of an input line | Suppress the implicit space or line break before the next input line |
 | `\h'N'` with a positive literal relative distance | Keep a reading space if an advance remains after any pending native backstep |
-| Leading `\h'-N'` with a literal relative distance | Apply a rewind when the same word overwrites only generated entry padding, a tab reference, or the pending zero-advance glyph |
+| Leading `\h'-N'` with a literal relative distance | Replay the edit within proven live field slots, including earlier word glyphs and entry padding |
 | `\p` | Break at the next ordinary word boundary; a no-fill physical row settles any still-pending break |
 | `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned libmandoc catalog; bracketed `uXXXX` Unicode names and `_`-joined scalar sequences are decoded, while an unknown name remains visible in escaped source form |
 | `\E` | Copy-mode-safe nested escape |
@@ -1422,7 +1430,7 @@ output. For example, `\fB\-\fP\fB\-emulate\fP` becomes
 escaping is minimal but lossless: intraword underscores such as the one in
 `PATH_SCRIPT` remain literal, while delimiter-active underscores are escaped.
 
-Color, point size, vertical or non-literal motion, drawing, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Overstrike `\o` is the exception: ManT retains the surviving glyph from mandoc's bounded one-cell terminal projection, including its trailing blank/tab trim, without reproducing device geometry or decoration. Link identity continues to follow the separate HTML-compatible source projection. A positive literal relative horizontal motion can contribute one reading space, including before a `\c` line join. If its only advance clears the pending native backstep, it adds no space. A leading negative literal relative motion can consume generated word-entry padding, a tab reference, or an uncommitted zero-advance glyph when the same word overwrites that native range. A raw space over an existing cell advances the input cursor without replacing the cell or adding another visible space. Other negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
+Color, point size, vertical or non-literal motion, drawing, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Overstrike `\o` retains surviving author glyphs, including bounded consecutive backspaces and the native trailing blank/tab trim. Link identity continues to follow the separate HTML-compatible source projection. A positive literal relative horizontal motion can contribute one reading space, including before a `\c` line join. If its only advance clears the pending native backstep, it adds no space. A literal rewind can edit an earlier operand while the native cursor and affected slots are known. A raw space over an existing cell advances the input cursor without replacing the cell or adding another visible space. Motions into an unproved region preserve the authored reading text. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its two formatter stages—waiting for a glyph and waiting for a later glyph to overstrike the completed glyph—are retained independently across adjacent source text, style operands, inline macro arguments, and formatter-generated syntax such as `OP` brackets. An ordinary filled-word boundary consumes the latter backtracking position without adding a visible blank; real line and cell boundaries settle any remaining glyph. Following the pinned mandoc CVS formatter, a following `\c` cancels only a still-unconsumed `\z`; after a zero-advance glyph has already been produced, a trailing `\c` remains a valid source-line continuation and the next glyph may overstrike it. GNU troff diagnoses or projects some of these non-portable `\z`/`\c` combinations differently. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
 
@@ -1621,6 +1629,10 @@ column width to decide the accepted text. A native no-break field uses the
 remaining page width from the cell's actual start. The span's own fill flag
 controls that limit even inside a no-fill owner. Other cell edits retain a
 responsive paragraph, with wrapping decided by the reading viewport.
+Ordinary width folds within an accepted run stay soft even when the same
+cell also contains an explicit `\p`. The reading projection keeps a device
+boundary when crossing it would change which glyph survives or hide an
+accepted device-only row.
 
 Phrasing tables share the page's source recovery and work allowance with
 block tables. An implicit
