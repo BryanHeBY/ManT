@@ -24,6 +24,8 @@ impl<'a> PlacedWord<'a> {
     pub(super) fn prepare(
         seed: GeometrySeed<'a>,
         retain_suffix: bool,
+        exact_inner_blanks: bool,
+        editable_marker: bool,
     ) -> Result<Self, PriorSlotEdit> {
         let GeometrySeed {
             placement,
@@ -46,6 +48,9 @@ impl<'a> PlacedWord<'a> {
         let (extent, cursor_retreat) = slots.extent_and_retreat();
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
+        if exact_inner_blanks {
+            publish_inner_advances(&mut slots, &mut reading, earlier);
+        }
         let settled = super::overprint::settle(&mut slots);
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
@@ -91,11 +96,15 @@ impl<'a> PlacedWord<'a> {
             record_slot_proof(
                 &mut writes,
                 &settled,
-                extent == end,
-                end,
-                cursor_retreat,
-                backbefore,
-                duplicates,
+                &slots,
+                extent,
+                FieldWrite::ProveRawSlots {
+                    count: end,
+                    cursor_retreat,
+                    backbefore,
+                    duplicates,
+                    editable_marker,
+                },
             );
         }
         writes.extend(zero_width_retreats.into_iter().map(|(target, mark)| {
@@ -112,9 +121,7 @@ impl<'a> PlacedWord<'a> {
                 from_end: end - index,
             });
         }
-        if let Some(tail) = next_tail {
-            writes.push(FieldWrite::RetainDeviceTail(Box::new(tail)));
-        }
+        writes.extend(next_tail.map(|tail| FieldWrite::RetainDeviceTail(Box::new(tail))));
         Ok(Self {
             slots,
             reading,
@@ -212,14 +219,104 @@ impl<'a> PlacedWord<'a> {
     }
 }
 
+/// A short advance inside one operand is already part of its reading
+/// line. Give its spaces their own cells instead of attaching a collapsed
+/// separator to the next graph: that graph may be overwritten later.
+fn publish_inner_advances(
+    slots: &mut Vec<FillSlot>,
+    reading: &mut Vec<ReadingCell<'_>>,
+    earlier: usize,
+) {
+    let mut preceding = None;
+    let mut replacements = Vec::new();
+    let mut budget = 64usize;
+    for (index, slot) in slots.iter().enumerate() {
+        let ink = slot.owner.filter(|&owner| {
+            owner >= earlier
+                && matches!(reading[owner].glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
+                && matches!(slot.cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
+        });
+        if ink.is_none() {
+            continue;
+        }
+        if let Some(at) = preceding {
+            let mut end = index;
+            if index >= at + 3
+                && slots[index - 1].cell == FieldCell::Backline
+                && slots[index - 2].owner.is_none()
+                && matches!(
+                    slots[index - 2].cell,
+                    FieldCell::Graph {
+                        text: '_',
+                        width: 1
+                    }
+                )
+            {
+                // The underline paint immediately before the next glyph
+                // occupies that same column (term.c::encode1).
+                end -= 2;
+            }
+            let between = at + 1..end;
+            let mut advances = Vec::new();
+            let mut width = 0usize;
+            let usable = between.clone().all(|index| {
+                let gap = &slots[index];
+                match gap.owner {
+                    Some(owner) if matches!(reading[owner].glyph, ReadingGlyph::DeviceAdvance) => {
+                        advances.push((index, owner));
+                        width = width.saturating_add(gap.count);
+                        true
+                    }
+                    Some(_) => false,
+                    None => matches!(
+                        gap.cell,
+                        FieldCell::ZeroWidthGraph | FieldCell::TabReference | FieldCell::Breakpoint
+                    ),
+                }
+            });
+            if usable && width != 0 && width <= budget {
+                replacements.extend(advances);
+                budget -= width;
+            }
+        }
+        preceding = Some(index);
+    }
+    // A trailing or oversized advance has no projected scalar above.
+    for slot in &mut *slots {
+        if slot
+            .owner
+            .is_some_and(|id| matches!(reading[id].glyph, ReadingGlyph::DeviceAdvance))
+        {
+            slot.owner = None;
+        }
+    }
+    for (index, owner) in replacements.into_iter().rev() {
+        let read = reading[owner];
+        let slot = &slots[index];
+        let blanks = (0..slot.count)
+            .map(|_| {
+                let id = reading.len();
+                reading.push(ReadingCell {
+                    glyph: ReadingGlyph::Scalar(' '),
+                    ..read
+                });
+                FillSlot {
+                    cell: slot.cell.clone(),
+                    count: 1,
+                    owner: Some(id),
+                }
+            })
+            .collect::<Vec<_>>();
+        slots.splice(index..=index, blanks);
+    }
+}
+
 fn record_slot_proof(
     writes: &mut Vec<FieldWrite>,
     settled: &[std::ops::Range<usize>],
-    complete: bool,
-    count: usize,
-    cursor_retreat: usize,
-    backbefore: bool,
-    duplicates: Vec<(usize, usize)>,
+    slots: &[FillSlot],
+    extent: usize,
+    proof: FieldWrite,
 ) {
     if !settled.is_empty() {
         // The visible column order cannot prove one owner per raw byte.
@@ -227,13 +324,15 @@ fn record_slot_proof(
             styled_suffix: None,
             keeps_prior_slots: false,
         });
-    } else if complete {
-        writes.push(FieldWrite::ProveRawSlots {
-            count,
-            cursor_retreat,
-            backbefore,
-            duplicates,
-        });
+    } else if slots.iter().all(|slot| {
+        slot.count == 1
+            || matches!(
+                slot.cell,
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+            ) && slot.owner.is_none()
+    }) && extent == slots.iter().map(|slot| slot.count).sum::<usize>()
+    {
+        writes.push(proof);
     }
 }
 

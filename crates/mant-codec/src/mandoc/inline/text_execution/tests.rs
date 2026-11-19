@@ -78,7 +78,16 @@ fn function_word_policy_changes_only_literal_source_blanks() {
                 execution
                     .native_writes
                     .iter()
-                    .filter(|write| matches!(write, FieldWrite::Cell(FieldCell::NonBreakingBlank)))
+                    .filter(|write| {
+                        matches!(
+                            write,
+                            FieldWrite::Cell(FieldCell::NonBreakingBlank)
+                                | FieldWrite::Placed {
+                                    cell: FieldCell::NonBreakingBlank,
+                                    ..
+                                }
+                        )
+                    })
                     .count(),
                 intrinsic
                     + if spaces == WordSpace::NonBreaking {

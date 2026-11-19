@@ -21,6 +21,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     if !can_place_word(context) {
         return false;
     }
+    let field = context.policy.field_authoritative;
     let mut marker = false;
     let mut edits = false;
     let mut authored_blank = false;
@@ -43,13 +44,10 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 argument: Some(value),
                 ..
             } => {
-                let absolute = value.strip_prefix('|');
-                if let Some((units, _)) =
-                    libmandoc_rs::TableColumnMetrics::motion_argument(absolute.unwrap_or(value))
-                {
-                    absolute_edit |= absolute.is_some();
-                    relative_retreat |= absolute.is_none() && units < 0;
-                    relative_advance |= absolute.is_none() && units > 0;
+                if let Some((absolute, units)) = motion_columns(value) {
+                    absolute_edit |= absolute;
+                    relative_retreat |= !absolute && units < 0;
+                    relative_advance |= !absolute && units > 0;
                 }
             }
             RoffInlineEvent::Overstrike {
@@ -72,11 +70,11 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 has_zero_advance = true;
             }
             RoffInlineEvent::Link(_) => has_link = true,
-            RoffInlineEvent::Glyph(value) if !context.policy.field_authoritative => {
+            RoffInlineEvent::Glyph(value) if !field => {
                 isolated_needs_accepted_retreat |=
                     !value.is_empty() && mant_ir::geometry::text_width(value) == 0;
             }
-            RoffInlineEvent::Breakpoint if !context.policy.field_authoritative => {
+            RoffInlineEvent::Breakpoint if !field => {
                 isolated_needs_accepted_retreat = true;
             }
             RoffInlineEvent::Presentation {
@@ -86,7 +84,9 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 edits = true;
                 draws = true;
             }
-            RoffInlineEvent::Text(value) => authored_blank |= value.contains([' ', '\t']),
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
+                authored_blank |= value.contains([' ', '\t']);
+            }
             _ => {}
         }
     }
@@ -99,17 +99,19 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
         return false;
     }
     edits |= absolute_edit || relative_retreat;
-    !context.policy.field_authoritative
+    !field
         && (relative_retreat
             || absolute_edit
             || has_overstrike
             || marker && relative_advance
             || has_zero_advance && isolated_needs_accepted_retreat)
         || marker && (edits || context.table_leading_blanks != 0)
-        || context.policy.field_authoritative
+        || field
             && (has_live_raw_cursor(context)
-                || has_zero_advance && contains_local_overwrite(events)
+                || has_zero_advance && contains_local_overwrite(events, has_prior_retreat(context))
                 || has_link && decorated_word(events, context.font.current)
+                || marker && editable_marker(events, context)
+                || relative_advance && can_publish_inner_advances(events, context)
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
@@ -118,6 +120,16 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || replay_empty_overstrike
                 || tight_word_can_carry_glyph(events, context)
                 || replayable_device_tail(context, edits, !events.is_empty()))
+}
+
+fn motion_columns(value: &str) -> Option<(bool, i32)> {
+    let absolute = value.strip_prefix('|');
+    libmandoc_rs::TableColumnMetrics::motion_argument(absolute.unwrap_or(value))
+        .map(|(units, _)| (absolute.is_some(), units))
+}
+
+fn has_prior_retreat(context: &TextExecutionContext<'_>) -> bool {
+    context.zero_advance.has_buffered_glyph() || context.slot_entry.retreat_blanks > 0
 }
 
 fn replayable_device_tail(
@@ -158,26 +170,123 @@ fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
 /// A complete in-word backspace stays editable until the native field
 /// retires. An unfinished escape still uses the delayed glyph owner,
 /// whose recovery and annotation state can span multiple fragments.
-fn contains_local_overwrite(events: &[RoffInlineEvent]) -> bool {
-    let mut after_arm = None;
+fn contains_local_overwrite(events: &[RoffInlineEvent], inherited_glyph: bool) -> bool {
+    let mut armed = false;
+    let mut backbefore = false;
+    let mut wrote_pair = false;
     for event in events {
         match event {
-            RoffInlineEvent::ZeroAdvance if after_arm.is_none() => after_arm = Some(0usize),
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
-                if value.chars().all(|ch| ch.is_ascii_graphic()) =>
+            RoffInlineEvent::ZeroAdvance
+                if !inherited_glyph || !armed && !backbefore && !wrote_pair =>
             {
-                if let Some(count) = &mut after_arm {
-                    *count = count.saturating_add(value.len());
+                armed = true;
+            }
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
+                if value.chars().all(|ch| {
+                    ch.is_ascii_graphic() || !inherited_glyph && matches!(ch, ' ' | '\u{a0}')
+                }) =>
+            {
+                // term.c::encode does not consume BACKAFTER on a blank.
+                // encode1 consumes BACKBEFORE before writing the next
+                // glyph. A second arm may leave another pending glyph.
+                for _ in value.bytes().filter(u8::is_ascii_graphic) {
+                    wrote_pair |= backbefore;
+                    backbefore = std::mem::take(&mut armed);
                 }
             }
             RoffInlineEvent::Link(_)
             | RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::ZeroWidthGlyph => {}
+            RoffInlineEvent::Breakpoint
+            | RoffInlineEvent::LineBreak
+            | RoffInlineEvent::NonBreakingWordBlank
+                if !inherited_glyph => {}
             _ => return false,
         }
     }
-    after_arm.is_some_and(|count| count >= 2)
+    wrote_pair && !armed && (!inherited_glyph || !backbefore)
+}
+
+fn can_publish_inner_advances(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    if !context.policy.field_authoritative
+        || context.zero_advance.is_armed()
+        || context.zero_advance.has_pending_glyph()
+        || context.zero_advance.has_annotation_output_owner()
+    {
+        // Pending glyphs and semantic label prefixes have their own
+        // native output receipt. Do not claim that layout as inline text.
+        return false;
+    }
+    let mut ink = false;
+    let mut advance = false;
+    let mut followed = false;
+    for event in events {
+        match event {
+            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text) => {
+                let printable = text
+                    .chars()
+                    .any(|ch| !ch.is_whitespace() && !ch.is_control());
+                followed |= advance && printable;
+                ink |= printable;
+            }
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(value),
+                ..
+            } if libmandoc_rs::TableColumnMetrics::motion_argument(value)
+                .is_some_and(|(units, _)| units > 0) =>
+            {
+                advance |= ink;
+            }
+            RoffInlineEvent::Presentation {
+                kind: PresentationKind::HorizontalLine,
+                argument: Some(value),
+            } if value.ends_with(' ') => {
+                advance |= ink;
+            }
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::Link(_)
+            | RoffInlineEvent::ZeroWidthGlyph => {}
+            _ => return false,
+        }
+    }
+    followed
+}
+
+// term_fill() does not retire a pending marker until it reaches a
+// breakable cell. A marker embedded between glyphs of one unbroken
+// operand has not yet committed a projected pass.
+fn editable_marker(events: &[RoffInlineEvent], context: &TextExecutionContext<'_>) -> bool {
+    if context.zero_advance.has_buffered_glyph() {
+        return false;
+    }
+    let mut has_ink = false;
+    let mut marked = false;
+    let mut suffix = false;
+    for event in events {
+        match event {
+            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text)
+                if text.bytes().all(|byte| byte.is_ascii_graphic()) =>
+            {
+                has_ink |= !text.is_empty();
+                suffix |= marked && !text.is_empty();
+            }
+            RoffInlineEvent::LineBreak if has_ink => {
+                marked = true;
+                suffix = false;
+            }
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::Link(_)
+            | RoffInlineEvent::ZeroWidthGlyph => {}
+            _ => return false,
+        }
+    }
+    suffix
 }
 
 fn has_live_raw_cursor(context: &TextExecutionContext<'_>) -> bool {
@@ -246,6 +355,7 @@ enum ReadingGlyph<'a> {
     Spelling(&'a str),
     Earlier(usize),
     EntryBlank,
+    DeviceAdvance,
 }
 
 impl ReadingGlyph<'_> {
@@ -253,7 +363,7 @@ impl ReadingGlyph<'_> {
         match self {
             Self::Scalar(value) => text.push(value),
             Self::Spelling(value) => text.push_str(value),
-            Self::Earlier(_) | Self::EntryBlank => {}
+            Self::Earlier(_) | Self::EntryBlank | Self::DeviceAdvance => {}
         }
     }
 
@@ -262,6 +372,7 @@ impl ReadingGlyph<'_> {
             Self::Scalar(_) | Self::EntryBlank => 1,
             Self::Spelling(text) => text.chars().count(),
             Self::Earlier(count) => count,
+            Self::DeviceAdvance => 0,
         }
     }
 }
@@ -345,6 +456,7 @@ impl<'a> Placement<'a> {
         event: &'a RoffInlineEvent,
         state: &mut FontState,
         line_width_units: usize,
+        include_advances: bool,
     ) {
         let font = state.current;
         let display = state.display_current();
@@ -382,12 +494,18 @@ impl<'a> Placement<'a> {
                 });
             }
             RoffInlineEvent::HorizontalMotion { argument, .. } => {
-                self.slots.motion(argument.as_deref());
+                let owner =
+                    include_advances.then(|| self.mark(ReadingGlyph::DeviceAdvance, display));
+                self.slots.motion(argument.as_deref(), owner);
             }
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
                 argument: Some(argument),
-            } => self.slots.line(argument, line_width_units, font),
+            } => {
+                let owner =
+                    include_advances.then(|| self.mark(ReadingGlyph::DeviceAdvance, display));
+                self.slots.line(argument, line_width_units, font, owner);
+            }
             RoffInlineEvent::BreakableHyphen => self.place(FieldCell::Hyphen, '-', display, font),
             RoffInlineEvent::NonBreakingWordBlank => {
                 self.place(FieldCell::NonBreakingBlank, ' ', display, font);
@@ -593,6 +711,7 @@ fn execute_seed<'a>(
     // placed. Falling back to the live word executor must not run them twice.
     let mut font = context.font.clone();
     let mut continuation = None;
+    let include_advances = can_publish_inner_advances(events, context);
     if context.zero_advance.is_armed() {
         seed.placement.slots.arm_backafter();
     }
@@ -601,15 +720,16 @@ fn execute_seed<'a>(
             continuation = Some(!seed.placement.slots.backafter());
         }
         seed.placement
-            .input(event, &mut font, context.line_width_units);
+            .input(event, &mut font, context.line_width_units, include_advances);
         if let Some(edit) = seed.placement.slots.prior_edit() {
             return Err(edit);
         }
     }
-    let retain_suffix = context.policy.field_authoritative
-        && !events
-            .iter()
-            .any(|event| matches!(event, RoffInlineEvent::LineBreak));
+    let has_marker = events
+        .iter()
+        .any(|event| matches!(event, RoffInlineEvent::LineBreak));
+    let editable_marker = has_marker && editable_marker(events, context);
+    let retain_suffix = context.policy.field_authoritative && (!has_marker || editable_marker);
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()
@@ -619,7 +739,7 @@ fn execute_seed<'a>(
         // carried forward at the end of that earlier word.
         return Err(PriorSlotEdit::Unresolved);
     }
-    let placed = PlacedWord::prepare(seed, retain_suffix)?;
+    let placed = PlacedWord::prepare(seed, retain_suffix, include_advances, editable_marker)?;
     *context.font = font;
     context.zero_advance.take_armed();
     word.source_continuation = continuation;

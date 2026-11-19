@@ -247,7 +247,7 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// words only append cells until the real flush runs one fresh scan.
     /// Repeated .ta/word pairs must not replay their growing field history.
     word_scan: WordScanPolicy,
-    last_break_marker: Option<usize>,
+    break_markers: Vec<usize>,
     /// The last breakpoint already considered for this buffer's backline
     /// fence. A marker can reach only one such fence before scanning resumes.
     last_breakpoint_fence: usize,

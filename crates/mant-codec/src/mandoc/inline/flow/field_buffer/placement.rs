@@ -18,8 +18,19 @@ impl FieldBuffer {
                 cursor_retreat,
                 backbefore,
                 duplicates,
+                editable_marker,
             } => {
                 self.raw_slot_fence = self.cells.len() - count;
+                if *editable_marker
+                    && self.resume == 0
+                    && matches!(self.word_scan, super::WordScanPolicy::Incremental)
+                {
+                    // An interior \p has only marked the raw word.
+                    // term.c::term_fill runs when a real flush accepts
+                    // the field. A later operand can still edit this pass.
+                    self.word_scan = super::WordScanPolicy::AwaitFlush;
+                    self.scan = None;
+                }
                 self.cursor_retreat = *cursor_retreat;
                 self.backbefore_armed = *backbefore;
                 self.raw_copy_aliases.clear();
@@ -32,7 +43,13 @@ impl FieldBuffer {
                 styled_suffix,
                 keeps_prior_slots,
             } => self.record_raw_tail_font(*styled_suffix, *keeps_prior_slots),
-            FieldWrite::ReplaceLivePrefix { start: 0, .. } => self.clear(),
+            FieldWrite::ReplaceLivePrefix { start: 0, .. } => {
+                let await_flush = matches!(self.word_scan, super::WordScanPolicy::AwaitFlush);
+                self.clear();
+                if await_flush {
+                    self.word_scan = super::WordScanPolicy::AwaitFlush;
+                }
+            }
             FieldWrite::ReplaceLivePrefix { start, .. } => {
                 self.replace_placed_tail(self.cells.len() - start);
             }
@@ -109,12 +126,6 @@ impl FieldBuffer {
         let mut cells = Vec::with_capacity(self.cells.len() - start);
         for (offset, cell) in self.cells[start..].iter().enumerate() {
             let index = start + offset;
-            if matches!(
-                cell,
-                FieldCell::DrawnSpaces(2..) | FieldCell::FixedDrawingAdvance(2..)
-            ) {
-                return None;
-            }
             let length = self.projection_length(index, index + 1);
             if length > 1
                 || length > 0
@@ -251,15 +262,14 @@ impl FieldBuffer {
         self.raw_slot_fence = self.cells.len() + 1;
         self.clear_backtracking();
         self.backafter_armed = false;
-        if *cell == FieldCell::BreakMarker {
-            self.last_break_marker = Some(self.cells.len());
-        }
         let previous = self.projection_prefix.last().copied().unwrap_or(0);
         self.push_cell(cell.clone());
         *self.projection_prefix.last_mut().expect("placed cell") = previous + scalars;
     }
 
     pub(super) fn truncate_raw_slot_proof(&mut self, end: usize) {
+        self.break_markers
+            .truncate(self.break_markers.partition_point(|&marker| marker < end));
         self.raw_slot_fence = self.raw_slot_fence.min(end);
         if let Some((range, _)) = &mut self.raw_tail_font {
             range.end = range.end.min(end);
@@ -297,7 +307,7 @@ pub(in crate::mandoc::inline) fn isolated_passes(
     // when term_fill/term_field can change a marker's acceptance or when
     // a backline covers a glyph only if its replacement prints on that pass.
     let target = table_field_units
-        .filter(|_| field.last_break_marker.is_some() || field.has_zero_width_retreats())
+        .filter(|_| !field.break_markers.is_empty() || field.has_zero_width_retreats())
         .unwrap_or(usize::MAX / 4);
     let mut remainder = false;
     let mut partial_motion = BTreeMap::new();

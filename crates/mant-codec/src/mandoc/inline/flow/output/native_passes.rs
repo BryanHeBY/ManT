@@ -187,6 +187,8 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     let count = passes.len().saturating_sub(1);
     let start = output_start.min(nodes.len());
     let mut boundaries: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
+    let mut positions = BTreeMap::new();
+    let mut preceding = 0;
     for (pass, next) in passes[..count].iter().zip(passes.iter().skip(1)) {
         if buffer.has_projected_pass(pass.end) || pass.boundary == FillBoundary::Hyphen {
             // An encoded ASCII_HYPH candidate locates the final device row
@@ -197,12 +199,25 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         }
         let cell = next.start;
         let owner = anchors.partition_point(|anchor| anchor.content <= cell);
-        if let Some(anchor) = owner.checked_sub(1).and_then(|index| anchors.get(index)) {
+        if let Some(index) = owner.checked_sub(1) {
+            // Native replay can move part of one word after another
+            // owner's glyph. The projection cursor counts an owner's
+            // scalars across all of its fragments, not just this span.
+            for pair in anchors[preceding..=index].windows(2) {
+                let (previous, next) = (&pair[0], &pair[1]);
+                *positions.entry(previous.owner.as_str()).or_insert(0) += buffer.projection_length(
+                    previous.content,
+                    next.start.min(next.content).max(previous.content),
+                );
+            }
+            preceding = index;
+            let anchor = &anchors[index];
             boundaries
                 .entry(anchor.owner.clone())
                 .or_default()
                 .push(RecordedRowSplit {
-                    offset: buffer.projection_length(anchor.content, cell),
+                    offset: positions.get(anchor.owner.as_str()).copied().unwrap_or(0)
+                        + buffer.projection_length(anchor.content, cell),
                     pass_end: pass.end,
                     before_cached_glyph: false,
                 });

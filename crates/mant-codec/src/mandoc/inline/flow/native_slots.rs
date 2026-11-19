@@ -270,7 +270,15 @@ impl NativeSlots {
             } else {
                 index
             };
-            slots.write_run(cell.clone(), 1, Some(owner));
+            match cell {
+                FieldCell::DrawnSpaces(count) => {
+                    slots.advance(*count, FieldCell::BreakableBlank, None);
+                }
+                FieldCell::FixedDrawingAdvance(count) => {
+                    slots.advance(*count, FieldCell::NonBreakingBlank, None);
+                }
+                _ => slots.write_run(cell.clone(), 1, Some(owner)),
+            }
         }
         slots.cursor -= prefix.cursor_retreat;
         if prefix.automatic > 0 {
@@ -347,7 +355,11 @@ impl NativeSlots {
         self.cursor = end;
     }
 
-    pub(in crate::mandoc::inline) fn motion(&mut self, argument: Option<&str>) {
+    pub(in crate::mandoc::inline) fn motion(
+        &mut self,
+        argument: Option<&str>,
+        owner: Option<usize>,
+    ) {
         if std::mem::take(&mut self.backafter) {
             return;
         }
@@ -374,7 +386,7 @@ impl NativeSlots {
         if relative > 0 {
             let cells = usize::try_from(relative).unwrap_or(usize::MAX).div_ceil(EN);
             let cells = cells.saturating_sub(usize::from(std::mem::take(&mut self.backbefore)));
-            self.advance(cells, FieldCell::NonBreakingBlank, None);
+            self.advance(cells, FieldCell::NonBreakingBlank, owner);
         } else if relative < 0 {
             let cells = usize::try_from(relative.unsigned_abs()).unwrap_or(usize::MAX) / EN;
             let retreat = usize::from(std::mem::take(&mut self.backbefore));
@@ -393,6 +405,7 @@ impl NativeSlots {
         argument: &str,
         cell_width: usize,
         font: RoffFont,
+        owner: Option<usize>,
     ) {
         let Some(stroke) = horizontal_line_stroke(argument, cell_width) else {
             return;
@@ -407,15 +420,16 @@ impl NativeSlots {
         };
         // encode1() applies the active font to printable strokes. The BACK
         // registers can change at most their first two writes.
+        let owner = owner.filter(|_| cell == FieldCell::BreakableBlank);
         let lead = count.min(2);
         for _ in 0..lead {
-            self.glyph(cell.clone(), font, None);
+            self.glyph(cell.clone(), font, owner);
         }
         if count > lead {
             let prefix = decoration_prefix(&cell, font);
             if prefix.clone().next().is_none() {
                 if cell == FieldCell::BreakableBlank {
-                    self.advance(count - lead, cell, None);
+                    self.advance(count - lead, cell, owner);
                 } else {
                     self.write_run(cell, count - lead, None);
                 }
@@ -702,8 +716,8 @@ mod tests {
                 buffer.native_write(write, RoffFont::Regular, None);
             }
             for _ in 0..movements {
-                buffer.motion(Some("1024n"));
-                buffer.motion(Some("-1024n"));
+                buffer.motion(Some("1024n"), None);
+                buffer.motion(Some("-1024n"), None);
             }
             assert_eq!(buffer.cursor, 3);
             assert_eq!(buffer.extent, 1027);

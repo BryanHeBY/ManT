@@ -165,7 +165,7 @@ impl FieldBuffer {
             backafter_armed: false,
             committed_passes: Vec::new(),
             word_scan: super::WordScanPolicy::Incremental,
-            last_break_marker: None,
+            break_markers: Vec::new(),
             last_breakpoint_fence: 0,
             projected_pass_ends: BTreeSet::new(),
             scan: None,

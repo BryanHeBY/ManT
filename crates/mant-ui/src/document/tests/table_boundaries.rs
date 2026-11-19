@@ -94,6 +94,85 @@ fn native_slot_writes_preserve_painting_copy_search_and_link_hits() {
 }
 
 #[test]
+fn active_native_words_paint_and_copy_the_accepted_rows() {
+    // term.c::encode1 writes one or more raw slots per glyph. Later
+    // ESCAPE_HORIZ can reveal earlier ink or overwrite a decorated copy
+    // before term_fill accepts the row, across a marker and link controls.
+    let link = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
+    for (word, rows, label) in [
+        (r#".No "P \zMA" No "\h'-3n'T""#, &["P MTA"][..], None),
+        (r#".No "\zMA\zBC" No "\h'-3n'T""#, &["ABTC"][..], None),
+        (r#".Sy "A\pB" No "\h'-2n'T""#, &["AT"][..], None),
+        (r#".No "A\h'2n'B" No "\h'-2n'T""#, &["A  T"][..], None),
+        (r#".No "A\l'1n 'B" No "\h'-2n'T""#, &["A T"][..], None),
+        (
+            r#".Sy "P\X'tty: link https://one.test'M\pA\X'tty: link'B" No "T" Ns No "\h'-3n'Y""#,
+            &["PMAY", "T"][..],
+            Some("MA"),
+        ),
+        (
+            r#".Sy "P\h'2n'\X'tty: link https://one.test'M\X'tty: link'AB" No "\h'-2n'T""#,
+            &["P  MAT"][..],
+            Some("M"),
+        ),
+    ] {
+        let source = format!("{REVIEW_HEADER}{word}\n");
+        let view = DocumentView::new(&restored(&source));
+        for width in [24, 78] {
+            let rendered = view.render(width);
+            let first = rendered.search("DESCRIPTION")[0].row + 1;
+            let buffer = paint(&rendered, width);
+            for (offset, &row) in rows.iter().enumerate() {
+                assert_eq!(
+                    painted(&buffer, first + offset, 0, width.into()).trim(),
+                    row,
+                    "{source}: {width}"
+                );
+                let hits = rendered.search(row);
+                assert!(
+                    hits.iter().any(|hit| hit.row == first + offset),
+                    "{source}: {row}"
+                );
+            }
+            let selected = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: first,
+                    column: 0,
+                },
+                focus: TextPosition {
+                    row: first + rows.len() - 1,
+                    column: usize::from(width) - 1,
+                },
+            });
+            assert_eq!(
+                selected.lines().map(str::trim).collect::<Vec<_>>(),
+                rows,
+                "{source}"
+            );
+            if let Some(label) = label {
+                let hit = rendered
+                    .search(label)
+                    .into_iter()
+                    .find(|hit| hit.row == first)
+                    .unwrap();
+                for column in hit.start_column..hit.end_column {
+                    assert_eq!(
+                        rendered.link_target_at(first, column),
+                        Some(&link),
+                        "{source}"
+                    );
+                }
+                assert_eq!(
+                    rendered.link_target_at(first, hit.end_column),
+                    None,
+                    "{source}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn a_native_table_inside_an_extended_definition_head_paints_every_cell() {
     let header = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
     // CVS term_tbl emits both cells inside Xo, before the original It BODY.

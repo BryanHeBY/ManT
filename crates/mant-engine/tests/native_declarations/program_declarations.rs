@@ -402,6 +402,32 @@ fn authored_group_edges_preserve_qualified_program_names_and_aliases() {
 }
 
 #[test]
+fn surviving_native_ink_owns_the_definition_name_and_its_body() {
+    // term.c::encode1 keeps both author glyphs when it arms a backspace.
+    // The final HORIZ overwrites an earlier backspace, exposing B.
+    let page = source("DESCRIPTION", r#"No "\zMA\zBC" No "\h'-3n'T""#);
+    let content = load(&page);
+    let items = super::definitions(content.document.as_ref().unwrap());
+    let [item] = items.as_slice() else {
+        panic!("{page}")
+    };
+    check_head(item, "ABTC", &["ABTC"]);
+    let result = roundtrip(&explain(&content, "ABTC"));
+    assert_eq!(result.counts.direct_entry.total, 1);
+    assert!(explanation_ranges::assert_ranges(&result, "ABTC") > 0);
+    let hit = result
+        .evidence
+        .iter()
+        .find(|hit| hit.class == EvidenceClass::DirectEntry)
+        .unwrap();
+    assert_eq!(hit.source.unwrap().line, 9);
+    let excerpt =
+        mant_query::select_excerpt(&content, &[ContentSelector::path(hit.outline.path())]).unwrap();
+    assert!(mant_render::render_excerpt_text(&excerpt).contains(BODY));
+    assert_eq!(explain(&content, "ATC").counts.direct_entry.total, 0);
+}
+
+#[test]
 fn quoted_arguments_and_reopened_flags_keep_their_invocation_owner() {
     // mdoc_macro.c::in_line reopens Fl after its comma. The reopened
     // operand looks identical to a second authored Fl in the terminal.

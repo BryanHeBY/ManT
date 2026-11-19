@@ -113,6 +113,10 @@ fn assert_link(source: &str, input: &str, label: &str) {
 }
 
 fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
+    assert_readback_modes(source, expected, label, &[false, true]);
+}
+
+fn assert_readback_modes(source: &str, expected: &str, label: Option<&str>, modes: &[bool]) {
     let plain = render(source, "roff", "text", "never", false);
     let ansi = render(source, "roff", "text", "always", false);
     assert_eq!(description(&plain), expected, "{source}");
@@ -120,7 +124,7 @@ fn assert_readbacks(source: &str, expected: &str, label: Option<&str>) {
     if let Some(label) = label {
         assert_link(source, "roff", label);
     }
-    for addressable in [false, true] {
+    for &addressable in modes {
         let mut input = source.to_owned();
         let mut input_format = "roff";
         for round in 1..=2 {
@@ -1293,6 +1297,53 @@ fn relative_word_rewind_needs_no_overstrike_or_line_break_escape() {
             search_visible_word(&source, "PT"),
             u64::from(expected == "PT")
         );
+    }
+}
+
+#[test]
+fn active_words_keep_raw_glyphs_and_advances_through_later_edits() {
+    // Pinned term.c::term_word/encode1 keeps the word-end marker, spaces,
+    // and overstrike bytes editable until term_flushln() accepts a pass.
+    for (word, expected, hit, miss, label) in [
+        (r#".No "P \zMA" No "\h'-3n'T""#, "P MTA", "MTA", "TA", None),
+        (
+            r#".No P No "\zMA" No "\h'-3n'T""#,
+            "P MTA",
+            "MTA",
+            "TA",
+            None,
+        ),
+        (r#".Sy "A\pB" No "\h'-2n'T""#, "AT", "AT", "AB T", None),
+        (r#".No "A\h'2n'B" No "\h'-2n'T""#, "A  T", "T", "B", None),
+        (r#".No "A\l'1n 'B" No "\h'-2n'T""#, "A T", "T", "B", None),
+        (
+            r#".Sy "P\h'2n'\X'tty: link https://x.io'M\X'tty: link'AB" No "\h'-2n'T""#,
+            "P  MAT",
+            "MAT",
+            "MAB",
+            Some("M"),
+        ),
+        (
+            r#".Sy "P\l'1n '\X'tty: link https://x.io'M\X'tty: link'AB" No "\h'-2n'T""#,
+            "P MAT",
+            "MAT",
+            "MAB",
+            Some("M"),
+        ),
+        (
+            r#".Sy "P\X'tty: link https://x.io'M\pA\X'tty: link'B" No "T" Ns No "\h'-3n'Y""#,
+            "PMAY\nT",
+            "PMAY",
+            "PMAB",
+            Some("MA"),
+        ),
+    ] {
+        let source = format!("{FIELD_PROBE}{word}\n");
+        // Addressable Markdown uses raw HTML anchor tags, which are
+        // outside the documented semantic reimport subset.
+        assert_readback_modes(&source, expected, label, &[false]);
+        assert_eq!(search_visible_word(&source, hit), 1, "{source}");
+        assert_eq!(search_visible_word(&source, miss), 0, "{source}");
     }
 }
 

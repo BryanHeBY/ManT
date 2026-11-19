@@ -20,12 +20,12 @@ pub(super) fn first_pass(
     for event in &events {
         match event {
             RoffInlineEvent::HorizontalMotion { argument, .. } => {
-                scratch.motion(argument.as_deref());
+                scratch.motion(argument.as_deref(), None);
             }
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
                 argument: Some(argument),
-            } => scratch.line(argument, cell_width, font.current),
+            } => scratch.line(argument, cell_width, font.current, None),
             RoffInlineEvent::Overstrike { source, .. } => {
                 scratch.overstrike(source, font.current, |_| None);
             }

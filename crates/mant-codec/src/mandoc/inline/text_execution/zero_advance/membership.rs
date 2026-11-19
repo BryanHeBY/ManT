@@ -164,6 +164,11 @@ impl ZeroAdvanceState {
         }
     }
 
+    /// Wrapped source labels have their own reading projection.
+    pub(in crate::mandoc::inline::text_execution) fn has_annotation_output_owner(&self) -> bool {
+        !self.membership.output_owners.is_empty()
+    }
+
     /// Positive leading motion is emitted outside all active annotations
     /// which have yet to receive an authored member. Older enclosing labels
     /// may already own the same space as an internal separator.

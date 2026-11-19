@@ -39,8 +39,8 @@ impl FieldBuffer {
             FieldCell::NonBreakingBlank | FieldCell::FixedDrawingAdvance(_) => {
                 self.nonbreaking_positions.insert(self.cells.len());
             }
-            FieldCell::BreakMarker
-            | FieldCell::Tab
+            FieldCell::BreakMarker => self.break_markers.push(self.cells.len()),
+            FieldCell::Tab
             | FieldCell::TabReference
             | FieldCell::ZeroWidthGraph
             | FieldCell::Breakpoint => {}
@@ -118,7 +118,9 @@ impl FieldBuffer {
     }
 
     pub(in crate::mandoc::inline::flow) fn has_pending_break_markers(&self) -> bool {
-        self.last_break_marker
+        self.break_markers
+            .last()
+            .copied()
             .is_some_and(|marker| marker >= self.resume)
     }
 
@@ -126,7 +128,7 @@ impl FieldBuffer {
     /// flush retires its cells. An explicit marker's field policy therefore
     /// survives scanning past it, but never survives field retirement.
     pub(in crate::mandoc::inline::flow) fn has_break_markers(&self) -> bool {
-        self.last_break_marker.is_some()
+        !self.break_markers.is_empty()
     }
 
     /// The live pass scanner, rather than projected glyph booleans, proves
@@ -219,7 +221,7 @@ impl FieldBuffer {
         self.committed_passes.clear();
         self.normalized_until = 0;
         self.word_scan = WordScanPolicy::Incremental;
-        self.last_break_marker = None;
+        self.break_markers.clear();
         self.last_breakpoint_fence = 0;
         self.projected_pass_ends.clear();
         self.word_first_content = None;
@@ -297,9 +299,7 @@ impl FieldBuffer {
                     ));
                 }
                 FieldWrite::Cell(cell) | FieldWrite::DecoratedGraph { cell, .. } => {
-                    if matches!(cell, FieldCell::BreakMarker) {
-                        self.last_break_marker = Some(self.cells.len());
-                    } else if matches!(cell, FieldCell::Breakpoint) {
+                    if matches!(cell, FieldCell::Breakpoint) {
                         self.fence_backline_at_breakpoint();
                     }
                     self.push_cell(cell.clone());
@@ -399,7 +399,9 @@ impl FieldBuffer {
         // following the marker (term.c:276-305). Later breakpoints cannot
         // fence the newly buffered target on behalf of that same marker.
         if self
-            .last_break_marker
+            .break_markers
+            .last()
+            .copied()
             .is_some_and(|marker| marker >= self.resume.max(self.last_breakpoint_fence))
         {
             self.last_breakpoint_fence = self.cells.len();
@@ -504,7 +506,6 @@ impl FieldBuffer {
     /// `bufferc('\n')` for `\p` (term.c:657-658).
     #[cfg(test)]
     pub(in crate::mandoc::inline::flow) fn push_break_marker(&mut self) {
-        self.last_break_marker = Some(self.cells.len());
         self.push_cell(FieldCell::BreakMarker);
     }
 
