@@ -12,11 +12,19 @@ pub(super) struct WordPassProjection {
     pub(super) closes_before: Vec<std::ops::Range<usize>>,
     pub(super) leading_padding: RestartedPadding,
     pub(super) native_separator: usize,
-    pub(super) preserve_native_separator: bool,
-    pub(super) consumed_initial_separator: bool,
+    pub(super) separator: SeparatorDisposition,
     pub(super) prints_padding: bool,
     pub(super) authored_separator: Option<Inline>,
     pub(super) split_word: Option<Vec<Inline>>,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum SeparatorDisposition {
+    #[default]
+    Automatic,
+    Keep,
+    Consumed,
+    DeviceAdvance,
 }
 
 #[derive(Clone, Copy)]
@@ -55,16 +63,44 @@ impl WordPassProjection {
         surviving: usize,
     ) {
         self.native_separator = buffer.projectable_padding(word_start, word_start + surviving);
-        self.preserve_native_separator = written == 2 && surviving == 1;
-        self.consumed_initial_separator = surviving > 0 && self.native_separator == 0;
+        self.separator = if surviving > 0 && self.native_separator == 0 {
+            SeparatorDisposition::Consumed
+        } else if written == 2 && surviving == 1 {
+            SeparatorDisposition::Keep
+        } else {
+            SeparatorDisposition::Automatic
+        };
     }
 
     fn align_separator_owner(&self, anchor: &mut super::super::NativeWordAnchor, content: usize) {
-        if self.consumed_initial_separator {
+        if self.separator == SeparatorDisposition::Consumed {
             // The accepted range is traversed with the same scalar
             // coordinates as its projected payload. The skipped prefix
             // must not reserve a slot in the current word.
             anchor.content = anchor.content.max(content);
+        }
+    }
+
+    fn record_separator_effects(
+        &mut self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        word_start: usize,
+        entry: &ExecutedWordEntry,
+        keep: bool,
+    ) {
+        // The earlier \h cell is already in the live word buffer. Reuse
+        // the virtual space projection when the new word would print it.
+        if self.separator == SeparatorDisposition::Consumed {
+            return;
+        }
+        if self.native_separator == 0
+            && entry.receipt.prints_padding
+            && entry.receipt.first_content_cell >= word_start
+            && buffer.has_device_gap_before(word_start)
+        {
+            self.separator = SeparatorDisposition::DeviceAdvance;
+        } else if keep || entry.receipt.leading_retreat.is_some() {
+            self.separator = SeparatorDisposition::Keep;
         }
     }
 }
@@ -170,6 +206,7 @@ impl InlineBuilder {
         let (buffer, _) = self.execution.word_input();
         projection.record_separator(buffer, native_word_start, separator, native_separator);
         entry.record_projection(&mut projection);
+        projection.record_separator_effects(buffer, native_word_start, &entry, projected_keep);
         if let Some(anchor) = self
             .execution
             .definition
@@ -178,7 +215,6 @@ impl InlineBuilder {
         {
             projection.align_separator_owner(anchor, receipt.first_content_cell);
         }
-        projection.preserve_native_separator |= receipt.leading_retreat.is_some() || projected_keep;
         projection.prints_padding = receipt.prints_padding;
         projection.authored_separator = authored_separator;
         projection
@@ -277,13 +313,13 @@ impl InlineBuilder {
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
         entry.record_projection(&mut result);
+        result.record_separator_effects(&unit.buffer, native_word_start, &entry, projected_keep);
         if let Some(anchor) = unit.anchors.last_mut() {
             result.align_separator_owner(anchor, receipt.first_content_cell);
             if let Some(handoff) = &mut self.section_handoff {
                 handoff.note_heading_word(anchor.start.min(anchor.content));
             }
         }
-        result.preserve_native_separator |= receipt.leading_retreat.is_some() || projected_keep;
         result.prints_padding = receipt.prints_padding;
         result.authored_separator = authored_separator;
         result

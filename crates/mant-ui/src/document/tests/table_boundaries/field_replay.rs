@@ -13,7 +13,12 @@ fn visible_slots_agree_across_paint_copy_search_and_link_hits() {
     // ASCII and UTF-8 from the fixed CVS agree for these exact sources.
     // Include empty and superseded labels; their target alone cannot prove
     // that any displayed position belongs to the link.
-    let cases: Vec<Case> = serde_json::from_str(include_str!("field_replay_oracle.json")).unwrap();
+    let cases = [
+        include_str!("field_replay_oracle.json"),
+        include_str!("word_projection_oracle.json"),
+    ]
+    .into_iter()
+    .flat_map(|data| serde_json::from_str::<Vec<Case>>(data).unwrap());
     let target = LinkTarget::External(ExternalUri::parse("https://example.test/r").unwrap());
     for case in cases {
         let view = DocumentView::new(&restored(&case.source));

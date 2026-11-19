@@ -109,6 +109,7 @@ pub(in crate::mandoc) enum FieldWrite {
     ReplacePlacedTail {
         cells: usize,
         entry_blanks: Option<usize>,
+        first_incoming: Option<usize>,
     },
     RetainDeviceTail(Box<crate::mandoc::inline::flow::native_slots::DeviceTail>),
     /// Earlier cell to new cell indices. Empty entries were overwritten.

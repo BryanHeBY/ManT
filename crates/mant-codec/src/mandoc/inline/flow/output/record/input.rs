@@ -3,7 +3,9 @@
 use super::super::super::NativeWordAnchor;
 use super::super::super::field_buffer::{EntryRewind, FieldBuffer, FieldWrite, WordWriteReceipt};
 use super::super::source_blanks::{remove_rewound_glyph, remove_rewound_source_blanks};
-use super::{Inline, PendingBoundary, WordPassProjection, WordProjectionPolicy};
+use super::{
+    Inline, PendingBoundary, SeparatorDisposition, WordPassProjection, WordProjectionPolicy,
+};
 
 mod live_prefix;
 
@@ -25,9 +27,16 @@ impl ExecutedWordEntry {
         earlier: &mut [NativeWordAnchor],
     ) -> Self {
         let prefix = live_prefix::PrefixEdits::prepare(buffer, &writes, earlier);
-        let placed_entry_blanks = match writes.first() {
-            Some(FieldWrite::ReplacePlacedTail { entry_blanks, .. }) => *entry_blanks,
-            _ => None,
+        let (placed_entry_blanks, placed_first) = match writes.first() {
+            Some(FieldWrite::ReplacePlacedTail {
+                cells,
+                entry_blanks,
+                first_incoming,
+            }) => (
+                *entry_blanks,
+                first_incoming.map(|first| buffer.cells().len() - cells + first),
+            ),
+            _ => (None, None),
         };
         let rewind = buffer.rewind_word_entry(&mut writes, start, |cell| {
             earlier
@@ -35,7 +44,7 @@ impl ExecutedWordEntry {
                 .map_or(start, |next| next.start.min(next.content))
         });
         let mut receipt = buffer.apply_writes(&writes);
-        if let Some(first) = prefix.first_incoming() {
+        if let Some(first) = prefix.first_incoming().or(placed_first) {
             receipt.first_content_cell = first;
         }
         let retired_separator = match rewind {
@@ -98,17 +107,25 @@ impl ExecutedWordEntry {
     pub(super) fn record_projection(&self, projection: &mut WordPassProjection) {
         if self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some() {
             projection.native_separator = self.surviving_separator;
-            projection.preserve_native_separator = self.surviving_separator > 0;
-            projection.consumed_initial_separator =
-                self.written_separator > 0 && self.surviving_separator == 0;
+            projection.separator = if self.surviving_separator > 0 {
+                SeparatorDisposition::Keep
+            } else if self.written_separator > 0 {
+                SeparatorDisposition::Consumed
+            } else {
+                SeparatorDisposition::Automatic
+            };
         }
         if let EntryRewind::Executed {
             retired_separator, ..
         } = self.rewind
         {
-            projection.preserve_native_separator = true;
-            projection.consumed_initial_separator |=
-                retired_separator > 0 && self.surviving_separator == 0;
+            projection.separator = if projection.separator == SeparatorDisposition::Consumed
+                || retired_separator > 0 && self.surviving_separator == 0
+            {
+                SeparatorDisposition::Consumed
+            } else {
+                SeparatorDisposition::Keep
+            };
         }
     }
 

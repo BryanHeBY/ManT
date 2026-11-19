@@ -178,7 +178,11 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) {
         // A source row only inserts TABREF after native buffer writes.
         if !self.cells.is_empty() {
-            self.device_tail = None;
+            if let Some(tail) = &mut self.device_tail
+                && !tail.note_tab_reference()
+            {
+                return;
+            }
             self.push_cell(FieldCell::TabReference);
         }
     }

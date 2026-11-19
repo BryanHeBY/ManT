@@ -60,6 +60,16 @@ impl<'a> PlacedWord<'a> {
             writes.push(FieldWrite::ReplacePlacedTail {
                 cells: replace_tail,
                 entry_blanks,
+                first_incoming: replayed_entry.then(|| {
+                    slots
+                        .iter()
+                        .position(|slot| {
+                            slot.owner.is_some_and(|id| {
+                                !matches!(reading[id].glyph, ReadingGlyph::EntryBlank)
+                            })
+                        })
+                        .unwrap_or(slots.len())
+                }),
             });
         }
         let prior = unpublished.map(|id| slots.iter().any(|slot| slot.owner == Some(id)));
@@ -100,7 +110,7 @@ impl<'a> PlacedWord<'a> {
             .map(|uri| {
                 let target = context
                     .zero_advance
-                    .annotation_target(mant_ir::LinkTarget::External { uri: (*uri).into() });
+                    .glyph_annotation_target(mant_ir::LinkTarget::External { uri: (*uri).into() });
                 let mant_ir::LinkTarget::External { uri } = target else {
                     unreachable!()
                 };
@@ -112,7 +122,11 @@ impl<'a> PlacedWord<'a> {
             self.buffer_tail_glyph(context, &links);
             append_range(word, &self.slots, &self.reading, &links, context);
         } else {
-            for (range, closes) in isolated_passes(&self.writes, context.table_field_units) {
+            let passes = isolated_passes(&self.writes, context.table_field_units);
+            for covered in passes.covered {
+                self.slots[covered].owner = None;
+            }
+            for (range, closes) in passes.ranges {
                 append_range(word, &self.slots[range], &self.reading, &links, context);
                 if closes {
                     word.flush_segment();
@@ -193,30 +207,45 @@ fn replay_prefix(
 }
 
 fn resolve_backlines(slots: &mut [FillSlot]) -> Vec<(usize, usize)> {
-    // Decoration prefixes have no source owner. A native backing up
-    // followed by an advancing graph covers the preceding source cell.
-    let mut combining = Vec::new();
-    for index in 1..slots.len().saturating_sub(1) {
-        if slots[index].cell == FieldCell::Backline
-            && matches!(
-                slots[index - 1].cell,
-                FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen
-            )
-            && slots[index - 1].owner.is_some()
-        {
-            match slots[index + 1].cell {
-                FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen => {
-                    slots[index - 1].owner = None;
+    // term_field() skips controls, including NBRZW written by tty
+    // annotation and ASCII_BREAK. A backspace still reaches the last
+    // emitted graph. A break opportunity or zero-width mark defers
+    // coverage until the subsequent advance is accepted in that pass.
+    let mut covers = Vec::new();
+    let mut previous: Option<usize> = None;
+    let mut retreat = None;
+    for index in 0..slots.len() {
+        match slots[index].cell {
+            FieldCell::BreakMarker
+            | FieldCell::Breakpoint
+            | FieldCell::TabReference
+            | FieldCell::ZeroWidthGraph => {}
+            FieldCell::Backline => {
+                retreat = previous.take().map(|target| (target, index));
+            }
+            FieldCell::Graph { .. } | FieldCell::Hyphen => {
+                if let Some((target, backline)) = retreat.take() {
+                    if matches!(slots[index].cell, FieldCell::Graph { width: 0, .. })
+                        || target + 1 != backline
+                        || backline + 1 != index
+                        || slots[target].cell == FieldCell::Hyphen
+                    {
+                        covers.push((target, index));
+                    } else {
+                        slots[target].owner = None;
+                    }
                 }
-                // The mark itself does not cover the advancing glyph.
-                // Let field acceptance decide whether another advance
-                // reaches it in that same pass (term.c:420–439).
-                FieldCell::Graph { width: 0, .. } => combining.push((index - 1, index + 1)),
-                _ => {}
+                previous = (slots[index].owner.is_some()
+                    && !matches!(slots[index].cell, FieldCell::Graph { width: 0, .. }))
+                .then_some(index);
+            }
+            _ => {
+                previous = None;
+                retreat = None;
             }
         }
     }
-    combining
+    covers
 }
 
 fn slot_write(slot: &FillSlot, reading: &[ReadingCell<'_>]) -> FieldWrite {

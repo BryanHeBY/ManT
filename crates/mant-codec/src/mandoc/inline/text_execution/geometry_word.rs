@@ -32,9 +32,13 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     let mut edits = false;
     let mut authored_blank = false;
     let mut draws = false;
+    let mut overstrike_edit = false;
+    let mut absolute_edit = false;
     let mut moves_toward_prefix = false;
     let mut armed_overstrike = false;
     let mut armed_empty_overstrike = false;
+    let mut has_zero_advance = false;
+    let mut isolated_needs_accepted_retreat = false;
     let mut armed = context.zero_advance.is_armed();
     for event in events {
         match event {
@@ -44,6 +48,9 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 ..
             } => {
                 let relative = value.strip_prefix('|');
+                absolute_edit |= relative
+                    .and_then(libmandoc_rs::TableColumnMetrics::motion_argument)
+                    .is_some();
                 moves_toward_prefix |=
                     libmandoc_rs::TableColumnMetrics::motion_argument(relative.unwrap_or(value))
                         .is_some_and(|(units, _)| relative.is_some() || units < 0);
@@ -52,10 +59,25 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 buffered, terminal, ..
             } => {
                 edits |= *buffered || authored_blank;
+                overstrike_edit |= armed && *buffered
+                    || terminal.is_none()
+                        && (*buffered
+                            || context.slot_entry.trailing_tab_reference
+                                && context.slot_entry.automatic_blanks > 0);
                 armed_overstrike |= armed && *buffered && terminal.is_none();
                 armed_empty_overstrike |= armed && !buffered;
             }
-            RoffInlineEvent::ZeroAdvance => armed = true,
+            RoffInlineEvent::ZeroAdvance => {
+                armed = true;
+                has_zero_advance = true;
+            }
+            RoffInlineEvent::Glyph(value) if !context.policy.field_authoritative => {
+                isolated_needs_accepted_retreat |=
+                    !value.is_empty() && mant_ir::geometry::text_width(value) == 0;
+            }
+            RoffInlineEvent::Breakpoint if !context.policy.field_authoritative => {
+                isolated_needs_accepted_retreat = true;
+            }
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
                 ..
@@ -69,6 +91,10 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     }
     let replay_empty_overstrike =
         armed_empty_overstrike && context.slot_entry.trailing_tab_reference;
+    let proved_overstrike_entry = !context.slot_entry.prior_input
+        || context.slot_entry.prefix.is_some()
+        || context.slot_entry.device_tail.is_some()
+        || context.slot_entry.automatic_blanks > 0;
     if context.slot_entry.prior_input
         && context.zero_advance.is_armed()
         && context.slot_entry.prefix.is_none()
@@ -83,9 +109,12 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
         return false;
     }
     edits |= moves_toward_prefix;
-    marker && (edits || context.table_leading_blanks != 0)
+    !context.policy.field_authoritative && has_zero_advance && isolated_needs_accepted_retreat
+        || marker && (edits || context.table_leading_blanks != 0)
         || context.policy.field_authoritative
             && (draws
+                || overstrike_edit && proved_overstrike_entry
+                || absolute_edit
                 || armed_overstrike
                 || replay_empty_overstrike
                 || context
@@ -168,6 +197,22 @@ impl<'a> Placement<'a> {
             preserve_separator: false,
         });
         owner
+    }
+
+    fn write_entry_blanks(&mut self, count: usize, kept: bool) {
+        let blank = if kept {
+            FieldCell::NonBreakingBlank
+        } else {
+            FieldCell::BreakableBlank
+        };
+        for _ in 0..count {
+            let owner = self.mark(ReadingGlyph::EntryBlank, Font::Regular);
+            self.slots.native_write(
+                FieldWrite::Cell(blank.clone()),
+                RoffFont::Regular,
+                Some(owner),
+            );
+        }
     }
 
     fn input(
@@ -307,7 +352,7 @@ struct GeometrySeed<'a> {
 }
 
 impl GeometrySeed<'_> {
-    fn begin(context: &mut TextExecutionContext<'_>) -> Self {
+    fn begin(context: &mut TextExecutionContext<'_>, events: &[RoffInlineEvent]) -> Self {
         let mut seed = if let Some(prefix) = context
             .slot_entry
             .prefix
@@ -334,11 +379,14 @@ impl GeometrySeed<'_> {
                 replayed_entry: false,
             }
         } else if let Some(tail) = context.slot_entry.device_tail.take() {
-            let replace_tail = tail.fill_cells;
+            let automatic = context.slot_entry.automatic_blanks;
+            let replace_tail = tail.fill_cells + automatic;
+            let mut placement = Placement::empty(tail.into_slots());
+            placement.write_entry_blanks(automatic, context.slot_entry.kept_blanks);
             Self {
-                placement: Placement::empty(tail.into_slots()),
+                placement,
                 replace_tail,
-                replayed_entry: false,
+                replayed_entry: automatic > 0,
                 earlier: 0,
                 unpublished: None,
             }
@@ -348,16 +396,18 @@ impl GeometrySeed<'_> {
             let mut replace_tail = context.slot_entry.retreat_blanks;
             let replayed_entry = replace_tail == 0
                 && context.slot_entry.prior_input
-                && context.zero_advance.is_armed();
+                && context.slot_entry.automatic_blanks > 0
+                && (context.zero_advance.is_armed()
+                    || events
+                        .iter()
+                        .any(|event| matches!(event, RoffInlineEvent::Overstrike { .. }))
+                        && !events
+                            .iter()
+                            .any(|event| matches!(event, RoffInlineEvent::LineBreak)));
             if replace_tail > 0 {
                 placement.slots.enter_with_retreat(replace_tail);
             } else if replayed_entry {
                 replace_tail = context.slot_entry.automatic_blanks;
-                let blank = if context.slot_entry.kept_blanks {
-                    FieldCell::NonBreakingBlank
-                } else {
-                    FieldCell::BreakableBlank
-                };
                 if context.slot_entry.trailing_tab_reference {
                     placement.slots.native_write(
                         FieldWrite::Cell(FieldCell::TabReference),
@@ -366,14 +416,10 @@ impl GeometrySeed<'_> {
                     );
                     replace_tail += 1;
                 }
-                for _ in 0..context.slot_entry.automatic_blanks {
-                    let owner = placement.mark(ReadingGlyph::EntryBlank, Font::Regular);
-                    placement.slots.native_write(
-                        FieldWrite::Cell(blank.clone()),
-                        RoffFont::Regular,
-                        Some(owner),
-                    );
-                }
+                placement.write_entry_blanks(
+                    context.slot_entry.automatic_blanks,
+                    context.slot_entry.kept_blanks,
+                );
             }
             Self {
                 placement,
@@ -395,7 +441,7 @@ pub(super) fn try_execute(
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
 ) -> Result<(), PriorSlotEdit> {
-    let seed = GeometrySeed::begin(context);
+    let seed = GeometrySeed::begin(context, events);
     execute_seed(seed, events, context, word)
 }
 
@@ -426,6 +472,15 @@ fn execute_seed<'a>(
         && !events
             .iter()
             .any(|event| matches!(event, RoffInlineEvent::LineBreak));
+    if retain_suffix
+        && events.iter().any(absolute_motion)
+        && seed.placement.slots.cursor_before_owner()
+    {
+        // A cursor inside an earlier owner has no detachable slot suffix.
+        // Preserve the text rather than implying that the cursor can be
+        // carried forward at the end of that earlier word.
+        return Err(PriorSlotEdit::Unresolved);
+    }
     let placed = PlacedWord::prepare(seed, retain_suffix)?;
     *context.font = font;
     context.zero_advance.take_armed();

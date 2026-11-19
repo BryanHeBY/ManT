@@ -594,7 +594,7 @@ impl super::InlineExecutionState {
             } else {
                 0
             },
-            device_tail: tight.then(|| input.device_tail()).flatten(),
+            device_tail: input.device_tail(),
             prefix: (capture_prefix || leading_retreat && !input.has_entry_retreat())
                 .then(|| input.field_prefix(automatic_blanks, kept_blanks))
                 .flatten(),

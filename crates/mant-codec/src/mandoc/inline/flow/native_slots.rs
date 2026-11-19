@@ -146,7 +146,17 @@ impl DeviceTail {
     }
 
     pub(in crate::mandoc::inline) fn has_retreated(&self) -> bool {
-        self.slots.cursor < self.slots.extent
+        self.slots.cursor < self.slots.extent || self.slots.backbefore
+    }
+
+    pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) -> bool {
+        // term_tab_ref() only calls bufferc() at lastcol.
+        if self.slots.cursor < self.slots.extent {
+            return false;
+        }
+        self.slots.write_run(FieldCell::TabReference, 1, None);
+        self.fill_cells += 1;
+        true
     }
 }
 
@@ -170,10 +180,9 @@ impl NativeSlots {
         // retained run count so fragmented input cannot cause repeated
         // copying of a growing field across term_word() calls.
         const MAX_TAIL_RUNS: usize = 16;
-        if self.backbefore || self.backafter {
+        if self.pending_owner().is_some() {
             return None;
         }
-        let origin = self.origin?;
         let mut suffix = self
             .runs
             .iter()
@@ -181,7 +190,9 @@ impl NativeSlots {
             .take_while(|(_, run)| run.owner.is_none());
         let mut runs = BTreeMap::new();
         let captured = suffix.by_ref().take(MAX_TAIL_RUNS).collect::<Vec<_>>();
-        if suffix.next().is_some() {
+        if suffix.next().is_some()
+            || captured.is_empty() && self.origin.is_none() && !self.backbefore
+        {
             return None;
         }
         let start = captured.last().map_or(self.extent, |(start, _)| **start);
@@ -203,8 +214,10 @@ impl NativeSlots {
                 runs,
                 cursor,
                 extent: self.extent - start,
-                origin: Some(origin.saturating_add(start)),
+                origin: self.origin.map(|origin| origin.saturating_add(start)),
                 prior_input: self.prior_input || start > 0,
+                backbefore: self.backbefore,
+                backafter: self.backafter,
                 ..Self::default()
             },
         })
@@ -238,6 +251,14 @@ impl NativeSlots {
 
     pub(in crate::mandoc::inline) fn prior_edit(&self) -> Option<PriorSlotEdit> {
         self.prior_edit
+    }
+
+    pub(in crate::mandoc::inline) fn cursor_before_owner(&self) -> bool {
+        self.runs
+            .values()
+            .rev()
+            .find(|run| run.owner.is_some())
+            .is_some_and(|run| self.cursor < run.end)
     }
 
     /// Padding written by `tbl_number()` before the actual cell word.

@@ -49,7 +49,10 @@ struct Destination {
 
 #[derive(Debug)]
 enum DestinationPayload {
-    Link(LinkTarget),
+    Link {
+        target: LinkTarget,
+        keep_empty: bool,
+    },
     Equation(Box<EquationDestination>),
     Code,
 }
@@ -140,12 +143,25 @@ impl AnnotationPool {
             .targets
             .get(key)
             .and_then(|destination| match &destination.payload {
-                DestinationPayload::Link(target) => Some(read(target)),
+                DestinationPayload::Link { target, .. } => Some(read(target)),
                 DestinationPayload::Equation(_) | DestinationPayload::Code => None,
             })
     }
 
     pub(in crate::mandoc) fn register(&self, target: LinkTarget) -> RegisteredAnnotation {
+        self.register_link(target, true)
+    }
+
+    /// A tty URI annotates printed cells. Opening it does not supply an
+    /// independent destination when every annotated cell is covered.
+    pub(in crate::mandoc) fn register_glyph_link(
+        &self,
+        target: LinkTarget,
+    ) -> RegisteredAnnotation {
+        self.register_link(target, false)
+    }
+
+    fn register_link(&self, target: LinkTarget, keep_empty: bool) -> RegisteredAnnotation {
         // The allocator is operation-local and also shared by speculative
         // forks. A discarded fork can leave a vacant key, never reuse a
         // live source occurrence's identity. No key reaches public IR.
@@ -164,7 +180,7 @@ impl AnnotationPool {
             counts.registered += 1;
             counts.registered_bytes += target_bytes(&target);
         });
-        self.insert_destination(DestinationPayload::Link(target))
+        self.insert_destination(DestinationPayload::Link { target, keep_empty })
     }
 
     pub(in crate::mandoc) fn register_equation(
@@ -392,7 +408,18 @@ impl AnnotationPool {
                 // An empty provisional receipt must not precede its accepted
                 // label as another public occurrence in this same root.
                 let has_content = has_scalar(children);
-                if !has_content && nonempty.contains(uri) {
+                if !has_content
+                    && (nonempty.contains(uri)
+                        || self.0.borrow().targets.get(uri).is_some_and(|destination| {
+                            matches!(
+                                destination.payload,
+                                DestinationPayload::Link {
+                                    keep_empty: false,
+                                    ..
+                                }
+                            )
+                        }))
+                {
                     output.append(children);
                     continue;
                 }
@@ -410,7 +437,7 @@ impl AnnotationPool {
                     destinations.reduced.entry(key).or_insert(None);
                 }
                 if destinations.published.insert(uri.clone()) {
-                    let DestinationPayload::Link(target) = &destinations
+                    let DestinationPayload::Link { target, .. } = &destinations
                         .targets
                         .get(uri)
                         .expect("live annotation")
@@ -452,10 +479,8 @@ impl AnnotationPool {
     }
 
     fn is_link_destination(&self, uri: &str) -> bool {
-        self.0
-            .borrow()
-            .targets
-            .get(uri)
-            .is_some_and(|destination| matches!(destination.payload, DestinationPayload::Link(_)))
+        self.0.borrow().targets.get(uri).is_some_and(|destination| {
+            matches!(destination.payload, DestinationPayload::Link { .. })
+        })
     }
 }

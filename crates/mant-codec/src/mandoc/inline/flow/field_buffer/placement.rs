@@ -92,6 +92,31 @@ impl FieldBuffer {
         self.resume < self.cells.len() && self.cells.last() == Some(&FieldCell::TabReference)
     }
 
+    pub(in crate::mandoc::inline::flow) fn has_device_gap_before(&self, end: usize) -> bool {
+        let end = end.min(self.cells.len());
+        let Some(&gap) = self.nonbreaking_positions.range(..end).next_back() else {
+            return false;
+        };
+        if gap < self.resume || !matches!(self.cells[gap], FieldCell::FixedDrawingAdvance(1..)) {
+            return false;
+        }
+        // term_field() defers these cells until the next printed graph.
+        // Source-row references and zero-width operands do not end that
+        // pending advance. A prior author graph makes it a word separator.
+        let mut fixed = false;
+        for index in (self.resume..end).rev() {
+            match self.cells[index] {
+                FieldCell::FixedDrawingAdvance(1..) => fixed = true,
+                FieldCell::TabReference | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
+                FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen => {
+                    return fixed && self.projection_length(index, index + 1) > 0;
+                }
+                _ => return false,
+            }
+        }
+        false
+    }
+
     pub(super) fn replace_placed_tail(&mut self, count: usize) {
         let start = self.cells.len().saturating_sub(count);
         debug_assert!(start >= self.resume);
@@ -133,23 +158,33 @@ impl FieldBuffer {
 
 /// A tbl input word executes independently. Consumer soft-wrap is still
 /// responsive outside this explicit device-slot path.
+pub(in crate::mandoc::inline) struct IsolatedPasses {
+    pub(in crate::mandoc::inline) ranges: Vec<(Range<usize>, bool)>,
+    pub(in crate::mandoc::inline) covered: Vec<usize>,
+}
+
 pub(in crate::mandoc::inline) fn isolated_passes(
     writes: &[FieldWrite],
     table_field_units: Option<usize>,
-) -> Vec<(Range<usize>, bool)> {
+) -> IsolatedPasses {
     let mut field = FieldBuffer::default();
     field.apply_writes(writes);
     let mut passes = Vec::new();
+    let mut ranges = Vec::new();
     let target = table_field_units.unwrap_or(usize::MAX / 4);
     while let Some(pass) = field.scan_fill_pass(target, true) {
         let end = field.printed_content_end(pass.start, pass.end);
         let closes = field.has_non_ignorable_after(pass.end, false);
-        passes.push((pass.start..end, closes));
+        ranges.push((pass.start..end, closes));
+        passes.push(pass);
         if !closes {
             break;
         }
         field.advance_past(pass.end);
         field.consume_break_blanks();
     }
-    passes
+    IsolatedPasses {
+        ranges,
+        covered: field.covered_zero_width_retreats(&passes),
+    }
 }

@@ -4,7 +4,9 @@ use mant_ir::{Inline, LinkTarget, inline_plain_text, visit::Visit};
 const MDOC: &str =
     ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
 
+mod operand_edits;
 mod unproved_prefixes;
+mod word_projection;
 
 #[derive(serde::Deserialize)]
 struct Case {

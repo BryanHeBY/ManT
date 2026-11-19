@@ -5,7 +5,11 @@ use crate::{definitions::NativeOperandRole, mandoc::blocks::InlineTablePrefix};
 use mant_ir::Inline;
 
 pub(in crate::mandoc) fn table_word_needs_native_slots(text: &str) -> bool {
-    text.contains("\\h") || text.contains("\\l") || text.contains("\\o")
+    // A retreat across a breakpoint can keep its earlier glyph only when
+    // tbl's actual column separates the two advances (tbl_term.c).
+    ["\\h", "\\l", "\\o", "\\z"]
+        .iter()
+        .any(|escape| text.contains(escape))
 }
 
 /// Effects of the selected tbl column transaction. A source fragment can

@@ -3,6 +3,7 @@
 use super::{Inline, InlineBuilder, PendingBoundary, push_text, trim_trailing_breakable_spaces};
 
 use super::super::native_passes;
+use super::super::record::SeparatorDisposition;
 
 impl InlineBuilder {
     pub(super) fn append_recorded_word_boundary(
@@ -206,10 +207,19 @@ impl InlineBuilder {
         projection: &super::super::record::WordPassProjection,
     ) -> (PendingBoundary, bool) {
         let native_separator = projection.native_separator;
-        if projection.consumed_initial_separator {
+        if projection.separator == SeparatorDisposition::Consumed {
             // The word wrote a blank, but an accepted pass or BACKBEFORE
             // consumed it. A presentation fallback cannot count it again.
             (boundary, false)
+        } else if word
+            && !empty_word
+            && projection.separator == SeparatorDisposition::DeviceAdvance
+            && self
+                .execution
+                .last_visible_character
+                .is_some_and(|character| !character.is_whitespace())
+        {
+            (PendingBoundary::Preserved, true)
         } else if word
             && self.execution.no_fill_word_active
             && boundary == PendingBoundary::CommittedField
@@ -241,7 +251,7 @@ impl InlineBuilder {
                 && (empty_word || !projection.prints_padding))
                 || !boundary.is_tight()
                 || self.execution.zero_advance_joined
-                || projection.preserve_native_separator)
+                || projection.separator == SeparatorDisposition::Keep)
         {
             // term_word()573-589 buffers this separator independently
             // of projected glyphs and authored leading/trailing blanks.

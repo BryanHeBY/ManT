@@ -33,11 +33,14 @@ impl ZeroAdvanceState {
             .get_or_insert_with(Default::default)
             .register(target)
     }
-    pub(in crate::mandoc) fn annotation_target(
+    pub(in crate::mandoc) fn glyph_annotation_target(
         &mut self,
         target: mant_ir::LinkTarget,
     ) -> mant_ir::LinkTarget {
-        self.new_annotation(target).target
+        self.annotations
+            .get_or_insert_with(Default::default)
+            .register_glyph_link(target)
+            .target
     }
     pub(in crate::mandoc) fn qualify_current_link(&mut self, target: mant_ir::LinkTarget) {
         let epoch = self

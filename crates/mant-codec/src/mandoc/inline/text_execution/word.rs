@@ -166,7 +166,7 @@ impl WordExecution {
         self.link = target.map(|target| {
             let mant_ir::LinkTarget::External { uri } = context
                 .zero_advance
-                .annotation_target(mant_ir::LinkTarget::External { uri: target.into() })
+                .glyph_annotation_target(mant_ir::LinkTarget::External { uri: target.into() })
             else {
                 unreachable!()
             };
