@@ -219,7 +219,10 @@ ManT resolves the native writes before projecting the accepted text. Prose,
 headings, link labels, definition labels, and table cells use that write
 order. Reading output omits device-only strokes and retains authored word
 boundaries between surviving glyphs.
-An entry rewind onto an earlier operand still uses the live field. When
+Entry rewinds can reuse the live field's proven slots across operands before
+an actual native flush. The preceding glyph can remain provisional across
+font controls, links, and a source continuation. A combining mark remains
+readable when a subsequent advancing graph covers its earlier base. When
 absolute motion can reach previously written cells whose positions cannot
 be proved, the reading projection preserves the authored words.
 
@@ -670,6 +673,11 @@ A combined definition can bind independent native declaration groups to the
 same owner. A delimiter must be an accepted separator between groups. Commas
 inside a function signature, a literal value or label, or a name glued to
 adjacent text do not establish a new group.
+Each group uses the same declaration grammar and section context as a
+standalone label. This preserves a value in an address-family list or a
+compound command in COMMANDS alongside other names. A pipe inside a command
+invocation keeps its operand meaning. Parallel aliases require an explicit
+separator and a separately proved name.
 
 Environment and variable definitions keep their names before one complete
 trailing parenthetical note, including styled descriptions. The enclosing
@@ -1240,6 +1248,11 @@ and cannot authorize deletion of an authored fixed blank.
 
 Control operands are never printable descendants. The block, inline and display paths share this distinction while still executing supported font, fill and spacing effects. Logical-sibling transparency is separate: an ignored device effect does not automatically make its source node transparent, and a transparent `ft` or `Tg` still changes font state or retains a target.
 
+The obsolete mdoc `Db` macro retains its native diagnostic. Its operands are
+skipped in prose, displays, and definition labels, so they supply neither
+visible words nor definition names. In tbl cell data, the native parser
+supplies the operands directly to tbl, where they remain cell text.
+
 `ce` and `rj` retain counted text rows, entry/exit line boundaries and nested
 requests, and project `center` or `right` preferences onto their accepted row
 owners. Their first native child is the control count, including a synthesized
@@ -1537,10 +1550,13 @@ Neither adds author text to a search result. When a table cell overstrikes and
 then moves, its alignment uses the native write cursor and the reading text
 retains the surviving glyph.
 
-Block tables use the resolved column width for those fill passes. A table in
-a definition label uses the live native field for its opening pass, then
-preserves the completed rows and the original cell text separately. The
-projected reading width of a glyph does not stand in for its native advance.
+Numeric alignment writes fixed blanks before the cell word. Those slots can
+supply an accepted pass before `\p` or be overwritten by the cell's edits.
+They carry no authored text. An ordinary span uses its measured column width
+for fill passes. A native no-break field uses the remaining page width from
+the cell's actual start. The span's own fill flag controls that limit even
+inside a no-fill owner. The reading projection preserves completed rows and
+the surviving cell text separately from these device advances.
 
 Phrasing tables share the page's source recovery and work allowance with
 block tables. An implicit

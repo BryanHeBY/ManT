@@ -151,9 +151,17 @@ that crate was not published for that change.
 - Use the same native write order for word-end breaks in prose and table
   cells. Preserve surviving styled text, source word boundaries, and the
   completed rows of inline tables in definition labels.
+- Keep the editable native field across formatter words. Apply drawings,
+  cursor moves, numeric table padding and overstrikes before accepting a
+  word-end break. Preserve the surviving links and combining marks.
 - Bind independent native declaration groups across accepted delimiters.
   Punctuation inside an operand or attached to a name cannot start another
   group.
+- Recognize mixed declarations with their full grammars and parent context.
+  Retain address-family values, compound command names, option aliases and
+  environment names, with explicit coverage diagnostics at the name limit.
+- Omit the unused operands of the obsolete mdoc `Db` macro while retaining
+  the native validation diagnostic.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
   Repeated names retain their assigned IDs and exact-spelling reservations.
 - Preserve literal Markdown heading tails through export and readback.
