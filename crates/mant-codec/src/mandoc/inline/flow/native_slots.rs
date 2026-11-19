@@ -117,8 +117,16 @@ pub(in crate::mandoc) struct DeviceTail {
     pub(in crate::mandoc::inline) fill_cells: usize,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum ReplayDomain {
+    #[default]
+    Scoped,
+    Filled,
+}
+
 #[derive(Default)]
 pub(in crate::mandoc) struct SlotEntry {
+    pub(in crate::mandoc::inline) domain: ReplayDomain,
     pub(in crate::mandoc::inline) prior_input: bool,
     pub(in crate::mandoc::inline) automatic_blanks: usize,
     pub(in crate::mandoc::inline) kept_blanks: bool,

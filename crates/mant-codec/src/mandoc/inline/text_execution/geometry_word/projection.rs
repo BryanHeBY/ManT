@@ -274,9 +274,20 @@ fn publish_inner_advances(
                     ),
                 }
             });
-            if usable && width != 0 && width <= budget {
-                replacements.extend(advances);
-                budget -= width;
+            if usable && width != 0 {
+                if width <= budget {
+                    replacements.extend(
+                        advances
+                            .into_iter()
+                            .map(|(slot, owner)| (slot, owner, slots[slot].count)),
+                    );
+                    budget -= width;
+                } else if let Some(&(slot, owner)) = advances.first() {
+                    // Retain one reading separator for a compact span.
+                    // Attaching it to the next glyph would make that
+                    // glyph's raw slot impossible to replay independently.
+                    replacements.push((slot, owner, 1));
+                }
             }
         }
         preceding = Some(index);
@@ -290,10 +301,10 @@ fn publish_inner_advances(
             slot.owner = None;
         }
     }
-    for (index, owner) in replacements.into_iter().rev() {
+    for (index, owner, projected) in replacements.into_iter().rev() {
         let read = reading[owner];
         let slot = &slots[index];
-        let blanks = (0..slot.count)
+        let mut blanks = (0..projected)
             .map(|_| {
                 let id = reading.len();
                 reading.push(ReadingCell {
@@ -307,6 +318,13 @@ fn publish_inner_advances(
                 }
             })
             .collect::<Vec<_>>();
+        if projected < slot.count {
+            blanks.push(FillSlot {
+                cell: slot.cell.clone(),
+                count: slot.count - projected,
+                owner: None,
+            });
+        }
         slots.splice(index..=index, blanks);
     }
 }

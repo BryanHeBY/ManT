@@ -96,9 +96,15 @@ impl FieldBuffer {
         {
             return None;
         }
-        let start = self
+        let floor = self
             .raw_slot_fence
             .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
+        // A projection-only recovery spelling can fence its own native
+        // position without hiding complete glyph slots appended after it.
+        let start = (floor..self.cells.len())
+            .rev()
+            .find(|&index| !self.has_replayable_projection(index))
+            .map_or(floor, |index| index + 1);
         // A covered glyph outside this suffix still needs the later
         // overstrike on the same accepted pass. Do not cut through it.
         let first_retreat = self
@@ -127,19 +133,6 @@ impl FieldBuffer {
         for (offset, cell) in self.cells[start..].iter().enumerate() {
             let index = start + offset;
             let length = self.projection_length(index, index + 1);
-            if length > 1
-                || length > 0
-                    && !matches!(
-                        cell,
-                        FieldCell::Graph { .. }
-                            | FieldCell::Hyphen
-                            | FieldCell::BreakableBlank
-                            | FieldCell::NonBreakingBlank
-                            | FieldCell::Tab
-                    )
-            {
-                return None;
-            }
             let raw = match cell {
                 FieldCell::DrawnSpaces(1) => FieldCell::BreakableBlank,
                 FieldCell::FixedDrawingAdvance(1) => FieldCell::NonBreakingBlank,
@@ -168,6 +161,21 @@ impl FieldBuffer {
                 .backbefore_graph
                 .and_then(|index| index.checked_sub(start)),
         })
+    }
+
+    fn has_replayable_projection(&self, index: usize) -> bool {
+        match self.projection_length(index, index + 1) {
+            0 => true,
+            1 => matches!(
+                self.cells[index],
+                FieldCell::Graph { .. }
+                    | FieldCell::Hyphen
+                    | FieldCell::BreakableBlank
+                    | FieldCell::NonBreakingBlank
+                    | FieldCell::Tab
+            ),
+            _ => false,
+        }
     }
 
     pub(in crate::mandoc::inline::flow) fn device_tail(

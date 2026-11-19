@@ -183,7 +183,13 @@ impl super::InlineExecutionState {
         });
         let leading_retreat = matches!(events.first(), Some(RoffInlineEvent::HorizontalMotion { argument, .. })
             if negative_entry_columns(argument.as_deref()).is_some());
-        self.native_slot_entry(capture_prefix || pending, leading_retreat)
+        let extend = events.iter().any(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::LineBreak | RoffInlineEvent::ZeroAdvance
+            )
+        });
+        self.native_slot_entry(capture_prefix || pending, extend, leading_retreat)
     }
 
     pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {

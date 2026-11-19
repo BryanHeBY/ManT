@@ -1,4 +1,5 @@
 use super::definition::PendingFieldGapOrigin;
+use super::native_slots::ReplayDomain;
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
     InlineExecutionState, KeepPhase, NativeWordSpacing, PendingBoundary, PreservedInlineState,
@@ -587,6 +588,7 @@ impl super::InlineExecutionState {
     pub(in crate::mandoc::inline) fn native_slot_entry(
         &self,
         capture_prefix: bool,
+        extend: bool,
         leading_retreat: bool,
     ) -> super::native_slots::SlotEntry {
         let (input, _) = self.word_input();
@@ -603,8 +605,15 @@ impl super::InlineExecutionState {
             || device_tail
                 .as_ref()
                 .is_some_and(super::native_slots::DeviceTail::has_retreated);
+        let domain =
+            if self.no_fill_word_active || self.definition.is_some() || self.table_cell.is_some() {
+                ReplayDomain::Scoped
+            } else {
+                ReplayDomain::Filled
+            };
         super::native_slots::SlotEntry {
             prior_input: !input.is_empty(),
+            domain,
             automatic_blanks,
             kept_blanks,
             trailing_tab_reference: input.has_live_tab_reference(),
@@ -614,9 +623,13 @@ impl super::InlineExecutionState {
                 0
             },
             device_tail,
-            prefix: (capture_prefix || live_edit || leading_retreat && !input.has_entry_retreat())
-                .then(|| input.field_prefix(automatic_blanks, kept_blanks))
-                .flatten(),
+            prefix: (capture_prefix || live_edit || leading_retreat && !input.has_entry_retreat()
+                // An incremental marker pass owns the earlier spaces and
+                // glyphs until acceptance. Extending an already editable
+                // buffer can carry that prefix without re-publishing it.
+                || extend && (!input.has_pending_break_markers() || input.word_scan_deferred()))
+            .then(|| input.field_prefix(automatic_blanks, kept_blanks))
+            .flatten(),
         }
     }
 

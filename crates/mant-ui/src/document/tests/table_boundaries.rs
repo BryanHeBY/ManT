@@ -115,58 +115,98 @@ fn active_native_words_paint_and_copy_the_accepted_rows() {
             &["P  MAT"][..],
             Some("M"),
         ),
+        (
+            r#".No "\zA\p\X'tty: link https://one.test'B\X'tty: link'" No "\h'-3n'T""#,
+            &["T"][..],
+            None,
+        ),
+        (r#".No "A\zB\pC" No "\h'-2n'T""#, &["AT"][..], None),
+        (
+            r#".No "\pAB" No T Ns No "\h'-3n'Y""#,
+            &["AY", "T"][..],
+            None,
+        ),
+        (
+            r#".No "A\pB\:C" No T Ns No "\h'-3n'Y""#,
+            &["AB", "Y T"][..],
+            None,
+        ),
+        (
+            r#".No "A\h'65n'B" Ns No "DC" No "\h'-2n'X""#,
+            &["A BDX"][..],
+            None,
+        ),
     ] {
-        let source = format!("{REVIEW_HEADER}{word}\n");
-        let view = DocumentView::new(&restored(&source));
-        for width in [24, 78] {
-            let rendered = view.render(width);
-            let first = rendered.search("DESCRIPTION")[0].row + 1;
-            let buffer = paint(&rendered, width);
-            for (offset, &row) in rows.iter().enumerate() {
+        assert_native_word_appearance(word, rows, label, &link);
+    }
+}
+
+fn assert_native_word_appearance(
+    word: &str,
+    rows: &[&str],
+    label: Option<&str>,
+    link: &LinkTarget,
+) {
+    let source = format!("{REVIEW_HEADER}{word}\n");
+    let view = DocumentView::new(&restored(&source));
+    for width in [24, 78] {
+        let rendered = view.render(width);
+        let first = rendered.search("DESCRIPTION")[0].row + 1;
+        let buffer = paint(&rendered, width);
+        for (offset, &row) in rows.iter().enumerate() {
+            assert_eq!(
+                painted(&buffer, first + offset, 0, width.into()).trim(),
+                row,
+                "{source}: {width}"
+            );
+            let hits = rendered.search(row);
+            assert!(
+                hits.iter().any(|hit| hit.row == first + offset),
+                "{source}: {row}"
+            );
+        }
+        let selected = rendered.selected_text(RenderedSelection {
+            anchor: TextPosition {
+                row: first,
+                column: 0,
+            },
+            focus: TextPosition {
+                row: first + rows.len() - 1,
+                column: usize::from(width) - 1,
+            },
+        });
+        assert_eq!(
+            selected.lines().map(str::trim).collect::<Vec<_>>(),
+            rows,
+            "{source}"
+        );
+        if let Some(label) = label {
+            let hit = rendered
+                .search(label)
+                .into_iter()
+                .find(|hit| hit.row == first)
+                .unwrap();
+            for column in hit.start_column..hit.end_column {
                 assert_eq!(
-                    painted(&buffer, first + offset, 0, width.into()).trim(),
-                    row,
-                    "{source}: {width}"
-                );
-                let hits = rendered.search(row);
-                assert!(
-                    hits.iter().any(|hit| hit.row == first + offset),
-                    "{source}: {row}"
+                    rendered.link_target_at(first, column),
+                    Some(link),
+                    "{source}"
                 );
             }
-            let selected = rendered.selected_text(RenderedSelection {
-                anchor: TextPosition {
-                    row: first,
-                    column: 0,
-                },
-                focus: TextPosition {
-                    row: first + rows.len() - 1,
-                    column: usize::from(width) - 1,
-                },
-            });
             assert_eq!(
-                selected.lines().map(str::trim).collect::<Vec<_>>(),
-                rows,
+                rendered.link_target_at(first, hit.end_column),
+                None,
                 "{source}"
             );
-            if let Some(label) = label {
-                let hit = rendered
-                    .search(label)
-                    .into_iter()
-                    .find(|hit| hit.row == first)
-                    .unwrap();
-                for column in hit.start_column..hit.end_column {
+        } else {
+            for offset in 0..rows.len() {
+                for column in 0..width.into() {
                     assert_eq!(
-                        rendered.link_target_at(first, column),
-                        Some(&link),
+                        rendered.link_target_at(first + offset, column),
+                        None,
                         "{source}"
                     );
                 }
-                assert_eq!(
-                    rendered.link_target_at(first, hit.end_column),
-                    None,
-                    "{source}"
-                );
             }
         }
     }

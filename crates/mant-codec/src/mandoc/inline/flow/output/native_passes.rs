@@ -227,7 +227,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         // Earlier flushed fields are immutable output. Only the active
         // suffix is traversed, once per real flush (term.c:233-237).
         let pending = nodes.split_off(start);
-        nodes.extend(split_recorded_native_passes(&pending, boundaries, buffer));
+        nodes.extend(project_recorded_passes(&pending, boundaries, buffer, true));
     }
 }
 
@@ -273,7 +273,15 @@ pub(super) fn split_recorded_native_passes(
     splits: BTreeMap<String, Vec<RecordedRowSplit>>,
     buffer: &mut super::super::field_buffer::FieldBuffer,
 ) -> Vec<Inline> {
-    let mut splits = splits;
+    project_recorded_passes(nodes, splits, buffer, false)
+}
+
+fn project_recorded_passes(
+    nodes: &[Inline],
+    mut splits: BTreeMap<String, Vec<RecordedRowSplit>>,
+    buffer: &mut super::super::field_buffer::FieldBuffer,
+    retired: bool,
+) -> Vec<Inline> {
     let mut positions = BTreeMap::new();
     for (owner, splits) in &mut splits {
         splits.sort_unstable_by_key(|split| (split.offset, split.pass_end));
@@ -283,7 +291,7 @@ pub(super) fn split_recorded_native_passes(
         );
     }
     let (output, projected) = split_native_field_passes_mode(nodes, &positions, &|owner, index| {
-        splits[owner][index].before_cached_glyph
+        retired || splits[owner][index].before_cached_glyph
     });
     for (owner, splits) in splits {
         let count = projected.get(&owner).map_or(0, |&(_, count)| count);

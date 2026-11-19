@@ -1300,6 +1300,120 @@ fn relative_word_rewind_needs_no_overstrike_or_line_break_escape() {
     }
 }
 
+const EDITABLE_FIELD: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+
+#[test]
+fn live_markers_and_backspaces_commit_the_same_text_and_link_owners() {
+    // CVS term_word writes \p into the buffer. term_fill reads the
+    // marker after all writes, including writes reaching a preceding word.
+    for (body, rendered, visible, hidden) in [
+        (
+            r#".No "\zA\p\X'tty: link https://one.test'B\X'tty: link'" No "\h'-3n'T""#,
+            "T",
+            "T",
+            "B",
+        ),
+        (r#".No "A\zB\pC" No "\h'-2n'T""#, "AT", "AT", "ABC"),
+        (
+            r#".No PA No "B\pC" No "\h'-5n'T""#,
+            "PATBC",
+            "PATBC",
+            "PA BC",
+        ),
+        (
+            r#".No PA No "B\zC D" No "\h'-5n'T""#,
+            "PATBCD",
+            "PATBCD",
+            "BCD",
+        ),
+        (r#".No "\pAB" No T Ns No "\h'-3n'Y""#, "AY\nT", "AY", "AB"),
+        (r#".No "A\pB" No T Ns No "\h'-3n'Y""#, "AY\nT", "AY", "AB"),
+        (
+            r#".No "A\pB\:C" No T Ns No "\h'-3n'Y""#,
+            "AB\nY T",
+            "AB",
+            "ABC",
+        ),
+    ] {
+        let source = format!("{EDITABLE_FIELD}{body}\n");
+        assert_readbacks(&source, rendered, None);
+        assert_eq!(search_visible_word(&source, visible), 1, "{source}");
+        assert_eq!(search_visible_word(&source, hidden), 0, "{source}");
+        assert!(
+            document_links(&source, "roff")
+                .iter()
+                .all(|(_, text)| text.is_empty())
+        );
+    }
+}
+
+#[test]
+fn long_device_advances_leave_complete_words_editable_after_them() {
+    // The pinned term_word() advances col independently of its later
+    // term_fill()/term_field() view. These short rewinds replace B or C.
+    for length in [5, 63, 64, 65, 96, 128] {
+        for gap in [
+            format!(r"\h'{length}n'"),
+            format!(r"\h'|{}n'", length + 1),
+            format!(r"\h'1n'\h'{}n'", length - 1),
+            format!(r"\l'{length}n '"),
+        ] {
+            for (after, wanted, erased) in [("", "AX", 'B'), (r#" Ns No "DC""#, "ABDX", 'C')] {
+                let source =
+                    format!(r#"{EDITABLE_FIELD}.No "A{gap}B"{after} No "\h'-2n'X""#) + "\n";
+                let markdown = render(&source, "roff", "markdown", "never", false);
+                for text in [
+                    render(&source, "roff", "text", "never", false),
+                    render(&markdown, "markdown", "text", "never", false),
+                ] {
+                    let body = description(&text);
+                    assert_eq!(
+                        body.chars()
+                            .filter(char::is_ascii_uppercase)
+                            .collect::<String>(),
+                        wanted,
+                        "{source}"
+                    );
+                    assert!(!body.contains(erased), "{source}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn pending_native_writes_define_only_the_final_label() {
+    // term_word overwrites B and retires the following slots before the
+    // list HEAD is flushed. The definition spans the surviving A and T.
+    let head = r#"No "A\zB\pC" No "\h'-2n'T""#;
+    for list in ["tag", "hang"] {
+        let source = format!("{EDITABLE_FIELD}.Bl -{list} -width 12n\n.It {head}\nBODYWORD\n.El\n");
+        let json = |query: &[&str]| {
+            let mut args = vec!["--input", "-", "--input-format", "roff", "--format", "json"];
+            args.extend_from_slice(query);
+            let result = run_text_input(&args, &source);
+            assert!(result.status.success(), "{source}: {result:?}");
+            serde_json::from_slice::<serde_json::Value>(&result.stdout).unwrap()
+        };
+        let doc = json(&[]);
+        let item = &doc["document"]["sections"][1]["blocks"][0]["items"][0];
+        let entry = &item["entry"];
+        assert_eq!(entry["names"], serde_json::json!(["AT"]), "{item}");
+        let parts = &entry["nameBindings"][0]["occurrences"][0]["parts"];
+        assert_eq!(parts.as_array().unwrap().len(), 2, "{item}");
+        assert!(
+            item["description"].to_string().contains("BODYWORD"),
+            "{item}"
+        );
+        for (query, count) in [("AT", 1), ("ABC T", 0)] {
+            assert_eq!(
+                json(&["--explain", query])["counts"]["directEntry"]["total"],
+                count
+            );
+        }
+    }
+}
+
 #[test]
 fn active_words_keep_raw_glyphs_and_advances_through_later_edits() {
     // Pinned term.c::term_word/encode1 keeps the word-end marker, spaces,
