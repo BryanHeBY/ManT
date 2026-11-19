@@ -225,6 +225,14 @@ font controls, links, and a source continuation. A combining mark remains
 readable when a subsequent advancing graph covers its earlier base. When
 absolute motion can reach previously written cells whose positions cannot
 be proved, the reading projection preserves the authored words.
+Blank overstrikes can change the field even when their own operand has no
+readable glyph. The next operand uses the result of those writes and any
+removed trailing blanks. A positive device advance at a source continuation
+keeps a word boundary when a later accepted glyph prints it. An internal
+zero-width control can sit between a glyph and the backspace that covers
+it. Prose and raw table cells publish the surviving glyphs from the
+accepted pass. A tty link loses glyphs covered by a later write. A rejected
+field can still retain its authored destination as an empty link.
 
 Generated inset/diagnostic gaps keep the native nonbreaking cells for
 execution, including overstrikes and field acceptance. Their surviving reading
@@ -678,6 +686,9 @@ standalone label. This preserves a value in an address-family list or a
 compound command in COMMANDS alongside other names. A pipe inside a command
 invocation keeps its operand meaning. Parallel aliases require an explicit
 separator and a separately proved name.
+Native punctuation can end a macro's inline scope while leaving its argument
+in the same invocation. Option choices such as `-M mask | time` remain in the
+visible form. Only `-M` supplies a direct name and uses the name budget.
 
 Environment and variable definitions keep their names before one complete
 trailing parenthetical note, including styled descriptions. The enclosing

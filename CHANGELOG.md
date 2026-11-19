@@ -154,12 +154,18 @@ that crate was not published for that change.
 - Keep the editable native field across formatter words. Apply drawings,
   cursor moves, numeric table padding and overstrikes before accepting a
   word-end break. Preserve the surviving links and combining marks.
+- Keep blank overstrikes in the active native field across operands.
+  Preserve word boundaries across continued source lines, and apply the
+  same overwrite rules to prose and table cells before publishing links.
 - Bind independent native declaration groups across accepted delimiters.
   Punctuation inside an operand or attached to a name cannot start another
   group.
 - Recognize mixed declarations with their full grammars and parent context.
   Retain address-family values, compound command names, option aliases and
   environment names, with explicit coverage diagnostics at the name limit.
+- Keep option choices and command operands searchable in their original
+  definitions. Reserve direct names and the name budget for declarations
+  with independent evidence.
 - Omit the unused operands of the obsolete mdoc `Db` macro while retaining
   the native validation diagnostic.
 - Resume roff anchor suffix allocation from the last candidate for each slug.
