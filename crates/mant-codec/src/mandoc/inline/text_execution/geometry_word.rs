@@ -276,6 +276,8 @@ fn marker_replay(
     // Wider word shapes are replayable as a whole at a fresh filled
     // field. A pending run-in or source-blank receipt still owns its
     // earlier spans and must finish through the shared word path.
+    // Breakable spaces stay with the incremental pass scanner, whose
+    // row ends can close the previous owner as a section HEAD begins.
     let filled = context.slot_entry.domain == ReplayDomain::Filled
         && !context.slot_entry.prior_input
         && !context.defer_leading_blanks
@@ -297,14 +299,19 @@ fn marker_replay(
                 if filled
                     && text
                         .chars()
-                        .all(|ch| matches!(ch, ' ' | '\u{a0}') || ch.is_ascii_graphic()) =>
+                        .all(|ch| ch == '\u{a0}' || ch.is_ascii_graphic()) =>
             {
                 let ink = text.bytes().any(|byte| byte.is_ascii_graphic());
                 has_ink |= ink;
                 ink_after_marker |= has_marker && ink;
                 needs_complete_word = true;
             }
-            RoffInlineEvent::LineBreak => has_marker = true,
+            RoffInlineEvent::LineBreak => {
+                has_marker = true;
+                // A trailing request does not prove an editable suffix.
+                // The next word still owns execution of that boundary.
+                ink_after_marker = false;
+            }
             RoffInlineEvent::HorizontalMotion {
                 argument: Some(value),
                 ..

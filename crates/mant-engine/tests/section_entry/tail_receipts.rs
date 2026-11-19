@@ -186,6 +186,39 @@ fn old_empty_passes_stay_in_order_through_section_handoff() {
 }
 
 #[test]
+fn word_markers_on_either_side_of_a_live_subsection_seam_keep_their_rows() {
+    // Exact sources ran pinned CVS ASCII, UTF-8, HTML and lint.
+    // pre_SS with PD=0 borrows the old buffer. When BETA and NEXT share
+    // a device row, the structured heading still begins at its owner.
+    for (old, head, title, id) in [
+        (r"ALPHA\p\:BETA\p", "NEXT", "NEXT", "next"),
+        (
+            r"ALPHA\p\:BETA",
+            r"NEXT\p\:WORD",
+            "NEXT\nWORD",
+            "next-p-word",
+        ),
+        (
+            r"ALPHA\p BETA",
+            r"NEXT\p\:WORD",
+            "NEXT\nWORD",
+            "next-p-word",
+        ),
+    ] {
+        let source = format!("{HEADER}{old}\n.SS {head}\n{BODY}\n{FOOTER}");
+        assert_tail(
+            &source,
+            Tail {
+                inline: "ALPHA\nBETA",
+                blank_rows: 0,
+            },
+            title,
+            id,
+        );
+    }
+}
+
+#[test]
 fn real_flushes_and_parser_removed_breaks_keep_their_distinct_rows() {
     // CVS tree proves the first .br survives because of the next \& TEXT,
     // while a .br immediately before first SS is removed (lint warns).
