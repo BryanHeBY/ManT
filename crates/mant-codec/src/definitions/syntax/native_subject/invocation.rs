@@ -65,7 +65,7 @@ pub(super) fn program_name(
     // native element. Recognize their argument syntax across all segments.
     let prefix = commands::styled_command_prefix(&text[span.start..end]);
     let remaining = span.start + prefix.len()..span.end;
-    if program_pipeline(remaining, tail)
+    if program_pipeline(text, remaining, tail)
         || prefix.len() == name.len()
             && !is_program_tail(text, program_end..span.end, tail, allow_bare)
     {
@@ -81,33 +81,75 @@ pub(super) fn program_name(
     .then(|| RecognizedName::contiguous(prefix, span.start))
 }
 
-fn program_pipeline(span: Range<usize>, operands: &[NativeOperand]) -> bool {
-    let mut enclosure = None;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InvocationGroup {
+    Native(u32),
+    Authored(char),
+}
+
+impl InvocationGroup {
+    fn opening(role: NativeOperandRole) -> Option<Self> {
+        match role {
+            NativeOperandRole::EnclosureStart { body, .. } => Some(Self::Native(body)),
+            NativeOperandRole::LiteralDelimiter { glyph: '(', .. } => Some(Self::Authored(')')),
+            NativeOperandRole::LiteralDelimiter { glyph: '[', .. } => Some(Self::Authored(']')),
+            _ => None,
+        }
+    }
+
+    fn closing(role: NativeOperandRole) -> Option<Self> {
+        match role {
+            NativeOperandRole::EnclosureEnd(body) => Some(Self::Native(body)),
+            NativeOperandRole::LiteralDelimiter {
+                glyph: glyph @ (')' | ']'),
+                ..
+            } => Some(Self::Authored(glyph)),
+            _ => None,
+        }
+    }
+}
+
+fn starts_program(text: &str, mut at: usize, end: usize, operands: &[NativeOperand]) -> bool {
+    for operand in operands.iter().take_while(|word| word.bytes.start < end) {
+        if !text
+            .get(at..operand.bytes.start)
+            .is_some_and(|gap| gap.trim().is_empty())
+        {
+            return false;
+        }
+        if InvocationGroup::opening(operand.role).is_none() && !operand.role.display_only() {
+            return matches!(operand.role, NativeOperandRole::ProgramName(_));
+        }
+        at = operand.bytes.end;
+    }
+    false
+}
+
+fn program_pipeline(text: &str, span: Range<usize>, operands: &[NativeOperand]) -> bool {
+    let mut groups = Vec::new();
     for (index, operand) in operands
         .iter()
         .enumerate()
         .take_while(|(_, op)| op.bytes.start < span.end)
     {
-        match operand.role {
-            NativeOperandRole::EnclosureStart { body, parent: None } => enclosure = Some(body),
-            NativeOperandRole::EnclosureEnd(body) if enclosure == Some(body) => enclosure = None,
-            role if enclosure.is_none()
-                && operand.bytes.start >= span.start
-                && matches!(
-                    role.declaration_delimiter(),
-                    NativeOperandRole::PipeDelimiter(_)
-                )
-                && operands.get(index + 1).is_some_and(|next| {
-                    matches!(next.role, NativeOperandRole::ProgramName(_))
-                        && next.bytes.start < span.end
-                }) =>
-            {
+        if let Some(opening) = InvocationGroup::opening(operand.role) {
+            groups.push(opening);
+        } else if let Some(closing) = InvocationGroup::closing(operand.role) {
+            if groups.pop() != Some(closing) {
                 return true;
             }
-            _ => {}
+        } else if groups.is_empty()
+            && operand.bytes.start >= span.start
+            && matches!(
+                operand.role.declaration_delimiter(),
+                NativeOperandRole::PipeDelimiter(_)
+            )
+            && starts_program(text, operand.bytes.end, span.end, &operands[index + 1..])
+        {
+            return true;
         }
     }
-    false
+    !groups.is_empty()
 }
 
 /// Nm can also name the subject of a manual. A standalone invocation is
@@ -274,6 +316,13 @@ impl<'a> Syntax<'a> {
                     NativeOperandRole::PipeDelimiter(_)
                 )
             });
+        let program_rhs = bare_pipe
+            && starts_program(
+                text,
+                at + 1,
+                text.len(),
+                &operands[operand_cursor(operands, at + 1)..],
+            );
         let reopened_flag = separator == b','
             && operand_at(operands, at).is_some_and(|operand| {
                 matches!(operand.role, NativeOperandRole::FlReopening { .. })
@@ -318,9 +367,7 @@ impl<'a> Syntax<'a> {
                         && operand_at(operands, prefix.first).is_some_and(|word| {
                             matches!(word.role, NativeOperandRole::ProgramName(_))
                         })
-                        && next.is_some_and(|word| {
-                            matches!(word.role, NativeOperandRole::ProgramName(_))
-                        })
+                        && program_rhs
                     || bare_pipe
                         && !begins_owner
                         && operand_pipe(text, operands, prefix.first, at, next)

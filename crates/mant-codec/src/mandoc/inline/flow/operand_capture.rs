@@ -433,7 +433,8 @@ fn captured_bare_delimiter(
 ) -> Option<NativeOperandRole> {
     // in_line() rewinds its element at a middle delimiter and emits a
     // sibling TEXT. In particular that pipe was not an explicit No operand.
-    if text == Some("|") {
+    // mdoc.c::mdoc_isdelim recognizes both spellings as DELIM_MIDDLE.
+    if matches!(text, Some("|" | r"\fR|\fP")) {
         Some(NativeOperandRole::PipeDelimiter(enclosure))
     } else {
         enclosure

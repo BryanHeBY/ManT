@@ -284,6 +284,61 @@ fn program_groups_require_invocation_evidence_at_their_own_scope() {
 }
 
 #[test]
+fn program_pipes_respect_authored_and_generated_argument_groups() {
+    // mdoc.c::mdoc_isdelim recognizes the Roman-font pipe too. The pinned
+    // terminal and HTML agree on both literal and generated delimiters.
+    for section in ["COMMANDS", "DESCRIPTION"] {
+        for (open, close, rendered_open, rendered_close) in [
+            ("(", ")", "(", ")"),
+            ("[", "]", "[", "]"),
+            ("( [", "] )", "([", "])"),
+            ("Po", "Pc", "(", ")"),
+            ("Oo", "Oc", "[", "]"),
+            ("Po Oo", "Oc Pc", "([", "])"),
+        ] {
+            let head = format!("Nm alpha Cm dump {open} Ar a | Nm inner {close}");
+            let form = format!("alpha dump {rendered_open}a | inner{rendered_close}");
+            for (prefix, suffix, before, after, names) in [
+                ("", "", "", "", &["alpha dump"][..]),
+                ("Nm gamma , ", "", "gamma, ", "", &["gamma", "alpha dump"]),
+                ("", " , Nm gamma", "", ", gamma", &["alpha dump", "gamma"]),
+            ] {
+                assert_program_group(
+                    section,
+                    &format!("{prefix}{head}{suffix}"),
+                    &format!("{before}{form}{after}"),
+                    names,
+                    &["inner"],
+                );
+            }
+            assert_program_group(
+                section,
+                &format!("{head} | Nm beta Cm read"),
+                &format!("{form} | beta read"),
+                &[],
+                &["alpha dump", "inner", "beta read"],
+            );
+        }
+        for (rhs, visible) in [
+            ("Nm beta Cm read", "beta read"),
+            ("( Nm beta Cm read )", "(beta read)"),
+            ("Pq Nm beta Cm read", "(beta read)"),
+            ("Po Nm beta Cm read Pc", "(beta read)"),
+        ] {
+            for pipe in ["|", r"\fR|\fP"] {
+                assert_program_group(
+                    section,
+                    &format!("Nm alpha Cm dump {pipe} {rhs}"),
+                    &format!("alpha dump | {visible}"),
+                    &[],
+                    &["alpha dump", "beta read"],
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn quoted_arguments_and_reopened_flags_keep_their_invocation_owner() {
     // mdoc_macro.c::in_line reopens Fl after its comma. The reopened
     // operand looks identical to a second authored Fl in the terminal.
