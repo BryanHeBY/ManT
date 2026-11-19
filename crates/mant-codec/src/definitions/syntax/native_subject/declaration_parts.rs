@@ -533,10 +533,13 @@ fn group_hint(
         {
             Some(NativeHeadRole::Literal)
         }
-        // An Ar operand or typed subject preceding Ic still supplies its
-        // own role even when the whole HEAD appears under COMMANDS.
-        _ if admission != Admission::ProtectedSyntax
+        // A standalone Nm still names the program when a protected
+        // argument group contains Cm tokens, e.g. ztar {c | x}.
+        // Actual compound names have already been proved from the prefix.
+        _ if (admission != Admission::ProtectedSyntax
             && source.context == DefinitionContext::Commands
+            || lead.is_some_and(|operand| operand.role == NativeOperandRole::ProgramName)
+                && !source.argument_separators(&source.ranges[index]).is_empty())
             && lead.is_none_or(|operand| {
                 operand.role.subject().is_none() && !operand.role.is_operand_label()
             })

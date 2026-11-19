@@ -169,7 +169,18 @@ impl Projection {
         let styled_command = context == DefinitionContext::Commands
             && (commands::leading_styled_command_name(&self.content).is_some()
                 || self.has_separated_command(&text));
-        if !(native || styled_command || hint == Some(NativeHeadRole::Literal)) {
+        let visible = text.trim();
+        let start = super::offset(&text, visible);
+        if !(native
+            || styled_command
+            || hint == Some(NativeHeadRole::Literal)
+            || super::invocation::compound_name(
+                &text,
+                &(start..start + visible.len()),
+                &self.operands,
+            )
+            .is_some())
+        {
             return None;
         }
         let term = DefinitionTerm::from(self.content);

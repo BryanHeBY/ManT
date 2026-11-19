@@ -36,7 +36,7 @@ pub(super) fn compound_name(
             break;
         };
         let suffix = commands::styled_command_prefix(word);
-        if !gap.trim().is_empty() || !commands::is_command_name(suffix) {
+        if gap.contains('\n') || !gap.trim().is_empty() || !commands::is_command_name(suffix) {
             break;
         }
         command = true;

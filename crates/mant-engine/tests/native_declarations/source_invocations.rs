@@ -290,3 +290,71 @@ fn a_reopened_flag_value_is_distinct_from_another_executed_flag() {
         }
     }
 }
+
+#[test]
+fn display_content_does_not_hide_a_same_row_compound_name() {
+    // The pinned tree places both words and the table under the extended
+    // It HEAD. A preceding table actually ends rows between Nm and Cm.
+    const TABLE: &str = ".br\n.TS\nl.\nCELLWITNESS\n.TE\n";
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (qualifier, eligible) in [("", true), (".Ar operand\n", false)] {
+            let invocation = format!("{qualifier}.Nm tool\n.Cm mount\n");
+            for (head, compound_scheme) in [
+                (format!("Xo\n{invocation}{TABLE}.Xc"), true),
+                (format!("Xo\n{TABLE}{invocation}.Xc"), false),
+            ] {
+                let input = source(section, &head, "BODY");
+                let content = load(&input);
+                let rendered = mant_render::render_query_text(&content);
+                let witness = if compound_scheme {
+                    "tool mount\nCELLWITNESS"
+                } else {
+                    "tool\nmount"
+                };
+                assert!(rendered.contains(witness), "{rendered}");
+                assert_eq!(rendered.matches("CELLWITNESS").count(), 1);
+                let found = roundtrip(&explain(&content, "tool mount"));
+                let direct = compound_scheme && eligible;
+                assert_eq!(
+                    found.counts.direct_entry.total,
+                    u32::from(direct),
+                    "{input}"
+                );
+                if direct {
+                    assert!(explanation_ranges::assert_ranges(&found, "tool mount") > 0);
+                    let hit = found
+                        .evidence
+                        .iter()
+                        .find(|hit| hit.class == EvidenceClass::DirectEntry)
+                        .unwrap();
+                    assert_eq!(hit.source.unwrap().line, 9);
+                    let excerpt = mant_query::select_excerpt(
+                        &content,
+                        &[ContentSelector::path(hit.outline.path())],
+                    )
+                    .unwrap();
+                    let rendered = mant_render::render_excerpt_text(&excerpt);
+                    assert!(
+                        rendered.contains("BODY") && rendered.contains("CELLWITNESS"),
+                        "{rendered}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn the_standalone_program_owns_the_form_with_an_enclosed_command_choice() {
+    // The groff_mdoc(7) example has a complete leading Nm. CVS opens a
+    // Brq BODY for both Cm alternatives rather than a compound prefix.
+    let head = "Nm ztar Xo\n.Brq Cm c | Cm x\n.Op Fl w Op Fl y | Fl z\n.Op Fl f Ar archive\n.Ar member No ...\n.Xc";
+    check(
+        &source("DESCRIPTION", head, "BODY"),
+        "ztar {c | x} [-w [-y | -z]] [-f archive] member ...",
+        &["ztar"],
+        &["c", "x", "-w", "-y", "-z", "-f", "archive", "member"],
+        "BODY",
+        9,
+    );
+}
