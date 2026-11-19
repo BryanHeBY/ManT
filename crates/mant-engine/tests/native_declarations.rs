@@ -5,6 +5,8 @@ use mant_ir::{
 };
 use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
 
+#[path = "native_declarations/assignment_and_arguments.rs"]
+mod assignment_and_arguments;
 #[path = "native_declarations/boundaries.rs"]
 mod boundaries;
 #[path = "native_declarations/bsd_symbols.rs"]
@@ -21,6 +23,8 @@ mod operands;
 mod option_operand_boundaries;
 #[path = "native_declarations/publication.rs"]
 mod publication;
+#[path = "native_declarations/real_invocations.rs"]
+mod real_invocations;
 #[path = "native_declarations/real_subjects.rs"]
 mod real_subjects;
 #[path = "native_declarations/roles.rs"]

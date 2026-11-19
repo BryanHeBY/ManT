@@ -145,7 +145,7 @@ fn append_literal_head(inlines: &[Inline], output: &mut String) -> bool {
 fn styled_command_prefix(value: &str) -> &str {
     let mut after_space = false;
     for (offset, character) in value.char_indices() {
-        if after_space && matches!(character, '-' | '+' | '/' | '[' | '<' | '{') {
+        if after_space && matches!(character, '-' | '+' | '/' | '(' | '[' | '<' | '{') {
             return value[..offset].trim_end();
         }
         after_space = character.is_whitespace();

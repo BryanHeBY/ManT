@@ -119,7 +119,9 @@ fn annotation_end(value: &str) -> Option<usize> {
 /// Delimiters inside a bounded annotation or placeholder are not declaration
 /// separators. Every outer part still has to pass its entire name grammar.
 pub(super) fn named_groups<'a>(text: &'a str, uses: OperandUses<'_>) -> Option<Vec<&'a str>> {
-    split_named_groups(text, |index, _| uses.protects_syntax(index))
+    split_named_groups(text, |index, _| {
+        uses.protects_named_syntax(index, text.as_bytes()[index])
+    })
 }
 
 pub(super) fn split_named_groups(
@@ -381,7 +383,7 @@ fn environment_occurrences_in_groups(
 
 fn has_assignment(text: &str, uses: OperandUses<'_>) -> bool {
     text.match_indices('=')
-        .any(|(index, _)| !uses.protects_syntax(index))
+        .any(|(index, _)| !uses.protects_named_syntax(index, b'='))
 }
 
 // A bounded literal/placeholder environment head is a declaration, but not

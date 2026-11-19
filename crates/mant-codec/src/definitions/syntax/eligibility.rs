@@ -110,32 +110,33 @@ impl<'a> OperandUses<'a> {
     pub(super) fn command_symbol_start(self, part: Range<usize>) -> Option<usize> {
         let mut command = false;
         self.intersecting(&part).find_map(|operand| {
-            command |= operand.role == NativeOperandRole::Command;
+            command |= operand.role.is_invocation_name();
             (command && operand.role == NativeOperandRole::SymbolicText)
                 .then(|| operand.bytes.start - self.offset)
         })
     }
 
-    pub(super) fn protects_syntax(self, offset: usize) -> bool {
+    pub(super) fn protects_named_syntax(self, offset: usize, character: u8) -> bool {
         #[cfg(feature = "roff")]
-        if operand_at(self.operands, self.offset + offset)
-            .is_some_and(|operand| operand.role == NativeOperandRole::SymbolicText)
-        {
-            // mdoc_macro.c::in_line moves a bare delimiter out of Sy.
-            // Punctuation still owned by a Sy text word stays literal.
+        if operand_at(self.operands, self.offset + offset).is_some_and(|operand| {
+            match operand.role {
+                // mdoc_macro.c::in_line moves a bare delimiter out of Sy.
+                // Punctuation retained in Sy is part of the authored word;
+                // '=' is still available to the complete assignment grammar.
+                NativeOperandRole::SymbolicText => character != b'=',
+                NativeOperandRole::LiteralPunctuation => matches!(character, b',' | b'|'),
+                _ => false,
+            }
+        }) {
             return true;
         }
+        #[cfg(not(feature = "roff"))]
+        let _ = character;
         self.protects(&(offset..offset + 1))
     }
 
     pub(super) fn protects_declaration_separator(self, offset: usize) -> bool {
-        #[cfg(feature = "roff")]
-        if operand_at(self.operands, self.offset + offset)
-            .is_some_and(|operand| operand.role == NativeOperandRole::LiteralPunctuation)
-        {
-            return true;
-        }
-        self.protects_syntax(offset)
+        self.protects_named_syntax(offset, b'|')
     }
 
     #[cfg(feature = "roff")]

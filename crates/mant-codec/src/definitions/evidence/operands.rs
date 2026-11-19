@@ -63,6 +63,9 @@ pub(crate) enum NativeOperandRole {
     /// An executed Cm/Ic operand can open an independent command declaration.
     #[cfg(feature = "roff")]
     Command,
+    /// An executed Nm names the program at the start of an invocation.
+    #[cfg(feature = "roff")]
+    ProgramName,
     /// The device wrote this Fn/Fo signature delimiter.
     #[cfg(feature = "roff")]
     FunctionSignature {
@@ -172,7 +175,15 @@ impl NativeOperandRole {
 
     #[cfg(feature = "roff")]
     pub(crate) fn is_description(self) -> bool {
-        matches!(self, Self::Description | Self::SymbolicText | Self::Command)
+        matches!(
+            self,
+            Self::Description | Self::SymbolicText | Self::Command | Self::ProgramName
+        )
+    }
+
+    #[cfg(feature = "roff")]
+    pub(in crate::definitions) fn is_invocation_name(self) -> bool {
+        matches!(self, Self::Command | Self::ProgramName)
     }
 
     #[cfg(feature = "roff")]
@@ -229,7 +240,7 @@ impl NativeOperandRole {
             Self::LiteralContinuation(_)
             | Self::PipeDelimiter(_)
             | Self::FunctionSignature { .. } => Self::Argument,
-            Self::Command => Self::Description,
+            Self::Command | Self::ProgramName => Self::Description,
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,
         }

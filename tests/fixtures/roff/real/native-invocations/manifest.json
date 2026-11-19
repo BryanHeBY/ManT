@@ -1,0 +1,259 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "Exact complete FreeBSD and illumos sources for command invocations and assignment alternatives.",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "file": "freebsd-dtrace.1.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man1/dtrace.1.gz",
+      "sourceSha256": "abcc6ae5767b35911ef8870243cfce836747ae86374df24a713514ec76e19bd7",
+      "fixtureSha256": "abcc6ae5767b35911ef8870243cfce836747ae86374df24a713514ec76e19bd7",
+      "decompressedSha256": "0c61e4adacfefdd8fb63d5a3aa0209cc5d271cd3bcbbc6fb6b9eed61df3172ed",
+      "sourceBytes": 9776,
+      "fixtureBytes": 9776,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originalAuditDate": "2026-11-19",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "sourceRepository": null,
+      "revision": null,
+      "archive": "base.txz",
+      "archiveMember": "./usr/share/man/man1/dtrace.1.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "license": "CDDL-1.0; original copyright notices retained",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "transformation": "None; exact gzip member from the release archive.",
+      "selectionReason": "The evaltime configuration assignment binds the key without binding any value alternatives.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "3d26918e7580d461b0d7c8c350ba1ec02e3708a45f30d4ba1b1e374cd38be47f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 39829,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "123ebc261d9bf23c8c7a4c54bb1f9caa166a655b5fd692688f29d3008ca28b6d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 39989,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "e49d126f955f66e418e4f07c4cbc4213d91ff36ab5b1fc6e9eb413a0ef2baa83",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 58670,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "6402d741a68ed0021118e4a92ae18445f16dabcb00e1e85cf99ebbe8e9fb9550",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 130733,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "4fec98ecb32a0a8a4736af3adc3b140a40d2ff7a7220242d85448b0833fa6eba",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2414,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-zfs-allow.8.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man8/zfs-allow.8.gz",
+      "sourceSha256": "691c214ec5dfb58b68bff4840b316fdd8d714004c23b46578b04f3eaf725fab2",
+      "fixtureSha256": "691c214ec5dfb58b68bff4840b316fdd8d714004c23b46578b04f3eaf725fab2",
+      "decompressedSha256": "357ec6fad51dbe22d290f55a185c2553f83ae1220fb778b8ea027b4a353d7f93",
+      "sourceBytes": 4017,
+      "fixtureBytes": 4017,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originalAuditDate": "2026-11-19",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "sourceRepository": null,
+      "revision": null,
+      "archive": "base.txz",
+      "archiveMember": "./usr/share/man/man8/zfs-allow.8.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "license": "CDDL-1.0; original copyright notices retained",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "transformation": "None; exact gzip member from the release archive.",
+      "selectionReason": "Command owners keep complete invocations; pipe and comma alternatives remain operands.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "bb3ba0ebf398ed9d312ff34a0f84c9fbe715328911985bfcb3b1aae92bea51b3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 18863,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "db7fe1138f6c8360e8e21005d37b61c8e90f9406221a454fdbc5902a42cb8807",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 19137,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "4082c5d1d7a5da10d1fece52fead9ddb776225dda6b60fff909bfc760ca9676c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 32203,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "395dac3567524af6a1d73173110aee86be863670f7277d7d1a03fd70a8627ea3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 76283,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 0,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 0,
+          "stderrBytes": 0,
+          "status": "Captured"
+        }
+      }
+    },
+    {
+      "file": "freebsd-zfs-mount.8.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man8/zfs-mount.8.gz",
+      "sourceSha256": "d82f7b920f021bcca8d2d74dc53af6dcbe39e7acee9db3e1b82cf70dcc14038b",
+      "fixtureSha256": "d82f7b920f021bcca8d2d74dc53af6dcbe39e7acee9db3e1b82cf70dcc14038b",
+      "decompressedSha256": "190f56c95467085e4e5011612cc0853dda36092c96b73149f95a9f4edb976ebb",
+      "sourceBytes": 1633,
+      "fixtureBytes": 1633,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originalAuditDate": "2026-11-19",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "sourceRepository": null,
+      "revision": null,
+      "archive": "base.txz",
+      "archiveMember": "./usr/share/man/man8/zfs-mount.8.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "license": "CDDL-1.0; original copyright notices retained",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "transformation": "None; exact gzip member from the release archive.",
+      "selectionReason": "The inline -R operand remains visible while the separate -R definition owns its description.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "9b2065458d26a76e191fd5d6b0f38c159083583ad9b8fbc2e2867457e791fbeb",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3324,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "9923e69b16462e0cd4b84a8d865f7bb36f020cb34875ce0b61bd56faf696f848",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 3326,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "a8da8f51f51942f40fc2adb5c503032668552bd4f65310e3d3d38c99238f4cef",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8324,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "64636530fd4d7900c978971141d8b94efb7a93bfaf2ba3ddc478e447eeae867d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 16318,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "4a8c7dfb5b323ec03e2ae9fc16aab8b9fa4a30470faa22b1273b1de3b3eace8a",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 88,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "illumos-zfs.8",
+      "sourceIdentity": "illumos-gate-e8f5c080:usr/src/man/man8/zfs.8",
+      "sourceSha256": "4196bf0af923ae345f03f4b379d7e277da1754a6f4cdf025ac38981ada5957e7",
+      "fixtureSha256": "4196bf0af923ae345f03f4b379d7e277da1754a6f4cdf025ac38981ada5957e7",
+      "decompressedSha256": "4196bf0af923ae345f03f4b379d7e277da1754a6f4cdf025ac38981ada5957e7",
+      "sourceBytes": 145338,
+      "fixtureBytes": 145338,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originalAuditDate": "2026-11-19",
+      "originUrl": "https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man8/zfs.8",
+      "sourceRepository": "https://github.com/illumos/illumos-gate.git",
+      "revision": "e8f5c080cc0b7997410d860afd787df30ba1cf2d",
+      "archive": null,
+      "archiveMember": "usr/src/man/man8/zfs.8",
+      "archiveSha256": null,
+      "license": "CDDL-1.0; original copyright notices retained",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "transformation": "None; exact complete repository file.",
+      "selectionReason": "The standalone volume definition keeps its own entry alongside several zfs allow command forms.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "01ccb1554e32111cc89eec1b12ae956e7d321cafbdd1ed039a9a690ef9e7a5d7",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 179656,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "d0d0989e61d8a63fd3b425f58deccd20506a3568b13905b7ad9b0411d18d31a5",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 179660,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "f1d33dbd3abbd16fa6c0648bf4e6f42f85918d03ecc8c49e5f9ddb11b29fa739",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 241646,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "fdf11b80b5be5f045e69964909f9a6a77c2f8dd7c0aebc859981337c24defd22",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 636889,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "fb47f18a0f0045795b1778ba4020c9d4895213deac3356a301c8a936fc556c51",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1276,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    }
+  ]
+}

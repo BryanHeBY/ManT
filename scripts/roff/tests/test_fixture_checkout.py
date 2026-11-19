@@ -57,7 +57,8 @@ class FixtureCheckoutTests(unittest.TestCase):
         for family in ("literal_leading_rows", "table_layout"):
             files.update({path.relative_to(ROOT): path.read_bytes()
                           for path in (ROOT / "tests/fixtures/roff" / family).rglob("*.1")})
-        for family in ("ordered-continuation", "mdoc-subjects", "section-navigation", "bsd-declarations"):
+        for family in ("ordered-continuation", "mdoc-subjects", "section-navigation", "bsd-declarations",
+                       "native-invocations"):
             directory = Path("tests/fixtures/roff/real") / family
             manifest = json.loads((ROOT / directory / "manifest.json").read_bytes())
             for case in manifest["cases"]:

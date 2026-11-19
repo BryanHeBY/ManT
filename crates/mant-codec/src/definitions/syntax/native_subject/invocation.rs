@@ -76,9 +76,14 @@ impl<'a> Syntax<'a> {
         let operands = self.operands;
         let next = following_operand(text, operands, at + 1);
         let begins_owner = next.is_some_and(|next| is_new_owner(next.role));
-        let bare_pipe = text.as_bytes()[at] == b'|'
+        let separator = text.as_bytes()[at];
+        let bare_pipe = separator == b'|'
             && operand_at(operands, at)
                 .is_some_and(|operand| matches!(operand.role, NativeOperandRole::PipeDelimiter(_)));
+        let argument_separator = bare_pipe
+            || separator == b','
+                && !begins_owner
+                && next.is_none_or(|next| !next.role.is_invocation_name());
         let prefix = self.prefix(start, at);
         if !begins_owner && prefix.assignment.is_some_and(|equals| equals < at) {
             return true;
@@ -92,7 +97,7 @@ impl<'a> Syntax<'a> {
             LeadingRole::Command {
                 next: cursor,
                 has_argument,
-            } if bare_pipe => {
+            } if argument_separator => {
                 // Visit each accepted operand only once, even for a long
                 // command prefix followed by many argument alternatives.
                 while !*has_argument
@@ -100,10 +105,17 @@ impl<'a> Syntax<'a> {
                 {
                     *cursor += 1;
                     *has_argument = word.role.is_operand_label()
-                        || word.role == NativeOperandRole::ExplicitOption;
+                        || matches!(
+                            word.role,
+                            NativeOperandRole::ExplicitOption
+                                | NativeOperandRole::SearchArgument(_)
+                                | NativeOperandRole::SymbolicText
+                        );
                 }
                 *has_argument
-                    || !begins_owner && operand_pipe(text, operands, prefix.first, at, next)
+                    || bare_pipe
+                        && !begins_owner
+                        && operand_pipe(text, operands, prefix.first, at, next)
             }
             _ => bare_pipe && !begins_owner && operand_pipe(text, operands, prefix.first, at, next),
         }
@@ -126,22 +138,17 @@ impl<'a> Syntax<'a> {
                         has_argument: false,
                     })
                 }
-                Some(NativeOperandRole::Command) => LeadingRole::Command {
+                Some(role) if role.is_invocation_name() => LeadingRole::Command {
                     next: cursor + 1,
                     has_argument: false,
                 },
                 _ => LeadingRole::Other,
             };
-            // Compare a joined configuration key to the same complete
-            // grammar used for named definitions. A separated word that
-            // merely contains '=' supplies no proof for the preceding one.
-            let key_and_value = self.text[first..at]
-                .split_whitespace()
-                .next()
-                .unwrap_or_default();
-            let assignment = key_and_value
+            // Validate the entire written key before the assignment.
+            // Whitespace and macro boundaries may occur beside '='.
+            let assignment = self.text[first..at]
                 .split_once('=')
-                .filter(|(key, _)| named::is_configuration_key(key))
+                .filter(|(key, _)| named::is_configuration_key(key.trim_end()))
                 .map(|(key, _)| first + key.len());
             self.prefix = Some(Prefix {
                 start,

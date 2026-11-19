@@ -467,11 +467,15 @@ fn independent_groups<'a>(
                         NativeOperandRole::ExplicitOption
                         | NativeOperandRole::Description
                         | NativeOperandRole::SymbolicText
-                        | NativeOperandRole::Command
                         | NativeOperandRole::LiteralPunctuation
                         | NativeOperandRole::ReferenceText(_)
                         | NativeOperandRole::EnclosureStart { .. }
                         | NativeOperandRole::EnclosureEnd(_) => true,
+                        NativeOperandRole::Command | NativeOperandRole::ProgramName => {
+                            // in_line() may leave '(' and ')' attached to
+                            // words even though the middle pipe reopens Ic.
+                            !matches!(head.as_bytes()[index], b'(' | b')')
+                        }
                         NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
                         NativeOperandRole::PipeDelimiter(scope) => enclosure != scope,
                         NativeOperandRole::LiteralDelimiter {
@@ -511,8 +515,10 @@ fn group_hint(
         // A styled Nm followed by Cm can prove one compound command.
         // An Ar operand or typed subject preceding Ic still supplies its
         // own role even when the whole HEAD appears under COMMANDS.
-        _ if admission != Admission::ProtectedSyntax
+        _ if (admission != Admission::ProtectedSyntax
             && source.context == DefinitionContext::Commands
+            || lead.is_some_and(|operand| operand.role == NativeOperandRole::ProgramName)
+                && !source.argument_separators(&source.ranges[index]).is_empty())
             && lead.is_none_or(|operand| {
                 operand.role.subject().is_none() && !operand.role.is_operand_label()
             })

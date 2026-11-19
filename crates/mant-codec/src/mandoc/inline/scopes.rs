@@ -158,7 +158,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
             super::names::append_block(builder, node, None, name);
         }
         Some(Mdoc(MdocMacro::Nm)) => {
-            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
+            builder.with_native_operand_role(NativeOperandRole::ProgramName, |builder| {
                 builder
                     .with_font_scope(Font::Strong, |builder| append_name(builder, children, name));
             });
