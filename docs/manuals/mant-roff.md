@@ -249,7 +249,9 @@ native slots remain live. The replay uses a bounded suffix with a proved
 write cursor, including across automatic word blanks. A surviving glyph
 appears in the accepted order and keeps its original style and link, even
 if it was pending under `\z`. Native copies of a bold glyph refer to one
-author glyph. A queued blank can cover
+author glyph. Successive writes keep each earlier glyph's position within
+its original source word, including when it moves into a separate run.
+A queued blank can cover
 it when a later device write on the same pass makes the blank print. A
 generated `Fl` dash follows the same device writes and can survive when
 either bold copy remains. An empty overstrike can leave a pending retreat
@@ -868,6 +870,9 @@ executed declaration after a separator uses its own evidence. Implicit
 enclosures can contain that separator, and glued `Fl` invocations cannot
 form one new option spelling. Operands stay in the readable form, and an
 edited or partial command word cannot prove a different name.
+Inside a command directory, one `Nm` can author a complete multiword name
+such as `zpool iostat`. A pipe between independent program invocations
+keeps their source form without adding a name for either invocation.
 Ordinary `Nm` references in a description or synopsis retain their source role.
 
 Independent `IP`, `TP`, and definition-form `It` items retain separate semantic
@@ -1630,7 +1635,8 @@ remaining page width from the cell's actual start. The span's own fill flag
 controls that limit even inside a no-fill owner. Other cell edits retain a
 responsive paragraph, with wrapping decided by the reading viewport.
 Ordinary width folds within an accepted run stay soft even when the same
-cell also contains an explicit `\p`. The reading projection keeps a device
+cell also contains an explicit `\p`. A marker at the start of a word
+requests a break at that word's end. The reading projection keeps a device
 boundary when crossing it would change which glyph survives or hide an
 accepted device-only row.
 

@@ -39,6 +39,12 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Keep source glyphs, links and accepted separators accurate through
+  successive roff word overwrites. A word-end request in a table stays
+  with the word that executes it, including after a width-only fold.
+- Recognize complete compound `Nm` names in command directories and
+  quoted operands inside option groups. A pipeline between independent
+  invocations no longer supplies an entry name for its left operand.
 - The 0.15 roff APIs use `libmandoc-rs` 0.15. Preserve literal numeric
   definitions when a discarded macro argument performed the register increment.
 - Keep compact mdoc displays on a separate row from the definition label
