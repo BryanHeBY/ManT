@@ -3,6 +3,8 @@
 use mant_ir::{Block, Inline, ResolvedContent, inline_plain_text};
 use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax, default_search_limit};
 
+mod field_replay;
+
 const HEADER: &str =
     ".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- fixture\n.SH DESCRIPTION\n";
 const END: &str = "\n.PP\nENDTEXT\n";

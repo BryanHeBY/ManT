@@ -12,6 +12,7 @@ pub(crate) use mant_ir::{inline_plain_text as plain_text, terms_fit_inline};
 pub(in crate::mandoc) mod display_tabs;
 mod equation;
 mod flow;
+pub(in crate::mandoc) use flow::native_slots::SlotEntry;
 mod font;
 mod generated;
 mod text_execution;

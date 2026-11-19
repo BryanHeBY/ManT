@@ -1,8 +1,8 @@
 //! Decode real cell owners while recording the row's native input effects.
 use super::recovery::lower_table_cell;
 use super::{
-    TableEmbedding, execution, recovery, table_alignment, table_cell_font, table_cell_kind,
-    table_cell_width,
+    InlineTablePrefix, TableEmbedding, execution, recovery, table_alignment, table_cell_font,
+    table_cell_kind, table_cell_width,
 };
 use crate::mandoc::{LoweringContext, inline::TableCellExecution, source_span};
 use libmandoc_rs::{Node, TableCellKind, TableFont};
@@ -51,7 +51,7 @@ pub(super) fn lower_cells(
     context: &LoweringContext<'_>,
     indent_columns: crate::mandoc::layout::SourceIndent,
     embedding: Option<&TableEmbedding<'_>>,
-    measure_prefix: bool,
+    prefix: Option<InlineTablePrefix>,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> Vec<ExecutedCell> {
     let execution = embedding.map(|embedding| embedding.execution.as_ref());
@@ -83,39 +83,36 @@ pub(super) fn lower_cells(
         embedding.map_or_else(Vec::new, |_| recovery::recover_text_blocks(node, context));
     let text_blocks = text_blocks(node, &source_blocks);
     let mut cells = cell_owners(node);
+    let slot_inputs = slot_input_plan(
+        node,
+        &columns,
+        execution.filter(|_| proved_columns),
+        context,
+        prefix,
+        formatter,
+    );
     let mut buffered = false;
     if active {
-        for column in &columns {
+        for (column_index, column) in columns.iter().enumerate() {
             // tbl_term.c::term_tbl: every non-hspan EXECUTION column enters,
             // including missing trailing data. All fills precede all flushes.
             formatter.clear_zero_advance();
             formatter.execution.table_cell = Some(TableCellExecution::default());
             if let Some((index, cell)) = raw_word_for_column(node, column) {
                 let text = cell.decoder_text();
-                if measure_prefix
-                    && text.is_some_and(crate::mandoc::inline::table_word_needs_native_slots)
-                {
+                let needs_slots = text.is_some_and(|text| needs_slot_input(column, text));
+                if prefix.is_some() && needs_slots {
                     // term_tbl feeds each word before any tcol prints.
                     // Later column font changes cannot remeasure this word.
                     cells[index].entry_font = Some(formatter.font.clone());
                 }
-                if let Some(cell_execution) = &mut formatter.execution.table_cell {
-                    cell_execution.line_width_units = cell_device_width(
-                        text,
-                        execution.filter(|_| proved_columns),
-                        column.logical,
-                        cell.column_span as usize,
-                        node,
-                        context,
-                    );
-                    cell_execution.field_width_units =
-                        cell_execution.line_width_units.map(|width| {
-                            width.saturating_sub(
-                                24 * usize::from(
-                                    column.kind == libmandoc_rs::TableLayoutKind::Long,
-                                ),
-                            )
-                        });
+                if needs_slots && let Some(input) = slot_inputs.get(column_index) {
+                    formatter.execution.table_cell = Some(TableCellExecution {
+                        line_width_units: Some(input.line_width),
+                        field_width_units: input.fill_target,
+                        leading_blanks: input.leading_blanks,
+                        ..TableCellExecution::default()
+                    });
                 }
                 let blocks =
                     project_text_cell(cell, index, node, context, text_blocks[index], formatter);
@@ -134,7 +131,7 @@ pub(super) fn lower_cells(
             && proved_columns
             && let Some(execution) = execution
         {
-            match execution::buffered_padding(node, &columns, execution) {
+            match execution.buffered_padding(node, &columns) {
                 Ok(written) => buffered = written,
                 Err(message) => {
                     execution.report_failure(node, context, &message);
@@ -176,38 +173,40 @@ fn raw_word_for_column<'a>(
     (cell.kind == TableCellKind::Text).then_some((index, cell))
 }
 
-fn cell_device_width(
-    text: Option<&str>,
-    execution: Option<&execution::TableExecution<'_>>,
-    column: usize,
-    span: usize,
+fn slot_input_plan(
     node: &Node,
+    columns: &[execution::Column],
+    execution: Option<&execution::TableExecution<'_>>,
     context: &LoweringContext<'_>,
-) -> Option<usize> {
-    use crate::mandoc::roff_escape::{PresentationKind, RoffInlineEvent, decode};
-    let execution = execution?;
-    let text = text.filter(|text| crate::mandoc::inline::table_word_needs_native_slots(text))?;
-    let needs_width = decode(text).iter().any(|event| match event {
-        RoffInlineEvent::LineBreak => true,
-        RoffInlineEvent::Presentation {
-            kind: PresentationKind::HorizontalLine,
-            argument: Some(argument),
-        } => {
-            libmandoc_rs::TableColumnMetrics::horizontal_line_needs_column_width(argument)
-                == Some(true)
-        }
-        _ => false,
-    });
-    if !needs_width {
-        return None;
-    }
-    match execution.cell_width(column, span) {
-        Ok(width) => Some(width),
+    prefix: Option<InlineTablePrefix>,
+    formatter: &crate::mandoc::formatter::FormatterState,
+) -> Vec<execution::ColumnInput> {
+    let Some(execution) = execution.filter(|_| {
+        columns.iter().any(|column| {
+            raw_word_for_column(node, column)
+                .and_then(|(_, cell)| cell.decoder_text())
+                .is_some_and(|text| needs_slot_input(column, text))
+        })
+    }) else {
+        return Vec::new();
+    };
+    match execution.column_inputs(
+        node,
+        columns,
+        formatter.execution.table_no_break_margin(),
+        prefix,
+    ) {
+        Ok(inputs) => inputs,
         Err(message) => {
             execution.report_failure(node, context, &message);
-            None
+            Vec::new()
         }
     }
+}
+
+fn needs_slot_input(column: &execution::Column, text: &str) -> bool {
+    crate::mandoc::inline::table_word_needs_native_slots(text)
+        || column.kind == libmandoc_rs::TableLayoutKind::Number && text.contains("\\p")
 }
 
 fn text_blocks<'a>(

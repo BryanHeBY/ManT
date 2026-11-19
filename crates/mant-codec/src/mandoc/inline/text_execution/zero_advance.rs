@@ -247,6 +247,29 @@ impl ZeroAdvanceState {
         }
     }
 
+    /// Local slot placement already wrote this glyph. Its reading owner
+    /// remains provisional until the next entry or actual field flush.
+    pub(super) fn inherit_buffered_glyph(&mut self, glyph: Inline) {
+        self.arm();
+        let _ = self.project_glyph(glyph);
+    }
+
+    pub(super) fn can_project_prior_slot(&self) -> bool {
+        self.machine.pending_ref().is_some()
+            && self.held.is_empty()
+            && self.machine.deferred_projection().is_empty()
+    }
+
+    pub(super) fn project_prior_slot(&mut self, survives: bool) -> Vec<Inline> {
+        self.resolved_preexisting = true;
+        if survives {
+            self.take_pending().unwrap_or_default()
+        } else {
+            self.machine.discard_pending();
+            Vec::new()
+        }
+    }
+
     /// Blanks buffered behind the pending glyph when a `\p` marker
     /// arrives: the next graph's retreat lands on the marker's own blank,
     /// so the held bytes survive and print after the settled glyph.

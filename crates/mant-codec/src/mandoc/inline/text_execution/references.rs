@@ -36,6 +36,10 @@ pub(super) fn append_empty_destination(
         policy.field_authoritative,
         None,
     );
+    qualify_empty_destination(word, eligible);
+}
+
+pub(super) fn qualify_empty_destination(word: &mut WordOutput<'_>, eligible: bool) {
     let Some(before_marker) = word.buffer.strip_suffix("<>").filter(|_| eligible) else {
         return;
     };

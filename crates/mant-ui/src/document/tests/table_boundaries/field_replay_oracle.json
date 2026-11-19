@@ -1,0 +1,14 @@
+[
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nQ\\o'ab'\\p PASS\\zX\\c\nYTAIL\n.PP\nENDTEXT\n","probe":"PASSYTAIL","want":1,"link":false},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nQ\\o'ab'\\p PASS\\zX\\c\nYTAIL\n.PP\nENDTEXT\n","probe":"PASSXYTAIL","want":0,"link":false},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\n.UR https://example.test/r\nQ\\o'ab'\\p PASS\\zX\\c\nYTAIL\n.UE\n.PP\nENDTEXT\n","probe":"PASSYTAIL","want":1,"link":true},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\n.UR https://example.test/r\nQ\\o'ab'\\p PASS\\zX\\c\nYTAIL\n.UE\n.PP\nENDTEXT\n","probe":"PASSXYTAIL","want":0,"link":true},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nQ\\o'ab'\\p PASS\\zX\nYTAIL\n.PP\nENDTEXT\n","probe":"PASSYTAIL","want":0,"link":false},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nQ\\o'ab'\\p PASS\\zX\nYTAIL\n.PP\nENDTEXT\n","probe":"PASSXYTAIL","want":1,"link":false},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\n.UR https://example.test/r\nQ\\o'ab'\\p PASS\\zX\nYTAIL\n.UE\n.PP\nENDTEXT\n","probe":"PASSYTAIL","want":0,"link":true},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\n.UR https://example.test/r\nQ\\o'ab'\\p PASS\\zX\nYTAIL\n.UE\n.PP\nENDTEXT\n","probe":"PASSXYTAIL","want":1,"link":true},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nP\\l'1n '\\h'0n'\\h'|5n'\\p \\X'tty: link https://example.test/r'NEEDLE\\X'tty: link'\nTAILWORD\n.PP\nENDTEXT\n","probe":"NEEDLE","want":1,"link":true},
+  {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\n.TS\nn.\n\\o' '\\p XYZ\n99999999\n.TE\n","probe":"XYZ","want":1,"link":false},
+  {"source":".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n.Bl -tag -width 4n\n.It Xo\n.No PRE\\zX\n.No \"\\l'1n.'\\h'-1n'\\p XYZ\"\n.Xc\nENDING\n.El\n","probe":"XYZ","want":1,"link":false},
+  {"source":".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\nBEFORE\n.Db GHOSTTOKEN\nAFTER\n","probe":"GHOSTTOKEN","want":0,"link":false}
+]

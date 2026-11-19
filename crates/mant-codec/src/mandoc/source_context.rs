@@ -380,11 +380,8 @@ impl<'a> LoweringContext<'a> {
         zero_advance.inherit_armed(formatter.take_zero_advance_armed());
         let record_native_cells = formatter.execution.table_cell.is_some();
         let line_width_units = formatter.execution.horizontal_line_width_units(source);
-        let table_field_units = if formatter.no_fill {
-            None
-        } else {
-            formatter.execution.table_word_fill_width()
-        };
+        let table_cell = formatter.execution.table_cell.unwrap_or_default();
+        let table_field_units = table_cell.field_width_units;
         let execution = inline::parse_roff_text_with_zero_advance(
             source,
             inline::TextExecutionContext {
@@ -392,8 +389,9 @@ impl<'a> LoweringContext<'a> {
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
                 line_width_units,
-                native_field_has_input: false,
+                slot_entry: inline::SlotEntry::default(),
                 table_field_units,
+                table_leading_blanks: table_cell.leading_blanks,
                 policy: inline::TextExecutionPolicy {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
                     record_native_cells,

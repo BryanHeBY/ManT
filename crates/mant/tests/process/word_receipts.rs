@@ -804,3 +804,68 @@ fn printed_link_spaces_retain_their_owner_on_both_cli_markdown_readbacks() {
     }
     assert_readbacks(LINK_REARM, "ALPHAX ETA: https://x.io\nOMEGA", Some("ETA"));
 }
+
+#[test]
+fn linked_annotations_consume_the_same_native_cell_as_other_ignored_escapes() {
+    // Fixed ASCII and UTF-8 agree: ESCAPE_IGNORE writes one ASCII_NBRZW
+    // (term.c::term_word). Rewinding that cell leaves a nonprinting field
+    // and rejects the tail. The URL annotation does not add another cell.
+    let header = ".TH CHECK 1 \"November 19, 2026\"\n.SH NAME\ncheck \\- test\n.SH DESCRIPTION\n";
+    for (control, close) in [
+        (r"\X'tty: link'", ""),
+        (r"\X'tty: link https://x.io'", r"\X'tty: link'"),
+        (r"\&", ""),
+        (r"\m[red]", ""),
+    ] {
+        for rewind in ["", r"\h'-1n'", r"\h'-2n'"] {
+            let accepted = rewind.is_empty();
+            let word = format!(r"\l'1n.'\h'-1n'{control}{rewind}\p XYZ{close}");
+            let source = format!("{header}{word}\nTAILWORD\n.PP\nENDTEXT\n");
+            let label = (!close.is_empty()).then_some(if accepted { "\nXYZ" } else { "" });
+            if accepted {
+                assert_readbacks(&source, "\nXYZ TAILWORD\n\nENDTEXT", label);
+            } else {
+                let plain = render(&source, "roff", "text", "never", false);
+                let ansi = render(&source, "roff", "text", "always", false);
+                assert_eq!(description(&plain), "\n\nENDTEXT", "{source}");
+                assert_eq!(without_sgr(&ansi), plain, "{source}");
+                if let Some(label) = label {
+                    assert_link(&source, "roff", label);
+                }
+                // Both native blanks are layout spacing in the absence of
+                // accepted words. Markdown projects that gap as one row.
+                for addressable in [false, true] {
+                    let mut markdown = render(&source, "roff", "markdown", "never", addressable);
+                    for _ in 0..2 {
+                        let readback = render(&markdown, "markdown", "text", "never", false);
+                        assert_eq!(description(&readback), "\nENDTEXT", "{source}");
+                        if let Some(label) = label {
+                            assert_link(&markdown, "markdown", label);
+                        }
+                        markdown = render(&markdown, "markdown", "markdown", "never", addressable);
+                    }
+                }
+            }
+
+            let result = run_text_input(
+                &[
+                    "--input",
+                    "-",
+                    "--input-format",
+                    "roff",
+                    "--format",
+                    "json",
+                    "--display",
+                    "direct",
+                    "--word",
+                    "--search",
+                    "XYZ",
+                ],
+                &source,
+            );
+            assert!(result.status.success(), "{result:?}");
+            let response: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+            assert_eq!(response["total"], usize::from(accepted), "{source}");
+        }
+    }
+}

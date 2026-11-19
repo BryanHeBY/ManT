@@ -73,7 +73,7 @@ impl<'a> InlineTableSequence<'a> {
             &self.context,
             crate::mandoc::layout::SourceIndent::default(),
             embedding,
-            prefix.is_some(),
+            prefix,
             formatter,
         );
         self.context
@@ -175,7 +175,7 @@ pub(super) fn append_table_row(
         context,
         indent_columns,
         embedding,
-        false,
+        None,
         formatter,
     )
     .into_iter()

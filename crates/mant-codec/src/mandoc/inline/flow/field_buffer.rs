@@ -204,6 +204,8 @@ enum WordScanPolicy {
 #[derive(Clone, Debug, Default)]
 pub(in crate::mandoc::inline) struct FieldBuffer {
     cells: Vec<FieldCell>,
+    device_tail: Option<Box<super::native_slots::DeviceTail>>,
+    opaque_raw_slots: bool,
     tabs: Arc<TabStops>,
     /// Persistent tcol->taboff; each pass starts with this reference.
     tab_offset: i64,

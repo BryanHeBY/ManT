@@ -5,10 +5,12 @@
 //! `term_flushln`'s final reset; no fill occurs after that reset. A row-local
 //! occupancy receipt suffices for BACK* without reproducing device output.
 use crate::mandoc::formatter::FormatterState;
-use libmandoc_rs::{Node, TableCellKind, TableColumnMetrics, TableLayoutKind as Kind};
+use libmandoc_rs::{Node, TableColumnMetrics, TableLayoutKind as Kind};
 use std::cell::{Cell, RefCell};
 
 mod leading_gap;
+mod row_input;
+pub(super) use row_input::ColumnInput;
 
 pub(super) struct TableExecution<'a> {
     rows: Vec<&'a Node>,
@@ -16,16 +18,19 @@ pub(super) struct TableExecution<'a> {
     metrics: RefCell<Option<Result<Vec<TableColumnMetrics>, String>>>,
     failure_reported: Cell<bool>,
     column_work_left: Cell<usize>,
+    left_edge: bool,
 }
 
 impl<'a> TableExecution<'a> {
     pub(super) fn new(rows: Vec<&'a Node>) -> Self {
+        let left_edge = rows.iter().copied().any(leading_gap::row_has_left_border);
         Self {
             rows,
             bounds: Cell::new(None),
             metrics: RefCell::new(None),
             failure_reported: Cell::new(false),
             column_work_left: Cell::new(4_000_000),
+            left_edge,
         }
     }
 
@@ -60,15 +65,6 @@ impl<'a> TableExecution<'a> {
                 source: crate::mandoc::source_span(node),
             });
         }
-    }
-
-    pub(super) fn cell_width(&self, column: usize, span: usize) -> Result<usize, String> {
-        self.with_metrics(|metrics| {
-            metrics
-                .get(column..column.saturating_add(span))
-                .map(|columns| leading_gap::column_extent(columns, false))
-        })?
-        .ok_or_else(|| "invalid table cell width".into())
     }
 
     fn with_metrics<T>(
@@ -159,95 +155,6 @@ pub(super) fn data_columns(node: &Node) -> Vec<Column> {
                 .map_or(Kind::Left, |slot| slot.kind),
         })
         .collect()
-}
-
-/// Native rules and numeric padding can write without semantic children.
-/// Only these paths need widths. Ordinary table words supply their ordered
-/// write receipt directly, so no output text is rescanned here.
-pub(super) fn buffered_padding(
-    node: &Node,
-    columns: &[Column],
-    execution: &TableExecution<'_>,
-) -> Result<bool, String> {
-    if !columns.iter().any(|column| {
-        matches!(
-            column.kind,
-            Kind::Number | Kind::HorizontalRule | Kind::DoubleHorizontalRule
-        ) || column.cell.is_some_and(|index| {
-            !matches!(
-                node.table_cells[index].kind,
-                TableCellKind::Text | TableCellKind::Empty
-            )
-        })
-    }) {
-        return Ok(false);
-    }
-    execution
-        .with_metrics(|metrics| {
-            let offsets = metrics
-                .iter()
-                .scan(0_usize, |offset, column| {
-                    let result = *offset;
-                    *offset = offset
-                        .saturating_add(column.width_basic_units)
-                        .saturating_add(column.spacing_columns.saturating_mul(24));
-                    Some(result)
-                })
-                .collect::<Vec<_>>();
-            let mut coloff = 0;
-            for column in columns {
-                let metric = metrics.get(column.logical)?;
-                let offset = *offsets.get(column.logical)?;
-                let cell = column.cell.map(|index| &node.table_cells[index]);
-                let rule = matches!(
-                    column.kind,
-                    Kind::HorizontalRule | Kind::DoubleHorizontalRule
-                ) || cell.is_some_and(|cell| {
-                    !matches!(cell.kind, TableCellKind::Text | TableCellKind::Empty)
-                });
-                if rule {
-                    // tbl_fill_string(): even a positive effective width writes
-                    // nothing if an earlier span advanced coloff past its target.
-                    if metric.width_basic_units != 0
-                        && coloff < offset.saturating_add(metric.width_basic_units)
-                    {
-                        return Some(true);
-                    }
-                } else if let Some(cell) = cell.filter(|cell| cell.kind == TableCellKind::Text) {
-                    match column.kind {
-                        Kind::Number => {
-                            let decimal = node.table_layout.as_ref()?.decimal_point;
-                            let pad = metric
-                                .number_padding(
-                                    cell.decoder_text().unwrap_or_default(),
-                                    decimal,
-                                    measure,
-                                )
-                                .ok()?;
-                            if pad != 0 && coloff < offset.saturating_add(pad) {
-                                return Some(true);
-                            }
-                            coloff = coloff.saturating_add(metric.width_basic_units);
-                        }
-                        Kind::Left | Kind::Right | Kind::Center | Kind::Long => {
-                            let end = column.logical.checked_add(cell.column_span as usize)?;
-                            for logical in column.logical..end {
-                                let spanned = metrics.get(logical)?;
-                                coloff = coloff.saturating_add(spanned.width_basic_units);
-                                if logical + 1 < end {
-                                    coloff = coloff
-                                        .saturating_add(spanned.spacing_columns.saturating_mul(24));
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                coloff = coloff.saturating_add(metric.spacing_columns.saturating_mul(24));
-            }
-            Some(false)
-        })
-        .and_then(|result| result.ok_or_else(|| "invalid table execution geometry".into()))
 }
 
 #[cfg(test)]

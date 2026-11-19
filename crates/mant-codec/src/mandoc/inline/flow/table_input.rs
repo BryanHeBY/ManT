@@ -1,4 +1,5 @@
 //! Table input observations borrow the shared word and source registers.
+use super::native_slots::SlotEntry;
 use super::{InlineBuilder, InlineExecutionState};
 use crate::{definitions::NativeOperandRole, mandoc::blocks::InlineTablePrefix};
 use mant_ir::Inline;
@@ -15,6 +16,7 @@ pub(in crate::mandoc) struct TableCellExecution {
     pub(in crate::mandoc) trailing_rows: usize,
     pub(in crate::mandoc) line_width_units: Option<usize>,
     pub(in crate::mandoc) field_width_units: Option<usize>,
+    pub(in crate::mandoc) leading_blanks: usize,
 }
 
 impl InlineBuilder {
@@ -101,7 +103,7 @@ impl InlineBuilder {
 }
 
 impl InlineExecutionState {
-    pub(in crate::mandoc) fn table_word_fill_width(&self) -> Option<usize> {
+    pub(in crate::mandoc) fn table_no_break_margin(&self) -> Option<usize> {
         // tbl_term.c keeps TERMP_NOBREAK on the surrounding HEAD. Such
         // cells still fill against the page, not the shortened column.
         let no_break = self.definition.as_ref().is_some_and(|field| {
@@ -112,7 +114,7 @@ impl InlineExecutionState {
                         if flags.contains(super::FieldFlag::NoBreak))
                 })
         });
-        self.table_cell?.field_width_units.filter(|_| !no_break)
+        no_break.then_some(self.table_page_margin)
     }
 
     pub(in crate::mandoc) fn finish_table_word_rows(
@@ -177,8 +179,9 @@ impl InlineExecutionState {
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
                 line_width_units: cell_width,
-                native_field_has_input: false,
+                slot_entry: SlotEntry::default(),
                 table_field_units: None,
+                table_leading_blanks: 0,
                 policy: crate::mandoc::inline::TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: true,

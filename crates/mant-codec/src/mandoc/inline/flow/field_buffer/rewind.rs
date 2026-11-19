@@ -133,6 +133,12 @@ impl FieldWrite {
             | Self::DrawSpaces(_)
             | Self::MoveInDrawing { .. }
             | Self::UnprovedMotion
+            | Self::KeepPlacedRetreat { .. }
+            | Self::PlacedZeroWidthRetreat { .. }
+            | Self::ReplacePlacedTail { .. }
+            | Self::RetainDeviceTail(_)
+            | Self::ReplaceLivePrefix { .. }
+            | Self::OpaqueRawSlots
             | Self::Placed { .. } => EntryWrite::Rewind,
         }
     }

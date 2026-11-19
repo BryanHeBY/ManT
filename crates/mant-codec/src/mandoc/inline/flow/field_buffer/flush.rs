@@ -142,6 +142,8 @@ impl FieldBuffer {
     pub(super) fn native_flush_scan(&self) -> Self {
         Self {
             cells: self.cells.clone(),
+            device_tail: None,
+            opaque_raw_slots: false,
             tabs: self.tabs.clone(),
             tab_offset: self.tab_offset,
             pass_tab_offset: self.pass_tab_offset,

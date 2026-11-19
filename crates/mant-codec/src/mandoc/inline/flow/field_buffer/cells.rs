@@ -98,6 +98,28 @@ pub(in crate::mandoc) enum FieldWrite {
         cell: FieldCell,
         scalars: usize,
     },
+    /// The already-written cell whose BACKBEFORE remains live at word exit.
+    KeepPlacedRetreat {
+        from_end: usize,
+    },
+    PlacedZeroWidthRetreat {
+        target_from_end: usize,
+        mark_from_end: usize,
+    },
+    ReplacePlacedTail {
+        cells: usize,
+        entry_blanks: Option<usize>,
+    },
+    RetainDeviceTail(Box<crate::mandoc::inline::flow::native_slots::DeviceTail>),
+    /// Earlier cell to new cell indices. Empty entries were overwritten.
+    ReplaceLivePrefix {
+        positions: Vec<Option<usize>>,
+        first_incoming: usize,
+        entry_blanks: usize,
+        unpublished: Option<usize>,
+    },
+    /// These compact writes do not prove individual native byte slots.
+    OpaqueRawSlots,
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or
     /// an encode1 glyph (term.c:610-638).

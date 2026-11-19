@@ -15,7 +15,7 @@ pub(in crate::mandoc::inline) struct FillSlot {
     pub(in crate::mandoc::inline) owner: Option<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Pattern {
     Plain(FieldCell),
     Overstrike {
@@ -88,24 +88,69 @@ impl Pattern {
     }
 }
 
+#[derive(Clone, Debug)]
 struct Run {
     end: usize,
     pattern: Pattern,
     owner: Option<usize>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(in crate::mandoc::inline) struct NativeSlots {
     runs: BTreeMap<usize, Run>,
     cursor: usize,
     extent: usize,
     backafter: bool,
     backbefore: bool,
+    backbefore_slot: Option<usize>,
     prior_input: bool,
     prior_edit: Option<PriorSlotEdit>,
+    /// Position of this local segment in the full native buffer, if proved.
+    origin: Option<usize>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+/// The slot suffix of the active field that has no projected author owners.
+/// Keep only this editing surface between words, never the earlier text.
+#[derive(Clone, Debug)]
+pub(in crate::mandoc) struct DeviceTail {
+    slots: NativeSlots,
+    pub(in crate::mandoc::inline) fill_cells: usize,
+}
+
+#[derive(Default)]
+pub(in crate::mandoc) struct SlotEntry {
+    pub(in crate::mandoc::inline) prior_input: bool,
+    pub(in crate::mandoc::inline) automatic_blanks: usize,
+    pub(in crate::mandoc::inline) kept_blanks: bool,
+    pub(in crate::mandoc::inline) trailing_tab_reference: bool,
+    pub(in crate::mandoc::inline) retreat_blanks: usize,
+    pub(in crate::mandoc::inline) device_tail: Option<DeviceTail>,
+    pub(in crate::mandoc::inline) prefix: Option<FieldPrefix>,
+}
+
+/// A small, uncommitted field with a proved one-to-one slot correspondence.
+/// Earlier characters remain owned by the existing projection until replay
+/// returns their surviving cell positions.
+pub(in crate::mandoc::inline) struct FieldPrefix {
+    pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
+    pub(in crate::mandoc::inline) automatic: usize,
+    pub(in crate::mandoc::inline) kept: bool,
+    pub(in crate::mandoc::inline) backbefore: bool,
+    pub(in crate::mandoc::inline) backafter: bool,
+    pub(in crate::mandoc::inline) pending_cell: Option<usize>,
+}
+
+impl DeviceTail {
+    pub(in crate::mandoc::inline) fn into_slots(self) -> NativeSlots {
+        self.slots
+    }
+
+    pub(in crate::mandoc::inline) fn has_retreated(&self) -> bool {
+        self.slots.cursor < self.slots.extent
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::mandoc::inline) enum PriorSlotEdit {
     Rewind,
     Unresolved,
@@ -115,12 +160,89 @@ impl NativeSlots {
     pub(in crate::mandoc::inline) fn after_entry(prior_input: bool) -> Self {
         Self {
             prior_input,
+            origin: (!prior_input).then_some(0),
             ..Self::default()
         }
     }
 
+    pub(in crate::mandoc::inline) fn unowned_tail(&self) -> Option<DeviceTail> {
+        // Long lines of device-only strokes stay compressed. Bound the
+        // retained run count so fragmented input cannot cause repeated
+        // copying of a growing field across term_word() calls.
+        const MAX_TAIL_RUNS: usize = 16;
+        if self.backbefore || self.backafter {
+            return None;
+        }
+        let origin = self.origin?;
+        let mut suffix = self
+            .runs
+            .iter()
+            .rev()
+            .take_while(|(_, run)| run.owner.is_none());
+        let mut runs = BTreeMap::new();
+        let captured = suffix.by_ref().take(MAX_TAIL_RUNS).collect::<Vec<_>>();
+        if suffix.next().is_some() {
+            return None;
+        }
+        let start = captured.last().map_or(self.extent, |(start, _)| **start);
+        let cursor = self.cursor.checked_sub(start)?;
+        let mut fill = Vec::new();
+        for (&at, run) in captured.into_iter().rev() {
+            run.pattern.append_fill_slots(&mut fill, run.end - at, None);
+            runs.insert(
+                at - start,
+                Run {
+                    end: run.end - start,
+                    ..run.clone()
+                },
+            );
+        }
+        Some(DeviceTail {
+            fill_cells: fill.len(),
+            slots: Self {
+                runs,
+                cursor,
+                extent: self.extent - start,
+                origin: Some(origin.saturating_add(start)),
+                prior_input: self.prior_input || start > 0,
+                ..Self::default()
+            },
+        })
+    }
+
+    pub(in crate::mandoc::inline) fn enter_with_retreat(&mut self, blanks: usize) {
+        self.advance(blanks, FieldCell::BreakableBlank, None);
+        self.backbefore = true;
+    }
+
+    pub(in crate::mandoc::inline) fn with_field_prefix(prefix: &FieldPrefix) -> Self {
+        let mut slots = Self::after_entry(false);
+        for (index, (cell, _)) in prefix.cells.iter().enumerate() {
+            slots.write_run(cell.clone(), 1, Some(index));
+        }
+        if prefix.automatic > 0 {
+            let blank = if prefix.kept {
+                FieldCell::NonBreakingBlank
+            } else {
+                FieldCell::BreakableBlank
+            };
+            for offset in 0..prefix.automatic {
+                slots.write_run(blank.clone(), 1, Some(prefix.cells.len() + offset));
+            }
+        }
+        slots.backbefore = prefix.backbefore;
+        slots.backafter = prefix.backafter;
+        slots.backbefore_slot = prefix.pending_cell;
+        slots
+    }
+
     pub(in crate::mandoc::inline) fn prior_edit(&self) -> Option<PriorSlotEdit> {
         self.prior_edit
+    }
+
+    /// Padding written by `tbl_number()` before the actual cell word.
+    pub(in crate::mandoc::inline) fn prepend_fixed_blanks(&mut self, count: usize) {
+        self.advance(count, FieldCell::NonBreakingBlank, None);
     }
 
     pub(in crate::mandoc::inline) fn arm_backafter(&mut self) {
@@ -129,6 +251,13 @@ impl NativeSlots {
 
     pub(in crate::mandoc::inline) fn backafter(&self) -> bool {
         self.backafter
+    }
+
+    pub(in crate::mandoc::inline) fn pending_owner(&self) -> Option<usize> {
+        let slot = self
+            .backbefore_slot
+            .filter(|&slot| self.backbefore && slot < self.extent)?;
+        self.runs.range(..=slot).next_back()?.1.owner
     }
 
     /// `term_word` holds both col and lastcol. Spacing advances through old
@@ -160,15 +289,16 @@ impl NativeSlots {
         let Some((length, _)) = TableColumnMetrics::motion_argument(argument) else {
             return;
         };
-        if absolute && self.prior_input {
+        if absolute && self.prior_input && self.origin.is_none() {
             // term_word() resolves absolute HORIZ against col in the whole
             // field, including writes by earlier operands (term.c:678–714).
             self.prior_edit = Some(PriorSlotEdit::Unresolved);
             return;
         }
+        let column = self.origin.unwrap_or(0).saturating_add(self.cursor);
         let relative = if absolute {
             i64::from(length)
-                .saturating_sub(i64::try_from(self.cursor.saturating_mul(EN)).unwrap_or(i64::MAX))
+                .saturating_sub(i64::try_from(column.saturating_mul(EN)).unwrap_or(i64::MAX))
         } else {
             i64::from(length)
         };
@@ -345,6 +475,7 @@ impl NativeSlots {
             self.write_run(cell, 1, owner);
         }
         self.backbefore = std::mem::take(&mut self.backafter);
+        self.backbefore_slot = self.backbefore.then(|| self.cursor.saturating_sub(1));
     }
 
     fn previous_cell(&self, cursor: usize) -> Option<&FieldCell> {

@@ -428,6 +428,80 @@ fn mdoc_ordinal_marker_still_accepts_only_the_approved_source_forms() {
 }
 
 #[test]
+fn buffered_overstrike_blank_preserves_the_next_ordinal_digit() {
+    // Fixed CVS term.c::encode() passes an overstrike blank to encode1():
+    // BACKAFTER becomes BACKBEFORE, so the digit replaces the blank. An
+    // empty overstrike writes nothing and the period still covers the digit.
+    const BLANK: &str = r"\z\o' '";
+    const EMPTY: &str = r"\z\o''";
+    for first in ["", BLANK, EMPTY] {
+        for second in ["", BLANK, EMPTY] {
+            let source = format!(
+                "{MDOC}.Bl -tag -width 6n\n.It {first}1.\nBODY-1\n.It {second}2.\nBODY-2\n.El\n.Sh END PROBE\nDone.\n"
+            );
+            let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let content = crate::json_roundtrip::json_string_roundtrip(&loaded);
+            let [block] = content.document.as_ref().unwrap().sections[1]
+                .blocks
+                .as_slice()
+            else {
+                panic!("{source}");
+            };
+            let labels = [
+                if first == EMPTY { "." } else { "1." },
+                if second == EMPTY { "." } else { "2." },
+            ];
+            let bodies = ["BODY-1", "BODY-2"];
+            if labels == ["1.", "2."] {
+                let Block::List {
+                    kind: ListKind::Ordered { start: Some(1) },
+                    items,
+                    ..
+                } = block
+                else {
+                    panic!("{source}: {block:?}");
+                };
+                assert_eq!(items.len(), bodies.len(), "{source}");
+                for (item, body) in items.iter().zip(bodies) {
+                    assert_eq!(mant_ir::inline_plain_text(paragraph(&item.blocks)), body);
+                }
+            } else {
+                let Block::DefinitionList { items, .. } = block else {
+                    panic!("{source}: {block:?}");
+                };
+                assert_eq!(items.len(), bodies.len(), "{source}");
+                for ((item, label), body) in items.iter().zip(labels).zip(bodies) {
+                    assert_eq!(mant_ir::inline_plain_text(&item.terms[0]), label);
+                    assert_eq!(
+                        mant_ir::inline_plain_text(paragraph(&item.description)),
+                        body
+                    );
+                }
+            }
+
+            let markdown = mant_codec::encode::render_markdown(&content);
+            let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            for document in [&content, &readback] {
+                let rendered = mant_render::render_query_text(document);
+                for (label, body) in labels.into_iter().zip(bodies) {
+                    let rows = rendered
+                        .lines()
+                        .filter(|row| row.contains(body))
+                        .collect::<Vec<_>>();
+                    assert_eq!(rows.len(), 1, "{source}\n{markdown}\n{rendered}");
+                    assert!(
+                        rows[0]
+                            .trim_start_matches(&[' ', '•', '-'][..])
+                            .starts_with(label),
+                        "{source}\n{markdown}\n{rendered}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn man_ordinals_keep_tp_ip_spelling_and_register_progression() {
     // pre_TP() selects the actual next-line label. pre_IP() uses the first
     // operand and leaves the current incremented counter value in the tree.

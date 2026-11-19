@@ -97,7 +97,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         WordSource::EquationOperand => false,
     };
     let line_width_units = builder.execution.horizontal_line_width_units(source);
-    let native_field_has_input = builder.execution.native_field_has_input();
+    let slot_entry = builder.execution.native_slot_entry_for_word(events);
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {
@@ -105,8 +105,9 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
             zero_advance: &mut builder.execution.zero_advance,
             defer_leading_blanks,
             line_width_units,
-            native_field_has_input,
+            slot_entry,
             table_field_units: None,
+            table_leading_blanks: 0,
             policy: font::TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: true,
@@ -166,6 +167,15 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
 }
 
 impl super::InlineExecutionState {
+    fn native_slot_entry_for_word(&self, events: &[RoffInlineEvent]) -> super::SlotEntry {
+        let capture_prefix = events.iter().any(|event| matches!(event,
+        RoffInlineEvent::HorizontalMotion { argument: Some(argument), .. } if argument.starts_with('|')
+    )) || self.zero_advance.is_armed() && events.iter().any(|event| matches!(event, RoffInlineEvent::Overstrike { .. }));
+        let leading_retreat = matches!(events.first(), Some(RoffInlineEvent::HorizontalMotion { argument, .. })
+            if negative_entry_columns(argument.as_deref()).is_some());
+        self.native_slot_entry(capture_prefix, leading_retreat)
+    }
+
     pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {
         if !source.contains("\\l") {
             return 0;

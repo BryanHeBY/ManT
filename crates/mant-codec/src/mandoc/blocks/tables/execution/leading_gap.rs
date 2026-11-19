@@ -1,6 +1,6 @@
 //! Read the first visible tbl cell's physical gap at an occupied HEAD row.
 
-use super::{Kind, Node, TableColumnMetrics, TableExecution, measure};
+use super::{Kind, Node, TableColumnMetrics, TableExecution, row_input};
 use crate::mandoc::{
     blocks::InlineTablePrefix,
     inline::{FontState, InlineExecutionState},
@@ -35,7 +35,7 @@ impl TableExecution<'_> {
         if node.flags.table_start && self.rows.iter().copied().take(2).any(row_has_left_border) {
             return true;
         }
-        let left_edge = self.rows.iter().copied().any(row_has_left_border);
+        let left_edge = self.left_edge;
         let frame = usize::from(boxed || left_edge) * 2 * EN;
         // tbl_term.c::term_tbl sets offsets including left-edge allowance
         // and all earlier columns, including cells with no visible graph.
@@ -117,7 +117,7 @@ impl TableExecution<'_> {
         .unwrap_or(prefix.min_padding > EN / 2)
     }
 
-    fn centered_prefix(
+    pub(super) fn centered_prefix(
         &self,
         node: &Node,
         mut prefix: InlineTablePrefix,
@@ -252,22 +252,12 @@ fn number_padding_writes(
     offset: usize,
     cursor: usize,
 ) -> usize {
-    // tbl_fill_string writes one complete ASCII_NBRSP per iteration, even
-    // for half an en, until its existing cursor reaches the target.
-    node.table_layout
-        .as_ref()
-        .and_then(|layout| {
-            metric
-                .number_padding(text, layout.decimal_point, measure)
-                .ok()
-        })
-        .filter(|pad| *pad != 0)
-        .map_or(0, |pad| offset.saturating_add(pad).saturating_sub(cursor))
-        .div_ceil(EN)
+    row_input::number_padding(node, metric, text, offset, cursor)
+        .unwrap_or_default()
         .saturating_mul(EN)
 }
 
-fn row_has_left_border(row: &Node) -> bool {
+pub(super) fn row_has_left_border(row: &Node) -> bool {
     row.table_layout
         .as_ref()
         .is_some_and(|layout| layout.left_border.is_some())

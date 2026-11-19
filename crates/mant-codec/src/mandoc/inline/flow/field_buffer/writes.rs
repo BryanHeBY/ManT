@@ -178,6 +178,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) {
         // A source row only inserts TABREF after native buffer writes.
         if !self.cells.is_empty() {
+            self.device_tail = None;
             self.push_cell(FieldCell::TabReference);
         }
     }
@@ -198,6 +199,8 @@ impl FieldBuffer {
     /// both by the accepted-exit and by the nbr==0 wipe).
     pub(in crate::mandoc::inline::flow) fn clear(&mut self) {
         self.cells.clear();
+        self.device_tail = None;
+        self.opaque_raw_slots = false;
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
         self.zero_width_retreats.clear();
@@ -249,6 +252,7 @@ impl FieldBuffer {
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
         self.word_first_content = None;
+        self.device_tail = None;
         let mut first_graph = true;
         let mut leading_retreat = None;
         let mut drawing_start = self.cells.len();
@@ -305,7 +309,13 @@ impl FieldBuffer {
                     self.scan = None;
                     self.clear_backtracking();
                 }
-                FieldWrite::Placed { cell, scalars } => self.push_placed(cell, *scalars),
+                FieldWrite::Placed { .. }
+                | FieldWrite::KeepPlacedRetreat { .. }
+                | FieldWrite::ReplacePlacedTail { .. }
+                | FieldWrite::RetainDeviceTail(_)
+                | FieldWrite::OpaqueRawSlots
+                | FieldWrite::ReplaceLivePrefix { .. }
+                | FieldWrite::PlacedZeroWidthRetreat { .. } => self.apply_slot_placement(write),
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
                 FieldWrite::DeferredBlanks { source, count } => {
                     let start = self.cells.len();

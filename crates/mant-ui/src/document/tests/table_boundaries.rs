@@ -7,6 +7,8 @@ use ratatui::{
     widgets::{Paragraph, Widget},
 };
 
+mod field_replay;
+
 const REVIEW_HEADER: &str = ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd exercise descriptors\n.Sh DESCRIPTION\n";
 
 fn restored(source: &str) -> ResolvedContent {

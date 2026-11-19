@@ -11,7 +11,10 @@ mod word;
 mod zero_advance;
 pub(in crate::mandoc) use zero_advance::ZeroAdvanceState;
 
-use super::flow::{field_buffer::FieldWrite, native_slots::PriorSlotEdit};
+use super::flow::{
+    field_buffer::FieldWrite,
+    native_slots::{PriorSlotEdit, SlotEntry},
+};
 use event_state::append_text_event;
 pub(in crate::mandoc::inline) use native_writes::record_native_event;
 use references::append_empty_destination;
@@ -40,9 +43,11 @@ pub(in crate::mandoc) struct TextExecutionContext<'state> {
     /// Native right margin minus offset, for lengthless drawing operands.
     pub(in crate::mandoc) line_width_units: usize,
     /// The live field already has native input to which this word can refer.
-    pub(in crate::mandoc) native_field_has_input: bool,
+    pub(in crate::mandoc) slot_entry: SlotEntry,
     /// Native tbl field bound for words that explicitly mutate device slots.
     pub(in crate::mandoc) table_field_units: Option<usize>,
+    /// Non-breaking slots written by numeric tbl alignment before this word.
+    pub(in crate::mandoc) table_leading_blanks: usize,
     pub(in crate::mandoc) policy: TextExecutionPolicy,
 }
 
@@ -80,8 +85,9 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
             zero_advance: &mut zero_advance,
             defer_leading_blanks: false,
             line_width_units: 78 * 24,
-            native_field_has_input: false,
+            slot_entry: SlotEntry::default(),
             table_field_units: None,
+            table_leading_blanks: 0,
             policy: TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: false,
@@ -202,7 +208,22 @@ fn execute_formatter_word_events(
     } else {
         None
     };
+    let mut opaque_slots = !matches!(context.font.current, Font::Regular | Font::Code);
+    let retained_previous_glyph =
+        context.slot_entry.retreat_blanks > 0 || context.zero_advance.has_pending_glyph();
+    let mut unproved_motion = false;
     for (index, event) in events.iter().enumerate() {
+        unproved_motion |= context.policy.field_authoritative
+            && retained_previous_glyph
+            && !context.zero_advance.is_armed()
+            && geometry_word::absolute_motion(event);
+        opaque_slots |= matches!(
+            event,
+            RoffInlineEvent::Font(_)
+                | RoffInlineEvent::PreviousFont
+                | RoffInlineEvent::Overstrike { .. }
+                | RoffInlineEvent::HorizontalMotion { .. }
+        );
         let write_start = word.native_writes.len();
         // These native writes have no reading-text glyph. Keep their receipt
         // separate from FieldBuffer's graph/width model. Once any column has
@@ -233,14 +254,19 @@ fn execute_formatter_word_events(
             context.font.current,
         );
     }
-    if let Some(edit) = prior_edit
-        && (edit == PriorSlotEdit::Unresolved
-            || !matches!(
-                word.native_writes.first(),
-                Some(FieldWrite::RewindWordEntry(_))
-            ))
+    if unproved_motion
+        || prior_edit.is_some_and(|edit| {
+            edit == PriorSlotEdit::Unresolved
+                || !matches!(
+                    word.native_writes.first(),
+                    Some(FieldWrite::RewindWordEntry(_))
+                )
+        })
     {
         word.native_writes.push(FieldWrite::UnprovedMotion);
+    }
+    if opaque_slots && context.policy.record_native_cells && context.policy.field_authoritative {
+        word.native_writes.push(FieldWrite::OpaqueRawSlots);
     }
     word.finish_content_prefix();
     word.flush_segment();

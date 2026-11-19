@@ -1,13 +1,19 @@
 //! Native word input, rewind execution and field-row observations.
 
+use super::super::super::NativeWordAnchor;
 use super::super::super::field_buffer::{EntryRewind, FieldBuffer, FieldWrite, WordWriteReceipt};
 use super::super::source_blanks::{remove_rewound_glyph, remove_rewound_source_blanks};
 use super::{Inline, PendingBoundary, WordPassProjection, WordProjectionPolicy};
 
+mod live_prefix;
+
 pub(super) struct ExecutedWordEntry {
     pub(super) receipt: WordWriteReceipt,
     rewind: EntryRewind,
+    prefix: live_prefix::PrefixEdits,
+    placed_entry_blanks: Option<usize>,
     pub(super) surviving_separator: usize,
+    written_separator: usize,
 }
 
 impl ExecutedWordEntry {
@@ -16,22 +22,35 @@ impl ExecutedWordEntry {
         mut writes: Vec<FieldWrite>,
         start: usize,
         separator: usize,
-        earlier: &[super::super::super::NativeWordAnchor],
+        earlier: &mut [NativeWordAnchor],
     ) -> Self {
+        let prefix = live_prefix::PrefixEdits::prepare(buffer, &writes, earlier);
+        let placed_entry_blanks = match writes.first() {
+            Some(FieldWrite::ReplacePlacedTail { entry_blanks, .. }) => *entry_blanks,
+            _ => None,
+        };
         let rewind = buffer.rewind_word_entry(&mut writes, start, |cell| {
             earlier
                 .get(earlier_word_after_cell(earlier, cell))
                 .map_or(start, |next| next.start.min(next.content))
         });
         let mut receipt = buffer.apply_writes(&writes);
+        if let Some(first) = prefix.first_incoming() {
+            receipt.first_content_cell = first;
+        }
         let retired_separator = match rewind {
             EntryRewind::Executed {
                 retired_separator, ..
             } => retired_separator,
             EntryRewind::Absent | EntryRewind::Unmodeled => 0,
         };
-        let surviving_separator =
-            buffer.surviving_word_separator(start, separator - retired_separator);
+        let surviving_separator = if prefix.first_incoming().is_some() {
+            prefix.entry_blanks
+        } else {
+            placed_entry_blanks.unwrap_or_else(|| {
+                buffer.surviving_word_separator(start, separator - retired_separator)
+            })
+        };
         if matches!(rewind, EntryRewind::Executed { .. })
             && surviving_separator > 0
             && receipt.first_content_cell < start
@@ -45,7 +64,10 @@ impl ExecutedWordEntry {
         Self {
             receipt,
             rewind,
+            prefix,
+            placed_entry_blanks,
             surviving_separator,
+            written_separator: separator,
         }
     }
 
@@ -56,6 +78,7 @@ impl ExecutedWordEntry {
         owner: &str,
         earlier: &[super::super::super::NativeWordAnchor],
     ) {
+        self.prefix.project(nodes, incoming, earlier);
         let EntryRewind::Executed {
             ref traversed_source_blanks,
             ref overwritten_glyph,
@@ -73,6 +96,12 @@ impl ExecutedWordEntry {
     }
 
     pub(super) fn record_projection(&self, projection: &mut WordPassProjection) {
+        if self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some() {
+            projection.native_separator = self.surviving_separator;
+            projection.preserve_native_separator = self.surviving_separator > 0;
+            projection.consumed_initial_separator =
+                self.written_separator > 0 && self.surviving_separator == 0;
+        }
         if let EntryRewind::Executed {
             retired_separator, ..
         } = self.rewind

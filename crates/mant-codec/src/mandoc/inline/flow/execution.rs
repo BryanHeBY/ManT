@@ -571,8 +571,34 @@ impl super::InlineExecutionState {
         }
     }
 
-    pub(in crate::mandoc::inline) fn native_field_has_input(&self) -> bool {
-        !self.word_input().0.is_empty()
+    pub(in crate::mandoc::inline) fn native_slot_entry(
+        &self,
+        capture_prefix: bool,
+        leading_retreat: bool,
+    ) -> super::native_slots::SlotEntry {
+        let (input, _) = self.word_input();
+        let boundary = self
+            .native_word_boundary
+            .unwrap_or(super::PendingBoundary::Tight);
+        let tight = boundary.is_native_tight();
+        let kept_blanks = boundary == super::PendingBoundary::Kept;
+        let automatic_blanks =
+            usize::from(!tight) * (1 + usize::from(!kept_blanks && self.native_word_sentence));
+        super::native_slots::SlotEntry {
+            prior_input: !input.is_empty(),
+            automatic_blanks,
+            kept_blanks,
+            trailing_tab_reference: input.has_live_tab_reference(),
+            retreat_blanks: if !kept_blanks && input.has_entry_retreat() {
+                automatic_blanks
+            } else {
+                0
+            },
+            device_tail: tight.then(|| input.device_tail()).flatten(),
+            prefix: (capture_prefix || leading_retreat && !input.has_entry_retreat())
+                .then(|| input.field_prefix(automatic_blanks, kept_blanks))
+                .flatten(),
+        }
     }
 
     pub(super) fn acknowledge_word_input_pass(&mut self, end: usize) {

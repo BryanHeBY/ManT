@@ -125,7 +125,7 @@ impl InlineBuilder {
             native_writes.expect("formatter word native writes"),
             native_word_start,
             separator,
-            &definition.field_word_anchors,
+            &mut definition.field_word_anchors,
         );
         entry.project_rewind(
             &mut self.nodes,
@@ -220,7 +220,7 @@ impl InlineBuilder {
             native_writes.unwrap_or_default(),
             native_word_start,
             separator,
-            &self.execution.plain_input.anchors,
+            &mut self.execution.plain_input.anchors,
         );
         entry.project_rewind(
             &mut self.nodes,

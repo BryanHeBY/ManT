@@ -3,6 +3,7 @@
 use super::{Block, lower, whole_word};
 use mant_ir::ResolvedContent;
 
+mod column_entries;
 mod movement;
 mod overstrike;
 mod slot_sequences;
