@@ -13,7 +13,13 @@ pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
     pub(in crate::mandoc::inline::flow) prefix_printed: bool,
     /// Source scalars in an accepted pass with no surviving device cell.
     /// They can be unprinted padding or covered glyphs.
-    pub(in crate::mandoc::inline::flow) omitted_scalars: Vec<std::ops::Range<usize>>,
+    pub(in crate::mandoc::inline::flow) omitted_scalars: Vec<ScalarOmission>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::mandoc::inline::flow) struct ScalarOmission {
+    pub(super) range: std::ops::Range<usize>,
+    pub(super) covered: bool,
 }
 
 impl OwnerAcceptance {
@@ -22,16 +28,21 @@ impl OwnerAcceptance {
         buffer: &super::super::field_buffer::FieldBuffer,
         start: usize,
         cell: usize,
+        covered: bool,
     ) {
         let first = self.scalars + buffer.projection_length(start, cell);
         let last = self.scalars + buffer.projection_length(start, cell + 1);
         if first < last {
             if let Some(previous) = self.omitted_scalars.last_mut()
-                && previous.end == first
+                && previous.range.end == first
+                && previous.covered == covered
             {
-                previous.end = last;
+                previous.range.end = last;
             } else {
-                self.omitted_scalars.push(first..last);
+                self.omitted_scalars.push(ScalarOmission {
+                    range: first..last,
+                    covered,
+                });
             }
         }
     }
@@ -116,7 +127,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                     .iter()
                     .take_while(|&&cell| cell < projected_end)
                 {
-                    acceptance.omit_cell(buffer, start, cell);
+                    acceptance.omit_cell(buffer, start, cell, true);
                 }
                 let source_literal = preserve_literal_whitespace
                     && anchor.projection
@@ -141,7 +152,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                         buffer.cells()[cell],
                         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
                     ) {
-                        acceptance.omit_cell(buffer, start, cell);
+                        acceptance.omit_cell(buffer, start, cell, false);
                     }
                 }
                 acceptance.scalars += buffer.projection_length(start, projected_end);

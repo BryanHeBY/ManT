@@ -13,9 +13,13 @@ pub(in crate::mandoc) fn target_key(key: impl Display) -> String {
     format!("{TARGET}{key}")
 }
 
-pub(super) fn is_target(uri: &str) -> bool {
+pub(in crate::mandoc::inline) fn is_target(uri: &str) -> bool {
     uri.starts_with(TARGET)
 }
+
+/// Mark a provisional link whose accepted glyphs include cells retired by
+/// a native overstrike. The annotation publisher consumes this private fact.
+pub(in crate::mandoc::inline) const COVERED_ANNOTATION: &str = "\0mant:annotation-covered";
 
 pub(super) fn is_annotation_marker(id: &str) -> bool {
     [ENTRY, LINK_SCOPE, END]

@@ -341,8 +341,24 @@ impl AnnotationPool {
             return false;
         }
         let mut nonempty = HashSet::new();
-        collect_nonempty(nodes, &mut nonempty);
-        prune_provisional_identities(nodes, &nonempty);
+        // Drop covered fragments before joining a source occurrence.
+        // Another empty fragment can still carry a rejected destination.
+        {
+            let destinations = self.0.borrow();
+            let drop_if_covered = |uri: &str| {
+                destinations.targets.get(uri).is_some_and(|destination| {
+                    matches!(
+                        destination.payload,
+                        DestinationPayload::Link {
+                            keep_empty: false,
+                            ..
+                        }
+                    )
+                })
+            };
+            collect_nonempty(nodes, &mut nonempty, &drop_if_covered);
+            prune_provisional_identities(nodes, &nonempty, &drop_if_covered);
+        }
         coalesce(nodes);
         if has_source_candidates {
             protect_source_label_candidates(nodes);
@@ -408,18 +424,7 @@ impl AnnotationPool {
                 // An empty provisional receipt must not precede its accepted
                 // label as another public occurrence in this same root.
                 let has_content = has_scalar(children);
-                if !has_content
-                    && (nonempty.contains(uri)
-                        || self.0.borrow().targets.get(uri).is_some_and(|destination| {
-                            matches!(
-                                destination.payload,
-                                DestinationPayload::Link {
-                                    keep_empty: false,
-                                    ..
-                                }
-                            )
-                        }))
-                {
+                if !has_content && nonempty.contains(uri) {
                     output.append(children);
                     continue;
                 }

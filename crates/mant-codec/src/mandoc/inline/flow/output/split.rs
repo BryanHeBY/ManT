@@ -1,5 +1,8 @@
 use super::super::Inline;
 
+mod accepted_owners;
+pub(in crate::mandoc::inline::flow) use accepted_owners::retain_native_field_owners;
+
 /// Split a formatter word at the row boundaries its field passes decided
 /// (term.c:220 with 205-207): each boundary is a cell offset inside the
 /// word's content; the breakable blanks immediately before it were
@@ -221,99 +224,6 @@ fn push_split_text(run: &mut String, node: &Inline, output: &mut Vec<Inline>) {
         Inline::Code { .. } => output.push(Inline::Code { value: text }),
         _ => output.push(Inline::Text { value: text }),
     }
-}
-
-/// Keep exactly each native owner's accepted scalar interval. A cached
-/// glyph can resume an earlier owner after a later owner's marker: acceptance
-/// follows that identity, never the append location. Typed links and authored
-/// anchors survive even when all their visible cells were rejected.
-pub(in crate::mandoc::inline::flow) fn retain_native_field_owners(
-    nodes: &mut Vec<Inline>,
-    limits: &std::collections::BTreeMap<String, super::native_passes::OwnerAcceptance>,
-) -> bool {
-    fn retain(
-        nodes: &mut Vec<Inline>,
-        limits: &std::collections::BTreeMap<String, super::native_passes::OwnerAcceptance>,
-        owner: &mut Option<String>,
-        prefix_printed: &mut Option<bool>,
-        positions: &mut std::collections::BTreeMap<String, (usize, usize)>,
-        found: &mut bool,
-    ) {
-        nodes.retain_mut(|node| {
-            if let Inline::Anchor { id, .. } = node {
-                if let Some(serial) = id.as_str().strip_prefix(super::INTERNAL_FIELD_PREFIX) {
-                    // Generated minbl precedes the source word marker. It is
-                    // not a scalar of the preceding word and cannot consume
-                    // that word's accepted interval. term_field()389-427 prints
-                    // it only with this next word's first accepted graph.
-                    let word = format!("{}{serial}", super::INTERNAL_FIELD_WORD);
-                    *prefix_printed =
-                        Some(limits.get(&word).is_some_and(|range| range.prefix_printed));
-                } else if limits.contains_key(id.as_str()) {
-                    *owner = Some(id.as_str().to_owned());
-                    *prefix_printed = None;
-                    *found = true;
-                }
-                return true;
-            }
-            match node {
-                Inline::Strong { children }
-                | Inline::Emphasis { children }
-                | Inline::Link { children, .. } => {
-                    retain(children, limits, owner, prefix_printed, positions, found);
-                    !children.is_empty() || matches!(node, Inline::Link { .. })
-                }
-                _ if prefix_printed.is_some() => prefix_printed == &Some(true),
-                _ if owner.is_none() => true,
-                Inline::Text { value }
-                | Inline::Code { value }
-                | Inline::Equation { value, .. } => {
-                    let owner = owner.as_ref().expect("native owner");
-                    if value.is_empty() {
-                        // An invisible native graph can own an empty physical
-                        // row witness. A glyphless Rust fragment alone cannot
-                        // establish it (term.c:340-349,475-481).
-                        return limits.get(owner).is_some_and(|range| range.native_cells);
-                    }
-                    let (position, next_omission) = positions.entry(owner.clone()).or_default();
-                    let accepted = limits.get(owner);
-                    let scalars = accepted.map_or(0, |range| range.scalars);
-                    let omissions =
-                        accepted.map_or(&[][..], |range| range.omitted_scalars.as_slice());
-                    value.retain(|_| {
-                        let scalar = *position;
-                        *position = position.saturating_add(1);
-                        while omissions
-                            .get(*next_omission)
-                            .is_some_and(|range| range.end <= scalar)
-                        {
-                            *next_omission += 1;
-                        }
-                        scalar < scalars
-                            && !omissions
-                                .get(*next_omission)
-                                .is_some_and(|range| range.contains(&scalar))
-                    });
-                    !value.is_empty()
-                }
-                Inline::LineBreak { .. } => {
-                    let owner = owner.as_ref().expect("native owner");
-                    limits.get(owner).is_some_and(|range| range.native_cells)
-                }
-                Inline::Anchor { .. } => unreachable!(),
-            }
-        });
-    }
-    let mut found = false;
-    retain(
-        nodes,
-        limits,
-        &mut None,
-        &mut None,
-        &mut std::collections::BTreeMap::new(),
-        &mut found,
-    );
-    found
 }
 
 #[cfg(test)]

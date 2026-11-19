@@ -1,7 +1,9 @@
 //! Group only accepted members of one private source occurrence.
+use crate::mandoc::inline::has_rendered_formatter_glyph;
+
 use super::{
     HashSet, Inline, LinkTarget,
-    markers::{is_annotation_marker, is_target},
+    markers::{COVERED_ANNOTATION, is_annotation_marker, is_target},
 };
 
 /// Join by source key, not destination equality. This forward pass moves
@@ -127,7 +129,22 @@ pub(super) fn compact_styles(nodes: &mut Vec<Inline>) {
     *nodes = output;
 }
 
-pub(super) fn collect_nonempty(nodes: &[Inline], output: &mut HashSet<String>) {
+fn covered_without_glyphs(
+    uri: &str,
+    title: Option<&str>,
+    children: &[Inline],
+    drop_if_covered: &impl Fn(&str) -> bool,
+) -> bool {
+    title == Some(COVERED_ANNOTATION)
+        && drop_if_covered(uri)
+        && !has_rendered_formatter_glyph(children)
+}
+
+pub(super) fn collect_nonempty(
+    nodes: &[Inline],
+    output: &mut HashSet<String>,
+    drop_if_covered: &impl Fn(&str) -> bool,
+) {
     for node in nodes {
         #[cfg(test)]
         super::super::metrics::note(|counts| counts.normalization += 1);
@@ -135,22 +152,28 @@ pub(super) fn collect_nonempty(nodes: &[Inline], output: &mut HashSet<String>) {
             Inline::Link {
                 target: LinkTarget::External { uri },
                 children,
-                ..
+                title,
             } if is_target(uri) => {
-                if has_scalar(children) {
+                if has_scalar(children)
+                    && !covered_without_glyphs(uri, title.as_deref(), children, drop_if_covered)
+                {
                     output.insert(uri.clone());
                 }
-                collect_nonempty(children, output);
+                collect_nonempty(children, output, drop_if_covered);
             }
             Inline::Link { children, .. }
             | Inline::Strong { children }
-            | Inline::Emphasis { children } => collect_nonempty(children, output),
+            | Inline::Emphasis { children } => collect_nonempty(children, output, drop_if_covered),
             _ => {}
         }
     }
 }
 
-pub(super) fn prune_provisional_identities(nodes: &mut Vec<Inline>, nonempty: &HashSet<String>) {
+pub(super) fn prune_provisional_identities(
+    nodes: &mut Vec<Inline>,
+    nonempty: &HashSet<String>,
+    drop_if_covered: &impl Fn(&str) -> bool,
+) {
     let mut output = Vec::with_capacity(nodes.len());
     for mut node in std::mem::take(nodes) {
         #[cfg(test)]
@@ -158,16 +181,18 @@ pub(super) fn prune_provisional_identities(nodes: &mut Vec<Inline>, nonempty: &H
         match &mut node {
             Inline::Link { children, .. }
             | Inline::Strong { children }
-            | Inline::Emphasis { children } => prune_provisional_identities(children, nonempty),
+            | Inline::Emphasis { children } => {
+                prune_provisional_identities(children, nonempty, drop_if_covered);
+            }
             _ => {}
         }
         if let Inline::Link {
             target: LinkTarget::External { uri },
+            title,
             children,
-            ..
         } = &mut node
-            && nonempty.contains(uri)
-            && !has_scalar(children)
+            && ((nonempty.contains(uri) && !has_scalar(children))
+                || covered_without_glyphs(uri, title.as_deref(), children, drop_if_covered))
         {
             output.append(children);
         } else {
@@ -175,6 +200,32 @@ pub(super) fn prune_provisional_identities(nodes: &mut Vec<Inline>, nonempty: &H
         }
     }
     *nodes = output;
+}
+
+#[cfg(test)]
+#[test]
+fn covered_members_leave_a_separate_empty_destination_intact() {
+    let uri = super::markers::target_key(0);
+    let fragment = |title, children| Inline::Link {
+        target: LinkTarget::External { uri: uri.clone() },
+        title,
+        children,
+    };
+    let rejected = fragment(None, Vec::new());
+    let covered = fragment(
+        Some(COVERED_ANNOTATION.to_owned()),
+        vec![Inline::anchor("witness"), Inline::line_break()],
+    );
+    let mut nodes = vec![rejected.clone(), covered];
+    let drop_if_covered = |key: &str| key == uri;
+    let mut nonempty = HashSet::new();
+    collect_nonempty(&nodes, &mut nonempty, &drop_if_covered);
+    assert!(nonempty.is_empty());
+    prune_provisional_identities(&mut nodes, &nonempty, &drop_if_covered);
+    assert_eq!(
+        nodes,
+        [rejected, Inline::anchor("witness"), Inline::line_break()]
+    );
 }
 
 #[cfg(test)]

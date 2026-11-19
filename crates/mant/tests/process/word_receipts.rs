@@ -869,3 +869,24 @@ fn linked_annotations_consume_the_same_native_cell_as_other_ignored_escapes() {
         }
     }
 }
+
+#[test]
+fn covered_tty_labels_leave_native_hard_lines_outside_the_link() {
+    // term.c::term_field emits the hard line before the next pass writes
+    // X, backspace, and YTAIL. The accepted replacement owns the glyph.
+    let source = r#".TH CHECK 1 "November 19, 2026"
+.SH NAME
+check \- test
+.SH DESCRIPTION
+Q\o'ab'\p LEFT\X'tty: link https://x.io'\p \zX\X'tty: link'YTAIL
+TAILWORD
+.PP
+STOP
+"#;
+    assert_readbacks(source, "Qb\nLEFT\nYTAIL TAILWORD\n\nSTOP", None);
+    assert_eq!(document_links(source, "roff"), []);
+    for addressable in [false, true] {
+        let markdown = render(source, "roff", "markdown", "never", addressable);
+        assert_eq!(document_links(&markdown, "markdown"), []);
+    }
+}
