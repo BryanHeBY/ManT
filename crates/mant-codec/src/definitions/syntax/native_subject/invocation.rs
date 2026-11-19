@@ -6,6 +6,9 @@ use crate::definitions::{
 };
 use std::ops::Range;
 
+mod tail;
+use tail::{InvocationTail, starts_program};
+
 /// Read the leading Nm and any consecutive Cm/Ic words in one visible
 /// prefix, stopping before arguments or a new physical line.
 pub(super) fn program_name(
@@ -65,10 +68,9 @@ pub(super) fn program_name(
     // native element. Recognize their argument syntax across all segments.
     let prefix = commands::styled_command_prefix(&text[span.start..end]);
     let remaining = span.start + prefix.len()..span.end;
-    if program_pipeline(text, remaining, tail)
-        || prefix.len() == name.len()
-            && !is_program_tail(text, program_end..span.end, tail, allow_bare)
-    {
+    let bare = prefix.len() == name.len();
+    let syntax = InvocationTail::read(text, remaining, tail, bare);
+    if syntax.pipeline || bare && !syntax.proves_arguments(allow_bare) {
         return None;
     }
     let end = span.start + prefix.len();
@@ -79,155 +81,6 @@ pub(super) fn program_name(
             character.is_whitespace() || matches!(character, '[' | '<' | '{' | '(')
         }))
     .then(|| RecognizedName::contiguous(prefix, span.start))
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum InvocationGroup {
-    Native(u32),
-    Authored(char),
-}
-
-impl InvocationGroup {
-    fn opening(role: NativeOperandRole) -> Option<Self> {
-        match role {
-            NativeOperandRole::EnclosureStart { body, .. } => Some(Self::Native(body)),
-            NativeOperandRole::LiteralDelimiter { glyph: '(', .. } => Some(Self::Authored(')')),
-            NativeOperandRole::LiteralDelimiter { glyph: '[', .. } => Some(Self::Authored(']')),
-            _ => None,
-        }
-    }
-
-    fn closing(role: NativeOperandRole) -> Option<Self> {
-        match role {
-            NativeOperandRole::EnclosureEnd(body) => Some(Self::Native(body)),
-            NativeOperandRole::LiteralDelimiter {
-                glyph: glyph @ (')' | ']'),
-                ..
-            } => Some(Self::Authored(glyph)),
-            _ => None,
-        }
-    }
-}
-
-fn starts_program(text: &str, mut at: usize, end: usize, operands: &[NativeOperand]) -> bool {
-    for operand in operands.iter().take_while(|word| word.bytes.start < end) {
-        if !text
-            .get(at..operand.bytes.start)
-            .is_some_and(|gap| gap.trim().is_empty())
-        {
-            return false;
-        }
-        if InvocationGroup::opening(operand.role).is_none() && !operand.role.display_only() {
-            return matches!(operand.role, NativeOperandRole::ProgramName(_));
-        }
-        at = operand.bytes.end;
-    }
-    false
-}
-
-fn program_pipeline(text: &str, span: Range<usize>, operands: &[NativeOperand]) -> bool {
-    let mut groups = Vec::new();
-    for (index, operand) in operands
-        .iter()
-        .enumerate()
-        .take_while(|(_, op)| op.bytes.start < span.end)
-    {
-        if let Some(opening) = InvocationGroup::opening(operand.role) {
-            groups.push(opening);
-        } else if let Some(closing) = InvocationGroup::closing(operand.role) {
-            if groups.pop() != Some(closing) {
-                return true;
-            }
-        } else if groups.is_empty()
-            && operand.bytes.start >= span.start
-            && matches!(
-                operand.role.declaration_delimiter(),
-                NativeOperandRole::PipeDelimiter(_)
-            )
-            && starts_program(text, operand.bytes.end, span.end, &operands[index + 1..])
-        {
-            return true;
-        }
-    }
-    !groups.is_empty()
-}
-
-/// Nm can also name the subject of a manual. A standalone invocation is
-/// either bare or starts its tail with an actual argument, flag, or a
-/// native enclosure containing such a choice. Ordinary prose is not proof.
-fn is_program_tail(
-    text: &str,
-    span: Range<usize>,
-    operands: &[NativeOperand],
-    allow_bare: bool,
-) -> bool {
-    let rest = text[span.clone()].trim_start();
-    if rest.is_empty() {
-        // A bare Nm can declare a whole head or an explicit list of names.
-        // Alongside a different
-        // declaration (e.g. Ev HOME , Nm FILES) it can also be a reference.
-        return allow_bare;
-    }
-    let start = offset(text, rest);
-    let mut enclosures = Vec::new();
-    let mut argument = false;
-    for operand in operands
-        .iter()
-        .take_while(|operand| operand.bytes.start < span.end)
-    {
-        if !argument && enclosures.is_empty() && !operand.bytes.contains(&start) {
-            return false;
-        }
-        match operand.role {
-            NativeOperandRole::EnclosureStart { body, parent } => {
-                if parent != enclosures.last().map(|&(body, _)| body) {
-                    return false;
-                }
-                // Typewriter quotes in a native usage label can explicitly
-                // delimit an argument (e.g. Qo reason Qc in atf-sh-api).
-                enclosures.push((body, text[operand.bytes.clone()].trim() == "\""));
-            }
-            NativeOperandRole::EnclosureEnd(body) => {
-                let Some((opening, proved)) = enclosures.pop() else {
-                    return false;
-                };
-                if opening != body {
-                    return false;
-                }
-                if proved {
-                    add_argument(&mut argument, &mut enclosures);
-                } else if !argument && enclosures.is_empty() {
-                    return false;
-                }
-            }
-            NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder => {
-                add_argument(&mut argument, &mut enclosures);
-            }
-            NativeOperandRole::Command if !enclosures.is_empty() => {
-                add_argument(&mut argument, &mut enclosures);
-            }
-            // An intervening option keeps a later subcommand out of the
-            // contiguous name. Its presence cannot prove a bare Nm instead.
-            NativeOperandRole::Command
-            | NativeOperandRole::ProgramName(_)
-            | NativeOperandRole::ClippedInvocation
-                if enclosures.is_empty() =>
-            {
-                return false;
-            }
-            _ if !argument && enclosures.is_empty() => return false,
-            _ => {}
-        }
-    }
-    argument && enclosures.is_empty()
-}
-
-fn add_argument(argument: &mut bool, enclosures: &mut [(u32, bool)]) {
-    if let Some((_, proved)) = enclosures.last_mut() {
-        *proved = true;
-    } else {
-        *argument = true;
-    }
 }
 
 pub(super) fn assignment_operator(text: &str) -> Option<usize> {

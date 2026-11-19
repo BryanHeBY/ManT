@@ -339,6 +339,69 @@ fn program_pipes_respect_authored_and_generated_argument_groups() {
 }
 
 #[test]
+fn authored_group_edges_preserve_qualified_program_names_and_aliases() {
+    // CVS mdoc_isdelim() marks bare punctuation, while mdoc_macro.c::dword
+    // can leave an escaped edge or an opening bracket inside Ar. The
+    // accepted spelling and argument roles still prove the same invocation.
+    for section in ["COMMANDS", "DESCRIPTION"] {
+        for (head, form, names) in [
+            (
+                r"Nm alpha Cm dump Ar path Ns [ Ar index ]",
+                "alpha dump path[index]",
+                &["alpha dump"][..],
+            ),
+            (
+                r"Nm alpha Cm dump Ar path Ns \&[ Ns Ar index ]",
+                "alpha dump path[index]",
+                &["alpha dump"][..],
+            ),
+            (
+                r"Nm alpha Cm dump Ar path Ns [ Ar index Ns \&]",
+                "alpha dump path[index]",
+                &["alpha dump"][..],
+            ),
+            (
+                r"Nm alpha Cm dump Ar path[ Ns Ar index ]",
+                "alpha dump path[index]",
+                &["alpha dump"][..],
+            ),
+            ("Nm alpha [ Ar file ]", "alpha [file]", &["alpha"][..]),
+            ("Nm alpha Oo Ar file Oc", "alpha [file]", &["alpha"][..]),
+            ("Nm alpha ( Fl a )", "alpha (-a)", &["alpha"][..]),
+            ("Nm alpha [ No filename ]", "alpha [filename]", &[][..]),
+            (
+                r"Nm alpha Cm dump [ Ar a , Nm inner Ns \&] , Nm gamma",
+                "alpha dump [a, inner], gamma",
+                &["alpha dump", "gamma"][..],
+            ),
+            (
+                r"Nm alpha Cm dump [ Ar a | Nm inner Ns \&]",
+                "alpha dump [a | inner]",
+                &["alpha dump"][..],
+            ),
+            (
+                r"Nm alpha Cm dump [ Ar a | Nm inner Ns \&] | Nm beta Cm read",
+                "alpha dump [a | inner] | beta read",
+                &[][..],
+            ),
+            (
+                "Nm alpha Cm dump [ Ar a | Nm inner",
+                "alpha dump [a | inner",
+                &[][..],
+            ),
+        ] {
+            for head in [head.to_owned(), format!("Xo\n.{head}\n.Xc")] {
+                let non_names = ["index", "file", "filename", "inner", "beta read"]
+                    .into_iter()
+                    .filter(|operand| form.contains(operand))
+                    .collect::<Vec<_>>();
+                check(&source(section, &head), form, names, &non_names, BODY, 9);
+            }
+        }
+    }
+}
+
+#[test]
 fn quoted_arguments_and_reopened_flags_keep_their_invocation_owner() {
     // mdoc_macro.c::in_line reopens Fl after its comma. The reopened
     // operand looks identical to a second authored Fl in the terminal.
