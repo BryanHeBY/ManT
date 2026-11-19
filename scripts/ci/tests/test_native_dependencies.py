@@ -17,7 +17,7 @@ SCRIPT = ROOT / "scripts/ci/install-ci-native-dependencies.sh"
 @unittest.skipUnless(os.name == "posix", "Unix dependency setup")
 class NativeDependencyTests(unittest.TestCase):
     def run_setup(self, *, primary_failure="", fallback_failure=False,
-                  ready=False, architecture="amd64", distro="ubuntu", upstream_cvs=False):
+                  ready=False, architecture="amd64", distro="ubuntu"):
         with tempfile.TemporaryDirectory(prefix="mant native setup ") as directory:
             root = Path(directory)
             tools = root / "tools"
@@ -70,14 +70,9 @@ if not sources and phase == os.environ["MANT_TEST_PRIMARY_FAIL"]:
     sys.exit(124)
 if phase == "install":
     (root / "installed").touch()
-    if "cvs" in args:
-        client = root / "tools" / "cvs"
-        client.write_text("#!/bin/sh\\nexit 0\\n")
-        client.chmod(0o755)
 ''')
             result = subprocess.run(
-                ["bash", str(SCRIPT), *(["--upstream-cvs"] if upstream_cvs else [])],
-                capture_output=True, text=True, timeout=15,
+                ["bash", str(SCRIPT)], capture_output=True, text=True, timeout=15,
                 env={**os.environ, "PATH": str(tools),
                      "TMPDIR": str(scratch), "MANT_TEST_STATE": str(root),
                      "MANT_TEST_ARCH": architecture,
@@ -103,14 +98,6 @@ if phase == "install":
                          [("update", False), ("install", False)])
         self.assertNotIn("cvs", calls[-1]["args"])
         self.assertTrue(installed)
-
-    def test_upstream_verification_installs_only_missing_cvs_from_cached_index(self):
-        result, calls, installed = self.run_setup(ready=True, upstream_cvs=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(installed)
-        self.assertEqual([(c["phase"], c["fallback"]) for c in calls], [("install", False)])
-        self.assertEqual(calls[0]["args"][-1], "cvs")
-        self.assertNotIn("zlib1g-dev", calls[0]["args"])
 
     def test_update_timeout_uses_signed_https_without_installing_from_stale_indexes(self):
         result, calls, installed = self.run_setup(primary_failure="update")

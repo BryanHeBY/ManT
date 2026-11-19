@@ -121,7 +121,10 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: bash scripts/ci/install-ci-native-dependencies.sh --upstream-cvs
+        run: bash scripts/ci/install-ci-native-dependencies.sh
+
+      - name: Verify vendored libmandoc against the pinned CVS manifest
+        run: bash crates/libmandoc-rs/scripts/sync-vendor --verify --offline-cvs
 
       - name: Install stable Rust toolchain
         run: |
@@ -146,9 +149,6 @@ jobs:
       # build the optimized binary after proving this exact SHA passed CI.
       - name: Build and test
         run: bash scripts/check.sh --build-profile debug
-
-      - name: Verify vendored libmandoc matches upstream
-        run: bash crates/libmandoc-rs/scripts/sync-vendor --verify
 
   macos-native:
     # Guards the checked-in macOS C configuration (config/macos.h and its

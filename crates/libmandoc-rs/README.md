@@ -495,8 +495,9 @@ working in `crates/libmandoc-rs/`:
 
 ```sh
 ./scripts/sync-vendor           # download, patch, replace vendor/
-./scripts/sync-vendor --verify  # CI: check vendor/ matches upstream + patches
+./scripts/sync-vendor --verify  # check vendor/ using a fresh upstream checkout
 ./scripts/sync-vendor --verify --archive /path/to/upstream.tar.gz  # offline
+./scripts/sync-vendor --verify --offline-cvs  # CI: verify the shipping-byte lock
 ```
 
 The vendor synchronizer reads one `upstream/SOURCE` and one ordered
@@ -505,6 +506,12 @@ version. `kind = cvs` instead locks the official CVS root, module, UTC checkout
 date, archive root, version label and a checksummed file manifest. Manifest rows
 are tab-separated `sha256`, CVS `revision`, and relative `path`; they cover the
 complete vendored source subset, excluding `regress/` and CVS administration.
+
+The offline CI check reverses the patch series in a scratch copy. It checks
+the complete shipping file inventory and every recovered byte against that
+manifest, then replays the patches forward and compares the checked-in
+result. Use a live checkout to check CVS revision metadata, or the locked
+pristine archive to build an independent behavioral oracle.
 The version label selects `vendor/mandoc-<version>/`; changing upstream baselines
 updates the same source declaration and patch series, with previous states kept
 in Git rather than parallel baseline directories.

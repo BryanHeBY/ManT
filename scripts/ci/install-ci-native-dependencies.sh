@@ -3,18 +3,10 @@
 
 set -euo pipefail
 
-need_cvs=false
-if [[ ${1:-} == --upstream-cvs && $# == 1 ]]; then
-  need_cvs=true
-elif (( $# != 0 )); then
-  echo "usage: $0 [--upstream-cvs]" >&2
-  exit 2
-fi
-
 probe_dir=$(mktemp -d)
 trap 'rm -rf -- "$probe_dir"' EXIT
 
-native_build_available() {
+native_dependencies_available() {
   command -v cc >/dev/null 2>&1 &&
     command -v ar >/dev/null 2>&1 &&
     printf '%s\n' \
@@ -23,23 +15,14 @@ native_build_available() {
       cc -x c - -o "$probe_dir/zlib-probe" -lz >/dev/null 2>&1
 }
 
-native_dependencies_available() {
-  native_build_available && { ! $need_cvs || command -v cvs >/dev/null 2>&1; }
-}
-
 if native_dependencies_available; then
   echo "Linux native build dependencies are already available"
   exit 0
 fi
 
-packages=()
-if ! native_build_available; then
-  packages+=(build-essential zlib1g-dev)
-fi
-if $need_cvs && ! command -v cvs >/dev/null 2>&1; then
-  packages+=(cvs)
-fi
-echo "Linux dependencies need installation: ${packages[*]}"
+# The offline CVS snapshot tests supply their own client. Maintainers who
+# fetch a new upstream snapshot install the real client separately.
+echo "Linux C compiler, archiver, or zlib development files need installation"
 
 if ! command -v apt-get >/dev/null 2>&1 || ! command -v sudo >/dev/null 2>&1; then
   echo "Linux native build dependencies are missing and apt-get is unavailable" >&2
@@ -60,15 +43,10 @@ apt_get=(
 install_native_packages() {
   timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" "$@" update &&
     timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" "$@" install \
-      --yes --no-install-recommends "${packages[@]}"
+      --yes --no-install-recommends build-essential zlib1g-dev
 }
 
-install_from_cached_cvs_index() {
-  [[ ${packages[*]} == cvs ]] &&
-    timeout --signal=TERM --kill-after=10s 45s "${apt_get[@]}" install +      --yes --no-install-recommends cvs
-}
-
-if ! install_from_cached_cvs_index && ! install_native_packages; then
+if ! install_native_packages; then
   # A mirror-list source can keep selecting a stalled Azure HTTP endpoint even
   # after APT retries. Scope the fallback to these commands: do not rewrite the
   # runner's /etc sources, and retain Ubuntu archive signature verification.
@@ -102,6 +80,6 @@ if ! install_from_cached_cvs_index && ! install_native_packages; then
 fi
 
 if ! native_dependencies_available; then
-  echo "installed packages did not provide all requested dependencies" >&2
+  echo "installed packages did not provide a working C toolchain and zlib" >&2
   exit 1
 fi

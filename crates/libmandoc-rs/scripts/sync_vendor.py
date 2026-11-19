@@ -189,18 +189,20 @@ def verify_cvs_tree(root, entries):
                 raise ValueError(f"CVS revision mismatch: {name}")
 
 
+def locked_cvs_files(root, source):
+    for name_key, hash_key in (
+        ("inventory", "inventory_sha256"),
+        ("regress_manifest", "regress_manifest_sha256"),
+    ):
+        if name_key in source:
+            evidence = root / "upstream" / source[name_key]
+            if not evidence.is_file() or evidence.is_symlink() or sha256(evidence) != source[hash_key]:
+                raise ValueError(f"CVS {name_key} checksum mismatch")
+    return read_manifest(root / "upstream" / source["manifest"], source["manifest_sha256"])
+
+
 def acquire(root, source, directory, archive):
-    entries = None
-    if source["kind"] == "cvs":
-        for name_key, hash_key in (
-            ("inventory", "inventory_sha256"),
-            ("regress_manifest", "regress_manifest_sha256"),
-        ):
-            if name_key in source:
-                evidence = root / "upstream" / source[name_key]
-                if not evidence.is_file() or evidence.is_symlink() or sha256(evidence) != source[hash_key]:
-                    raise ValueError(f"CVS {name_key} checksum mismatch")
-        entries = read_manifest(root / "upstream" / source["manifest"], source["manifest_sha256"])
+    entries = locked_cvs_files(root, source) if source["kind"] == "cvs" else None
     if archive is not None:
         expected_archive = source.get("archive_sha256", source.get("sha256"))
         if expected_archive is not None and sha256(archive) != expected_archive:
@@ -223,16 +225,19 @@ def acquire(root, source, directory, archive):
         verify_cvs_tree(unpacked, entries)
     # Copy only the shipping source subset. This also removes CVS metadata before
     # patches run, and makes archive and live-checkout replay identical.
-    staged = directory / "patched"
+    return stage_shipping_files(unpacked, directory / "patched")
+
+
+def stage_shipping_files(tree, staged):
     staged.mkdir()
-    for name, path in source_files(unpacked).items():
+    for name, path in source_files(tree).items():
         destination = staged / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
     return staged
 
 
-def apply_patches(root, staged):
+def apply_patches(root, staged, *, reverse=False):
     patches = root / "patches"
     names = []
     seen = set()
@@ -246,11 +251,24 @@ def apply_patches(root, staged):
         seen.add(name)
         names.append(name)
     # Validate the complete ordering before modifying the staged source tree.
+    if reverse:
+        names.reverse()
+    operation = "--reverse" if reverse else "--forward"
     for name in names:
-        print(f"[sync-vendor] applying {name}", flush=True)
+        print(f"[sync-vendor] {'reversing' if reverse else 'applying'} {name}", flush=True)
         with (patches / name).open("rb") as patch:
-            subprocess.run(["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-d", str(staged)],
+            subprocess.run(["patch", "--batch", operation, "--fuzz=0", "-p1", "-d", str(staged)],
                            stdin=patch, check=True)
+
+
+def recover_pinned_shipping_files(root, source, directory, destination):
+    # Authenticate each recovered upstream byte against the independent
+    # freeze manifest before using this scratch tree for forward replay.
+    entries = locked_cvs_files(root, source)
+    staged = stage_shipping_files(destination, directory / "shipping")
+    apply_patches(root, staged, reverse=True)
+    verify_cvs_tree(staged, entries)
+    return staged
 
 
 def compare_trees(left, right):
@@ -283,17 +301,25 @@ def install_tree(staged, destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="compare without modifying vendor")
-    parser.add_argument("--archive", type=Path, help="use a local locked upstream archive without network")
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("--archive", type=Path, help="use a local locked upstream archive without network")
+    inputs.add_argument("--offline-cvs", action="store_true",
+                        help="verify shipping bytes against the CVS lock without a live checkout")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     source = read_source(root / "upstream" / "SOURCE")
     destination = root / "vendor" / ("mandoc-" + source["version"])
+    if args.offline_cvs and (not args.verify or source["kind"] != "cvs"):
+        parser.error("--offline-cvs requires --verify and a CVS source lock")
+    if args.verify and (not destination.is_dir() or destination.is_symlink()):
+        raise ValueError(f"missing or invalid vendor directory: {destination}")
     with tempfile.TemporaryDirectory(prefix="mant-sync-vendor-") as directory:
-        staged = acquire(root, source, Path(directory), args.archive)
+        if args.offline_cvs:
+            staged = recover_pinned_shipping_files(root, source, Path(directory), destination)
+        else:
+            staged = acquire(root, source, Path(directory), args.archive)
         apply_patches(root, staged)
         if args.verify:
-            if not destination.is_dir() or destination.is_symlink():
-                raise ValueError(f"missing or invalid vendor directory: {destination}")
             differences = compare_trees(staged, destination)
             if differences:
                 raise ValueError("vendor differs from upstream + patches: " + ", ".join(differences))

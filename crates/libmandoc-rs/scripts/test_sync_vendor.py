@@ -220,6 +220,39 @@ class VendorReplayTests(unittest.TestCase):
         self.assertEqual((staged / "source.c").read_bytes(), b"before")
 
     @unittest.skipUnless(shutil.which("patch"), "patch utility unavailable")
+    def test_offline_verification_authenticates_recovered_shipping_bytes(self):
+        tree, _, source = self.cvs_source()
+        snapshot = self.root / "vendor"
+        shutil.copytree(tree, snapshot)
+        (snapshot / "config.h").write_bytes(b"second\n")
+        patches = self.root / "patches"
+        (patches / "series").write_text("create.patch\nchange.patch\n")
+        (patches / "create.patch").write_text(
+            "--- /dev/null\n+++ b/config.h\n@@ -0,0 +1 @@\n+first\n",
+            encoding="utf-8", newline="\n",
+        )
+        (patches / "change.patch").write_text(
+            "--- a/config.h\n+++ b/config.h\n@@ -1 +1 @@\n-first\n+second\n",
+            encoding="utf-8", newline="\n",
+        )
+        work = self.root / "work"
+        work.mkdir()
+        staged = vendor.recover_pinned_shipping_files(self.root, source, work, snapshot)
+        self.assertEqual(vendor.compare_trees(staged, tree), [])
+        self.assertEqual((snapshot / "config.h").read_bytes(), b"second\n")
+        vendor.apply_patches(self.root, staged)
+        self.assertEqual(vendor.compare_trees(staged, snapshot), [])
+
+        # A source file untouched by patches must still match the original lock.
+        (snapshot / "source.c").write_bytes(b"corrupted")
+        work = self.root / "corrupt"
+        work.mkdir()
+        with self.assertRaisesRegex(ValueError, "CVS content checksum mismatch: source.c"):
+            vendor.recover_pinned_shipping_files(self.root, source, work, snapshot)
+        self.assertEqual((snapshot / "source.c").read_bytes(), b"corrupted")
+        self.assertEqual((snapshot / "config.h").read_bytes(), b"second\n")
+
+    @unittest.skipUnless(shutil.which("patch"), "patch utility unavailable")
     def test_already_applied_patch_fails_without_reversing_source(self):
         staged = self.root / "staged"
         staged.mkdir()
