@@ -324,9 +324,7 @@ pub(in crate::mandoc::inline) fn isolated_passes(
             // A word-end marker can sit in the skipped device advance at
             // the head of the next pass. Its boundary still separates the
             // two reading runs even though term_fill stopped on width.
-            let leading_marker = (pass.end..next.end)
-                .take_while(|&cell| field.projection_length(next.start, cell.max(next.start)) == 0)
-                .any(|cell| field.cells[cell] == FieldCell::BreakMarker);
+            let leading_marker = device_advance_before_word_end(&field, pass.end..next.end);
             pass.boundary == FillBoundary::WordEndBreak
                 || split_retreat
                 || before_device_only_row
@@ -341,4 +339,19 @@ pub(in crate::mandoc::inline) fn isolated_passes(
         }
     }
     IsolatedPasses { ranges, covered }
+}
+
+fn device_advance_before_word_end(field: &FieldBuffer, interval: Range<usize>) -> bool {
+    let mut marker = false;
+    let mut device_graph = false;
+    for cell in interval {
+        if field.projection_length(cell, cell + 1) != 0 {
+            break;
+        }
+        marker |= field.cells[cell] == FieldCell::BreakMarker;
+        device_graph |= matches!(field.cells[cell], FieldCell::Graph { width: 1.., .. });
+    }
+    // term_fill() may admit a separately drawn prefix on the new line.
+    // A marker before an ordinary word only arms that word's own end.
+    marker && device_graph
 }
