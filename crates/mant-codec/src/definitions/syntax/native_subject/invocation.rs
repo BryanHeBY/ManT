@@ -10,7 +10,7 @@ pub(super) fn program_name(
     text: &str,
     span: &Range<usize>,
     operands: &[NativeOperand],
-    allow_standalone: bool,
+    allow_bare: bool,
 ) -> Option<RecognizedName> {
     let operands = &operands[operand_cursor(operands, span.start)..];
     let (program, tail) = operands.split_first()?;
@@ -44,7 +44,7 @@ pub(super) fn program_name(
     // native element. Recognize their argument syntax across all segments.
     let prefix = commands::styled_command_prefix(&text[span.start..end]);
     if prefix.len() == name.len()
-        && (!allow_standalone || has_other_invocation_words(tail, span.end))
+        && !is_program_tail(text, program.bytes.end..span.end, tail, allow_bare)
     {
         return None;
     }
@@ -58,30 +58,61 @@ pub(super) fn program_name(
     .then(|| RecognizedName::contiguous(prefix, span.start))
 }
 
-fn has_other_invocation_words(operands: &[NativeOperand], end: usize) -> bool {
+/// Nm can also name the subject of a manual. A standalone invocation is
+/// either bare or starts its tail with an actual argument, flag, or a
+/// native enclosure containing such a choice. Ordinary prose is not proof.
+fn is_program_tail(
+    text: &str,
+    span: Range<usize>,
+    operands: &[NativeOperand],
+    allow_bare: bool,
+) -> bool {
+    let rest = text[span.clone()].trim_start();
+    if rest.is_empty() {
+        // A bare Nm can declare a whole head or an explicit list of names.
+        // Alongside a different
+        // declaration (e.g. Ev HOME , Nm FILES) it can also be a reference.
+        return allow_bare;
+    }
+    let start = offset(text, rest);
     let mut enclosure = None;
+    let mut argument = false;
     for operand in operands
         .iter()
-        .take_while(|operand| operand.bytes.start < end)
+        .take_while(|operand| operand.bytes.start < span.end)
     {
+        if !argument && enclosure.is_none() && !operand.bytes.contains(&start) {
+            return false;
+        }
         match operand.role {
-            NativeOperandRole::EnclosureStart { body, parent: None } => enclosure = Some(body),
-            NativeOperandRole::EnclosureEnd(body) if enclosure == Some(body) => enclosure = None,
-            // A source form like `Nm Oo Fl d Oc Cm run` contains a real
-            // command with a noncontiguous spelling. Nm alone is not proof
-            // of a separate standalone program here. Commands inside an
-            // executed Brq/Op describe choices and do not have that effect.
+            NativeOperandRole::EnclosureStart { body, parent: None } => {
+                enclosure = Some(body);
+                // Typewriter quotes in a native usage label can explicitly
+                // delimit an argument (e.g. Qo reason Qc in atf-sh-api).
+                argument |= text[operand.bytes.clone()].trim() == "\"";
+            }
+            NativeOperandRole::EnclosureEnd(body) if enclosure == Some(body) => {
+                if !argument {
+                    return false;
+                }
+                enclosure = None;
+            }
+            NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder => argument = true,
+            NativeOperandRole::Command if enclosure.is_some() => argument = true,
+            // An intervening option keeps a later subcommand out of the
+            // contiguous name. Its presence cannot prove a bare Nm instead.
             NativeOperandRole::Command
             | NativeOperandRole::ProgramName
             | NativeOperandRole::ClippedInvocation
                 if enclosure.is_none() =>
             {
-                return true;
+                return false;
             }
+            _ if !argument && enclosure.is_none() => return false,
             _ => {}
         }
     }
-    false
+    argument
 }
 
 pub(super) fn assignment_operator(text: &str) -> Option<usize> {
@@ -170,7 +201,12 @@ impl<'a> Syntax<'a> {
                     NativeOperandRole::PipeDelimiter(_)
                 )
             });
+        let reopened_flag = separator == b','
+            && operand_at(operands, at).is_some_and(|operand| {
+                matches!(operand.role, NativeOperandRole::FlReopening { .. })
+            });
         let argument_separator = bare_pipe
+            || reopened_flag
             || separator == b','
                 && !begins_owner
                 && next.is_none_or(|next| !next.role.is_invocation_name());
@@ -205,6 +241,10 @@ impl<'a> Syntax<'a> {
                         );
                 }
                 *has_argument
+                    || bare_pipe
+                        && operand_at(operands, prefix.first)
+                            .is_some_and(|word| word.role == NativeOperandRole::ProgramName)
+                        && next.is_some_and(|word| word.role == NativeOperandRole::ProgramName)
                     || bare_pipe
                         && !begins_owner
                         && operand_pipe(text, operands, prefix.first, at, next)

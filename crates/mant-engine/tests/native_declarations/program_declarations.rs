@@ -196,3 +196,168 @@ fn assignment_groups_bind_independent_native_operands_without_unrelated_siblings
         }
     }
 }
+
+#[test]
+fn program_groups_require_invocation_evidence_at_their_own_scope() {
+    // mdoc_macro.c::blk_part_imp keeps the remaining line inside Op/Brq.
+    // With explicit Oo/Oc or Bro/Brc the following comma belongs to It.
+    for section in ["COMMANDS", "DESCRIPTION"] {
+        for (head, form, names, non_names) in [
+            (
+                "Nm foo Ar arg , Dv SIGINT",
+                "foo arg, SIGINT",
+                &["foo", "SIGINT"][..],
+                &["arg"][..],
+            ),
+            (
+                "Dv SIGINT , Nm foo Ar arg",
+                "SIGINT, foo arg",
+                &["SIGINT", "foo"],
+                &["arg"],
+            ),
+            (
+                "Nm foo Oo Fl a Oc , Nm bar Op Fl b",
+                "foo [-a], bar [-b]",
+                &["foo", "bar"],
+                &["-a", "-b"],
+            ),
+            (
+                "Nm foo Op Fl a , Nm bar Op Fl b",
+                "foo [-a, bar [-b]]",
+                &["foo"],
+                &["bar", "-b"],
+            ),
+            (
+                "Nm foo Bro Cm c | Cm x Brc , Dv SIGINT",
+                "foo {c | x}, SIGINT",
+                &["foo", "SIGINT"],
+                &["c", "x"],
+            ),
+            (
+                "Nm foo No version , Nm bar Ar arg",
+                "foo version, bar arg",
+                &["bar"],
+                &["foo", "version"],
+            ),
+            (
+                "Nm foo Ar arg , Nm bar No version",
+                "foo arg, bar version",
+                &["foo"],
+                &["bar", "version"],
+            ),
+            ("Nm a , Nm b", "a, b", &["a", "b"], &[]),
+            ("Nm foo | Nm bar", "foo | bar", &[], &["foo", "bar"]),
+            (
+                "Nm tool Ar arg | Nm next Ar arg",
+                "tool arg | next arg",
+                &[],
+                &["tool", "next"],
+            ),
+            (
+                "Nm HAMMER No version 2-",
+                "HAMMER version 2-",
+                &[],
+                &["HAMMER"],
+            ),
+            (
+                "Nm HAMMER Sy version 2-",
+                "HAMMER version 2-",
+                &[],
+                &["HAMMER"],
+            ),
+            (
+                "Nm HAMMER Op No version",
+                "HAMMER [version]",
+                &[],
+                &["HAMMER"],
+            ),
+            (
+                "Nm HAMMER No example Ar path",
+                "HAMMER example path",
+                &[],
+                &["HAMMER", "path"],
+            ),
+        ] {
+            assert_program_group(section, head, form, names, non_names);
+        }
+    }
+}
+
+#[test]
+fn quoted_arguments_and_reopened_flags_keep_their_invocation_owner() {
+    // mdoc_macro.c::in_line reopens Fl after its comma. The reopened
+    // operand looks identical to a second authored Fl in the terminal.
+    for section in ["COMMANDS", "DESCRIPTION"] {
+        for (head, form, names, non_names) in [
+            (
+                "Nm tool Qo reason Qc Qo ... Qc",
+                "tool \"reason\" \"...\"",
+                &["tool"][..],
+                &["reason"][..],
+            ),
+            (
+                "Nm tool Qq filename",
+                "tool \"filename\"",
+                &["tool"],
+                &["filename"],
+            ),
+            (
+                "Nm tool Fl V , -version",
+                "tool -V, --version",
+                &["tool"],
+                &["--version"],
+            ),
+            (
+                "Nm tool Fl V , Fl -version",
+                "tool -V, --version",
+                &["tool", "--version"],
+                &[],
+            ),
+        ] {
+            assert_program_group(section, head, form, names, non_names);
+        }
+    }
+}
+
+fn assert_program_group(section: &str, head: &str, form: &str, names: &[&str], non_names: &[&str]) {
+    let input = source(section, head);
+    let content = load(&input);
+    let items = super::definitions(content.document.as_ref().unwrap());
+    let [item] = items.as_slice() else {
+        panic!("{input}")
+    };
+    check_head(item, form, names);
+    for name in names {
+        super::real_invocations::direct_lines(&content, name, &[9]);
+    }
+    for rejected in non_names {
+        super::real_invocations::direct_lines(&content, rejected, &[]);
+    }
+}
+
+#[test]
+fn literal_suffixes_cannot_join_another_flags_executed_dash() {
+    // termp_fl_pre emits its own dash. The intervening No in "-qx-a" does
+    // not transfer that second Fl's glyphs to the name of the first one.
+    for section in ["COMMANDS", "DESCRIPTION"] {
+        for (head, spelling, positive) in [
+            ("Fl q Ns No x Ns Fl a", "-qx-a", false),
+            ("Fl q Ns No x Ns Fl Fl beta", "-qx--beta", false),
+            ("Fl q Ns No x Ns No y", "-qxy", true),
+        ] {
+            for suffix in ["", " , Fl z"] {
+                let content = load(&source(section, &format!("{head}{suffix}")));
+                super::real_invocations::direct_lines(
+                    &content,
+                    spelling,
+                    if positive { &[9] } else { &[] },
+                );
+                super::real_invocations::direct_lines(
+                    &content,
+                    "-z",
+                    if suffix.is_empty() { &[] } else { &[9] },
+                );
+            }
+        }
+    }
+}

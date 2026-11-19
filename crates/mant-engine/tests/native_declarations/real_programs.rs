@@ -69,3 +69,43 @@ fn pkg_keeps_standalone_and_compound_owners_distinct() {
     check_head(owner, form, &[]);
     assert_eq!(explain(&content, form).counts.direct_entry.total, 1);
 }
+
+#[test]
+fn hammer_version_headings_keep_both_descriptions_without_a_command_name() {
+    // CVS termp_nm_pre/HTML mdoc_nm_pre emit the subject of this manual
+    // inside each It HEAD; the following No supplies an ordinary version label.
+    let content = fixture_in("program-declarations", "dragonflybsd-hammer.8.gz");
+    direct_lines(&content, "HAMMER", &[]);
+    let items = super::definitions(content.document.as_ref().unwrap());
+    for (version, lines) in [("2-", [608, 1331]), ("3+", [613, 1354])] {
+        let form = format!("HAMMER version {version}");
+        direct_lines(&content, &form, &lines);
+        for line in lines {
+            let owner = items
+                .iter()
+                .find(|it| it.source.is_some_and(|span| span.line == line))
+                .unwrap();
+            check_head(owner, &form, &[]);
+            assert_eq!(owner.entry.as_ref().unwrap().kind, EntryKind::Term);
+            let hit = explain(&content, &form)
+                .evidence
+                .into_iter()
+                .find(|hit| hit.source == owner.source)
+                .unwrap();
+            let excerpt = mant_query::select_excerpt(
+                &content,
+                &[mant_protocol::ContentSelector::path(hit.outline.path())],
+            )
+            .unwrap();
+            let expected = if line < 1000 {
+                "The configuration file"
+            } else {
+                "The snapshots directory"
+            };
+            assert!(
+                mant_render::render_excerpt_text(&excerpt).contains(expected),
+                "{line}"
+            );
+        }
+    }
+}

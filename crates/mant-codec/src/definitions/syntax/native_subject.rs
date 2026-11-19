@@ -131,6 +131,9 @@ fn recognize(
     {
         return Some((EntryKind::Command, Recognition::one(Some(name))));
     }
+    if leading.is_some_and(|word| word.role == NativeOperandRole::ProgramName) {
+        return Some((EntryKind::Term, Recognition::default()));
+    }
     recognize_part(text, head, operands, enclosure)
 }
 

@@ -70,6 +70,7 @@ struct Head<'a> {
     text: &'a str,
     operands: &'a [NativeOperand],
     context: DefinitionContext,
+    program_aliases: bool,
     ranges: Vec<Range<usize>>,
     terms: Vec<DefinitionTerm>,
     argument_separators: Vec<usize>,
@@ -118,6 +119,14 @@ pub(super) fn recognize(
     if !partition.separated && !protected_arguments {
         return None;
     }
+    let program_aliases = enclosure.is_none()
+        && groups.iter().all(|group| {
+            let Group::Part(index) = group else {
+                return false;
+            };
+            operand_at(operands, partition.ranges[*index].start)
+                .is_some_and(|operand| operand.role == NativeOperandRole::ProgramName)
+        });
     if admission == Admission::AfterSeparator
         && !protected_arguments
         && !operands
@@ -126,7 +135,7 @@ pub(super) fn recognize(
         && !partition.has_mixed_roles(operands)
         && !partition.ranges.iter().any(|span| {
             is_assignment(text, span, operands)
-                || invocation::program_name(text, span, operands, false).is_some()
+                || invocation::program_name(text, span, operands, program_aliases).is_some()
         })
     {
         return None;
@@ -141,6 +150,7 @@ pub(super) fn recognize(
         text,
         operands,
         context,
+        program_aliases,
         ranges: partition.ranges,
         terms,
         argument_separators: partition.argument_separators,
@@ -357,7 +367,7 @@ fn collect_group(
     });
     let program = enclosure
         .is_none()
-        .then(|| invocation::program_name(text, span, operands, index == 0))
+        .then(|| invocation::program_name(text, span, operands, source.program_aliases))
         .flatten();
     let assignment = is_assignment(text, span, operands);
     let hint = group_hint(source, index, lead, admission, enclosure);
@@ -369,6 +379,10 @@ fn collect_group(
     let recognized = if let Some(name) = program {
         Ok((EntryKind::Command, Recognition::one(Some(name))))
     } else {
+        if lead.is_some_and(|operand| operand.role == NativeOperandRole::ProgramName) {
+            candidates.unproved_part = true;
+            return Ok(());
+        }
         recognize_group(source, index, hint, admission, enclosure, assignment)
     };
     let Ok((kind, result)) = recognized else {
@@ -712,6 +726,7 @@ pub(super) fn independent_role(role: NativeOperandRole) -> bool {
         role,
         NativeOperandRole::Environment { .. }
             | NativeOperandRole::Command
+            | NativeOperandRole::ProgramName
             | NativeOperandRole::ExplicitOption
     )
 }

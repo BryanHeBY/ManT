@@ -74,7 +74,7 @@ pub(super) fn permits_option_spelling(
             // only after an accepted base key. A bare generated dash must
             // never turn a foreign replacement glyph into a Fl operand.
             return allow_literal_suffix
-                && operand_at(operands, end).is_none_or(|next| {
+                && intersecting_operands(operands, end..span.end).all(|next| {
                     !next.role.is_parameter() && next.role != NativeOperandRole::ExplicitOption
                 });
         }
