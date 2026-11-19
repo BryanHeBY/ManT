@@ -2,14 +2,23 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use libmandoc_rs::{DisplayKind, Node, NodeKind};
+use libmandoc_rs::{DisplayKind, Node, NodeKind, NormalizedListKind};
 use mant_ir::{Block, Document, Section, SourceSpan};
 
 use super::{
     AstStructure,
-    ir::has_visible_inline,
-    ordinal_labels::{description::description, skips_source_children},
+    native_topology::column_data_items,
+    ordinal_labels::{
+        SourceContext,
+        description::{description, source_evidence, word_payload},
+        skips_source_children,
+    },
 };
+
+#[path = "literal_owners/matching.rs"]
+mod matching;
+
+pub(super) use matching::compare;
 
 type Point = (u32, u32);
 
@@ -23,6 +32,14 @@ struct Scope {
 enum ScopeKind {
     Section,
     Item,
+    ColumnTable,
+    ColumnCell { row: usize, cell: usize },
+}
+
+impl ScopeKind {
+    const fn table_scope(self) -> bool {
+        matches!(self, Self::ColumnTable | Self::ColumnCell { .. })
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -40,6 +57,9 @@ struct LiteralOrigin {
 struct SourceDisplay {
     opening: Point,
     origins: BTreeSet<LiteralOrigin>,
+    path: Vec<ScopeOccurrence>,
+    rows: usize,
+    pending_rows: BTreeMap<u32, String>,
 }
 
 #[derive(Default)]
@@ -47,6 +67,8 @@ pub(super) struct SourceDisplays {
     owners: Vec<SourceDisplay>,
     scopes: BTreeSet<Scope>,
     counts: ScopeCounts,
+    cell_prefixes: BTreeMap<Vec<ScopeOccurrence>, (Point, String)>,
+    source_rows: Vec<(usize, String)>,
 }
 
 type ScopeCounts = BTreeMap<(Vec<ScopeOccurrence>, Scope), usize>;
@@ -78,6 +100,10 @@ fn visit_native(
         return;
     }
     let point = (node.line, node.column);
+    if node.kind == NodeKind::Block && node.list_kind == Some(NormalizedListKind::Column) {
+        visit_column_list(node, path, profile);
+        return;
+    }
     let kind = if node.kind == NodeKind::Block {
         match node.macro_token.as_deref() {
             Some("Sh" | "Ss") => Some(ScopeKind::Section),
@@ -88,9 +114,7 @@ fn visit_native(
         None
     };
     if let Some(kind) = kind {
-        let scope = Scope { point, kind };
-        profile.literal_owners.scopes.insert(scope);
-        enter_scope(path, scope, &mut profile.literal_owners.counts);
+        enter_native_scope(profile, path, Scope { point, kind });
     }
     if node.kind == NodeKind::Block
         && matches!(node.macro_token.as_deref(), Some("D1" | "Dl" | "Bd"))
@@ -106,10 +130,14 @@ fn visit_native(
         {
             let payload = description(node, false, &profile.source_context);
             if payload.has_text() {
+                let pending_rows = plain_display_rows(node, &profile.source_context);
                 display = Some(profile.literal_owners.owners.len());
                 profile.literal_owners.owners.push(SourceDisplay {
                     opening: point,
                     origins: BTreeSet::new(),
+                    path: path.clone(),
+                    rows: pending_rows.len(),
+                    pending_rows,
                 });
             } else if payload.unproved_literal() {
                 profile
@@ -123,12 +151,15 @@ fn visit_native(
     {
         // A block can start at a generated macro word or at the first
         // emitted descendant, including after a separately owned block.
-        profile.literal_owners.owners[owner]
-            .origins
-            .insert(LiteralOrigin {
-                path: path.clone(),
-                point,
-            });
+        let literals = &mut profile.literal_owners;
+        let source = &mut literals.owners[owner];
+        source.origins.insert(LiteralOrigin {
+            path: path.clone(),
+            point,
+        });
+        if let Some(text) = source.pending_rows.remove(&node.id) {
+            literals.source_rows.push((owner, text));
+        }
     }
     if node.kind != NodeKind::Table {
         for child in &node.children {
@@ -140,12 +171,158 @@ fn visit_native(
     }
 }
 
+fn enter_native_scope(profile: &mut AstStructure, path: &mut Vec<ScopeOccurrence>, scope: Scope) {
+    profile.literal_owners.scopes.insert(scope);
+    enter_scope(path, scope, &mut profile.literal_owners.counts);
+}
+
+fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut AstStructure) {
+    // CVS mdoc_it_pre() emits one <tr> per It and one <td> per BODY;
+    // termp_it_pre() likewise uses the preceding BODY siblings as columns.
+    let point = (node.line, node.column);
+    enter_native_scope(
+        profile,
+        path,
+        Scope {
+            point,
+            kind: ScopeKind::ColumnTable,
+        },
+    );
+    for (row, item) in column_data_items(node).enumerate() {
+        for (cell, body) in item
+            .children
+            .iter()
+            .filter(|part| part.kind == NodeKind::Body && part.scope_end.is_none())
+            .enumerate()
+        {
+            enter_native_scope(
+                profile,
+                path,
+                Scope {
+                    point,
+                    kind: ScopeKind::ColumnCell { row, cell },
+                },
+            );
+            if let Some(first) = body.children.first()
+                && let Some(prefix) = plain_source_row(first)
+            {
+                profile
+                    .literal_owners
+                    .cell_prefixes
+                    .insert(path.clone(), ((first.line, first.column), prefix));
+            }
+            visit_native(body, path, None, profile);
+            path.pop();
+        }
+    }
+    path.pop();
+}
+
+fn plain_display_rows(node: &Node, source: &SourceContext) -> BTreeMap<u32, String> {
+    // A literal row of plain authored bytes has an independent reading
+    // witness. Keep field rewrites and generated macro words under the
+    // separate source execution proof. Do not guess their IR spelling.
+    let mut rows = BTreeMap::new();
+    for child in node
+        .children
+        .iter()
+        .filter(|part| part.kind == NodeKind::Body)
+        .flat_map(|body| &body.children)
+    {
+        if let Some(row) = plain_source_row(child).or_else(|| inline_source_row(child, source)) {
+            if !rows.is_empty() && !child.flags.line_start {
+                return BTreeMap::new();
+            }
+            rows.insert(child.id, row);
+        } else if child.kind == NodeKind::Block
+            && matches!(
+                child.macro_token.as_deref(),
+                Some("D1" | "Dl" | "Bd" | "Bl")
+            )
+            || matches!(child.macro_token.as_deref(), Some("br" | "Pp"))
+        {
+            // These scopes or requests terminate the active text field.
+        } else {
+            return BTreeMap::new();
+        }
+    }
+    // mdoc_macro.c puts trailing delimiters after the short display BODY,
+    // and print_mdoc_node() glues them to the preceding word before post.
+    if matches!(node.macro_token.as_deref(), Some("D1" | "Dl"))
+        && let Some(mut row) = rows.last_entry()
+    {
+        let tail = node
+            .children
+            .iter()
+            .skip_while(|part| part.kind != NodeKind::Body)
+            .skip(1);
+        for child in tail {
+            if !child.flags.delimiter_close {
+                return BTreeMap::new();
+            }
+            let Some(word) = plain_source_row(child) else {
+                return BTreeMap::new();
+            };
+            row.get_mut().push_str(&word);
+        }
+    }
+    rows
+}
+
+fn inline_source_row(node: &Node, source: &SourceContext) -> Option<String> {
+    use mant_codec::RoffWordEffect::{EmittedBreak, Unclassified, WordEndBreak};
+    // These pre handlers either select a font or generate known words.
+    // Device-specific glyphs, inline geometry, and pretty synopsis
+    // formatting stay on the source-position proof path.
+    if node.kind != NodeKind::Element
+        || node.flags.synopsis_pretty
+        || !matches!(
+            node.macro_token.as_deref(),
+            Some("Em" | "Sy" | "Li" | "Ar" | "Cm" | "Ic" | "Fl" | "Fn" | "Xr")
+        )
+        || !node.children.iter().all(|child| {
+            !child.flags.line_start
+                && (plain_source_row(child).is_some()
+                    || child.kind == NodeKind::Text && child.text.as_deref() == Some(r"\&"))
+        })
+    {
+        return None;
+    }
+    let (prefix, word) = source_evidence(node, false, source, true);
+    let word = word?;
+    (prefix.absent()
+        && !word.has(Unclassified)
+        && !word.has(WordEndBreak)
+        && !word.has(EmittedBreak)
+        && word_payload(&word, true).has_text())
+    .then(|| normalized_row(&word.text))
+}
+
+fn plain_source_row(node: &Node) -> Option<String> {
+    let text = node.text.as_deref()?;
+    (node.kind == NodeKind::Text
+        && text
+            .bytes()
+            .all(|byte| byte.is_ascii_graphic() && byte != b'\\' || byte == b' ' || byte == b'\t')
+        && has_glyph(text))
+    .then(|| normalized_row(text))
+}
+
+fn has_glyph(text: &str) -> bool {
+    text.chars()
+        .any(|ch| !ch.is_ascii_whitespace() && !ch.is_control())
+}
+
+fn normalized_row(text: &str) -> String {
+    text.split_ascii_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[derive(Default)]
 pub(super) struct ObservedDisplays {
     // Parents are registered before descendants. An empty item still
     // occupies its scope occurrence, even if it no longer contains a block.
     scopes: Vec<(Option<usize>, Scope)>,
-    blocks: Vec<(Option<usize>, Point)>,
+    blocks: Vec<(Option<usize>, Option<Point>, Vec<String>)>,
 }
 
 impl ObservedDisplays {
@@ -155,21 +332,18 @@ impl ObservedDisplays {
         source: Option<SourceSpan>,
         kind: ScopeKind,
     ) -> Option<usize> {
-        let Some(source) = source else {
+        let Some(point) = source
+            .map(point)
+            .or_else(|| kind.table_scope().then_some((0, 0)))
+        else {
             return parent;
         };
         let index = self.scopes.len();
-        self.scopes.push((
-            parent,
-            Scope {
-                point: point(source),
-                kind,
-            },
-        ));
+        self.scopes.push((parent, Scope { point, kind }));
         Some(index)
     }
 
-    fn matching_origins(&self, native_scopes: &BTreeSet<Scope>) -> Vec<LiteralOrigin> {
+    fn matching_blocks(&self, native_scopes: &BTreeSet<Scope>) -> Vec<ObservedBlock<'_>> {
         fn path(paths: &[Vec<ScopeOccurrence>], index: Option<usize>) -> Vec<ScopeOccurrence> {
             index.map_or_else(Vec::new, |index| paths[index].clone())
         }
@@ -178,21 +352,28 @@ impl ObservedDisplays {
         let mut counts = ScopeCounts::new();
         for (parent, scope) in &self.scopes {
             let mut path = path(&paths, *parent);
-            // Semantic inference can group native blocks into an additional
-            // definition. It does not change their native display ancestry.
-            if native_scopes.contains(scope) {
+            // Inferred definitions need not be native scopes, but an
+            // explicit table or field always remains a barrier.
+            if scope.kind.table_scope() || native_scopes.contains(scope) {
                 enter_scope(&mut path, *scope, &mut counts);
             }
             paths.push(path);
         }
         self.blocks
             .iter()
-            .map(|(parent, point)| LiteralOrigin {
+            .map(|(parent, point, rows)| ObservedBlock {
                 path: path(&paths, *parent),
                 point: *point,
+                rows,
             })
             .collect()
     }
+}
+
+struct ObservedBlock<'a> {
+    path: Vec<ScopeOccurrence>,
+    point: Option<Point>,
+    rows: &'a [String],
 }
 
 pub(super) fn record_ir_displays(document: &Document) -> ObservedDisplays {
@@ -220,11 +401,13 @@ fn visit_blocks(blocks: &[Block], parent: Option<usize>, observations: &mut Obse
     for block in blocks {
         match block {
             Block::Preformatted {
-                children,
-                source: Some(source),
-                ..
-            } if has_visible_inline(children) => {
-                observations.blocks.push((parent, point(*source)));
+                children, source, ..
+            } => {
+                let text = mant_ir::inline_plain_text(children);
+                if has_glyph(&text) {
+                    let rows = text.split('\n').map(normalized_row).collect();
+                    observations.blocks.push((parent, source.map(point), rows));
+                }
             }
             Block::List { items, .. } => {
                 for item in items {
@@ -238,86 +421,21 @@ fn visit_blocks(blocks: &[Block], parent: Option<usize>, observations: &mut Obse
                     visit_blocks(&item.description, parent, observations);
                 }
             }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter().flat_map(|row| &row.cells) {
-                    visit_blocks(&cell.blocks, parent, observations);
+            Block::Table { rows, source, .. } => {
+                let anchor = *source;
+                let parent = observations.enter_scope(parent, anchor, ScopeKind::ColumnTable);
+                for (row, data) in rows.iter().enumerate() {
+                    for (cell, field) in data.cells.iter().enumerate() {
+                        let parent = observations.enter_scope(
+                            parent,
+                            anchor,
+                            ScopeKind::ColumnCell { row, cell },
+                        );
+                        visit_blocks(&field.blocks, parent, observations);
+                    }
                 }
             }
             _ => {}
         }
     }
-}
-
-pub(super) fn compare(
-    expected: &SourceDisplays,
-    observed: &ObservedDisplays,
-    violations: &mut Vec<String>,
-) {
-    let mut blocks = BTreeMap::<_, Blocks>::new();
-    for origin in observed.matching_origins(&expected.scopes) {
-        blocks.entry(origin).or_default().available += 1;
-    }
-    let expected = &expected.owners;
-    let mut claims = vec![None; expected.len()];
-    let mut occurrences = BTreeMap::<Point, usize>::new();
-    for (index, owner) in expected.iter().enumerate() {
-        let occurrence = occurrences.entry(owner.opening).or_default();
-        *occurrence += 1;
-        if !match_block(index, expected, &mut blocks, &mut claims) {
-            let (line, column) = owner.opening;
-            violations.push(format!(
-                "literal-displays: missing sourced block for {line}:{column} occurrence {occurrence}"
-            ));
-        }
-    }
-}
-
-#[derive(Default)]
-struct Blocks {
-    available: usize,
-    owners: BTreeSet<usize>,
-}
-
-fn match_block(
-    owner: usize,
-    expected: &[SourceDisplay],
-    blocks: &mut BTreeMap<LiteralOrigin, Blocks>,
-    claims: &mut [Option<LiteralOrigin>],
-) -> bool {
-    // Equal positions occur in user macro expansions. Each block can pay
-    // once. If more than one point fits an owner, look for an alternate
-    // assignment without allowing a neighboring display to pay twice.
-    let mut pending = vec![owner];
-    let mut paths = BTreeMap::new();
-    while let Some(owner) = pending.pop() {
-        for origin in &expected[owner].origins {
-            let Some(block) = blocks.get(origin) else {
-                continue;
-            };
-            let std::collections::btree_map::Entry::Vacant(path) = paths.entry(origin.clone())
-            else {
-                continue;
-            };
-            path.insert(owner);
-            if block.available == 0 {
-                pending.extend(block.owners.iter().copied());
-                continue;
-            }
-            let mut open = Some(origin.clone());
-            while let Some(origin) = open {
-                let owner = paths[&origin];
-                let block = blocks.get_mut(&origin).expect("matched literal origin");
-                block.available -= 1;
-                block.owners.insert(owner);
-                open = claims[owner].replace(origin);
-                if let Some(previous) = &open {
-                    let old = blocks.get_mut(previous).expect("prior literal origin");
-                    old.available += 1;
-                    old.owners.remove(&owner);
-                }
-            }
-            return true;
-        }
-    }
-    false
 }

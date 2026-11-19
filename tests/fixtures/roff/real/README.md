@@ -8,11 +8,12 @@ required by the third-party manuals.
 
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
-| [`definition-displays/`](definition-displays/README.md) | Immutable illumos ctfdiff | Complete original repository file | Compact display boundaries inside definitions |
+| [`definition-displays/`](definition-displays/README.md) | Immutable illumos and FreeBSD 15.1 amd64 | Complete original repository files and exact gzip release members | Display rows, definition ownership and independent column-cell displays |
 | [`ordered-continuation/`](ordered-continuation/README.md) | Immutable illumos `getopts(1)` from the November 18 real roff review | Exact complete source file | Relative-indent continuations retain label/description order and intervening spacing |
 | [`mdoc-subjects/`](mdoc-subjects/README.md) | Immutable illumos `kstat(3KSTAT)` | Exact complete source file | Parallel field names retain a shared definition owner |
 | [`bsd-declarations/`](bsd-declarations/README.md) | FreeBSD 15.1 amd64, DragonFly BSD 6.4.2 x86-64, NetBSD 10.1 amd64 and OpenBSD 7.9 amd64 | Exact compressed and uncompressed release members | Numbered errors, annotated constants, grouped symbols and environment templates |
 | [`native-invocations/`](native-invocations/README.md) | FreeBSD 15.1 amd64 and immutable illumos zfs(8) | Exact gzip members and complete repository file | Assignment alternatives, invocation owners and independently defined options and terms |
+| [`program-declarations/`](program-declarations/README.md) | FreeBSD 15.1 amd64 and DragonFly BSD 6.4.2 x86-64 | Exact complete gzip release members | Standalone programs and contiguous command prefixes bind their own invocation descriptions |
 | [`section-navigation/`](section-navigation/README.md) | Immutable Arch Linux GCC package | Complete original gzip package member | Long Doxygen subsection titles retain selectable IDs |
 | [`source-lines/`](source-lines/README.md) | Arch Linux libxcb 1.17.0-1 | Complete original gzip package member | Leading TAB in filled definition bodies and ordinary paragraphs |
 | [`mathematical-export/`](mathematical-export/README.md) | Exact November 2026 mathematical audit sources from POSIX, OpenBSD, FreeBSD, illumos and X11 | Complete original sources and the original X11 gzip member | Inline/display ownership, scripts, integral limits, matrices, accents and readable code-context formulas |

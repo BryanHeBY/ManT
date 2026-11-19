@@ -7,6 +7,9 @@ use mant_render::{render_excerpt_text, render_query_text};
 
 use super::json_roundtrip;
 
+#[path = "display_ownership/real_cases.rs"]
+mod real_cases;
+
 const HEADER: &str =
     ".Dd November 19, 2026\n.Dt PROBE 4\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
 const ITEMS: &str =

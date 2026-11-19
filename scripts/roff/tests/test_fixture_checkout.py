@@ -58,7 +58,7 @@ class FixtureCheckoutTests(unittest.TestCase):
             files.update({path.relative_to(ROOT): path.read_bytes()
                           for path in (ROOT / "tests/fixtures/roff" / family).rglob("*.1")})
         for family in ("ordered-continuation", "mdoc-subjects", "section-navigation", "bsd-declarations",
-                       "native-invocations"):
+                       "native-invocations", "definition-displays", "program-declarations"):
             directory = Path("tests/fixtures/roff/real") / family
             manifest = json.loads((ROOT / directory / "manifest.json").read_bytes())
             for case in manifest["cases"]:
@@ -66,8 +66,7 @@ class FixtureCheckoutTests(unittest.TestCase):
                 files[fixture] = (ROOT / fixture).read_bytes()
                 self.assertEqual(hashlib.sha256(files[fixture]).hexdigest(),
                                  case["fixtureSha256"])
-        for family in ("scoped-layout", "field-boundaries", "mathematical-export", "source-lines",
-                       "definition-displays"):
+        for family in ("scoped-layout", "field-boundaries", "mathematical-export", "source-lines"):
             files.update({path.relative_to(ROOT): path.read_bytes()
                           for path in (ROOT / "tests/fixtures/roff/real" / family).iterdir()
                           if path.suffix in {".1", ".3", ".4", ".8", ".0p", ".3p", ".gz"}})

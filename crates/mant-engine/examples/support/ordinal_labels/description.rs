@@ -99,15 +99,27 @@ impl Payload {
 }
 
 pub(crate) fn description(node: &Node, continues: bool, context: &SourceContext) -> Payload {
-    DescriptionProbe {
+    source_evidence(node, continues, context, false).0
+}
+
+pub(crate) fn source_evidence(
+    node: &Node,
+    continues: bool,
+    source: &SourceContext,
+    capture_open_field: bool,
+) -> (Payload, Option<NativeWord>) {
+    // Use the same generated words when a caller needs an exact lexical
+    // witness for one uncomplicated inline subtree in a display row.
+    let mut probe = DescriptionProbe {
         continues,
         zero_advance: false,
-        display: None,
-        no_space_mode: context.no_space_at(node),
-        source: context,
+        display: capture_open_field.then(DisplayField::default),
+        no_space_mode: source.no_space_at(node),
+        source,
         space_debt: 0,
-    }
-    .visit(node)
+    };
+    let payload = probe.visit(node);
+    (payload, probe.display.map(|field| field.word))
 }
 
 struct DescriptionProbe<'a> {

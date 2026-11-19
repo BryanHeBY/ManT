@@ -36,6 +36,7 @@ crates/libmandoc-rs/LICENSES/** text eol=lf
 tests/fixtures/roff/real/source-adjacency/*.1 text eol=lf
 tests/fixtures/roff/real/scoped-layout/* text eol=lf
 tests/fixtures/roff/real/definition-displays/*.1 text eol=lf
+tests/fixtures/roff/real/definition-displays/*.4i text eol=lf
 tests/fixtures/roff/real/field-boundaries/*.1 text eol=lf -whitespace
 tests/fixtures/roff/real/mathematical-export/*.0p text eol=lf -whitespace
 tests/fixtures/roff/real/mathematical-export/*.3p text eol=lf -whitespace

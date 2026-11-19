@@ -1,0 +1,187 @@
+{
+  "schema": "mant.real-source-fixtures/v1",
+  "scope": "BSD program forms and contiguous compound command names.",
+  "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
+  "cases": [
+    {
+      "file": "dragonflybsd-limits.1.gz",
+      "sourceIdentity": "dragonflybsd-6.4.2-x86_64:man/man1/limits.1.gz",
+      "originUrl": "https://avalon.dragonflybsd.org/iso-images/dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archive": "dfly-x86_64-6.4.2_REL.iso.bz2",
+      "archiveMember": "usr/share/man/man1/limits.1.gz",
+      "archiveSha256": "373150a21eeb7ce0f20c7faf1b8129145bf3bf0463a45d0dc18aad274f7ed661",
+      "sourceSha256": "3a4ea0dec29af11e7dabb2adf7827300435df95bc36d1bc6ac19e58b10259c10",
+      "fixtureSha256": "3a4ea0dec29af11e7dabb2adf7827300435df95bc36d1bc6ac19e58b10259c10",
+      "decompressedSha256": "99ea245ba8ecdd5763c7559d6c2d5b07fe5e107617760649f563befa2552caa8",
+      "sourceBytes": 3614,
+      "fixtureBytes": 3614,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "David Nugent five-condition license",
+      "licenseFile": "dragonflybsd-limits.1.gz",
+      "transformation": "None. Complete compressed release member with a portable fixture basename.",
+      "selectionReason": "Standalone program names before alternative and optional arguments on all three usage owners.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "52b66503b176432776e7cf5c43bf8b9902e173f90ce513313202e0150a0781ec",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 11202,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "242ddaea505c277aefde6999c82b77fbe394961f60166bf0f5bcabd196c61134",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 11232,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "f9b03bcf9448bff1f088908e96c9a4d852ec2b6d4220e23ad26efedd3c214ea9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 19657,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "7574470c9223330ebb3667878b5de27cea428067e69249bba8d125c6f9f33a40",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 36963,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "2789e5d2cb3ddb48624ab4469d4f43a100136e4a35561a175d326844ab91ea56",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 672,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-limits.1.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man1/limits.1.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man1/limits.1.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "a31eaa74c54918b49bc9d124ba76f076366a83f60343111dbcfe69c0d994a28e",
+      "fixtureSha256": "a31eaa74c54918b49bc9d124ba76f076366a83f60343111dbcfe69c0d994a28e",
+      "decompressedSha256": "05042abd7f0f2b40e9e2acbf797ed6907a912328145233fa2ee799c19504b56a",
+      "sourceBytes": 3793,
+      "fixtureBytes": 3793,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "David Nugent five-condition license",
+      "licenseFile": "freebsd-limits.1.gz",
+      "transformation": "None. Complete compressed release member with a portable fixture basename.",
+      "selectionReason": "Standalone Nm precedes flag, login class, environment and resource arguments.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "6d883aca9669c4184041e7febc5263ec9bfb4670389ef5c91c1128f9b3638b30",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 12215,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "4d34bc5f5f7845d3681c7e14d8e6807335ff632c5a3e020fcb7960e506533b1d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 12281,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "efdd9e50872d6e1e4e4d31f17c1c3787825bd139edc20b87313152f8a4dd5a23",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 21440,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "28a43f32f5eb7cdc14b9658ff15c4ab7da22b3ceea20e82479208f69336bfaec",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 43544,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "8b334bd35077234f3bc873bd128d431dd9531fee4590a837445fb05a97f6c362",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 519,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-pkg.7.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man7/pkg.7.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man7/pkg.7.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "0c7b0cd58299fc7d7ddd384dac090c3acb17232679af3aefa0b452d20fa8d81b",
+      "fixtureSha256": "0c7b0cd58299fc7d7ddd384dac090c3acb17232679af3aefa0b452d20fa8d81b",
+      "decompressedSha256": "d28e39e64fdeb51f0a77734ba71aa2a4c7483264bb313a1cece717ba19622b1a",
+      "sourceBytes": 3222,
+      "fixtureBytes": 3222,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "BSD-2-Clause",
+      "licenseFile": "freebsd-pkg.7.gz",
+      "transformation": "None. Complete compressed release member with a portable fixture basename.",
+      "selectionReason": "Standalone and contiguous compound forms bind their own descriptions. An intervening option enclosure does not prove a contiguous command prefix.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "4bac96be96fc564ea99ccd082a7287a783eb1c71862d93ff4f7dfed1b32759b4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8738,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "858a6bf996ceea2d26385365c9116cd27ea73ee807001420f1fa4c16b605f5aa",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8740,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "ab669ccc1a1e7b68904cdb491ee4057f875218024b939bf264657f36f52c4c68",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 16898,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "8c71a94acefa6a000be174e3fbcf30950c7719fff4220821289a34de581e3f0b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 27993,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "56fe9aa72085132d6051c307407c21778fef7759f4ddd5386fa66d4228a366a4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 767,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    }
+  ]
+}

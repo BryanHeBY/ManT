@@ -7,6 +7,8 @@ use super::{NoFillSourceLine, equation_visible_text, retained_no_fill_rows};
 mod link_execution_tests;
 #[path = "link_tests.rs"]
 mod link_tests;
+#[path = "literal_ownership_tests.rs"]
+mod literal_ownership_tests;
 #[path = "payload_tests.rs"]
 mod payload_tests;
 

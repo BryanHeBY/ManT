@@ -1,10 +1,10 @@
 {
   "schema": "mant.real-source-fixtures/v1",
-  "scope": "Compact display HEAD/BODY boundaries; selected contracts only.",
+  "scope": "Native display row boundaries and display ownership inside and outside definitions and tables.",
   "referenceSha256": "9f7aecf5aec662d87557db9f273b2ab248f379058d8d2d5193bf1c1e7b88719e",
   "oracleRecipe": {
     "name": "native-default",
-    "stdin": "exact source bytes encoded as UTF-8",
+    "stdin": "exact source bytes, decompressed without modification for gzip fixtures",
     "environment": {
       "PATH": "/usr/bin:/bin",
       "LC_ALL": "C.UTF-8",
@@ -101,6 +101,218 @@
           "status": "CapturedWithDiagnostics"
         }
       }
+    },
+    {
+      "file": "illumos-fdio.4i",
+      "sourceIdentity": "illumos-gate-e8f5c080:man/man4i/fdio.4i",
+      "sourceSha256": "a6872e7123be70bc9bdf9e74807e91d3750614e33bcee8e77862d85add26c52a",
+      "fixtureSha256": "a6872e7123be70bc9bdf9e74807e91d3750614e33bcee8e77862d85add26c52a",
+      "sourceBytes": 8041,
+      "fixtureBytes": 8041,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originUrl": "https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man4i/fdio.4i",
+      "sourceRepository": "https://github.com/illumos/illumos-gate.git",
+      "revision": "e8f5c080cc0b7997410d860afd787df30ba1cf2d",
+      "archive": null,
+      "archiveMember": "usr/src/man/man4i/fdio.4i",
+      "archiveSha256": null,
+      "corpusRevision": "832e18b3645884dd1d04dc34ebd656015e5a8e71",
+      "corpusMember": "corpora/illumos-gate-e8f5c080/root/man/man4i/fdio.4i",
+      "gitBlobSha1": "99ffb147b6287fb7361ce5c948167c47e70dfa30",
+      "license": "CDDL-1.0",
+      "licenseFile": "../LICENSES/CDDL-1.0.txt",
+      "licenseSha256": "1ffb70c33c4f79f04e947facc5c7851f289609256aacb47fc115f700427d9520",
+      "embeddedNoticeLines": [
+        1,
+        16
+      ],
+      "embeddedNoticeSha256": "878af562e4448e02341d904244e11438121ddb85922337edfac1d26d14672c2e",
+      "transformation": "None; byte-for-byte copy of the retained full manual.",
+      "selectionReason": "Offset structure declarations after El stay outside the completed ioctl entries.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "2d243d6b13989a7f28e67b9ee7c46e7591d09a928f329bf8c65afac7f9f1905d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8674,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "beb1789833da6064ac6cc346efb61f6ed235328484a30605b742fdc56758496b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 8676,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "d081e4f824bbc0355872aa7ce248e55499e9c5bd4ec223ea6bf67d16996009e4",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 13275,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "539bc5d749003c334bdf0a97f2fd2d8be9929d3a02d8c1ef492221e42cc2463d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 22420,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "dc6ae82cd129d704a43d4213fe040e7ef079edd114ef51e79e447927ba04d194",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 208,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "freebsd-_umtx_op.2.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man2/_umtx_op.2.gz",
+      "sourceSha256": "97f99a3844cc9f395542fb7fd52a33450066f393ca1a9b13bba0a704ff7c863e",
+      "fixtureSha256": "97f99a3844cc9f395542fb7fd52a33450066f393ca1a9b13bba0a704ff7c863e",
+      "sourceBytes": 11595,
+      "fixtureBytes": 11595,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "sourceRepository": null,
+      "revision": null,
+      "archive": "base.txz",
+      "archiveMember": "./usr/share/man/man2/_umtx_op.2.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "corpusRevision": "832e18b3645884dd1d04dc34ebd656015e5a8e71",
+      "corpusMember": "corpora/freebsd-15.1-amd64/root/man/man2/_umtx_op.2.gz",
+      "gitBlobSha1": "4719971f615beabd089a1a9d74c2dd94c0a2009b",
+      "license": "BSD-2-Clause",
+      "licenseFile": "../LICENSES/FREEBSD-UMTX-OP-BSD-2-Clause.txt",
+      "licenseSha256": "e8181b77aa2bd5cd5ddcd58ee79188488cb223db0f3c0ba5995db1b44e12d4fa",
+      "embeddedNoticeLines": [
+        1,
+        26
+      ],
+      "embeddedNoticeSha256": "4dd7506217ae5b1032d68e66af31b2a6a03b8a5aa3e175cffca59851d6d2bbf1",
+      "transformation": "None; exact gzip member from the release archive.",
+      "selectionReason": "Independent synchronization structure declarations remain outside the preceding USYNC_PROCESS_SHARED definition.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "fc59400963dee4c3bf723c3f0273b75ebe15876f8b4a7ee87e0e56e5ccf7dd59",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 49668,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "28c44f2b54622ba591dda9387a303c72d16661eb5410641537f3dd0a1ade7a5f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 49683,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "0deaae59d7ebd52c8dd02e05119f53d1184886a20e73cae4285265133145524e",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 68962,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "230f5e942531fdbe94fd896f9173fef1d190ed19260f60feb54190a2d43cf43b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 147697,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 2,
+          "stdoutSha256": "1fac481c92156695d4bb1185f91c38ece167d53f228c5a4a06e9f36562da33c3",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 1625,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      },
+      "decompressedSha256": "535be415e7187e07768c8237aed48800366db70611791486873a26b1bc984da4"
+    },
+    {
+      "file": "freebsd-rc.subr.8.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:./usr/share/man/man8/rc.subr.8.gz",
+      "sourceSha256": "365595fab1b7ab1b9c1c7d3fdae56e1a0681ad79f1fa85a15262eaea47cd1ce1",
+      "fixtureSha256": "365595fab1b7ab1b9c1c7d3fdae56e1a0681ad79f1fa85a15262eaea47cd1ce1",
+      "sourceBytes": 8129,
+      "fixtureBytes": 8129,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "sourceRepository": null,
+      "revision": null,
+      "archive": "base.txz",
+      "archiveMember": "./usr/share/man/man8/rc.subr.8.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "corpusRevision": "832e18b3645884dd1d04dc34ebd656015e5a8e71",
+      "corpusMember": "corpora/freebsd-15.1-amd64/root/man/man8/rc.subr.8.gz",
+      "gitBlobSha1": "2f6fe62a51f4e728b8bb85e278e6de127d827839",
+      "license": "BSD-2-Clause",
+      "licenseFile": "../LICENSES/NETBSD-RC-SUBR-BSD-2-Clause.txt",
+      "licenseSha256": "ef48a70c5ad3287a439154be7607be60cf841f14d3e2ea1873a5405393cc2ecb",
+      "embeddedNoticeLines": [
+        3,
+        28
+      ],
+      "embeddedNoticeSha256": "51b95d16cc8067e0475d765df71b03c9cb001453cae8c36afc53a33b1d46ea0d",
+      "transformation": "None; exact gzip member from the release archive.",
+      "selectionReason": "Repeated native displays within distinct table cells have independent structure-audit obligations.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "83f93d874a08b20f9a5dc6b4633fd6c416ef8e49a8e830dc9fa891f5996ed913",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 35016,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "b10c8a3be7dd5767167561214d03e4d547fd76ccd7f69f65ef3a93ee0a772fe8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 35138,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "11e4327ab678d982cec77a9e1a5eb61648b487c1922ef1c1b137e2319888a960",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 52911,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "a86ea129d527249ccc09e18245e865509463c44706bc3cd402a6ced8b82b1405",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 130413,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "3eab42e8c1323d4e90e5abee92835ed85ebea439e3e0f5e3835524136d04eab8",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 857,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      },
+      "decompressedSha256": "3e5827ef6763b47873ed5ef8d7c31dd63bf588276b2b6018bca051f20d50a2a5"
     }
   ]
 }

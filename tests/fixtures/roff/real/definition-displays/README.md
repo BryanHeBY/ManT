@@ -1,16 +1,12 @@
-# Definition display boundary fixture
+# Definition and table display fixtures
 
-The complete `ctfdiff(1)` manual was copied without changes on November 18,
-2026 from the retained [corpus snapshot](https://github.com/BryanHeBY/mant-roff-corpus/tree/832e18b3645884dd1d04dc34ebd656015e5a8e71/corpora/illumos-gate-e8f5c080).
-The original source is the [illumos-gate Git member](https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man1/ctfdiff.1)
-`usr/src/man/man1/ctfdiff.1`, not a binary package archive member.
+These complete manuals were copied without changes from [the retained corpus](https://github.com/BryanHeBY/mant-roff-corpus/tree/832e18b3645884dd1d04dc34ebd656015e5a8e71/corpora). Each entry in [manifest.json](manifest.json) records the original source member, the matching source and fixture hashes, the original notice, and receipts for five pristine CVS profiles.
 
-[manifest.json](manifest.json) records the exact retained blob, license,
-unchanged source/fixture SHA-256 and five pristine CVS run receipts. Focusing
-on EXIT STATUS, filled compact `.Bd` starts the descriptions of 0 and 1 on
-the row below the label with six extra columns and no additional blank row.
-The neighboring `.D1` descriptions for 2 and 3 provide an independent
-one-line-display control.
+| Fixture | Origin | Coverage |
+| --- | --- | --- |
+| `illumos-ctfdiff.1` | [illumos-gate `ctfdiff.1`](https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man1/ctfdiff.1), copied November 18, 2026 | Compact `Bd` places the descriptions of exit codes 0 and 1 below the label without an additional blank line. The `.D1` descriptions of 2 and 3 provide a control. |
+| `illumos-fdio.4i` | [illumos-gate `fdio.4i`](https://github.com/illumos/illumos-gate/blob/e8f5c080cc0b7997410d860afd787df30ba1cf2d/usr/src/man/man4i/fdio.4i), copied November 19, 2026 | Four offset displays after `.El` remain section content. Explain and the selected ioctl nodes exclude them. |
+| `freebsd-_umtx_op.2.gz` | `./usr/share/man/man2/_umtx_op.2.gz` in [FreeBSD 15.1-RELEASE amd64 `base.txz`](https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz), copied November 19, 2026 | Five synchronization structure declarations stay outside the preceding `USYNC_PROCESS_SHARED` item. |
+| `freebsd-rc.subr.8.gz` | `./usr/share/man/man8/rc.subr.8.gz` in the same FreeBSD archive, copied November 19, 2026 | Repeated displays within a `.Bl -column` list each require evidence from their own cell. |
 
-The original CDDL notice and Joyent copyright remain in the file. The
-complete license governing this fixture is [CDDL-1.0.txt](../LICENSES/CDDL-1.0.txt).
+The illumos files retain their original notices under the [CDDL](../LICENSES/CDDL-1.0.txt). The FreeBSD release members retain their [FreeBSD Foundation](../LICENSES/FREEBSD-UMTX-OP-BSD-2-Clause.txt) and [NetBSD Foundation](../LICENSES/NETBSD-RC-SUBR-BSD-2-Clause.txt) BSD-2-Clause notices.
