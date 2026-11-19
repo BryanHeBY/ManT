@@ -419,7 +419,9 @@ pub(super) enum EnclosureMark<'a> {
 impl EnclosureMark<'_> {
     pub(super) fn append_word(self, builder: &mut super::inline::InlineBuilder) {
         match self {
-            Self::Glyph(value) => builder.append_text(&value),
+            // CVS termp_quote_pre/post uses term_word for both marks;
+            // a queued native retreat can cover the content before post.
+            Self::Glyph(value) => super::inline::append_normalized_word(builder, &value),
             Self::Operand("") => builder.execute_empty_word(),
             Self::Operand(value) => super::inline::append_normalized_word(builder, value),
             Self::Nodes(_) => unreachable!("authored marks retain their source nodes"),

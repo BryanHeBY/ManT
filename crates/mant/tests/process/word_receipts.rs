@@ -1120,3 +1120,129 @@ fn generated_option_dashes_follow_the_same_native_writes_as_authored_dashes() {
         }
     }
 }
+
+const FIELD_PROBE: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample manual\n.Sh DESCRIPTION\n";
+
+#[test]
+fn interword_spacing_uses_the_last_accepted_cell_before_a_pending_glyph() {
+    // CVS writes an ordinary SP before \&, then an empty overstrike
+    // either trims an extra separator or leaves the old SP for T to
+    // overstrike. Observe both directions across native font scopes.
+    for (word, expected, search, count) in [
+        (r#".Sy A No "\&" No "\z\o''T""#, "A T", "AT", 0),
+        (r#".No A No "\&" No "\z\o''T""#, "A T", "AT", 0),
+        (r#".Ic abc No "\&" Ns No "\z\o''T""#, "abc T", "abcT", 0),
+        (r#".Fl abc No "\:" No "\z\o''T""#, "-abc T", "abcT", 0),
+        (r#".No "P\zQ" No "\&" Ns No "\z\o''T""#, "PQT", "PQT", 1),
+        (r#".No "P\zQ" No "\:" Ns No "\o''T""#, "PQT", "PQT", 1),
+    ] {
+        let source = format!("{FIELD_PROBE}STARTFLAG\n.br\n{word}\n.br\nENDFLAG\n");
+        let expected_rendering = format!("STARTFLAG\n{expected}\nENDFLAG");
+        let plain = render(&source, "roff", "text", "never", false);
+        assert_eq!(description(&plain), expected_rendering, "{source}");
+        let ansi = render(&source, "roff", "text", "always", false);
+        assert_eq!(without_sgr(&ansi), plain, "{source}");
+        let markdown = render(&source, "roff", "markdown", "never", false);
+        let roundtrip = render(&markdown, "markdown", "text", "never", false);
+        assert_eq!(description(&roundtrip), expected_rendering, "{source}");
+        assert_eq!(search_visible_word(&source, search), count, "{source}");
+    }
+}
+
+#[test]
+fn native_backspace_only_removes_a_blank_when_its_replacement_is_accepted() {
+    // With BACKBEFORE, encode1 can replace the SP directly or step
+    // over it after an ignored ASCII_BREAK cell. The next glyph
+    // still has to be accepted by term_fill on the same pass.
+    for (arm, separator, expected) in [
+        ("", r"\p T", &["PREB", "T"][..]),
+        ("", r" \:T", &["PREB T"][..]),
+        (r"\z", r"\p T", &["PREBT"][..]),
+        (r"\z", r" \:T", &["PREBT"][..]),
+    ] {
+        let word = format!("PRE{arm}\\o'AB'{separator}");
+        for body in [
+            word.clone(),
+            format!(".Bd -literal -compact\n{word}\n.Ed"),
+            format!(".TS\nl.\n{word}\nWWWWWWWWWWWWWWWW\n.TE"),
+        ] {
+            let source = format!("{FIELD_PROBE}STARTFLAG\n.br\n{body}\n.br\nENDFLAG\n");
+            let markdown = render(&source, "roff", "markdown", "never", false);
+            for text in [
+                render(&source, "roff", "text", "never", false),
+                render(&markdown, "markdown", "text", "never", false),
+            ] {
+                let rows: Vec<_> = description(&text).lines().map(str::trim).collect();
+                let mut wanted = vec!["STARTFLAG"];
+                wanted.extend(expected);
+                if body.starts_with(".TS") {
+                    wanted.push("WWWWWWWWWWWWWWWW");
+                }
+                wanted.push("ENDFLAG");
+                assert_eq!(rows, wanted, "{source}");
+            }
+        }
+    }
+}
+
+#[test]
+fn relative_word_rewind_needs_no_overstrike_or_line_break_escape() {
+    // term_word's relative HORIZ retreats one native slot. T overwrites
+    // M both in one operand and across an independently executed No.
+    for (word, expected) in [
+        (r"PM\h'-1n'T", "PT"),
+        (r#".No PM Ns No "\h'-1n'T""#, "PT"),
+        ("PMT", "PMT"),
+    ] {
+        let source = format!("{FIELD_PROBE}STARTFLAG\n.br\n{word}\n.br\nENDFLAG\n");
+        assert_readbacks(&source, &format!("STARTFLAG\n{expected}\nENDFLAG"), None);
+        assert_eq!(
+            search_visible_word(&source, "PT"),
+            u64::from(expected == "PT")
+        );
+    }
+}
+
+#[test]
+fn generated_closers_retire_covered_option_names_before_explain() {
+    let closing = r#".Bq Cm v No "\o''""#;
+    let source = format!("{FIELD_PROBE}STARTFLAG\n.br\n{closing}\n.br\nENDFLAG\n");
+    assert_readbacks(&source, "STARTFLAG\n[]\nENDFLAG", None);
+    // termp_quote_post writes its tight delimiter through term_word.
+    // Only a complete surviving option spelling can own a definition.
+    for holder in ["Op", "Bq"] {
+        for option in ["a", "ab"] {
+            for (tail, survives) in [
+                ("", true),
+                (r#" No "\o''""#, false),
+                (r#" No "\o' '""#, true),
+            ] {
+                let source = format!(
+                    "{FIELD_PROBE}.Bl -tag -width Ds\n.It {holder} Fl {option}{tail}\nXBODY\n.El\n"
+                );
+                let query = format!("--explain=-{option}");
+                let result = run_text_input(
+                    &[
+                        "--input",
+                        "-",
+                        "--input-format",
+                        "roff",
+                        "--format",
+                        "json",
+                        "--display",
+                        "direct",
+                        &query,
+                    ],
+                    &source,
+                );
+                assert!(result.status.success(), "{source}: {result:?}");
+                let facts: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+                assert_eq!(
+                    facts["counts"]["directEntry"]["total"],
+                    u64::from(survives),
+                    "{source}"
+                );
+            }
+        }
+    }
+}

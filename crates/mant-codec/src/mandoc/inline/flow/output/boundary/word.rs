@@ -3,7 +3,7 @@
 use super::{Inline, InlineBuilder, PendingBoundary, push_text, trim_trailing_breakable_spaces};
 
 use super::super::native_passes;
-use super::super::record::SeparatorDisposition;
+use super::super::record::{SeparatorDisposition, WordPassProjection};
 
 impl InlineBuilder {
     pub(super) fn append_recorded_word_boundary(
@@ -17,6 +17,7 @@ impl InlineBuilder {
     ) -> usize {
         let accepted_row_break = !projection.closes_before.is_empty();
         let native_separator = projection.native_separator;
+        let empty_word = empty_word && !self.pending_word_prints_device_gap(projection);
         // Plain MC's one projected next-word blank is an advance reservation,
         // unlike a definition field's minbl. Once an empty word actually
         // buffers that blank, transfer ownership to the word cells. The
@@ -138,6 +139,17 @@ impl InlineBuilder {
             }
             layout_start
         }
+    }
+
+    fn pending_word_prints_device_gap(&self, projection: &WordPassProjection) -> bool {
+        // Geometry can prove an advance before the glyph it has left in
+        // BACKBEFORE. Project that gap before the delayed glyph even
+        // while this word's current inline payload is empty.
+        projection.separator == SeparatorDisposition::DeviceAdvance
+            && self
+                .execution
+                .zero_advance
+                .buffered_glyph_belongs_to_current_word()
     }
 
     pub(super) fn append_restarted_word_padding(

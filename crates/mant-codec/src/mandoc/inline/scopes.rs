@@ -242,16 +242,37 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
                 append_inline_nodes(builder, children, name);
             });
         }
-        Some(Mdoc(_)) if node.kind == NodeKind::Element => {
-            // Unhandled mdoc elements execute their own child words in
-            // print_mdoc_node, including validator-generated St/OS text.
-            // Only the explicit No branch can continue an Ev's spelling.
-            builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
-                append_inline_nodes(builder, children, name);
-            });
+        Some(Mdoc(token)) if node.kind == NodeKind::Element => {
+            append_mdoc_element(builder, *token, children, name);
         }
         _ => append_inline_nodes(builder, children, name),
     }
+}
+
+fn append_mdoc_element(
+    builder: &mut InlineBuilder,
+    token: MdocMacro,
+    children: &[Node],
+    name: Option<&str>,
+) {
+    // print_mdoc_node executes these child words, including generated OS
+    // names. Only the explicit No branch can continue an Ev spelling.
+    builder.with_declaration_operand(NativeOperandRole::Description, |builder| {
+        let append = |builder: &mut InlineBuilder| append_inline_nodes(builder, children, name);
+        if matches!(
+            token,
+            MdocMacro::Bsx
+                | MdocMacro::Dx
+                | MdocMacro::Fx
+                | MdocMacro::Nx
+                | MdocMacro::Ox
+                | MdocMacro::Ux
+        ) {
+            builder.with_implicit_word_keep(append);
+        } else {
+            append(builder);
+        }
+    });
 }
 
 fn append_literal_declaration(

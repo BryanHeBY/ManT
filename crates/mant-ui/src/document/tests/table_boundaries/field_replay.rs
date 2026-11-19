@@ -149,3 +149,69 @@ fn tbl_breakpoint_measurement_preserves_the_real_link_after_a_retreat() {
         }
     }
 }
+
+#[test]
+fn an_equal_label_keeps_the_owner_of_the_surviving_device_copy() {
+    let header = ".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample probe\n.SH DESCRIPTION\nSTARTFLAG\n.br\n";
+    let first = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
+    let second = LinkTarget::External(ExternalUri::parse("https://two.test").unwrap());
+    // The fixed devices print the same rows with equal labels and with
+    // the independent q/v tracers. term.c::encode1 retains the earlier
+    // bold copy when only the final styled slot is overwritten.
+    for (before_second, after_second, traced, target) in [
+        (r"\h'-2n'", r"\h'-2n'", "pqz", Some(&first)),
+        ("", "", "pvz", Some(&second)),
+        ("", r"\h'-2n'", "pz", None),
+    ] {
+        for (left, right, expected) in [
+            ('q', 'v', traced.to_owned()),
+            ('m', 'm', traced.replace(['q', 'v'], "m")),
+        ] {
+            let word = format!(
+                "p\\X'tty: link https://one.test'\\fB\\z{left}\\fR\\X'tty: link'{before_second}\\X'tty: link https://two.test'\\fR{right}\\fR\\X'tty: link'{after_second}z"
+            );
+            for source in [
+                format!("{header}{word}\n.br\nENDFLAG\n"),
+                format!("{header}.nf\n{word}\n.fi\nENDFLAG\n"),
+                format!(
+                    "{header}.TS\nl.\n{word}\n{}\n.TE\n.br\nENDFLAG\n",
+                    "W".repeat(32)
+                ),
+            ] {
+                let view = DocumentView::new(&restored(&source));
+                for width in [24_u16, 78] {
+                    let rendered = view.render(width);
+                    let hits = rendered.search(&expected);
+                    let [hit] = hits.as_slice() else {
+                        panic!("{source} at {width}");
+                    };
+                    let buffer = paint(&rendered, width);
+                    assert_eq!(
+                        painted(&buffer, hit.row, hit.start_column, hit.end_column),
+                        expected
+                    );
+                    let at = |column| TextPosition {
+                        row: hit.row,
+                        column,
+                    };
+                    assert_eq!(
+                        rendered.selected_text(RenderedSelection {
+                            anchor: at(hit.start_column),
+                            focus: at(hit.end_column - 1),
+                        }),
+                        expected
+                    );
+                    for col in hit.start_column..hit.end_column {
+                        let author = if col == hit.start_column + 1 {
+                            target
+                        } else {
+                            None
+                        };
+                        assert_eq!(rendered.link_target_at(hit.row, col), author, "{source}");
+                    }
+                    assert_eq!(rendered.search("ENDFLAG").len(), 1, "{source}");
+                }
+            }
+        }
+    }
+}

@@ -302,6 +302,10 @@ impl NativeSlots {
             .is_some_and(|run| self.cursor < run.end)
     }
 
+    pub(in crate::mandoc::inline) fn cursor_before_end(&self) -> bool {
+        self.cursor < self.extent
+    }
+
     /// Padding written by `tbl_number()` before the actual cell word.
     pub(in crate::mandoc::inline) fn prepend_fixed_blanks(&mut self, count: usize) {
         self.advance(count, FieldCell::NonBreakingBlank, None);

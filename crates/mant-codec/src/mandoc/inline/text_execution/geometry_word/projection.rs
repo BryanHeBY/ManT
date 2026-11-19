@@ -281,7 +281,10 @@ fn resolve_backlines(slots: &mut [FillSlot], editable: bool) -> Vec<(usize, usiz
                     // if a later device write prints on the same pass.
                     covers.push((target, index));
                 }
-                previous = None;
+                // Defer coverage of a blank when the backspace follows
+                // skipped cells. The blank still prints before the next
+                // graph in term_field, so the backspace reaches that cell.
+                previous = Some(index);
             }
             FieldCell::Graph { .. } | FieldCell::Hyphen => {
                 if let Some((target, backline)) = retreat.take() {

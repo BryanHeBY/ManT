@@ -368,6 +368,19 @@ impl InlineBuilder {
         self.execution.keep.phase = KeepPhase::PreKeep;
     }
 
+    pub(in crate::mandoc) fn with_implicit_word_keep(&mut self, append: impl FnOnce(&mut Self)) {
+        // mdoc_term.c::termp_xx_pre/post only install and retire PREKEEP
+        // when the caller has no keep. Promoting PREKEEP leaves it armed.
+        let owns_keep = self.execution.keep.phase == KeepPhase::Inactive;
+        if owns_keep {
+            self.enter_keep_words();
+        }
+        append(self);
+        if owns_keep {
+            self.exit_keep_words();
+        }
+    }
+
     pub(in crate::mandoc) fn exit_keep_words(&mut self) {
         // CVS stores PREKEEP/KEEP as formatter-global flags rather than a
         // nesting depth. Consequently an inner Ek clears an outer Bk too.

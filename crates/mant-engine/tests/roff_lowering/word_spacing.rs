@@ -4,6 +4,8 @@ use mant_ir::ResolvedContent;
 use super::case_failures::verify_cases;
 use super::json_roundtrip::json_string_roundtrip;
 
+#[path = "word_spacing/implicit_keep.rs"]
+mod implicit_keep;
 #[path = "word_spacing/marker_blanks.rs"]
 mod marker_blanks;
 #[path = "word_spacing/cases.rs"]
