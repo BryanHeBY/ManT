@@ -21,40 +21,71 @@ fn visible_slots_agree_across_paint_copy_search_and_link_hits() {
     .flat_map(|data| serde_json::from_str::<Vec<Case>>(data).unwrap());
     let target = LinkTarget::External(ExternalUri::parse("https://example.test/r").unwrap());
     for case in cases {
-        let view = DocumentView::new(&restored(&case.source));
-        for width in [24, 78] {
-            let rendered = view.render(width);
-            let buffer = paint(&rendered, width);
-            let shown: usize = (0..rendered.row_count)
-                .map(|row| {
-                    painted(&buffer, row, 0, width.into())
-                        .matches(&case.probe)
-                        .count()
-                })
-                .sum();
-            let copy = rendered.selected_text(RenderedSelection {
-                anchor: TextPosition { row: 0, column: 0 },
-                focus: TextPosition {
-                    row: rendered.row_count - 1,
-                    column: usize::from(width) - 1,
-                },
-            });
-            let hits = rendered.search(&case.probe);
-            assert_eq!(
-                [shown, copy.matches(&case.probe).count(), hits.len()],
-                [case.want; 3],
-                "{} at {width}",
-                case.source
-            );
-            for hit in hits {
-                for col in hit.start_column..hit.end_column {
-                    assert_eq!(
-                        rendered.link_target_at(hit.row, col),
-                        case.link.then_some(&target),
-                        "{} at {width}",
-                        case.source
-                    );
-                }
+        assert_visible_slots(
+            &case.source,
+            &case.probe,
+            case.want,
+            case.link.then_some(&target),
+        );
+    }
+}
+
+fn assert_visible_slots(source: &str, probe: &str, want: usize, target: Option<&LinkTarget>) {
+    let view = DocumentView::new(&restored(source));
+    for width in [24, 78] {
+        let rendered = view.render(width);
+        let buffer = paint(&rendered, width);
+        let shown: usize = (0..rendered.row_count)
+            .map(|row| {
+                painted(&buffer, row, 0, width.into())
+                    .matches(probe)
+                    .count()
+            })
+            .sum();
+        let copy = rendered.selected_text(RenderedSelection {
+            anchor: TextPosition { row: 0, column: 0 },
+            focus: TextPosition {
+                row: rendered.row_count - 1,
+                column: usize::from(width) - 1,
+            },
+        });
+        let hits = rendered.search(probe);
+        assert_eq!(
+            [shown, copy.matches(probe).count(), hits.len()],
+            [want; 3],
+            "{source} at {width}"
+        );
+        for hit in hits {
+            for col in hit.start_column..hit.end_column {
+                assert_eq!(
+                    rendered.link_target_at(hit.row, col),
+                    target,
+                    "{source} at {width}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn raw_overstrike_spelling_keeps_the_tbl_word_searchable_at_both_widths() {
+    // Fixed CVS term_strlen() sees the raw & in the overstrike on both
+    // devices. With a preceding \z, that slot measures but is covered.
+    let header =
+        ".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- example probe\n.SH DESCRIPTION\n";
+    for (skip, expected, absent) in [("", "LEFT&T", "LEFTT"), (r"\z", "LEFTT", "LEFT&T")] {
+        for alignment in ["l", "r", "c", "n"] {
+            for columns in [0, 5, 6, 7] {
+                let witness = if columns == 0 {
+                    String::new()
+                } else {
+                    format!("{}\n", "W".repeat(columns))
+                };
+                let source = format!(
+                    "{header}.TS\nbox;\n{alignment}.\nLEFT{skip}\\o'\\&'\\:T\n{witness}.TE\nENDTEXT\n"
+                );
+                assert_visible_slots(&source, expected, 1, None);
+                assert_visible_slots(&source, absent, 0, None);
             }
         }
     }

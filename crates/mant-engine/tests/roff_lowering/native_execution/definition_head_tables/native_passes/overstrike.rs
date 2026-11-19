@@ -98,6 +98,69 @@ fn tbl_measures_the_source_escape_before_deciding_whether_a_retreat_crosses_a_ro
 }
 
 #[test]
+fn escaped_overstrike_operands_keep_the_accepted_tbl_word_on_one_row() {
+    // Both pinned devices agree on the first cell's text and hard rows
+    // across these layouts. term_strlen() measures the raw operands;
+    // term_word() writes them and term_fill() uses that measured capacity.
+    for (word, expected) in [
+        (r"LEFT\o'\&'\:T", "LEFT&T"),
+        (r"LEFT\z\o'\&'\:T", "LEFTT"),
+        (r"LEFT\o'\:'\:T", "LEFT:T"),
+        (r"LEFT\o'\fR'\:T", "LEFTRT"),
+        (r"LEFT\o'\-'\:T", "LEFT-T"),
+        (r"LEFT\o'AB'\:T", "LEFTBT"),
+        (r"LEFT\o''\:T", "LEFTT"),
+        (r"LEFT\z\o''\:T", "LEFTT"),
+    ] {
+        for alignment in ["l", "r", "c", "n"] {
+            for columns in [0, 5, 6, 7] {
+                for (options, layout_tail, second_cell, witness_tail) in [
+                    ("box;", "", "", ""),
+                    ("box tab(|);", " l", "|ROWONE", "|ROWTWO"),
+                ] {
+                    let witness = if columns == 0 {
+                        String::new()
+                    } else {
+                        format!("{}{witness_tail}\n", "W".repeat(columns))
+                    };
+                    let source = format!(
+                        "{RAW_TABLE_HEADER}.TS\n{options}\n{alignment}{layout_tail}.\n{word}{second_cell}\n{witness}.TE\nENDTEXT\n"
+                    );
+                    let original = lower(&source);
+                    let wire = mant_render::render_query_json(&original, false).unwrap();
+                    let bundle: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
+                    let query = bundle.into();
+                    let blocks = &original.document.as_ref().unwrap().sections[1].blocks;
+                    let Some(Block::Table { rows, .. }) = first_table(blocks) else {
+                        panic!("expected the native table: {source}");
+                    };
+                    let first = &rows[0].cells[0].blocks;
+                    let [Block::Paragraph { children, .. }] = first.as_slice() else {
+                        panic!("expected one cell paragraph: {source}");
+                    };
+                    assert_eq!(mant_ir::inline_plain_text(children), expected, "{source}");
+                    assert_eq!(whole_word(&query, expected).matches.len(), 1, "{source}");
+                    for text in projections(&query) {
+                        assert_eq!(text.matches(expected).count(), 1, "{source}\n{text}");
+                        assert_eq!(text.matches("ENDTEXT").count(), 1, "{source}\n{text}");
+                        assert_eq!(
+                            text.matches("ROWONE").count(),
+                            usize::from(!second_cell.is_empty()),
+                            "{source}\n{text}"
+                        );
+                        assert_eq!(
+                            text.matches("ROWTWO").count(),
+                            usize::from(!witness_tail.is_empty() && columns > 0),
+                            "{source}\n{text}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn overstrike_then_motion_preserves_the_native_first_pass_word_boundary() {
     // Exact pinned ASCII and UTF-8 agree on these three adjacent widths.
     // term_word() retains every encode1 slot for absolute motion, while
