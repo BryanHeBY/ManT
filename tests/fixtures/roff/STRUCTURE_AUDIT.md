@@ -204,10 +204,12 @@ target page's AST obligations. Its source identity owns only the redirect;
 the resolved target has its own fidelity/structure identity. Missing targets
 remain hard failures, so this rule does not hide incomplete manual trees.
 
-The v17 literal display check reserves ordinary rows within the same
+The v18 literal display check reserves ordinary rows within the same
 mdoc column cell. A leading source space closes a filled row, and trailing
 spacing controls contribute their actual boundary without supplying display
-text. An equal ordinary row cannot stand in for the display.
+text. An equal ordinary row cannot stand in for the display. An unclassified
+tail in the cell keeps the observation in source review, even if the verified
+prefix matches the projection.
 
 Build the profiler and scan the reproducible real fixtures:
 

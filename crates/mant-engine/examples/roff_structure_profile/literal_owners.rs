@@ -216,9 +216,10 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
             if owners.iter().any(|owner| &owner.path == path) {
                 let plan = cell_plan(body, &profile.source_context, owners, first_owner, path);
                 if !plan.complete {
-                    for (_, owner) in owners.iter().enumerate().filter(|(index, owner)| {
-                        &owner.path == path && !plan.verified.contains(&(first_owner + index))
-                    }) {
+                    // A verified prefix can disprove a missing row, but
+                    // later unclassified text in this same cell could
+                    // supply an equal replacement after a deletion.
+                    for owner in owners.iter().filter(|owner| &owner.path == path) {
                         profile
                             .literal_display_reviews
                             .push([owner.opening.0, owner.opening.1]);

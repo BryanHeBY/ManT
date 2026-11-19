@@ -43,7 +43,7 @@ fn short_display_witnesses_include_delimiters_and_their_native_spacing() {
                 let (native, topology, mut doc) = parsed_structure(&source);
                 assert_eq!(
                     native.literal_display_reviews.len(),
-                    usize::from(suffix.starts_with(".Dl ")),
+                    2 * usize::from(suffix.starts_with(".Dl ")),
                     "{source}"
                 );
                 assert_eq!(missing(&native, &topology, &doc), 0, "{source}");
@@ -353,6 +353,30 @@ fn ordinary_cell_rows_are_reserved_across_filled_boundaries_and_trailing_request
                 }
             }
         }
+    }
+}
+
+#[test]
+fn an_unproved_cell_tail_cannot_certify_a_display_with_the_same_ink() {
+    // roff_term_pre_ta() affects tab evaluation without emitting a word.
+    // The literal auditor has not proved the following raw-cell range.
+    for kind in ["Dl", "D1", "literal", "unfilled"] {
+        let display = display(kind, "SENTRY");
+        let source = format!(
+            "{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta B\n{display}SENTRY\n.ta 3n\n.El\n{TAIL}"
+        );
+        let (native, topology, intact) = parsed_structure(&source);
+        assert_eq!(native.literal_display_reviews.len(), 1, "{source}");
+        assert_eq!(missing(&native, &topology, &intact), 0, "{source}");
+        let mut replaced = intact.clone();
+        replace_second_cell_row(&mut replaced, "SENTRY", "WRONG");
+        assert_eq!(missing(&native, &topology, &replaced), 1, "{source}");
+        let mut deleted = intact;
+        replace_second_cell_row(&mut deleted, "SENTRY", "");
+        // The merged observed block cannot tell which identical row is
+        // gone. The source Review must remain even with a matching prefix.
+        assert_eq!(missing(&native, &topology, &deleted), 0, "{source}");
+        assert_eq!(native.literal_display_reviews.len(), 1, "{source}");
     }
 }
 
