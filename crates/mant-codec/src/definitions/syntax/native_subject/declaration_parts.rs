@@ -466,6 +466,7 @@ fn independent_groups<'a>(
                     || match operand.role {
                         NativeOperandRole::ExplicitOption
                         | NativeOperandRole::Description
+                        | NativeOperandRole::SymbolicText
                         | NativeOperandRole::Command
                         | NativeOperandRole::LiteralPunctuation
                         | NativeOperandRole::ReferenceText(_)

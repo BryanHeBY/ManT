@@ -3,12 +3,21 @@ use super::eligibility::{NameSource, OperandUses};
 use crate::definitions::RecognizedName;
 use mant_ir::Inline;
 use mant_ir::inline_plain_text as plain_text;
+use std::ops::Range;
 
 /// A typed manual label can establish a directory command without font
 /// styling. Its visible spelling must contain that exact command name;
 /// destinations or arbitrary alternative labels are never lexical evidence.
-pub(super) fn inferred_command_name(term: &[Inline]) -> Option<String> {
-    manual_name(term).or_else(|| leading_styled_command_name(term))
+pub(super) fn inferred_command_binding(
+    term: &[Inline],
+    text: &str,
+    offset: usize,
+    uses: OperandUses<'_>,
+) -> Option<RecognizedName> {
+    let name = manual_name(term)
+        .or_else(|| styled_command_name(term, offset, uses))
+        .or_else(|| command_name_from_authored_form(text).map(str::to_owned))?;
+    command_binding(text, &name, offset, uses)
 }
 
 pub(super) fn command_binding(
@@ -19,6 +28,7 @@ pub(super) fn command_binding(
 ) -> Option<RecognizedName> {
     let start = text.find(name)?;
     let end = start + name.len();
+    let end = start + before_symbol(text, start..end, uses.shifted(offset))?.len();
     // Strong styling can cut the prefix of one joined command template.
     // A separate argument or an explicit syntax delimiter still gives a
     // complete name. Check the rest of the joined token even when an
@@ -32,7 +42,7 @@ pub(super) fn command_binding(
     if joined > 0 && uses.protects(&(offset + end..offset + end + joined)) {
         return None;
     }
-    let binding = RecognizedName::contiguous(name, offset + start);
+    let binding = RecognizedName::contiguous(&text[start..end], offset + start);
     uses.permits(&binding, NameSource::Lexical)
         .then_some(binding)
 }
@@ -79,10 +89,31 @@ pub(in crate::definitions) fn command_name_from_authored_form(value: &str) -> Op
 
 /// Read a formatter-emphasized command name without adjacent placeholders.
 pub(in crate::definitions) fn leading_styled_command_name(term: &[Inline]) -> Option<String> {
+    styled_command_name(term, 0, OperandUses::default())
+}
+
+fn styled_command_name(term: &[Inline], offset: usize, uses: OperandUses<'_>) -> Option<String> {
     let mut name = String::new();
     append_literal_head(term, &mut name);
-    let name = styled_command_prefix(name.trim());
-    is_command_name(name).then(|| name.to_owned())
+    let start = name.len() - name.trim_start().len();
+    let end = start + name.trim().len();
+    let prefix = before_symbol(&name, start..end, uses.shifted(offset))?;
+    let prefix = styled_command_prefix(prefix);
+    is_command_name(prefix).then(|| prefix.to_owned())
+}
+
+fn before_symbol<'a>(text: &'a str, span: Range<usize>, uses: OperandUses<'_>) -> Option<&'a str> {
+    #[cfg(feature = "roff")]
+    if let Some(symbol) = uses.command_symbol_start(span.clone()) {
+        let before = &text[span.start..symbol];
+        let name = before.trim_end();
+        // Separate native scopes can still contribute to one visible word.
+        return (before.len() > name.len() || text[symbol..].starts_with(char::is_whitespace))
+            .then_some(name);
+    }
+    #[cfg(not(feature = "roff"))]
+    let _ = uses;
+    Some(&text[span])
 }
 
 // Nm/Cm and adjacent font runs can form one multiword literal head. Preserve

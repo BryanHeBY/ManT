@@ -135,16 +135,16 @@ fn append_reference_body(builder: &mut InlineBuilder, nodes: &[Node], name: Opti
 fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let children = inline_children(node);
     if let Some(font) = super::mdoc_text_font(node.macro_token.as_ref()) {
-        let append = |builder: &mut InlineBuilder| {
-            builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
+        let role = match node.macro_token.as_ref() {
+            // Explicit No can supply a declaration operand or separator.
+            Some(Mdoc(MdocMacro::No)) => NativeOperandRole::LiteralContinuation(None),
+            // mdoc_term.c gives Sy its own bold scope, separate from Cm/Ic.
+            Some(Mdoc(MdocMacro::Sy)) => NativeOperandRole::SymbolicText,
+            _ => NativeOperandRole::Description,
         };
-        if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::No)) {
-            // termp_li_pre executes explicit literal text. In a HEAD it
-            // may supply a declaration operand or an independent separator.
-            builder.with_native_operand_role(NativeOperandRole::LiteralContinuation(None), append);
-        } else {
-            builder.with_native_operand_role(NativeOperandRole::Description, append);
-        }
+        builder.with_native_operand_role(role, |builder| {
+            builder.with_font_scope(font, |builder| append_inline_nodes(builder, children, name));
+        });
         return;
     }
     match node.macro_token.as_ref() {

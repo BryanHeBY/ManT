@@ -51,6 +51,8 @@ def expected_ids():
 def queries(case):
     family = case["family"]
     if family == "N1a":
+        if case["axes"][1:] == ["command", "sy"]:
+            return ["run", "run FILE", "FILE"]
         return [{"digit": "-1", "flag": "-f", "command": "run",
                  "env": "DEMO_HOME"}[case["axes"][1]]]
     return {
@@ -71,7 +73,7 @@ class AnnotationPublicationFixtureTests(unittest.TestCase):
         cases = [json.loads(row) for row in recorded.splitlines()]
         self.assertEqual(len(cases), 504)
         self.assertEqual({case["id"] for case in cases}, expected_ids())
-        self.assertEqual(sum(len(case["queries"]) for case in cases), 224)
+        self.assertEqual(sum(len(case["queries"]) for case in cases), 230)
         for case in cases:
             self.assertEqual(case["id"], "/".join([case["family"], *case["axes"]]))
             self.assertEqual(queries(case), case["queries"], case["id"])

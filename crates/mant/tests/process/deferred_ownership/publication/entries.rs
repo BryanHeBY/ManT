@@ -5,13 +5,12 @@ use serde_json::{Value, json};
 mod explanation_ranges;
 
 fn names(case: &Case<'_>) -> &'static [&'static str] {
-    match (case.axes[0], case.axes[1], case.axes[2]) {
-        (_, "digit", _) => &["-1"],
-        (_, "flag", _) => &["-f"],
-        ("OPTIONS" | "ENVIRONMENT", "command", "sy") => &["run FILE"],
-        (_, "command", _) => &["run"],
-        (_, "env", "xr") => &[],
-        (_, "env", _) => &["DEMO_HOME"],
+    match (case.axes[1], case.axes[2]) {
+        ("digit", _) => &["-1"],
+        ("flag", _) => &["-f"],
+        ("command", _) => &["run"],
+        ("env", "xr") => &[],
+        ("env", _) => &["DEMO_HOME"],
         _ => panic!("unknown head {}", case.id),
     }
 }
@@ -106,7 +105,7 @@ pub(super) fn query(
     explanation: &mant_protocol::QueryExplanation,
 ) {
     let direct = match case.family {
-        "N1a" => names(case).contains(&query),
+        "N1a" => names(case).contains(&query) || query == "run FILE",
         "N1c" => case.axes[1] == "headless",
         "X-head-marker" => query != "printf",
         _ => true,
@@ -122,13 +121,18 @@ pub(super) fn query(
     }
     let evidence = &response["evidence"][0];
     assert_eq!(evidence["class"], "direct-entry", "{} {query}", case.id);
-    assert!(
-        array(&evidence["bases"])
-            .iter()
-            .any(|basis| basis["kind"] == "name"),
-        "{} {query} name basis",
-        case.id
-    );
+    let bases = array(&evidence["bases"]);
+    if query == "run FILE" {
+        // Cm and Sy have separate executed scopes in the fixed tree.
+        assert_eq!(bases.len(), 1, "{} {query} exact form basis", case.id);
+        assert_eq!(bases[0]["kind"], "form", "{} {query}", case.id);
+    } else {
+        assert!(
+            bases.iter().any(|basis| basis["kind"] == "name"),
+            "{} {query} name basis",
+            case.id
+        );
+    }
     assert!(
         explanation_ranges::assert_ranges(explanation, query) > 0,
         "{} {query}",

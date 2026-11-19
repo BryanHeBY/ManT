@@ -229,10 +229,7 @@ pub(super) fn name_occurrences_with_operands(
                             let text = plain_text(&group);
                             let start = offset;
                             offset += text.len() + 1;
-                            let name = commands::inferred_command_name(&group).or_else(|| {
-                                commands::command_name_from_authored_form(&text).map(str::to_owned)
-                            })?;
-                            commands::command_binding(&text, &name, start, uses)
+                            commands::inferred_command_binding(&group, &text, start, uses)
                         })
                         .collect()
                 }

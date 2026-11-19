@@ -131,9 +131,7 @@ pub(in crate::definitions) fn recognize_inferred_head_with_operands(
             named::named_occurrences_with_uses(&text, named::is_variable_term, uses)?
         }
         mant_ir::EntryKind::Command => {
-            let name = commands::inferred_command_name(inlines)
-                .or_else(|| commands::command_name_from_authored_form(&text).map(str::to_owned))?;
-            vec![commands::command_binding(&text, &name, 0, uses)?]
+            vec![commands::inferred_command_binding(inlines, &text, 0, uses)?]
         }
         _ => return None,
     };

@@ -57,6 +57,9 @@ pub(crate) enum NativeOperandRole {
     /// Styled text executed by its own mdoc macro in a declaration HEAD.
     #[cfg(feature = "roff")]
     Description,
+    /// An independently executed mdoc Sy word.
+    #[cfg(feature = "roff")]
+    SymbolicText,
     /// An executed Cm/Ic operand can open an independent command declaration.
     #[cfg(feature = "roff")]
     Command,
@@ -169,7 +172,7 @@ impl NativeOperandRole {
 
     #[cfg(feature = "roff")]
     pub(crate) fn is_description(self) -> bool {
-        matches!(self, Self::Description | Self::Command)
+        matches!(self, Self::Description | Self::SymbolicText | Self::Command)
     }
 
     #[cfg(feature = "roff")]
@@ -351,14 +354,13 @@ impl CapturedHeadOperands {
                 .operands
                 .iter()
                 .find(|operand| {
-                    !matches!(
-                        operand.role,
-                        NativeOperandRole::EnclosureStart { .. }
-                            | NativeOperandRole::EnclosureEnd(_)
-                            | NativeOperandRole::LiteralDelimiter { .. }
-                            | NativeOperandRole::Description
-                            | NativeOperandRole::Command
-                    )
+                    !operand.role.is_description()
+                        && !matches!(
+                            operand.role,
+                            NativeOperandRole::EnclosureStart { .. }
+                                | NativeOperandRole::EnclosureEnd(_)
+                                | NativeOperandRole::LiteralDelimiter { .. }
+                        )
                 })
                 .is_some_and(|operand| operand.role.is_operand_label());
         if !check_scopes {

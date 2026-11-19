@@ -53,7 +53,6 @@ impl<'a> OperandUses<'a> {
         }
     }
 
-    #[cfg(feature = "roff")]
     pub(super) fn shifted(self, offset: usize) -> Self {
         Self {
             offset: self.offset + offset,
@@ -70,7 +69,13 @@ impl<'a> OperandUses<'a> {
 
     pub(super) fn permits(self, name: &RecognizedName, source: NameSource) -> bool {
         name.parts.iter().all(|part| match source {
-            NameSource::Lexical => !self.protects(part),
+            NameSource::Lexical => {
+                #[cfg(feature = "roff")]
+                if self.command_symbol_start(part.clone()).is_some() {
+                    return false;
+                }
+                !self.protects(part)
+            }
             #[cfg(feature = "roff")]
             NameSource::Operand(role) => {
                 if matches!(role, NativeOperandRole::ClippedSubject(..)) {
@@ -101,7 +106,25 @@ impl<'a> OperandUses<'a> {
             .any(|operand| operand.role.is_parameter())
     }
 
+    #[cfg(feature = "roff")]
+    pub(super) fn command_symbol_start(self, part: Range<usize>) -> Option<usize> {
+        let mut command = false;
+        self.intersecting(&part).find_map(|operand| {
+            command |= operand.role == NativeOperandRole::Command;
+            (command && operand.role == NativeOperandRole::SymbolicText)
+                .then(|| operand.bytes.start - self.offset)
+        })
+    }
+
     pub(super) fn protects_syntax(self, offset: usize) -> bool {
+        #[cfg(feature = "roff")]
+        if operand_at(self.operands, self.offset + offset)
+            .is_some_and(|operand| operand.role == NativeOperandRole::SymbolicText)
+        {
+            // mdoc_macro.c::in_line moves a bare delimiter out of Sy.
+            // Punctuation still owned by a Sy text word stays literal.
+            return true;
+        }
         self.protects(&(offset..offset + 1))
     }
 

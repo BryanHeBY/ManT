@@ -689,6 +689,10 @@ separator and a separately proved name.
 Native punctuation can end a macro's inline scope while leaving its argument
 in the same invocation. Option choices such as `-M mask | time` remain in the
 visible form. Only `-M` supplies a direct name and uses the name budget.
+A separate `Sy` word after a `Cm` or `Ic` command remains in the complete
+form. `Cm run Sy FILE` binds `run` as the name and still permits an exact
+`run FILE` form lookup. The command name can include multiple executed
+command words. A glued suffix does not prove a shorter name.
 
 Environment and variable definitions keep their names before one complete
 trailing parenthetical note, including styled descriptions. The enclosing

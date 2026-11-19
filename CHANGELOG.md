@@ -165,7 +165,8 @@ that crate was not published for that change.
   environment names, with explicit coverage diagnostics at the name limit.
 - Keep option choices and command operands searchable in their original
   definitions. Reserve direct names and the name budget for declarations
-  with independent evidence.
+  with independent evidence. A separate symbolic suffix remains readable
+  in a command form without extending the command name.
 - Omit the unused operands of the obsolete mdoc `Db` macro while retaining
   the native validation diagnostic.
 - Resume roff anchor suffix allocation from the last candidate for each slug.

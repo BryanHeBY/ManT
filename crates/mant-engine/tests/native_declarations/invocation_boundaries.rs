@@ -71,6 +71,84 @@ fn visible_argument(content: &ResolvedContent, name: &str) {
 }
 
 #[test]
+fn a_separate_symbolic_operand_keeps_its_text_without_extending_the_command_name() {
+    // The pinned tree gives Cm/Ic and Sy separate elements, even though
+    // mdoc_term.c::termp_bold_pre styles both and the complete form is visible.
+    for section in ["DESCRIPTION", "OPTIONS", "ENVIRONMENT", "COMMANDS"] {
+        for (head, form, name, argument) in [
+            ("Cm run Sy FILE", "run FILE", "run", "FILE"),
+            ("Ic run Sy file", "run file", "run", "file"),
+            (
+                "Cm run Cm check Sy file",
+                "run check file",
+                "run check",
+                "file",
+            ),
+            (
+                "Cm run Nm check Sy file",
+                "run check file",
+                "run check",
+                "file",
+            ),
+        ] {
+            let content = page(section, head, "BODY");
+            check_head(owner(&content), form, &[name]);
+            direct(&content, name, "BODY");
+            direct(&content, form, "BODY");
+            visible_argument(&content, argument);
+        }
+        // Ns executes a joined word. A source scope change cannot by itself
+        // make the shorter Cm spelling an independent visible name.
+        let joined = page(section, "Cm run Ns Sy FILE", "BODY");
+        check_head(owner(&joined), "runFILE", &[]);
+        assert_eq!(explain(&joined, "run").counts.direct_entry.total, 0);
+    }
+
+    let styled = page("COMMANDS", "Sy run FILE", "BODY");
+    check_head(owner(&styled), "run FILE", &["run FILE"]);
+    let assignment = page("ENVIRONMENT", "Cm TOOL=FILE", "BODY");
+    check_head(owner(&assignment), "TOOL=FILE", &["TOOL"]);
+    assert_eq!(
+        EntryOwner::Definition(owner(&assignment))
+            .facts()
+            .unwrap()
+            .kind,
+        EntryKind::EnvironmentVariable
+    );
+}
+
+#[test]
+fn punctuation_inside_a_symbolic_operand_does_not_open_another_name() {
+    // mdoc_macro.c::in_line retains quoted punctuation in the Sy text
+    // node and closes that scope before the separate comma.
+    for section in ["DESCRIPTION", "OPTIONS", "ENVIRONMENT", "COMMANDS"] {
+        for (head, form, names) in [
+            (r#"Cm run Sy "file,other""#, "run file,other", &["run"][..]),
+            (r#"Cm run Sy "file|other""#, "run file|other", &["run"][..]),
+            (
+                r#"Cm run Sy "file,other" , Cm extra"#,
+                "run file,other, extra",
+                &["run", "extra"][..],
+            ),
+            (
+                r#"Ic run Sy "file|other" , Cm extra"#,
+                "run file|other, extra",
+                &["run", "extra"][..],
+            ),
+        ] {
+            let content = page(section, head, "BODY");
+            check_head(owner(&content), form, names);
+            for name in names {
+                direct(&content, name, "BODY");
+            }
+            for operand in ["file", "other"] {
+                visible_argument(&content, operand);
+            }
+        }
+    }
+}
+
+#[test]
 fn option_arguments_remain_readable_without_owning_names() {
     // CVS mdoc_macro.c::in_line closes/reopens Cm or Ic at the middle
     // delimiter. The extra node does not signal a new declaration.

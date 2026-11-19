@@ -43,8 +43,9 @@ tails = {"xr": "Xr printf 3", "ar": "Ar FILE", "lk": "Lk https://example.test FI
          "mt": "Mt y@example.test", "sy": "Sy FILE"}
 for section, first, tail in product(("DESCRIPTION", "OPTIONS", "ENVIRONMENT"), heads, tails):
     head, query = heads[first]
+    queries = (query, "run FILE", "FILE") if (first, tail) == ("command", "sy") else (query,)
     emit("N1a", (section, first, tail), "mdoc",
-         items(".It " + head + " " + tails[tail] + "\nBODY"), (query,), section)
+         items(".It " + head + " " + tails[tail] + "\nBODY"), queries, section)
 
 # N1b: empty owner, description provider, both, provider BODY, no link.
 for place, separator in product(("empty", "provider", "both", "body", "none"),
