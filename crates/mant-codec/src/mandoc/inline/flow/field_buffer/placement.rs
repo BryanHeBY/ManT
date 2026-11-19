@@ -271,7 +271,12 @@ pub(in crate::mandoc::inline) fn isolated_passes(
     field.apply_writes(writes);
     let mut passes = Vec::new();
     let mut ranges = Vec::new();
-    let target = table_field_units.unwrap_or(usize::MAX / 4);
+    // Ordinary wrapping belongs to the viewport. Use the native margin
+    // when term_fill/term_field can change a marker's acceptance or when
+    // a backline covers a glyph only if its replacement prints on that pass.
+    let target = table_field_units
+        .filter(|_| field.last_break_marker.is_some() || field.has_zero_width_retreats())
+        .unwrap_or(usize::MAX / 4);
     while let Some(pass) = field.scan_fill_pass(target, true) {
         let end = field.printed_content_end(pass.start, pass.end);
         let closes = field.has_non_ignorable_after(pass.end, false);

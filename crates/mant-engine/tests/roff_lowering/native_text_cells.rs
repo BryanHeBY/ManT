@@ -80,3 +80,70 @@ fn tagged_field_writes_keep_accepted_and_rejected_prefixes() {
 fn every_printable_ascii_scalar_survives_native_recording() {
     assert_rows("all-printable-ascii");
 }
+
+#[test]
+fn edited_table_prose_keeps_soft_width_and_hard_markers_distinct() {
+    // On both fixed terminal profiles, tbl_term.c::tbl_word writes PT in
+    // these continued cells. term_fill wraps the remaining words according
+    // to w(), and the marked case additionally forces a break after PT.
+    let header = ".TH PROBE 1 \"November 19, 2026\"\n.SH DESCRIPTION\n";
+    let words = "ALPHA BRAVO CHARLIE DELTA EXTRA GAMMA PLAIN MORE TEXT HERE";
+    for width in ["8n", "16n", "48n"] {
+        for motion in [r"\h'-1n'", r"\h'|1n'"] {
+            for marker in ["", r"\p"] {
+                let source = format!(
+                    "{header}.TS\nbox tab(|);\nl lw({width}).\n{}|T{{\nPM{motion}T{marker} {words}\nT}}\n.TE\n",
+                    "W".repeat(42)
+                );
+                let decoded = super::json_roundtrip::json_string_roundtrip(
+                    &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+                );
+                let [mant_ir::Block::Table { rows, .. }] =
+                    decoded.document.as_ref().unwrap().sections[0]
+                        .blocks
+                        .as_slice()
+                else {
+                    panic!("{source}");
+                };
+                let [mant_ir::Block::Paragraph { children, .. }] =
+                    rows[0].cells[1].blocks.as_slice()
+                else {
+                    panic!("{source}");
+                };
+                let projected = mant_ir::inline_plain_text(children);
+                if marker.is_empty() {
+                    assert_eq!(projected, format!("PT {words}"), "{source}");
+                } else {
+                    assert_eq!(projected.lines().next(), Some("PT"), "{source}");
+                    assert_eq!(
+                        projected.split_whitespace().skip(1).collect::<Vec<_>>(),
+                        words.split_whitespace().collect::<Vec<_>>(),
+                        "{source}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_width_choice_still_controls_whether_tbl_overstrikes_cover_a_glyph() {
+    // Fixed ASCII and UTF-8 term_field() retain b when the break point
+    // takes Y onto the next pass, and cover b when the two are on one pass.
+    let header = ".TH PROBE 1 \"November 19, 2026\"\n.SH DESCRIPTION\n.TS\nl.\n";
+    for (witness, expected) in [("", "LEFTb\nYTAIL"), ("WWWWWWWWWW\n", "LEFTYTAIL")] {
+        let source = format!("{header}LEFT\\zb\\:YTAIL\n{witness}.TE\n");
+        let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let [mant_ir::Block::Table { rows, .. }] = content.document.as_ref().unwrap().sections[0]
+            .blocks
+            .as_slice()
+        else {
+            panic!("{source}");
+        };
+        let [mant_ir::Block::Paragraph { children, .. }] = rows[0].cells[0].blocks.as_slice()
+        else {
+            panic!("{source}");
+        };
+        assert_eq!(mant_ir::inline_plain_text(children), expected, "{source}");
+    }
+}
