@@ -81,10 +81,7 @@ impl InvocationTail {
                     // through mdoc_isdelim(). Accepted edge glyphs can
                     // still enclose arguments in the visible invocation.
                     if role == NativeOperandRole::Placeholder {
-                        let suffix = word.trim_end_matches(is_bracket).len();
-                        for ch in word[suffix..].chars() {
-                            state.bracket(ch);
-                        }
+                        state.parameter_edges(word);
                     }
                 }
                 NativeOperandRole::Command if !state.groups.is_empty() => state.argument(),
@@ -144,6 +141,37 @@ impl ScopeScan {
         }
     }
 
+    fn parameter_edges(&mut self, word: &str) {
+        let suffix = word.trim_end_matches(is_bracket).len();
+        if suffix == word.len() {
+            return;
+        }
+        // mdoc_isdelim() only sees bare punctuation. Pair brackets
+        // belonging to the same Ar before offering its unmatched edge
+        // glyphs to the enclosing invocation.
+        let mut local = Vec::new();
+        let mut edge = Vec::new();
+        for (offset, glyph) in word.char_indices() {
+            match glyph {
+                '(' | '[' => local.push((offset, glyph)),
+                ')' | ']' => {
+                    let open = if glyph == ')' { '(' } else { '[' };
+                    if local.last().is_some_and(|&(_, last)| last == open) {
+                        local.pop();
+                    } else if offset >= suffix {
+                        edge.push((offset, glyph));
+                    }
+                }
+                _ => {}
+            }
+        }
+        edge.extend(local.into_iter().filter(|&(offset, _)| offset >= suffix));
+        edge.sort_unstable_by_key(|&(offset, _)| offset);
+        for (_, glyph) in edge {
+            self.bracket(glyph);
+        }
+    }
+
     fn authored_text(&mut self, text: &str) {
         let text = text.trim();
         if is_bracket_text(text) {
@@ -181,15 +209,15 @@ impl ScopeScan {
     }
 
     fn close(&mut self, kind: InvocationGroup) {
-        match self.groups.pop() {
-            Some(group) if group.kind == kind => {
-                if group.argument {
-                    self.argument();
-                } else {
-                    self.unproved_prose();
-                }
-            }
-            _ => self.malformed = true,
+        if self.groups.last().is_none_or(|group| group.kind != kind) {
+            self.malformed = true;
+            return;
+        }
+        let group = self.groups.pop().expect("matching invocation group");
+        if group.argument {
+            self.argument();
+        } else {
+            self.unproved_prose();
         }
     }
 

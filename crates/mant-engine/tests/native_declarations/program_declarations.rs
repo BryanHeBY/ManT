@@ -402,6 +402,66 @@ fn authored_group_edges_preserve_qualified_program_names_and_aliases() {
 }
 
 #[test]
+fn parameter_internal_brackets_do_not_close_the_invocation() {
+    // mdoc_isdelim() is called on an entire token. CVS keeps these
+    // paired brackets in one Ar, including inside an explicit Oo BODY.
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (head, form, names, argument) in [
+            (
+                "Nm alpha Ar path[index]",
+                "alpha path[index]",
+                &["alpha"][..],
+                "path[index]",
+            ),
+            (
+                "Nm alpha Ar table[row][column]",
+                "alpha table[row][column]",
+                &["alpha"][..],
+                "table[row][column]",
+            ),
+            (
+                r#"Nm alpha Op Ar "file(s)""#,
+                "alpha [file(s)]",
+                &["alpha"][..],
+                "file(s)",
+            ),
+            (
+                r"Nm alpha Cm dump Oo Ar path\&[index\&] | Nm beta Oc",
+                "alpha dump [path[index] | beta]",
+                &["alpha dump"][..],
+                "path[index]",
+            ),
+            (
+                "Nm gamma , Nm alpha Cm dump Oo Ar map[(index)] | Nm beta Oc",
+                "gamma, alpha dump [map[(index)] | beta]",
+                &["gamma", "alpha dump"][..],
+                "map[(index)]",
+            ),
+            (
+                "Nm alpha Ar path[index] | Nm beta , Nm gamma",
+                "alpha path[index] | beta, gamma",
+                &["gamma"][..],
+                "path[index]",
+            ),
+            (
+                "Nm alpha Cm dump Ar path[ Ns Ar index ]",
+                "alpha dump path[index]",
+                &["alpha dump"][..],
+                "path[index]",
+            ),
+        ] {
+            for head in [head.to_owned(), format!("Xo\n.{head}\n.Xc")] {
+                let rejected = [argument, "beta"]
+                    .into_iter()
+                    .filter(|name| form.contains(name))
+                    .collect::<Vec<_>>();
+                check(&source(section, &head), form, names, &rejected, BODY, 9);
+            }
+        }
+    }
+}
+
+#[test]
 fn surviving_native_ink_owns_the_definition_name_and_its_body() {
     // term.c::encode1 keeps both author glyphs when it arms a backspace.
     // The final HORIZ overwrites an earlier backspace, exposing B.
