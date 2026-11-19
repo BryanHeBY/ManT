@@ -42,9 +42,11 @@ that crate was not published for that change.
 - Keep glyph sources and styles available until native word writes settle.
   A later overwrite can reveal earlier glyphs through backspaces, word-end
   markers and horizontal advances while preserving link ranges and names.
+  Large device-only advances retain an editable suffix across later words.
 - Keep literal and macro-generated argument groups equivalent in mdoc
-  command lists, including escaped or attached brackets. Native pipes
-  between independent invocations still suppress standalone names.
+  command lists, including balanced brackets within a single parameter.
+  Native pipes between independent invocations still suppress standalone
+  names.
 - Resolve tbl word-end marks against the native accepted cell range.
   Horizontal advances retain exactly the part of a compressed run reached
   by the field scan, preventing both rejected text and extra empty rows.
