@@ -40,11 +40,11 @@ that crate was not published for that change.
 ### mant-codec
 
 - Keep glyph sources and styles available until native word writes settle.
-  A later write can remove a backspace or complete an overstrike after a
-  zero-width control without dropping the surviving glyph or moving its link.
-- Keep literal and macro-generated groups equivalent in mdoc command lists.
-  Native pipes between program invocations still suppress standalone names,
-  including the Roman-font spelling and a grouped right-hand invocation.
+  A later overwrite can reveal earlier glyphs through backspaces, word-end
+  markers and horizontal advances while preserving link ranges and names.
+- Keep literal and macro-generated argument groups equivalent in mdoc
+  command lists, including escaped or attached brackets. Native pipes
+  between independent invocations still suppress standalone names.
 - Resolve tbl word-end marks against the native accepted cell range.
   Horizontal advances retain exactly the part of a compressed run reached
   by the field scan, preventing both rejected text and extra empty rows.
