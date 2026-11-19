@@ -498,7 +498,11 @@ fn overstrike_projects_one_terminal_cell_through_the_shared_zero_advance_state()
         ("trailing-blank", r"A\o'BC 'D", "ACD"),
         ("repeated-trailing-blanks", r"A\o'BC  'D", "ACD"),
         ("trailing-tab", "A\\o'BC\t'D", "ACD"),
-        ("all-blanks", r"A\o'   'D", "AD"),
+        // term.c::term_word trims the final backspace/blank pair. The
+        // advancing blank itself still occupies one cell.
+        ("one-blank", r"A\o' 'D", "A D"),
+        ("all-blanks", r"A\o'   'D", "A D"),
+        ("zero-advance-all-blanks", r"A\z\o'   'D", "AD"),
         ("zero-advance", r"A\z\o'BC'D", "AD"),
         ("zero-advance-trailing-blank-at-end", r"A\z\o'BC '", "AC"),
         ("empty", r"A\o''D", "AD"),
