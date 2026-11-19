@@ -68,14 +68,23 @@ impl GroupPlan {
         }
         let first = visible.as_ptr() as usize - text.as_ptr() as usize;
         let index = separators.partition_point(|separator| separator.bytes.start < first);
-        let leading = separators
+        let next = separators
             .get(index)
-            .filter(|separator| separator.bytes.start == first);
+            .filter(|separator| separator.bytes.end <= bytes.end);
+        let leading = next.filter(|separator| separator.bytes.start == first);
+        // An interruption just after the key leaves the first argument on
+        // the other side of the display. Its proved invocation delimiter
+        // still binds both retained intervals to the same declaration.
+        let continues_invocation = next
+            .and_then(|separator| separator.invocation_start)
+            .is_some_and(|start| start < first);
         let joins = self.join == Join::Enclosure
             || self.admits_alternative && leading.is_some_and(|sep| sep.alternative)
             || self.join == Join::AcrossDisplay
                 && self.group > 0
-                && (self.trailing_separator || leading.is_some_and(|sep| !sep.alternative));
+                && (self.trailing_separator
+                    || leading.is_some_and(|sep| !sep.alternative)
+                    || continues_invocation);
         if !joins
             && (self.join == Join::AwaitSeparator || leading.is_some_and(|sep| sep.alternative))
         {
@@ -84,7 +93,7 @@ impl GroupPlan {
             let Some(separator) = separators[index..]
                 .iter()
                 .take_while(|separator| separator.bytes.end <= bytes.end)
-                .find(|separator| !separator.alternative)
+                .find(|separator| !separator.alternative && separator.invocation_start.is_none())
             else {
                 self.join = Join::AwaitSeparator;
                 return;

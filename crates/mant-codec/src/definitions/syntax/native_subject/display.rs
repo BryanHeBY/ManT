@@ -206,19 +206,24 @@ impl Projection {
     fn has_separated_command(&self, text: &str) -> bool {
         // A confirmed Cm/Ic after the author's separate delimiter supplies
         // its own evidence even when the preceding clause has no name.
+        let mut syntax = super::invocation::Syntax::new(text, &self.operands);
+        let mut start = 0;
         self.operands
             .iter()
             .zip(self.operands.iter().skip(1))
             .any(|(separator, command)| {
-                (separator.role == NativeOperandRole::LiteralContinuation(None)
-                    || separator.role == NativeOperandRole::PipeDelimiter(None)
-                        && !super::declaration_parts::is_command_pipe(
-                            text,
-                            separator.bytes.start,
-                            &self.operands,
-                        ))
-                    && command.role == NativeOperandRole::Command
-                    && matches!(text[separator.bytes.clone()].trim(), "," | "|")
+                let delimiter = text[separator.bytes.clone()].trim();
+                if !matches!(
+                    separator.role,
+                    NativeOperandRole::LiteralContinuation(None)
+                        | NativeOperandRole::PipeDelimiter(None)
+                ) || !matches!(delimiter, "," | "|")
+                    || syntax.protects(start, super::offset(text, delimiter))
+                {
+                    return false;
+                }
+                start = separator.bytes.end;
+                command.role == NativeOperandRole::Command
                     && text[separator.bytes.end..command.bytes.start]
                         .trim()
                         .is_empty()

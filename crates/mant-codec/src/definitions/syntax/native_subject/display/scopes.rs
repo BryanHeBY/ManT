@@ -1,5 +1,8 @@
 //! An accepted table can separate declarations only at the outer HEAD level.
-use super::super::annotations::{self, Boundary as MarkBoundary, Mark, OpenMark};
+use super::super::{
+    annotations::{self, Boundary as MarkBoundary, Mark, OpenMark},
+    invocation,
+};
 use crate::definitions::syntax::scan::{MAX_NESTING, closing, quote_closer};
 use crate::definitions::{NativeOperand, NativeOperandRole};
 use std::ops::Range;
@@ -24,6 +27,7 @@ pub(super) struct HeadPartition {
 pub(super) struct Separator {
     pub(super) bytes: Range<usize>,
     pub(super) alternative: bool,
+    pub(super) invocation_start: Option<usize>,
 }
 
 pub(super) fn display_boundaries(
@@ -38,6 +42,7 @@ pub(super) fn display_boundaries(
     let mut end = 0;
     let mut bodies = bodies.iter().peekable();
     let mut active_body = None;
+    let mut syntax = invocation::Syntax::new(text, operands);
     for operand in operands {
         if operand.bytes.start < end {
             continue;
@@ -67,13 +72,7 @@ pub(super) fn display_boundaries(
             }
         }
         scan.literal_marks(gap..operand.bytes.start);
-        let alternative_pipe = matches!(operand.role, NativeOperandRole::PipeDelimiter(None))
-            && !super::super::declaration_parts::is_command_pipe(
-                text,
-                operand.bytes.start,
-                operands,
-            );
-        scan.operand(operand, active_body.is_some(), alternative_pipe);
+        scan.operand(operand, active_body.is_some(), &mut syntax);
         end = operand.bytes.end;
     }
     scan.literal_marks(active_body.map_or(end, |body| end.max(body.end))..text.len());
@@ -94,6 +93,7 @@ struct ScopeScan<'a> {
     scopes: Vec<OpenMark<'a>>,
     start: usize,
     top_level_start: usize,
+    invocation_start: usize,
     signature_depth: usize,
     slot: SlotPrefix,
     opaque: bool,
@@ -130,22 +130,28 @@ impl<'a> ScopeScan<'a> {
         }
     }
 
-    fn separator(&mut self, bytes: Range<usize>, alternative: bool) {
-        if !alternative || self.slot == SlotPrefix::Option {
+    fn separator(&mut self, bytes: Range<usize>, alternative: bool, continues_invocation: bool) {
+        let invocation_start = continues_invocation.then_some(self.invocation_start);
+        if invocation_start.is_none() && (!alternative || self.slot == SlotPrefix::Option) {
             // The next proved native BODY starts a new declaration slot.
             // Older words only turn a lexical scope into an annotation
             // when they still belong to the current slot.
             self.top_level_start = bytes.end;
+            self.invocation_start = bytes.end;
             self.slot = SlotPrefix::Empty;
         }
-        self.separators.push(Separator { bytes, alternative });
+        self.separators.push(Separator {
+            bytes,
+            alternative,
+            invocation_start,
+        });
     }
 
     fn operand(
         &mut self,
         operand: &NativeOperand,
         within_native_body: bool,
-        alternative_pipe: bool,
+        syntax: &mut invocation::Syntax<'_>,
     ) {
         let role = operand.role;
         let bytes = operand.bytes.clone();
@@ -170,7 +176,7 @@ impl<'a> ScopeScan<'a> {
             if role == NativeOperandRole::ExplicitOption && !self.opaque {
                 self.slot = SlotPrefix::Option;
             }
-            self.accept_non_display(operand, bytes, within_native_body, alternative_pipe);
+            self.accept_non_display(operand, bytes, within_native_body, syntax);
         }
     }
 
@@ -179,7 +185,7 @@ impl<'a> ScopeScan<'a> {
         operand: &NativeOperand,
         bytes: Range<usize>,
         within_native_body: bool,
-        alternative_pipe: bool,
+        syntax: &mut invocation::Syntax<'_>,
     ) {
         let role = operand.role;
         let mark_start = bytes.end - self.text[bytes.clone()].trim_start().len();
@@ -190,10 +196,19 @@ impl<'a> ScopeScan<'a> {
         let word = self.text[mark_start..bytes.end].trim_end();
         if !within_native_body
             && self.scopes.is_empty()
-            && (alternative_pipe || role == NativeOperandRole::LiteralContinuation(None))
+            && matches!(
+                role,
+                NativeOperandRole::PipeDelimiter(None)
+                    | NativeOperandRole::LiteralContinuation(None)
+            )
             && matches!(word, "," | "|" | "or")
         {
-            self.separator(mark_start..mark_start + word.len(), word == "or");
+            let alternative = word == "or";
+            self.separator(
+                mark_start..mark_start + word.len(),
+                alternative,
+                !alternative && syntax.protects(self.invocation_start, mark_start),
+            );
             return;
         }
         if let Some(active) = self.scopes.last_mut()

@@ -16,6 +16,7 @@ pub(super) use display::infer_display_head;
 mod environment;
 pub(super) use environment::environment_names;
 mod intervals;
+mod invocation;
 mod symbols;
 
 pub(super) fn recognize_head(
@@ -143,10 +144,7 @@ fn recognize_part(
         || matches!(lead.role, NativeOperandRole::SearchArgument(_))
             && head.len() < text.trim().len()
     {
-        if head
-            .match_indices('|')
-            .any(|(at, _)| declaration_parts::is_command_pipe(text, start + at, operands))
-        {
+        if invocation::Syntax::new(text, operands).has_operand_pipe(start, end) {
             return Some((EntryKind::Term, Recognition::default()));
         }
         return Some((

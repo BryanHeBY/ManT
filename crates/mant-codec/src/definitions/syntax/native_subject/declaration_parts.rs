@@ -2,7 +2,7 @@
 use super::{
     Recognition, annotations, following_function,
     intervals::{local_operands, scoped_operands, split_inline_intervals},
-    offset, operand_at, operand_cursor, recognize_part, unwrapped,
+    invocation, offset, operand_at, operand_cursor, recognize_part, unwrapped,
 };
 use crate::definitions::syntax::{
     DeclarationLimit, commands,
@@ -72,6 +72,17 @@ struct Head<'a> {
     context: DefinitionContext,
     ranges: Vec<Range<usize>>,
     terms: Vec<DefinitionTerm>,
+    argument_separators: Vec<usize>,
+}
+
+impl Head<'_> {
+    fn argument_separators(&self, span: &Range<usize>) -> &[usize] {
+        let first = self
+            .argument_separators
+            .partition_point(|at| *at < span.start);
+        let count = self.argument_separators[first..].partition_point(|at| *at < span.end);
+        &self.argument_separators[first..first + count]
+    }
 }
 
 enum Group {
@@ -87,6 +98,7 @@ enum Group {
 struct Partition {
     ranges: Vec<Range<usize>>,
     separated: bool,
+    argument_separators: Vec<usize>,
 }
 
 pub(super) fn recognize(
@@ -102,11 +114,13 @@ pub(super) fn recognize(
     let mut partition = Partition::default();
     let (head, enclosure) = unwrap_search(text, text, operands);
     let groups = partition.groups(text, head, operands, enclosure, 0, admission)?;
-    if !partition.separated
+    let protected_arguments = !partition.argument_separators.is_empty();
+    if !partition.separated && !protected_arguments
         || admission == Admission::AfterSeparator
             && !operands
                 .iter()
                 .any(|operand| operand.role.subject().is_some())
+            && !protected_arguments
             && !partition.has_mixed_roles(operands)
     {
         return None;
@@ -115,12 +129,15 @@ pub(super) fn recognize(
         .into_iter()
         .map(DefinitionTerm::from)
         .collect();
+    partition.argument_separators.sort_unstable();
+    partition.argument_separators.dedup();
     let source = Head {
         text,
         operands,
         context,
         ranges: partition.ranges,
         terms,
+        argument_separators: partition.argument_separators,
     };
     let mut candidates = Candidates::default();
     let collected = collect(&source, &groups, enclosure, admission, &mut candidates);
@@ -163,7 +180,14 @@ impl Partition {
         if depth == MAX_NESTING {
             return None;
         }
-        let parts = independent_groups(text, head, enclosure, operands, admission)?;
+        let parts = independent_groups(
+            text,
+            head,
+            enclosure,
+            operands,
+            admission,
+            &mut self.argument_separators,
+        )?;
         self.separated |= parts.len() > 1;
         Some(
             parts
@@ -400,6 +424,7 @@ fn independent_groups<'a>(
     enclosure: Option<u32>,
     operands: &[NativeOperand],
     admission: Admission,
+    argument_separators: &mut Vec<usize>,
 ) -> Option<Vec<&'a str>> {
     // Protect accepted words in a nested enclosure even if its opening or
     // closing glyph was overwritten. Only the unwrapped BODY/ELEM supplies
@@ -408,20 +433,23 @@ fn independent_groups<'a>(
     let first = operand_cursor(operands, start);
     let mut receipts = operands[first..].iter().peekable();
     let mut last = None;
-    named::split_named_groups(head, |index, _| {
+    let mut syntax = invocation::Syntax::new(text, operands);
+    let mut group_start = start;
+    named::split_named_groups(head, |index, top_level| {
         let offset = start + index;
         while let Some(operand) = receipts.next_if(|operand| operand.bytes.start <= offset) {
             last = Some(operand);
         }
         let current = last.filter(|operand| operand.bytes.contains(&offset));
-        if head.as_bytes()[index] == b'|' && is_command_pipe(text, offset, operands) {
+        let separator = matches!(head.as_bytes()[index], b',' | b'|');
+        if top_level && separator && syntax.protects(group_start, offset) {
+            argument_separators.push(offset);
             return true;
         }
-        if matches!(head.as_bytes()[index], b',' | b'|') && admission != Admission::ProtectedSyntax
-        {
+        let protected = if separator && admission != Admission::ProtectedSyntax {
             // In a weak prefix, punctuation embedded in a prose operand
             // cannot authorize a later native subject as its own declaration.
-            return current.is_none_or(|operand| {
+            current.is_none_or(|operand| {
                 !(operand.role == NativeOperandRole::LiteralContinuation(enclosure)
                     || operand.role == NativeOperandRole::PipeDelimiter(enclosure)
                     || enclosure.is_some_and(|body| {
@@ -431,55 +459,32 @@ fn independent_groups<'a>(
                     || head
                         .get(operand.bytes.start - start..operand.bytes.end - start)
                         .is_none_or(|value| !matches!(value.trim(), "," | "|"))
-            });
+            })
+        } else {
+            current.is_some_and(|operand| {
+                operand.role.is_parameter()
+                    || match operand.role {
+                        NativeOperandRole::ExplicitOption
+                        | NativeOperandRole::Description
+                        | NativeOperandRole::Command
+                        | NativeOperandRole::LiteralPunctuation
+                        | NativeOperandRole::ReferenceText(_)
+                        | NativeOperandRole::EnclosureStart { .. }
+                        | NativeOperandRole::EnclosureEnd(_) => true,
+                        NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
+                        NativeOperandRole::PipeDelimiter(scope) => enclosure != scope,
+                        NativeOperandRole::LiteralDelimiter {
+                            enclosure: owner, ..
+                        } => enclosure != owner,
+                        _ => false,
+                    }
+            })
+        };
+        if top_level && separator && !protected {
+            group_start = offset + 1;
         }
-        current.is_some_and(|operand| {
-            operand.role.is_parameter()
-                || match operand.role {
-                    NativeOperandRole::ExplicitOption
-                    | NativeOperandRole::Description
-                    | NativeOperandRole::Command
-                    | NativeOperandRole::LiteralPunctuation
-                    | NativeOperandRole::ReferenceText(_)
-                    | NativeOperandRole::EnclosureStart { .. }
-                    | NativeOperandRole::EnclosureEnd(_) => true,
-                    NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
-                    NativeOperandRole::PipeDelimiter(scope) => enclosure != scope,
-                    NativeOperandRole::LiteralDelimiter {
-                        enclosure: owner, ..
-                    } => enclosure != owner,
-                    _ => false,
-                }
-        })
+        protected
     })
-}
-
-pub(super) fn is_command_pipe(text: &str, at: usize, operands: &[NativeOperand]) -> bool {
-    let pipe = text[at..].trim_start();
-    let Some(suffix) = pipe.strip_prefix('|') else {
-        return false;
-    };
-    let at = offset(text, pipe);
-    let index = operand_cursor(operands, at);
-    if !operand_at(operands, at)
-        .is_some_and(|operand| matches!(operand.role, NativeOperandRole::PipeDelimiter(_)))
-    {
-        return false;
-    }
-    let Some(operand) = index.checked_sub(1).and_then(|index| operands.get(index)) else {
-        return false;
-    };
-    // mdoc_macro.c::in_line rewinds the Ar element before the middle
-    // delimiter, then executes Ic as a separate macro. An operand before
-    // that unowned pipe is invocation syntax. A standalone No separator
-    // or two actual operand labels can still form independent alternatives.
-    let after = offset(text, suffix.trim_start());
-    operand.role.is_operand_label()
-        && text[operand.bytes.end..at].trim().is_empty()
-        && operand_at(operands, after).is_some_and(|next| {
-            next.role == NativeOperandRole::Command
-                && text[next.bytes.start..after].trim().is_empty()
-        })
 }
 
 fn group_hint(
@@ -496,7 +501,10 @@ fn group_hint(
         }) if admission != Admission::ProtectedSyntax && scope == enclosure => {
             Some(NativeHeadRole::Environment)
         }
-        Some(NativeOperandRole::Command) if admission != Admission::ProtectedSyntax => {
+        Some(NativeOperandRole::Command)
+            if admission != Admission::ProtectedSyntax
+                || !source.argument_separators(&source.ranges[index]).is_empty() =>
+        {
             Some(NativeHeadRole::Literal)
         }
         // A styled Nm followed by Cm can prove one compound command.
@@ -577,9 +585,10 @@ fn recognize_lexical_group(
     } else {
         (original.clone(), None)
     };
-    let scoped = [local_operands(scoped_operands(
-        source.operands,
-        range.clone(),
+    let scoped = [local_operands(invocation::protect_arguments(
+        scoped_operands(source.operands, range.clone()),
+        source.argument_separators(&range),
+        range.start,
     ))];
     let found = infer_lexical_terms(
         std::slice::from_ref(narrowed.as_ref().unwrap_or(term)),

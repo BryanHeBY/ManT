@@ -5,6 +5,8 @@ use mant_protocol::{ContentSelector, EvidenceClass};
 
 use super::support::{check_head, check_occurrences, explain, json_roundtrip};
 
+#[path = "bsd_symbols/invocations.rs"]
+mod invocations;
 #[path = "bsd_symbols/netbsd_bpf.rs"]
 mod netbsd_bpf;
 #[path = "bsd_symbols/openbsd_ports.rs"]

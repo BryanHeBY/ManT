@@ -15,12 +15,16 @@ otherwise identical to the upstream release members.
 | `freebsd-netstat.1.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man1/netstat.1.gz` | The `netgraph` and `ng` address-family names are values of `-f`. |
 | `dragonflybsd-netstat.1.gz` | DragonFly BSD 6.4.2 x86-64 release ISO, `usr/share/man/man1/netstat.1.gz` | Both address-family aliases stay values when their parenthetical annotation contains two constants. |
 | `freebsd-awk.1.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man1/awk.1.gz` | Pipe operands stay in the `getline` form, with independent definitions for the three input forms. |
+| `freebsd-ping.8.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man8/ping.8.gz` | The `-M` declaration keeps its ICMP mode arguments visible without indexing them as aliases. |
+| `netbsd-patch.1` | NetBSD 11.0 amd64 `man.tar.xz`, `usr/share/man/man1/patch.1` | The short and long version-control names share one original description. The two argument lists remain invocation syntax. |
+| `openbsd-openssl.1` | OpenBSD 7.9 amd64 `man79.tgz`, `./usr/share/man/man1/openssl.1` | `pem` has one genuine definition and is also mentioned in many option arguments. |
 | `freebsd-ng_deflate.4.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man4/ng_deflate.4.gz` | `NGM_DEFLATE_CONFIG` retains its original description alongside the parenthesized command alias. |
 | `freebsd-archive_entry_acl.3.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man3/archive_entry_acl.3.gz` | Styled permission shorthand in literal parentheses preserves both bodyless and described constant owners. |
 | `netbsd-bpf.4` | NetBSD 10.1 amd64 `man.tar.xz`, `usr/share/man/man4/bpf.4` | The 28 ioctl names in 21 original definition heads bind through punctuation that reopens the native invocation. |
 | `openbsd-bsd.port.mk.5` | OpenBSD 7.9 amd64 `man79.tgz`, `./usr/share/man/man5/bsd.port.mk.5` | Install templates keep their full forms and descriptions. The independently listed architecture names remain selectable. |
 
-Each BSD-licensed member retains its complete redistribution notice. The
+Each member retains its complete redistribution notices, including the
+OpenSSL Project and Original SSLeay notices in `openssl(1)`. The
 `awk` member includes its Lucent documentation license, also provided in
 [supporting documentation](../LICENSES/LUCENT-AWK-1997.txt). The
 [manifest](manifest.json) records the licenses, release archive and member hashes,

@@ -722,6 +722,186 @@
           "status": "CapturedWithDiagnostics"
         }
       }
+    },
+    {
+      "file": "freebsd-ping.8.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man8/ping.8.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man8/ping.8.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "f31a5b9da79152c068b43ea1cf8e0bb16417f6b6148c18b2cf47c86ad8c1671a",
+      "fixtureSha256": "f31a5b9da79152c068b43ea1cf8e0bb16417f6b6148c18b2cf47c86ad8c1671a",
+      "decompressedSha256": "49e9b1bce779c25782565b3529f410332e8bc3e57397c490c2becd0b43796edd",
+      "sourceBytes": 8234,
+      "fixtureBytes": 8234,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "BSD-3-Clause",
+      "licenseFile": "freebsd-ping.8.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "-M is the only owner name; both ICMP mode values remain visible.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "c6028f62860f346962eda018412501d4504185d53e8b2b6158c7fc1c2325ec36",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 25812,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "48bb3fa5ca78a4de461e4005bd80af1b356d483129a249089f226a4e35f7c1d1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 25850,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "346be44dc458819b1abe0906a5380fc45c62b734b37b400605b044aec56b7a77",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 38660,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "0219334dfa0abfd926f7c0f02f9d5ac2399cc88b82626976c5463fef11ab51e1",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 77939,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "babfe39e46f3ddddec4db0c8bb4cfd1a47e79bb1145d30ecd31ac367513b3363",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 906,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "netbsd-patch.1",
+      "sourceIdentity": "netbsd-11.0-amd64:man/man1/patch.1",
+      "originUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-11.0/amd64/binary/sets/man.tar.xz",
+      "archive": "man.tar.xz",
+      "archiveMember": "usr/share/man/man1/patch.1",
+      "archiveSha256": "31bb8a57b23b0fe6b309e4ff6b3f7a9c3c6aaadae9c8ce4dfc7baefa7c4ffa26",
+      "sourceSha256": "7010be706a4352b03bf9adf3c8beb13f91ea02c2c28f44556e52385c9638a84a",
+      "fixtureSha256": "7010be706a4352b03bf9adf3c8beb13f91ea02c2c28f44556e52385c9638a84a",
+      "decompressedSha256": "7010be706a4352b03bf9adf3c8beb13f91ea02c2c28f44556e52385c9638a84a",
+      "sourceBytes": 20769,
+      "fixtureBytes": 20769,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "BSD-1-Clause",
+      "licenseFile": "netbsd-patch.1",
+      "transformation": "None; exact complete release member, with a portable fixture basename.",
+      "selectionReason": "Two separately authored option spellings share the version-control description; neither finite argument is an alias.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "5ebb2e00ba43dfbbff31e4058790a19d72749b12fa3f15dfa7f43e05070bfd35",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 24720,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "9c154dab2ac096b37cf3b92ab70933f7fbb786a37a8882b489813fdf4cfb87ec",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 24783,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "06cd1c5167061bd985aa3b5b2e47f176872ec18655b59078e67d4e9dcbfe0567",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 34971,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "c6c2fcff3ac5d77815a055db69977d5bafbf9eb208b7e669dfda01bcf7e87f9f",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 65113,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "e5d6d18575be2163825eeaf892a3d4a8617911744129cbeef657a881690f77ce",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 538,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
+    },
+    {
+      "file": "openbsd-openssl.1",
+      "sourceIdentity": "openbsd-7.9-amd64:man/man1/openssl.1",
+      "originUrl": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/man79.tgz",
+      "archive": "man79.tgz",
+      "archiveMember": "./usr/share/man/man1/openssl.1",
+      "archiveSha256": "7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af",
+      "sourceSha256": "4f713a7d85fead011e752c1b9cd4a8a99f3141c4f946b6bbaf27b9fef21807be",
+      "fixtureSha256": "4f713a7d85fead011e752c1b9cd4a8a99f3141c4f946b6bbaf27b9fef21807be",
+      "decompressedSha256": "4f713a7d85fead011e752c1b9cd4a8a99f3141c4f946b6bbaf27b9fef21807be",
+      "sourceBytes": 189971,
+      "fixtureBytes": 189971,
+      "retrievedFromRetainedCorpusOn": "2026-11-19",
+      "license": "OpenSSL",
+      "licenseFile": "openbsd-openssl.1",
+      "transformation": "None; exact complete release member, with a portable fixture basename.",
+      "selectionReason": "The genuine pem owner remains uniquely explainable even when many option arguments spell pem.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "ebfef17b2fba487516fd3688d25899c34d1d7cbe680c735e2f542afe18352434",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 255310,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "c745898498814d4dc13d011b727ed48f4dc8af58e64848d37a55ca4766b6d904",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 255426,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "b804e4f5b9d450873a32575df2bcc480b2beaadeca293fb9ae1ac45bba57a57d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 371811,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "db4ef20d3a5bfc522aad9640ed4c521c2ad74a22de5e53710fff1e8822ca126b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 862192,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "3d0b7255e8db8a7f02f604debdd0ffae3b73e9f4e4232bcd895a67e34c20e1ef",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 603,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
     }
   ]
 }
