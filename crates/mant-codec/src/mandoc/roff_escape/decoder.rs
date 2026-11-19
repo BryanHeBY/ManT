@@ -191,6 +191,11 @@ impl Decoder {
             // displayed blank and break only at the next real word boundary.
             ' ' | '~' | '0' => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),
             'p' => self.emit(RoffInlineEvent::LineBreak),
+            // term_strlen() measures source \: through the special
+            // character catalog. Its zero-width glyph consumes a pending
+            // \z skip. By contrast, an internal ASCII_BREAK byte is not
+            // a source glyph and never reaches this branch.
+            ':' if self.measurement => self.emit(RoffInlineEvent::Glyph("\u{200b}".into())),
             // term.c::term_word(), ESCAPE_SPECIAL: exactly ':' writes a
             // breakpoint before the ASCII/UTF8 split. Unlike chars.c's HTML
             // U+200B, this is bufferc(), not an encode1() glyph or graph.

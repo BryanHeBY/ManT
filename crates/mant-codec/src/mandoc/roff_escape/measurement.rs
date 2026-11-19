@@ -73,3 +73,23 @@ pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
     }
     width
 }
+
+#[cfg(test)]
+mod tests {
+    use super::width_sample;
+
+    #[test]
+    fn source_breakpoint_retires_the_skipped_width_in_a_tbl_sample() {
+        // Fixed ASCII/UTF8 term_strlen widths, measured independently
+        // as the native box's top rule minus its two border blanks.
+        for (word, columns) in [
+            ("LEFTYTAIL", 9),
+            ("LEFTbYTAIL", 10),
+            (r"LEFT\zb\:YTAIL", 9),
+            (r"LEFT\z\o'ab'\:YTAIL", 10),
+            (r"LEFT\z\o'ab'\&YTAIL", 9),
+        ] {
+            assert_eq!(width_sample(word), columns, "{word}");
+        }
+    }
+}
