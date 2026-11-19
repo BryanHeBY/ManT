@@ -161,6 +161,9 @@ that crate was not published for that change.
   exact native slot suffix remains editable. A later trim can expose an
   earlier glyph. Measure roff table breakpoints in source order with
   zero-advance escapes, and replay blank overstrikes in table cells.
+- Keep surviving bold glyphs, generated flag dashes and word separators
+  through native field edits. Measure the raw spelling of overstrike
+  operands before committing table rows.
 - Bind independent native declaration groups across accepted delimiters.
   Punctuation inside an operand or attached to a name cannot start another
   group.
@@ -174,6 +177,8 @@ that crate was not published for that change.
 - Keep assignment values and invocation arguments inside their original
   definition. Preserve distinct direct owners for independently declared
   options and terms with the same spelling.
+- Preserve compound `Nm`/`Cm` command names across distinct signatures
+  and keep reopened typed operands on the assignment's value side.
 - Omit the unused operands of the obsolete mdoc `Db` macro while retaining
   the native validation diagnostic.
 - Resume roff anchor suffix allocation from the last candidate for each slug.

@@ -237,10 +237,16 @@ A later edit can expose an earlier overstrike glyph while the relevant
 native slots remain live. The replay uses a bounded suffix with a proved
 write cursor and preserves the glyph's original style and link. Native
 copies of a bold glyph refer to one author glyph. A queued blank can cover
-it when a later device write on the same pass makes the blank print. If
+it when a later device write on the same pass makes the blank print. A
+generated `Fl` dash follows the same device writes and can survive when
+either bold copy remains. An empty overstrike can leave a pending retreat
+active across words. A surviving blank still separates the next accepted
+word even when the current operand's entry blank was trimmed. If
 the suffix would split an active overstrike, it cannot authorize an edit
 to the earlier owner. Raw table columns use native measurement before
-executing the cell words. A source `\:` is zero width there and can
+executing the cell words. Inside an overstrike, measurement and execution
+read the same raw operand spelling. For example, `\o'\&'` supplies an
+ampersand. Outside the overstrike, source `\:` has zero width and can
 consume the measurement path's pending `\z`.
 
 Generated inset/diagnostic gaps keep the native nonbreaking cells for
@@ -702,11 +708,16 @@ A separate `Sy` word after a `Cm` or `Ic` command remains in the complete
 form. `Cm run Sy FILE` binds `run` as the name and still permits an exact
 `run FILE` form lookup. The command name can include multiple executed
 command words. A glued suffix does not prove a shorter name.
+In a definition head, separately executed `Nm` and `Cm` or `Ic` words can
+prove a compound command such as `zfs mount` before optional arguments.
+Different signatures keep their own bindings and descriptions.
 Assignment syntax can span native style boundaries and accept spaces around
 `=`. Values such as `mode = red | blue` remain in the complete form under
-`mode`. Command argument alternatives can continue across commas and pipes
-and across the parser's reopened macro scopes. A separate definition of
-the same spelling keeps its own queryable identity and description.
+`mode`. A `Dv`, `Ev`, `Er`, `Va` or `Fl` invocation reopened at a separator
+still belongs to the same value. Command argument alternatives can continue
+across commas and pipes and across the parser's reopened macro scopes.
+A separate definition of the same spelling keeps its own queryable
+identity and description.
 
 Environment and variable definitions keep their names before one complete
 trailing parenthetical note, including styled descriptions. The enclosing
