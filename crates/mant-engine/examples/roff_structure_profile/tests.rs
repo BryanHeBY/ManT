@@ -1,15 +1,14 @@
 //! Structure observation and loss-detection controls.
 use std::collections::BTreeMap;
 
-use super::{
-    NoFillSourceLine, equation_visible_text, is_no_fill_row_text, is_zero_width_guard_line,
-    retained_no_fill_rows,
-};
+use super::{NoFillSourceLine, equation_visible_text, retained_no_fill_rows};
 
 #[path = "link_execution_tests.rs"]
 mod link_execution_tests;
 #[path = "link_tests.rs"]
 mod link_tests;
+#[path = "payload_tests.rs"]
+mod payload_tests;
 
 pub(super) fn parsed_structure(
     source: &str,
@@ -616,19 +615,22 @@ fn ip_list_obligations_require_complete_authored_named_bullets() {
 
 #[test]
 fn standalone_roff_font_switches_do_not_claim_visible_no_fill_lines() {
-    assert!(!is_no_fill_row_text(r"\f[C]"));
-    assert!(!is_no_fill_row_text(r"\fR"));
-    assert!(!is_no_fill_row_text(r"    \f(CW"));
-    assert!(!is_no_fill_row_text(r"\f[B]\f[R]\f[B]"));
-    assert!(is_no_fill_row_text(r"\f[C]visible\f[R]"));
-    assert!(is_no_fill_row_text("visible"));
+    use super::ordinal_labels::description::word_payload;
+    for (source, visible) in [
+        (r"\f[C]", false),
+        (r"\fR", false),
+        (r"    \f(CW", false),
+        (r"\f[B]\f[R]\f[B]", false),
+        (r"\f[C]visible\f[R]", true),
+        ("visible", true),
+    ] {
+        let word = mant_codec::RoffWordEvidence::read(source);
+        assert_eq!(word_payload(&word, true).has_text(), visible, "{source}");
+    }
 }
 
 #[test]
 fn bounded_zero_width_guard_runs_claim_one_no_fill_row() {
-    assert!(is_zero_width_guard_line(r"\&"));
-    assert!(is_zero_width_guard_line(r"\& \&"));
-    assert!(!is_zero_width_guard_line(r"\&\c"));
     let mut lines = BTreeMap::new();
     lines.insert(
         10,

@@ -2,11 +2,14 @@
 
 use std::collections::HashSet;
 
-use libmandoc_rs::{MacroToken, MdocMacro, Node, NodeKind, TableCellKind};
+use libmandoc_rs::{Node, NodeKind, TableCellKind};
 
+#[path = "ordinal_labels/controls.rs"]
+pub(crate) mod controls;
 #[path = "ordinal_labels/description.rs"]
 pub(crate) mod description;
-use description::{Description, description};
+use controls::{SourceControl, source_control};
+use description::{Payload, description};
 use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
 
 pub(crate) fn skips_source_children(node: &Node) -> bool {
@@ -14,7 +17,7 @@ pub(crate) fn skips_source_children(node: &Node) -> bool {
     // In particular, obsolete Db retains its operands for diagnostics.
     node.flags.no_print
         || node.kind == NodeKind::Comment
-        || node.macro_token.as_ref() == Some(&MacroToken::Mdoc(MdocMacro::Db))
+        || source_control(node) == Some(SourceControl::Skip)
 }
 
 #[cfg(test)]
@@ -120,16 +123,15 @@ pub(crate) fn observe<'a>(
                 prior.checked_add(1) == Some(number) && mark == punctuation
             })
         });
-        let body = part(item, NodeKind::Body).map_or(Description::Absent, |body| {
-            description(body, label.continues)
-        });
+        let body = part(item, NodeKind::Body)
+            .map_or_else(Payload::default, |body| description(body, label.continues));
         if (!follows && label.effect != LabelEffect::Uncertain)
             || label.effect == LabelEffect::Retained
-            || body == Description::Absent
+            || body.absent()
         {
             disposition = OrdinalDisposition::Retained;
         } else if disposition != OrdinalDisposition::Retained
-            && (label.effect == LabelEffect::Uncertain || body == Description::Uncertain)
+            && (label.effect == LabelEffect::Uncertain || body.needs_review())
         {
             disposition = OrdinalDisposition::Uncertain;
         }
@@ -229,18 +231,14 @@ impl NativeLabel {
             self.join_next = true;
             return;
         }
+        if let Some(control) = source_control(node) {
+            self.visit_control(node, control);
+            return;
+        }
         let token = node.macro_token.as_deref();
         match (node.kind, token) {
-            (_, Some("Tg")) => return,
             (_, Some("Ns")) => {
                 self.join_next |= !node.flags.line_start;
-                return;
-            }
-            (_, Some("Sm")) => {
-                self.no_space_mode = spacing_mode(node, self.no_space_mode);
-                if !self.no_space_mode && !self.evidence.text.is_empty() {
-                    self.join_next = false;
-                }
                 return;
             }
             (_, Some("Pf")) => {
@@ -279,7 +277,7 @@ impl NativeLabel {
             ) => {}
             // A native link or real boundary remains meaningful even
             // when its own displayed words resemble an ordinal marker.
-            (_, Some("Sx" | "Xr" | "Lk" | "Mt" | "br" | "sp" | "Pp")) => {
+            (_, Some("Sx" | "Xr" | "Lk" | "Mt")) => {
                 self.effect = LabelEffect::Retained;
             }
             // An unmodeled node can expose a candidate spelling without
@@ -287,6 +285,27 @@ impl NativeLabel {
             _ => self.effect = self.effect.max(LabelEffect::Uncertain),
         }
         self.walk_children(node);
+    }
+
+    fn visit_control(&mut self, node: &Node, control: SourceControl) {
+        match control {
+            SourceControl::SpacingMode => {
+                self.no_space_mode = spacing_mode(node, self.no_space_mode);
+                if !self.no_space_mode && !self.evidence.text.is_empty() {
+                    self.join_next = false;
+                }
+            }
+            SourceControl::LineBoundary | SourceControl::VerticalSpace => {
+                self.effect = LabelEffect::Retained;
+            }
+            SourceControl::AlignedRows => {
+                self.effect = LabelEffect::Retained;
+                for (index, child) in node.children.iter().enumerate().skip(1) {
+                    self.walk(child, node.children.get(index + 1));
+                }
+            }
+            SourceControl::State | SourceControl::Skip => {}
+        }
     }
 
     fn custom_enclosure(&mut self, node: &Node) {

@@ -10,7 +10,7 @@ destinations survive; it cannot prove that numbered prose, placement-only
 definitions, or invalid value-domain children were not promoted into the
 agent-visible semantic index.
 
-The current semantic profile is `mant.roff-semantic-profile/v11`. An incremental
+The current semantic profile is `mant.roff-semantic-profile/v12`. An incremental
 scan revisits matching corpus, path and source hash records from earlier profiles.
 It preserves human review dispositions and notes. Use `--recorded-only` to replay
 every unchanged recorded source. Verification requires a current profile row.
@@ -31,9 +31,17 @@ evidence when they contribute no visible glyphs. A glyph written by a drawing
 escape can consume zero-advance state before a following ordinal candidate.
 The candidate keeps its source coordinates for Review when placement remains
 unproved.
+Display evidence tracks glyphs, completed blank rows and unknown effects
+independently. Font controls, continuations and skipped operands alone do
+not make a compact display substantive. State and boundary requests in a
+label follow their native handlers, including skipping alignment counts.
+A zero or canceled spacing request can preserve a layout boundary without
+completing a physical row.
 
 Each conversion pairs at most one observed disposition with its nonempty IR
-path. A missing or different owner requires the explicit conversion violation
+path. Only one conversion in a page may claim each observed path. Candidates
+may share a source coordinate after macro expansion. A missing or different
+owner requires the explicit conversion violation
 and its inclusion in the overall violations. `other-list` is a valid observed
 product difference, recorded for Review. Malformed records and JSON booleans in
 numeric coordinates or counts are rejected.

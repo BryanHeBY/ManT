@@ -231,6 +231,40 @@ class AuditProfileWireTests(unittest.TestCase):
                     malformed['ordinalConversions'][0][field] = value
                     self.assertEqual(self.finding(semantic, malformed).status, 'hard-failure')
 
+    def test_ordinal_conversion_paths_identify_distinct_observed_owners(self):
+        # Genuine profiler pairs from adjacent native tag lists can share
+        # a source coordinate after macro expansion, but never share an IR
+        # owner. The body witnesses establish distinct occurrences in CVS.
+        for lines in ((8, 14), (22, 22)):
+            for styles in (('r', 'r'), ('r', 't'), ('t', 'r'), ('t', 't')):
+                response = successful_page(semantic)
+                records = []
+                for index, (line, style) in enumerate(zip(lines, styles, strict=True)):
+                    record = ordinal_conversion()
+                    record.update(sourceLine=line, observedIrPaths=[f'section[1]/block[{index}]'])
+                    if style == 't':
+                        record.update(terms=['[1]', '[2]'],
+                                      expectedDisposition='retained-definition-list',
+                                      observedDispositions=['retained-definition-list'])
+                    records.append(record)
+                response['ordinalConversions'] = records
+                self.assertEqual(self.finding(semantic, response).status, 'clean')
+                for source, target, status in (
+                    (0, 1, 'hard-failure'), (1, 0, 'hard-failure'), (0, 0, 'clean'),
+                ):
+                    with self.subTest(lines=lines, styles=styles, source=source, target=target):
+                        payload = deepcopy(response)
+                        payload['ordinalConversions'][target]['observedIrPaths'] = (
+                            records[source]['observedIrPaths'].copy()
+                        )
+                        self.assertEqual(self.finding(semantic, payload).status, status)
+
+                for record in records:
+                    record.update(observedIrPaths=[], observedDispositions=[])
+                issues = semantic.expected_conversion_violations(records)
+                response.update(ordinalConversionViolations=issues, violations=issues)
+                self.assertEqual(self.finding(semantic, response).status, 'review')
+
     def test_structure_validates_each_record_in_both_observation_streams(self):
         for side in ('expected', 'observed'):
             response = successful_page(structure)

@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v10` successful page response requires both
+The `mant.roff-structure-profile/v11` successful page response requires both
 `ordinalCasesForReview` and `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
 evidence. Incomplete observations fail validation. A pure alias retains its
@@ -137,6 +137,11 @@ Glyphless display rows and nested lists or columns can establish useful BODY
 structure. A stroke that consumes zero-advance state preserves the potential
 ordinal spelling in the source audit, with unresolved placement recorded for
 Review.
+Short and long displays use the same source payload check. A proved glyph
+prefix still requires a preformatted owner when a later edit leaves the
+exact spelling uncertain. A rewind can revoke that proof, and an empty
+initial pass can reject later glyphs. A glyphless completed row can use
+vertical space. A separate display equation supplies its own visible owner.
 
 Repeated zero-advance effects and normalized custom enclosures retain their
 source execution order. BODY evidence follows the native selected equation

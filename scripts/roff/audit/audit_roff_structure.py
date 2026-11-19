@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v10"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v11"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",

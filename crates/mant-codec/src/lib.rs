@@ -25,7 +25,7 @@ pub use tldr::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_
 pub use mandoc::{
     RoffSectionHeading, RoffSectionTargets, RoffWordEffect, RoffWordEvidence, SectionLabelEvidence,
     observe_roff_link_operand, observe_roff_section_label_evidence,
-    observe_roff_section_label_glyphs, observe_roff_section_phrase,
+    observe_roff_section_label_glyphs, observe_roff_section_phrase, roff_vertical_space_lines,
 };
 
 #[cfg(feature = "roff")]

@@ -4,19 +4,81 @@ use libmandoc_rs::{Node, NodeKind};
 
 use mant_codec::{RoffWordEffect as WordEffect, RoffWordEvidence as NativeWord};
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) enum Description {
-    Absent,
-    Uncertain,
-    Layout,
-    Visible,
+use super::controls::{SourceControl, source_control};
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+enum Glyphs {
+    #[default]
+    None,
+    Equation,
+    Text,
 }
 
-pub(crate) fn description(node: &Node, continues: bool) -> Description {
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+enum Spacing {
+    #[default]
+    None,
+    Boundary,
+    Row,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Payload {
+    glyphs: Glyphs,
+    spacing: Spacing,
+    unresolved: bool,
+}
+
+impl Payload {
+    const ROW: Self = Self {
+        spacing: Spacing::Row,
+        ..Self::ABSENT
+    };
+    const GLYPHS: Self = Self {
+        glyphs: Glyphs::Text,
+        ..Self::ABSENT
+    };
+    const UNRESOLVED: Self = Self {
+        unresolved: true,
+        ..Self::ABSENT
+    };
+    const ABSENT: Self = Self {
+        glyphs: Glyphs::None,
+        spacing: Spacing::None,
+        unresolved: false,
+    };
+
+    pub(crate) fn absent(self) -> bool {
+        self.glyphs == Glyphs::None && self.spacing == Spacing::None && !self.unresolved
+    }
+
+    pub(crate) fn needs_review(self) -> bool {
+        self.unresolved && self.glyphs == Glyphs::None && !self.has_row()
+    }
+
+    pub(crate) fn has_text(self) -> bool {
+        self.glyphs == Glyphs::Text
+    }
+
+    pub(crate) fn has_row(self) -> bool {
+        self.spacing == Spacing::Row
+    }
+
+    fn merge(self, another: Self) -> Self {
+        Self {
+            glyphs: self.glyphs.max(another.glyphs),
+            spacing: self.spacing.max(another.spacing),
+            unresolved: self.unresolved || another.unresolved,
+        }
+    }
+}
+
+pub(crate) fn description(node: &Node, continues: bool) -> Payload {
     DescriptionProbe {
         continues,
         zero_advance: false,
         display_row: false,
+        space_debt: 0,
     }
     .visit(node)
 }
@@ -25,15 +87,32 @@ struct DescriptionProbe {
     continues: bool,
     zero_advance: bool,
     display_row: bool,
+    space_debt: i32,
 }
 
 impl DescriptionProbe {
-    fn visit(&mut self, node: &Node) -> Description {
+    fn visit(&mut self, node: &Node) -> Payload {
         if super::skips_source_children(node) {
-            return Description::Absent;
+            return Payload::ABSENT;
         }
         if generated_body_glyph(node) {
-            return Description::Visible;
+            return Payload::GLYPHS;
+        }
+        if let Some(control) = source_control(node) {
+            return match control {
+                SourceControl::VerticalSpace => {
+                    let argument = node
+                        .children
+                        .first()
+                        .and_then(|child| child.text.as_deref());
+                    self.vertical_space(mant_codec::roff_vertical_space_lines(argument))
+                }
+                SourceControl::AlignedRows => self.visit_children(node.children.iter().skip(1)),
+                SourceControl::State
+                | SourceControl::SpacingMode
+                | SourceControl::LineBoundary
+                | SourceControl::Skip => Payload::ABSENT,
+            };
         }
         let token = node.macro_token.as_deref();
         match (node.kind, token) {
@@ -42,20 +121,20 @@ impl DescriptionProbe {
             // eqn_term.c::eqn_box() also generates delimiters/operators that
             // cannot be inferred from the responsive scalar projection.
             (NodeKind::Equation, _) => {
-                return node
+                let mut payload = node
                     .equation
                     .as_ref()
-                    .map_or(Description::Absent, equation_description);
+                    .map_or(Payload::ABSENT, equation_description);
+                // A display EQ owns its glyphs in a separate block.
+                if payload.has_text() && !node.equation_inline.unwrap_or(!node.flags.line_start) {
+                    payload.glyphs = Glyphs::Equation;
+                }
+                return payload;
             }
             (NodeKind::Element, Some("Fn")) if !node.children.is_empty() => {
                 // termp_fn_pre() writes both parentheses after the name,
                 // even when that first word has no visible glyph.
-                return Description::Visible;
-            }
-            (_, Some("ce" | "rj")) => {
-                // roff_term_pre_ce starts at n->child->next. The first TEXT
-                // is the count, and is never passed to term_word().
-                return self.visit_children(node.children.iter().skip(1));
+                return Payload::GLYPHS;
             }
             (NodeKind::Body, Some("En")) => {
                 // termp_quote_pre/post use parser-normalized Es operands,
@@ -64,8 +143,9 @@ impl DescriptionProbe {
                     let delimiters = NativeWord::read(&enclosure.opening);
                     let closing =
                         NativeWord::read(enclosure.closing.as_deref().unwrap_or_default());
-                    let generated = word_description(&delimiters).max(word_description(&closing));
-                    if generated != Description::Absent {
+                    let generated =
+                        word_payload(&delimiters, false).merge(word_payload(&closing, false));
+                    if !generated.absent() {
                         return generated;
                     }
                 }
@@ -80,18 +160,10 @@ impl DescriptionProbe {
                     "Ao" | "Aq" | "Bo" | "Bq" | "Bro" | "Brq" | "Do" | "Dq" | "Oo" | "Op" | "Po"
                     | "Pq" | "Ql" | "Qo" | "Qq" | "So" | "Sq",
                 ),
-            ) => return Description::Visible,
-            (NodeKind::Table, _)
-            | (NodeKind::Block, Some("Bd"))
-            | (NodeKind::Element, Some("sp" | "Pp")) => return Description::Layout,
-            (NodeKind::Body, Some("D1" | "Dl")) => {
-                // termp_d1_pre() opens a separate row, and termp_bl_post()
-                // closes it at block exit. A buffered zero-width glyph can
-                // own that row even when the source's NODE_NOFILL is unset.
-                let previous = std::mem::replace(&mut self.display_row, true);
-                let result = self.visit_children(node.children.iter());
-                self.display_row = previous;
-                return result;
+            ) => return Payload::GLYPHS,
+            (NodeKind::Table, _) => return Payload::ROW,
+            (NodeKind::Block, Some("Bd" | "D1" | "Dl")) => {
+                return self.visit_display(node);
             }
             (NodeKind::Block, Some("Bl")) if node.list_kind.is_some() => {
                 // A native list or column owner remains substantive after
@@ -99,96 +171,123 @@ impl DescriptionProbe {
                 // own the whole structure. An armed \z with no buffer may
                 // survive the post and affect the following ordinal.
                 let result = self.visit_children(node.children.iter());
-                return result.max(if self.zero_advance {
-                    Description::Uncertain
+                return result.merge(if self.zero_advance {
+                    Payload::UNRESOLVED
                 } else {
-                    Description::Layout
+                    Payload::ROW
                 });
             }
-            // State-only macro operands do not go through term_word().
-            (
-                _,
-                Some(
-                    "Sm" | "ft" | "ll" | "po" | "in" | "ti" | "ta" | "nf" | "fi" | "DT" | "PD"
-                    | "Tg" | "br" | "Es",
-                ),
-            ) => return Description::Absent,
             _ => {}
         }
         self.visit_children(node.children.iter())
     }
 
-    fn visit_children<'a>(&mut self, children: impl Iterator<Item = &'a Node>) -> Description {
-        let mut result = Description::Absent;
+    fn visit_display(&mut self, node: &Node) -> Payload {
+        // termp_d1_pre/termp_bl_post and termp_bd_post close the actual
+        // buffer. A word can own an empty row when it writes a zero-width
+        // cell or marker. A compact display alone writes no blank.
+        let previous = std::mem::replace(&mut self.display_row, true);
+        let result = self.visit_children(
+            node.children
+                .iter()
+                .filter(|part| part.kind == NodeKind::Body),
+        );
+        self.display_row = previous;
+        if node.macro_token.as_deref() == Some("Bd") && !node.compact {
+            // Inside a definition BODY, print_bvspace() can supply a row
+            // independently of the display payload.
+            result.merge(Payload {
+                spacing: Spacing::Boundary,
+                ..Payload::ABSENT
+            })
+        } else {
+            result
+        }
+    }
+
+    fn visit_children<'a>(&mut self, children: impl Iterator<Item = &'a Node>) -> Payload {
+        let mut result = Payload::ABSENT;
         for child in children {
-            result = result.max(self.visit(child));
-            if result == Description::Visible {
+            result = result.merge(self.visit(child));
+            if result.has_text() {
                 break;
             }
         }
         result
     }
 
-    fn visit_text(&mut self, node: &Node) -> Description {
+    fn visit_text(&mut self, node: &Node) -> Payload {
         let source = node.text.as_deref().unwrap_or_default();
         if source.is_empty() && node.flags.line_start {
             // print_mdoc_node() only calls term_vspace() for empty source
             // TEXT when the preceding word did not set TERMP_NONEWLINE.
             return if self.continues {
-                Description::Absent
+                Payload::ABSENT
             } else if self.zero_advance {
                 // An unconsumed \z may survive this empty boundary and
                 // change the next owner. This case needs source review.
-                Description::Uncertain
+                Payload::UNRESOLVED
             } else {
-                Description::Layout
+                self.vertical_space(1)
             };
         }
+        // Actual term_word() clears skipvsp even for a nonprinting word.
+        self.space_debt = 0;
         let word = NativeWord::read(source);
         self.continues = word.has(WordEffect::Continues);
         self.zero_advance =
             word.has(WordEffect::ZeroAdvance) || self.zero_advance && word.text.is_empty();
-        let result = word_description(&word);
-        if result != Description::Absent {
-            result
-        } else if (node.flags.no_fill || self.display_row)
-            && (word.has(WordEffect::Buffered) || !word.text.is_empty())
-        {
-            // A buffered zero-width cell or line marker can still own a
-            // physical no-fill row. A bare control writes no cell.
-            Description::Layout
+        word_payload(&word, node.flags.no_fill || self.display_row)
+    }
+
+    fn vertical_space(&mut self, rows: i32) -> Payload {
+        // roff_term_pre_sp() accumulates negative requests. term_vspace()
+        // consumes the debt before completing blank rows. The explicit
+        // request still marks a layout boundary when it produces zero rows.
+        let completes_row = rows > self.space_debt;
+        self.space_debt = self.space_debt.saturating_sub(rows).max(0);
+        if completes_row {
+            Payload::ROW
         } else {
-            Description::Absent
+            Payload {
+                spacing: Spacing::Boundary,
+                ..Payload::ABSENT
+            }
         }
     }
 }
 
-fn word_description(word: &NativeWord) -> Description {
-    if word.has(WordEffect::Unclassified) {
-        Description::Uncertain
-    } else if word
-        .text
-        .chars()
-        .any(|ch| !ch.is_whitespace() || ch == '\u{a0}')
-    {
-        Description::Visible
-    } else {
-        Description::Absent
+pub(crate) fn word_payload(word: &NativeWord, closes_row: bool) -> Payload {
+    if closes_row && word.rejects_leading_pass() {
+        return Payload::ROW;
+    }
+    let unresolved = word.has(WordEffect::Unclassified);
+    let glyphs = closes_row && word.has_leading_graph()
+        || !unresolved
+            && word
+                .text
+                .chars()
+                .any(|ch| !ch.is_whitespace() || ch == '\u{a0}');
+    // Without a proved close, buffered controls are just part of the
+    // current field. An unclassified edit can undo such writes.
+    let row =
+        closes_row && !unresolved && (word.has(WordEffect::Buffered) || !word.text.is_empty());
+    Payload {
+        glyphs: if glyphs { Glyphs::Text } else { Glyphs::None },
+        spacing: if row { Spacing::Row } else { Spacing::None },
+        unresolved,
     }
 }
 
-fn equation_description(equation: &libmandoc_rs::EquationBox) -> Description {
+fn equation_description(equation: &libmandoc_rs::EquationBox) -> Payload {
     equation_context(equation, false)
 }
 
-fn equation_context(equation: &libmandoc_rs::EquationBox, has_siblings: bool) -> Description {
+fn equation_context(equation: &libmandoc_rs::EquationBox, has_siblings: bool) -> Payload {
     use libmandoc_rs::{EquationKind, EquationPosition};
-    let mut result = equation
-        .text
-        .as_deref()
-        .map_or(Description::Absent, |text| {
-            word_description(&NativeWord::read(text))
-        });
+    let mut result = equation.text.as_deref().map_or(Payload::ABSENT, |text| {
+        word_payload(&NativeWord::read(text), false)
+    });
     if equation.kind == EquationKind::List && equation.expected_args > 1
         || equation.kind == EquationKind::Pile && has_siblings
     {
@@ -196,15 +295,15 @@ fn equation_context(equation: &libmandoc_rs::EquationBox, has_siblings: bool) ->
             equation.left.as_deref().unwrap_or("("),
             equation.right.as_deref().unwrap_or(")"),
         ] {
-            result = result.max(word_description(&NativeWord::read(fence)));
+            result = result.merge(word_payload(&NativeWord::read(fence), false));
         }
     }
     if equation.position != EquationPosition::None || equation.bottom.is_some() {
         // Native positional operators and bottom decorations emit a glyph.
-        result = Description::Visible;
+        result.glyphs = Glyphs::Text;
     }
     if let Some(top) = &equation.top {
-        result = result.max(word_description(&NativeWord::read(top)));
+        result = result.merge(word_payload(&NativeWord::read(top), false));
     }
     for child in &equation.children {
         if equation.kind == EquationKind::Matrix
@@ -213,7 +312,7 @@ fn equation_context(equation: &libmandoc_rs::EquationBox, has_siblings: bool) ->
         {
             // eqn_box() bypasses the matrix's outer column-list fences.
             for column in &child.children {
-                result = result.max(equation_context(column, child.children.len() > 1));
+                result = result.merge(equation_context(column, child.children.len() > 1));
             }
         } else if equation.kind == EquationKind::Pile
             && child.kind == EquationKind::List
@@ -223,16 +322,16 @@ fn equation_context(equation: &libmandoc_rs::EquationBox, has_siblings: bool) ->
             // eqn_box() passes only the row's first child in this exact
             // shape. Empty rows with no child still execute their fences.
             if let Some(first) = child.children.first() {
-                result = result.max(equation_context(first, false));
+                result = result.merge(equation_context(first, false));
             }
         } else {
-            result = result.max(equation_context(child, equation.children.len() > 1));
+            result = result.merge(equation_context(child, equation.children.len() > 1));
         }
     }
-    if result == Description::Absent && (equation.text.is_some() || !equation.children.is_empty()) {
+    if result.absent() && (equation.text.is_some() || !equation.children.is_empty()) {
         // A populated but glyphless expression still needs an independent
         // source review. Its owner and equation census remain obligatory.
-        Description::Uncertain
+        Payload::UNRESOLVED
     } else {
         result
     }

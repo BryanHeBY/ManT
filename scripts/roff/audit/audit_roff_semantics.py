@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_semantic_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/SEMANTIC_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-semantic-profile/v11"
+PROFILE_SCHEMA = "mant.roff-semantic-profile/v12"
 SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v1",
     "mant.roff-semantic-profile/v2",
@@ -51,6 +51,7 @@ SUPPORTED_PROFILE_SCHEMAS = {
     "mant.roff-semantic-profile/v8",
     "mant.roff-semantic-profile/v9",
     "mant.roff-semantic-profile/v10",
+    "mant.roff-semantic-profile/v11",
     PROFILE_SCHEMA,
 }
 DATABASE_FIELDS = [
@@ -277,6 +278,20 @@ def valid_ordinal_conversion(value: object) -> bool:
     )
 
 
+def valid_ordinal_conversions(value: object) -> bool:
+    if not isinstance(value, list):
+        return False
+    observed_owners = set()
+    for item in value:
+        if not valid_ordinal_conversion(item):
+            return False
+        for path in item["observedIrPaths"]:
+            if path in observed_owners:
+                return False
+            observed_owners.add(path)
+    return True
+
+
 def recovered_ordinal(term: str) -> tuple[int, str] | None:
     style = term[-1:]
     if style not in (".", ")"):
@@ -407,8 +422,7 @@ def profile_findings(
                 and len(note_samples) <= min(note_count, 32)
                 and isinstance(value_domain_violations, list)
                 and all(isinstance(item, str) for item in value_domain_violations)
-                and isinstance(ordinal_conversions, list)
-                and all(valid_ordinal_conversion(item) for item in ordinal_conversions)
+                and valid_ordinal_conversions(ordinal_conversions)
                 and isinstance(ordinal_conversion_violations, list)
                 and all(isinstance(item, str) for item in ordinal_conversion_violations)
                 and source_review is not None

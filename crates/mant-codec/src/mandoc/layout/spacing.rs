@@ -121,7 +121,13 @@ pub(in crate::mandoc) fn vertical_distance_lines(node: &Node) -> Option<u16> {
 /// `term.skipvsp` and cancel later vertical-space requests until a formatter
 /// word resets that debt.
 pub(in crate::mandoc) fn vertical_space_delta(node: &Node) -> i32 {
-    first_text(node).map_or(1, |argument| signed_distance_lines(argument).unwrap_or(1))
+    roff_vertical_space_lines(first_text(node))
+}
+
+/// Measure a CVS `.sp` operand before applying the active vertical-space debt.
+#[must_use]
+pub fn roff_vertical_space_lines(argument: Option<&str>) -> i32 {
+    argument.map_or(1, |argument| signed_distance_lines(argument).unwrap_or(1))
 }
 
 fn distance_lines(argument: &str) -> Option<u16> {

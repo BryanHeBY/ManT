@@ -10,6 +10,7 @@ mod escape_coverage;
 mod formatter;
 pub(crate) mod inline;
 mod layout;
+pub use layout::roff_vertical_space_lines;
 mod literal_reading;
 mod navigation;
 mod owner_layout;

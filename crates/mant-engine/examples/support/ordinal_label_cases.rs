@@ -4,6 +4,8 @@
 
 #[path = "ordinal_execution_cases.rs"]
 pub(crate) mod execution;
+#[path = "ordinal_payload_cases.rs"]
+pub(crate) mod payloads;
 
 const HEADER: &str = concat!(
     ".Dd November 18, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n",

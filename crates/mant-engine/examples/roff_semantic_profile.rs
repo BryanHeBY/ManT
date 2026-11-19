@@ -27,7 +27,7 @@ mod ordinal_labels;
 #[path = "support/profile_io.rs"]
 mod profile_io;
 
-const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v11";
+const PROFILE_SCHEMA: &str = "mant.roff-semantic-profile/v12";
 const SAMPLE_LIMIT: usize = 32;
 
 #[derive(Clone, Serialize)]
@@ -787,6 +787,50 @@ mod tests {
                 );
                 assert_eq!(lost["ordinalConversions"][0]["observedIrPaths"], json!([]));
             }
+        }
+    }
+
+    #[test]
+    fn display_payloads_and_head_controls_keep_exact_native_ordinal_labels() {
+        use crate::ordinal_labels::{
+            OrdinalDisposition,
+            cases::{execution::Case, payloads},
+        };
+        use serde_json::json;
+        use std::path::Path;
+
+        let verify = |case: &Case, display: Option<&payloads::DisplayCase>| {
+            let report = libmandoc_rs::Parser::default()
+                .parse_bytes("probe.1", case.source.as_bytes())
+                .unwrap();
+            let document = mant_codec::lower_mandoc_document(Path::new("probe.1"), &report);
+            if let Some(display) = display {
+                display.assert_body(&document);
+            }
+            let profile = super::profile_document(&case.name, &report.document.root, &document, 0);
+            let disposition = if case.disposition == OrdinalDisposition::Recovered {
+                "recovered-ordered-list"
+            } else {
+                "retained-definition-list"
+            };
+            assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
+            assert_eq!(profile["ordinalCasesForReview"], json!([]), "{}", case.name);
+            assert_eq!(
+                profile["ordinalConversions"],
+                json!([{
+                    "sourceLine":case.source_line,"listStyle":"tag","terms":["1.","2."],
+                    "expectedDisposition":disposition,"observedDispositions":[disposition],
+                    "observedIrPaths":["section[1]/block[0]"]
+                }]),
+                "{}",
+                case.name
+            );
+        };
+        for example in payloads::displays().filter(|example| example.ordinal) {
+            verify(&example.case, Some(&example));
+        }
+        for case in payloads::heads() {
+            verify(&case, None);
         }
     }
 

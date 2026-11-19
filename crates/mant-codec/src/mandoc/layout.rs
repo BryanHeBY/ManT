@@ -20,6 +20,7 @@ pub(super) use distance::Distance;
 pub(super) use mdoc::display_offset_distance;
 pub(super) use measurement::mdoc_distance;
 pub(super) use source_indent::SourceIndent;
+pub use spacing::roff_vertical_space_lines;
 #[cfg(test)]
 pub(super) use spacing::vertical_distance_lines;
 pub(super) use spacing::{

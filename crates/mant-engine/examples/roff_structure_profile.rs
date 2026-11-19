@@ -49,9 +49,7 @@ use comparison::{compare_table_topology, underflow};
 use ir::ir_profile;
 use native::{ast_profile, semantic_link_origins};
 #[cfg(test)]
-use native::{
-    equation_visible_text, is_no_fill_row_text, is_zero_width_guard_line, retained_no_fill_rows,
-};
+use native::{equation_visible_text, retained_no_fill_rows};
 #[cfg(test)]
 #[path = "roff_structure_profile/observer_tests.rs"]
 mod observer_tests;
@@ -59,7 +57,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v10";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v11";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]

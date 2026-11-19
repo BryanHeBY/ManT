@@ -30,6 +30,17 @@ pub struct RoffWordEvidence {
     pub text: String,
     effects: u8,
     advance: Advance,
+    leading_graph: LeadingGraph,
+}
+
+#[derive(Default, PartialEq, Eq)]
+enum LeadingGraph {
+    #[default]
+    Empty,
+    Invisible,
+    Proved,
+    Unproved,
+    Rejected,
 }
 
 #[derive(Default)]
@@ -48,6 +59,20 @@ impl RoffWordEvidence {
         self.effects & effect as u8 != 0
     }
 
+    /// An advancing authored glyph preceded any unclassified write or break.
+    /// A later unknown edit can affect spelling without making the initial
+    /// native field glyphless.
+    #[must_use]
+    pub fn has_leading_graph(&self) -> bool {
+        self.leading_graph == LeadingGraph::Proved
+    }
+
+    /// An empty initial pass rejected the remainder at a word-end break.
+    #[must_use]
+    pub fn rejects_leading_pass(&self) -> bool {
+        self.leading_graph == LeadingGraph::Rejected
+    }
+
     /// Decode one owned terminal source word using the shared roff grammar.
     #[must_use]
     pub fn read(source: &str) -> Self {
@@ -62,13 +87,14 @@ impl RoffWordEvidence {
         self.effects &= !(Continues as u8 | EmittedBreak as u8 | ZeroAdvance as u8);
         let decoded = decode_with_status(source);
         if !decoded.proves_native_glyphs() {
-            self.set(Unclassified);
+            self.mark_unclassified();
         }
         let mut events = decoded.events.into_iter().peekable();
         while let Some(event) = events.next() {
             match event {
                 RoffInlineEvent::Text(text) => {
-                    if text.contains(' ') {
+                    if let Some((before, _)) = text.split_once(' ') {
+                        self.prove_graph(before);
                         self.resolve_break();
                     }
                     self.append(&text);
@@ -77,7 +103,10 @@ impl RoffWordEvidence {
                 RoffInlineEvent::BreakableHyphen => self.append("-"),
                 RoffInlineEvent::NonBreakingWordBlank => self.append("\u{a0}"),
                 RoffInlineEvent::DeviceName => self.append("utf8"),
-                RoffInlineEvent::ZeroWidthGlyph => self.set(Buffered),
+                RoffInlineEvent::ZeroWidthGlyph => {
+                    self.set(Buffered);
+                    self.invisible_graph();
+                }
                 RoffInlineEvent::Breakpoint => {
                     self.set(Buffered);
                     self.resolve_break();
@@ -100,7 +129,12 @@ impl RoffWordEvidence {
                 RoffInlineEvent::Overstrike {
                     terminal, buffered, ..
                 } => {
-                    self.set(Unclassified);
+                    if let Some(text) = terminal.as_deref()
+                        && matches!(self.advance, Advance::Ordinary)
+                    {
+                        self.prove_graph(text);
+                    }
+                    self.mark_unclassified();
                     if buffered {
                         self.set(Buffered);
                     }
@@ -116,24 +150,17 @@ impl RoffWordEvidence {
                         }
                     }
                 }
-                RoffInlineEvent::HorizontalMotion { .. } => {
-                    // term_word() handles BACKAFTER before reading HORIZ's
-                    // argument. Consuming the control must not eat a digit
-                    // in the next TEXT or source word.
-                    match self.advance {
-                        Advance::Armed => self.advance = Advance::Ordinary,
-                        Advance::BufferedAndArmed(start) => self.advance = Advance::Buffered(start),
-                        _ => self.set(Unclassified),
-                    }
+                RoffInlineEvent::HorizontalMotion { argument, .. } => {
+                    self.motion(argument.as_deref());
                 }
                 RoffInlineEvent::Link(_) | RoffInlineEvent::FallbackGlyph(_) => {
-                    self.set(Unclassified);
+                    self.mark_unclassified();
                 }
                 RoffInlineEvent::Presentation {
                     kind: PresentationKind::HorizontalLine,
                     argument,
                 } => {
-                    self.set(Unclassified);
+                    self.mark_unclassified();
                     // A nonpositive length draws to the field margin when
                     // space remains. Check whether a stroke is possible,
                     // without making the observer assume a field width.
@@ -181,10 +208,72 @@ impl RoffWordEvidence {
         self.effects |= effect as u8;
     }
 
+    fn mark_unclassified(&mut self) {
+        self.set(Unclassified);
+        if matches!(
+            self.leading_graph,
+            LeadingGraph::Empty | LeadingGraph::Invisible
+        ) {
+            self.leading_graph = LeadingGraph::Unproved;
+        }
+    }
+
+    fn motion(&mut self, argument: Option<&str>) {
+        use libmandoc_rs::TableColumnMetrics;
+        // term_word() consumes an armed BACKAFTER before measuring HORIZ.
+        match self.advance {
+            Advance::Armed => self.advance = Advance::Ordinary,
+            Advance::BufferedAndArmed(start) => self.advance = Advance::Buffered(start),
+            _ => {
+                let motion = argument.and_then(|argument| {
+                    let absolute = argument.strip_prefix('|');
+                    TableColumnMetrics::motion_argument(absolute.unwrap_or(argument))
+                        .map(|(units, _)| (units, absolute.is_some()))
+                });
+                // Entering a previous slot can invalidate even earlier ink.
+                if motion.is_some_and(|(units, absolute)| absolute || units < 0) {
+                    self.leading_graph = LeadingGraph::Unproved;
+                }
+                if motion == Some((0, false)) {
+                    // No slots change. Exact ordinal spelling after a
+                    // motion remains a separate lexical decision.
+                    self.set(Unclassified);
+                } else {
+                    self.mark_unclassified();
+                }
+            }
+        }
+    }
+
+    fn prove_graph(&mut self, text: &str) {
+        // A first advancing source graph participates in term_fill() before
+        // a word-end break can reject an unprinted field.
+        if matches!(
+            self.leading_graph,
+            LeadingGraph::Empty | LeadingGraph::Invisible
+        ) && text
+            .chars()
+            .any(|ch| (!ch.is_whitespace() && !ch.is_control()) || ch == '\u{a0}')
+        {
+            self.leading_graph = LeadingGraph::Proved;
+        } else if text.contains('\t') {
+            self.invisible_graph();
+        }
+    }
+
+    fn invisible_graph(&mut self) {
+        if self.leading_graph == LeadingGraph::Empty {
+            self.leading_graph = LeadingGraph::Invisible;
+        }
+    }
+
     fn resolve_break(&mut self) {
         if self.has(WordEndBreak) {
             // A terminal \p does not break the line until term_fill()
             // visits a real space or ASCII_BREAK in its buffer.
+            if self.leading_graph == LeadingGraph::Empty {
+                self.leading_graph = LeadingGraph::Rejected;
+            }
             self.set(EmittedBreak);
             self.effects &= !(WordEndBreak as u8);
         }
@@ -195,8 +284,12 @@ impl RoffWordEvidence {
             return;
         };
         match std::mem::take(&mut self.advance) {
-            Advance::Ordinary => self.text.push_str(text),
+            Advance::Ordinary => {
+                self.prove_graph(text);
+                self.text.push_str(text);
+            }
             Advance::Armed => {
+                self.prove_graph(text);
                 let remainder = &text[first.len_utf8()..];
                 if remainder.is_empty() {
                     self.advance = Advance::Buffered(self.text.len());
@@ -205,17 +298,17 @@ impl RoffWordEvidence {
                     // term_word()/encode1() can overwrite the held cell.
                     // The surviving spelling is evidence for a candidate,
                     // never confirmation of the resulting field position.
-                    self.set(Unclassified);
+                    self.mark_unclassified();
                     self.text.push_str(remainder);
                 }
             }
             Advance::Buffered(start) => {
-                self.set(Unclassified);
+                self.mark_unclassified();
                 self.text.truncate(start);
                 self.text.push_str(text);
             }
             Advance::BufferedAndArmed(start) => {
-                self.set(Unclassified);
+                self.mark_unclassified();
                 self.text.truncate(start);
                 self.advance = Advance::Armed;
                 self.append(text);

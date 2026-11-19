@@ -8,7 +8,8 @@ use super::{
         mdoc_list_topology_kind,
     },
     ordinal_labels::{
-        description::{Description, description},
+        controls::{SourceControl, source_control},
+        description::{description, word_payload},
         skips_source_children,
     },
     special_character,
@@ -51,18 +52,13 @@ fn collect_ast_structure(
     }
     if node.kind == NodeKind::Block {
         match node.macro_token.as_deref() {
-            Some("D1" | "Dl") if description(node, false) == Description::Visible => {
-                profile.literal_displays += 1;
-            }
-            Some("Bd")
-                if matches!(
-                    node.display_kind,
-                    Some(DisplayKind::Literal | DisplayKind::Unfilled)
-                ) && node
-                    .children
-                    .iter()
-                    .filter(|part| part.kind == NodeKind::Body)
-                    .any(has_visible_text) =>
+            Some("D1" | "Dl" | "Bd")
+                if (node.macro_token.as_deref() != Some("Bd")
+                    || matches!(
+                        node.display_kind,
+                        Some(DisplayKind::Literal | DisplayKind::Unfilled)
+                    ))
+                    && description(node, false).has_text() =>
             {
                 profile.literal_displays += 1;
             }
@@ -126,7 +122,8 @@ fn collect_ast_structure(
         profile.positive_relative_indent_scopes += 1;
     }
     profile.max_relative_indent_depth = profile.max_relative_indent_depth.max(child_indent_depth);
-    for child in &node.children {
+    let count_children = usize::from(source_control(node) == Some(SourceControl::AlignedRows));
+    for child in node.children.iter().skip(count_children) {
         collect_ast_structure(
             child,
             nonprinting,
@@ -147,17 +144,19 @@ fn record_no_fill_line(node: &Node, lines: &mut BTreeMap<u32, NoFillSourceLine>)
     {
         return;
     }
-    let Some(text) = node
-        .text
-        .as_deref()
-        .filter(|text| is_no_fill_row_text(text))
-    else {
+    let Some(text) = node.text.as_deref().filter(|text| !text.is_empty()) else {
         return;
     };
+    let word = mant_codec::RoffWordEvidence::read(text);
+    let payload = word_payload(&word, true);
+    if !payload.has_text() && !payload.has_row() {
+        return;
+    }
+    let continues = node.flags.line_continuation || word.has(mant_codec::RoffWordEffect::Continues);
     let line = lines.entry(node.line).or_default();
-    line.zero_width_blank |= is_zero_width_guard_line(text);
-    line.printable |= is_printable_no_fill_text(text);
-    line.continues_line |= node.flags.line_continuation;
+    line.zero_width_blank |= payload.has_row() && !payload.has_text() && !continues;
+    line.printable |= payload.has_text();
+    line.continues_line |= continues;
 }
 
 /// A signed RS offset is not necessarily an indentation to the right.
@@ -238,33 +237,11 @@ pub(super) fn node_part_children(node: &Node, kind: NodeKind) -> &[Node] {
         .map_or(&[], |part| part.children.as_slice())
 }
 
-/// libmandoc keeps a source-line node for a standalone `\f` font switch in a
-/// no-fill display. The switch has no printable glyph and therefore cannot
-/// demand a `LineBreak` in `ManT` IR.
-pub(super) fn is_no_fill_row_text(text: &str) -> bool {
-    !text.is_empty() && !is_roff_font_switch(text)
-}
-
-pub(super) fn is_printable_no_fill_text(text: &str) -> bool {
-    is_no_fill_row_text(text) && !is_zero_width_guard_line(text)
-}
-
-pub(super) fn is_zero_width_guard_line(text: &str) -> bool {
-    let mut remainder = text.trim();
-    let mut found = false;
-    while let Some(rest) = remainder.strip_prefix(r"\&") {
-        found = true;
-        remainder = rest.trim();
-    }
-    found && remainder.is_empty()
-}
-
-/// Count printable no-fill rows plus bounded runs of zero-width blank rows.
+/// Count printable no-fill rows plus bounded runs of glyphless blank rows.
 ///
-/// A terminal-visible `\&` row matters only between printable rows in the
-/// same source run. A trailing guard immediately before `.Ve` or `.fi` merely
-/// separates blocks and must not manufacture content. Consecutive guard rows
-/// collapse to one visual separator, matching the lowering contract.
+/// Blank rows only contribute to this literal-line census between printable
+/// rows in the same source run. A standalone or trailing row may be IR
+/// vertical space instead of preformatted text.
 pub(super) fn retained_no_fill_rows(lines: &BTreeMap<u32, NoFillSourceLine>) -> usize {
     let printable = lines
         .values()
@@ -299,52 +276,12 @@ pub(super) fn retained_no_fill_rows(lines: &BTreeMap<u32, NoFillSourceLine>) -> 
     printable + blank_runs
 }
 
-fn is_roff_font_switch(text: &str) -> bool {
-    let mut remainder = text.trim();
-    let mut found = false;
-    while let Some(font) = remainder.strip_prefix(r"\f") {
-        let consumed = if font.starts_with('(') {
-            font.char_indices()
-                .nth(3)
-                .map_or(font.len(), |(index, _)| index)
-        } else if font.starts_with('[') {
-            let Some(end) = font.find(']') else {
-                return false;
-            };
-            end + 1
-        } else if font.is_empty() {
-            return false;
-        } else {
-            font.char_indices()
-                .nth(1)
-                .map_or(font.len(), |(index, _)| index)
-        };
-        found = true;
-        remainder = font[consumed..].trim();
-    }
-    found && remainder.is_empty()
-}
-
-pub(super) fn is_stateful_request(node: &Node) -> bool {
-    matches!(
-        node.macro_token.as_deref(),
-        Some(
-            "Es" | "Sm"
-                | "PD"
-                | "ad"
-                | "fi"
-                | "ft"
-                | "hy"
-                | "in"
-                | "na"
-                | "ne"
-                | "nf"
-                | "nh"
-                | "nr"
-                | "ta"
-                | "ti"
+fn is_stateful_request(node: &Node) -> bool {
+    source_control(node).is_some_and(|control| control != SourceControl::AlignedRows)
+        || matches!(
+            node.macro_token.as_deref(),
+            Some("ad" | "hy" | "na" | "ne" | "nh" | "nr")
         )
-    )
 }
 
 pub(super) fn ast_tag_is_bullet(node: &Node) -> bool {
