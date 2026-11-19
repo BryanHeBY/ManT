@@ -127,11 +127,11 @@ fn recognize(
     }
     if enclosure.is_none()
         && let Some(name) =
-            invocation::program_name(text, &(start..start + head.len()), operands, true)
+            invocation::program_name(text, &(start..start + head.len()), operands, context, true)
     {
         return Some((EntryKind::Command, Recognition::one(Some(name))));
     }
-    if leading.is_some_and(|word| word.role == NativeOperandRole::ProgramName) {
+    if leading.is_some_and(|word| matches!(word.role, NativeOperandRole::ProgramName(_))) {
         return Some((EntryKind::Term, Recognition::default()));
     }
     recognize_part(text, head, operands, enclosure)

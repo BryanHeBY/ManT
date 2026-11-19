@@ -71,6 +71,23 @@ fn pkg_keeps_standalone_and_compound_owners_distinct() {
 }
 
 #[test]
+fn stats_keeps_the_whole_executed_subcommand_in_its_command_directory() {
+    // termp_nm_pre writes both words from one Nm under the original It.
+    let content = fixture_in("program-declarations", "freebsd-stats.7.gz");
+    direct_lines(&content, "zpool iostat", &[87]);
+    direct_lines(&content, "zpool", &[]);
+    direct_lines(&content, "iostat", &[57]);
+    check_owner(
+        &content,
+        87,
+        "zpool iostat",
+        "zpool iostat",
+        EntryKind::Command,
+        "Report ZFS I/O statistics",
+    );
+}
+
+#[test]
 fn hammer_version_headings_keep_both_descriptions_without_a_command_name() {
     // CVS termp_nm_pre/HTML mdoc_nm_pre emit the subject of this manual
     // inside each It HEAD; the following No supplies an ordinary version label.

@@ -178,6 +178,7 @@ impl Projection {
                 &text,
                 &(start..start + visible.len()),
                 &self.operands,
+                context,
                 true,
             )
             .is_some())

@@ -1,7 +1,9 @@
 //! Native delimiters close macro scopes without necessarily ending an invocation.
 use super::{offset, operand_at, operand_cursor};
 use crate::definitions::syntax::{commands, named};
-use crate::definitions::{NativeOperand, NativeOperandRole, NativeSubject, RecognizedName};
+use crate::definitions::{
+    DefinitionContext, NativeOperand, NativeOperandRole, NativeSubject, RecognizedName,
+};
 use std::ops::Range;
 
 /// Read the leading Nm and any consecutive Cm/Ic words in one visible
@@ -10,19 +12,38 @@ pub(super) fn program_name(
     text: &str,
     span: &Range<usize>,
     operands: &[NativeOperand],
+    context: DefinitionContext,
     allow_bare: bool,
 ) -> Option<RecognizedName> {
     let operands = &operands[operand_cursor(operands, span.start)..];
     let (program, tail) = operands.split_first()?;
-    if program.role != NativeOperandRole::ProgramName
+    if !matches!(program.role, NativeOperandRole::ProgramName(_))
         || !program.bytes.contains(&span.start)
         || program.bytes.end > span.end
         || !text[program.bytes.start..span.start].trim().is_empty()
     {
         return None;
     }
-    let name = text[span.start..program.bytes.end].trim_end();
-    if name.contains(char::is_whitespace) || !commands::is_command_name(name) {
+    let same_scope = if context == DefinitionContext::Commands {
+        tail.iter()
+            .take_while(|word| word.role == program.role)
+            .count()
+    } else {
+        0
+    };
+    let program_end = operands[same_scope].bytes.end;
+    if program_end > span.end {
+        return None;
+    }
+    let tail = &tail[same_scope..];
+    let name = text[span.start..program_end].trim_end();
+    if !commands::is_command_name(name)
+        || name.contains(char::is_whitespace)
+            && (context != DefinitionContext::Commands
+                || name.contains('\n')
+                || commands::styled_command_prefix(name) != name
+                || !name.split_whitespace().all(commands::is_command_name))
+    {
         return None;
     }
     let mut end = span.start + name.len();
@@ -43,8 +64,10 @@ pub(super) fn program_name(
     // Cm/Ic can supply several separately executed words even within one
     // native element. Recognize their argument syntax across all segments.
     let prefix = commands::styled_command_prefix(&text[span.start..end]);
-    if prefix.len() == name.len()
-        && !is_program_tail(text, program.bytes.end..span.end, tail, allow_bare)
+    let remaining = span.start + prefix.len()..span.end;
+    if program_pipeline(remaining, tail)
+        || prefix.len() == name.len()
+            && !is_program_tail(text, program_end..span.end, tail, allow_bare)
     {
         return None;
     }
@@ -56,6 +79,35 @@ pub(super) fn program_name(
             character.is_whitespace() || matches!(character, '[' | '<' | '{' | '(')
         }))
     .then(|| RecognizedName::contiguous(prefix, span.start))
+}
+
+fn program_pipeline(span: Range<usize>, operands: &[NativeOperand]) -> bool {
+    let mut enclosure = None;
+    for (index, operand) in operands
+        .iter()
+        .enumerate()
+        .take_while(|(_, op)| op.bytes.start < span.end)
+    {
+        match operand.role {
+            NativeOperandRole::EnclosureStart { body, parent: None } => enclosure = Some(body),
+            NativeOperandRole::EnclosureEnd(body) if enclosure == Some(body) => enclosure = None,
+            role if enclosure.is_none()
+                && operand.bytes.start >= span.start
+                && matches!(
+                    role.declaration_delimiter(),
+                    NativeOperandRole::PipeDelimiter(_)
+                )
+                && operands.get(index + 1).is_some_and(|next| {
+                    matches!(next.role, NativeOperandRole::ProgramName(_))
+                        && next.bytes.start < span.end
+                }) =>
+            {
+                return true;
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Nm can also name the subject of a manual. A standalone invocation is
@@ -75,44 +127,65 @@ fn is_program_tail(
         return allow_bare;
     }
     let start = offset(text, rest);
-    let mut enclosure = None;
+    let mut enclosures = Vec::new();
     let mut argument = false;
     for operand in operands
         .iter()
         .take_while(|operand| operand.bytes.start < span.end)
     {
-        if !argument && enclosure.is_none() && !operand.bytes.contains(&start) {
+        if !argument && enclosures.is_empty() && !operand.bytes.contains(&start) {
             return false;
         }
         match operand.role {
-            NativeOperandRole::EnclosureStart { body, parent: None } => {
-                enclosure = Some(body);
-                // Typewriter quotes in a native usage label can explicitly
-                // delimit an argument (e.g. Qo reason Qc in atf-sh-api).
-                argument |= text[operand.bytes.clone()].trim() == "\"";
-            }
-            NativeOperandRole::EnclosureEnd(body) if enclosure == Some(body) => {
-                if !argument {
+            NativeOperandRole::EnclosureStart { body, parent } => {
+                if parent != enclosures.last().map(|&(body, _)| body) {
                     return false;
                 }
-                enclosure = None;
+                // Typewriter quotes in a native usage label can explicitly
+                // delimit an argument (e.g. Qo reason Qc in atf-sh-api).
+                enclosures.push((body, text[operand.bytes.clone()].trim() == "\""));
             }
-            NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder => argument = true,
-            NativeOperandRole::Command if enclosure.is_some() => argument = true,
+            NativeOperandRole::EnclosureEnd(body) => {
+                let Some((opening, proved)) = enclosures.pop() else {
+                    return false;
+                };
+                if opening != body {
+                    return false;
+                }
+                if proved {
+                    add_argument(&mut argument, &mut enclosures);
+                } else if !argument && enclosures.is_empty() {
+                    return false;
+                }
+            }
+            NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder => {
+                add_argument(&mut argument, &mut enclosures);
+            }
+            NativeOperandRole::Command if !enclosures.is_empty() => {
+                add_argument(&mut argument, &mut enclosures);
+            }
             // An intervening option keeps a later subcommand out of the
             // contiguous name. Its presence cannot prove a bare Nm instead.
             NativeOperandRole::Command
-            | NativeOperandRole::ProgramName
+            | NativeOperandRole::ProgramName(_)
             | NativeOperandRole::ClippedInvocation
-                if enclosure.is_none() =>
+                if enclosures.is_empty() =>
             {
                 return false;
             }
-            _ if !argument && enclosure.is_none() => return false,
+            _ if !argument && enclosures.is_empty() => return false,
             _ => {}
         }
     }
-    argument
+    argument && enclosures.is_empty()
+}
+
+fn add_argument(argument: &mut bool, enclosures: &mut [(u32, bool)]) {
+    if let Some((_, proved)) = enclosures.last_mut() {
+        *proved = true;
+    } else {
+        *argument = true;
+    }
 }
 
 pub(super) fn assignment_operator(text: &str) -> Option<usize> {
@@ -242,9 +315,12 @@ impl<'a> Syntax<'a> {
                 }
                 *has_argument
                     || bare_pipe
-                        && operand_at(operands, prefix.first)
-                            .is_some_and(|word| word.role == NativeOperandRole::ProgramName)
-                        && next.is_some_and(|word| word.role == NativeOperandRole::ProgramName)
+                        && operand_at(operands, prefix.first).is_some_and(|word| {
+                            matches!(word.role, NativeOperandRole::ProgramName(_))
+                        })
+                        && next.is_some_and(|word| {
+                            matches!(word.role, NativeOperandRole::ProgramName(_))
+                        })
                     || bare_pipe
                         && !begins_owner
                         && operand_pipe(text, operands, prefix.first, at, next)

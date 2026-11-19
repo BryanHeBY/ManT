@@ -163,7 +163,7 @@ impl HeadOperandCapture {
                     | NativeOperandRole::Environment { .. }
                     | NativeOperandRole::LiteralContinuation(_)
                     | NativeOperandRole::Command
-                    | NativeOperandRole::ProgramName
+                    | NativeOperandRole::ProgramName(_)
                     | NativeOperandRole::FunctionSignature { .. }
                     | NativeOperandRole::EnclosureStart { .. }
                     | NativeOperandRole::EnclosureEnd(_)

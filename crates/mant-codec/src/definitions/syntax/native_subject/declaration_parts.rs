@@ -125,7 +125,7 @@ pub(super) fn recognize(
                 return false;
             };
             operand_at(operands, partition.ranges[*index].start)
-                .is_some_and(|operand| operand.role == NativeOperandRole::ProgramName)
+                .is_some_and(|operand| matches!(operand.role, NativeOperandRole::ProgramName(_)))
         });
     if admission == Admission::AfterSeparator
         && !protected_arguments
@@ -135,7 +135,8 @@ pub(super) fn recognize(
         && !partition.has_mixed_roles(operands)
         && !partition.ranges.iter().any(|span| {
             is_assignment(text, span, operands)
-                || invocation::program_name(text, span, operands, program_aliases).is_some()
+                || invocation::program_name(text, span, operands, context, program_aliases)
+                    .is_some()
         })
     {
         return None;
@@ -367,7 +368,9 @@ fn collect_group(
     });
     let program = enclosure
         .is_none()
-        .then(|| invocation::program_name(text, span, operands, source.program_aliases))
+        .then(|| {
+            invocation::program_name(text, span, operands, source.context, source.program_aliases)
+        })
         .flatten();
     let assignment = is_assignment(text, span, operands);
     let hint = group_hint(source, index, lead, admission, enclosure);
@@ -379,7 +382,7 @@ fn collect_group(
     let recognized = if let Some(name) = program {
         Ok((EntryKind::Command, Recognition::one(Some(name))))
     } else {
-        if lead.is_some_and(|operand| operand.role == NativeOperandRole::ProgramName) {
+        if lead.is_some_and(|operand| matches!(operand.role, NativeOperandRole::ProgramName(_))) {
             candidates.unproved_part = true;
             return Ok(());
         }
@@ -504,7 +507,7 @@ fn independent_groups<'a>(
                         | NativeOperandRole::ReferenceText(_)
                         | NativeOperandRole::EnclosureStart { .. }
                         | NativeOperandRole::EnclosureEnd(_) => true,
-                        NativeOperandRole::Command | NativeOperandRole::ProgramName => {
+                        NativeOperandRole::Command | NativeOperandRole::ProgramName(_) => {
                             // in_line() may leave '(' and ')' attached to
                             // words even though the middle pipe reopens Ic.
                             !matches!(head.as_bytes()[index], b'(' | b')')
@@ -726,7 +729,7 @@ pub(super) fn independent_role(role: NativeOperandRole) -> bool {
         role,
         NativeOperandRole::Environment { .. }
             | NativeOperandRole::Command
-            | NativeOperandRole::ProgramName
+            | NativeOperandRole::ProgramName(_)
             | NativeOperandRole::ExplicitOption
     )
 }

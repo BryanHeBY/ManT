@@ -72,9 +72,9 @@ pub(crate) enum NativeOperandRole {
     /// An executed Cm/Ic operand can open an independent command declaration.
     #[cfg(feature = "roff")]
     Command,
-    /// An executed Nm names the program at the start of an invocation.
+    /// One Nm scope can execute several words of an authored command name.
     #[cfg(feature = "roff")]
-    ProgramName,
+    ProgramName(u32),
     /// The surviving part of an invocation word cannot prove its name.
     #[cfg(feature = "roff")]
     ClippedInvocation,
@@ -193,14 +193,14 @@ impl NativeOperandRole {
             Self::Description
                 | Self::SymbolicText
                 | Self::Command
-                | Self::ProgramName
+                | Self::ProgramName(_)
                 | Self::ClippedInvocation
         )
     }
 
     #[cfg(feature = "roff")]
     pub(in crate::definitions) fn is_invocation_name(self) -> bool {
-        matches!(self, Self::Command | Self::ProgramName)
+        matches!(self, Self::Command | Self::ProgramName(_))
     }
 
     #[cfg(feature = "roff")]
@@ -281,7 +281,7 @@ impl NativeOperandRole {
             | Self::PipeDelimiter(_)
             | Self::FlReopening { .. }
             | Self::FunctionSignature { .. } => Self::Argument,
-            Self::Command | Self::ProgramName => Self::ClippedInvocation,
+            Self::Command | Self::ProgramName(_) => Self::ClippedInvocation,
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,
         }

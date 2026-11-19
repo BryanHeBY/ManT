@@ -336,6 +336,78 @@ fn assert_program_group(section: &str, head: &str, form: &str, names: &[&str], n
 }
 
 #[test]
+fn execution_qualifies_compound_programs_and_nested_arguments_in_scope() {
+    // CVS termp_nm_pre prints both words of one explicit Nm name, and
+    // termp_quote_pre/post delimit the matching optional and quoted BODYs.
+    // Separate Nm invocations across a pipe do not describe one declaration.
+    for section in ["COMMANDS", "DESCRIPTION"] {
+        let command_section = section == "COMMANDS";
+        for (head, form, names, rejected) in [
+            (
+                "Nm zpool iostat",
+                "zpool iostat",
+                if command_section {
+                    &["zpool iostat"][..]
+                } else {
+                    &[]
+                },
+                &["zpool"][..],
+            ),
+            (
+                "Nm zpool Cm iostat",
+                "zpool iostat",
+                &["zpool iostat"],
+                &["zpool"],
+            ),
+            (
+                "Nm alpha Oo Qo filename Qc Oc",
+                "alpha [\"filename\"]",
+                &["alpha"],
+                &["filename"],
+            ),
+            (
+                "Nm alpha Op Qq filename",
+                "alpha [\"filename\"]",
+                &["alpha"],
+                &["filename"],
+            ),
+            (
+                "Nm alpha Op No filename",
+                "alpha [filename]",
+                &[],
+                &["alpha", "filename"],
+            ),
+            (
+                "Nm alpha Cm dump | Nm beta Cm read",
+                "alpha dump | beta read",
+                &[],
+                &["alpha dump", "beta read"],
+            ),
+            (
+                "Nm alpha Cm dump Ar arg | Nm beta Ar other",
+                "alpha dump arg | beta other",
+                &[],
+                &["alpha dump", "beta"],
+            ),
+            (
+                "Nm alpha Cm dump , Nm beta Cm read",
+                "alpha dump, beta read",
+                &["alpha dump", "beta read"],
+                &["alpha", "beta"],
+            ),
+            (
+                "Nm alpha Cm dump Ar a | Ar b",
+                "alpha dump a | b",
+                &["alpha dump"],
+                &["a", "b"],
+            ),
+        ] {
+            assert_program_group(section, head, form, names, rejected);
+        }
+    }
+}
+
+#[test]
 fn literal_suffixes_cannot_join_another_flags_executed_dash() {
     // termp_fl_pre emits its own dash. The intervening No in "-qx-a" does
     // not transfer that second Fl's glyphs to the name of the first one.
