@@ -309,7 +309,7 @@ fn append_option(builder: &mut InlineBuilder, scope: u32, children: &[Node], nam
         |builder| {
             builder.with_font_scope(Font::Strong, |builder| {
                 builder.with_native_operand_role(NativeOperandRole::FlDash(scope), |builder| {
-                    builder.append_text("-");
+                    super::word_input::append_normalized_word(builder, r"\-");
                 });
                 builder.with_prefix_join(|builder| {
                     builder.with_native_operand_role(NativeOperandRole::FlWord(scope), |builder| {

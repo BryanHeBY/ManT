@@ -137,7 +137,7 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) automatic: usize,
     pub(in crate::mandoc::inline) kept: bool,
     pub(in crate::mandoc::inline) tail_font: Option<(usize, RoffFont)>,
-    pub(in crate::mandoc::inline) duplicate: Option<(usize, usize)>,
+    pub(in crate::mandoc::inline) duplicates: Vec<(usize, usize)>,
     pub(in crate::mandoc::inline) backbefore: bool,
     pub(in crate::mandoc::inline) backafter: bool,
     pub(in crate::mandoc::inline) pending_cell: Option<usize>,
@@ -250,6 +250,7 @@ impl NativeSlots {
 
     pub(in crate::mandoc::inline) fn with_field_prefix(prefix: &FieldPrefix) -> Self {
         let mut slots = Self::after_entry(prefix.start != 0);
+        let mut aliases = prefix.duplicates.iter().peekable();
         for (index, (cell, _)) in prefix.cells.iter().enumerate() {
             if let Some((at, font)) = prefix.tail_font
                 && at == index
@@ -257,16 +258,13 @@ impl NativeSlots {
                 // encode1 writes the decoration before the final glyph.
                 // Bold's earlier copy can still be the author's glyph
                 // when a subsequent overstrike trims the final copy.
-                let decoration = decoration_prefix(cell, font);
-                let duplicate = decoration.clone().count().checked_sub(2);
-                for (part, value) in decoration.enumerate() {
-                    slots.write_run(value, 1, (Some(part) == duplicate).then_some(index));
-                }
+                slots.write_decoration(cell, font, Some(index));
             }
-            let owner = prefix
-                .duplicate
-                .filter(|&(copy, _)| copy == index)
-                .map_or(index, |(_, owner)| owner);
+            let owner = if aliases.peek().is_some_and(|&&(copy, _)| copy == index) {
+                aliases.next().expect("matching alias").1
+            } else {
+                index
+            };
             slots.write_run(cell.clone(), 1, Some(owner));
         }
         if prefix.automatic > 0 {
@@ -527,9 +525,7 @@ impl NativeSlots {
                 self.write_run(FieldCell::Backline, 1, None);
             }
         }
-        for prefix in decoration_prefix(&cell, font) {
-            self.write_run(prefix, 1, None);
-        }
+        self.write_decoration(&cell, font, owner);
         if matches!(
             cell,
             FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
@@ -540,6 +536,19 @@ impl NativeSlots {
         }
         self.backbefore = std::mem::take(&mut self.backafter);
         self.backbefore_slot = self.backbefore.then(|| self.cursor.saturating_sub(1));
+    }
+
+    fn write_decoration(&mut self, cell: &FieldCell, font: RoffFont, owner: Option<usize>) {
+        // encode1 writes the same source value twice for bold. Underline
+        // and backspace are device controls and never inherit its owner.
+        let duplicate = match font {
+            RoffFont::Strong | RoffFont::CodeStrong => Some(0),
+            RoffFont::StrongEmphasis => Some(2),
+            _ => None,
+        };
+        for (index, value) in decoration_prefix(cell, font).enumerate() {
+            self.write_run(value, 1, owner.filter(|_| Some(index) == duplicate));
+        }
     }
 
     fn previous_cell(&self, cursor: usize) -> Option<&FieldCell> {

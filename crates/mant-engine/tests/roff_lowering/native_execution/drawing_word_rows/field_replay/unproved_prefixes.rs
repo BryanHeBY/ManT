@@ -176,3 +176,51 @@ fn a_bounded_slot_replay_cannot_split_an_unresolved_overstrike() {
         }
     }
 }
+
+#[test]
+fn field_edits_keep_the_complete_short_prefix_around_styled_operands() {
+    // Exact pinned ASCII and UTF-8 agree on the remaining author text.
+    // termp_in_pre/post and termp_lk_pre place regular punctuation around
+    // an underlined operand. encode1()'s underline and backspace occupy
+    // raw slots, so a rewind can cut the prefix, the glyph or its suffix.
+    for (operand, expected) in [
+        ("Ar X", ["X", "", "", ""]),
+        ("In x", ["x>", "x>", "", ""]),
+        ("Lk u t", ["t: u", ": u", "u", ""]),
+        ("Fn x", ["x()", "()", "", ""]),
+        (r"Xr \& \&", ["()", ")", "", ""]),
+    ] {
+        for motion in [r"\h'|0n'", r"\h'-12n'"] {
+            for (count, expected) in [1, 3, 5, 12].into_iter().zip(expected) {
+                let word = format!(r#"{operand} Ns No "{motion}{}""#, r"\p".repeat(count));
+                for display in [
+                    format!(".Dl {word}"),
+                    format!(".Bd -literal -compact\n.{word}\n.Ed"),
+                ] {
+                    let source = format!(
+                        "{HEADER}STARTPROBE\n.br\n{display}\n.br\nSTOPPROBE\n.Sh ENDPROBE\nDone.\n"
+                    );
+                    let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+                    let restored = crate::json_roundtrip::json_string_roundtrip(&loaded);
+                    let markdown = mant_codec::encode::render_markdown(&restored);
+                    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+                    for content in [&restored, &readback] {
+                        let text = mant_render::render_query_text(content);
+                        let (_, tail) = text.split_once("STARTPROBE\n").unwrap();
+                        let (region, _) = tail.split_once("STOPPROBE").unwrap();
+                        let mut rows = region
+                            .lines()
+                            .map(str::trim)
+                            .filter(|line| !line.is_empty());
+                        assert_eq!(
+                            rows.next(),
+                            (!expected.is_empty()).then_some(expected),
+                            "{source}\n{text}"
+                        );
+                        assert_eq!(rows.next(), None, "{source}\n{text}");
+                    }
+                }
+            }
+        }
+    }
+}

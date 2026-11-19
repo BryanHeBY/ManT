@@ -8,18 +8,41 @@ pub(super) fn proved_decorated_tail(
     use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
     // A styled append can prove its final duplicate even when the earlier
     // field is opaque. Cursor edits and BACK registers need the full path.
-    matches!(
-        font,
-        super::Font::Strong | super::Font::CodeStrong | super::Font::StrongEmphasis
-    ) && matches!(
-        writes.last(),
-        Some(FieldWrite::Cell(FieldCell::Graph { text, width: 1 })) if text.is_ascii_graphic()
-    ) && events.iter().all(|event| {
-        matches!(
-            event,
-            RoffInlineEvent::Text(_) | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+    has_native_decoration(font)
+        && matches!(
+            writes.last(),
+            Some(FieldWrite::Cell(FieldCell::Graph { text, width: 1 })) if text.is_ascii_graphic()
         )
-    })
+        && events.iter().all(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::Text(_) | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+            )
+        })
+}
+
+pub(super) fn has_native_decoration(font: super::Font) -> bool {
+    !matches!(font, super::Font::Regular | super::Font::Code)
+}
+
+pub(super) fn decorated_write_count(
+    writes: &[crate::mandoc::inline::flow::field_buffer::FieldWrite],
+    font: super::Font,
+) -> usize {
+    use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+    if !has_native_decoration(font) {
+        return 0;
+    }
+    writes
+        .iter()
+        .filter(|write| {
+            matches!(
+                write,
+                FieldWrite::Cell(FieldCell::Graph { .. } | FieldCell::Hyphen)
+            )
+        })
+        .take(2)
+        .count()
 }
 
 /// A native `encode1()` writes actual decoration bytes into the input

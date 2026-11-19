@@ -117,7 +117,7 @@ pub(in crate::mandoc) enum FieldWrite {
     ProveAppendSlots {
         count: usize,
         backbefore: bool,
-        duplicate: Option<(usize, usize)>,
+        duplicates: Vec<(usize, usize)>,
     },
     /// Earlier cell to new cell indices. Empty entries were overwritten.
     ReplaceLivePrefix {
@@ -130,6 +130,7 @@ pub(in crate::mandoc) enum FieldWrite {
     /// These compact writes do not prove individual native byte slots.
     OpaqueRawSlots {
         last_font: Option<crate::mandoc::roff_escape::RoffFont>,
+        keeps_prior_slots: bool,
     },
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or

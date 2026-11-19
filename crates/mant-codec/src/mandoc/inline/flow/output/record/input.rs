@@ -136,6 +136,10 @@ impl ExecutedWordEntry {
     pub(super) fn word_start(&self, original: usize) -> usize {
         self.prefix.word_start.unwrap_or(original)
     }
+
+    pub(super) fn has_replayed_slots(&self) -> bool {
+        self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some()
+    }
 }
 
 fn earlier_word_after_cell(

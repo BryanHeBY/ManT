@@ -1008,3 +1008,115 @@ fn bold_device_copies_keep_one_author_until_the_accepted_pass_covers_it() {
         }
     }
 }
+
+#[test]
+fn native_overstrike_keeps_the_style_and_link_of_a_surviving_bold_copy() {
+    let header =
+        ".TH SAMPLE 1 \"November 19, 2026\"\n.SH NAME\nsample \\- sample\n.SH DESCRIPTION\n";
+    // CVS encode1 emits the first bold copy before the backline and the
+    // final copy. A later draw can replace the final copy without replacing
+    // the earlier one, whether this author was literal or inside \o.
+    for (word, expected, label) in [
+        (r"P\fB\o'A'\fR\h'-2n'XYZ", "PAXYZ", None),
+        (r"P\f[BI]\o'A'\fR\h'-2n'XYZ", "PAXYZ", None),
+        (r"P\fBA\fR\o' '\o' 'Z", "PAZ", None),
+        (
+            r"P\X'tty: link https://x.io'\fB\o'A'\fR\X'tty: link'\h'-3n'XYZ",
+            "PAXYZ",
+            Some("A"),
+        ),
+    ] {
+        let source = format!("{header}{word}\n.br\nENDTEXT\n");
+        assert_readbacks(&source, &format!("{expected}\nENDTEXT"), label);
+        if label.is_none() {
+            let ansi = render(&source, "roff", "text", "always", false);
+            let bold_copy = if word.contains("[BI]") {
+                "\x1b[1m\x1b[3mA\x1b[0m"
+            } else {
+                "\x1b[1mA\x1b[0m"
+            };
+            assert!(ansi.contains(bold_copy), "{source}");
+        }
+        assert_eq!(search_visible_word(&source, expected), 1, "{source}");
+    }
+}
+
+#[test]
+fn empty_overstrike_uses_the_live_entry_slots_across_words() {
+    let header = ".Dd November 19, 2026\n.Dt SAMPLE 1\n.Os\n.Sh NAME\n.Nm sample\n.Nd sample\n.Sh DESCRIPTION\n";
+    // term_word trims the native buffer after every overstrike. A surviving
+    // device space can belong to earlier operands without either current
+    // automatic entry spacing or authored output for that cell.
+    for (word, expected) in [
+        (r#".No P No "\o' '" No "\o' '\o' 'Z""#, "P Z"),
+        (r#".No P No "\o' '" No "\o' 'Z""#, "PZ"),
+        (r#".No P No "\o' '" No Z"#, "P Z"),
+        (r#".No P Ns No "\o' '" Ns No Z"#, "P Z"),
+        (r#".No "P\zQ" No "\o''" No Z"#, "PZ"),
+        (r#".No "P\zQ" Ns No "\o''" Ns No Z"#, "PZ"),
+        (r#".No "P\zQ" Ns No "\o''" Ns No "\o' 'Z""#, "PQZ"),
+        (r#".No "P\fBA\fR" No "\:" No "\o' 'Z""#, "PA Z"),
+        (r#".No "P\fBA\fR" No "\&" No "\o' '\o' 'Z""#, "PA Z"),
+    ] {
+        let source = format!("{header}STARTFLAG\n.br\n{word}\n.br\nENDMARK\n");
+        assert_readbacks(&source, &format!("STARTFLAG\n{expected}\nENDMARK"), None);
+        assert_eq!(
+            search_visible_word(&source, "PZ"),
+            u64::from(expected == "PZ"),
+            "{source}"
+        );
+    }
+}
+
+fn search_visible_word(source: &str, word: &str) -> u64 {
+    let result = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "json",
+            "--display",
+            "direct",
+            "--word",
+            "--search",
+            word,
+        ],
+        source,
+    );
+    assert!(result.status.success(), "{result:?}");
+    let response: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    response["total"].as_u64().unwrap()
+}
+
+#[test]
+fn generated_option_dashes_follow_the_same_native_writes_as_authored_dashes() {
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd test page\n.Sh DESCRIPTION\nSTARTPROBE\n.br\n";
+    // termp_fl_pre performs term_word("\\-") in bold. The two terminal
+    // bytes carrying its single glyph tolerate one or two overwrites.
+    for movement in [r"\h'|0n'", r"\h'-3n'"] {
+        for (markers, expected) in [
+            (0, ["STARTPROBE", "-", "STOPPROBE"].as_slice()),
+            (1, ["STARTPROBE", "-", "STOPPROBE"].as_slice()),
+            (2, ["STARTPROBE", "-", "STOPPROBE"].as_slice()),
+            (3, ["STARTPROBE", "", "STOPPROBE"].as_slice()),
+        ] {
+            let breaks = r"\p".repeat(markers);
+            for option in ["Fl", "Sy -"] {
+                let source = format!(
+                    "{header}.Dl {option} Ns No \"{movement}{breaks}\"\n.br\nSTOPPROBE\n.Sh ENDPROBE\nDone.\n"
+                );
+                let markdown = render(&source, "roff", "markdown", "never", false);
+                for text in [
+                    render(&source, "roff", "text", "never", false),
+                    render(&markdown, "markdown", "text", "never", false),
+                ] {
+                    let (rows, _) = description(&text).split_once("\n\nENDPROBE").unwrap();
+                    let rows: Vec<_> = rows.lines().map(str::trim).collect();
+                    assert_eq!(rows, expected, "{source}");
+                }
+            }
+        }
+    }
+}

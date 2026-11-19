@@ -206,7 +206,7 @@ impl FieldBuffer {
         self.device_tail = None;
         self.raw_slot_fence = 0;
         self.raw_tail_font = None;
-        self.raw_copy_alias = None;
+        self.raw_copy_aliases.clear();
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
         self.zero_width_retreats.clear();

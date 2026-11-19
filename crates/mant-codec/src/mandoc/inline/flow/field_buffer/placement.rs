@@ -14,14 +14,20 @@ impl FieldBuffer {
             FieldWrite::ProveAppendSlots {
                 count,
                 backbefore,
-                duplicate,
+                duplicates,
             } => {
                 self.raw_slot_fence = self.cells.len() - count;
                 self.backbefore_armed = *backbefore;
-                self.raw_copy_alias = duplicate
-                    .map(|(copy, owner)| (self.raw_slot_fence + copy, self.raw_slot_fence + owner));
+                self.raw_copy_aliases.clear();
+                self.raw_copy_aliases
+                    .extend(duplicates.iter().map(|&(copy, owner)| {
+                        (self.raw_slot_fence + copy, self.raw_slot_fence + owner)
+                    }));
             }
-            FieldWrite::OpaqueRawSlots { last_font } => self.record_raw_tail_font(*last_font),
+            FieldWrite::OpaqueRawSlots {
+                last_font,
+                keeps_prior_slots,
+            } => self.record_raw_tail_font(*last_font, *keeps_prior_slots),
             FieldWrite::ReplaceLivePrefix { start: 0, .. } => self.clear(),
             FieldWrite::ReplaceLivePrefix { start, .. } => {
                 self.replace_placed_tail(self.cells.len() - start);
@@ -38,14 +44,24 @@ impl FieldBuffer {
         }
     }
 
-    fn record_raw_tail_font(&mut self, last_font: Option<crate::mandoc::roff_escape::RoffFont>) {
+    fn record_raw_tail_font(
+        &mut self,
+        last_font: Option<crate::mandoc::roff_escape::RoffFont>,
+        keeps_prior_slots: bool,
+    ) {
         let end = self.cells.len();
-        self.raw_tail_font = last_font
+        let tail = last_font
             .zip(end.checked_sub(1))
             .filter(|&(_, index)| self.projection_length(index, end) == 1)
             .map(|(font, index)| (index, font));
-        self.raw_slot_fence = self.raw_tail_font.map_or(end, |(index, _)| index);
-        self.raw_copy_alias = None;
+        // One decorated tail on an otherwise exact append leaves the old
+        // prefix usable. Another compressed decoration would require a
+        // second origin receipt; seal that part of the field instead.
+        if !(keeps_prior_slots && tail.is_some() && self.raw_tail_font.is_none()) {
+            self.raw_slot_fence = tail.map_or(end, |(index, _)| index);
+            self.raw_copy_aliases.clear();
+        }
+        self.raw_tail_font = tail;
     }
 
     pub(in crate::mandoc::inline::flow) fn field_prefix(
@@ -69,11 +85,14 @@ impl FieldBuffer {
         let first_retreat = self
             .zero_width_retreats
             .partition_point(|&(_, mark)| mark < start);
+        // A bold source writes graph, backline, graph. The pairs are
+        // disjoint and ordered, so at most the previous pair spans start.
+        let first_alias = self
+            .raw_copy_aliases
+            .partition_point(|&(copy, _)| copy < start);
         if *self.cells.get(start)? == FieldCell::Backline
             || start != 0 && self.projection_length(start, self.cells.len()) == 0
-            || self
-                .raw_copy_alias
-                .is_some_and(|(copy, owner)| copy < start && owner >= start)
+            || first_alias != 0 && self.raw_copy_aliases[first_alias - 1].1 >= start
             || self
                 .zero_width_retreats
                 .get(first_retreat)
@@ -119,9 +138,10 @@ impl FieldBuffer {
             tail_font: self
                 .raw_tail_font
                 .and_then(|(index, font)| Some((index.checked_sub(start)?, font))),
-            duplicate: self
-                .raw_copy_alias
-                .and_then(|(copy, owner)| Some((copy.checked_sub(start)?, owner - start))),
+            duplicates: self.raw_copy_aliases[first_alias..]
+                .iter()
+                .map(|&(copy, owner)| (copy - start, owner - start))
+                .collect(),
             backbefore: self.backbefore_armed,
             backafter: self.backafter_armed,
             pending_cell: self
@@ -147,12 +167,22 @@ impl FieldBuffer {
         self.resume < self.cells.len() && self.cells.last() == Some(&FieldCell::TabReference)
     }
 
-    pub(in crate::mandoc::inline::flow) fn has_device_gap_before(&self, end: usize) -> bool {
+    pub(in crate::mandoc::inline::flow) fn has_device_gap_before(
+        &self,
+        end: usize,
+        replayed: bool,
+    ) -> bool {
         let end = end.min(self.cells.len());
-        let Some(&gap) = self.nonbreaking_positions.range(..end).next_back() else {
+        let gap = self.nonbreaking_positions.range(..end).next_back().max(
+            self.blank_positions
+                .range(..end)
+                .next_back()
+                .filter(|&&gap| replayed || matches!(self.cells[gap], FieldCell::DrawnSpaces(1..))),
+        );
+        let Some(&gap) = gap else {
             return false;
         };
-        if gap < self.resume || !matches!(self.cells[gap], FieldCell::FixedDrawingAdvance(1..)) {
+        if gap < self.resume {
             return false;
         }
         // term_field() defers these cells until the next printed graph.
@@ -161,7 +191,8 @@ impl FieldBuffer {
         let mut fixed = false;
         for index in (self.resume..end).rev() {
             match self.cells[index] {
-                FieldCell::FixedDrawingAdvance(1..) => fixed = true,
+                FieldCell::FixedDrawingAdvance(1..) | FieldCell::DrawnSpaces(1..) => fixed = true,
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank if replayed => fixed = true,
                 FieldCell::TabReference | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
                 FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen => {
                     return fixed && self.projection_length(index, index + 1) > 0;
@@ -177,9 +208,7 @@ impl FieldBuffer {
         debug_assert!(start >= self.resume);
         self.invalidate_projection_scan(start);
         self.cells.truncate(start);
-        self.raw_slot_fence = self.raw_slot_fence.min(start);
-        self.raw_tail_font = self.raw_tail_font.filter(|&(position, _)| position < start);
-        self.raw_copy_alias = self.raw_copy_alias.filter(|&(_, owner)| owner < start);
+        self.truncate_raw_slot_proof(start);
         self.projection_prefix.truncate(start + 1);
         self.zero_width_retreats.truncate(
             self.zero_width_retreats
@@ -208,6 +237,15 @@ impl FieldBuffer {
         let previous = self.projection_prefix.last().copied().unwrap_or(0);
         self.push_cell(cell.clone());
         *self.projection_prefix.last_mut().expect("placed cell") = previous + scalars;
+    }
+
+    pub(super) fn truncate_raw_slot_proof(&mut self, end: usize) {
+        self.raw_slot_fence = self.raw_slot_fence.min(end);
+        self.raw_tail_font = self.raw_tail_font.filter(|&(position, _)| position < end);
+        let aliases = self
+            .raw_copy_aliases
+            .partition_point(|&(_, owner)| owner < end);
+        self.raw_copy_aliases.truncate(aliases);
     }
 
     pub(super) fn keep_placed_retreat(&mut self, from_end: usize) {

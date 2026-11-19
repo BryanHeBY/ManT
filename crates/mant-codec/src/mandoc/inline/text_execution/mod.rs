@@ -208,12 +208,13 @@ fn execute_formatter_word_events(
     } else {
         None
     };
-    let mut opaque_slots = !matches!(context.font.current, Font::Regular | Font::Code);
+    let mut opaque_slots = native_writes::has_native_decoration(context.font.current);
     let retained_previous_glyph =
         context.slot_entry.retreat_blanks > 0 || context.zero_advance.has_pending_glyph();
     let can_record_last_font =
         !retained_previous_glyph && !context.zero_advance.is_armed() && prior_edit.is_none();
     let mut last_font = None;
+    let mut decorated_writes = 0;
     let mut unproved_motion = false;
     for (index, event) in events.iter().enumerate() {
         unproved_motion |= context.policy.field_authoritative
@@ -258,6 +259,12 @@ fn execute_formatter_word_events(
         );
         if word.native_writes.len() > write_start {
             last_font = Some(context.font.current);
+            if can_record_last_font && decorated_writes < 2 {
+                decorated_writes += native_writes::decorated_write_count(
+                    &word.native_writes[write_start..],
+                    context.font.current,
+                );
+            }
         }
     }
     if unproved_motion
@@ -276,8 +283,10 @@ fn execute_formatter_word_events(
             can_record_last_font
                 && native_writes::proved_decorated_tail(events, &word.native_writes, font)
         });
-        word.native_writes
-            .push(FieldWrite::OpaqueRawSlots { last_font });
+        word.native_writes.push(FieldWrite::OpaqueRawSlots {
+            last_font,
+            keeps_prior_slots: decorated_writes == 1,
+        });
     }
     word.finish_content_prefix();
     word.flush_segment();

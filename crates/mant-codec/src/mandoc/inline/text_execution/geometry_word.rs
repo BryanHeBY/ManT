@@ -63,8 +63,9 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 edits |= *buffered || authored_blank;
                 overstrike_edit |= *buffered
                     || terminal.is_none()
-                        && context.slot_entry.trailing_tab_reference
-                        && context.slot_entry.automatic_blanks > 0;
+                        && (context.slot_entry.prefix.is_some()
+                            || context.slot_entry.trailing_tab_reference
+                                && context.slot_entry.automatic_blanks > 0);
                 armed_overstrike |= armed && *buffered && terminal.is_none();
                 armed_empty_overstrike |= armed && !buffered;
             }
@@ -392,7 +393,6 @@ struct GeometrySeed<'a> {
     replayed_entry: bool,
     prefix_start: usize,
     earlier: usize,
-    repeated_prior: Option<usize>,
     unpublished: Option<usize>,
 }
 
@@ -411,10 +411,6 @@ impl GeometrySeed<'_> {
                 placement,
                 prefix_start: prefix.start,
                 earlier,
-                repeated_prior: prefix
-                    .tail_font
-                    .map(|(index, _)| index)
-                    .or(prefix.duplicate.map(|(_, owner)| owner)),
                 unpublished: context
                     .zero_advance
                     .has_pending_glyph()
@@ -434,7 +430,6 @@ impl GeometrySeed<'_> {
                 replayed_entry: automatic > 0,
                 prefix_start: 0,
                 earlier: 0,
-                repeated_prior: None,
                 unpublished: None,
             }
         } else {
@@ -474,7 +469,6 @@ impl GeometrySeed<'_> {
                 replayed_entry,
                 prefix_start: 0,
                 earlier: 0,
-                repeated_prior: None,
                 unpublished: None,
             }
         };

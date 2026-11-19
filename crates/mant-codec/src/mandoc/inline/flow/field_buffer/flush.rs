@@ -145,7 +145,7 @@ impl FieldBuffer {
             device_tail: None,
             raw_slot_fence: 0,
             raw_tail_font: None,
-            raw_copy_alias: None,
+            raw_copy_aliases: Vec::new(),
             tabs: self.tabs.clone(),
             tab_offset: self.tab_offset,
             pass_tab_offset: self.pass_tab_offset,

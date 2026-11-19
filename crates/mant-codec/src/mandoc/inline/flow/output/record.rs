@@ -90,16 +90,21 @@ impl WordPassProjection {
     ) {
         // The earlier \h cell is already in the live word buffer. Reuse
         // the virtual space projection when the new word would print it.
-        if self.separator == SeparatorDisposition::Consumed {
-            return;
-        }
+        let replayed = entry.has_replayed_slots();
+        let gap_end = if replayed {
+            entry.receipt.first_content_cell
+        } else {
+            word_start
+        };
         if self.native_separator == 0
             && entry.receipt.prints_padding
             && entry.receipt.first_content_cell >= word_start
-            && buffer.has_device_gap_before(word_start)
+            && buffer.has_device_gap_before(gap_end, replayed)
         {
             self.separator = SeparatorDisposition::DeviceAdvance;
-        } else if keep || entry.receipt.leading_retreat.is_some() {
+        } else if self.separator != SeparatorDisposition::Consumed
+            && (keep || entry.receipt.leading_retreat.is_some())
+        {
             self.separator = SeparatorDisposition::Keep;
         }
     }

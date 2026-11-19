@@ -29,7 +29,6 @@ impl<'a> PlacedWord<'a> {
             placement,
             prefix_start,
             earlier,
-            repeated_prior,
             unpublished,
             replace_tail,
             replayed_entry,
@@ -42,11 +41,12 @@ impl<'a> PlacedWord<'a> {
         } = placement;
         let armed = slots.backafter();
         let backbefore = slots.backbefore();
-        let pending = slots.pending_owner().filter(|&owner| owner >= earlier);
+        let pending_owner = slots.pending_owner();
+        let pending = pending_owner.filter(|&owner| owner >= earlier);
         let append_extent = slots.append_extent();
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
-        let duplicate = keep_last_prior_copy(&mut slots, repeated_prior);
+        let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix);
         preserve_author_separators(&slots, &mut reading);
         let mut writes = Vec::new();
@@ -83,14 +83,19 @@ impl<'a> PlacedWord<'a> {
                 }),
             });
         }
-        let prior = unpublished.map(|id| slots.iter().any(|slot| slot.owner == Some(id)));
+        let inherited_pending = pending_owner
+            .filter(|owner| Some(*owner) == unpublished)
+            .and_then(|owner| slots.iter().rposition(|slot| slot.owner == Some(owner)));
+        let prior = unpublished
+            .filter(|_| inherited_pending.is_none())
+            .map(|id| slots.iter().any(|slot| slot.owner == Some(id)));
         writes.extend(slots.iter().map(|slot| slot_write(slot, &reading)));
         let end = slots.len();
         if retain_suffix && append_extent == Some(end) {
             writes.push(FieldWrite::ProveAppendSlots {
                 count: end,
                 backbefore,
-                duplicate,
+                duplicates,
             });
         }
         writes.extend(zero_width_retreats.into_iter().map(|(target, mark)| {
@@ -99,6 +104,14 @@ impl<'a> PlacedWord<'a> {
                 mark_from_end: end - mark,
             }
         }));
+        if let Some(index) = inherited_pending {
+            // A control such as an empty overstrike can leave both the
+            // old glyph and BACKBEFORE intact. The next real glyph, not
+            // this word boundary, must decide whether to cover it.
+            writes.push(FieldWrite::KeepPlacedRetreat {
+                from_end: end - index,
+            });
+        }
         if let Some(tail) = next_tail {
             writes.push(FieldWrite::RetainDeviceTail(Box::new(tail)));
         }
@@ -190,16 +203,23 @@ impl<'a> PlacedWord<'a> {
     }
 }
 
-fn keep_last_prior_copy(slots: &mut [FillSlot], repeated: Option<usize>) -> Option<(usize, usize)> {
-    let owner = repeated?;
-    let last = slots.iter().rposition(|slot| slot.owner == Some(owner))?;
-    let copy = slots[..last]
-        .iter()
-        .position(|slot| slot.owner == Some(owner))?;
-    // Keep one provisional scalar quota, but register where the earlier
-    // device copy can still supply that owner after the next operand.
-    slots[copy].owner = None;
-    Some((copy, last))
+fn keep_one_copy_per_owner(slots: &mut [FillSlot], owners: usize) -> Vec<(usize, usize)> {
+    let mut latest = vec![None; owners];
+    let mut duplicates = Vec::new();
+    for (index, slot) in slots.iter_mut().enumerate().rev() {
+        let Some(owner) = slot.owner else { continue };
+        if let Some(last) = latest[owner] {
+            // Both encoded copies retain an author while the field is being
+            // edited. Publish its scalar once and retain the earlier byte's
+            // ownership for any later word that overlaps this suffix.
+            slot.owner = None;
+            duplicates.push((index, last));
+        } else {
+            latest[owner] = Some(index);
+        }
+    }
+    duplicates.reverse();
+    duplicates
 }
 
 fn replay_prefix(
