@@ -157,6 +157,10 @@ that crate was not published for that change.
 - Keep blank overstrikes in the active native field across operands.
   Preserve word boundaries across continued source lines, and apply the
   same overwrite rules to prose and table cells before publishing links.
+- Keep overwritten source glyphs and their link labels available while an
+  exact native slot suffix remains editable. A later trim can expose an
+  earlier glyph. Measure roff table breakpoints in source order with
+  zero-advance escapes, and replay blank overstrikes in table cells.
 - Bind independent native declaration groups across accepted delimiters.
   Punctuation inside an operand or attached to a name cannot start another
   group.
@@ -167,6 +171,9 @@ that crate was not published for that change.
   definitions. Reserve direct names and the name budget for declarations
   with independent evidence. A separate symbolic suffix remains readable
   in a command form without extending the command name.
+- Keep assignment values and invocation arguments inside their original
+  definition. Preserve distinct direct owners for independently declared
+  options and terms with the same spelling.
 - Omit the unused operands of the obsolete mdoc `Db` macro while retaining
   the native validation diagnostic.
 - Resume roff anchor suffix allocation from the last candidate for each slug.

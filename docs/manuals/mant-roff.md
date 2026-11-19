@@ -233,6 +233,15 @@ zero-width control can sit between a glyph and the backspace that covers
 it. Prose and raw table cells publish the surviving glyphs from the
 accepted pass. A tty link loses glyphs covered by a later write. A rejected
 field can still retain its authored destination as an empty link.
+A later edit can expose an earlier overstrike glyph while the relevant
+native slots remain live. The replay uses a bounded suffix with a proved
+write cursor and preserves the glyph's original style and link. Native
+copies of a bold glyph refer to one author glyph. A queued blank can cover
+it when a later device write on the same pass makes the blank print. If
+the suffix would split an active overstrike, it cannot authorize an edit
+to the earlier owner. Raw table columns use native measurement before
+executing the cell words. A source `\:` is zero width there and can
+consume the measurement path's pending `\z`.
 
 Generated inset/diagnostic gaps keep the native nonbreaking cells for
 execution, including overstrikes and field acceptance. Their surviving reading
@@ -693,6 +702,11 @@ A separate `Sy` word after a `Cm` or `Ic` command remains in the complete
 form. `Cm run Sy FILE` binds `run` as the name and still permits an exact
 `run FILE` form lookup. The command name can include multiple executed
 command words. A glued suffix does not prove a shorter name.
+Assignment syntax can span native style boundaries and accept spaces around
+`=`. Values such as `mode = red | blue` remain in the complete form under
+`mode`. Command argument alternatives can continue across commas and pipes
+and across the parser's reopened macro scopes. A separate definition of
+the same spelling keeps its own queryable identity and description.
 
 Environment and variable definitions keep their names before one complete
 trailing parenthetical note, including styled descriptions. The enclosing
