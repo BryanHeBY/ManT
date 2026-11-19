@@ -43,6 +43,18 @@ that crate was not published for that change.
   definitions when a discarded macro argument performed the register increment.
 - Keep compact mdoc displays on a separate row from the definition label
   when the native display entry closes the label's row.
+- Keep mdoc displays after `El` in their parsed container, so they stay out
+  of the preceding item's explanation and excerpt.
+- Execute the implicit word keep of mdoc system-name macros in prose and
+  displays, preserving words protected by the native nonbreaking space.
+- Resolve short relative rewinds, pending word gaps and generated enclosure
+  delimiters from their accepted native writes. Preserve the source link of
+  a surviving glyph even when another link has the same label.
+- Keep ordinary wrapping in edited tbl cells responsive. Use the native
+  field width when it determines a hard break or which glyph survives.
+- Bind the complete leading mdoc program or command in definition heads.
+  Parenthesized operands stay in the form, and unrelated groups no longer
+  determine whether assignments and independent names can be queried.
 - Preserve source order and spacing around relative indent continuations
   of numbered man list items.
 - Publish valid single-mailbox `mailto:` links from roff as email references

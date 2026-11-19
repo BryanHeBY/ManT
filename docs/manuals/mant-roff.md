@@ -108,6 +108,11 @@ presentation belongs to the list structure, and BODY placement cannot inherit
 a retired marker's padding. Node returns restore geometry without restoring
 consumed device rows, flags, fonts or continuation state.
 
+The validated mdoc tree determines which blocks belong to an `It` description.
+An offset display after `El` belongs to the enclosing section or list item, even
+when it appears indented under the preceding label. Explanations and excerpts
+use the same ownership as the full document.
+
 An ordinary `Nm` inside an `It` description executes its HEAD and BODY in
 the enclosing live field. Its BODY retains normal block handling; source-line
 entry, field flush and native scope post keep their separate meanings when
@@ -129,6 +134,11 @@ its actual dialect before entering a name field. Its `Nm` HEAD/BODY phases
 share that live input, including pending glyphs and the field's resolved gap;
 the final section boundary closes the native row before output is drained.
 This does not expand the recovery language or its per-cell and session budgets.
+
+The system-name macros `Bsx`, `Dx`, `Fx`, `Nx`, `Ox` and `Ux` execute their
+native implicit word keep within the macro. Its nonbreaking spaces affect
+which words survive field breaks. An outer `Bk` remains active across the
+macro, and an unprotected sibling after the macro uses ordinary spacing.
 
 ## man Language
 
@@ -219,6 +229,7 @@ ManT resolves the native writes before projecting the accepted text. Prose,
 headings, link labels, definition labels, and table cells use that write
 order. Reading output omits device-only strokes and retains authored word
 boundaries between surviving glyphs.
+Short relative rewinds can edit proven slots even without a word-end marker.
 Entry rewinds can reuse the live field's proven slots across operands before
 an actual native flush. The preceding glyph can remain provisional across
 font controls, links, and a source continuation. A combining mark remains
@@ -845,6 +856,12 @@ does not promote every definition to a command. Correcting a previously
 unclassified command can intentionally change its kind, names and derived ID;
 the authored form and body remain unchanged.
 
+In an authored mdoc definition head, a complete leading `Nm` can bind the
+program by itself. Consecutive accepted `Cm` and `Ic` words can extend it to
+a command name. A bracketed or parenthesized argument stays in the readable
+form, and an edited or partial command word cannot prove a different name.
+Ordinary `Nm` references in a description or synopsis retain their source role.
+
 Independent `IP`, `TP`, and definition-form `It` items retain separate semantic
 owners, including items without a description. Neither `PD 0`, a later `PD`
 reset, font changes nor suppressed line breaks prove shared ownership. An
@@ -854,7 +871,9 @@ forms do not imply an explicit alias relationship.
 
 In an mdoc `Ev` declaration, accepted native operands delimit names, values
 and supplements. Commas and pipes within balanced templates or within the
-same assignment value do not introduce aliases. A balanced parenthesis that
+same assignment value do not introduce aliases. A separator followed by
+an independently executed declaration can delimit a new name. Each group
+uses its own assignment and operand evidence. A balanced parenthesis that
 is part of the name, such as `BASH_FUNC_home()`, can precede an independent
 alias. Internal font changes retain the complete proved spelling. An explicit
 literal continuation can form part of a name. A path, reference label or
@@ -1066,6 +1085,10 @@ Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 | Stateful (obsolete) | `Es opening closing`, then `En` | Resolved per `En` use |
 
 The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter. `Eo` and `Ec` retain their literal, author-supplied delimiters. The obsolete `Es` macro changes parser state but emits no text; libmandoc resolves that state onto each `En` invocation before ManT lowers it.
+
+Generated enclosure marks write to the same live field as author text. If a
+pending native retreat makes a closing mark cover an option letter, the
+letter drops out of both the visible form and the option-name evidence.
 
 Structural parts are views of a macro, not its complete visible content.
 Direct children before HEAD or after BODY execute in their original sibling
@@ -1592,11 +1615,12 @@ retains the surviving glyph.
 
 Numeric alignment writes fixed blanks before the cell word. Those slots can
 supply an accepted pass before `\p` or be overwritten by the cell's edits.
-They carry no authored text. An ordinary span uses its measured column width
-for fill passes. A native no-break field uses the remaining page width from
-the cell's actual start. The span's own fill flag controls that limit even
-inside a no-fill owner. The reading projection preserves completed rows and
-the surviving cell text separately from these device advances.
+They carry no authored text. For a word-end marker or a backline whose
+replacement must print on the same pass, an ordinary span uses its measured
+column width to decide the accepted text. A native no-break field uses the
+remaining page width from the cell's actual start. The span's own fill flag
+controls that limit even inside a no-fill owner. Other cell edits retain a
+responsive paragraph, with wrapping decided by the reading viewport.
 
 Phrasing tables share the page's source recovery and work allowance with
 block tables. An implicit
