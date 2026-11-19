@@ -290,6 +290,73 @@ fn native_display_row_spellings_keep_their_cell_and_complete_field() {
 }
 
 #[test]
+fn ordinary_cell_rows_are_reserved_across_filled_boundaries_and_trailing_requests() {
+    // Pinned mdoc_term.c::print_mdoc_node() closes filled TEXT whose
+    // source line starts with space. termp_sm_pre() emits no ink and
+    // roff_term_pre_sp() still flushes at .sp 0.
+    for kind in ["Dl", "D1", "literal", "unfilled"] {
+        for (before, after, rows, at) in [
+            (" LEAD\n", "", "B\nLEAD\nSENTRY", 2),
+            (" SENTRY\n", "", "B\nSENTRY\nSENTRY", 2),
+            ("", "SENTRY\n", "B\nSENTRY\nSENTRY", 1),
+            ("", "OTHER\n", "B\nSENTRY\nOTHER", 1),
+            (".br\nLEAD\n", "", "B\nLEAD\nSENTRY", 2),
+        ] {
+            for suffix in ["", ".Sm off\n", ".sp 0\n"] {
+                let display = display(kind, "SENTRY");
+                let source = format!(
+                    "{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta B\n{before}{display}{after}{suffix}.El\n{TAIL}"
+                );
+                let (native, topology, intact) = parsed_structure(&source);
+                assert!(native.literal_display_reviews.is_empty(), "{source}");
+                assert_eq!(missing(&native, &topology, &intact), 0, "{source}");
+                for replacement in ["WRONG", " "] {
+                    let mut document = intact.clone();
+                    let Block::Table { rows: table, .. } = &mut document.sections[1].blocks[0]
+                    else {
+                        panic!("{source}");
+                    };
+                    let Block::Preformatted { children, .. } = &mut table[0].cells[1].blocks[0]
+                    else {
+                        panic!("{source}");
+                    };
+                    let physical = children
+                        .split(|node| matches!(node, Inline::LineBreak {}))
+                        .map(|row| inline_plain_text(row).trim().to_owned())
+                        .collect::<Vec<_>>();
+                    assert_eq!(physical.join("\n"), rows, "{source}");
+                    let start = children
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, node)| matches!(node, Inline::LineBreak {}))
+                        .nth(at - 1)
+                        .unwrap()
+                        .0
+                        + 1;
+                    let end = start
+                        + children[start..]
+                            .iter()
+                            .take_while(|node| !matches!(node, Inline::LineBreak {}))
+                            .count();
+                    assert_eq!(
+                        inline_plain_text(&children[start..end]),
+                        "SENTRY",
+                        "{source}"
+                    );
+                    children.splice(
+                        start..end,
+                        [Inline::Text {
+                            value: replacement.to_owned(),
+                        }],
+                    );
+                    assert_eq!(missing(&native, &topology, &document), 1, "{source}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn an_ordinary_cell_row_cannot_replace_missing_display_ink() {
     // The pristine termp_it_pre and termp_d1_pre/termp_bd_pre put ordinary
     // and display rows in the same cell. Preserve the non-display ink and

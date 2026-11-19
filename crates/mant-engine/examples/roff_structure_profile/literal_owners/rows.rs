@@ -78,11 +78,13 @@ fn lexical_rows(
     for end in 0..=nodes.len() {
         let next = nodes.get(end);
         let closes = next.is_none_or(|n| {
-            matches!(n.macro_token.as_deref(), Some("br" | "Pp"))
+            matches!(n.macro_token.as_deref(), Some("br" | "Pp" | "sp"))
                 || n.kind == NodeKind::Block
                     && matches!(n.macro_token.as_deref(), Some("D1" | "Dl" | "Bd" | "Bl"))
+                // termp_sm_pre changes the next word's spacing only.
+                || end + 1 == nodes.len() && n.macro_token.as_deref() == Some("Sm")
         });
-        if closes || next.is_some_and(|n| n.flags.no_fill && n.flags.line_start) {
+        if closes || next.is_some_and(starts_source_row) {
             if start < end {
                 let field = &nodes[start..end];
                 if !field.iter().all(simple_inline) {
@@ -97,6 +99,18 @@ fn lexical_rows(
         }
     }
     Some(rows)
+}
+
+fn starts_source_row(node: &Node) -> bool {
+    // mdoc_term.c::print_mdoc_node ends a row for a leading ASCII space
+    // in filled TEXT as well as for NODE_LINE in no-fill. lexical_row
+    // rejects a continuation escape before either inferred boundary.
+    node.flags.line_start
+        && (node.flags.no_fill
+            || node.kind == NodeKind::Text
+                && node
+                    .decoder_text()
+                    .is_some_and(|text| text.starts_with(' ')))
 }
 
 fn lexical_row(nodes: &[Node], origin: &Node, source: &SourceContext) -> Option<String> {

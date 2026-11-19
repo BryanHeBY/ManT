@@ -95,6 +95,9 @@ fn claim_cells(
             // When later source is unproved, only the exact initial rows
             // can be claimed. Later equal ink cannot replace that prefix.
             for (want, &(text, literal)) in plan.rows.iter().zip(rows) {
+                if want.owner.is_none() && text != want.text {
+                    break;
+                }
                 if literal
                     && text == want.text
                     && let Some(id) = want.owner
