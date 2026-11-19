@@ -36,8 +36,11 @@ class NativeDependencyTests(unittest.TestCase):
                 path.chmod(0o755)
 
             tool("cc", '#!/bin/sh\ncat >/dev/null\ntest -f "$MANT_TEST_STATE/installed"\n')
-            for name in ["ar", "cvs"]:
-                tool(name, "#!/bin/sh\nexit 0\n")
+            # Use a closed PATH so a CVS installation on the host cannot
+            # mask an unnecessary dependency in the CI setup.
+            for name in ["bash", "cat", "env", "mktemp", "python3", "rm"]:
+                (tools / name).symlink_to(shutil.which(name))
+            tool("ar", "#!/bin/sh\nexit 0\n")
             tool("sudo", '#!/bin/sh\nexec "$@"\n')
             tool("timeout", '#!/bin/sh\nshift 3\nexec "$@"\n')
             tool("dpkg", '#!/bin/sh\nprintf "%s\\n" "$MANT_TEST_ARCH"\n')
@@ -70,7 +73,7 @@ if phase == "install":
 ''')
             result = subprocess.run(
                 ["bash", str(SCRIPT)], capture_output=True, text=True, timeout=15,
-                env={**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
+                env={**os.environ, "PATH": str(tools),
                      "TMPDIR": str(scratch), "MANT_TEST_STATE": str(root),
                      "MANT_TEST_ARCH": architecture,
                      "MANT_TEST_PRIMARY_FAIL": primary_failure,
@@ -82,7 +85,7 @@ if phase == "install":
             self.assertEqual(list(scratch.iterdir()), [], "probe/fallback files were not cleaned")
             return result, records, marker.exists()
 
-    def test_ready_toolchain_never_runs_apt(self):
+    def test_ready_toolchain_never_runs_apt_without_cvs(self):
         result, calls, installed = self.run_setup(ready=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, [])
@@ -93,6 +96,7 @@ if phase == "install":
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([(c["phase"], c["fallback"]) for c in calls],
                          [("update", False), ("install", False)])
+        self.assertNotIn("cvs", calls[-1]["args"])
         self.assertTrue(installed)
 
     def test_update_timeout_uses_signed_https_without_installing_from_stale_indexes(self):

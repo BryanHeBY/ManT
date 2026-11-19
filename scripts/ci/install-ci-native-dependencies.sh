@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ensure native builds and the maintainer-only pinned CVS replay can run in CI.
+# Probe the Linux dependencies used by native builds.
 
 set -euo pipefail
 
@@ -9,7 +9,6 @@ trap 'rm -rf -- "$probe_dir"' EXIT
 native_dependencies_available() {
   command -v cc >/dev/null 2>&1 &&
     command -v ar >/dev/null 2>&1 &&
-    command -v cvs >/dev/null 2>&1 &&
     printf '%s\n' \
       '#include <zlib.h>' \
       'int main(void) { return zlibVersion() == 0; }' |
@@ -20,6 +19,10 @@ if native_dependencies_available; then
   echo "Linux native build dependencies are already available"
   exit 0
 fi
+
+# The offline CVS snapshot tests supply their own client. Maintainers who
+# fetch a new upstream snapshot install the real client separately.
+echo "Linux C compiler, archiver, or zlib development files need installation"
 
 if ! command -v apt-get >/dev/null 2>&1 || ! command -v sudo >/dev/null 2>&1; then
   echo "Linux native build dependencies are missing and apt-get is unavailable" >&2
@@ -40,7 +43,7 @@ apt_get=(
 install_native_packages() {
   timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" "$@" update &&
     timeout --signal=TERM --kill-after=10s 90s "${apt_get[@]}" "$@" install \
-      --yes --no-install-recommends build-essential cvs zlib1g-dev
+      --yes --no-install-recommends build-essential zlib1g-dev
 }
 
 if ! install_native_packages; then
