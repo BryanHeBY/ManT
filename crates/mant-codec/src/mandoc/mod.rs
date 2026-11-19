@@ -144,6 +144,9 @@ fn lower_mandoc_document_with_source(
         targets::NativeTargetPlan::build(&parsed.root, &mut context.authored_section_targets);
     let explicit_targets = target_plan.explicit();
     context.macro_set = parsed.macro_set;
+    // mdoc_macro.c closes the Bl/It scopes at .El. A later indented
+    // block at the same structural level belongs to their parent.
+    context.native_heads.get_mut().explicit_list_owners = parsed.macro_set == MacroSet::Mdoc;
     context
         .native_target_owners
         .clone_from(target_plan.validated_owners());

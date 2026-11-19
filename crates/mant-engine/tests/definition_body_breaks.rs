@@ -3,6 +3,11 @@ use mant_ir::{Block, DefinitionItem};
 use mant_loader::load_roff_bytes;
 use mant_render::render_query_text;
 
+#[path = "support/json_roundtrip.rs"]
+mod json_roundtrip;
+
+#[path = "definition_body_breaks/display_ownership.rs"]
+mod display_ownership;
 #[path = "definition_body_breaks/displays.rs"]
 mod displays;
 

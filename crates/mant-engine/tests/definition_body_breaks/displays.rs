@@ -3,8 +3,7 @@ use mant_ir::{Block, DefinitionItem, HeadBodyRelation, ResolvedContent, inline_p
 use mant_loader::{load_markdown_text, load_roff_bytes};
 use mant_render::render_query_text;
 
-#[path = "../support/json_roundtrip.rs"]
-mod json_roundtrip;
+use super::json_roundtrip;
 
 const HEADER: &str = ".Dd November 17, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd behavior probe\n.Sh EXIT STATUS\n";
 const PAYLOAD: &str = "Execution completed.";

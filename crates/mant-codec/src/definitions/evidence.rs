@@ -56,6 +56,8 @@ pub(crate) struct NativeHeadEvidence {
     /// Explicit headless IP continuations already assigned to their source
     /// owner. Later indentation recovery cannot move them into its last child.
     pub(crate) continuations: std::collections::HashSet<(u32, u32)>,
+    /// The source parser already assigned every definition-list body.
+    pub(crate) explicit_list_owners: bool,
     witnesses: HashMap<(u32, u32), Vec<HeadWitness>>,
     native_witnesses: HashMap<usize, HeadWitness>,
     operand_witnesses: HashMap<usize, Vec<OperandWitness>>,

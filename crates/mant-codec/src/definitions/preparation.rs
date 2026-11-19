@@ -208,7 +208,9 @@ fn normalize_blocks(
     diagnostics: &mut Vec<mant_ir::Diagnostic>,
 ) {
     super::normalize::normalize_native_hanging_owners(blocks, context, &evidence.hanging);
-    normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
+    if !evidence.explicit_list_owners {
+        normalize_definition_nesting_with_boundaries(blocks, &evidence.continuations);
+    }
     normalize_hanging_definitions_with_evidence(blocks, context, evidence, diagnostics);
     for block in blocks {
         match block {
