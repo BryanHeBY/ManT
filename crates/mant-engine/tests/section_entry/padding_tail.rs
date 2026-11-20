@@ -188,20 +188,24 @@ fn literal_motion_keeps_reading_space_without_republishing_completed_rows() {
 fn authored_blanks_and_real_tail_receipts_are_not_suppressed() {
     // Exact negative controls also ran pristine first. NBRZW can admit
     // a real old empty row; normal filled HORIZ doesn't leave a literal
-    // reading cell. Authored NBSP and \~ remain exact owner scalars.
-    for (mode, tail, old, gap) in [
-        ("", r"\h'1n'", "ALPHA", 1),
-        (".nf\n", r"\h'0n'", "ALPHA", 1),
-        (".nf\n", " ", "ALPHA", 1),
-        (".nf\n", "\u{a0}", "ALPHA\n\n\u{a0}", 0),
-        (".nf\n", r"\~", "ALPHA\n\n\u{a0}", 0),
-        (".nf\n", r"\h'1n' BETA", "ALPHA\n\n  BETA", 0),
-        (".nf\n", r"\zX\h'1n'", "ALPHA\n\nX", 0),
-        (".nf\n", r"\fI\h'1n'\fP", "ALPHA\n\n ", 0),
+    // reading cell. man_term.c::pre_SS lets authored NBSP and \~ share
+    // the heading row, without taking the independently completed blank.
+    for (mode, tail, old, gap, heading) in [
+        ("", r"\h'1n'", "ALPHA", 1, " NEXT"),
+        (".nf\n", r"\h'0n'", "ALPHA", 1, " NEXT"),
+        (".nf\n", " ", "ALPHA", 1, " NEXT"),
+        (".nf\n", "\u{a0}", "ALPHA\n", 0, "\u{a0} NEXT"),
+        (".nf\n", r"\~", "ALPHA\n", 0, "\u{a0} NEXT"),
+        (".nf\n", r"\h'1n' BETA", "ALPHA\n\n  BETA", 0, " NEXT"),
+        (".nf\n", r"\zX\h'1n'", "ALPHA\n\nX", 0, " NEXT"),
+        (".nf\n", r"\fI\h'1n'\fP", "ALPHA\n\n ", 0, " NEXT"),
     ] {
         let source = format!("{HEADER}{mode}ALPHA\\p \\p\\& {tail}{FOOTER}");
         let input = load(&source);
-        assert_projection(&source, &input, old, gap, " NEXT", !mode.is_empty());
+        assert_projection(&source, &input, old, gap, heading, !mode.is_empty());
+        if heading.starts_with('\u{a0}') {
+            assert_reading(&source, &input, old, gap, heading);
+        }
         if tail.starts_with(r"\fI") {
             let Block::Preformatted { children, .. } =
                 &input.document.as_ref().unwrap().sections[1].blocks[0]
