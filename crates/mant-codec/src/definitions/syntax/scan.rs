@@ -507,12 +507,25 @@ impl<'a> Scanner<'a> {
                 })
     }
 
+    fn is_argument_separator(&self, character: char, operand: Option<&NativeOperand>) -> bool {
+        matches!(character, ',' | '|')
+            && !self.view.literal_punctuation(self.cursor)
+            && !operand.is_some_and(|operand| {
+                // Commas and pipes inside a single Fl assignment belong
+                // to its authored value, even before a dash-looking word.
+                operand.role == NativeOperandRole::ExplicitOption
+                    && self.argument_start.as_ref().is_some_and(|argument| {
+                        operand.bytes.contains(&argument.bytes.start)
+                            && self.view.text[argument.bytes.start..].starts_with('=')
+                    })
+            })
+    }
+
     fn consume_argument(&mut self, character: char) {
         let mut next_offset = self.cursor + character.len_utf8();
         let role = self.view.operand(self.cursor);
         let parameter = self.view.is_parameter(self.cursor);
-        let separator =
-            matches!(character, ',' | '|') && !self.view.literal_punctuation(self.cursor);
+        let separator = self.is_argument_separator(character, role);
         self.styled_argument |= parameter;
         if self.lexical.is_top_level() {
             let mut following = next_offset;
@@ -533,7 +546,7 @@ impl<'a> Scanner<'a> {
             let complete_parameter = self.complete_parameter_token(parameter)
                 || separator && self.complete_bare_parameter(following);
             let independent_assignment_alias = separator
-                && self.view.explicit_option(following)
+                && self.view.native_option_starts(following)
                 && self.argument_start.as_ref().is_some_and(|argument| {
                     argument.attached_to_name
                         && self.view.text[argument.bytes.start..].starts_with('=')

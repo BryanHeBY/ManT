@@ -863,10 +863,74 @@ fn native_assignment_boundaries_respect_angle_pairs_and_independent_aliases() {
 }
 
 #[test]
+fn assignment_punctuation_uses_operand_ownership_and_group_depth() {
+    // CVS mdoc_macro.c::in_line yields independent Fl operands for
+    // these alias names but also for the -v inside the assigned group.
+    // Both terminal devices preserve the complete visible forms.
+    for (head, label, names) in [
+        ("Fl a=-10,-20", "-a=-10,-20", &["-a"][..]),
+        ("Fl a=first,--fake,last", "-a=first,--fake,last", &["-a"]),
+        ("Fl a=-10|--fake", "-a=-10|--fake", &["-a"]),
+        ("Fl a=-10,-20 , Fl b", "-a=-10,-20, -b", &["-a", "-b"]),
+        ("Fl a= Ns Ar -10,-20", "-a=-10,-20", &["-a"]),
+        (
+            "Fl a= Ns Ar size<1024 , Fl b= Ns Ar x>4",
+            "-a=size<1024, -b=x>4",
+            &["-a", "-b"],
+        ),
+        (
+            "Fl a= Ns Ar size<1024 , Fl b= Ns Ar x>4 , Fl c",
+            "-a=size<1024, -b=x>4, -c",
+            &["-a", "-b", "-c"],
+        ),
+        (
+            "Fl a= Ns Ar size<1024 Op Ar x>42",
+            "-a=size<1024 [x>42]",
+            &["-a"],
+        ),
+        ("Fl a= Ns Ar size<1024 Op Ar >", "-a=size<1024 [>]", &["-a"]),
+        (
+            "Fl a= Ns Ar <x Ns | Ns Fl v Ns Ar > , Fl b",
+            "-a=<x|-v>, -b",
+            &["-a", "-b"],
+        ),
+        (
+            "Fl a=< Ns Ar x Ns | Ns Fl v Ns Ar > , Fl b",
+            "-a=<x|-v>, -b",
+            &["-a", "-b"],
+        ),
+        (
+            "Fl a= Ns Ar x<value Ns | Ns Fl v Ns Ar > , Fl b= Ns Ar x>4",
+            "-a=x<value|-v>, -b=x>4",
+            &["-a", "-b"],
+        ),
+    ] {
+        check(
+            "OPTIONS",
+            head,
+            names,
+            label,
+            true,
+            &["-v", "-20", "--fake"],
+        );
+    }
+}
+
+#[test]
 fn dotted_values_require_a_native_join_and_a_typed_terminal_operand() {
     // termp_quote_pre/post and termp_fl_pre preserve these spellings. A
     // detached dot word is not authored as either half of the assignment.
     for (head, label, complete) in [
+        (
+            r"Fl a= Ns Ar x Pq Ar value | No \&. Ns Pa config",
+            "-a=x (value | .config)",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x Pq Ar value | No .bak",
+            "-a=x (value | .bak)",
+            false,
+        ),
         (
             r"Fl a= Ns Ar x Pq Li auto | Li \&. Ns Pa config",
             "-a=x (auto | .config)",

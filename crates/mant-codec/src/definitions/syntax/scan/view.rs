@@ -126,40 +126,83 @@ impl<'a> HeadView<'a> {
         operand_at(self.operands, offset)
     }
 
+    pub(super) fn native_option_starts(&self, offset: usize) -> bool {
+        self.explicit_option(offset) && self.literal_operand_starts(offset)
+    }
+
     #[cfg(feature = "roff")]
     pub(super) fn paired_assignment_angle(&self, offset: usize) -> bool {
         self.assignment_angles
             .get_or_init(|| {
-                // An assignment can contain several native operands inside
-                // its angles. An independently owned Fl after a separator
-                // starts a new declaration; it cannot close the old pair.
+                // A leading angle can contain native Fl operands. An
+                // interior comparison cannot claim a later declaration's
+                // closing angle. Use accepted native operand starts, which
+                // can follow a space owned by the same operand.
                 let mut pairs = Vec::new();
-                let mut open = Vec::new();
+                let mut open: Vec<OpenAngle> = Vec::new();
                 let mut escaped = false;
                 let mut previous = None;
+                let mut operands = self.operands.iter().peekable();
                 for (offset, ch) in self.text.char_indices() {
-                    if ch == '\n'
-                        || ch == '-'
-                            && matches!(previous, Some(',' | '|'))
-                            && self.operand(offset).is_some_and(|operand| {
-                                operand.role == NativeOperandRole::ExplicitOption
-                                    && operand.bytes.start == offset
-                            })
+                    while let Some(operand) =
+                        operands.peek().filter(|item| item.bytes.end <= offset)
                     {
+                        if let NativeOperandRole::EnclosureEnd(body) = operand.role {
+                            open.retain(|angle| angle.enclosure != Some(body));
+                        }
+                        operands.next();
+                    }
+                    let operand = operands
+                        .peek()
+                        .copied()
+                        .filter(|item| item.bytes.contains(&offset));
+                    if ch == '\n' {
                         open.clear();
+                    } else if ch == '-'
+                        && matches!(previous, Some((',' | '|', end)) if end < offset)
+                        && self.native_option_starts(offset)
+                    {
+                        while open.last().is_some_and(|angle| !angle.leading) {
+                            open.pop();
+                        }
                     }
                     if !ch.is_whitespace() {
-                        previous = Some(ch);
+                        previous = Some((ch, offset + ch.len_utf8()));
                     }
                     if std::mem::take(&mut escaped) {
                         continue;
                     }
+                    if operand.is_some_and(|item| {
+                        matches!(
+                            item.role,
+                            NativeOperandRole::EnclosureStart { .. }
+                                | NativeOperandRole::EnclosureEnd(_)
+                        )
+                    }) {
+                        continue;
+                    }
                     match ch {
                         '\\' => escaped = true,
-                        '<' if open.len() < super::MAX_NESTING => open.push(offset),
-                        '>' => {
-                            if let Some(start) = open.pop() {
-                                pairs.extend([start, offset]);
+                        '<' if open.len() < super::MAX_NESTING => {
+                            let leading = operand.is_none_or(|operand| {
+                                let prefix = self.text[operand.bytes.start..offset].trim();
+                                prefix.is_empty() || prefix.ends_with('=')
+                            });
+                            open.push(OpenAngle {
+                                offset,
+                                leading,
+                                enclosure: angle_enclosure(operand),
+                            });
+                        }
+                        '>' if operand.is_none_or(|operand| {
+                            self.text[offset + 1..operand.bytes.end].starts_with(|ch: char| {
+                                !super::parameter_token::parameter_character(ch)
+                            }) || offset + 1 == operand.bytes.end
+                        }) =>
+                        {
+                            let enclosure = angle_enclosure(operand);
+                            if let Some(angle) = open.pop_if(|angle| angle.enclosure == enclosure) {
+                                pairs.extend([angle.offset, offset]);
                             }
                         }
                         _ => {}
@@ -287,5 +330,22 @@ impl<'a> HeadView<'a> {
         self.operands[start..]
             .iter()
             .take_while(move |item| item.bytes.start < range.end)
+    }
+}
+
+#[cfg(feature = "roff")]
+struct OpenAngle {
+    offset: usize,
+    leading: bool,
+    enclosure: Option<u32>,
+}
+
+#[cfg(feature = "roff")]
+fn angle_enclosure(operand: Option<&NativeOperand>) -> Option<u32> {
+    match operand?.role {
+        NativeOperandRole::Placeholder { enclosure, .. }
+        | NativeOperandRole::PathOperand(enclosure) => enclosure,
+        NativeOperandRole::EnclosureContent { body, .. } => Some(body),
+        _ => None,
     }
 }

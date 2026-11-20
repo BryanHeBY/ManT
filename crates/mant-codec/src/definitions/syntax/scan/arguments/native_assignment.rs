@@ -103,7 +103,7 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
 fn complete_flag_value(view: &HeadView<'_>, rhs: std::ops::Range<usize>) -> bool {
     let mut lexical = LexicalState::default();
     for (offset, ch) in view.text[rhs.clone()].char_indices() {
-        if !parameter_character(ch) && !"+%*?#~&!^$;/:@=.[](){}<>".contains(ch) {
+        if !parameter_character(ch) && !"+%*?#~&!^$;/:@=.,|[](){}<>".contains(ch) {
             return false;
         }
         if !matches!(ch, '<' | '>')
@@ -331,7 +331,22 @@ impl AssignmentSyntax {
             {
                 // Actual Op/Oo can supply one bare value such as [host].
                 // A Bq with the same terminal glyphs makes no such claim.
-                self.literal(value, scoped_literal(scopes.last().filter(|_| bare)))
+                // A No dot can finish a pending choice together with the
+                // adjacent part of a Pa in the same generated enclosure.
+                let path_prefix = value.trim() == "."
+                    && piece.tail == OperandTail::Joined
+                    && self
+                        .group()
+                        .is_some_and(|group| group.join == Some(Join::Word))
+                    && view
+                        .operand(piece.start + value.len())
+                        .is_some_and(|operand| operand.role == Role::PathOperand(Some(body)));
+                let literal = if path_prefix {
+                    Literal::Explicit
+                } else {
+                    scoped_literal(scopes.last().filter(|_| bare))
+                };
+                self.literal(value, literal)
             }
             Role::Command => self.literal(value, scoped_literal(scopes.last())),
             Role::LiteralValue => self.literal(value, Literal::Explicit),
