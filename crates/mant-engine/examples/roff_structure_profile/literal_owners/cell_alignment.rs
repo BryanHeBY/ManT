@@ -17,6 +17,14 @@ pub(super) struct MissingRows {
 }
 
 impl MissingRows {
+    pub(super) fn label(self) -> String {
+        if self.min == self.max {
+            self.min.to_string()
+        } else {
+            format!("{}..={}", self.min, self.max)
+        }
+    }
+
     fn include(slot: &mut Option<Self>, range: Self) {
         *slot = Some(slot.map_or(range, |other| Self {
             min: other.min.min(range.min),

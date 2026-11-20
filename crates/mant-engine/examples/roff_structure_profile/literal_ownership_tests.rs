@@ -433,7 +433,7 @@ fn missing_equal_column_rows_use_the_physical_slot_or_report_all_candidates() {
                             assert_eq!(errors.len(), 1, "{source}: {errors:?}");
                             let expected = if gap.is_empty() && second_word == "SENTRY" {
                                 format!(
-                                    "1 missing row(s) among column display candidates {}:2, {}:2",
+                                    "1 missing row(s) among column display candidates {}:2 occurrence 1 (0..=1 missing row(s)), {}:2 occurrence 1 (0..=1 missing row(s))",
                                     starts[0], starts[1]
                                 )
                             } else {
@@ -449,7 +449,7 @@ fn missing_equal_column_rows_use_the_physical_slot_or_report_all_candidates() {
                         assert_eq!(errors.len(), 1, "{source}: {errors:?}");
                         let expected = if gap.is_empty() {
                             format!(
-                                "1 missing row(s) among column display candidates {}:2, {}:2",
+                                "1 missing row(s) among column display candidates {}:2 occurrence 1 (0..=1 missing row(s)), {}:2 occurrence 1 (0..=1 missing row(s))",
                                 starts[0], starts[1]
                             )
                         } else {
@@ -488,7 +488,7 @@ fn multiline_display_slots_constrain_equal_rows_across_native_spacing() {
                     let errors = compare(&native, &topology, &doc);
                     let expected = if second_same - first_same == 1 {
                         format!(
-                            "1 missing row(s) among column display candidates {first_opening}:2, {second_opening}:2"
+                            "1 missing row(s) among column display candidates {first_opening}:2 occurrence 1 (0..=1 missing row(s)), {second_opening}:2 occurrence 1 (0..=1 missing row(s))"
                         )
                     } else {
                         format!("for {opening}:2 ")
@@ -526,17 +526,23 @@ fn column_row_damage_preserves_ordinary_and_invisible_slot_alternatives() {
         (
             ".Dl SAME\nSAME\n.D1 SAME\n",
             &[(2, "SAME", "")][..],
-            &["0..=1 missing row(s) among column display candidates 10:2, 12:2"][..],
+            &[
+                "0..=1 missing row(s) among column display candidates 10:2 occurrence 1 (0..=1 missing row(s)), 12:2 occurrence 1 (0..=1 missing row(s)); cell loss 0..=1 row(s)",
+            ][..],
         ),
         (
             ".Dl SAME\nSAME\n.D1 SAME\n",
             &[(3, "SAME", ""), (2, "SAME", "")][..],
-            &["1..=2 missing row(s) among column display candidates 10:2, 12:2"][..],
+            &[
+                "1..=2 missing row(s) among column display candidates 10:2 occurrence 1 (0..=1 missing row(s)), 12:2 occurrence 1 (0..=1 missing row(s)); cell loss 1..=2 row(s)",
+            ][..],
         ),
         (
             ".Bd -literal -compact\n\\&\nFIRST\nSAME\n.Ed\n.Dl SAME\n",
             &[(3, "SAME", "WRONG")][..],
-            &["1 missing row(s) among column display candidates 10:2, 15:2"][..],
+            &[
+                "1 missing row(s) among column display candidates 10:2 occurrence 1 (0..=1 missing row(s)), 15:2 occurrence 1 (0..=1 missing row(s)); cell loss 1 row(s)",
+            ][..],
         ),
         (
             ".Bd -literal\nFIRST\nSAME\n.Ed\nPIN\n.D1 SAME\n.Dl LAST\n",
@@ -581,14 +587,16 @@ fn replace_column_payload_at(
     let Block::Preformatted { children, .. } = &mut rows[0].cells[1].blocks[0] else {
         panic!()
     };
-    let start = children
-        .iter()
-        .enumerate()
-        .filter(|(_, node)| matches!(node, Inline::LineBreak {}))
-        .nth(at - 1)
-        .unwrap()
-        .0
-        + 1;
+    let start = at.checked_sub(1).map_or(0, |break_index| {
+        children
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| matches!(node, Inline::LineBreak {}))
+            .nth(break_index)
+            .unwrap()
+            .0
+            + 1
+    });
     let end = start
         + children[start..]
             .iter()
@@ -596,7 +604,11 @@ fn replace_column_payload_at(
             .count();
     assert_eq!(inline_plain_text(&children[start..end]), expected);
     if replacement.is_empty() {
-        children.drain(start - 1..end);
+        if start == 0 {
+            children.drain(..(end + 1).min(children.len()));
+        } else {
+            children.drain(start - 1..end);
+        }
     } else {
         children.splice(
             start..end,
@@ -639,7 +651,7 @@ fn column_edit_budgets_never_make_equal_owners_more_certain() {
         assert_eq!(
             compare(&native, &topology, &document),
             [format!(
-                "literal-displays: 1 missing row(s) among column display candidates {first}:2, {}:2",
+                "literal-displays: 1 missing row(s) among column display candidates {first}:2 occurrence 1 (0..=1 missing row(s)), {}:2 occurrence 1 (0..=1 missing row(s)); cell loss 1 row(s)",
                 first + 1
             )]
         );
@@ -679,10 +691,60 @@ fn shifted_cells_keep_the_same_minimum_loss_as_replaced_rows() {
     assert_eq!(
         compare(&native, &topology, &document),
         [
-            "literal-displays: 1 missing row(s) among column display candidates 10:2, 11:2",
+            "literal-displays: 1 missing row(s) among column display candidates 10:2 occurrence 1 (0..=1 missing row(s)), 11:2 occurrence 1 (0..=1 missing row(s)); cell loss 2 row(s)",
             "literal-displays: missing sourced block for 12:2 occurrence 1",
         ]
     );
+}
+
+#[test]
+fn an_unknown_column_tail_does_not_turn_an_ordinary_edit_into_display_loss() {
+    // Both literal rows reach term_flushln in the original CVS cell.
+    // roff_term_pre_ta changes tab stops without emitting a third row.
+    let source =
+        format!("{HEAD}.Bl -column aaa bbb\n.It A Ta B\n.Dl FIRST\n.Dl LAST\n.ta 3n\n.El\n{TAIL}");
+    let (native, topology, mut document) = parsed_structure(&source);
+    assert_eq!(native.literal_display_reviews.len(), 2);
+    assert!(compare(&native, &topology, &document).is_empty());
+    replace_column_payload_at(&mut document, 0, "B", "WRONG");
+    assert_eq!(
+        compare(&native, &topology, &document),
+        [
+            "literal-displays: unresolved column slot alignment for candidates 10:2 occurrence 1, 11:2 occurrence 1"
+        ]
+    );
+}
+
+#[test]
+fn ambiguous_loss_reports_the_total_and_each_source_occurrence_range() {
+    // termp_bd_pre and termp_d1_pre create three independent display
+    // owners. Dropping two SAME rows leaves the multirow owner with a
+    // proved lower bound of one, while the short display may still live.
+    let body = ".Bd -literal -compact\nSAME\nSAME\n.Ed\n.Dl SAME\n.Dl LAST\n";
+    for (display, first, second) in [
+        (body.to_owned(), "10:2 occurrence 1", "14:2 occurrence 1"),
+        (
+            format!(".de XX\n{body}..\n.XX\n"),
+            "18:2 occurrence 1",
+            "18:2 occurrence 2",
+        ),
+    ] {
+        let source = format!("{HEAD}.Bl -column aaa bbb\n.It A Ta B\n{display}.El\n{TAIL}");
+        let (native, topology, mut document) = parsed_structure(&source);
+        assert!(
+            compare(&native, &topology, &document).is_empty(),
+            "{source}"
+        );
+        replace_column_payload_at(&mut document, 2, "SAME", "");
+        replace_column_payload_at(&mut document, 1, "SAME", "");
+        assert_eq!(
+            compare(&native, &topology, &document),
+            [format!(
+                "literal-displays: 2 missing row(s) among column display candidates {first} (1..=2 missing row(s)), {second} (0..=1 missing row(s)); cell loss 2 row(s)"
+            )],
+            "{source}"
+        );
+    }
 }
 
 #[test]
