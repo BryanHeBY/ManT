@@ -229,7 +229,8 @@ fn breakpoint_retreat_cannot_revoke_a_glyph_from_an_earlier_pass() {
     // Exact X\zY\p\:Z source first ran on the new pristine five profiles:
     // XY belongs to pass one, Z to pass two. encode1() keeps BACKBEFORE and
     // writes '\b' after ASCII_BREAK; term_fill() already accepts XY before
-    // that cell. Only its projection ownership ends, not the native retreat.
+    // that cell. The provisional glyph is retained when the covering cell
+    // lands in a different accepted pass.
     use super::FieldWrite;
     let mut buffer = FieldBuffer::default();
     buffer.apply_writes(&[
@@ -244,6 +245,7 @@ fn breakpoint_retreat_cannot_revoke_a_glyph_from_an_earlier_pass() {
         }),
         FieldWrite::Cell(FieldCell::BreakMarker),
         FieldWrite::Cell(FieldCell::Breakpoint),
+        FieldWrite::StageBacklineProjection,
         FieldWrite::Cell(FieldCell::Graph {
             text: 'Z',
             width: 1,
@@ -254,6 +256,10 @@ fn breakpoint_retreat_cannot_revoke_a_glyph_from_an_earlier_pass() {
     buffer.advance_past(first.end);
     let second = buffer.fill_pass(78).expect("Z accepted after breakpoint");
     assert_eq!(buffer.projection_length(first.end, second.end), 1);
+    assert_eq!(
+        buffer.covered_pass_retreats(&[first, second]),
+        [] as [usize; 0]
+    );
     assert!(matches!(
         buffer.cells(),
         [

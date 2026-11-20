@@ -158,7 +158,8 @@ impl FieldBuffer {
             blank_positions: self.blank_positions.clone(),
             projection_prefix: Vec::new(),
             deferred_blanks: Vec::new(),
-            zero_width_retreats: Vec::new(),
+            pass_retreats: Vec::new(),
+            staged_backline_projection: false,
             backline_projection_target: None,
             backbefore_graph: None,
             backbefore_armed: false,
@@ -166,7 +167,6 @@ impl FieldBuffer {
             committed_passes: Vec::new(),
             word_scan: super::WordScanPolicy::Incremental,
             break_markers: Vec::new(),
-            last_breakpoint_fence: 0,
             projected_pass_ends: BTreeSet::new(),
             scan: None,
             word_first_content: None,
@@ -228,11 +228,11 @@ impl FieldBuffer {
             })
     }
 
-    pub(in crate::mandoc::inline::flow) fn has_zero_width_retreats(&self) -> bool {
-        !self.zero_width_retreats.is_empty()
+    pub(in crate::mandoc::inline::flow) fn has_pass_retreats(&self) -> bool {
+        !self.pass_retreats.is_empty()
     }
 
-    pub(in crate::mandoc::inline::flow) fn covered_zero_width_retreats(
+    pub(in crate::mandoc::inline::flow) fn covered_pass_retreats(
         &self,
         passes: &[FillPass],
     ) -> Vec<usize> {
@@ -246,7 +246,7 @@ impl FieldBuffer {
         passes: &[FillPass],
         mut accept: impl FnMut(usize, usize),
     ) {
-        let mut retreats = self.zero_width_retreats.iter().peekable();
+        let mut retreats = self.pass_retreats.iter().peekable();
         for pass in passes {
             let Some(&&(target, _)) = retreats.peek() else {
                 break;

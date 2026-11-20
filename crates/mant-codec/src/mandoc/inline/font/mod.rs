@@ -40,9 +40,9 @@ pub(super) fn lower_man_font_scope(
             output
                 .font
                 .select(if index % 2 == 0 { first } else { second });
-            // Alternating man macro operands are emitted as one formatter
-            // word.  This is also the scope in which CVS preserves the
-            // TERMP_BACK* state from one argument to the next.
+            // pre_alternate() buffers each operand with term_word() and
+            // sets TERMP_NOSPACE between them. Both TERMP_BACK registers
+            // remain live across those tight joins.
             if index > 0 {
                 output.tighten_next_boundary();
             }

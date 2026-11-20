@@ -41,7 +41,6 @@ pub(in crate::mandoc) struct TextExecutionContext<'state> {
     pub(in crate::mandoc) zero_advance: &'state mut ZeroAdvanceState,
     pub(in crate::mandoc) defer_leading_blanks: bool,
     /// A still buffered marker can first reach `ASCII_BREAK` in this word.
-    pub(in crate::mandoc) prior_word_end_marker: bool,
     /// Native right margin minus offset, for lengthless drawing operands.
     pub(in crate::mandoc) line_width_units: usize,
     /// The live field already has native input to which this word can refer.
@@ -86,7 +85,6 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
             font: state,
             zero_advance: &mut zero_advance,
             defer_leading_blanks: false,
-            prior_word_end_marker: false,
             line_width_units: 78 * 24,
             slot_entry: SlotEntry::default(),
             table_field_units: None,

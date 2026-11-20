@@ -130,6 +130,7 @@ impl FieldWrite {
             Self::CancelBackafter => EntryWrite::CancelBackafter,
             Self::CancelBackbefore => EntryWrite::CancelBackbefore,
             Self::RewindWordEntry(_)
+            | Self::StageBacklineProjection
             | Self::DrawSpaces(_)
             | Self::MoveInDrawing { .. }
             | Self::UnprovedMotion
@@ -217,8 +218,8 @@ impl FieldBuffer {
         self.cells.truncate(start);
         self.truncate_raw_slot_proof(start);
         self.projection_prefix.truncate(start + 1);
-        self.zero_width_retreats.truncate(
-            self.zero_width_retreats
+        self.pass_retreats.truncate(
+            self.pass_retreats
                 .partition_point(|&(_, mark)| mark.saturating_sub(1) < start),
         );
         self.normalized_until = self.normalized_until.min(start);

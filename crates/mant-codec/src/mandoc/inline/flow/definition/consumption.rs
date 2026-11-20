@@ -254,7 +254,7 @@ impl InlineBuilder {
 
     fn record_definition_operand_covers(&self, passes: &[super::super::field_buffer::FillPass]) {
         let field = self.execution.definition.as_ref().expect("native field");
-        if !field.field_buffer.has_zero_width_retreats() {
+        if !field.field_buffer.has_pass_retreats() {
             return;
         }
         let operands = self.head_operand_capture.clone().or_else(|| {
@@ -301,7 +301,7 @@ impl InlineBuilder {
                 .field_buffer
                 .has_unprinted_padding(pass.start, pass.end)
         });
-        if !unprinted_padding && !definition.field_buffer.has_zero_width_retreats() {
+        if !unprinted_padding && !definition.field_buffer.has_pass_retreats() {
             return;
         }
         let accepted = super::super::output::native_passes::accepted_owner_lengths(

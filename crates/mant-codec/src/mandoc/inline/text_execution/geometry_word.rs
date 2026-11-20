@@ -104,7 +104,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
             || absolute_edit
             || has_overstrike
             || marker && relative_advance
-            || has_zero_advance && isolated_needs_accepted_retreat)
+            || has_zero_advance && (isolated_needs_accepted_retreat || marker && authored_blank))
         || marker && (edits || context.table_leading_blanks != 0)
         || field
             && (has_live_raw_cursor(context)

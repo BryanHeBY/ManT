@@ -212,7 +212,8 @@ impl FieldBuffer {
         self.raw_copy_aliases.clear();
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
-        self.zero_width_retreats.clear();
+        self.pass_retreats.clear();
+        self.staged_backline_projection = false;
         self.backline_projection_target = None;
         self.backbefore_graph = None;
         self.resume = 0;
@@ -222,7 +223,6 @@ impl FieldBuffer {
         self.normalized_until = 0;
         self.word_scan = WordScanPolicy::Incremental;
         self.break_markers.clear();
-        self.last_breakpoint_fence = 0;
         self.projected_pass_ends.clear();
         self.word_first_content = None;
         self.completed_empty_pass_end = None;
@@ -299,10 +299,10 @@ impl FieldBuffer {
                     ));
                 }
                 FieldWrite::Cell(cell) | FieldWrite::DecoratedGraph { cell, .. } => {
-                    if matches!(cell, FieldCell::Breakpoint) {
-                        self.fence_backline_at_breakpoint();
-                    }
                     self.push_cell(cell.clone());
+                }
+                FieldWrite::StageBacklineProjection => {
+                    self.staged_backline_projection = self.backbefore_armed;
                 }
                 FieldWrite::RecoveryGlyph { projected_scalars } => {
                     self.push_cell(FieldCell::ZeroWidthGraph);
@@ -352,9 +352,7 @@ impl FieldBuffer {
                     }
                 }
                 FieldWrite::CancelBackbefore => {
-                    self.backbefore_armed = false;
-                    self.backbefore_graph = None;
-                    self.backline_projection_target = None;
+                    self.clear_backtracking();
                 }
             }
         }
@@ -392,21 +390,6 @@ impl FieldBuffer {
 
     pub(in crate::mandoc::inline::flow) fn has_projected_rows(&self) -> bool {
         !self.projected_pass_ends.is_empty()
-    }
-
-    fn fence_backline_at_breakpoint(&mut self) {
-        // term_fill() restarts breakline after the first ASCII_BREAK
-        // following the marker (term.c:276-305). Later breakpoints cannot
-        // fence the newly buffered target on behalf of that same marker.
-        if self
-            .break_markers
-            .last()
-            .copied()
-            .is_some_and(|marker| marker >= self.resume.max(self.last_breakpoint_fence))
-        {
-            self.last_breakpoint_fence = self.cells.len();
-            self.backline_projection_target = None;
-        }
     }
 
     fn encode_graph(
@@ -495,6 +478,7 @@ impl FieldBuffer {
     /// A drained IR owner is immutable. Backtracking remains native state,
     /// but cannot revoke a glyph already assigned to the previous owner.
     pub(in crate::mandoc::inline::flow) fn detach_projection_owner(&mut self) {
+        self.staged_backline_projection = false;
         self.backbefore_graph = None;
         self.backline_projection_target = None;
     }
@@ -519,6 +503,7 @@ impl FieldBuffer {
     /// pending `TERMP_BACKBEFORE` retreat first consumes the blank directly
     /// before it (`col--`), or buffers `'\b'` over a non-blank cell.
     pub(in crate::mandoc::inline::flow) fn push_graph(&mut self, text: char, width: usize) {
+        let staged = std::mem::take(&mut self.staged_backline_projection);
         if self.backbefore_armed {
             self.backbefore_armed = false;
             self.backbefore_graph = None;
@@ -555,7 +540,7 @@ impl FieldBuffer {
                 }
                 Some(_) => {
                     if let Some(cell) = target.filter(|&cell| cell >= self.resume) {
-                        self.project_backline_retreat(cell, width);
+                        self.project_backline_retreat(cell, width, staged);
                     }
                     self.push_cell(FieldCell::Backline);
                 }
@@ -576,22 +561,23 @@ impl FieldBuffer {
         }
     }
 
-    fn project_backline_retreat(&mut self, cell: usize, incoming_width: usize) {
+    fn project_backline_retreat(&mut self, cell: usize, incoming_width: usize, staged: bool) {
         if matches!(self.cells[cell], FieldCell::Graph { width: 0, .. }) {
             // A cached zero-width graph was emitted by term_field() and
             // its backline also has zero width. The new graph cannot cover it.
             return;
         }
-        if incoming_width == 0
-            && matches!(
-                self.cells[cell],
-                FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen
-            )
+        if staged
+            || incoming_width == 0
+                && matches!(
+                    self.cells[cell],
+                    FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen
+                )
         {
             // encode1() still writes the backline before the mark. A mark
             // emits no advancing cell at term_field()421-439. Keep the
             // old scalar quota until the accepted pass proves a cover.
-            self.zero_width_retreats.push((cell, self.cells.len() + 1));
+            self.pass_retreats.push((cell, self.cells.len() + 1));
             return;
         }
         // term_field() advances to a pending blank and can rewind over it
@@ -619,6 +605,7 @@ impl FieldBuffer {
     /// `term_flushln()` clears both backtracking flags with the row
     /// (term.c:235-237).
     pub(in crate::mandoc::inline::flow) fn clear_backtracking(&mut self) {
+        self.staged_backline_projection = false;
         self.backbefore_armed = false;
         self.backbefore_graph = None;
         self.backline_projection_target = None;

@@ -1584,6 +1584,15 @@ fn an_inherited_marker_keeps_the_pending_glyph_before_a_discretionary_break() {
     // CVS term_fill reads both words in one field. ASCII_BREAK ends the
     // pending \p pass, while NBRZW leaves the overstrike on the same row.
     for (word, expected, link) in [
+        (r#".No "\pB" No "\zD" Ns No "\:C""#, "B\nC", false),
+        (
+            r#".No "\pB" No "\X'tty: link https://one.test'\zD\X'tty: link'" Ns No "\:C""#,
+            "B\nC",
+            false,
+        ),
+        (r#".No "\zA\p" No "\zB\:C""#, "AB\nC", false),
+        (r#".No "\zA\p" Ns No "\z\:C""#, "A\nC", false),
+        (r#".No "\zA\p" Ns No "\z" Ns No "\:C""#, "A\nC", false),
         (r#".No "\zA\p" Ns No "\:C""#, "A\nC", false),
         (r#".No "\zA\p\:C""#, "A\nC", false),
         (r#".No "\zA\p" Ns No "\&C""#, "C", false),
@@ -1605,8 +1614,13 @@ fn an_inherited_marker_keeps_the_pending_glyph_before_a_discretionary_break() {
         for (input, format) in [(source.as_str(), "roff"), (markdown.as_str(), "markdown")] {
             assert_eq!(
                 search_visible_word_with_format(input, format, "A"),
-                u64::from(expected.starts_with('A'))
+                u64::from(expected.starts_with("A\n"))
             );
+            assert_eq!(
+                search_visible_word_with_format(input, format, "AB"),
+                u64::from(expected.starts_with("AB\n"))
+            );
+            assert_eq!(search_visible_word_with_format(input, format, "DC"), 0);
             assert_eq!(search_visible_word_with_format(input, format, "AC"), 0);
             let targets = document_links(input, format);
             if link {
@@ -1666,6 +1680,22 @@ fn a_breakpoint_keeps_the_pending_link_in_its_definition_owner() {
                     "A".into()
                 )]
             );
+        }
+    }
+}
+
+#[test]
+fn alternating_fonts_place_a_delayed_glyph_before_the_next_owners_break() {
+    // man_term.c::pre_alternate executes separate words without a space.
+    // term_fill accepts both graphs before ASCII_BREAK, even though the
+    // second glyph only enters the projection with the third operand.
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH DESCRIPTION\n";
+    for style in ["BR", "BI"] {
+        for control in ["", r"\&"] {
+            let source = format!(r#"{head}.{style} "\pB" "{control}\zD" "\:C""#) + "\n";
+            assert_readbacks(&source, "BD\nC", None);
+            assert_eq!(search_visible_word(&source, "BD"), 1, "{source}");
+            assert_eq!(search_visible_word(&source, "DC"), 0, "{source}");
         }
     }
 }
@@ -1761,6 +1791,57 @@ fn subsection_excerpts_keep_only_the_heading_owned_hard_rows() {
         if title == "DD" {
             let markdown = render(&source, "roff", "markdown", "never", false);
             assert!(markdown.lines().any(|row| row == "### DD"), "{markdown}");
+        }
+    }
+}
+
+#[test]
+fn table_word_end_breaks_reach_their_accepted_interior_row() {
+    // tbl_term.c::tbl_word buffers the word before term_fill. BACKBEFORE
+    // consumes one SP; two SPs leave the first one to end the current pass.
+    for prefix in ["", r"\z"] {
+        for blanks in 0..=4 {
+            for continued in [false, true] {
+                let word = format!("{prefix}A\\p{}C", " ".repeat(blanks));
+                let cell = if continued {
+                    format!("T{{\n{word}\nT}}")
+                } else {
+                    word
+                };
+                let source = format!(
+                    ".TH TOOL 1\n.SH DESCRIPTION\n.TS\nlw(20n).\n{cell}\nzzzzzzzzzzzzzzzz\n.TE\n.SH ENDPROBE\nzz\n"
+                );
+                let expected = match (prefix.is_empty(), blanks) {
+                    (false, 0) => "C",
+                    (false, 1) | (true, 0) => "AC",
+                    _ => "A\nC",
+                };
+                let markdown = render(&source, "roff", "markdown", "never", false);
+                for (input, format) in [(source.as_str(), "roff"), (markdown.as_str(), "markdown")]
+                {
+                    let text = render(input, format, "text", "never", false);
+                    let body = text
+                        .split_once("DESCRIPTION\n")
+                        .unwrap()
+                        .1
+                        .split_once("\nENDPROBE")
+                        .unwrap()
+                        .0
+                        .trim_end_matches('\n');
+                    assert_eq!(
+                        body.lines().map(str::trim).collect::<Vec<_>>(),
+                        expected
+                            .lines()
+                            .chain(["zzzzzzzzzzzzzzzz"])
+                            .collect::<Vec<_>>(),
+                        "{source}"
+                    );
+                    assert_eq!(
+                        search_visible_word_with_format(input, format, "AC"),
+                        u64::from(expected == "AC")
+                    );
+                }
+            }
         }
     }
 }

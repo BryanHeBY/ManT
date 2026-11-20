@@ -194,6 +194,12 @@ fn a_discretionary_break_keeps_the_previous_words_pending_glyph_and_link() {
     let head = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
     let link = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
     for (word, rows, label) in [
+        (
+            r#".No "\pB" No "\X'tty: link https://one.test'\zD\X'tty: link'" Ns No "\:C""#,
+            &["B", "C"][..],
+            None,
+        ),
+        (r#".No "\zA\p" No "\zB\:C""#, &["AB", "C"][..], None),
         (r#".No "\zA\p" Ns No "\:C""#, &["A", "C"][..], None),
         (r#".No "\zA\p" Ns No "\&C""#, &["C"][..], None),
         (
@@ -204,6 +210,15 @@ fn a_discretionary_break_keeps_the_previous_words_pending_glyph_and_link() {
     ] {
         assert_native_word_appearance(&format!("{head}{word}\n"), rows, label, &link);
     }
+}
+
+#[test]
+fn table_marker_after_a_retreated_blank_paints_and_copies_both_rows() {
+    // tbl_word() leaves one surviving SP after BACKBEFORE. term_fill()
+    // ends the pass there, before C's cell in the accepted continuation.
+    let source = ".TH TOOL 1\n.SH DESCRIPTION\n.TS\nl.\n\\zA\\p  C\n.TE\n";
+    let link = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
+    assert_native_word_appearance(source, &["A", "C"], None, &link);
 }
 
 #[test]

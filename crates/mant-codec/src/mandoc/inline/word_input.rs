@@ -99,14 +99,12 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     };
     let line_width_units = builder.execution.horizontal_line_width_units(source);
     let slot_entry = builder.execution.native_slot_entry_for_word(events);
-    let prior_word_end_marker = builder.carries_word_end_marker_for_glyph();
     let execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {
             font: &mut builder.execution.font,
             zero_advance: &mut builder.execution.zero_advance,
             defer_leading_blanks,
-            prior_word_end_marker,
             line_width_units,
             slot_entry,
             table_field_units: None,

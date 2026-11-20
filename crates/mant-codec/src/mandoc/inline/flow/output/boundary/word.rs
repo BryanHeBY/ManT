@@ -46,9 +46,10 @@ impl InlineBuilder {
             self.execution.plain_input.anchors.last()
         }
         .map(|anchor| anchor.owner.clone());
-        if !accepted_row_break && native_separator > 0 {
-            // term_word() appends this word's separator after earlier
-            // buffered glyphs, even when their projection arrives late.
+        if !accepted_row_break {
+            // The new word's owner starts after earlier buffered glyphs,
+            // even on a tight join. A deferred term_fill() pass can restart
+            // exactly at the current word's first slot (term.c:205-220).
             self.nodes.extend(take_borrowed_word_prefix(
                 payload,
                 native_anchor_marker.as_deref(),

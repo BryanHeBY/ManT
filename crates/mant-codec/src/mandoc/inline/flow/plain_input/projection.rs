@@ -175,7 +175,7 @@ pub(super) fn completed_empty_plain_passes(
     }
     let passes = accepted.all();
     let covered = if handoff.is_some() {
-        buffer.covered_zero_width_retreats(passes)
+        buffer.covered_pass_retreats(passes)
     } else {
         Vec::new()
     };
@@ -331,7 +331,7 @@ pub(super) fn retain_accepted_unit_output(
         .iter()
         .any(|pass| buffer.has_unprinted_padding(pass.start, pass.end));
     if unprinted_padding
-        || buffer.has_zero_width_retreats()
+        || buffer.has_pass_retreats()
         || passes
             .last()
             .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)

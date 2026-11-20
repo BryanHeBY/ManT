@@ -60,7 +60,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     use super::super::field_buffer::FieldCell;
 
     let mut lengths = BTreeMap::new();
-    let covered = buffer.covered_zero_width_retreats(passes);
+    let covered = buffer.covered_pass_retreats(passes);
     let printed_ends: Vec<_> = passes
         .iter()
         .map(|pass| {

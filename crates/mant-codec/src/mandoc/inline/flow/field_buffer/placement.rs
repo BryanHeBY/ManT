@@ -58,7 +58,7 @@ impl FieldBuffer {
                 mark_from_end,
             } => {
                 let end = self.cells.len();
-                self.zero_width_retreats
+                self.pass_retreats
                     .push((end - target_from_end, end - mark_from_end));
             }
             _ => unreachable!("only resolved slot writes reach this path"),
@@ -108,7 +108,7 @@ impl FieldBuffer {
         // A covered glyph outside this suffix still needs the later
         // overstrike on the same accepted pass. Do not cut through it.
         let first_retreat = self
-            .zero_width_retreats
+            .pass_retreats
             .partition_point(|&(_, mark)| mark < start);
         // Both copies of a bold glyph must lie in the replayable suffix.
         let first_alias = self
@@ -123,7 +123,7 @@ impl FieldBuffer {
                 .get(first_alias)
                 .is_some_and(|&(_, owner)| owner < start)
             || self
-                .zero_width_retreats
+                .pass_retreats
                 .get(first_retreat)
                 .is_some_and(|&(old, _)| old < start)
         {
@@ -249,8 +249,8 @@ impl FieldBuffer {
         self.cells.truncate(start);
         self.truncate_raw_slot_proof(start);
         self.projection_prefix.truncate(start + 1);
-        self.zero_width_retreats.truncate(
-            self.zero_width_retreats
+        self.pass_retreats.truncate(
+            self.pass_retreats
                 .partition_point(|&(_, mark)| mark < start),
         );
         self.normalized_until = self.normalized_until.min(start);
@@ -315,7 +315,7 @@ pub(in crate::mandoc::inline) fn isolated_passes(
     // when term_fill/term_field can change a marker's acceptance or when
     // a backline covers a glyph only if its replacement prints on that pass.
     let target = table_field_units
-        .filter(|_| !field.break_markers.is_empty() || field.has_zero_width_retreats())
+        .filter(|_| !field.break_markers.is_empty() || field.has_pass_retreats())
         .unwrap_or(usize::MAX / 4);
     let mut remainder = false;
     let mut partial_motion = BTreeMap::new();
@@ -336,9 +336,9 @@ pub(in crate::mandoc::inline) fn isolated_passes(
             *count -= visited;
         }
     }
-    let covered = field.covered_zero_width_retreats(&passes);
+    let covered = field.covered_pass_retreats(&passes);
     let mut covered_iter = covered.iter().copied().peekable();
-    let mut retreats = field.zero_width_retreats.iter().copied().peekable();
+    let mut retreats = field.pass_retreats.iter().copied().peekable();
     let mut ranges = Vec::new();
     let mut start = 0;
     for (i, pass) in passes.iter().enumerate() {

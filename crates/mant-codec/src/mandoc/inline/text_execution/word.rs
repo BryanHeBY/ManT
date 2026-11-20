@@ -339,15 +339,26 @@ impl WordExecution {
         // not ASCII_NBRZW: it clears graph and can stop a pending \p pass.
         // An isolated tbl word uses the same local projection rule; live
         // paragraph/definition fields keep acceptance with their cell sink.
-        if self.text_state.pending_word_end_break
-            || context.prior_word_end_marker && !self.text_state.saw_source_cell
-        {
+        if context.policy.field_authoritative && context.zero_advance.has_buffered_glyph() {
+            // Publish the provisional owner at a breakpoint. The native
+            // slot and accepted pass decide whether a later glyph covers it.
+            self.native_writes.push(
+                crate::mandoc::inline::flow::field_buffer::FieldWrite::StageBacklineProjection,
+            );
             context.zero_advance.commit_pending_projection(
                 &mut self.output,
                 &mut self.buffer,
                 self.font,
                 self.link.as_deref(),
-                context.policy.field_authoritative,
+                true,
+            );
+        } else if self.text_state.pending_word_end_break && !context.policy.field_authoritative {
+            context.zero_advance.commit_pending_projection(
+                &mut self.output,
+                &mut self.buffer,
+                self.font,
+                self.link.as_deref(),
+                false,
             );
         }
         if self.text_state.pending_word_end_break {

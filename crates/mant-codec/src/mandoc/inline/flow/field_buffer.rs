@@ -221,10 +221,10 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// graphs remain native graph cells but contribute no projected glyph.
     projection_prefix: Vec<usize>,
     deferred_blanks: Vec<cells::DeferredBlankRun>,
-    /// A zero-width graph can retreat onto an earlier advancing graph
-    /// without covering it. A later advancing write in that accepted
-    /// pass decides whether the earlier graph remains in reading text.
-    zero_width_retreats: Vec<(usize, usize)>,
+    /// A backline can cover a provisional projection only when its
+    /// replacement advance is accepted in the same pass.
+    pass_retreats: Vec<(usize, usize)>,
+    staged_backline_projection: bool,
     /// Latest occupied cell that an emitted backline could overwrite in
     /// this projection interval. Native BACKBEFORE can survive its retirement.
     backline_projection_target: Option<usize>,
@@ -248,9 +248,6 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Repeated .ta/word pairs must not replay their growing field history.
     word_scan: WordScanPolicy,
     break_markers: Vec<usize>,
-    /// The last breakpoint already considered for this buffer's backline
-    /// fence. A marker can reach only one such fence before scanning resumes.
-    last_breakpoint_fence: usize,
     /// Accepted native row events already projected. A .ta change restarts
     /// width scanning, but cannot execute the same marker pass twice.
     projected_pass_ends: std::collections::BTreeSet<usize>,
