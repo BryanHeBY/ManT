@@ -828,6 +828,60 @@ fn expanded_tables_have_page_wide_occurrences_across_parent_scopes() {
 }
 
 #[test]
+fn definition_heads_count_in_native_order_before_projecting_display_obligations() {
+    // CVS termp_it_pre() and mdoc_it_pre() visit the extended tag HEAD.
+    // The fixed tree and HTML place its displays before LAST, all at the
+    // macro invocation coordinate. HEAD's terms have no literal obligation.
+    const HEADER: &str = ".Dd November 19, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd example\n.Sh DESCRIPTION\n";
+    for kind in ["Dl", "D1", "literal", "unfilled"] {
+        for nested_table in [false, true] {
+            for count in [1, 2] {
+                for text in ["BEFORE", r"\&"] {
+                    let display = display(kind, text);
+                    let item = if nested_table {
+                        format!(".Bl -column a b\n.It C Ta D\n{display}.El\n")
+                    } else {
+                        display
+                    };
+                    let source = format!(
+                        "{HEADER}.de XX\n.Bl -tag -width a\n.It Xo\n{}.Xc\nDesc.\n.El\n.Bl -column a b\n.It C Ta D\n.Dl LAST\n.ta 3n\n.El\n..\n.XX\n.Sh ENDPROBE\nDone.\n",
+                        item.repeat(count)
+                    );
+                    let (native, _, doc) = parsed_structure(&source);
+                    let [last] = native.literal_display_reviews.as_slice() else {
+                        panic!("expected one review for LAST: {source}");
+                    };
+                    let invocation =
+                        u32::try_from(source.lines().position(|line| line == ".XX").unwrap() + 1)
+                            .unwrap();
+                    assert_eq!(
+                        (last.line, last.column, last.occurrence),
+                        (invocation, 2, count + 1),
+                        "{source}"
+                    );
+                    let cell = last.cell.expect("LAST is in the second column");
+                    assert_eq!(
+                        (cell.table_line, cell.table_column, cell.table_occurrence),
+                        (invocation, 2, 1 + count * usize::from(nested_table)),
+                        "{source}"
+                    );
+                    assert_eq!((cell.row, cell.column), (0, 1), "{source}");
+                    let query = mant_ir::ResolvedContent {
+                        label: "TEST".into(),
+                        address: None,
+                        document: Some(doc),
+                        tldr: None,
+                    };
+                    let rendered = mant_render::render_query_man(&query);
+                    assert!(rendered.contains("LAST"), "{source}");
+                    assert_eq!(rendered.contains("BEFORE"), text == "BEFORE", "{source}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn filtered_displays_keep_their_source_occurrence() {
     // CVS tree retains every at-call-site BLOCK. mdoc_html.c emits its
     // display BODY even when it contains only a zero-width character.

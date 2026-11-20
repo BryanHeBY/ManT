@@ -227,8 +227,10 @@ displays with no exported review record still occupy their source
 occurrences. A display inside a column cell
 also reports the enclosing column table's coordinates and page-wide
 occurrence with the zero-based row and column. Occurrences count tables
-across parent scopes. Review records may skip occurrences and may be in
-any order. A repeated display coordinate and occurrence is invalid.
+across parent scopes. Native displays and tables in extended definition
+headings also occupy their source occurrences. Review records may skip
+occurrences and may be in any order. A repeated display coordinate and
+occurrence is invalid.
 
 Build the profiler and scan the reproducible real fixtures:
 

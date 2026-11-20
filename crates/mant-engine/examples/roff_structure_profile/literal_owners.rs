@@ -105,8 +105,6 @@ pub(super) struct SourceDisplays {
     owners: Vec<SourceDisplay>,
     scopes: BTreeSet<Scope>,
     counts: ScopeCounts,
-    display_occurrences: BTreeMap<Point, usize>,
-    table_occurrences: BTreeMap<Point, usize>,
     cells: BTreeMap<Vec<ScopeOccurrence>, CellPlan>,
     source_rows: Vec<(usize, String)>,
 }
@@ -123,8 +121,60 @@ fn enter_scope(path: &mut Vec<ScopeOccurrence>, scope: Scope, counts: &mut Scope
 }
 
 pub(super) fn record_source_displays(root: &Node, profile: &mut AstStructure) {
-    visit_native(root, &mut Vec::new(), None, None, profile);
+    let mut occurrences = BTreeMap::new();
+    number_native_occurrences(root, &mut BTreeMap::new(), &mut occurrences);
+    visit_native(root, &mut Vec::new(), None, None, profile, &occurrences);
     profile.literal_displays = profile.literal_owners.owners.len();
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum OccurrenceKind {
+    ColumnTable,
+    Display,
+}
+
+fn occurrence_kind(node: &Node) -> Option<OccurrenceKind> {
+    if node.kind != NodeKind::Block {
+        return None;
+    }
+    match node.macro_token.as_deref() {
+        Some("Bl") if node.list_kind == Some(NormalizedListKind::Column) => {
+            Some(OccurrenceKind::ColumnTable)
+        }
+        Some("D1" | "Dl") => Some(OccurrenceKind::Display),
+        Some("Bd")
+            if matches!(
+                node.display_kind,
+                Some(DisplayKind::Literal | DisplayKind::Unfilled)
+            ) =>
+        {
+            Some(OccurrenceKind::Display)
+        }
+        _ => None,
+    }
+}
+
+fn number_native_occurrences(
+    node: &Node,
+    counts: &mut BTreeMap<(OccurrenceKind, Point), usize>,
+    occurrences: &mut BTreeMap<u32, usize>,
+) {
+    if skips_source_children(node) {
+        return;
+    }
+    // mdoc_term.c::termp_it_pre() also walks an extended definition HEAD.
+    // Empty or inline-only projections still occur in this native order,
+    // independently of the display and cell matching below.
+    if let Some(kind) = occurrence_kind(node) {
+        let occurrence = counts.entry((kind, (node.line, node.column))).or_default();
+        *occurrence += 1;
+        occurrences.insert(node.id, *occurrence);
+    }
+    if node.kind != NodeKind::Table {
+        for child in &node.children {
+            number_native_occurrences(child, counts, occurrences);
+        }
+    }
 }
 
 fn visit_native(
@@ -133,6 +183,7 @@ fn visit_native(
     mut display: Option<usize>,
     cell: Option<LiteralReviewCell>,
     profile: &mut AstStructure,
+    occurrences: &BTreeMap<u32, usize>,
 ) {
     if skips_source_children(node)
         || node.kind == NodeKind::Head && node.macro_token.as_deref() == Some("It")
@@ -141,8 +192,8 @@ fn visit_native(
         return;
     }
     let point = (node.line, node.column);
-    if node.kind == NodeKind::Block && node.list_kind == Some(NormalizedListKind::Column) {
-        visit_column_list(node, path, profile);
+    if occurrence_kind(node) == Some(OccurrenceKind::ColumnTable) {
+        visit_column_list(node, path, profile, occurrences);
         return;
     }
     let kind = if node.kind == NodeKind::Block {
@@ -163,21 +214,7 @@ fn visit_native(
         // A nested display has its own output owner even when an ancestor
         // literal projects more blocks after the nested scope returns.
         display = None;
-        if node.macro_token.as_deref() != Some("Bd")
-            || matches!(
-                node.display_kind,
-                Some(DisplayKind::Literal | DisplayKind::Unfilled)
-            )
-        {
-            // The CVS display BODY exists even when its projected payload
-            // has no ink (mdoc_html.c::mdoc_d1_pre and mdoc_bd_pre).
-            let occurrence = profile
-                .literal_owners
-                .display_occurrences
-                .entry(point)
-                .or_default();
-            *occurrence += 1;
-            let occurrence = *occurrence;
+        if let Some(&occurrence) = occurrences.get(&node.id) {
             let payload = description(node, false, &profile.source_context);
             if payload.has_text() {
                 let pending_rows = display_rows(node, &profile.source_context).unwrap_or_default();
@@ -217,7 +254,7 @@ fn visit_native(
     }
     if node.kind != NodeKind::Table {
         for child in &node.children {
-            visit_native(child, path, display, cell, profile);
+            visit_native(child, path, display, cell, profile, occurrences);
         }
     }
     if kind.is_some() {
@@ -230,19 +267,18 @@ fn enter_native_scope(profile: &mut AstStructure, path: &mut Vec<ScopeOccurrence
     enter_scope(path, scope, &mut profile.literal_owners.counts);
 }
 
-fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut AstStructure) {
+fn visit_column_list(
+    node: &Node,
+    path: &mut Vec<ScopeOccurrence>,
+    profile: &mut AstStructure,
+    occurrences: &BTreeMap<u32, usize>,
+) {
     // CVS mdoc_it_pre() emits one <tr> per It and one <td> per BODY;
     // termp_it_pre() likewise uses the preceding BODY siblings as columns.
     let point = (node.line, node.column);
     // The published locator has no parent path. Assign its ordinal across
     // the source traversal, independent of the internal matching scopes.
-    let table_occurrence = profile
-        .literal_owners
-        .table_occurrences
-        .entry(point)
-        .or_default();
-    *table_occurrence += 1;
-    let table_occurrence = *table_occurrence;
+    let table_occurrence = occurrences[&node.id];
     enter_native_scope(
         profile,
         path,
@@ -279,6 +315,7 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
                     column: cell,
                 }),
                 profile,
+                occurrences,
             );
             let owners = &profile.literal_owners.owners[first_owner..];
             if owners.iter().any(|owner| &owner.path == path) {
