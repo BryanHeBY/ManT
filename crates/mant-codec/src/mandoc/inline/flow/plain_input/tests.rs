@@ -54,7 +54,12 @@ fn plain_tail_outcomes_distinguish_acceptance_blanks_and_rejection() {
             let outcome = builder.retire_plain_flush_unit(PlainFlushBoundary::Layout);
             assert_eq!(outcome.rejected(), rejected);
             assert_eq!(outcome.closes_unprinted_row(), unprinted && !inherited);
-            assert_eq!(outcome.closes_represented_row(), unprinted && inherited);
+            // term_flushln() can reject the first word and still end
+            // the earlier field's printed row (term.c:143-146,250-253).
+            assert_eq!(
+                outcome.closes_represented_row(),
+                inherited && (unprinted || rejected),
+            );
         }
     }
 }
