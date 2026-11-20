@@ -104,6 +104,18 @@ pub fn sanitize_terminal_text(value: &str) -> Cow<'_, str> {
     )
 }
 
+/// Fold the structural hard rows of an entry form into a navigation label.
+///
+/// Terminal consumers still filter control characters when painting the label.
+#[must_use]
+pub fn single_line_entry_label(value: &str) -> Cow<'_, str> {
+    if value.contains('\n') {
+        Cow::Owned(value.replace('\n', " "))
+    } else {
+        Cow::Borrowed(value)
+    }
+}
+
 /// Explain why an empty catalog query selected no indexable scope.
 ///
 /// A covered scope with no name matches intentionally returns `None`; callers

@@ -121,6 +121,43 @@ fn closed_entries_match_names_aliases_and_full_forms_once_per_node() {
 }
 
 #[test]
+fn multiline_native_forms_use_the_same_label_for_paint_and_search() {
+    // In pinned CVS the extended It head prints two physical rows.
+    let source = b".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Xo\n.No zhack feature stat\n.br\n.No pool\n.Xc\nBODYWORD\n.El\n";
+    let loaded = mant_loader::load_roff_bytes(source).unwrap();
+    let wire = mant_render::render_query_json(&loaded, false).unwrap();
+    let restored: ResolvedContent = serde_json::from_str::<mant_protocol::QueryBundle>(&wire)
+        .unwrap()
+        .into();
+    let mut app = App::new(&restored);
+    query(&mut app, "stat�pool");
+    assert!(app.outline_search.matches.is_empty());
+    query(&mut app, "stat pool");
+    assert_eq!(app.outline_search.matches.len(), 1);
+    let node = app.outline_search.matches[0].node_index;
+    let target = app.session.document.navigation()[node].target_id.clone();
+    assert_eq!(target, "term-zhack-feature-stat-pool");
+    assert!(app.jump_to_anchor(&target));
+    for (width, selected, full) in [(24, true, false), (78, false, false), (78, false, true)] {
+        app.selected = if selected { node } else { 0 };
+        app.full_outline_labels = full;
+        let rows = app.outline_rows(&app.visible_navigation_indices(), width, usize::MAX);
+        let label: String = rows
+            .iter()
+            .filter(|row| row.node_index == node)
+            .flat_map(|row| &row.line.spans)
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert!(label.contains("pool"), "{label}");
+        assert!(!label.contains('�'), "{label}");
+    }
+    assert_eq!(highlighted(&app, theme::SEARCH_ACTIVE), "stat pool");
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    assert!(!terminal.backend().to_string().contains("stat�pool"));
+}
+
+#[test]
 fn synthetic_labels_counts_and_tree_markers_are_not_searchable_content() {
     let mut app = App::new(&markdown(
         "# Catalog\n\n## Entries\n\n[ALPHA](target.md#part) and [BETA](target.md#part).\n",

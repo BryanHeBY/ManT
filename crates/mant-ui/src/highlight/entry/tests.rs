@@ -153,3 +153,17 @@ fn cached_roles_survive_inline_boundaries_and_custom_theme_values() {
         Some(StyleRole::EntryDelimiter)
     );
 }
+#[test]
+fn single_line_forms_retain_their_scalar_accents() {
+    let text = "tool\n[参数]";
+    let styles = LabelStyles::new(text, accents(text, &[]));
+    assert_eq!(styles.text, "tool [参数]");
+    assert_eq!(
+        styles.role_at("tool ".len()),
+        Some(StyleRole::EntryDelimiter)
+    );
+    assert_eq!(
+        styles.role_at("tool [参数".len()),
+        Some(StyleRole::EntryDelimiter)
+    );
+}

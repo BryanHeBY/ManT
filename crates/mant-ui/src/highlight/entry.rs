@@ -298,7 +298,10 @@ pub(crate) struct LabelStyles {
 
 impl LabelStyles {
     pub(crate) fn new(text: &str, mut accents: Vec<Accent>) -> Self {
-        let text = crate::text::sanitize_terminal_text(text).into_owned();
+        let text = mant_render::single_line_entry_label(text);
+        // The heading fold preserves every scalar coordinate before
+        // the control filter can change the corresponding byte ranges.
+        let text = crate::text::sanitize_terminal_text(&text).into_owned();
         let boundaries = text
             .char_indices()
             .map(|(byte, _)| byte)

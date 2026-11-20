@@ -42,18 +42,8 @@ impl DocumentBuilder<'_> {
         parent_id: &str,
     ) {
         for (index, entry) in entries.iter().enumerate() {
-            let full_title = mant_protocol::entry_label(
-                mant_protocol::EntryLabelMode::Forms,
-                &entry.id,
-                &entry.names,
-                &entry.forms,
-            );
-            let title = mant_protocol::entry_label(
-                mant_protocol::EntryLabelMode::Compact,
-                &entry.id,
-                &entry.names,
-                &entry.forms,
-            );
+            let full_title = navigation_entry_label(entry, mant_protocol::EntryLabelMode::Forms);
+            let title = navigation_entry_label(entry, mant_protocol::EntryLabelMode::Compact);
             self.navigation(NavNode {
                 id: entry.id.to_string(),
                 target_id: entry.id.to_string(),
@@ -67,6 +57,14 @@ impl DocumentBuilder<'_> {
             });
             self.semantic_entries(&entry.children, depth + 1, &entry.id);
         }
+    }
+}
+
+fn navigation_entry_label(entry: &SemanticEntry, mode: mant_protocol::EntryLabelMode) -> String {
+    let label = mant_protocol::entry_label(mode, &entry.id, &entry.names, &entry.forms);
+    match mant_render::single_line_entry_label(&label) {
+        std::borrow::Cow::Borrowed(_) => label,
+        std::borrow::Cow::Owned(display) => display,
     }
 }
 
