@@ -328,6 +328,13 @@ impl NativeSlots {
         self.cursor < self.extent
     }
 
+    pub(in crate::mandoc::inline) fn follows_blank(&self) -> bool {
+        matches!(
+            self.previous_cell(self.cursor),
+            Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab)
+        )
+    }
+
     /// A detached cursor can still traverse a tail of controls skipped by
     /// `term_field()`. In particular, `bufferc()` must walk past a buffered
     /// NBRZW instead of appending a separator after it at lastcol.
@@ -566,18 +573,20 @@ impl NativeSlots {
     }
 
     /// Raw SP advances without replacing an existing byte. When it crosses
-    /// the automatic separator, that same cell supplies the source blank.
-    pub(in crate::mandoc::inline) fn claim_entry_blank(
+    /// an existing, unprojected blank, that same cell can represent it.
+    pub(in crate::mandoc::inline) fn claim_unprojected_blank(
         &mut self,
         owner: usize,
-        is_entry: impl FnOnce(usize) -> bool,
+        is_unprojected: impl FnOnce(&FieldCell, usize) -> bool,
         from_current_word: impl Fn(usize) -> bool,
     ) -> bool {
         let Some(slot) = self.runs.get(&self.cursor) else {
             return false;
         };
         if slot.end != self.cursor + 1
-            || !slot.owner.is_some_and(is_entry)
+            || !slot
+                .owner
+                .is_some_and(|owner| is_unprojected(slot.pattern.cell(0), owner))
             || !self
                 .runs
                 .range(..self.cursor)
@@ -588,7 +597,7 @@ impl NativeSlots {
         }
         self.runs
             .get_mut(&self.cursor)
-            .expect("matching blank")
+            .expect("checked raw blank")
             .owner = Some(owner);
         self.cursor += 1;
         true

@@ -574,3 +574,39 @@ fn an_equal_label_keeps_the_owner_of_the_surviving_device_copy() {
         }
     }
 }
+
+#[test]
+fn accepted_overprint_reorders_click_and_copy_coordinates_with_the_label() {
+    // term_field() paints X over D at the left of F. The tty annotation
+    // belongs to X, so it moves to the leftmost hit cell with the glyph.
+    let source = concat!(
+        ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n",
+        r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em H Ns No "\h'-1n'\X'tty: link https://kept.test'X\X'tty: link'""#,
+        "\n",
+    );
+    let view = DocumentView::new(&restored(source));
+    let target = LinkTarget::External(ExternalUri::parse("https://kept.test").unwrap());
+    for width in [24, 78] {
+        let rendered = view.render(width);
+        let buffer = paint(&rendered, width);
+        let row = rendered.search("DESCRIPTION")[0].row + 1;
+        let painted = painted(&buffer, row, 0, width.into());
+        assert_eq!(painted.trim(), "XF");
+        let hit = &rendered.search("XF")[0];
+        assert_eq!(hit.row, row);
+        assert_eq!(rendered.search("FX"), []);
+        let column = hit.start_column;
+        assert_eq!(rendered.link_target_at(row, column), Some(&target));
+        assert_eq!(rendered.link_target_at(row, column + 1), None);
+        assert_eq!(
+            rendered.selected_text(RenderedSelection {
+                anchor: TextPosition { row, column },
+                focus: TextPosition {
+                    row,
+                    column: column + 1
+                },
+            }),
+            "XF"
+        );
+    }
+}

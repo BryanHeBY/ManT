@@ -39,6 +39,7 @@ fn project_native_owners(
         covered_only,
     };
     owners.retain(nodes);
+    super::painted_order::mark_survivors(nodes, limits, covered_only);
     owners.owner.is_some()
 }
 

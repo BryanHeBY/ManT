@@ -14,6 +14,14 @@ pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
     /// Source scalars in an accepted pass with no surviving device cell.
     /// They can be unprinted padding or covered glyphs.
     pub(in crate::mandoc::inline::flow) omitted_scalars: Vec<ScalarOmission>,
+    pub(super) ordered_glyphs: Vec<OrderedGlyph>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct OrderedGlyph {
+    pub(super) scalar: usize,
+    pub(super) character: char,
+    pub(super) receipt: String,
 }
 
 #[derive(Clone, Debug)]
@@ -23,6 +31,33 @@ pub(in crate::mandoc::inline::flow) struct ScalarOmission {
 }
 
 impl OwnerAcceptance {
+    pub(in crate::mandoc::inline::flow) fn has_ink_edits(&self) -> bool {
+        !self.omitted_scalars.is_empty() || !self.ordered_glyphs.is_empty()
+    }
+
+    fn collect_ordered_glyphs(
+        &mut self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        order: &BTreeMap<usize, String>,
+        interval: std::ops::Range<usize>,
+    ) {
+        use super::super::field_buffer::FieldCell;
+
+        let start = interval.start;
+        for (&cell, receipt) in order.range(interval) {
+            let character = match buffer.cells()[cell] {
+                FieldCell::Graph { text, .. } => text,
+                FieldCell::Hyphen => '-',
+                _ => continue,
+            };
+            self.ordered_glyphs.push(OrderedGlyph {
+                scalar: self.scalars + buffer.projection_length(start, cell),
+                character,
+                receipt: receipt.clone(),
+            });
+        }
+    }
+
     fn omit_cell(
         &mut self,
         buffer: &super::super::field_buffer::FieldBuffer,
@@ -60,7 +95,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     use super::super::field_buffer::FieldCell;
 
     let mut lengths = BTreeMap::new();
-    let covered = buffer.covered_pass_retreats(passes);
+    let (covered, order) = collect_native_overprints(buffer, anchors, passes);
     let printed_ends: Vec<_> = passes
         .iter()
         .map(|pass| {
@@ -124,6 +159,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             let (printed_end, printed, projected_end, projected) = printed_ends[pass_index];
             if start < accepted_end {
                 let projected_end = projected_end.min(accepted_end);
+                acceptance.collect_ordered_glyphs(buffer, &order, start..projected_end.max(start));
                 let covered_start = covered.partition_point(|&cell| cell < start);
                 for &cell in covered[covered_start..]
                     .iter()
@@ -172,6 +208,37 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     }
     resolve_buffered_prefixes(anchors, passes, &printed_ends, &covered, &mut lengths);
     lengths
+}
+
+fn collect_native_overprints(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    passes: &[super::super::field_buffer::FillPass],
+) -> (Vec<usize>, BTreeMap<usize, String>) {
+    let mut covered = Vec::new();
+    let mut order = BTreeMap::new();
+    if let Some(first_word) = anchors
+        .first()
+        .and_then(|anchor| anchor.owner.strip_prefix(super::INTERNAL_FIELD_WORD))
+    {
+        let mut group = 0;
+        buffer.visit_accepted_overprints(
+            passes,
+            |target, _| {
+                if covered.last() != Some(&target) {
+                    covered.push(target);
+                }
+            },
+            |ordered| {
+                let size = ordered.len();
+                for (rank, cell) in ordered.into_iter().enumerate() {
+                    order.insert(cell, format!("{first_word}:{group}:{rank}:{size}"));
+                }
+                group += 1;
+            },
+        );
+    }
+    (covered, order)
 }
 
 fn resolve_buffered_prefixes(
@@ -244,7 +311,27 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 owner += 1;
             }
         }
-        if let Some(index) = owner.checked_sub(1) {
+        if let Some(mut index) = owner.checked_sub(1) {
+            let mut cut = cell;
+            if anchors[index].content < cell
+                && buffer.projection_length(anchors[index].content, cell) == 0
+                && let Some(last) = buffer.last_projected_cell(pass.start..pass.end)
+            {
+                // A replay can resume a word in a control-only interval
+                // after a glyph from an older owner. Its scalar count is
+                // unchanged, so a tail cut on that word would close its
+                // first fragment, before the borrowed glyph. Cut after
+                // the actual last published cell of the accepted pass.
+                let actual = anchors.partition_point(|anchor| anchor.content <= last);
+                if let Some(actual) = actual.checked_sub(1)
+                    && actual >= preceding
+                    && actual < index
+                    && anchors[actual].owner != anchors[index].owner
+                {
+                    index = actual;
+                    cut = last + 1;
+                }
+            }
             let anchor = &anchors[index];
             let section_seam = section.is_some_and(|section| {
                 section.closes_at_section_seam(buffer, pass.start..pass.end, anchor.content)
@@ -265,7 +352,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 .or_default()
                 .push(RecordedRowSplit {
                     offset: positions.get(anchor.owner.as_str()).copied().unwrap_or(0)
-                        + buffer.projection_length(anchor.content, cell),
+                        + buffer.projection_length(anchor.content, cut),
                     pass_end: pass.end,
                     before_cached_glyph: false,
                     section_seam,

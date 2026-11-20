@@ -102,6 +102,7 @@ pub(in crate::mandoc) use row_origins::{
     push_row_break, split_row_origin, take_definition_term_breaks, take_inline_layout,
 };
 pub(in crate::mandoc::inline::flow) mod split;
+pub(in crate::mandoc::inline::flow) use split::painted_order::apply as reconcile_painted_order;
 
 impl InlineBuilder {
     /// Already executed empty endlines in the accepted output tail.

@@ -464,6 +464,7 @@ struct Placement<'a> {
     marker_boundary: MarkerBoundary,
     links: Vec<&'a str>,
     active_link: Option<usize>,
+    marker_after_blank: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -481,6 +482,7 @@ impl<'a> Placement<'a> {
             marker_boundary: MarkerBoundary::Clear,
             links: Vec::new(),
             active_link: None,
+            marker_after_blank: false,
         }
     }
 
@@ -607,6 +609,7 @@ impl<'a> Placement<'a> {
                 let cell = match event {
                     RoffInlineEvent::LineBreak => {
                         self.marker_boundary = MarkerBoundary::Pending;
+                        self.marker_after_blank = self.slots.follows_blank();
                         FieldWrite::Cell(FieldCell::BreakMarker)
                     }
                     RoffInlineEvent::ZeroWidthGlyph => FieldWrite::Cell(FieldCell::ZeroWidthGraph),
@@ -649,9 +652,13 @@ impl<'a> Placement<'a> {
                 {
                     self.marker_boundary = MarkerBoundary::AuthoredBlank;
                 }
-                if self.slots.claim_entry_blank(
+                if self.slots.claim_unprojected_blank(
                     owner,
-                    |prior| matches!(self.reading[prior].glyph, ReadingGlyph::EntryBlank),
+                    |cell, prior| {
+                        matches!(self.reading[prior].glyph, ReadingGlyph::EntryBlank)
+                            || matches!(self.reading[prior].glyph, ReadingGlyph::Earlier(0))
+                                && *cell == FieldCell::BreakableBlank
+                    },
                     |prior| {
                         matches!(self.reading[prior].glyph,
                         ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
@@ -811,17 +818,17 @@ fn execute_seed<'a>(
     // Keep its raw decoration and the invisible label slots around it, so
     // the next word can revisit the same native suffix (term.c::encode1).
     let pending_glyph = seed.placement.slots.pending_owner().is_some();
-    // Appending a word with a trailing marker preserves the earlier raw
-    // slots and covers. A later motion can address the new marker too.
-    let appended_marker = seed.earlier != 0
-        && matches!(events.last(), Some(RoffInlineEvent::LineBreak))
-        && !events
-            .iter()
-            .any(|event| matches!(event, RoffInlineEvent::HorizontalMotion { .. }));
+    // term_word() writes a marker at col, independently of font changes
+    // and zero relative motions. A following word can still address it.
+    let terminal_marker = seed.earlier != 0 && terminal_marker(events);
     let retain_suffix = context.policy.field_authoritative
-        && (!has_marker || marker.is_some() || live_cursor || pending_glyph || appended_marker);
-    let editable_marker =
-        matches!(marker, Some(MarkerReplay::AwaitFieldFlush)) || has_marker && live_cursor;
+        && (!has_marker || marker.is_some() || live_cursor || pending_glyph || terminal_marker);
+    let editable_marker = matches!(marker, Some(MarkerReplay::AwaitFieldFlush))
+        || has_marker && live_cursor
+        // term_fill() advances past buffered blanks before the next graph.
+        // Leave that separator to the real flush while keeping the raw
+        // cursor and its owners available to intervening native writes.
+        || terminal_marker && seed.placement.marker_after_blank;
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()
@@ -837,4 +844,20 @@ fn execute_seed<'a>(
     word.source_continuation = continuation;
     placed.project(context, word);
     Ok(())
+}
+
+fn terminal_marker(events: &[RoffInlineEvent]) -> bool {
+    let moves_cursor = |event: &RoffInlineEvent| {
+        matches!(event, RoffInlineEvent::HorizontalMotion { argument, .. }
+            if argument.as_deref().and_then(motion_columns) != Some((false, 0)))
+    };
+    matches!(
+        events.iter().rev().find(|event| {
+            !matches!(
+                event,
+                RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+            ) && (!matches!(event, RoffInlineEvent::HorizontalMotion { .. }) || moves_cursor(event))
+        }),
+        Some(RoffInlineEvent::LineBreak)
+    ) && !events.iter().any(moves_cursor)
 }

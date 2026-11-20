@@ -842,3 +842,142 @@ fn a_retreat_can_replace_the_blank_after_an_unflushed_marker() {
     labels.0.retain(|(_, label)| !label.is_empty());
     assert_eq!(labels.0, [("https://one.test".into(), "A".into())]);
 }
+
+#[test]
+fn terminal_marker_uses_buffered_cells_instead_of_the_last_escape_event() {
+    // Both pinned devices preserve HJ on one row and the authored gap in
+    // H X. term_fill() sees H\p and H \p differently; selecting a font or
+    // a zero movement after the marker writes no new glyph.
+    for (body, rows, linked) in [
+        (
+            r#".Sy "\zC\p\zJ" No "\~\h'-9n'\p\&\zF" Ns No "H \p" Ns No "\:""#,
+            &["HJ", "\u{a0}"][..],
+            None,
+        ),
+        (
+            r#".Em "\zC\pJ" No "\h'-9n'\&\zFG" Em "H \p" Em "\h'-2n'X""#,
+            &["H X"],
+            None,
+        ),
+        (
+            r#".Em "\zCD\zJ" No "\h'-8n'\:\X'tty: link https://f.test'F\X'tty: link'" Em "H \p" Em "\h'-2n'X""#,
+            &["FDH X"],
+            Some(("https://f.test", "F")),
+        ),
+        (
+            r#".Sy "\z\X'tty: link https://c.test'C\X'tty: link'\pD\zJ" No "\&\h'-2n'\pF" Ns No "H\p\fP" Ns No "\h'-1n'X""#,
+            &["DFHX"],
+            None,
+        ),
+        (
+            r".Em D\zJ No \h'-3n'\&\pF Em H\p\fP Ns No \h'-1n'X",
+            &["DF", "HX"],
+            None,
+        ),
+    ] {
+        assert_device_row(body, rows, linked);
+    }
+}
+
+#[test]
+fn surviving_owners_follow_device_columns_across_fill_controls() {
+    // term.c::term_field() emits both retreats. D is overwritten and X
+    // precedes the original F, even when a different owner supplies X.
+    for (body, linked) in [
+        (
+            r#".Sy "\zC\pD\zJ" No "\^\h'-4n'\zF" No "H\p" Ns No "\h'-2n'\&\&X""#,
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em H Ns No "\h'-1n'X""#,
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em H Ns No "\h'-1n'\X'tty: link https://kept.test'X\X'tty: link'""#,
+            Some(("https://kept.test", "X")),
+        ),
+    ] {
+        assert_device_row(body, &["XF"], linked);
+    }
+}
+
+#[test]
+fn append_only_tails_do_not_change_the_proved_overprint() {
+    // The native 63/64/65-slot passes and UTF-8 variants all print the
+    // same left prefix. ASCII transcribes the non-ASCII tail independently.
+    let ascii = [48, 49, 50].map(|length| "Q".repeat(length));
+    for (suffix, projected) in ascii
+        .iter()
+        .map(|suffix| (suffix.as_str(), suffix.as_str()))
+        .chain([
+            ("QQQé", "QQQé"),
+            ("QQQΩ", "QQQΩ"),
+            ("QQQ界", "QQQ界"),
+            (r"QQQ\[u00E9]", "QQQé"),
+        ])
+    {
+        let body =
+            format!(r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p" Ns No "\h'-1n'X{suffix}""#);
+        assert_device_row(&body, &[&format!("HX{projected}")], None);
+    }
+}
+
+#[test]
+fn a_hard_row_cut_does_not_consume_the_first_payload_of_the_next_pass() {
+    // A resumed formatter word can have a control-only interval in the
+    // accepted row and real ink at the start of the next row. In both
+    // fixed devices term_fill() keeps that ink after the actual loop cut.
+    for (body, rows) in [
+        (
+            r#".Sy "\zC\pD\zJ" No "\p\h'-4n'\&\p\zFG" Em "H" Ns No "\:\h'-4n'\&X""#,
+            &["DG", "XH"][..],
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" Sy "\&\h'-1n'\p\:F\p" No "H\zG\p" Ns No "\h'-2n'X""#,
+            &["DJ", "F", "XG"],
+        ),
+    ] {
+        assert_device_row(body, rows, None);
+    }
+}
+
+fn assert_device_row(body: &str, rows: &[&str], link: Option<(&str, &str)>) {
+    let source = format!("{REPLAY_HEADER}{body}\n");
+    let native = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let mut content = native;
+    for _ in 0..3 {
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&rendered, &source), rows, "{body}");
+        for (pattern, total) in rows
+            .iter()
+            .filter(|line| !line.trim().is_empty())
+            .map(|&word| (word, 1))
+            .chain(["FX", "CDFHX", "CDJFHX"].map(|word| (word, 0)))
+        {
+            let hits = mant_query::search_query(
+                &content,
+                &SearchQuery {
+                    pattern: pattern.into(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope: SearchScope::Visible,
+                    word: true,
+                    context_lines: 0,
+                    limit: 10,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(hits.total, total, "{body}: {pattern}");
+        }
+        let mut labels = Labels::default();
+        labels.visit_document(content.document.as_ref().unwrap());
+        let expected = link
+            .map(|(uri, value)| (uri.into(), value.into()))
+            .into_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(labels.0, expected, "{body}");
+        let markdown = mant_codec::encode::render_markdown(&content);
+        content = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    }
+}

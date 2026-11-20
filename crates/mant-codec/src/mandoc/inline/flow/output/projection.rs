@@ -224,6 +224,7 @@ pub(in crate::mandoc) fn finalize_inline_output(nodes: &mut Vec<Inline>) {
 }
 
 pub(in crate::mandoc) fn prepare_inline_output(nodes: &mut Vec<Inline>) {
+    super::reconcile_painted_order(nodes);
     super::super::super::links::presentation::finalize_accepted_links(nodes);
     join_authored_links(nodes);
 }

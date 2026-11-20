@@ -256,16 +256,28 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn visit_accepted_covers(
         &self,
         passes: &[FillPass],
+        accept: impl FnMut(usize, usize),
+    ) {
+        self.visit_accepted_overprints(passes, accept, |_| {});
+    }
+
+    pub(in crate::mandoc::inline::flow) fn visit_accepted_overprints(
+        &self,
+        passes: &[FillPass],
         mut accept: impl FnMut(usize, usize),
+        mut order: impl FnMut(Vec<usize>),
     ) {
         if !self.has_pass_retreats() {
             return;
         }
         let mut retreats = self.pass_retreats.iter().peekable();
         for pass in passes {
-            if let Some(covers) = self.prove_repeated_device_covers(pass.start, pass.end) {
-                for (target, by) in covers {
+            if let Some(overprint) = self.prove_device_overprint(pass.start, pass.end) {
+                for (target, by) in overprint.covered {
                     accept(target, by);
+                }
+                if !overprint.ordered.is_empty() {
+                    order(overprint.ordered);
                 }
                 while retreats
                     .peek()
@@ -487,6 +499,17 @@ impl FieldBuffer {
             .copied()
             .unwrap_or(0)
             .saturating_sub(self.projection_prefix.get(low).copied().unwrap_or(0))
+    }
+
+    pub(in crate::mandoc::inline::flow) fn last_projected_cell(
+        &self,
+        interval: std::ops::Range<usize>,
+    ) -> Option<usize> {
+        let start = interval.start;
+        let end = *self.projection_prefix.get(interval.end)?;
+        let earlier = self.projection_prefix.get(interval)?;
+        let cell = earlier.partition_point(|&count| count < end);
+        cell.checked_sub(1).map(|offset| offset + start)
     }
 
     /// A pass with a genuine following suffix is established for ordinary

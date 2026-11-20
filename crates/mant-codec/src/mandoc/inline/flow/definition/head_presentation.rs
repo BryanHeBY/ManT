@@ -108,6 +108,7 @@ impl DeferredHeadProjection {
         tab_projection::apply(terms, &tabs);
         deferred_blanks::apply(terms, &blanks);
         for term in terms {
+            super::super::output::reconcile_painted_order(term);
             if let Some(capture) = &operands {
                 capture.borrow_mut().observe_accepted_output(term);
             }
@@ -145,7 +146,7 @@ impl DeferredHeadProjection {
     ) {
         let mut pending = self.0.borrow_mut();
         for (owner, acceptance) in accepted {
-            if pending.owners.contains(owner) && !acceptance.omitted_scalars.is_empty() {
+            if pending.owners.contains(owner) && acceptance.has_ink_edits() {
                 pending.coverage.insert(owner.clone(), acceptance.clone());
             }
         }

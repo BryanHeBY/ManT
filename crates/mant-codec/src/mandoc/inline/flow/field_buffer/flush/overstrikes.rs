@@ -3,26 +3,37 @@
 use super::super::placement::MAX_REPLAY_PREFIX_CELLS;
 use super::{FieldBuffer, FieldCell};
 
+pub(super) struct DeviceOverprint {
+    pub(super) covered: Vec<(usize, usize)>,
+    pub(super) ordered: Vec<usize>,
+}
+
 impl FieldBuffer {
     /// `term_field()` emits backspaces and queues blanks independently of
     /// zero-width fill controls. Before acceptance, a repeated backspace
     /// may appear to leave its local graph run because a marker or blank
     /// separates it from the earlier glyph. This pass knows the real row.
-    pub(super) fn prove_repeated_device_covers(
+    pub(super) fn prove_device_overprint(
         &self,
         start: usize,
         end: usize,
-    ) -> Option<Vec<(usize, usize)>> {
-        if start < self.raw_slot_fence
-            || end - start > MAX_REPLAY_PREFIX_CELLS
-            || !self.cells[start..end]
-                .windows(2)
-                .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
-        {
+    ) -> Option<DeviceOverprint> {
+        if start < self.raw_slot_fence {
             return None;
         }
         let end = self.printed_content_end(start, end);
+        let cells = &self.cells[start..end];
+        if !cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]
+            .windows(2)
+            .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
+        {
+            return None;
+        }
+        let last_backline = cells
+            .iter()
+            .rposition(|cell| *cell == FieldCell::Backline)?;
         let mut cursor = 0usize;
+        let mut extent = 0;
         let mut row = [None; MAX_REPLAY_PREFIX_CELLS];
         let mut covered_by = [None; MAX_REPLAY_PREFIX_CELLS];
         let aliases = &self.raw_copy_aliases;
@@ -32,7 +43,16 @@ impl FieldBuffer {
                 .ok()
                 .map_or(cell, |index| aliases[index].1)
         };
-        for (offset, cell) in self.cells[start..end].iter().enumerate() {
+        for (offset, cell) in cells.iter().enumerate() {
+            // Beyond the last retreat and its landing area the device can
+            // only advance. That suffix needs neither storage nor a proved
+            // character width to decide what is still visible to its left.
+            if offset > last_backline && cursor == extent {
+                break;
+            }
+            if offset >= MAX_REPLAY_PREFIX_CELLS {
+                return None;
+            }
             let index = start + offset;
             match cell {
                 FieldCell::Graph { text, width: 1 } if text.is_ascii() => {}
@@ -52,37 +72,58 @@ impl FieldBuffer {
             }
             if let Some(previous) = row[cursor].replace(index) {
                 let owner = owner_at(previous).checked_sub(start)?;
-                if owner >= end - start {
+                if owner >= MAX_REPLAY_PREFIX_CELLS {
                     return None;
                 }
                 covered_by[owner] = Some(index);
             }
             cursor += 1;
+            extent = extent.max(cursor);
         }
+        let mut ordered = Vec::new();
         for cell in row.into_iter().flatten() {
             // Bold bytes are two copies of one author's glyph. Keep its
             // publication wherever either copy survives.
-            let owner = owner_at(cell).checked_sub(start)?;
-            if owner >= end - start {
+            let cell = owner_at(cell);
+            let owner = cell.checked_sub(start)?;
+            if owner >= MAX_REPLAY_PREFIX_CELLS {
                 return None;
             }
             covered_by[owner] = None;
+            if self.projected_ink(cell) && !ordered.contains(&cell) {
+                ordered.push(cell);
+            }
         }
-        Some(
-            covered_by
+        let mut source_order = ordered.clone();
+        source_order.sort_unstable();
+        let first = ordered.iter().zip(&source_order).position(|(a, b)| a != b);
+        let ordered = first.map_or_else(Vec::new, |first| {
+            let tail = ordered
+                .iter()
+                .zip(&source_order)
+                .rev()
+                .take_while(|(a, b)| a == b)
+                .count();
+            ordered[first..ordered.len() - tail].to_vec()
+        });
+        Some(DeviceOverprint {
+            covered: covered_by
                 .into_iter()
                 .enumerate()
                 .filter_map(|(offset, by)| {
                     let target = start + offset;
-                    by.filter(|_| {
-                        matches!(
-                            self.cells[target],
-                            FieldCell::Graph { .. } | FieldCell::Hyphen
-                        ) && self.projection_length(target, target + 1) == 1
-                    })
-                    .map(|by| (target, by))
+                    by.filter(|_| self.projected_ink(target))
+                        .map(|by| (target, by))
                 })
                 .collect(),
-        )
+            ordered,
+        })
+    }
+
+    fn projected_ink(&self, cell: usize) -> bool {
+        matches!(
+            self.cells[cell],
+            FieldCell::Graph { .. } | FieldCell::Hyphen
+        ) && self.projection_length(cell, cell + 1) == 1
     }
 }
