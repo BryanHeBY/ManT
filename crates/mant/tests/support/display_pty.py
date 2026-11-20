@@ -228,19 +228,30 @@ def check_pager_rows(path, environment, width):
     os.set_blocking(master, False)
     process = subprocess.Popen([sys.argv[1], "--input", str(path), "--format", "text", "--display", "pager", "--color", "always"], stdin=slave, stdout=slave, stderr=slave, env=environment)
     all_output = bytearray()
-    def read_output():
+    def read_output(marker=None):
         output = bytearray()
-        end = time.monotonic() + 0.18
+        end = time.monotonic() + (5 if marker else 0.18)
         while time.monotonic() < end:
             if select.select([master], [], [], 0.02)[0]:
                 chunk = read_chunk(master)
                 if chunk:
                     output.extend(chunk)
-                    # The search prompt asks the terminal for its cursor position.
-                    if b"\x1b[6n" in output:
-                        os.write(master, b"\x1b[3;1R")
+                    if marker and marker in output:
+                        break
+                elif chunk == b"":
+                    break
         all_output.extend(output)
+        assert marker is None or marker in output, (width, marker, all_output[-4000:])
         return output.decode("utf-8", "replace")
+
+    def start_search():
+        os.write(master, b"/")
+        read_output(b"\x1b[?25h")
+
+    def finish_search(key):
+        os.write(master, key)
+        read_output(b"\x1b[?25l")
+
     def check_colors(text):
         # Start from the prompt's default, not the preceding content row.
         foreground, glyphs = None, 0
@@ -270,19 +281,17 @@ def check_pager_rows(path, environment, width):
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 3, columns, 0, 0))
             process.send_signal(signal.SIGWINCH)
             check_colors(read_output())
-        os.write(master, b"/")
-        read_output()
-        for key in [b"B", b"o", b"d", b"y", b"\r"]:
+        start_search()
+        for key in [b"B", b"o", b"d", b"y"]:
             os.write(master, key)
             read_output()
+        finish_search(b"\r")
         os.write(master, b"n")
         read_output()
         # Validate actual glyph colors while matching wrapped name rows, not
         # merely the presence of a green escape somewhere in the output.
-        os.write(master, b"/")
-        read_output()
-        os.write(master, b"z+\r")
-        read_output()  # includes uncolored query-prompt echo
+        start_search()
+        finish_search(b"z+\r")  # includes uncolored query-prompt echo
         searched = 0
         for key in [b"n", b"N", b"n"]:
             os.write(master, key)
@@ -295,20 +304,19 @@ def check_pager_rows(path, environment, width):
         # A missing visible query is normal, including ANSI parameter digits.
         # This drives the actual FetchSearchQuery event path (formerly unwrap()).
         for query in (b"NEVER_PRESENT", b"92"):
-            os.write(master, b"/")
-            read_output()
-            os.write(master, query + b"\r")
-            read_output()
+            start_search()
+            finish_search(query + b"\r")
             assert process.poll() is None, (query, process.returncode, all_output)
             for key in (b"n", b"N"):
                 os.write(master, key)
                 check_colors(read_output())
                 assert process.poll() is None
         # Cancelling a new query clears the search overlay, not source colors.
-        os.write(master, b"/")
-        read_output()
-        os.write(master, b"\x1b")
-        check_colors(read_output())
+        start_search()
+        # Use Crossterm's unambiguous CSI-u Escape encoding. A lone ESC
+        # is also the prefix of an Alt chord or a terminal response.
+        # Wait for confirmed teardown before sending the navigation key.
+        finish_search(b"\x1b[27u")
         os.write(master, b"k")
         check_colors(read_output())
         os.write(master, b"q")
