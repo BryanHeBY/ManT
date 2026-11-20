@@ -207,12 +207,8 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         )) => {
             append_native_subject(builder, node, children, name);
         }
-        Some(Mdoc(MdocMacro::Pa | MdocMacro::Ad | MdocMacro::Fr)) => {
-            builder.with_native_operand_role(NativeOperandRole::ReferenceText(None), |builder| {
-                builder.with_font_scope(Font::Emphasis, |builder| {
-                    append_inline_nodes(builder, children, name);
-                });
-            });
+        Some(Mdoc(token @ (MdocMacro::Pa | MdocMacro::Ad | MdocMacro::Fr))) => {
+            append_emphasized_reference(builder, *token, children, name);
         }
         Some(Mdoc(MdocMacro::Sx)) => append_section_reference(builder, children, name),
         Some(Mdoc(MdocMacro::Nd)) => {
@@ -247,6 +243,26 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         }
         _ => append_inline_nodes(builder, children, name),
     }
+}
+
+fn append_emphasized_reference(
+    builder: &mut InlineBuilder,
+    token: MdocMacro,
+    children: &[Node],
+    name: Option<&str>,
+) {
+    // mdoc_html.c::mdoc_pa_pre preserves a pathname role. The terminal
+    // rendition uses the same emphasis as Ad and Fr.
+    let role = if token == MdocMacro::Pa {
+        NativeOperandRole::PathOperand(None)
+    } else {
+        NativeOperandRole::ReferenceText(None)
+    };
+    builder.with_native_operand_role(role, |builder| {
+        builder.with_font_scope(Font::Emphasis, |builder| {
+            append_inline_nodes(builder, children, name);
+        });
+    });
 }
 
 fn append_mdoc_element(

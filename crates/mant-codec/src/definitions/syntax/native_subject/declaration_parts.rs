@@ -532,6 +532,7 @@ fn independent_groups<'a>(
                         | NativeOperandRole::SymbolicText
                         | NativeOperandRole::LiteralPunctuation
                         | NativeOperandRole::ReferenceText(_)
+                        | NativeOperandRole::PathOperand(_)
                         | NativeOperandRole::EnclosureStart { .. }
                         | NativeOperandRole::EnclosureEnd(_) => true,
                         NativeOperandRole::Command | NativeOperandRole::ProgramName(_) => {

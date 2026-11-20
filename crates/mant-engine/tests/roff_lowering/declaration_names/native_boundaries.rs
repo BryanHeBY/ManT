@@ -146,6 +146,106 @@ fn the_flag_word_proves_its_own_value_without_proving_independent_operands() {
 }
 
 #[test]
+fn assigned_paths_and_dotted_values_stop_before_an_independent_aside() {
+    // mdoc_macro.c::in_line gives Pa its own operand; mdoc_pa_pre
+    // preserves that path role in HTML. The pinned devices agree on the
+    // actual visible right-hand sides, including source punctuation.
+    for (head, names, label, full) in [
+        ("Fl a= Ns Pa file", &["-a"][..], "-a=file", true),
+        (
+            "Fl a= Ns Pa /tmp/test.conf",
+            &["-a"],
+            "-a=/tmp/test.conf",
+            true,
+        ),
+        (
+            r"Fl a Ns Li \&= Ns Pa ./file.tar.gz",
+            &["-a"],
+            "-a=./file.tar.gz",
+            true,
+        ),
+        (
+            "Fl m Ar file , Fl Fl master-key= Ns Pa file",
+            &["-m", "--master-key"],
+            "-m file, --master-key=file",
+            true,
+        ),
+        (
+            "Fl d Ar file , Fl Fl database= Ns Pa file",
+            &["-d", "--database"],
+            "-d file, --database=file",
+            true,
+        ),
+        ("Fl a Ns = Ns Li 127.0.0.1", &["-a"], "-a=127.0.0.1", true),
+        (
+            "Fl a Ns = Ns Li example.org",
+            &["-a"],
+            "-a=example.org",
+            true,
+        ),
+        ("Fl a Ns = Ns Li 1.25", &["-a"], "-a=1.25", true),
+        (
+            "Fl a Ns = Ns Li 1.25 Ns Op Ar param",
+            &["-a"],
+            "-a=1.25[param]",
+            true,
+        ),
+        (
+            "Fl a Ns = Ns Ar x Ns Po Ar port Pc",
+            &["-a"],
+            "-a=x(port)",
+            true,
+        ),
+        (
+            "Fl a Ns = Ns Ar x Op Ar extra",
+            &["-a"],
+            "-a=x [extra]",
+            true,
+        ),
+        (
+            r#"Fl a= Ns Ar x No "(default: none)""#,
+            &["-a"],
+            "-a=x (default: none)",
+            false,
+        ),
+        (
+            r#"Fl a Ns Li \&= Ns Ar x No "(deprecated)""#,
+            &["-a"],
+            "-a=x (deprecated)",
+            false,
+        ),
+        (
+            "Fl a Ns = Ns Ar x Po default: none Pc",
+            &["-a"],
+            "-a=x (default: none)",
+            false,
+        ),
+        (
+            r#"Fl a Ns = Ns Li 1.25 No "(arbitrary: hint)""#,
+            &["-a"],
+            "-a=1.25 (arbitrary: hint)",
+            false,
+        ),
+        ("Fl a= Ns Ar x Pa file", &["-a"], "-a=x file", false),
+        (
+            "Fl f , -vdev-file-directory Ns = (default: Pa /tmp )",
+            &["-f", "--vdev-file-directory"],
+            "-f, --vdev-file-directory= (default: /tmp)",
+            false,
+        ),
+    ] {
+        check(
+            "OPTIONS",
+            head,
+            names,
+            label,
+            full,
+            &["file", "x", "127.0.0.1", "param", "default"],
+        );
+    }
+}
+
+#[test]
 fn real_assignment_forms_keep_compound_and_literal_alternatives() {
     // Reduced from node, pccritic, wavpack, dhcpcd, cmp, ld, m4, zdb
     // and exports. CVS term_word(), termp_ns_pre() and quote pre/post

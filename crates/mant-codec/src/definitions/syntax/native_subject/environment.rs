@@ -439,5 +439,9 @@ fn is_environment(role: NativeOperandRole) -> bool {
 }
 
 fn is_description(role: NativeOperandRole) -> bool {
-    role.is_description() || matches!(role, NativeOperandRole::ReferenceText(_))
+    role.is_description()
+        || matches!(
+            role,
+            NativeOperandRole::ReferenceText(_) | NativeOperandRole::PathOperand(_)
+        )
 }

@@ -176,6 +176,7 @@ impl<'a> HeadView<'a> {
             .is_some_and(|operand| match operand.role {
                 #[cfg(feature = "roff")]
                 NativeOperandRole::ReferenceText(_)
+                | NativeOperandRole::PathOperand(_)
                 | NativeOperandRole::Environment { .. }
                 | NativeOperandRole::ClippedEnvironment { .. } => true,
                 _ => false,

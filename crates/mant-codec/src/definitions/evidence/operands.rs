@@ -90,6 +90,9 @@ pub(crate) enum NativeOperandRole {
     /// Visible link operands, including the terminal's generated suffix.
     #[cfg(feature = "roff")]
     ReferenceText(Option<u32>),
+    /// An executed mdoc Pa operand supplies a pathname, unlike link text.
+    #[cfg(feature = "roff")]
+    PathOperand(Option<u32>),
     #[cfg(feature = "roff")]
     Subject(SubjectReceipt),
     /// Publication retained the native subject's role within the form,
@@ -256,6 +259,7 @@ impl NativeOperandRole {
                 parent: enclosure(),
             },
             Self::ReferenceText(_) => Self::ReferenceText(enclosure()),
+            Self::PathOperand(_) => Self::PathOperand(enclosure()),
             Self::LiteralContinuation(_) => Self::LiteralContinuation(enclosure()),
             Self::PipeDelimiter(_) => Self::PipeDelimiter(enclosure()),
             Self::FlReopening { pipe, .. } => Self::FlReopening {
@@ -290,6 +294,7 @@ impl NativeOperandRole {
             | Self::FlReopening { .. }
             | Self::FunctionSignature { .. } => Self::Argument,
             Self::Command | Self::ProgramName(_) => Self::ClippedInvocation,
+            Self::PathOperand(enclosure) => Self::ReferenceText(enclosure),
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,
         }

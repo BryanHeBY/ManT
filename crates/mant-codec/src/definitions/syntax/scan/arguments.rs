@@ -17,16 +17,24 @@ pub(super) fn proves_native_assignment(view: &HeadView<'_>, argument: &Argument)
     let rhs = span.start + 1..span.end;
     let mut cursor = rhs.start;
     let mut syntax = AssignmentSyntax::new();
-    let mut scopes = Vec::new();
+    let mut scopes: Vec<u32> = Vec::new();
+    let mut typed_suffix = None;
     for operand in view.operands_in(rhs.clone()) {
         let start = operand.bytes.start.max(cursor);
         let end = operand.bytes.end.min(rhs.end);
-        if !syntax.literal(&view.text[cursor..start], true) {
+        if !syntax.literal(&view.text[cursor..start], true, false) {
             return false;
         }
         let value = &view.text[start..end];
         let literal_atom = match operand.role {
             Role::Placeholder { .. } | Role::SearchArgument(_) => {
+                typed_suffix = None;
+                syntax.parameter(value);
+                cursor = end;
+                continue;
+            }
+            Role::PathOperand(_) if syntax.expects_atom => {
+                typed_suffix = None;
                 syntax.parameter(value);
                 cursor = end;
                 continue;
@@ -44,10 +52,19 @@ pub(super) fn proves_native_assignment(view: &HeadView<'_>, argument: &Argument)
                 if scopes.len() < super::MAX_NESTING
                     && scopes.last().is_none_or(|scope| Some(*scope) == parent) =>
             {
+                if syntax.separated_group(value) && value.trim_start().starts_with('(') {
+                    // A detached Po may be a comment. An executed argument
+                    // within it proves the optional suffix of the option.
+                    typed_suffix = Some(body);
+                }
                 scopes.push(body);
                 false
             }
-            Role::EnclosureEnd(body) if scopes.pop() == Some(body) => false,
+            Role::EnclosureEnd(body)
+                if scopes.pop() == Some(body) && typed_suffix != Some(body) =>
+            {
+                false
+            }
             Role::EnclosureContent(body) if scopes.last() == Some(&body) => true,
             Role::Literal | Role::LiteralContinuation(_) | Role::Description | Role::Command => {
                 true
@@ -61,13 +78,17 @@ pub(super) fn proves_native_assignment(view: &HeadView<'_>, argument: &Argument)
             | Role::SearchClose => false,
             _ => return false,
         };
-        if !syntax.literal(value, literal_atom) {
+        if !syntax.literal(
+            value,
+            literal_atom,
+            matches!(operand.role, Role::EnclosureStart { .. }),
+        ) {
             return false;
         }
         cursor = end;
     }
     scopes.is_empty()
-        && syntax.literal(&view.text[cursor..rhs.end], true)
+        && syntax.literal(&view.text[cursor..rhs.end], true, false)
         && syntax.has_value
         && syntax.lexical.is_top_level()
 }
@@ -77,6 +98,7 @@ struct AssignmentSyntax {
     lexical: LexicalState,
     expects_atom: bool,
     has_value: bool,
+    after_space: bool,
 }
 
 #[cfg(feature = "roff")]
@@ -86,6 +108,7 @@ impl AssignmentSyntax {
             lexical: LexicalState::default(),
             expects_atom: true,
             has_value: false,
+            after_space: false,
         }
     }
 
@@ -95,14 +118,36 @@ impl AssignmentSyntax {
                 self.lexical.observe(ch);
                 self.expects_atom = false;
                 self.has_value = true;
+                self.after_space = false;
             }
         }
     }
 
-    fn literal(&mut self, value: &str, permits_atom: bool) -> bool {
+    fn separated_group(&self, value: &str) -> bool {
+        (!self.has_value || !self.expects_atom)
+            && self.lexical.is_top_level()
+            && (self.after_space || value.starts_with(char::is_whitespace))
+    }
+
+    fn literal(&mut self, value: &str, permits_atom: bool, native_group: bool) -> bool {
         let mut in_atom = false;
+        // A standalone dot can join adjacent executed words, but does
+        // not join a free-standing sentence to a completed RHS.
+        if value == "." && self.has_value && !self.after_space {
+            self.expects_atom = true;
+        }
         for ch in value.chars() {
             if ch == '\n' {
+                return false;
+            }
+            if ch == '.' && in_atom {
+                // A dot within a literal is part of the same parameter.
+                continue;
+            }
+            if !native_group
+                && self.separated_group("")
+                && (closing(ch).is_some() || quote_closer(ch).is_some())
+            {
                 return false;
             }
             if self.punctuation(ch) {
@@ -112,6 +157,7 @@ impl AssignmentSyntax {
                 self.expects_atom = false;
                 self.has_value = true;
                 in_atom = true;
+                self.after_space = false;
             } else {
                 return false;
             }
@@ -120,6 +166,7 @@ impl AssignmentSyntax {
     }
 
     fn punctuation(&mut self, ch: char) -> bool {
+        self.after_space = ch.is_whitespace();
         let opener = closing(ch).is_some() || quote_closer(ch).is_some();
         let separator = matches!(ch, '=' | ',' | '/' | ':' | '@' | '|');
         if opener || separator || matches!(ch, ']' | '}' | ')' | '>' | '”' | '’') {
